@@ -503,7 +503,7 @@ export async function handleDemoApiRequest(path, options = {}) {
   if (pathname === "/api/news/topics" && method === "POST") {
     const name = body.name;
     const id = Math.max(0, ...seed.news.topics.map((t) => t.id)) + 1;
-    seed.news.topics.push({ id, name, position: seed.news.topics.length, sources: [], items: [] });
+    seed.news.topics.push({ id, name, position: seed.news.topics.length, sources: [], items: [], mutedTerms: [] });
     return { id, name };
   }
 
@@ -522,6 +522,7 @@ export async function handleDemoApiRequest(path, options = {}) {
     const id = Number(pathname.split("/").at(-1));
     const topic = seed.news.topics.find((t) => t.id === id);
     if (topic) topic.name = body.name || topic.name;
+    if (topic && Array.isArray(body.mutedTerms)) topic.mutedTerms = body.mutedTerms;
     return { ok: true };
   }
 

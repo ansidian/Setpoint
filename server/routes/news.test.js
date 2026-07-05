@@ -104,6 +104,30 @@ describe("news routes", () => {
     }
   });
 
+  it("PATCH /topics/:id accepts mutedTerms and GET reflects them", async () => {
+    await request(app).post("/api/news/topics").send({ name: "AI" });
+    const page = await request(app).get("/api/news");
+    const topicId = page.body.topics[0].id;
+    const res = await request(app).patch(`/api/news/topics/${topicId}`)
+      .send({ mutedTerms: [" crypto ", "Crypto", "sponsored"] });
+    expect(res.status).toBe(200);
+    const after = await request(app).get("/api/news");
+    expect(after.body.topics[0].mutedTerms).toEqual(["crypto", "sponsored"]);
+  });
+
+  it("PATCH /topics/:id still renames, rejects invalid mutedTerms and empty updates", async () => {
+    await request(app).post("/api/news/topics").send({ name: "AI" });
+    const page = await request(app).get("/api/news");
+    const topicId = page.body.topics[0].id;
+    const rename = await request(app).patch(`/api/news/topics/${topicId}`).send({ name: "ML" });
+    expect(rename.status).toBe(200);
+    expect((await request(app).get("/api/news")).body.topics[0].name).toBe("ML");
+    expect((await request(app).patch(`/api/news/topics/${topicId}`).send({ mutedTerms: "crypto" })).status).toBe(400);
+    expect((await request(app).patch(`/api/news/topics/${topicId}`).send({ mutedTerms: [42] })).status).toBe(400);
+    expect((await request(app).patch(`/api/news/topics/${topicId}`).send({ name: "  " })).status).toBe(400);
+    expect((await request(app).patch(`/api/news/topics/${topicId}`).send({})).status).toBe(400);
+  });
+
   it("POST /sources/preview resolves a feed; 422 when nothing found", async () => {
     const good = await request(app).post("/api/news/sources/preview").send({ url: "https://site.test" });
     expect(good.status).toBe(200);

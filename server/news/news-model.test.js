@@ -3,8 +3,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHnFeedUrl, buildNewsPagePayload, canonicalizeNewsUrl,
-  dedupeByCanonicalUrl, excerptFromHtml, NEWS_ITEMS_PER_TOPIC,
-  resolveSourceFeedUrl, shouldPollSource,
+  dedupeByCanonicalUrl, excerptFromHtml, isTitleMuted, NEWS_ITEMS_PER_TOPIC,
+  parseMutedTerms, resolveSourceFeedUrl, sanitizeMutedTerms, shouldPollSource,
 } from "./news-model.js";
 
 describe("canonicalizeNewsUrl", () => {
@@ -92,6 +92,36 @@ describe("dedupeByCanonicalUrl", () => {
   });
 });
 
+describe("mute terms", () => {
+  it("parseMutedTerms tolerates junk and non-arrays", () => {
+    expect(parseMutedTerms(null)).toEqual([]);
+    expect(parseMutedTerms("not json")).toEqual([]);
+    expect(parseMutedTerms('{"a":1}')).toEqual([]);
+    expect(parseMutedTerms('["crypto", "", 3, "AI"]')).toEqual(["crypto", "AI"]);
+  });
+
+  it("sanitizeMutedTerms trims, drops empties, dedupes case-insensitively", () => {
+    expect(sanitizeMutedTerms([" crypto ", "Crypto", "", "AI"])).toEqual(["crypto", "AI"]);
+  });
+
+  it("sanitizeMutedTerms rejects non-arrays, non-strings, oversized terms and lists", () => {
+    expect(sanitizeMutedTerms("crypto")).toBeNull();
+    expect(sanitizeMutedTerms([42])).toBeNull();
+    expect(sanitizeMutedTerms(["x".repeat(81)])).toBeNull();
+    expect(sanitizeMutedTerms(Array.from({ length: 51 }, (_, i) => `t${i}`))).toBeNull();
+  });
+
+  it("isTitleMuted matches whole words case-insensitively, title-only semantics", () => {
+    expect(isTitleMuted("OpenAI ships AI agent", ["ai"])).toBe(true);
+    expect(isTitleMuted("Spain said email works", ["ai"])).toBe(false); // no substring hits
+    expect(isTitleMuted("Elon Musk does a thing", ["elon musk"])).toBe(true); // phrase
+    expect(isTitleMuted("Learning C++ the hard way", ["c++"])).toBe(true); // regex-escaped
+    expect(isTitleMuted("ASP.NET rides again", [".net"])).toBe(false); // preceded by a word char
+    expect(isTitleMuted("Anything", [])).toBe(false);
+    expect(isTitleMuted(null, ["x"])).toBe(false);
+  });
+});
+
 describe("buildNewsPagePayload", () => {
   const topics = [
     { id: 2, user_id: "u1", name: "AI", position: 1 },
@@ -144,5 +174,58 @@ describe("buildNewsPagePayload", () => {
     expect([...stamps].sort().reverse()).toEqual(stamps);
     const canon = new Set(hw.map((i) => i.url));
     expect(canon.size).toBe(hw.length);
+  });
+
+  it("keeps a cross-topic duplicate only in the first topic by position", () => {
+    const dupA = {
+      id: 300, source_id: 10, guid: "d1", url: "https://s.test/story",
+      canonical_url: "https://s.test/story", title: "Big story", excerpt: "", author: null,
+      published_at: "2026-07-04T11:30:00.000Z", fetched_at: "2026-07-04T11:31:00.000Z", thumbnail_url: null,
+    };
+    const dupB = {
+      id: 301, source_id: 11, guid: "d2", url: "https://s.test/story?utm_source=hn",
+      canonical_url: "https://s.test/story", title: "Big story", excerpt: "", author: null,
+      published_at: "2026-07-04T11:32:00.000Z", fetched_at: "2026-07-04T11:33:00.000Z", thumbnail_url: null,
+    };
+    const payload = buildNewsPagePayload({ topics, sources, items: [...items, dupA, dupB], lastSeenAt: null });
+    const hardware = payload.topics[0]; // position 0
+    const ai = payload.topics[1];
+    expect(hardware.items.some((i) => i.id === 300)).toBe(true);
+    expect(ai.items.some((i) => i.id === 301)).toBe(false);
+  });
+
+  it("still shows a topic's own copy when a duplicate elsewhere was capped out, not shown", () => {
+    // 31 hardware items newer than the dup push the dup's canonical URL past the
+    // 30-cap in topic 1; the AI copy must then still appear (only *kept* URLs suppress).
+    const filler = Array.from({ length: 31 }, (_, i) => ({
+      id: 400 + i, source_id: 10, guid: `f${i}`, url: `https://t/f${i}`, canonical_url: `https://t/f${i}`,
+      title: `filler ${i}`, excerpt: "", author: null,
+      published_at: `2026-07-04T11:${String(10 + (i % 40)).padStart(2, "0")}:00.000Z`,
+      fetched_at: "2026-07-04T11:59:00.000Z", thumbnail_url: null,
+    }));
+    const dupOld = {
+      id: 500, source_id: 10, guid: "old", url: "https://s.test/old",
+      canonical_url: "https://s.test/old", title: "Old dup", excerpt: "", author: null,
+      published_at: "2026-07-01T00:00:00.000Z", fetched_at: "2026-07-01T00:00:00.000Z", thumbnail_url: null,
+    };
+    const dupAiCopy = { ...dupOld, id: 501, source_id: 11, guid: "old2", url: "https://s.test/old?ref=x" };
+    const payload = buildNewsPagePayload({
+      topics, sources, items: [...filler, dupOld, dupAiCopy], lastSeenAt: null,
+    });
+    expect(payload.topics[0].items.some((i) => i.id === 500)).toBe(false); // capped out
+    expect(payload.topics[1].items.some((i) => i.id === 501)).toBe(true);  // not suppressed
+  });
+
+  it("muted titles are filtered per topic, before the cap and before cross-topic dedup", () => {
+    const mutedTopics = topics.map((t) => (t.id === 1 ? { ...t, muted_terms: '["GPU"]' } : t));
+    // items[0] (id 100, "GPU news") belongs to topic 1's source
+    const aiCopy = { ...items[0], id: 900, source_id: 11, guid: "copy", url: "https://t/a", canonical_url: "https://t/a" };
+    const payload = buildNewsPagePayload({ topics: mutedTopics, sources, items: [...items, aiCopy], lastSeenAt: null });
+    const hardware = payload.topics[0];
+    const ai = payload.topics[1];
+    expect(hardware.items.some((i) => i.id === 100)).toBe(false); // muted in topic 1
+    expect(ai.items.some((i) => i.id === 900)).toBe(true); // NOT suppressed cross-topic by the muted copy
+    expect(hardware.mutedTerms).toEqual(["GPU"]);
+    expect(ai.mutedTerms).toEqual([]);
   });
 });

@@ -623,7 +623,7 @@ erDiagram
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_news_items` | `026_news.sql` |
 | `ea_news_sources` | `026_news.sql` |
-| `ea_news_topics` | `026_news.sql` |
+| `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql` |

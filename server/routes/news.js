@@ -1,7 +1,7 @@
 import { Router } from "express";
 import db from "../db/connection.js";
 import { requireCookieSession } from "../middleware/auth.js";
-import { buildHnFeedUrl, buildNewsPagePayload } from "../news/news-model.js";
+import { buildHnFeedUrl, buildNewsPagePayload, sanitizeMutedTerms } from "../news/news-model.js";
 import { NEWS_STARTER_CATALOG } from "../news/news-catalog.js";
 import { previewNewsFeed } from "../news/news-preview.js";
 import { requestImmediateNewsSweep } from "../news/news-poller.js";
@@ -144,18 +144,32 @@ router.post("/topics/reorder", async (req, res) => {
 });
 
 router.patch("/topics/:id", async (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  if (!name) return res.status(400).json({ message: "Topic name is required" });
+  const body = req.body || {};
+  const updates = [];
+  const args = [];
+  if ("name" in body) {
+    const name = String(body.name || "").trim();
+    if (!name) return res.status(400).json({ message: "Topic name is required" });
+    updates.push("name = ?");
+    args.push(name);
+  }
+  if ("mutedTerms" in body) {
+    const terms = sanitizeMutedTerms(body.mutedTerms);
+    if (!terms) return res.status(400).json({ message: "mutedTerms must be an array of short strings" });
+    updates.push("muted_terms = ?");
+    args.push(JSON.stringify(terms));
+  }
+  if (!updates.length) return res.status(400).json({ message: "Nothing to update" });
   try {
     if (!(await requireOwnedTopic(req.params.id, res))) return;
     await db.execute({
-      sql: "UPDATE ea_news_topics SET name = ? WHERE id = ? AND user_id = ?",
-      args: [name, req.params.id, userId()],
+      sql: `UPDATE ea_news_topics SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
+      args: [...args, req.params.id, userId()],
     });
     res.json({ ok: true });
   } catch (err) {
-    console.error("Error renaming news topic:", err);
-    res.status(500).json({ message: "Failed to rename topic" });
+    console.error("Error updating news topic:", err);
+    res.status(500).json({ message: "Failed to update topic" });
   }
 });
 
