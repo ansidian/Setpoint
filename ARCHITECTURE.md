@@ -130,6 +130,7 @@ server/
 │   │   └── evals/
 │   └── test-utils/
 ├── middleware/
+├── news/
 ├── platform/
 ├── reminders/
 ├── routes/
@@ -608,18 +609,22 @@ erDiagram
 | `ea_dismissed_emails` | `001_ea_tables.sql` |
 | `ea_email_backfill_state` | `001_ea_tables.sql` |
 | `ea_email_fts` | `001_ea_tables.sql` |
-| `ea_email_index` | `001_ea_tables.sql`, `013_email_index_normalized_date.sql` |
+| `ea_email_index` | `001_ea_tables.sql`, `013_email_index_normalized_date.sql`, `025_email_thread_identity.sql` |
 | `ea_email_search_ai_usage` | `007_email_search_ai_usage.sql` |
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
+| `ea_news_items` | `026_news.sql` |
+| `ea_news_sources` | `026_news.sql` |
+| `ea_news_topics` | `026_news.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql` |
+| `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
 | `ea_sessions` | `001_ea_tables.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |
@@ -630,6 +635,8 @@ erDiagram
 | `ea_triage_jobs` | `001_ea_tables.sql` |
 | `ea_triage_rules` | `001_ea_tables.sql` |
 | `ea_webauthn_challenges` | `012_passkey_auth.sql` |
+| `migrations` | `024_retire_legacy_ledger_rows.sql` |
+| `silently` | `023_pinned_emails_rebuild.sql` |
 <!-- END:db -->
 
 ## Key Patterns
@@ -720,6 +727,8 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | GET | `/api/briefing/email/:uid` | `server/routes/briefing/email.js` |
 | POST | `/api/briefing/email/:uid/mark-read` | `server/routes/briefing/email.js` |
 | POST | `/api/briefing/email/:uid/mark-unread` | `server/routes/briefing/email.js` |
+| DELETE | `/api/briefing/email/:uid/pin` | `server/routes/briefing/email.js` |
+| POST | `/api/briefing/email/:uid/pin` | `server/routes/briefing/email.js` |
 | DELETE | `/api/briefing/email/:uid/snooze` | `server/routes/briefing/email.js` |
 | POST | `/api/briefing/email/:uid/snooze` | `server/routes/briefing/email.js` |
 | POST | `/api/briefing/email/:uid/trash` | `server/routes/briefing/email.js` |
@@ -766,6 +775,19 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | PATCH | `/api/ea/accounts/reorder` | `server/routes/accounts.js` |
 | POST | `/api/ea/accounts/test/:id` | `server/routes/accounts.js` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.js` |
+| GET | `/api/news/` | `server/routes/news.js` |
+| GET | `/api/news/catalog` | `server/routes/news.js` |
+| POST | `/api/news/refresh` | `server/routes/news.js` |
+| POST | `/api/news/seen` | `server/routes/news.js` |
+| POST | `/api/news/sources` | `server/routes/news.js` |
+| DELETE | `/api/news/sources/:id` | `server/routes/news.js` |
+| PATCH | `/api/news/sources/:id` | `server/routes/news.js` |
+| POST | `/api/news/sources/preview` | `server/routes/news.js` |
+| POST | `/api/news/topics` | `server/routes/news.js` |
+| DELETE | `/api/news/topics/:id` | `server/routes/news.js` |
+| PATCH | `/api/news/topics/:id` | `server/routes/news.js` |
+| POST | `/api/news/topics/import-starter` | `server/routes/news.js` |
+| POST | `/api/news/topics/reorder` | `server/routes/news.js` |
 | GET | `/api/notes/` | `server/routes/notes.js` |
 | POST | `/api/notes/` | `server/routes/notes.js` |
 | DELETE | `/api/notes/:id` | `server/routes/notes.js` |
