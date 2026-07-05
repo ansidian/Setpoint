@@ -8,7 +8,7 @@ describe("026_news migration", () => {
     const db = await createMigratedDb();
     const topics = await db.execute("PRAGMA table_info(ea_news_topics)");
     expect(topics.rows.map((r) => r.name)).toEqual(
-      expect.arrayContaining(["id", "user_id", "name", "position", "created_at"]),
+      expect.arrayContaining(["id", "user_id", "name", "position", "created_at", "muted_terms"]),
     );
     const sources = await db.execute("PRAGMA table_info(ea_news_sources)");
     expect(sources.rows.map((r) => r.name)).toEqual(

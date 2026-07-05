@@ -413,6 +413,8 @@ export const createNewsTopic = (name) =>
   apiFetch("/api/news/topics", { method: "POST", body: JSON.stringify({ name }) });
 export const renameNewsTopic = (id, name) =>
   apiFetch(`/api/news/topics/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+export const updateNewsTopicMutedTerms = (id, mutedTerms) =>
+  apiFetch(`/api/news/topics/${id}`, { method: "PATCH", body: JSON.stringify({ mutedTerms }) });
 export const reorderNewsTopics = (ids) =>
   apiFetch("/api/news/topics/reorder", { method: "POST", body: JSON.stringify({ ids }) });
 export const deleteNewsTopic = (id) =>

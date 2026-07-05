@@ -18,7 +18,7 @@ export function buildDemoNews() {
     lastUpdatedAt: new Date(Date.now() - 6 * 60_000).toISOString(),
     topics: [
       {
-        id: 1, name: "PC Hardware", position: 0,
+        id: 1, name: "PC Hardware", position: 0, mutedTerms: [],
         sources: [{ id: 10, topicId: 1, kind: "rss", title: "Demo Hardware Feed",
           feedUrl: "https://demo.example/feed", siteUrl: null, enabled: true, hnQuery: null,
           minPoints: null, lastStatus: "200", lastFetchAt: new Date().toISOString(), consecutiveFailures: 0 }],
@@ -28,7 +28,7 @@ export function buildDemoNews() {
         ],
       },
       {
-        id: 2, name: "AI", position: 1,
+        id: 2, name: "AI", position: 1, mutedTerms: [],
         sources: [{ id: 11, topicId: 2, kind: "hn", title: "Hacker News · AI",
           feedUrl: "https://hnrss.org/newest?q=AI&points=50", siteUrl: null, enabled: true,
           hnQuery: "AI", minPoints: 50, lastStatus: "200",

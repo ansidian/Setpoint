@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import useDismissablePortal from "../../hooks/useDismissablePortal.js";
 import {
   createNewsTopic, deleteNewsSource, deleteNewsTopic, renameNewsTopic,
-  reorderNewsTopics, updateNewsSource,
+  reorderNewsTopics, updateNewsSource, updateNewsTopicMutedTerms,
 } from "../../api.js";
 import { describeSourceHealth } from "./newsPageModel.js";
 import NewsAddSourceForm from "./NewsAddSourceForm.jsx";
@@ -42,6 +42,7 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
   const [renameDraft, setRenameDraft] = useState("");
   const [confirmDeleteTopicId, setConfirmDeleteTopicId] = useState(null);
   const [addSourceTopicId, setAddSourceTopicId] = useState(null);
+  const [muteDrafts, setMuteDrafts] = useState({});
 
   useDismissablePortal({ active: open, ref: panelRef, onDismiss: onClose });
 
@@ -97,6 +98,19 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
 
   async function handleDeleteSource(sourceId) {
     await deleteNewsSource(sourceId);
+    onChanged?.();
+  }
+
+  async function handleAddMutedTerm(topic) {
+    const draft = (muteDrafts[topic.id] || "").trim();
+    if (!draft) return;
+    await updateNewsTopicMutedTerms(topic.id, [...(topic.mutedTerms || []), draft]);
+    setMuteDrafts((drafts) => ({ ...drafts, [topic.id]: "" }));
+    onChanged?.();
+  }
+
+  async function handleRemoveMutedTerm(topic, term) {
+    await updateNewsTopicMutedTerms(topic.id, (topic.mutedTerms || []).filter((t) => t !== term));
     onChanged?.();
   }
 
@@ -224,6 +238,39 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
                     </div>
                   );
                 })}
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                {(topic.mutedTerms || []).map((term) => (
+                  <span
+                    key={term}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+                      color: "var(--sp-subtext)", background: "rgba(255,255,255,0.05)",
+                      borderRadius: 999, padding: "2px 4px 2px 9px",
+                    }}
+                  >
+                    {term}
+                    <button
+                      type="button"
+                      aria-label={`Unmute ${term}`}
+                      onClick={() => handleRemoveMutedTerm(topic, term)}
+                      style={{
+                        border: "none", background: "transparent", color: "var(--sp-subtext)",
+                        cursor: "pointer", fontSize: 12, lineHeight: 1, padding: "0 4px",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={muteDrafts[topic.id] || ""}
+                  onChange={(e) => setMuteDrafts((drafts) => ({ ...drafts, [topic.id]: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddMutedTerm(topic); }}
+                  placeholder="Mute keyword…"
+                  style={{ ...manageInputStyle, width: 130, padding: "4px 8px" }}
+                />
               </div>
 
               {addSourceTopicId === topic.id ? (
