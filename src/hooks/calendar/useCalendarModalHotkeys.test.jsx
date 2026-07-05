@@ -116,14 +116,15 @@ describe("useCalendarModalHotkeys — 3-key view cycling", () => {
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
-  it("does not consume 1/2/4 so the shell tab hotkeys still receive them", () => {
+  it("does not consume 1/2/4/5 so the shell tab hotkeys still receive them", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
 
     // The calendar's document-capture hotkey listener must let the OTHER shell
-    // tab keys (1=dashboard, 2=inbox, 4=notes) bubble: it neither cycles the
-    // view nor calls preventDefault, so the event reaches the shell handler.
-    for (const key of ["1", "2", "4"]) {
+    // tab keys (1=dashboard, 2=inbox, 4=notes, 5=news) bubble: it neither
+    // cycles the view nor calls preventDefault, so the event reaches the shell
+    // handler.
+    for (const key of ["1", "2", "4", "5"]) {
       const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
       document.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(false);
