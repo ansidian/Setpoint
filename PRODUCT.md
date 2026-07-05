@@ -16,6 +16,8 @@ Setpoint consolidates scattered personal systems into current snapshots and focu
 
 Success means the user can trust the dashboard as the first place to look. Important emails surface without scanning every inbox, deadlines appear before they become problems, bills and transactions are ready to act on, and the current snapshot stays useful as live data changes throughout the day.
 
+The News tab is a personalized front page of tech-news headlines, organized into owner-defined topics and read at a glance — scan here, read at source. It is deliberately not a reading app: there is no AI classification, summarization, or ranking; no full-article fetching or in-app reading; no per-item read state, save-for-later, or bookmarks; and it never generates Needs-You items or notifications. The only "have I seen this" signal is a single per-visit seen-marker divider.
+
 ## Brand Personality
 
 Quiet, exacting, personal.

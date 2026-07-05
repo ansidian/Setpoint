@@ -22,6 +22,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `calendar.js` — calendar CRUD, deadline reads, event search, reminder hydration
 - `dashboard.js` — dashboard state, current-data SSE stream, health checks
 - `notes.js` — notes CRUD and reordering
+- `news.js` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.js` — Discord reminder testing and configuration
 - `settings.js` — user settings, model selection, integration configs
 - `gmail-push.js` — Gmail Pub/Sub push intake, queues history syncs

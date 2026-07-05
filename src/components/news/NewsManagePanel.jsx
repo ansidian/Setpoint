@@ -101,15 +101,25 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
   }
 
   return createPortal(
-    <div
-      ref={panelRef}
-      style={{
-        position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 92vw)",
-        background: "#16161e", isolation: "isolate", overscrollBehavior: "contain",
-        borderLeft: "1px solid rgba(255,255,255,0.08)", boxShadow: "-12px 0 32px rgba(0,0,0,0.4)",
-        display: "flex", flexDirection: "column", zIndex: 1000,
-      }}
-    >
+    <>
+      <div
+        aria-hidden
+        style={{
+          position: "fixed", inset: 0, zIndex: 999,
+          background: "rgba(11,11,19,0.45)",
+          animation: "newsBackdropIn 200ms ease-out",
+        }}
+      />
+      <div
+        ref={panelRef}
+        style={{
+          position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 92vw)",
+          background: "#16161e", isolation: "isolate", overscrollBehavior: "contain",
+          borderLeft: "1px solid rgba(255,255,255,0.08)", boxShadow: "-12px 0 32px rgba(0,0,0,0.4)",
+          display: "flex", flexDirection: "column", zIndex: 1000,
+          animation: "newsPanelIn 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
@@ -186,6 +196,7 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
                         aria-label={source.title}
                         checked={source.enabled}
                         onChange={() => handleToggleSource(source)}
+                        style={{ accentColor: "var(--sp-accent)", cursor: "pointer", width: 13, height: 13, margin: 0 }}
                       />
                       <span style={{
                         color: "var(--sp-text)", flex: 1, overflow: "hidden",
@@ -228,7 +239,8 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
           ))
         )}
       </div>
-    </div>,
+      </div>
+    </>,
     document.body,
   );
 }

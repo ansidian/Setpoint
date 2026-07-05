@@ -66,6 +66,59 @@ describe("normalizeFeedItem", () => {
       thumbnail_url: "https://site.test/a.jpg",
     });
   });
+
+  it("extracts a media:group-nested thumbnail (YouTube feeds)", async () => {
+    const { parseFeedXml } = await import("./news-poller.js");
+    const feed = await parseFeedXml(`<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <entry>
+    <id>yt:video:abc123</id>
+    <title>GPU review</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=abc123"/>
+    <published>2026-07-03T10:00:00+00:00</published>
+    <media:group>
+      <media:title>GPU review</media:title>
+      <media:thumbnail url="https://i.ytimg.com/vi/abc123/hqdefault.jpg" width="480" height="360"/>
+      <media:description>desc</media:description>
+    </media:group>
+  </entry>
+</feed>`);
+    const item = normalizeFeedItem(feed.items[0]);
+    expect(item.thumbnail_url).toBe("https://i.ytimg.com/vi/abc123/hqdefault.jpg");
+  });
+
+  it("falls back to the first <img> in content html when no metadata thumbnail exists", async () => {
+    const { parseFeedXml } = await import("./news-poller.js");
+    const feed = await parseFeedXml(`<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>https://site.test/verge-style</id>
+    <title>Story</title>
+    <link rel="alternate" href="https://site.test/verge-style"/>
+    <content type="html">&lt;figure&gt;&lt;img alt="hero" src="https://cdn.site.test/hero.jpg" /&gt;&lt;/figure&gt;&lt;p&gt;Body text&lt;/p&gt;</content>
+  </entry>
+</feed>`);
+    const item = normalizeFeedItem(feed.items[0]);
+    expect(item.thumbnail_url).toBe("https://cdn.site.test/hero.jpg");
+  });
+
+  it("prefers a metadata thumbnail over content-html images", async () => {
+    const { parseFeedXml } = await import("./news-poller.js");
+    const feed = await parseFeedXml(`<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel><title>T</title>
+    <item>
+      <title>Story</title>
+      <link>https://site.test/c</link>
+      <guid>tag:site.test,c</guid>
+      <media:thumbnail url="https://site.test/meta.jpg"/>
+      <content:encoded><![CDATA[<img src="https://site.test/inline.jpg"><p>body</p>]]></content:encoded>
+    </item>
+  </channel>
+</rss>`);
+    const item = normalizeFeedItem(feed.items[0]);
+    expect(item.thumbnail_url).toBe("https://site.test/meta.jpg");
+  });
 });
 
 describe("syncNewsSource", () => {
@@ -162,6 +215,46 @@ describe("sweepNewsSources + worker", () => {
     });
     expect(result.swept).toBe(0);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("fetches at most one reddit source per sweep, deferring the rest without recording failures", async () => {
+    const db = await createMigratedDb();
+    await db.execute("INSERT INTO ea_news_topics (user_id, name, position) VALUES ('u1', 'T', 0)");
+    for (const feedUrl of [
+      "https://www.reddit.com/r/news/.rss",
+      "https://www.reddit.com/r/politics/.rss",
+      "https://site.test/feed",
+    ]) {
+      await db.execute({
+        sql: `INSERT INTO ea_news_sources (topic_id, kind, title, feed_url, enabled, consecutive_failures)
+              VALUES (1, 'rss', ?, ?, 1, 0)`,
+        args: [feedUrl, feedUrl],
+      });
+    }
+    const fetchImpl = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
+    const result = await sweepNewsSources({ dbClient: db, fetchImpl, staggerMs: 0 });
+    expect(result.swept).toBe(2);
+    const fetchedUrls = fetchImpl.mock.calls.map(([url]) => url);
+    expect(fetchedUrls.filter((url) => url.includes("reddit.com"))).toHaveLength(1);
+    expect(fetchedUrls).toContain("https://site.test/feed");
+    const deferred = (await db.execute(
+      "SELECT * FROM ea_news_sources WHERE feed_url LIKE '%reddit%' AND last_fetch_at IS NULL",
+    )).rows;
+    expect(deferred).toHaveLength(1);
+    expect(Number(deferred[0].consecutive_failures)).toBe(0);
+  });
+
+  it("rotates deferred same-host sources: least recently fetched goes first", async () => {
+    const db = await createMigratedDb();
+    await db.execute("INSERT INTO ea_news_topics (user_id, name, position) VALUES ('u1', 'T', 0)");
+    await db.execute(`INSERT INTO ea_news_sources (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
+                      VALUES (1, 'rss', 'r/news', 'https://www.reddit.com/r/news/.rss', 1, 0, '2026-07-04T11:40:00.000Z')`);
+    await db.execute(`INSERT INTO ea_news_sources (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
+                      VALUES (1, 'rss', 'r/politics', 'https://www.reddit.com/r/politics/.rss', 1, 0, '2026-07-04T11:20:00.000Z')`);
+    const fetchImpl = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
+    await sweepNewsSources({ dbClient: db, fetchImpl, staggerMs: 0 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toBe("https://www.reddit.com/r/politics/.rss");
   });
 
   it("startNewsPollWorker guards against double start", async () => {

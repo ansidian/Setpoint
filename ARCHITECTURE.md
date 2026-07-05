@@ -415,6 +415,10 @@ Model selection is user-configurable through `/api/ea/models`, defaults to Anthr
 
 **Current Data Cache** — Non-email boot-critical data is cached by user and cache key, with health metadata exposed in the current dashboard envelope.
 
+## News Tab
+
+The fifth shell tab: RSS/Atom headlines only, no AI classification or summarization, $0 running cost. Migration `026_news.sql` adds `ea_news_topics` (owner-named topic sections), `ea_news_sources` (per-topic feed rows; `kind='hn'` sources build their `hnrss.org` URL from `hn_query`/`min_points` instead of storing one), and `ea_news_items` (a rolling window keyed unique on `(source_id, guid)`, plus `ea_settings.news_last_seen_at` for the single seen-marker). `server/news/news-poller.js` is an in-process interval worker (mirrors the `bills-mirror-sync`/`calendar-search-mirror` pattern): a 20-minute sweep does conditional-GET fetches (`ETag`/`Last-Modified`, 10s timeout), parses with `rss-parser`, upserts items, self-heals redirected feed URLs, and backs a source off to a ~6h retry cadence after 5 consecutive failures. Retention keeps the newest 30 items per source and additionally deletes anything older than 14 days beyond that. `server/routes/news.js` exposes the page payload (`GET /api/news`), topic/source CRUD, starter-catalog import, an add-source preview endpoint (fetches the pasted URL and follows one autodiscovered `<link rel=alternate>` if it isn't already a feed), the seen-marker bump, and a debounced manual refresh.
+
 ## Data Sources
 
 | Source | Module | API | Auth | Failure Behavior |
