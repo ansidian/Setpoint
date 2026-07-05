@@ -491,6 +491,77 @@ export async function handleDemoApiRequest(path, options = {}) {
     return { ok: true };
   }
 
+  if (pathname === "/api/news/seen" && method === "POST") {
+    seed.news.lastSeenAt = body.at || new Date().toISOString();
+    return { ok: true, at: seed.news.lastSeenAt };
+  }
+
+  if (pathname === "/api/news/refresh" && method === "POST") {
+    return { swept: 0, throttled: false };
+  }
+
+  if (pathname === "/api/news/topics" && method === "POST") {
+    const name = body.name;
+    const id = Math.max(0, ...seed.news.topics.map((t) => t.id)) + 1;
+    seed.news.topics.push({ id, name, position: seed.news.topics.length, sources: [], items: [] });
+    return { id, name };
+  }
+
+  if (pathname === "/api/news/topics/reorder" && method === "POST") {
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+    seed.news.topics.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    seed.news.topics.forEach((topic, index) => { topic.position = index; });
+    return { ok: true };
+  }
+
+  if (pathname === "/api/news/topics/import-starter" && method === "POST") {
+    return { imported: body.names || [] };
+  }
+
+  if (pathname.match(/^\/api\/news\/topics\/[^/]+$/) && method === "PATCH") {
+    const id = Number(pathname.split("/").at(-1));
+    const topic = seed.news.topics.find((t) => t.id === id);
+    if (topic) topic.name = body.name || topic.name;
+    return { ok: true };
+  }
+
+  if (pathname.match(/^\/api\/news\/topics\/[^/]+$/) && method === "DELETE") {
+    const id = Number(pathname.split("/").at(-1));
+    seed.news.topics = seed.news.topics.filter((t) => t.id !== id);
+    return { ok: true };
+  }
+
+  if (pathname === "/api/news/sources/preview" && method === "POST") {
+    return { feedUrl: "https://demo.example/feed", title: "Demo Feed", sampleTitles: ["Sample headline"] };
+  }
+
+  if (pathname === "/api/news/sources" && method === "POST") {
+    const topic = seed.news.topics.find((t) => t.id === Number(body.topicId));
+    const id = Date.now() % 100000;
+    const source = {
+      id, topicId: body.topicId, kind: body.kind || "rss", title: body.title,
+      feedUrl: body.feedUrl || "https://demo.example/feed", siteUrl: body.siteUrl || null,
+      enabled: true, hnQuery: body.hnQuery ?? null, minPoints: body.minPoints ?? null,
+      lastStatus: null, lastFetchAt: null, consecutiveFailures: 0,
+    };
+    if (topic) topic.sources.push(source);
+    return { source };
+  }
+
+  if (pathname.match(/^\/api\/news\/sources\/[^/]+$/) && (method === "PATCH" || method === "DELETE")) {
+    const id = Number(pathname.split("/").at(-1));
+    for (const topic of seed.news.topics) {
+      if (method === "DELETE") {
+        topic.sources = topic.sources.filter((s) => s.id !== id);
+        topic.items = topic.items.filter((i) => i.sourceId !== id);
+      } else {
+        const source = topic.sources.find((s) => s.id === id);
+        if (source) Object.assign(source, body);
+      }
+    }
+    return { ok: true };
+  }
+
   if (pathname === "/api/ea/settings" && method === "PUT") {
     Object.assign(seed.settings, body);
     return clone(seed.settings);
@@ -640,6 +711,10 @@ export async function handleDemoApiRequest(path, options = {}) {
     };
   }
   if (pathname === "/api/notes") return clone(seed.notes);
+  if (pathname === "/api/news") return clone(seed.news);
+  if (pathname === "/api/news/catalog") {
+    return { topics: [{ name: "3D Printing", sources: [] }, { name: "AI", sources: [] }] };
+  }
   if (pathname === "/api/ea/models" || pathname === "/api/ea/bill-extract-models") {
     return [{
       provider: "demo",

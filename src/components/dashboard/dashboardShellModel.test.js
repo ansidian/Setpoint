@@ -220,6 +220,10 @@ describe("dashboard shell model", () => {
     it("maps '4' to notes", () => {
       expect(resolveShellTabHotkey({ key: "4" })).toBe("notes");
     });
+
+    it("resolves hotkey 5 to the news tab", () => {
+      expect(resolveShellTabHotkey({ key: "5" })).toBe("news");
+    });
   });
 
   describe("alfred hotkeys", () => {
