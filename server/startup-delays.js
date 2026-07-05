@@ -6,6 +6,7 @@ const PRODUCTION_TODOIST_SYNC_OFFSET_MS = 0;
 const PRODUCTION_BILLS_MIRROR_OFFSET_MS = 30_000;
 const PRODUCTION_CALENDAR_SEARCH_MIRROR_OFFSET_MS = 60_000;
 const PRODUCTION_REMINDERS_OFFSET_MS = 0;
+const PRODUCTION_NEWS_OFFSET_MS = 20_000;
 
 function parseNonNegativeInt(value, fallback) {
   const parsed = Number.parseInt(value || "", 10);
@@ -51,6 +52,10 @@ export function buildStartupWorkerDelays(env = process.env, random = Math.random
     env.EA_STARTUP_REMINDERS_OFFSET_MS,
     isProduction ? PRODUCTION_REMINDERS_OFFSET_MS : 0,
   );
+  const newsOffsetMs = parseNonNegativeInt(
+    env.EA_STARTUP_NEWS_OFFSET_MS,
+    isProduction ? PRODUCTION_NEWS_OFFSET_MS : 0,
+  );
 
   return {
     scheduler: delayMs,
@@ -61,5 +66,6 @@ export function buildStartupWorkerDelays(env = process.env, random = Math.random
     billsMirror: delayMs + billsMirrorOffsetMs,
     calendarSearchMirror: delayMs + calendarSearchMirrorOffsetMs,
     reminders: delayMs + remindersOffsetMs,
+    news: delayMs + newsOffsetMs,
   };
 }

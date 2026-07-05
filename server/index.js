@@ -16,6 +16,7 @@ import calendarRoutes from "./routes/calendar.js";
 import alfredRoutes from "./routes/alfred.js";
 import { startAlfredConversationSweeper } from "./alfred/alfred-conversations.js";
 import notesRoutes from "./routes/notes.js";
+import newsRoutes from "./routes/news.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
 import todoistWebhookRoutes from "./routes/todoist-webhook.js";
 import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker } from "./scheduler.js";
@@ -24,6 +25,7 @@ import { startEmailBackfillWorker } from "./email/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.js";
 import { startBillsMirrorRefreshWorker } from "./bills/bills-service.js";
 import { startCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
+import { startNewsPollWorker } from "./news/news-poller.js";
 import { migrate } from "./db/migrate.js";
 import { migrateCbcEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
@@ -95,6 +97,7 @@ app.use("/api/ea", accountsRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/alfred", alfredRoutes);
 app.use("/api/notes", notesRoutes);
+app.use("/api/news", newsRoutes);
 app.use("/api/gmail", gmailPushRoutes);
 
 // Serve static frontend in production (behind auth)
@@ -149,6 +152,7 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
       scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
       scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
+      scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
       startAlfredConversationSweeper();
     });
   }).catch((err) => {
