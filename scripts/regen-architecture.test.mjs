@@ -98,6 +98,22 @@ describe("extractMigrationTables", () => {
     ])
   })
 
+  it("ignores CREATE/ALTER TABLE phrases inside SQL comments", () => {
+    const result = extractMigrationTables([
+      {
+        file: "023_rebuild.sql",
+        source: [
+          "-- CREATE TABLE IF NOT EXISTS silently no-opped against the old shape. Rebuild",
+          "/* ALTER TABLE ghost_block is also just prose */",
+          "CREATE TABLE ea_pinned_emails (id TEXT);",
+        ].join("\n"),
+      },
+    ])
+    expect(result).toEqual([
+      { table: "ea_pinned_emails", migrations: ["023_rebuild.sql"] },
+    ])
+  })
+
   it("returns tables sorted alphabetically for stable output", () => {
     const result = extractMigrationTables([
       { file: "001_init.sql", source: "CREATE TABLE IF NOT EXISTS zeta (a TEXT); CREATE TABLE IF NOT EXISTS alpha (a TEXT);" },

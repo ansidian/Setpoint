@@ -642,7 +642,6 @@ erDiagram
 | `ea_triage_rules` | `001_ea_tables.sql` |
 | `ea_webauthn_challenges` | `012_passkey_auth.sql` |
 | `migrations` | `024_retire_legacy_ledger_rows.sql` |
-| `silently` | `023_pinned_emails_rebuild.sql` |
 <!-- END:db -->
 
 ## Key Patterns
