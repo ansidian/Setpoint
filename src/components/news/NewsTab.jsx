@@ -5,11 +5,40 @@ import { resolveDividerMarker } from "./newsPageModel.js";
 import NewsView from "./NewsView.jsx";
 import NewsManagePanel from "./NewsManagePanel.jsx";
 
+const HIDE_SEEN_KEY = "news.hideSeen";
+
+function readHideSeen() {
+  try {
+    return window.localStorage.getItem(HIDE_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function NewsTab({ active }) {
   const { news, loading, error, refreshing, reload, refresh } = useNews({ active });
   const [prevNews, setPrevNews] = useState(news);
   const [dividerMarker, setDividerMarker] = useState(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [hideSeen, setHideSeen] = useState(readHideSeen);
+
+  const toggleHideSeen = () => {
+    setHideSeen((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(HIDE_SEEN_KEY, next ? "1" : "0");
+      } catch {
+        // storage unavailable (private mode) — session-only toggle is fine
+      }
+      return next;
+    });
+  };
+
+  const markAllSeen = () => {
+    const now = new Date().toISOString();
+    markNewsSeen(now).catch(() => {});
+    setDividerMarker(now);
+  };
 
   // Hold the first non-null server marker for the whole visit; background
   // refetches must not move the divider mid-scan. Adjusting state during
@@ -46,6 +75,9 @@ export default function NewsTab({ active }) {
         error={error}
         refreshing={refreshing}
         dividerMarker={dividerMarker}
+        hideSeen={hideSeen}
+        onToggleHideSeen={toggleHideSeen}
+        onMarkAllSeen={markAllSeen}
         onRefresh={refresh}
         onOpenManage={() => setManageOpen(true)}
         onReload={reload}

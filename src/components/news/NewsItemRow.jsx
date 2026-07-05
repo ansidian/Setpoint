@@ -43,7 +43,6 @@ export default function NewsItemRow({ item, variant = "compact" }) {
         <span
           className="news-row-title"
           style={{
-            color: "var(--sp-text)",
             fontSize: lead ? 14 : 12.5,
             fontWeight: lead ? 600 : 400,
             lineHeight: 1.4,

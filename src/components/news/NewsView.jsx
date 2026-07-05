@@ -8,12 +8,14 @@ import NewsTopicSection from "./NewsTopicSection.jsx";
 // `breakInside: avoid` on each section keeps a topic in one column.
 const COLUMN_FLOW = { columnWidth: 360, columnGap: 44 };
 
-function HeaderButton({ onClick, disabled, children, ariaLabel }) {
+function HeaderButton({ onClick, disabled, children, ariaLabel, ariaPressed }) {
   const [hover, setHover] = useState(false);
+  const active = ariaPressed === true;
   return (
     <button
       type="button"
       aria-label={ariaLabel}
+      aria-pressed={ariaPressed}
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
@@ -26,9 +28,9 @@ function HeaderButton({ onClick, disabled, children, ariaLabel }) {
         gap: 6,
         padding: "6px 10px",
         borderRadius: 8,
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 45%, transparent)" : "rgba(255,255,255,0.08)"}`,
         background: hover && !disabled ? "rgba(255,255,255,0.06)" : "transparent",
-        color: "var(--sp-text)",
+        color: active ? "var(--sp-accent)" : "var(--sp-text)",
         fontSize: 12,
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.6 : 1,
@@ -70,7 +72,8 @@ function NewsSkeleton() {
 }
 
 export default function NewsView({
-  news, loading, error, refreshing, dividerMarker, onRefresh, onOpenManage, onReload,
+  news, loading, error, refreshing, dividerMarker, hideSeen,
+  onToggleHideSeen, onMarkAllSeen, onRefresh, onOpenManage, onReload,
 }) {
   if (error && !news) {
     return (
@@ -106,6 +109,12 @@ export default function NewsView({
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <HeaderButton onClick={onToggleHideSeen} disabled={!news} ariaLabel="New only" ariaPressed={!!hideSeen}>
+            New only
+          </HeaderButton>
+          <HeaderButton onClick={onMarkAllSeen} disabled={!news} ariaLabel="Mark all seen">
+            Mark all seen
+          </HeaderButton>
           <HeaderButton onClick={onRefresh} disabled={refreshing || !news} ariaLabel="Refresh news">
             <RefreshCw size={13} style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }} />
           </HeaderButton>
@@ -120,7 +129,7 @@ export default function NewsView({
       ) : (
         <div style={COLUMN_FLOW}>
           {news.topics.map((topic) => (
-            <NewsTopicSection key={topic.id} topic={topic} dividerMarker={dividerMarker} />
+            <NewsTopicSection key={topic.id} topic={topic} dividerMarker={dividerMarker} hideSeen={hideSeen} />
           ))}
         </div>
       )}
