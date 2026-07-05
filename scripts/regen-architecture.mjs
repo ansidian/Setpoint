@@ -63,6 +63,12 @@ export function extractRoutes(source, file) {
   return routes
 }
 
+// SQL comments can mention "CREATE TABLE ..." as prose (023 does), so strip
+// them before matching statements.
+function stripSqlComments(sql) {
+  return sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "")
+}
+
 export function extractMigrationTables(migrations) {
   const map = new Map()
   const renames = new Map()
@@ -77,9 +83,10 @@ export function extractMigrationTables(migrations) {
   }
 
   for (const { file, source } of migrations) {
-    for (const m of source.matchAll(createRe)) record(m[1], file)
-    for (const m of source.matchAll(alterRe)) record(m[1], file)
-    for (const m of source.matchAll(renameRe)) renames.set(m[1], m[2])
+    const sql = stripSqlComments(source)
+    for (const m of sql.matchAll(createRe)) record(m[1], file)
+    for (const m of sql.matchAll(alterRe)) record(m[1], file)
+    for (const m of sql.matchAll(renameRe)) renames.set(m[1], m[2])
   }
 
   for (const [from, to] of renames) {
