@@ -1,3 +1,5 @@
+import { buildDemoNews } from "./newsData.js";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
@@ -782,6 +784,7 @@ function makeDemoSeed(now = new Date()) {
       { id: "demo-note-3", content: "Talk track: single-user system, rolling data boundary, inbox triage, calendar overlays, Actual Budget mapping.", sort_order: 3, created_at: fetchedAt, updated_at: fetchedAt },
       { id: "demo-note-4", content: "Capture screenshots on a weekday: inbox pressure, month calendar density, selected deadline rail, bills ledger.", sort_order: 4, created_at: fetchedAt, updated_at: fetchedAt },
     ],
+    news: buildDemoNews(),
     importantSenders: [
       { address: "morgan@northstar.example", name: "Morgan Lee", source: "auto" },
       { address: "alerts@pagerduty.example", name: "PagerDuty", source: "auto" },

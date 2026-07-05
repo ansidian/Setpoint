@@ -4,7 +4,7 @@ import {
   BarChart3,
   LayoutList, Inbox, Clock, AlertCircle, CreditCard,
   RefreshCw, Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon,
-  CalendarPlus, ListPlus, Notebook,
+  CalendarPlus, ListPlus, Notebook, Newspaper,
 } from "lucide-react";
 
 /**
@@ -45,6 +45,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
     { id: "calendar",     icon: CalendarDays, label: "Go to Calendar",  hint: "3", kind: "tab", payload: "calendar" },
     { id: "go-notes",     icon: Notebook,   label: "Go to Notes",      hint: "4", kind: "tab", payload: "notes" },
+    { id: "go-news",      icon: Newspaper,  label: "Go to News",       hint: "5", kind: "tab", payload: "news" },
     { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },
     { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
 { id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },

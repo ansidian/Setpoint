@@ -402,3 +402,28 @@ export const deleteNote = (id) => apiFetch(`/api/notes/${id}`, { method: "DELETE
 export const reorderNotes = (noteIds) => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
 export const archiveNote = (id, archived) =>
   apiFetch(`/api/notes/${id}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) });
+
+// News
+export const getNews = () => apiFetch("/api/news");
+export const getNewsCatalog = () => apiFetch("/api/news/catalog");
+export const markNewsSeen = (at) =>
+  apiFetch("/api/news/seen", { method: "POST", body: JSON.stringify({ at }) });
+export const refreshNews = () => apiFetch("/api/news/refresh", { method: "POST" });
+export const createNewsTopic = (name) =>
+  apiFetch("/api/news/topics", { method: "POST", body: JSON.stringify({ name }) });
+export const renameNewsTopic = (id, name) =>
+  apiFetch(`/api/news/topics/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+export const reorderNewsTopics = (ids) =>
+  apiFetch("/api/news/topics/reorder", { method: "POST", body: JSON.stringify({ ids }) });
+export const deleteNewsTopic = (id) =>
+  apiFetch(`/api/news/topics/${id}`, { method: "DELETE" });
+export const importNewsStarterTopics = (names) =>
+  apiFetch("/api/news/topics/import-starter", { method: "POST", body: JSON.stringify({ names }) });
+export const previewNewsSource = (url) =>
+  apiFetch("/api/news/sources/preview", { method: "POST", body: JSON.stringify({ url }) });
+export const createNewsSource = (data) =>
+  apiFetch("/api/news/sources", { method: "POST", body: JSON.stringify(data) });
+export const updateNewsSource = (id, data) =>
+  apiFetch(`/api/news/sources/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteNewsSource = (id) =>
+  apiFetch(`/api/news/sources/${id}`, { method: "DELETE" });

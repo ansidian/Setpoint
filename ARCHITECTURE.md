@@ -93,6 +93,7 @@ src/
 │   │   ├── reader/
 │   │   └── test-utils/
 │   ├── layout/
+│   ├── news/
 │   ├── notes/
 │   ├── settings/
 │   │   ├── cards/
@@ -262,6 +263,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useIsMobile` | `src/hooks/useIsMobile.js` |
 | `useKeyHold` | `src/hooks/useKeyHold.js` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.js` |
+| `useNews` | `src/hooks/useNews.js` |
 | `useNotifications` | `src/hooks/useNotifications.js` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.js` |
 | `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.js` |

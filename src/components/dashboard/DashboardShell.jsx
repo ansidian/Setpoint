@@ -31,6 +31,8 @@ const importInboxView = () => import("../inbox/InboxView");
 const InboxView = lazy(importInboxView);
 const importNotesTab = () => import("../notes/NotesTab");
 const NotesTab = lazy(importNotesTab);
+const importNewsTab = () => import("../news/NewsTab.jsx");
+const NewsTab = lazy(importNewsTab);
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
 // Former Customize defaults, now hardcoded. The accent + serif are also baked
@@ -93,6 +95,8 @@ export function DashboardShell({
   useWarmImport(importCalendar);
   // And the notes chunk so the first switch to the notes tab is instant.
   useWarmImport(importNotesTab);
+  // And the news chunk so the first switch to the news tab is instant.
+  useWarmImport(importNewsTab);
   // Mobile shell history is owned here (the parent) so the tab entry and the
   // reader entry are pushed in a deterministic order (tab, then reader) for both
   // entry points: tapping a list row and opening an email from a dashboard rail.
@@ -111,9 +115,13 @@ export function DashboardShell({
   // Declared before setShellTab so the calendar mount-on-first-visit setter is in
   // scope; the calendar tab stays mounted (Activity-frozen) once first visited.
   const [calendarMounted, setCalendarMounted] = useState(false);
+  // Same mount-on-first-visit treatment for news: it fetches on mount, so avoid
+  // eagerly hitting the news API before the owner ever opens the tab.
+  const [newsMounted, setNewsMounted] = useState(false);
   const setShellTab = useCallback((nextTab) => {
-    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes") return;
+    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes" && nextTab !== "news") return;
     if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
+    if (nextTab === "news") setNewsMounted(true); // mount-on-first-visit
     if (!isMobile || nextTab === tab) {
       // Non-urgent so the show/hide + re-mounted effects yield to user input.
       startTransition(() => setTab(nextTab));
@@ -529,6 +537,13 @@ export function DashboardShell({
           <Suspense fallback={null}>
             <NotesTab accent={accent} isMobile={isMobile} />
           </Suspense>
+        </KeepAliveTab>
+        <KeepAliveTab active={tab === "news"}>
+          {newsMounted ? (
+            <Suspense fallback={null}>
+              <NewsTab active={tab === "news"} />
+            </Suspense>
+          ) : null}
         </KeepAliveTab>
       </div>
 
