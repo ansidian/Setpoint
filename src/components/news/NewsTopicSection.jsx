@@ -1,22 +1,17 @@
-import { splitItemsBySeen } from "./newsPageModel.js";
+import { describeSourceHealth, planTopicSection } from "./newsPageModel.js";
 import NewsItemRow from "./NewsItemRow.jsx";
-
-const QUIET_ITEM_CAP = 5;
-const OLDER_ITEM_CAP = 8;
 
 // One topic section: label header with a fresh-count pill, a lead story
 // (newest fresh item, or the newest item at all when the topic is quiet),
 // compact headlines, and the seen divider between fresh and older items.
-// Seen items are context, not content — they cap at OLDER_ITEM_CAP so one
-// noisy feed can't turn its column into a 30-row archive.
-export default function NewsTopicSection({ topic, dividerMarker }) {
-  const hasItems = topic.items.length > 0;
-  const { fresh, older } = splitItemsBySeen(topic.items, dividerMarker);
-  const isQuiet = hasItems && fresh.length === 0;
-  const lead = fresh[0] ?? older[0] ?? null;
-  const freshRest = fresh.slice(1);
-  const visibleOlder = isQuiet ? older.slice(1, QUIET_ITEM_CAP) : older.slice(0, OLDER_ITEM_CAP);
-  const showDivider = fresh.length > 0 && visibleOlder.length > 0;
+// Seen items are context, not content — they cap at OLDER_ITEM_CAP (see
+// planTopicSection) so one noisy feed can't turn its column into a 30-row
+// archive. hideSeen suppresses older rows/divider/quiet-lead-fallback
+// entirely, rendering a "Nothing new" stub for quiet topics instead.
+export default function NewsTopicSection({ topic, dividerMarker, hideSeen }) {
+  const { hasItems, quiet, nothingNew, freshCount, lead, freshRest, visibleOlder, showDivider } =
+    planTopicSection(topic.items, dividerMarker, { hideSeen });
+  const failingCount = (topic.sources || []).filter((s) => describeSourceHealth(s).failing).length;
 
   return (
     <section style={{ breakInside: "avoid", marginBottom: 30 }}>
@@ -26,7 +21,7 @@ export default function NewsTopicSection({ topic, dividerMarker }) {
           alignItems: "center",
           gap: 10,
           margin: "0 0 10px",
-          opacity: isQuiet ? 0.62 : 1,
+          opacity: quiet ? 0.62 : 1,
         }}
       >
         <h3
@@ -42,7 +37,7 @@ export default function NewsTopicSection({ topic, dividerMarker }) {
         >
           {topic.name}
         </h3>
-        {fresh.length > 0 ? (
+        {freshCount > 0 ? (
           <span
             style={{
               fontSize: 10,
@@ -54,13 +49,20 @@ export default function NewsTopicSection({ topic, dividerMarker }) {
               whiteSpace: "nowrap",
             }}
           >
-            {fresh.length} new
+            {freshCount} new
+          </span>
+        ) : null}
+        {failingCount > 0 ? (
+          <span style={{ fontSize: 10, color: "var(--sp-rose)", whiteSpace: "nowrap" }}>
+            {failingCount === 1 ? "1 source failing" : `${failingCount} sources failing`}
           </span>
         ) : null}
         <span aria-hidden style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.07)" }} />
       </header>
       {!hasItems ? (
         <div style={{ color: "var(--sp-overlay)", fontSize: 12 }}>No stories yet</div>
+      ) : nothingNew ? (
+        <div style={{ color: "var(--sp-overlay)", fontSize: 12 }}>Nothing new</div>
       ) : (
         <div>
           <NewsItemRow item={lead} variant="lead" />

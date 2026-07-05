@@ -232,16 +232,24 @@ body {
 }
 
 /* News rows: the whole row is the link; hover tints the row and re-colors the
-   title. Kept in CSS so 30+ headline rows don't each carry hover state. */
+   title. Kept in CSS so 30+ headline rows don't each carry hover state.
+   Title color lives here (inherited by .news-row-title) so :visited can
+   quiet already-clicked headlines — browsers only honor color-type
+   properties on :visited, applied to the link element itself. */
 .news-row {
   text-decoration: none;
   border-radius: 8px;
+  color: var(--sp-text);
   transition: background 150ms ease;
+}
+.news-row:visited {
+  color: var(--sp-subtext);
 }
 .news-row:hover {
   background: rgba(255, 255, 255, 0.035);
 }
 .news-row .news-row-title {
+  color: inherit;
   transition: color 150ms ease;
 }
 .news-row:hover .news-row-title,

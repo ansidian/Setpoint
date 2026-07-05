@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { describeSourceHealth, displayExcerpt, resolveDividerMarker, splitItemsBySeen } from "./newsPageModel.js";
+import {
+  describeSourceHealth,
+  displayExcerpt,
+  planTopicSection,
+  resolveDividerMarker,
+  splitItemsBySeen,
+} from "./newsPageModel.js";
 
 const item = (id, publishedAt) => ({ id, publishedAt });
 
@@ -42,6 +48,52 @@ describe("displayExcerpt", () => {
     expect(displayExcerpt("A real summary of the story.")).toBe("A real summary of the story.");
     expect(displayExcerpt(null)).toBe("");
     expect(displayExcerpt(undefined)).toBe("");
+  });
+});
+
+describe("planTopicSection", () => {
+  const divider = "2026-07-04T10:00:00Z";
+  const freshItem = item(1, "2026-07-04T12:00:00Z");
+  const oldA = item(2, "2026-07-04T08:00:00Z");
+  const oldB = item(3, "2026-07-04T07:00:00Z");
+
+  it("default view: lead from fresh, older capped at 8, divider between", () => {
+    const olderMany = Array.from({ length: 10 }, (_, i) => item(10 + i, "2026-07-04T0" + (i % 9) + ":00:00Z"));
+    const plan = planTopicSection([freshItem, ...olderMany], divider, { hideSeen: false });
+    expect(plan.lead).toBe(freshItem);
+    expect(plan.freshCount).toBe(1);
+    expect(plan.visibleOlder.length).toBe(8);
+    expect(plan.showDivider).toBe(true);
+    expect(plan.nothingNew).toBe(false);
+  });
+
+  it("default view when quiet: lead falls back to newest older, remainder capped at 5 total", () => {
+    const plan = planTopicSection([oldA, oldB], divider, { hideSeen: false });
+    expect(plan.lead).toBe(oldA);
+    expect(plan.visibleOlder).toEqual([oldB]);
+    expect(plan.quiet).toBe(true);
+    expect(plan.showDivider).toBe(false);
+  });
+
+  it("hideSeen: older rows and divider suppressed, fresh untouched", () => {
+    const plan = planTopicSection([freshItem, oldA], divider, { hideSeen: true });
+    expect(plan.lead).toBe(freshItem);
+    expect(plan.visibleOlder).toEqual([]);
+    expect(plan.showDivider).toBe(false);
+    expect(plan.nothingNew).toBe(false);
+  });
+
+  it("hideSeen when quiet: no stale lead fallback, nothingNew flags the stub", () => {
+    const plan = planTopicSection([oldA, oldB], divider, { hideSeen: true });
+    expect(plan.lead).toBeNull();
+    expect(plan.visibleOlder).toEqual([]);
+    expect(plan.nothingNew).toBe(true);
+  });
+
+  it("no items at all is not nothingNew (that's the 'No stories yet' state)", () => {
+    const plan = planTopicSection([], divider, { hideSeen: true });
+    expect(plan.hasItems).toBe(false);
+    expect(plan.nothingNew).toBe(false);
   });
 });
 
