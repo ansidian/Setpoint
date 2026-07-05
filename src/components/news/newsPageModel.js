@@ -19,6 +19,16 @@ export function resolveDividerMarker(payloadLastSeenAt, heldMarker) {
   return heldMarker ?? payloadLastSeenAt ?? null;
 }
 
+// Link-aggregator feeds put boilerplate where an excerpt should be — hnrss's
+// "Article URL: … Comments URL: …", reddit's "submitted by /u/… [link]
+// [comments]"; both read as junk under a headline.
+export function displayExcerpt(excerpt) {
+  if (!excerpt) return "";
+  if (/^\s*Article URL:/i.test(excerpt)) return "";
+  if (/^\s*submitted by\s/i.test(excerpt)) return "";
+  return excerpt;
+}
+
 const FAILING_THRESHOLD = 5;
 
 export function describeSourceHealth(source) {

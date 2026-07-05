@@ -4,6 +4,10 @@ import { timeAgo } from "../dashboard/rails/railModel.js";
 import EmptyStateSplash from "../shared/EmptyStateSplash.jsx";
 import NewsTopicSection from "./NewsTopicSection.jsx";
 
+// Topics flow top-to-bottom through CSS columns (newspaper reading order);
+// `breakInside: avoid` on each section keeps a topic in one column.
+const COLUMN_FLOW = { columnWidth: 360, columnGap: 44 };
+
 function HeaderButton({ onClick, disabled, children, ariaLabel }) {
   const [hover, setHover] = useState(false);
   return (
@@ -36,11 +40,38 @@ function HeaderButton({ onClick, disabled, children, ariaLabel }) {
   );
 }
 
+function updatedLabel(lastUpdatedAt) {
+  if (!lastUpdatedAt) return "waiting for the first fetch";
+  const ago = timeAgo(lastUpdatedAt);
+  return ago === "now" ? "updated just now" : `updated ${ago} ago`;
+}
+
+function skeletonBar(width, height = 10) {
+  return { width, height, borderRadius: 4, background: "rgba(255,255,255,0.05)" };
+}
+
+function NewsSkeleton() {
+  return (
+    <div aria-hidden style={COLUMN_FLOW}>
+      {[0, 1, 2].map((section) => (
+        <div key={section} style={{ breakInside: "avoid", marginBottom: 30, display: "grid", gap: 12 }}>
+          <div style={skeletonBar(90, 8)} />
+          <div style={{ display: "grid", gap: 6 }}>
+            <div style={skeletonBar("85%", 13)} />
+            <div style={skeletonBar("55%", 13)} />
+          </div>
+          {[0, 1, 2, 3].map((row) => (
+            <div key={row} style={skeletonBar(`${88 - row * 9}%`)} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function NewsView({
   news, loading, error, refreshing, dividerMarker, onRefresh, onOpenManage, onReload,
 }) {
-  if (loading && !news) return null;
-
   if (error && !news) {
     return (
       <EmptyStateSplash
@@ -52,9 +83,9 @@ export default function NewsView({
     );
   }
 
-  if (!news) return null;
+  if (!news && !loading) return null;
 
-  if (!news.topics.length) {
+  if (news && !news.topics.length) {
     return (
       <EmptyStateSplash
         eyebrow="News"
@@ -66,27 +97,33 @@ export default function NewsView({
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: "0 auto", padding: "20px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "22px 28px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, color: "var(--sp-text)" }}>News</h2>
           <div style={{ fontSize: 11, color: "var(--sp-subtext)" }}>
-            updated {news.lastUpdatedAt ? `${timeAgo(news.lastUpdatedAt)} ago` : "never"}
+            {news ? updatedLabel(news.lastUpdatedAt) : "loading headlines…"}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <HeaderButton onClick={onRefresh} disabled={refreshing} ariaLabel="Refresh news">
+          <HeaderButton onClick={onRefresh} disabled={refreshing || !news} ariaLabel="Refresh news">
             <RefreshCw size={13} style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }} />
           </HeaderButton>
-          <HeaderButton onClick={onOpenManage} ariaLabel="Manage news sources">
+          <HeaderButton onClick={onOpenManage} disabled={!news} ariaLabel="Manage news sources">
             <Settings2 size={13} />
             Manage
           </HeaderButton>
         </div>
       </div>
-      {news.topics.map((topic) => (
-        <NewsTopicSection key={topic.id} topic={topic} dividerMarker={dividerMarker} />
-      ))}
+      {!news ? (
+        <NewsSkeleton />
+      ) : (
+        <div style={COLUMN_FLOW}>
+          {news.topics.map((topic) => (
+            <NewsTopicSection key={topic.id} topic={topic} dividerMarker={dividerMarker} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeSourceHealth, resolveDividerMarker, splitItemsBySeen } from "./newsPageModel.js";
+import { describeSourceHealth, displayExcerpt, resolveDividerMarker, splitItemsBySeen } from "./newsPageModel.js";
 
 const item = (id, publishedAt) => ({ id, publishedAt });
 
@@ -27,6 +27,21 @@ describe("resolveDividerMarker", () => {
   });
   it("stays null when the server has no marker yet", () => {
     expect(resolveDividerMarker(null, null)).toBeNull();
+  });
+});
+
+describe("displayExcerpt", () => {
+  it("suppresses hnrss link boilerplate", () => {
+    expect(displayExcerpt("Article URL: https://x.test/a Comments URL: https://news.ycombinator.com/item?id=1 Points: 108 # Comments: 54"))
+      .toBe("");
+  });
+  it("suppresses reddit submitted-by boilerplate", () => {
+    expect(displayExcerpt("submitted by /u/igetproteinfarts [link] [comments]")).toBe("");
+  });
+  it("passes real excerpts through and empties nullish input", () => {
+    expect(displayExcerpt("A real summary of the story.")).toBe("A real summary of the story.");
+    expect(displayExcerpt(null)).toBe("");
+    expect(displayExcerpt(undefined)).toBe("");
   });
 });
 

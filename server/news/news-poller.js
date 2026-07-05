@@ -19,6 +19,7 @@ const parser = new Parser({
     item: [
       ["media:thumbnail", "mediaThumbnail"],
       ["media:content", "mediaContent"],
+      ["media:group", "mediaGroup"],
     ],
   },
 });
@@ -56,6 +57,13 @@ export async function fetchFeedResponse(url, {
   }
 }
 
+// Last-resort thumbnail: feeds like The Verge ship images only as <img> tags
+// inside the content html. Only absolute http(s) URLs qualify.
+function firstImageFromHtml(html) {
+  const match = /<img\b[^>]*\bsrc\s*=\s*["']?(https?:\/\/[^"'\s>]+)/i.exec(String(html || ""));
+  return match ? match[1] : null;
+}
+
 export function normalizeFeedItem(raw) {
   const url = String(raw.link || "").trim();
   const guid = String(raw.guid || raw.id || url || raw.title || "").trim();
@@ -65,7 +73,12 @@ export function normalizeFeedItem(raw) {
     const parsed = new Date(rawDate);
     if (!Number.isNaN(parsed.getTime())) publishedAt = parsed.toISOString();
   }
-  const thumbnail = raw.mediaThumbnail?.$?.url || raw.mediaContent?.$?.url || raw.enclosure?.url || null;
+  const thumbnail = raw.mediaThumbnail?.$?.url
+    || raw.mediaContent?.$?.url
+    || raw.mediaGroup?.["media:thumbnail"]?.[0]?.$?.url // YouTube nests thumbnails in media:group
+    || raw.enclosure?.url
+    || firstImageFromHtml(raw["content:encoded"] || raw.content)
+    || null;
   return {
     guid,
     url,
@@ -162,6 +175,22 @@ export async function pruneNewsItems({ dbClient = db, now = new Date() } = {}) {
   });
 }
 
+// Reddit 429s back-to-back anonymous requests, so a sweep fetches at most one
+// source per limited host; the rest defer to a later sweep. Sorting the due
+// list least-recently-fetched-first makes deferred same-host sources rotate
+// fairly instead of starving behind the same winner every sweep.
+const ONE_FETCH_PER_SWEEP_HOSTS = ["reddit.com"];
+
+function rateLimitedFeedHost(feedUrl) {
+  let host;
+  try {
+    host = new URL(feedUrl).hostname;
+  } catch {
+    return null;
+  }
+  return ONE_FETCH_PER_SWEEP_HOSTS.find((limited) => host === limited || host.endsWith(`.${limited}`)) ?? null;
+}
+
 let sweepInFlight = false;
 
 export async function sweepNewsSources({
@@ -172,9 +201,17 @@ export async function sweepNewsSources({
   sweepInFlight = true;
   try {
     const result = await dbClient.execute({ sql: "SELECT * FROM ea_news_sources WHERE enabled = 1", args: [] });
-    const due = (result.rows || []).filter((source) => shouldPollSource(source, now));
+    const due = (result.rows || [])
+      .filter((source) => shouldPollSource(source, now))
+      .sort((a, b) => String(a.last_fetch_at || "").localeCompare(String(b.last_fetch_at || "")));
+    const fetchedLimitedHosts = new Set();
     let swept = 0;
     for (const source of due) {
+      const limitedHost = rateLimitedFeedHost(resolveSourceFeedUrl(source));
+      if (limitedHost) {
+        if (fetchedLimitedHosts.has(limitedHost)) continue;
+        fetchedLimitedHosts.add(limitedHost);
+      }
       await syncNewsSource(source, { dbClient, fetchImpl, now });
       swept += 1;
       if (staggerMs) await sleep(staggerMs);

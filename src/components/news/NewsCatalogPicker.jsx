@@ -45,7 +45,12 @@ export default function NewsCatalogPicker({ onImported }) {
             key={topic.name}
             style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--sp-text)", cursor: "pointer" }}
           >
-            <input type="checkbox" checked={selected.has(topic.name)} onChange={() => toggle(topic.name)} />
+            <input
+              type="checkbox"
+              checked={selected.has(topic.name)}
+              onChange={() => toggle(topic.name)}
+              style={{ accentColor: "var(--sp-accent)", cursor: "pointer", width: 13, height: 13, margin: 0 }}
+            />
             {topic.name}
             <span style={{ color: "var(--sp-subtext)", fontSize: 11 }}>
               ({topic.sources.length} source{topic.sources.length === 1 ? "" : "s"})

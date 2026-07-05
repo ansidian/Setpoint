@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import { NEWS_STARTER_CATALOG } from "./news-catalog.js";
 
 describe("NEWS_STARTER_CATALOG", () => {
-  it("covers the six starter topics", () => {
+  it("covers the eight starter topics", () => {
     expect(NEWS_STARTER_CATALOG.map((t) => t.name)).toEqual([
-      "3D Printing", "PC Gaming", "PC Hardware", "AI", "Tech", "Product Launches",
+      "3D Printing", "PC Gaming", "PC Hardware", "AI", "Tech", "Politics", "World", "Product Launches",
     ]);
   });
   it("every rss source has an https feedUrl; every hn source has hnQuery/minPoints shape", () => {

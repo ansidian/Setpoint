@@ -44,6 +44,24 @@ export const NEWS_STARTER_CATALOG = [
     ],
   },
   {
+    name: "Politics",
+    sources: [
+      { kind: "rss", title: "Politico", feedUrl: "https://rss.politico.com/politics-news.xml", siteUrl: "https://www.politico.com/politics" },
+      { kind: "rss", title: "The Hill", feedUrl: "https://thehill.com/homenews/feed/", siteUrl: "https://thehill.com" },
+      { kind: "rss", title: "PBS NewsHour · Politics", feedUrl: "https://www.pbs.org/newshour/feeds/rss/politics", siteUrl: "https://www.pbs.org/newshour/politics" },
+      { kind: "rss", title: "NPR · Politics", feedUrl: "https://feeds.npr.org/1014/rss.xml", siteUrl: "https://www.npr.org/sections/politics" },
+    ],
+  },
+  {
+    name: "World",
+    sources: [
+      { kind: "rss", title: "BBC · World", feedUrl: "https://feeds.bbci.co.uk/news/world/rss.xml", siteUrl: "https://www.bbc.com/news/world" },
+      { kind: "rss", title: "The Guardian · World", feedUrl: "https://www.theguardian.com/world/rss", siteUrl: "https://www.theguardian.com/world" },
+      { kind: "rss", title: "Al Jazeera", feedUrl: "https://www.aljazeera.com/xml/rss/all.xml", siteUrl: "https://www.aljazeera.com" },
+      { kind: "rss", title: "NPR · World", feedUrl: "https://feeds.npr.org/1004/rss.xml", siteUrl: "https://www.npr.org/sections/world" },
+    ],
+  },
+  {
     name: "Product Launches",
     sources: [
       { kind: "hn", title: "Hacker News · launches (30+ pts)", hnQuery: "launch", minPoints: 30 },
