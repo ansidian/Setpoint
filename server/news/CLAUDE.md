@@ -9,6 +9,11 @@ summarization — metadata only, read-at-source. HTTP surface is
 
 - `news-model.js` — pure domain rules: canonical URL dedup, HN feed URL
   building, poll-backoff predicate, excerpt sanitization, page-payload shaping
+  (`buildNewsPagePayload`, incl. cross-topic dedup — first topic by position
+  wins, only post-cap kept URLs suppress later copies — and mute-term
+  filtering: `parseMutedTerms`/`sanitizeMutedTerms`/`isTitleMuted`,
+  case-insensitive word-boundary match against the title only, applied before
+  the mute/dedup/30-cap ordering)
 - `news-catalog.js` — checked-in starter catalog constant (eight topic bundles);
   import copies rows into the owner's tables, catalog edits never mutate
   followed feeds
@@ -19,8 +24,9 @@ summarization — metadata only, read-at-source. HTTP surface is
   lifecycle
 - `news-preview.js` — add-source validation: fetch the pasted URL, sample it
   directly if it's a feed, else follow one advertised autodiscovery link
-- `migration.test.js` — permanent guard for migration `026_news.sql`'s schema
-  shape (lives here, not with the migration file)
+- `migration.test.js` — permanent guard for `026_news.sql`'s schema shape and
+  `027_news_mute_terms.sql`'s `muted_terms` column on `ea_news_topics` (lives
+  here, not with the migration files)
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
@@ -40,7 +46,8 @@ summarization — metadata only, read-at-source. HTTP surface is
 
 ## Related
 
-- `server/routes/news.js` — HTTP surface (topics/sources CRUD, catalog import,
-  preview, seen-marker, manual refresh)
+- `server/routes/news.js` — HTTP surface (topics/sources CRUD incl. PATCH
+  `/topics/:id` name and/or `mutedTerms`, catalog import, preview,
+  seen-marker, manual refresh)
 - `src/components/news/` — frontend consumer (see its map)
 - `docs/exec-plans/active/2026-07-04-news-tab-design.md` — design spec
