@@ -37,6 +37,7 @@ function summarizeSystemState(sources) {
 export function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOString() } = {}) {
   const todoistState = providerHealth.todoist?.state || "unavailable";
   const billsState = providerHealth.bills?.state || "unavailable";
+  const reauthAccounts = providerHealth.reauth?.accounts || [];
   const sources = [
     {
       key: "currentData",
@@ -73,6 +74,24 @@ export function composeSystemStatus(providerHealth, { generatedAt = new Date().t
       lastSuccessAt: providerHealth.bills?.lastSuccessAt || null,
       message: billsMessage(providerHealth.bills),
     },
+    ...reauthAccounts.map((account) => ({
+      key: "reauth:" + account.id,
+      label: "Gmail (" + account.email + ")",
+      state: "needs_reauth",
+      severity: "error",
+      lastSuccessAt: null,
+      message: "Authorization revoked — reconnect this Google account in Settings.",
+    })),
+    ...(providerHealth.reauth?.todoist
+      ? [{
+          key: "reauth:todoist",
+          label: "Todoist",
+          state: "needs_reauth",
+          severity: "error",
+          lastSuccessAt: null,
+          message: "Authorization revoked — reconnect Todoist in Settings.",
+        }]
+      : []),
   ];
 
   return {

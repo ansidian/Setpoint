@@ -43,12 +43,18 @@ describe("encryption", () => {
   });
 
   describe("CBC decrypt", () => {
-    it("decrypts a value encrypted with old CBC format", () => {
-      const original = "cbc-secret-value";
-      const cbcEncrypted = cbcEncrypt(original);
+    it("rejects legacy CBC-format ciphertext (non-gcm: prefixed)", () => {
+      const cbcEncrypted = cbcEncrypt("cbc-secret-value");
       // CBC format has no prefix, just iv:ciphertext
       expect(cbcEncrypted).not.toMatch(/^gcm:/);
-      expect(decrypt(cbcEncrypted)).toBe(original);
+      expect(() => decrypt(cbcEncrypted)).toThrow(
+        "[Encryption] Legacy CBC ciphertext is no longer supported; re-save the credential",
+      );
+    });
+
+    it("still round-trips GCM values after CBC rejection is added", () => {
+      const secret = "still-works";
+      expect(decrypt(encrypt(secret))).toBe(secret);
     });
   });
 

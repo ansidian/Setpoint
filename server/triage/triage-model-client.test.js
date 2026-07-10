@@ -159,6 +159,59 @@ describe("triage model client", () => {
       .rejects.toMatchObject({ status: 503 });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it("sends the anthropic classify request with an AbortSignal", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async () => anthropicResponse());
+    const client = createTriageModelClient({ fetchImpl });
+
+    await client.classify({ tier: "strong", email, reason: "hard_risk_override" });
+
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("sends the openai classify request with an AbortSignal", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async () => openAIResponse("gpt-5.4-nano"));
+    const client = createTriageModelClient({
+      fetchImpl,
+      config: {
+        cheap: { provider: "openai", model: "gpt-5.4-nano" },
+        strong: { provider: "anthropic", model: "claude-sonnet-4-6" },
+      },
+    });
+
+    await client.classify({ tier: "cheap", email, reason: "no_preflight_match" });
+
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("sends the openai cache-fields retry request with an AbortSignal", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => "prompt_cache_key is not supported",
+      })
+      .mockResolvedValueOnce(openAIResponse("gpt-5.4-nano"));
+    const client = createTriageModelClient({
+      fetchImpl,
+      config: {
+        cheap: { provider: "openai", model: "gpt-5.4-nano" },
+        strong: { provider: "anthropic", model: "claude-sonnet-4-6" },
+      },
+    });
+
+    await client.classify({ tier: "cheap", email, reason: "no_preflight_match" });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe("loadTriageModelConfig", () => {

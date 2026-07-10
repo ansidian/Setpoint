@@ -44,6 +44,24 @@ async function getActualConfig(userId) {
 let lock = Promise.resolve();
 let activeBudget = null;
 
+// PERF-L08: pruning is a readdir+stat sweep and backups only appear on SDK
+// snapshots, so once per interval per budget directory is sufficient.
+const BACKUP_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
+const lastBackupPruneAt = new Map();
+
+async function maybePruneBackups(budgetDir) {
+  const now = Date.now();
+  if ((lastBackupPruneAt.get(budgetDir) ?? 0) + BACKUP_PRUNE_INTERVAL_MS > now) return;
+  lastBackupPruneAt.set(budgetDir, now);
+  await pruneActualBudgetBackups(budgetDir).catch((err) => {
+    console.warn("[EA] Actual local backup pruning failed:", err.message);
+  });
+}
+
+function resetBackupPruneThrottle() {
+  lastBackupPruneAt.clear();
+}
+
 function allowColdActualDownload() {
   return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD === "1";
 }
@@ -112,9 +130,7 @@ async function withActualBudget(userId, fn) {
   try {
     const result = await fn(config);
     if (config.localBudgetDir) {
-      await pruneActualBudgetBackups(config.localBudgetDir).catch((err) => {
-        console.warn("[EA] Actual local backup pruning failed:", err.message);
-      });
+      await maybePruneBackups(config.localBudgetDir);
     }
     return result;
   } catch (error) {
@@ -294,7 +310,9 @@ async function updateExistingSchedule(existingId, newDueDate, amount, extraCondi
 
 async function createOrReuseSchedule(name, dueDate, amount, conditions) {
   const allSchedules = await getSchedulesWithConditions({ includeCompleted: true });
-  const byName = allSchedules.find(s => s.name === name);
+  // Preserve the P3-76 cross-type sign guard on this last-resort name fallback;
+  // amount conditions, including `isbetween`, are interpreted by the shared model.
+  const byName = findScheduleByName(allSchedules, name, amount);
   if (byName) {
     await actualApi.internal.send("schedule/update", {
       schedule: { id: byName.id, completed: false },
@@ -560,4 +578,5 @@ export function createQuickTxn(userId, { accountName, amount, payee, type = "pay
 export const __testing__ = {
   mapOpenBillInstances,
   closeActualSession,
+  resetBackupPruneThrottle,
 };

@@ -5,10 +5,14 @@ import {
   DEFAULT_BILL_EXTRACT_MODEL,
   isAllowedBillExtractModel,
 } from "../bills/bill-extractors/catalog.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
 const TRIAGE_PROMPT_CACHE_VERSION = "v1";
+// LLM completions legitimately run long; this deadline is a wedge-breaker
+// (guards against a hung connection), not a latency budget.
+const TRIAGE_MODEL_TIMEOUT_MS = 120_000;
 
 const TRIAGE_TOOL = {
   name: "submit_email_triage",
@@ -256,7 +260,10 @@ export function createTriageModelClient({
             cacheKey,
           })),
         };
-        let res = await fetchImpl("https://api.openai.com/v1/responses", requestOptions);
+        let res = await fetchWithTimeout("https://api.openai.com/v1/responses", requestOptions, {
+          timeoutMs: TRIAGE_MODEL_TIMEOUT_MS,
+          fetchFn: fetchImpl,
+        });
         if (!res.ok) {
           const text = await res.text?.();
           if (isOpenAICacheParameterError(res.status, text)) {
@@ -264,7 +271,7 @@ export function createTriageModelClient({
               `[Email Triage] OpenAI cache fields rejected for tier=${tier} model=${choice.model}; `
               + "retrying without cache-only fields",
             );
-            res = await fetchImpl("https://api.openai.com/v1/responses", {
+            res = await fetchWithTimeout("https://api.openai.com/v1/responses", {
               ...requestOptions,
               body: JSON.stringify(buildOpenAITriageRequestBody({
                 model: choice.model,
@@ -273,7 +280,7 @@ export function createTriageModelClient({
                 cacheKey,
                 includeCacheFields: false,
               })),
-            });
+            }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn: fetchImpl });
             if (res.ok) {
               const data = await res.json();
               logOpenAITriageCacheUsage({
@@ -320,7 +327,7 @@ export function createTriageModelClient({
         throw err;
       }
       const started = Date.now();
-      const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
+      const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -349,7 +356,7 @@ export function createTriageModelClient({
             content: compactEmailForPrompt(email, reason),
           }],
         }),
-      });
+      }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn: fetchImpl });
       if (!res.ok) {
         const text = await res.text?.();
         throw Object.assign(new Error(`Anthropic triage API error (${res.status})${text ? `: ${text}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });

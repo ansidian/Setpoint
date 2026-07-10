@@ -209,6 +209,8 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useCalendarLocationSuggestions` | `src/components/calendar/events/useCalendarLocationSuggestions.js` |
 | `useCalendarQuickActions` | `src/components/calendar/events/useCalendarQuickActions.js` |
 | `useCalendarSources` | `src/components/calendar/events/useCalendarSources.js` |
+| `useEventRecurrenceDraft` | `src/components/calendar/events/useEventRecurrenceDraft.js` |
+| `useEventReminderDrafts` | `src/components/calendar/events/useEventReminderDrafts.js` |
 | `useCalendarGridEffects` | `src/components/calendar/modal/useCalendarGridEffects.js` |
 | `useCalendarGridOverflow` | `src/components/calendar/modal/useCalendarGridOverflow.js` |
 | `useFloatingDetailDrag` | `src/components/calendar/modal/useFloatingDetailDrag.js` |
@@ -236,7 +238,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useCalendarDomainRange` | `src/hooks/calendar/useCalendarDomainRange.js` |
 | `useCalendarEventSelectionSet` | `src/hooks/calendar/useCalendarEventSelectionSet.js` |
 | `useCalendarFloatingDetail` | `src/hooks/calendar/useCalendarFloatingDetail.js` |
-| `useFloatingEditorRouting` | `src/hooks/calendar/useCalendarModalEditorRouting.js` |
 | `useCalendarModalHotkeys` | `src/hooks/calendar/useCalendarModalHotkeys.js` |
 | `useCalendarModalSearch` | `src/hooks/calendar/useCalendarModalSearch.js` |
 | `useCalendarModalSelection` | `src/hooks/calendar/useCalendarModalSelection.js` |
@@ -598,7 +599,7 @@ erDiagram
 <!-- BEGIN:db -->
 | Table | Migrations |
 |-------|------------|
-| `ea_accounts` | `001_ea_tables.sql` |
+| `ea_accounts` | `001_ea_tables.sql`, `028_provider_needs_reauth.sql` |
 | `ea_actual_metadata_mirror` | `009_actual_metadata_mirror.sql` |
 | `ea_alfred_usage` | `016_alfred_usage.sql`, `019_alfred_usage_cache_creation.sql` |
 | `ea_api_tokens` | `001_ea_tables.sql` |
@@ -630,7 +631,7 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
 | `ea_sessions` | `001_ea_tables.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |

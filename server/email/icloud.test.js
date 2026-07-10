@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 let activeClient;
 
@@ -97,6 +97,30 @@ class FakeImapFlowMime {
   }
 }
 
+// Counts constructions and lets a test control exactly when `connect()`
+// settles (resolve, or never — for the timeout test) via `connectDeferred`.
+let constructCount = 0;
+class ControllableImapFlow {
+  constructor() {
+    constructCount += 1;
+    activeClient = this;
+    this.usable = true;
+    this.connectDeferred = (() => {
+      let resolve;
+      let reject;
+      const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    })();
+    this.connect = vi.fn(() => this.connectDeferred.promise);
+    this.close = vi.fn(async () => {});
+    this.logout = vi.fn(async () => {});
+    this.on = vi.fn();
+  }
+}
+
 const imapFlowHolder = { current: FakeImapFlow };
 vi.mock("imapflow", () => ({
   ImapFlow: class {
@@ -106,7 +130,7 @@ vi.mock("imapflow", () => ({
   },
 }));
 
-const { fetchEmailsInRange } = await import("./icloud.js");
+const { fetchEmailsInRange, getPooledClient } = await import("./icloud.js");
 
 describe("iCloud fetchEmailsInRange", () => {
   const fakeAccount = {
@@ -205,5 +229,61 @@ describe("iCloud fetchEmailsInRange MIME parsing (D1)", () => {
     expect(email.body_text).not.toContain("XYZBOUNDARY");
     expect(email.body_text).not.toContain("Content-Transfer-Encoding");
     expect(email.body_preview.endsWith(" [amounts: $29.00]")).toBe(true);
+  });
+});
+
+describe("iCloud getPooledClient concurrency/timeout (REL-06)", () => {
+  beforeEach(() => {
+    activeClient = null;
+    constructCount = 0;
+    imapFlowHolder.current = ControllableImapFlow;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("dedups concurrent connects: only one client is constructed and both callers share it", async () => {
+    const p1 = getPooledClient("dedup-a@icloud.com", "pw");
+    const p2 = getPooledClient("dedup-a@icloud.com", "pw");
+
+    // Both calls should have synchronously reused the same in-flight entry —
+    // only one ImapFlow should have been constructed even though neither
+    // connect() has resolved yet.
+    expect(constructCount).toBe(1);
+
+    // Now let the single constructed client's connect() resolve.
+    activeClient.connectDeferred.resolve();
+
+    const [client1, client2] = await Promise.all([p1, p2]);
+
+    expect(constructCount).toBe(1);
+    expect(client1).toBe(client2);
+    expect(client1).toBe(activeClient);
+  });
+
+  it("rejects after the connect timeout and evicts the pool entry so the next call retries", async () => {
+    vi.useFakeTimers();
+
+    const pending = getPooledClient("timeout-b@icloud.com", "pw");
+    pending.catch(() => {}); // avoid unhandled-rejection noise while we advance timers
+
+    // connect() never settles — advance past ICLOUD_CONNECT_TIMEOUT_MS (15s).
+    await vi.advanceTimersByTimeAsync(15_001);
+
+    await expect(pending).rejects.toThrow(/iCloud IMAP connect timed out after 15000ms/);
+    expect(constructCount).toBe(1);
+
+    // A subsequent call must construct a fresh client — the failed entry was
+    // evicted, not left dangling in the pool.
+    const nextClientPromise = getPooledClient("timeout-b@icloud.com", "pw");
+    expect(constructCount).toBe(2);
+    activeClient.connectDeferred.resolve();
+
+    await vi.runOnlyPendingTimersAsync();
+    const nextClient = await nextClientPromise;
+    expect(nextClient).toBe(activeClient);
+
+    vi.useRealTimers();
   });
 });

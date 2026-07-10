@@ -1,3 +1,9 @@
+import { fetchWithTimeout } from "../../platform/fetch-with-timeout.js";
+
+// LLM completions legitimately run long; this deadline is a wedge-breaker
+// (guards against a hung connection), not a latency budget.
+const BILL_EXTRACT_TIMEOUT_MS = 120_000;
+
 const TOOL = {
   name: "submit_bill",
   description: "Submit extracted bill fields.",
@@ -28,7 +34,7 @@ export const ANTHROPIC_PROVIDER = {
       throw err;
     }
 
-    const apiRes = await fetch("https://api.anthropic.com/v1/messages", {
+    const apiRes = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -43,7 +49,7 @@ export const ANTHROPIC_PROVIDER = {
         tool_choice: { type: "tool", name: "submit_bill" },
         messages: [{ role: "user", content }],
       }),
-    });
+    }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
 
     if (!apiRes.ok) {
       const text = await apiRes.text();

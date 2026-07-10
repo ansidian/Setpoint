@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatDiscordReminderPayload,
   sendDiscordWebhook,
@@ -61,5 +61,41 @@ describe("Discord reminder delivery", () => {
 
     await expect(sendDiscordWebhook("https://discord.example/webhook", { embeds: [] }, { fetchFn }))
       .resolves.toEqual({ ok: true, status: 204 });
+  });
+
+  it("sends the webhook POST with an AbortSignal", async () => {
+    const fetchFn = vi.fn(async () => ({
+      ok: true,
+      status: 204,
+      headers: { get: () => null },
+      text: async () => "",
+    }));
+
+    await sendDiscordWebhook("https://discord.example/webhook", { embeds: [] }, { fetchFn });
+
+    expect(fetchFn.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  describe("timeout", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("rejects after 10s when the webhook fetch never settles", async () => {
+      const fetchFn = vi.fn((url, opts) => new Promise((resolve, reject) => {
+        opts.signal.addEventListener("abort", () => reject(opts.signal.reason));
+      }));
+
+      const pending = sendDiscordWebhook("https://discord.example/webhook", { embeds: [] }, { fetchFn });
+      pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(10_001);
+
+      await expect(pending).rejects.toThrow(/fetch timeout after 10000ms/);
+    });
   });
 });

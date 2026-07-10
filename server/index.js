@@ -14,18 +14,19 @@ import accountsRoutes from "./routes/accounts.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import calendarRoutes from "./routes/calendar.js";
 import alfredRoutes from "./routes/alfred.js";
-import { startAlfredConversationSweeper } from "./alfred/alfred-conversations.js";
+import { startAlfredConversationSweeper, stopAlfredConversationSweeper } from "./alfred/alfred-conversations.js";
 import notesRoutes from "./routes/notes.js";
 import newsRoutes from "./routes/news.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
 import todoistWebhookRoutes from "./routes/todoist-webhook.js";
-import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker } from "./scheduler.js";
-import { startSnoozeWaker } from "./snapshots/snooze-waker.js";
-import { startEmailBackfillWorker } from "./email/email-backfill-worker.js";
-import { startTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.js";
-import { startBillsMirrorRefreshWorker } from "./bills/bills-service.js";
-import { startCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
-import { startNewsPollWorker } from "./news/news-poller.js";
+import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.js";
+import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.js";
+import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.js";
+import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.js";
+import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.js";
+import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
+import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.js";
+import { createGracefulShutdown } from "./shutdown.js";
 import { migrate } from "./db/migrate.js";
 import { migrateCbcEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
@@ -134,7 +135,7 @@ function scheduleStartupWorker(worker, delayMs, fn) {
 timeAsync("migrations", () => migrate())
   .then(() => timeAsync("encryption-rewrite", () => migrateCbcEncryption()))
   .then(() => {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Setpoint running on http://localhost:${PORT}`);
       logTiming({
         event: "boot",
@@ -155,6 +156,21 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
       startAlfredConversationSweeper();
     });
+
+    const { shutdown } = createGracefulShutdown({
+      server,
+      stopFns: [
+        stopScheduler,                        // cron jobs + reminder worker (scheduler.js:455)
+        stopEmailBackfillWorker,              // Task 1
+        stopSnoozeWaker,                      // Task 1
+        stopTodoistMirrorSyncWorker,          // tasks/todoist-webhook.js:248
+        stopBillsMirrorRefreshWorker,         // Task 1
+        stopCalendarSearchMirrorSyncWorker,   // calendar/calendar-search-mirror.js:159
+        stopNewsPollWorker,                   // news/news-poller.js:249
+        stopAlfredConversationSweeper,        // Task 1
+      ],
+    });
+    for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => shutdown(signal));
   }).catch((err) => {
     console.error("Migration failed:", err);
     process.exit(1);

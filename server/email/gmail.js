@@ -3,6 +3,12 @@ import db from "../db/connection.js";
 import { encrypt, decrypt } from "../platform/encryption.js";
 import { htmlToPlainText } from "./html-to-text.js";
 import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.js";
+
+const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
+const PROFILE_FETCH_TIMEOUT_MS = 30_000;
+const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -45,7 +51,7 @@ export function getAuthUrl(state) {
 }
 
 export async function handleCallback(code, _accountId, userId) {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
+  const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -55,7 +61,7 @@ export async function handleCallback(code, _accountId, userId) {
       redirect_uri: GOOGLE_REDIRECT_URI,
       grant_type: "authorization_code",
     }),
-  });
+  }, { timeoutMs: TOKEN_EXCHANGE_TIMEOUT_MS });
 
   if (!res.ok) {
     const text = await res.text();
@@ -71,9 +77,10 @@ export async function handleCallback(code, _accountId, userId) {
   };
 
   // Fetch the user's email address for the label
-  const profileRes = await fetch(
+  const profileRes = await fetchWithTimeout(
     "https://www.googleapis.com/gmail/v1/users/me/profile",
     { headers: { Authorization: `Bearer ${credentials.access_token}` } },
+    { timeoutMs: PROFILE_FETCH_TIMEOUT_MS },
   );
   const profile = await profileRes.json();
   const email = profile.emailAddress;
@@ -100,6 +107,7 @@ export async function handleCallback(code, _accountId, userId) {
           ON CONFLICT(id) DO UPDATE SET
             credentials_encrypted = excluded.credentials_encrypted,
             email = excluded.email,
+            needs_reauth = 0,
             updated_at = datetime('now')`,
     args: [
       targetAccountId,
@@ -125,7 +133,7 @@ async function getValidToken(account) {
   const expiresAt = credentials.expires_at;
   const isExpiring = !Number.isFinite(expiresAt) || expiresAt < Date.now() + 5 * 60 * 1000;
   if (isExpiring) {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
+    const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -134,10 +142,14 @@ async function getValidToken(account) {
         refresh_token: credentials.refresh_token,
         grant_type: "refresh_token",
       }),
-    });
+    }, { timeoutMs: TOKEN_REFRESH_TIMEOUT_MS });
 
     if (!res.ok) {
       const text = await res.text();
+      if (isInvalidGrantError(text)) {
+        await markAccountNeedsReauth(canonicalAccountId).catch((e) =>
+          console.error("[Gmail] Failed to mark needs_reauth:", e.message));
+      }
       throw new Error(`Token refresh failed for ${account.email}: ${text}`);
     }
 
@@ -152,6 +164,11 @@ async function getValidToken(account) {
       sql: `UPDATE ea_accounts SET credentials_encrypted = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [encrypt(JSON.stringify(credentials)), canonicalAccountId],
     });
+
+    if (account.needs_reauth) {
+      await clearAccountNeedsReauth(canonicalAccountId).catch((e) =>
+        console.error("[Gmail] Failed to clear needs_reauth:", e.message));
+    }
   }
 
   return credentials.access_token;

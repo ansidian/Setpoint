@@ -29,7 +29,8 @@ async function createTodoistTokenTestDb() {
       todoist_oauth_refresh_token_encrypted TEXT,
       todoist_oauth_access_token_expires_at TEXT,
       todoist_oauth_scope TEXT,
-      todoist_oauth_token_type TEXT
+      todoist_oauth_token_type TEXT,
+      todoist_needs_reauth INTEGER NOT NULL DEFAULT 0
     );
   `);
   return db;
@@ -137,6 +138,7 @@ describe("getTodoistApiToken", () => {
     expect(body.get("client_secret")).toBe("client-secret");
     expect(body.get("grant_type")).toBe("refresh_token");
     expect(body.get("refresh_token")).toBe("refresh-1");
+    expect(fetchFn.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
 
     const row = (await testState.db.current.execute("SELECT * FROM ea_settings WHERE user_id = 'u1'")).rows[0];
     expect(row.todoist_api_token_encrypted).toBe("enc:fresh-access");
@@ -201,6 +203,95 @@ describe("getTodoistApiToken", () => {
     expect(row.todoist_api_token_encrypted).toBe("enc:expired-access");
     expect(row.todoist_oauth_refresh_token_encrypted).toBe("enc:refresh-1");
     expect(row.todoist_oauth_access_token_expires_at).toBe("2026-05-04T19:59:00.000Z");
+  });
+
+  it("marks todoist_needs_reauth on an invalid_grant refresh failure (REL-01)", async () => {
+    await seedSettings({
+      accessToken: "expired-access",
+      refreshToken: "refresh-1",
+      expiresAt: "2026-05-04T19:59:00.000Z",
+    });
+    const fetchFn = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      text: async () => '{"error":"invalid_grant"}',
+    }));
+
+    await expect(getTodoistApiToken("u1", {
+      dbClient: testState.db.current,
+      fetchFn,
+      env: {
+        TODOIST_CLIENT_ID: "client-id",
+        TODOIST_CLIENT_SECRET: "client-secret",
+      },
+      now: new Date("2026-05-04T20:00:00.000Z"),
+    })).rejects.toThrow("Todoist OAuth refresh failed");
+
+    const row = (await testState.db.current.execute("SELECT * FROM ea_settings WHERE user_id = 'u1'")).rows[0];
+    expect(row.todoist_needs_reauth).toBe(1);
+  });
+
+  it("does not mark todoist_needs_reauth on a non-invalid_grant (429) refresh failure", async () => {
+    await seedSettings({
+      accessToken: "expired-access",
+      refreshToken: "refresh-1",
+      expiresAt: "2026-05-04T19:59:00.000Z",
+    });
+    const fetchFn = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      text: async () => "Too Many Requests",
+    }));
+
+    await expect(getTodoistApiToken("u1", {
+      dbClient: testState.db.current,
+      fetchFn,
+      env: {
+        TODOIST_CLIENT_ID: "client-id",
+        TODOIST_CLIENT_SECRET: "client-secret",
+      },
+      now: new Date("2026-05-04T20:00:00.000Z"),
+    })).rejects.toThrow("Todoist OAuth refresh failed");
+
+    const row = (await testState.db.current.execute("SELECT * FROM ea_settings WHERE user_id = 'u1'")).rows[0];
+    expect(row.todoist_needs_reauth).toBe(0);
+  });
+
+  it("clears todoist_needs_reauth on a successful refresh for a previously flagged user", async () => {
+    await seedSettings({
+      accessToken: "expired-access",
+      refreshToken: "refresh-1",
+      expiresAt: "2026-05-04T19:59:00.000Z",
+    });
+    await testState.db.current.execute({
+      sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
+      args: ["u1"],
+    });
+    const fetchFn = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: "fresh-access",
+        token_type: "Bearer",
+        expires_in: 3600,
+        refresh_token: "refresh-2",
+        scope: "data:read_write,data:delete",
+      }),
+    }));
+
+    const token = await getTodoistApiToken("u1", {
+      dbClient: testState.db.current,
+      fetchFn,
+      env: {
+        TODOIST_CLIENT_ID: "client-id",
+        TODOIST_CLIENT_SECRET: "client-secret",
+      },
+      now: new Date("2026-05-04T20:00:00.000Z"),
+    });
+
+    expect(token).toBe("fresh-access");
+    const row = (await testState.db.current.execute("SELECT * FROM ea_settings WHERE user_id = 'u1'")).rows[0];
+    expect(row.todoist_needs_reauth).toBe(0);
   });
 });
 

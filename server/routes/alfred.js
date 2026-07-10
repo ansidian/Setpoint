@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.js";
+import { alfredRunLimiter } from "../middleware/rate-limits.js";
 import { resolveAlfredModel } from "../alfred/alfred-models.js";
 import {
   createAlfredConversation,
@@ -34,7 +35,7 @@ export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred } = {})
   const router = Router();
   router.use(requireCookieSession);
 
-  router.post("/run", async (req, res) => {
+  router.post("/run", alfredRunLimiter, async (req, res) => {
     const userId = process.env.EA_USER_ID;
     const message = String(req.body?.message || "").trim();
     if (!message) return res.status(400).json({ message: "message is required" });

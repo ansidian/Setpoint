@@ -31,7 +31,10 @@ import {
 import { getTriageCacheStats } from "../triage/triage-cache-stats.js";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.js";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.js";
+import { clearTodoistNeedsReauth } from "../platform/provider-reauth.js";
 import {
+  validateActualBudgetUrl,
+  validateDiscordWebhookUrl,
   validateEmailInterests,
   validateImportantSenders,
   validateSchedules,
@@ -40,6 +43,29 @@ import {
 
 // Bare router: mounted behind requireCookieSession in routes/accounts.js.
 const router = Router();
+
+// GET /settings response allowlist (SEC-06): every ea_settings column NOT
+// listed here is withheld from the client by default, including secrets
+// (*_encrypted, *_token*) and columns the client doesn't consume today
+// (important_senders_json has its own route; news_last_seen_at is News-only;
+// the Todoist OAuth bookkeeping columns are server-internal). Adding a new
+// public field requires an explicit, reviewed addition here.
+const SETTINGS_PUBLIC_FIELDS = [
+  "user_id",
+  "email_lookback_hours",
+  "weather_lat",
+  "weather_lng",
+  "weather_location",
+  "actual_budget_url",
+  "actual_budget_sync_id",
+  "email_ai_provider",
+  "email_ai_model",
+  "bill_extract_provider",
+  "bill_extract_model",
+  "email_triage_mode",
+  "discord_user_id",
+  "todoist_needs_reauth",
+];
 
 router.get("/geocode", async (req, res) => {
   const { q } = req.query;
@@ -71,6 +97,7 @@ router.get("/settings", async (req, res) => {
         args: [userId],
       });
     }
+    const row = result.rows[0];
     const {
       actual_budget_password_encrypted,
       todoist_api_token_encrypted,
@@ -81,10 +108,11 @@ router.get("/settings", async (req, res) => {
       triage_sound_settings_json,
       bill_pay_mappings_json,
       utility_pay_links_json,
-      ...safe
-    } = result.rows[0];
+    } = row;
+    const safe = Object.fromEntries(SETTINGS_PUBLIC_FIELDS.map((key) => [key, row[key]]));
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
     safe.todoist_configured = !!todoist_api_token_encrypted;
+    safe.todoist_needs_reauth = !!safe.todoist_needs_reauth;
     safe.todoist_oauth_configured = !!(todoist_api_token_encrypted && todoist_oauth_refresh_token_encrypted);
     safe.discord_webhook_configured = !!discord_webhook_url_encrypted;
     safe.schedules = schedules_json
@@ -186,7 +214,11 @@ router.put("/settings", async (req, res) => {
       if (typeof actual_budget_url !== "string") {
         return res.status(400).json({ message: "actual_budget_url must be a string" });
       }
-      updates.push("actual_budget_url = ?"); args.push(actual_budget_url);
+      const validation = validateActualBudgetUrl(actual_budget_url);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updates.push("actual_budget_url = ?"); args.push(validation.value);
     }
     if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
     if (actual_budget_sync_id !== undefined) {
@@ -256,9 +288,12 @@ router.put("/settings", async (req, res) => {
       args.push(JSON.stringify(validation.value));
     }
     if (discord_webhook_url !== undefined) {
-      const trimmedWebhook = String(discord_webhook_url || "").trim();
+      const validation = validateDiscordWebhookUrl(discord_webhook_url);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
       updates.push("discord_webhook_url_encrypted = ?");
-      args.push(trimmedWebhook ? encrypt(trimmedWebhook) : null);
+      args.push(validation.value ? encrypt(validation.value) : null);
     }
     if (discord_user_id !== undefined) {
       const trimmedUserId = String(discord_user_id || "").trim();
@@ -279,11 +314,23 @@ router.put("/settings", async (req, res) => {
       args.push(userId);
       await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
     }
+    if (todoist_api_token !== undefined && todoist_api_token) {
+      try {
+        await clearTodoistNeedsReauth(userId);
+      } catch (clearErr) {
+        console.error("[Settings] Failed to clear todoist_needs_reauth:", clearErr.message);
+      }
+    }
     if (todoist_oauth_token_response !== undefined) {
       const response = typeof todoist_oauth_token_response === "string"
         ? JSON.parse(todoist_oauth_token_response)
         : todoist_oauth_token_response;
       await storeTodoistOAuthTokenResponse(userId, response);
+      try {
+        await clearTodoistNeedsReauth(userId);
+      } catch (clearErr) {
+        console.error("[Settings] Failed to clear todoist_needs_reauth:", clearErr.message);
+      }
     }
 
     // Purge completed-task snapshots on disconnect. Current runtime reads domain data.

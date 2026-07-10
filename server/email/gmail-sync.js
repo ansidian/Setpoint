@@ -37,11 +37,18 @@ import {
   touchCursorStatement,
 } from "./gmailWatchStore.js";
 export { persistGmailWatchState } from "./gmailWatchStore.js";
+import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.js";
+import { triageRetryBackoffIso } from "../triage/triage-worker.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_PAGES = 20;
 const GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS = 14 * 24;
+// CORR-L08: gmail_history_sync jobs retried forever on a plain terminal-failure
+// catch (attempts tracked but never checked). Cap retries like the triage queue
+// sharing this same ea_triage_jobs table (triage-job-store.js's own 5-attempt
+// ceiling) instead of inventing a second backoff formula.
+const MAX_GMAIL_HISTORY_SYNC_ATTEMPTS = 5;
 
 async function findGmailAccountByEmail(emailAddress, dbClient) {
   const result = await dbClient.execute({
@@ -408,6 +415,7 @@ function parsePayloadJson(value) {
 export async function processNextGmailHistorySyncJob({
   dbClient = db,
   now = new Date(),
+  syncFn = syncGmailHistoryForAccount,
 } = {}) {
   const job = await claimNextHistorySyncJob(dbClient, now);
   if (!job) return { processed: false };
@@ -434,7 +442,7 @@ export async function processNextGmailHistorySyncJob({
       });
       return { processed: true, job_id: Number(job.id), skipped: true };
     }
-    const result = await syncGmailHistoryForAccount(account, {
+    const result = await syncFn(account, {
       dbClient,
       targetHistoryId,
       now,
@@ -450,14 +458,52 @@ export async function processNextGmailHistorySyncJob({
     });
     return { processed: true, job_id: Number(job.id), result };
   } catch (err) {
-    await dbClient.execute({
-      sql: `UPDATE ea_triage_jobs
-            SET status = 'failed',
-                last_error = ?,
-                updated_at = datetime('now')
-            WHERE id = ?`,
-      args: [err.message, job.id],
-    });
+    // CORR-L08: claimNextHistorySyncJob's UPDATE already bumped `attempts` in the
+    // DB for this run (same claim-then-increment shape as the triage queue's
+    // claimNextEmailTriageJob), but the in-memory `job` object here is the SELECT
+    // snapshot taken BEFORE that UPDATE ran — job.attempts is the pre-claim value.
+    // The current attempt count is therefore job.attempts + 1; do not re-increment
+    // attempts ourselves (that's already been done by the claim), just use
+    // job.attempts + 1 to decide terminal-vs-requeue and to compute backoff.
+    const currentAttempts = Number(job.attempts || 0) + 1;
+    if (isInvalidGrantError(err.message)) {
+      // Revoked/expired OAuth grant: retrying is pointless until the user
+      // reconnects the account, so fail immediately instead of burning through
+      // the retry budget, and flag the account for reconnect (Task 2/CORR-Lxx).
+      await dbClient.execute({
+        sql: `UPDATE ea_triage_jobs
+              SET status = 'failed',
+                  last_error = ?,
+                  updated_at = datetime('now')
+              WHERE id = ?`,
+        args: [err.message, job.id],
+      });
+      try {
+        await markAccountNeedsReauth(job.account_id, { dbClient });
+      } catch (markErr) {
+        console.error("[GmailSync] Failed to mark account needs_reauth:", markErr.message);
+      }
+    } else if (currentAttempts >= MAX_GMAIL_HISTORY_SYNC_ATTEMPTS) {
+      await dbClient.execute({
+        sql: `UPDATE ea_triage_jobs
+              SET status = 'failed',
+                  last_error = ?,
+                  updated_at = datetime('now')
+              WHERE id = ?`,
+        args: [err.message, job.id],
+      });
+    } else {
+      const scheduledFor = triageRetryBackoffIso(now, currentAttempts);
+      await dbClient.execute({
+        sql: `UPDATE ea_triage_jobs
+              SET status = 'queued',
+                  scheduled_for = ?,
+                  last_error = ?,
+                  updated_at = datetime('now')
+              WHERE id = ?`,
+        args: [scheduledFor, err.message, job.id],
+      });
+    }
     throw err;
   }
 }

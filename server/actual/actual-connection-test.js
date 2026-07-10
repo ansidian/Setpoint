@@ -67,7 +67,11 @@ async function fetchJson(url, options = {}) {
 
   if (!response.ok || body?.status === "error") {
     const reason = body?.reason || body?.description || bodyText || `HTTP ${response.status}`;
-    throw Object.assign(new Error(`Actual Budget connection failed: ${reason}`), {
+    // SEC-05: do not reflect the remote server's response body back to the
+    // client (partial-response SSRF oracle) — log the real reason server-side
+    // only and throw a generic, status-derived message.
+    console.error(`Actual Budget connection test failed (HTTP ${response.status}): ${reason}`);
+    throw Object.assign(new Error(`Actual Budget connection failed (HTTP ${response.status})`), {
       status: response.status >= 500 ? 502 : 400,
     });
   }

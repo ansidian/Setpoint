@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _clearAlfredConversationsForTest,
   cacheAlfredItems,
@@ -6,6 +6,8 @@ import {
   deleteAlfredConversation,
   getAlfredConversation,
   readAlfredItems,
+  startAlfredConversationSweeper,
+  stopAlfredConversationSweeper,
   sweepAlfredConversations,
 } from "./alfred-conversations.js";
 
@@ -62,5 +64,41 @@ describe("alfred conversation store", () => {
     sweepAlfredConversations({ now: 5 * HOUR });
     expect(getAlfredConversation(old.id, { now: 5 * HOUR })).toBeNull();
     expect(getAlfredConversation(fresh.id, { now: 5 * HOUR })).toBe(fresh);
+  });
+});
+
+describe("stopAlfredConversationSweeper", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    stopAlfredConversationSweeper();
+    vi.useRealTimers();
+  });
+
+  it("prevents the sweep interval from ticking again after stop", () => {
+    startAlfredConversationSweeper();
+    stopAlfredConversationSweeper();
+
+    const old = createAlfredConversation({ now: 0 });
+    vi.setSystemTime(5 * HOUR);
+    vi.advanceTimersByTime(60 * 60 * 1000);
+
+    // The sweep interval was stopped before it could fire, so the expired
+    // conversation is still physically present in the map — probed via
+    // deleteAlfredConversation's return value, which reflects real Map
+    // presence (unlike getAlfredConversation, which self-heals on TTL).
+    expect(deleteAlfredConversation(old.id)).toBe(true);
+  });
+
+  it("is safe to call twice", () => {
+    startAlfredConversationSweeper();
+    stopAlfredConversationSweeper();
+    expect(() => stopAlfredConversationSweeper()).not.toThrow();
+  });
+
+  it("is safe to call when the sweeper was never started", () => {
+    expect(() => stopAlfredConversationSweeper()).not.toThrow();
   });
 });

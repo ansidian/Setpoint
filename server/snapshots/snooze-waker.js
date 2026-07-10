@@ -254,11 +254,24 @@ async function cleanupResurfaced({
   }
 }
 
+let snoozeWakerJob = null;
+
 export function startSnoozeWaker() {
-  cron.schedule(CRON_EXPR, () => {
+  if (snoozeWakerJob) {
+    snoozeWakerJob.stop();
+    snoozeWakerJob = null;
+  }
+  snoozeWakerJob = cron.schedule(CRON_EXPR, () => {
     wakeDueSnoozes()
       .catch((err) => console.error("[EA Snooze] Worker tick failed:", err.message))
       .finally(() => { cleanupResurfaced(); });
   });
   console.log("[EA Snooze] Waker started (every 5 minutes)");
+}
+
+export function stopSnoozeWaker() {
+  if (snoozeWakerJob) {
+    snoozeWakerJob.stop();
+    snoozeWakerJob = null;
+  }
 }

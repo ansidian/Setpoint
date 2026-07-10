@@ -220,10 +220,26 @@ function mapColor(todoistColor) {
   return TODOIST_COLORS[todoistColor] || "#cba6da";
 }
 
-// Todoist returns due datetimes in the user's local timezone without a Z
-// suffix, so parse the time directly from the string to avoid UTC reinterpretation.
+// Todoist returns due datetimes in one of two shapes: (1) the user's local
+// timezone without a Z/offset suffix (a "floating" due) — parse the time
+// directly from the string to avoid UTC reinterpretation; (2) a fixed-timezone
+// due as a real RFC3339 UTC instant with a trailing Z or ±HH:MM offset — that
+// literal HH:MM is UTC, so it must be converted to Pacific before display.
+const OFFSET_SUFFIX_RE = /Z$|[+-]\d{2}:\d{2}$/;
+
 function formatTime12h(dateStr) {
   if (!dateStr || !dateStr.includes("T")) return null;
+  if (OFFSET_SUFFIX_RE.test(dateStr)) {
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(dateStr));
+    // Intl gives "7:00 PM"; normalize the space before AM/PM if it's a
+    // non-breaking space (some ICU builds emit U+202F narrow no-break space).
+    return formatted.replace(/\s+(AM|PM)$/, " $1");
+  }
   const match = dateStr.match(/T(\d{2}):(\d{2})/);
   if (!match) return null;
   let hour = parseInt(match[1], 10);
@@ -244,7 +260,13 @@ function todoistTaskUrl(content, id) {
 
 function extractDate(due) {
   if (!due?.date) return null;
-  // "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS..."
+  // "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS..." (floating, no suffix): the date
+  // component is already the intended local day, so split on "T" literally.
+  // Z/offset-suffixed strings are a real UTC instant — resolve the Pacific
+  // calendar day via the same en-CA formatter as todayPacific() instead.
+  if (OFFSET_SUFFIX_RE.test(due.date)) {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(due.date));
+  }
   return due.date.split("T")[0];
 }
 
@@ -434,6 +456,7 @@ export async function createTodoistTask(userId, { content, description, project_
   if (priority) body.priority = toApiPriority(priority);
   if (labels?.length) body.labels = labels;
   if (due_string) body.due_string = due_string;
+  if (body.due_string) body.due_lang = "en";
 
   const task = await todoistFetch(token, "/tasks", {
     method: "POST",
@@ -475,6 +498,7 @@ export async function updateTodoistTask(userId, taskId, { content, description, 
   if (priority !== undefined) body.priority = priority == null ? 1 : toApiPriority(priority);
   if (labels !== undefined) body.labels = labels;
   if (due_string !== undefined) body.due_string = due_string;
+  if (body.due_string) body.due_lang = "en";
 
   const task = await todoistFetch(token, `/tasks/${taskId}`, {
     method: "POST",

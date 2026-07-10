@@ -34,7 +34,7 @@ import {
   attachToActiveSnapshot,
   delayWeakSecurityGrace,
 } from "./triage-finalize-store.js";
-export { recoverStaleRunningTriageJobs, pruneCompletedTriageJobs } from "./triage-job-store.js";
+export { recoverStaleRunningTriageJobs, pruneCompletedTriageJobs, triageRetryBackoffIso } from "./triage-job-store.js";
 
 const ARRIVAL_GRACE_READ_EXIT_DEFER_MS = 30 * 60 * 1000;
 
@@ -76,6 +76,13 @@ async function classifyWithModel(getModelClient, tier, email, reason) {
 // / ea_triage_rules and rebuilding the model client for every job in the tick.
 // Pass the returned context to processNextEmailTriageJob({ batch }). Each getter
 // caches the in-flight promise, so the value is loaded at most once per user.
+//
+// Lifetime contract (REL-09): this context is created fresh per worker tick
+// (scheduler.js runEmailTriageWorker) and per snapshot sync
+// (snapshot-service.js runActiveSnapshotSync) and must stay that way.
+// Do NOT hoist it to module scope or any longer-lived owner: the Maps have
+// no eviction, and modelClients retains constructed LLM clients. If this
+// ever becomes long-lived or multi-user, add a size bound / TTL eviction.
 export function createTriageBatchContext({ dbClient = db } = {}) {
   const memo = (cache, key, load) => {
     if (!cache.has(key)) cache.set(key, load());
@@ -346,10 +353,15 @@ export async function processNextEmailTriageJob({
       modelCalls = routed.modelCalls;
     }
   } catch (err) {
-    if (err?.retryable && Number(job.attempts || 0) < MAX_TRIAGE_RETRY_ATTEMPTS) {
+    // claimNextEmailTriageJob already incremented attempts in the DB, but `job`
+    // is the SELECT snapshot taken before that UPDATE — job.attempts is the
+    // pre-claim value, so the current attempt count is job.attempts + 1 (same
+    // stale-snapshot correction as gmail-sync.js).
+    const currentAttempts = Number(job.attempts || 0) + 1;
+    if (err?.retryable && currentAttempts < MAX_TRIAGE_RETRY_ATTEMPTS) {
       // Transient provider error (429/5xx): re-queue with backoff instead of
       // permanently misclassifying the email as a failure_fallback.
-      const scheduledFor = triageRetryBackoffIso(now, job.attempts);
+      const scheduledFor = triageRetryBackoffIso(now, currentAttempts);
       await deferJob(job, dbClient, scheduledFor, `Retryable triage error: ${err.message}`);
       return { processed: true, job_id: Number(job.id), deferred: true, scheduled_for: scheduledFor };
     }
@@ -372,7 +384,8 @@ export async function processNextEmailTriageJob({
     await completeJob(job, dbClient, now, status === "failed" ? decision.error : "");
   } catch (finalizeErr) {
     // A finalize step failed; re-queue so the job isn't left stuck in 'running'.
-    const scheduledFor = triageRetryBackoffIso(now, job.attempts);
+    // job.attempts is the stale pre-claim snapshot; +1 is the actual attempt count.
+    const scheduledFor = triageRetryBackoffIso(now, Number(job.attempts || 0) + 1);
     await deferJob(job, dbClient, scheduledFor, `Finalize failed: ${finalizeErr.message}`);
     return { processed: true, job_id: Number(job.id), deferred: true, scheduled_for: scheduledFor };
   }

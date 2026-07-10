@@ -121,6 +121,39 @@ describe("mapTodoistTask", () => {
     });
   });
 
+  it("keeps the literal (no-Z) due datetime path byte-identical", async () => {
+    const { __testing__ } = await import("./todoist.js");
+    const projects = new Map([["p1", { name: "Home", color: "grape" }]]);
+    const raw = {
+      id: "t4",
+      content: "Floating due",
+      project_id: "p1",
+      due: { date: "2026-01-15T19:00:00" },
+      priority: 1,
+      labels: [],
+    };
+    const out = __testing__.mapTodoistTask(raw, projects);
+    expect(out.due_time).toBe("7:00 PM");
+    expect(out.due_date).toBe("2026-01-15");
+  });
+
+  it("converts a Z-suffixed due datetime to Pacific time/date", async () => {
+    const { __testing__ } = await import("./todoist.js");
+    const projects = new Map([["p1", { name: "Home", color: "grape" }]]);
+    const raw = {
+      id: "t5",
+      content: "Fixed-timezone due",
+      project_id: "p1",
+      // 2026-01-16T03:00:00Z = 2026-01-15 7:00 PM PST
+      due: { date: "2026-01-16T03:00:00Z" },
+      priority: 1,
+      labels: [],
+    };
+    const out = __testing__.mapTodoistTask(raw, projects);
+    expect(out.due_time).toBe("7:00 PM");
+    expect(out.due_date).toBe("2026-01-15");
+  });
+
   it("dedupes recurring Todoist range rows by id and due date", async () => {
     const { __testing__ } = await import("./todoist.js");
     const rows = [
@@ -137,6 +170,98 @@ describe("mapTodoistTask", () => {
 });
 
 describe("Todoist write mirror coherence", () => {
+  it("sends due_lang only when creating a task with a truthy due_string", async () => {
+    const createdTask = {
+      id: "new-task",
+      content: "Draft essay",
+      project_id: "p1",
+      priority: 1,
+      labels: [],
+    };
+    testState.fetchFn.mockImplementation(async (url) => {
+      if (url.endsWith("/tasks")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => createdTask,
+        };
+      }
+      if (url.includes("/projects")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ results: [{ id: "p1", name: "School", color: "blue" }] }),
+        };
+      }
+      throw new Error(`Unexpected Todoist URL ${url}`);
+    });
+    const { createTodoistTask } = await import("./todoist.js");
+
+    await createTodoistTask("u1", {
+      content: "Draft essay",
+      due_string: "tomorrow at 9am",
+    });
+    await createTodoistTask("u1", { content: "Draft essay", due_string: "" });
+
+    const taskBodies = testState.fetchFn.mock.calls
+      .filter(([url]) => url.endsWith("/tasks"))
+      .map(([, options]) => JSON.parse(options.body));
+    expect(taskBodies).toEqual([
+      {
+        content: "Draft essay",
+        due_string: "tomorrow at 9am",
+        due_lang: "en",
+      },
+      { content: "Draft essay" },
+    ]);
+  });
+
+  it("sends due_lang only when updating a task with a truthy due_string", async () => {
+    const updatedTask = {
+      id: "task-1",
+      content: "Revised essay",
+      project_id: "p1",
+      priority: 1,
+      labels: [],
+    };
+    testState.fetchFn.mockImplementation(async (url) => {
+      if (url.endsWith("/tasks/task-1")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => updatedTask,
+        };
+      }
+      if (url.includes("/projects")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ results: [{ id: "p1", name: "School", color: "blue" }] }),
+        };
+      }
+      throw new Error(`Unexpected Todoist URL ${url}`);
+    });
+    const { updateTodoistTask } = await import("./todoist.js");
+
+    await updateTodoistTask("u1", "task-1", {
+      content: "Revised essay",
+      due_string: "every weekday at 9am",
+    });
+    await updateTodoistTask("u1", "task-1", { content: "Revised essay", due_string: "" });
+
+    const taskBodies = testState.fetchFn.mock.calls
+      .filter(([url]) => url.endsWith("/tasks/task-1"))
+      .map(([, options]) => JSON.parse(options.body));
+    expect(taskBodies).toEqual([
+      {
+        content: "Revised essay",
+        due_string: "every weekday at 9am",
+        due_lang: "en",
+      },
+      { content: "Revised essay", due_string: "" },
+    ]);
+  });
+
   it("upserts created tasks into the mirror and requests reconciliation sync", async () => {
     const createdTask = {
       id: "new-task",

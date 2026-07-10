@@ -56,8 +56,22 @@ async function createMigratedDb() {
       email_lookback_hours INTEGER DEFAULT 16,
       weather_lat REAL DEFAULT 34.0686,
       weather_lng REAL DEFAULT -118.0276,
+      weather_location TEXT,
       actual_budget_url TEXT,
-      actual_budget_sync_id TEXT
+      actual_budget_sync_id TEXT,
+      todoist_needs_reauth INTEGER NOT NULL DEFAULT 0,
+      todoist_api_token_encrypted TEXT,
+      todoist_oauth_refresh_token_encrypted TEXT,
+      todoist_oauth_access_token_expires_at INTEGER,
+      todoist_oauth_scope TEXT,
+      todoist_oauth_token_type TEXT,
+      discord_webhook_url_encrypted TEXT,
+      future_secret_encrypted TEXT,
+      future_api_token TEXT
+    );
+    CREATE TABLE ea_completed_tasks (
+      user_id TEXT,
+      task_id TEXT
     );
   `);
   await db.execute({
@@ -148,6 +162,57 @@ describe("settings write-boundary validation", () => {
   });
 });
 
+describe("GET /settings todoist_needs_reauth", () => {
+  it("includes todoist_needs_reauth: false by default", async () => {
+    const res = await request(makeApp()).get("/api/ea/settings");
+
+    expect(res.status).toBe(200);
+    expect(res.body.todoist_needs_reauth).toBe(false);
+  });
+
+  it("includes todoist_needs_reauth: true when the Todoist grant was revoked", async () => {
+    await testState.db.current.execute({
+      sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
+      args: ["user-1"],
+    });
+
+    const res = await request(makeApp()).get("/api/ea/settings");
+
+    expect(res.status).toBe(200);
+    expect(res.body.todoist_needs_reauth).toBe(true);
+  });
+});
+
+describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)", () => {
+  it("clears todoist_needs_reauth when a non-empty token is saved (manual reconnect)", async () => {
+    await testState.db.current.execute({
+      sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
+      args: ["user-1"],
+    });
+
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ todoist_api_token: "a-fresh-valid-token" });
+
+    expect(res.status).toBe(200);
+    expect((await getSettingsRow()).todoist_needs_reauth).toBe(0);
+  });
+
+  it("does not clear todoist_needs_reauth when disconnecting (empty token)", async () => {
+    await testState.db.current.execute({
+      sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
+      args: ["user-1"],
+    });
+
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ todoist_api_token: "" });
+
+    expect(res.status).toBe(200);
+    expect((await getSettingsRow()).todoist_needs_reauth).toBe(1);
+  });
+});
+
 describe("settings error messages do not leak internals (P3-54)", () => {
   it("returns a fixed geocode failure string, not the raw error message", async () => {
     geocodeLocation.mockRejectedValueOnce(new Error("ENOTFOUND api.pirateweather.net secret-key=abc123"));
@@ -173,6 +238,60 @@ describe("settings error messages do not leak internals (P3-54)", () => {
     expect(res.status).toBe(500);
     expect(res.body.message).toBe("Failed to fetch important senders");
     expect(JSON.stringify(res.body)).not.toContain("secret_internal_detail");
+  });
+});
+
+describe("GET /settings response allowlist (SEC-06)", () => {
+  it("never leaks secret-shaped columns, including ones added after this test was written", async () => {
+    await testState.db.current.execute({
+      sql: "UPDATE ea_settings SET future_secret_encrypted = ?, future_api_token = ?, weather_location = ?, todoist_oauth_scope = ? WHERE user_id = ?",
+      args: [
+        "super-secret-value",
+        "future-token-value",
+        "El Monte, CA",
+        "MARKER-todoist-oauth-scope-should-never-leak",
+        "user-1",
+      ],
+    });
+
+    const res = await request(makeApp()).get("/api/ea/settings");
+
+    expect(res.status).toBe(200);
+    const bodyJson = JSON.stringify(res.body);
+
+    // No response key looks secret-shaped, except the intentional `*_configured`
+    // booleans (which are derived presence flags, not secrets themselves).
+    const secretShaped = /(_encrypted$)|password|secret|(^|_)token/i;
+    const leakedKeys = Object.keys(res.body).filter(
+      (key) => secretShaped.test(key) && !key.endsWith("_configured")
+    );
+    expect(leakedKeys).toEqual([]);
+
+    // Decoy secret values must not appear anywhere in the serialized response.
+    expect(bodyJson).not.toContain("super-secret-value");
+    expect(bodyJson).not.toContain("future-token-value");
+
+    // todoist_oauth_scope is a real, currently-excluded ea_settings column whose
+    // name doesn't match the secret-shaped regex above (no _encrypted/password/
+    // secret/token substring), so a future accidental re-addition to
+    // SETTINGS_PUBLIC_FIELDS would slip past the key-shape check. Assert its
+    // value directly, the same way the decoy columns are checked.
+    expect(bodyJson).not.toContain("MARKER-todoist-oauth-scope-should-never-leak");
+
+    // Known public fields must still come through.
+    expect(res.body.email_lookback_hours).toBe(16);
+    expect(res.body.weather_lat).toBe(34.0686);
+    expect(res.body.weather_location).toBe("El Monte, CA");
+    expect(res.body.actual_budget_url).toBeNull();
+    expect(res.body.schedules).toEqual([
+      { label: "Morning Briefing", time: "08:00", enabled: false },
+      { label: "Evening Briefing", time: "20:00", enabled: false },
+    ]);
+    expect(res.body.email_interests).toEqual([]);
+    expect(res.body.actual_budget_configured).toBe(false);
+    expect(res.body.todoist_configured).toBe(false);
+    expect(res.body.todoist_oauth_configured).toBe(false);
+    expect(res.body.discord_webhook_configured).toBe(false);
   });
 });
 
@@ -206,6 +325,33 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("actual_budget_url must be a string");
     expect((await getSettingsRow()).actual_budget_url).toBeNull();
+  });
+
+  it("rejects a dangerous-scheme actual_budget_url and does not persist (SEC-05)", async () => {
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ actual_budget_url: "file:///x" });
+
+    expect(res.status).toBe(400);
+    expect((await getSettingsRow()).actual_budget_url).toBeNull();
+  });
+
+  it("accepts a loopback actual_budget_url (self-hosted Actual server, SEC-05)", async () => {
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ actual_budget_url: "http://localhost:5006" });
+
+    expect(res.status).toBe(200);
+    expect((await getSettingsRow()).actual_budget_url).toBe("http://localhost:5006");
+  });
+
+  it("rejects a non-Discord discord_webhook_url and does not encrypt/persist (SEC-05)", async () => {
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ discord_webhook_url: "https://evil.com/hook" });
+
+    expect(res.status).toBe(400);
+    expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
   });
 
   it("accepts valid scalar settings and persists them", async () => {

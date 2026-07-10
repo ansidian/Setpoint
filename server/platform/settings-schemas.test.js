@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  validateActualBudgetUrl,
+  validateDiscordWebhookUrl,
   validateEmailInterests,
   validateImportantSenders,
   validateSchedules,
@@ -190,5 +192,42 @@ describe("validateUtilityPayLinks", () => {
       { scheduleId: "s1", url: "https://b" },
     ]);
     expect(result.valid).toBe(false);
+  });
+});
+
+describe("validateActualBudgetUrl (SEC-05)", () => {
+  it("accepts a blank string as clearing the setting", () => {
+    expect(validateActualBudgetUrl("")).toEqual({ valid: true, value: "" });
+    expect(validateActualBudgetUrl("   ")).toEqual({ valid: true, value: "" });
+  });
+
+  it("accepts loopback/LAN http(s) URLs (self-hosted Actual server)", () => {
+    expect(validateActualBudgetUrl("http://localhost:5006").valid).toBe(true);
+    expect(validateActualBudgetUrl("http://127.0.0.1:5006").valid).toBe(true);
+    expect(validateActualBudgetUrl("http://192.168.1.50:5006").valid).toBe(true);
+    expect(validateActualBudgetUrl("https://actual.example.com").valid).toBe(true);
+  });
+
+  it("rejects dangerous schemes and unparseable strings", () => {
+    expect(validateActualBudgetUrl("file:///etc/passwd").valid).toBe(false);
+    expect(validateActualBudgetUrl("notaurl").valid).toBe(false);
+    expect(validateActualBudgetUrl("javascript:alert(1)").valid).toBe(false);
+  });
+});
+
+describe("validateDiscordWebhookUrl (SEC-05)", () => {
+  it("accepts a blank string as clearing the setting", () => {
+    expect(validateDiscordWebhookUrl("")).toEqual({ valid: true, value: "" });
+    expect(validateDiscordWebhookUrl("   ")).toEqual({ valid: true, value: "" });
+  });
+
+  it("accepts a valid discord.com or discordapp.com webhook URL", () => {
+    expect(validateDiscordWebhookUrl("https://discord.com/api/webhooks/1/x").valid).toBe(true);
+    expect(validateDiscordWebhookUrl("https://discordapp.com/api/webhooks/1/x").valid).toBe(true);
+  });
+
+  it("rejects a non-Discord host and non-https scheme", () => {
+    expect(validateDiscordWebhookUrl("https://evil.com/api/webhooks/1/x").valid).toBe(false);
+    expect(validateDiscordWebhookUrl("http://discord.com/api/webhooks/1/x").valid).toBe(false);
   });
 });

@@ -1,4 +1,7 @@
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+
 const TODOIST_SYNC_URL = "https://api.todoist.com/api/v1/sync";
+const SYNC_API_TIMEOUT_MS = 30_000;
 
 export const TODOIST_MIRROR_RESOURCE_TYPES = ["items", "projects", "labels"];
 
@@ -23,14 +26,14 @@ export async function fetchTodoistSyncResources({
     sync_token: syncToken,
     resource_types: JSON.stringify(resourceTypes),
   });
-  const res = await fetchFn(TODOIST_SYNC_URL, {
+  const res = await fetchWithTimeout(TODOIST_SYNC_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
-  });
+  }, { timeoutMs: SYNC_API_TIMEOUT_MS, fetchFn });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");

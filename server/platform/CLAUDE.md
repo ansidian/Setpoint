@@ -10,6 +10,8 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `encryption.js` — secret encrypt/decrypt for stored credentials
 - `google-places.js` — Google Places autocomplete/details client with radius biasing
 - `weather.js` — Pirate Weather fetch and condition → lucide icon mapping
+- `fetch-with-timeout.js` — shared timeout helper for external provider fetches and non-fetch async operations
+- `provider-reauth.js` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

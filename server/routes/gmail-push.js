@@ -25,7 +25,7 @@ function safeEqualToken(candidate, expected) {
 
 function verifyPushToken(req) {
   const expected = process.env.GMAIL_PUBSUB_PUSH_TOKEN;
-  if (!expected) return process.env.NODE_ENV !== "production";
+  if (!expected) return false;
   return safeEqualToken(bearerToken(req), expected);
 }
 

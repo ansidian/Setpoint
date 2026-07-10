@@ -34,6 +34,8 @@ const {
   scheduleBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
   isBillsMirrorMaintenanceDue,
+  startBillsMirrorRefreshWorker,
+  stopBillsMirrorRefreshWorker,
   __resetBillsMirrorRefreshTimersForTests,
 } = await import("./bills-mirror-sync.js");
 
@@ -720,5 +722,43 @@ describe("Bills mirror", () => {
       lastSuccessAt: "2026-05-06T12:00:00.000Z",
       lastAttemptAt: "2026-05-06T17:55:00.000Z",
     }, { now })).toBe(false);
+  });
+
+  describe("stopBillsMirrorRefreshWorker", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mockDb.execute.mockResolvedValue(rowResult([]));
+    });
+
+    afterEach(() => {
+      stopBillsMirrorRefreshWorker();
+      vi.useRealTimers();
+    });
+
+    it("prevents the interval worker from ticking again after stop", async () => {
+      startBillsMirrorRefreshWorker({ intervalMs: 1000 });
+      // Startup check call.
+      await vi.advanceTimersByTimeAsync(0);
+      mockDb.execute.mockClear();
+
+      stopBillsMirrorRefreshWorker();
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(mockDb.execute).not.toHaveBeenCalled();
+    });
+
+    it("is safe to call twice", () => {
+      startBillsMirrorRefreshWorker({ intervalMs: 1000 });
+      stopBillsMirrorRefreshWorker();
+      expect(() => stopBillsMirrorRefreshWorker()).not.toThrow();
+    });
+
+    it("allows a fresh start after stop", async () => {
+      startBillsMirrorRefreshWorker({ intervalMs: 1000 });
+      stopBillsMirrorRefreshWorker();
+
+      const result = startBillsMirrorRefreshWorker({ intervalMs: 1000 });
+      expect(result).toEqual({ started: true });
+    });
   });
 });

@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getActiveSnapshotView } from "./snapshot-service.js";
 import { createMigratedDb, seedSnapshotItem } from "./snapshot-test-fixtures.js";
-import { wakeDueSnoozes } from "./snooze-waker.js";
+import { startSnoozeWaker, stopSnoozeWaker, wakeDueSnoozes } from "./snooze-waker.js";
+
+const cronApi = vi.hoisted(() => ({ schedule: vi.fn() }));
+vi.mock("node-cron", () => ({ default: cronApi }));
 
 describe("snooze waker", () => {
   it("reattaches woken snoozes to the active snapshot with resurfaced source metadata", async () => {
@@ -445,5 +448,36 @@ describe("snooze waker", () => {
     // Reattach threw, so the row must stay 'snoozed' for the next tick to retry,
     // not flip to 'resurfaced' (which would drop the email from the briefing).
     expect(row.rows[0].status).toBe("snoozed");
+  });
+});
+
+describe("stopSnoozeWaker", () => {
+  beforeEach(() => {
+    cronApi.schedule.mockReset();
+  });
+
+  it("stops the scheduled cron job", () => {
+    const job = { stop: vi.fn() };
+    cronApi.schedule.mockReturnValue(job);
+
+    startSnoozeWaker();
+    stopSnoozeWaker();
+
+    expect(job.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("is safe to call twice", () => {
+    const job = { stop: vi.fn() };
+    cronApi.schedule.mockReturnValue(job);
+
+    startSnoozeWaker();
+    stopSnoozeWaker();
+    expect(() => stopSnoozeWaker()).not.toThrow();
+    // Second call must not re-stop an already-cleared handle.
+    expect(job.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("is safe to call when the waker was never started", () => {
+    expect(() => stopSnoozeWaker()).not.toThrow();
   });
 });
