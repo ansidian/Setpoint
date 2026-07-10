@@ -49,6 +49,29 @@ describe("CalendarModal shell and search layout", () => {
     });
   });
 
+  it("aligns the weekday header with the seven-column calendar grid", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const calendarColumn = screen.getByTestId("calendar-scroll-container").parentElement;
+    const weekdayHeaders = screen.getAllByRole("columnheader");
+
+    expect(weekdayHeaders).toHaveLength(7);
+    expect(weekdayHeaders.every((header) => calendarColumn.contains(header))).toBe(true);
+    expect(screen.getByTestId("calendar-modal-rail").contains(weekdayHeaders[6])).toBe(false);
+  });
+
   it("shows skeleton loaders while the events month is loading", () => {
     window.innerWidth = 1900;
 
