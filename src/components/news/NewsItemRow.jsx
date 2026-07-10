@@ -10,13 +10,6 @@ function faviconUrl(url) {
   }
 }
 
-const CLAMP_TWO_LINES = {
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-};
-
 // One headline. `variant="lead"` is the topic's front-page story: bigger
 // title, excerpt, and the feed thumbnail when one exists. The whole row is
 // the link (larger target than a bare title anchor); hover/focus styling
@@ -27,57 +20,29 @@ export default function NewsItemRow({ item, variant = "compact" }) {
   const excerpt = lead ? displayExcerpt(item.excerpt) : "";
   return (
     <a
-      className="news-row"
+      className={`news-row news-row--${lead ? "lead" : "compact"}`}
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      style={{
-        display: "flex",
-        gap: 12,
-        alignItems: "flex-start",
-        padding: lead ? "8px 10px" : "5px 10px",
-        margin: "0 -10px",
-      }}
     >
-      <span style={{ display: "grid", gap: lead ? 4 : 3, minWidth: 0, flex: 1 }}>
-        <span
-          className="news-row-title"
-          style={{
-            fontSize: lead ? 14 : 12.5,
-            fontWeight: lead ? 600 : 400,
-            lineHeight: 1.4,
-            ...CLAMP_TWO_LINES,
-          }}
-        >
-          {item.title}
-        </span>
+      <span className="news-row-copy">
+        <span className="news-row-title">{item.title}</span>
         {excerpt ? (
-          <span style={{ color: "var(--sp-subtext)", fontSize: 12, lineHeight: 1.5, ...CLAMP_TWO_LINES }}>
-            {excerpt}
-          </span>
+          <span className="news-row-excerpt">{excerpt}</span>
         ) : null}
-        <span
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            minWidth: 0,
-            color: "var(--sp-subtext)",
-            fontSize: 10.5,
-          }}
-        >
+        <span className="news-row-meta">
           {favicon ? (
             <img
+              className="news-row-favicon"
               src={favicon}
               width={12}
               height={12}
               loading="lazy"
               alt=""
-              style={{ flexShrink: 0, borderRadius: 3 }}
               onError={(ev) => { ev.currentTarget.style.display = "none"; }}
             />
           ) : null}
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span className="news-row-source">
             {item.sourceTitle}
             {item.publishedAt ? ` · ${timeAgo(item.publishedAt)}` : ""}
           </span>
@@ -85,18 +50,11 @@ export default function NewsItemRow({ item, variant = "compact" }) {
       </span>
       {lead && item.thumbnailUrl ? (
         <img
+          className="news-row-thumbnail"
           src={item.thumbnailUrl}
           alt=""
           loading="lazy"
           referrerPolicy="no-referrer"
-          style={{
-            width: 68,
-            height: 68,
-            objectFit: "cover",
-            borderRadius: 8,
-            flexShrink: 0,
-            border: "1px solid rgba(255,255,255,0.06)",
-          }}
           onError={(ev) => { ev.currentTarget.style.display = "none"; }}
         />
       ) : null}

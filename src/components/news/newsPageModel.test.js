@@ -5,6 +5,7 @@ import {
   planTopicSection,
   resolveDividerMarker,
   splitItemsBySeen,
+  summarizeTopicSourceHealth,
 } from "./newsPageModel.js";
 
 const item = (id, publishedAt) => ({ id, publishedAt });
@@ -107,5 +108,50 @@ describe("describeSourceHealth", () => {
   it("is quiet for healthy sources", () => {
     expect(describeSourceHealth({ consecutiveFailures: 0, lastStatus: "200" }))
       .toEqual({ failing: false, label: null });
+  });
+
+  it("ignores failures from disabled sources", () => {
+    expect(describeSourceHealth({ enabled: false, consecutiveFailures: 9, lastStatus: "429" }))
+      .toEqual({ failing: false, label: null });
+  });
+
+  it("reports an enabled Reddit 429 immediately", () => {
+    expect(describeSourceHealth({
+      enabled: true,
+      feedUrl: "https://www.reddit.com/r/news/.rss",
+      consecutiveFailures: 1,
+      lastStatus: "429",
+    })).toEqual({ failing: true, label: "Reddit delayed · 429" });
+  });
+});
+
+describe("summarizeTopicSourceHealth", () => {
+  it("describes a rate-limited Reddit feed as delayed", () => {
+    expect(summarizeTopicSourceHealth([{
+      enabled: true,
+      feedUrl: "https://www.reddit.com/r/politics/.rss",
+      consecutiveFailures: 6,
+      lastStatus: "429",
+    }])).toEqual({ count: 1, label: "Reddit delayed · 429", tone: "warning" });
+  });
+
+  it("uses attention copy for generic feed failures", () => {
+    const failed = { enabled: true, consecutiveFailures: 5, lastStatus: "timeout" };
+    expect(summarizeTopicSourceHealth([failed]))
+      .toEqual({ count: 1, label: "1 feed needs attention", tone: "danger" });
+    expect(summarizeTopicSourceHealth([failed, { ...failed, lastStatus: "403" }]))
+      .toEqual({ count: 2, label: "2 feeds need attention", tone: "danger" });
+  });
+
+  it("keeps the full failure count when Reddit and another feed are unhealthy", () => {
+    expect(summarizeTopicSourceHealth([
+      {
+        enabled: true,
+        feedUrl: "https://www.reddit.com/r/news/.rss",
+        consecutiveFailures: 1,
+        lastStatus: "429",
+      },
+      { enabled: true, consecutiveFailures: 5, lastStatus: "timeout" },
+    ])).toEqual({ count: 2, label: "2 feeds need attention", tone: "danger" });
   });
 });
