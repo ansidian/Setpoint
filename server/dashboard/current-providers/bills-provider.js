@@ -35,6 +35,13 @@ function billsVisibleProjection(payload = null) {
   };
 }
 
+function hasUsableFinanceRows(rows) {
+  return Array.isArray(rows) && rows.every((row) => (
+    !Array.isArray(row?.conditions)
+      && (row?.amount == null || Number.isFinite(row.amount))
+  ));
+}
+
 function newestFailureTime(values) {
   const times = values
     .filter(Boolean)
@@ -73,8 +80,8 @@ const billsProvider = {
     actualBudgetUrl: null,
   }),
   hasUsablePayload: (payload) => Boolean(
-    Array.isArray(payload?.bills)
-      && Array.isArray(payload?.allSchedules)
+    hasUsableFinanceRows(payload?.bills)
+      && hasUsableFinanceRows(payload?.allSchedules)
       && payload?.payeeMap,
   ),
   visibleProjection: billsVisibleProjection,

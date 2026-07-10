@@ -1,7 +1,9 @@
 import { todayPacific, toPacificDate } from "./dashboard-helpers";
 
 export function formatAmount(amount) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount)) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(numericAmount);
 }
 
 export function formatDate(dateStr) {

@@ -107,6 +107,19 @@ describe("current dashboard source definitions", () => {
     })).toBe(true);
   });
 
+  it("rejects legacy or malformed cached bills before they reach the dashboard", () => {
+    const rowFor = (allSchedules) => ({
+      payload_json: JSON.stringify({ bills: [], allSchedules, payeeMap: {} }),
+    });
+
+    expect(hasUsablePayload("bills_current", rowFor([
+      { id: "legacy", next_date: "2026-05-10", conditions: [{ field: "amount", value: -5000 }] },
+    ]))).toBe(false);
+    expect(hasUsablePayload("bills_current", rowFor([
+      { id: "malformed", next_date: "2026-05-10", amount: "not-a-number" },
+    ]))).toBe(false);
+  });
+
   it("summarizes current data health through source payload rules", () => {
     const now = new Date("2026-05-07T12:00:00.000Z");
     const rows = {

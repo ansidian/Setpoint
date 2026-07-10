@@ -97,18 +97,25 @@ export default function CalendarScrollContainer({
 
   const activeKey = `${viewYear}-${viewMonth}`;
   const currentMonthData = useMemo(
-    () => ({ key: activeKey, viewData, itemsByDay, itemsByDate, cellMetaByDate }),
-    [activeKey, viewData, itemsByDay, itemsByDate, cellMetaByDate],
+    () => ({ key: activeKey, view, viewData, itemsByDay, itemsByDate, cellMetaByDate }),
+    [activeKey, view, viewData, itemsByDay, itemsByDate, cellMetaByDate],
   );
   const [monthDataState, setMonthDataState] = useState(() => ({
     tracked: currentMonthData,
     cached: null,
   }));
-  if (monthDataState.tracked.key !== activeKey) {
-    setMonthDataState({ tracked: currentMonthData, cached: monthDataState.tracked });
+  if (monthDataState.tracked.key !== activeKey || monthDataState.tracked.view !== view) {
+    setMonthDataState({
+      tracked: currentMonthData,
+      cached: monthDataState.tracked.view === view ? monthDataState.tracked : null,
+    });
   } else if (monthDataState.tracked !== currentMonthData) {
     setMonthDataState(prev => ({ ...prev, tracked: currentMonthData }));
   }
+
+  const cachedMonthData = monthDataState.cached?.view === view
+    ? monthDataState.cached
+    : null;
 
   // Faint week-row texture for unmounted spacers. Only ±2 months are mounted, so
   // a fast fling can briefly outrun the window and park the viewport on a spacer
@@ -155,7 +162,7 @@ export default function CalendarScrollContainer({
         todayDate={todayDate}
         layout={layout}
         activeView={activeView}
-        cached={monthDataState.cached}
+        cached={cachedMonthData}
         activeMonthData={activeMonthData}
         shareItemsByDate={shareItemsByDate}
         previewByIndex={previewByIndex}

@@ -20,6 +20,40 @@ describe("billsModel range data", () => {
     expect(result.monthTotal).toBe(100);
   });
 
+  it("does not create calendar items for a schedule with an invalid amount", () => {
+    const result = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        schedules: [
+          { id: "bad", name: "Invalid bill", amount: "not-a-number", next_date: "2026-05-10", paid: false, type: "bill" },
+          { id: "missing", name: "Missing amount", amount: null, next_date: "2026-05-11", paid: false, type: "bill" },
+          { id: "legacy", name: "Legacy invalid bill", next_date: "2026-05-12", paid: false, type: "bill", conditions: [{ field: "amount", value: { num1: "not-a-number" } }] },
+        ],
+      },
+    });
+
+    expect(result.itemsByDate).toEqual({});
+    expect(result.itemsByDay).toEqual({});
+    expect(result.monthTotal).toBe(0);
+  });
+
+  it("does not create calendar items for a transaction with an invalid amount", () => {
+    const result = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        transactions: [
+          { id: "bad-transaction", date: "2026-05-10", amount: "not-a-number", direction: "expense", payee: "Invalid transaction" },
+          { id: "missing-transaction", date: "2026-05-11", amount: null, direction: "expense", payee: "Missing amount" },
+        ],
+      },
+    });
+
+    expect(result.itemsByDate).toEqual({});
+    expect(result.itemsByDay).toEqual({});
+  });
+
   it("matches dashboard-origin schedule ids against range instance ids", () => {
     expect(billMatchesItemId({ id: "s1:2026-05-10", scheduleId: "s1" }, "s1")).toBe(true);
     expect(billMatchesItemId({ id: "s1:2026-05-10", scheduleId: "s1" }, "s1:2026-05-10")).toBe(true);

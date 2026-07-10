@@ -265,9 +265,8 @@ export default function CalendarCell({
         border: cellBorder,
         boxShadow: cellShadow,
         cursor: "pointer",
-        opacity: inCurrentMonth ? 1 : 0.68,
         transition:
-          "box-shadow 150ms, border-color 150ms, background 150ms, opacity 150ms",
+          "box-shadow 150ms, border-color 150ms, background 150ms",
         display: "flex",
         flexDirection: "column",
         gap: 2,
