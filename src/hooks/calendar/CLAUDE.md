@@ -21,6 +21,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarEntryReadinessModel.js` — entry-readiness projection (events-range loading + agenda-entry-ready gate over committed/seeded/current deadline overlay data) extracted from the `viewData` memo in `useCalendarModalController.jsx`
 
 ### Controller + view model
+- `calendarShellLoaders.jsx` — production lazy boundaries for the desktop shell and mobile agenda; Vitest resolves the same module paths eagerly to preserve synchronous behavior-test contracts
 - `useCalendarModalController.jsx` — main orchestrator wiring sub-hooks and editors
 - `useCalendarModalViewModel.js` — visible month data and shell prop building
 - `useCalendarModalSelection.js` — view date, selected day, focus tracking per open request
@@ -34,7 +35,6 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ### Floating detail + editor routing
 - `useCalendarFloatingDetail.js` — floating detail anchoring, session memory, placement
 - `useFloatingEditorRouting.js` — unified deadline/event editor routing, save→detail transitions
-- `useCalendarModalEditorRouting.js` — backward-compat re-export wrapper
 
 ### Domain state + lifecycle
 - `useCalendarRange.js` — per-month event caching/fetching, prefetch radius, staleness

@@ -182,6 +182,38 @@ describe("calendarModalSelectionModel", () => {
     }
   });
 
+  it("seeds today's view/day/key from Pacific time, not host-local, on a fresh open", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-06T05:30:00Z"));
+
+    try {
+      const snapshot = buildCalendarModalSyncSnapshot({
+        open: true,
+        view: "events",
+        prevOpen: false,
+        prevView: "events",
+        prevOpenRequestId: 0,
+        openRequestId: 0,
+        focusDate: null,
+        focusItemId: null,
+        viewDate: { month: 3, year: 2026 },
+        selectedDay: null,
+        selectedDateKey: null,
+        selectedItemId: null,
+        pendingFocusDate: null,
+        pendingFocusItemId: null,
+      });
+
+      expect(snapshot).toMatchObject({
+        nextViewDate: { month: 6, year: 2026 },
+        nextSelectedDay: 5,
+        nextSelectedDateKey: "2026-07-05",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("detects view-date equality by month and year", () => {
     expect(isSameViewDate({ month: 4, year: 2026 }, { month: 4, year: 2026 })).toBe(true);
     expect(isSameViewDate({ month: 4, year: 2026 }, { month: 5, year: 2026 })).toBe(false);

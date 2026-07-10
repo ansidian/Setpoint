@@ -10,6 +10,7 @@ import {
 } from "./CalendarCellItemChip.jsx";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 import { deadlineDragAllowed } from "../views/deadlines/calendarDeadlineRescheduleModel.js";
+import { isEventSelectionModifier } from "../events/calendarEventSelectionModel.js";
 
 function isOverflowTriggerTarget(target) {
   return target instanceof HTMLElement
@@ -107,10 +108,6 @@ function itemButtonStyle({
     textAlign: "left",
     transition: "border-color 140ms, background 140ms, box-shadow 140ms",
   };
-}
-
-function isEventSelectionModifier(event) {
-  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 function OverflowMetadata({ item, selected, accent, leadingColumnWidth }) {

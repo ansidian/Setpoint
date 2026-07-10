@@ -1,7 +1,8 @@
-import { createElement, useState } from "react";
+import { createElement } from "react";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import { CELL_HEADER_HEIGHT, buildCellAriaLabel, formatCellDate, formatCellDateKey } from "./calendarGridUtils.js";
 import { resolveIcon } from "../../../lib/icons.js";
+import { isEventSelectionModifier } from "../events/calendarEventSelectionModel.js";
 
 function formatCellWeather(weather) {
   if (weather?.high == null && weather?.low == null) return null;
@@ -15,10 +16,6 @@ function weatherIconColor(icon) {
   if (normalized.includes("snow")) return "rgba(205,214,244,0.74)";
   if (normalized.includes("storm") || normalized.includes("thunder")) return "color-mix(in srgb, var(--sp-cream) 66%, transparent)";
   return "rgba(166,173,200,0.66)";
-}
-
-function isEventSelectionModifier(event) {
-  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 export default function CalendarCell({
@@ -52,7 +49,6 @@ export default function CalendarCell({
   renderCellContents,
   quickActions,
 }) {
-  const [hovered, setHovered] = useState(false);
   const todayAccent = "var(--ea-accent)";
   const inlineOverflowOpen = overflowOpen && overflowMode === "inline";
   let cellBg = "rgba(255,255,255,0.015)";
@@ -106,12 +102,15 @@ export default function CalendarCell({
     if (!hasItems) dateWeight = 400;
   }
 
-  if (!isSelected && hovered) {
-    cellBg = inCurrentMonth
-      ? "rgba(255,255,255,0.035)"
-      : "rgba(255,255,255,0.018)";
-    cellBorder = "1px solid rgba(255,255,255,0.085)";
-  }
+  // Hover treatment (PERF-L03) is expressed in CSS (see index.css,
+  // `[data-calcell="true"]:hover`) rather than React state, so hovering a
+  // cell never re-renders it or re-invokes renderCellContents. The CSS rules
+  // reproduce the two backgrounds/border above, keyed on `data-selected`/
+  // `data-current-month`, and are suppressed via `:not()` guards when
+  // `data-drop-target` is set, or when `data-overflow-open`+`data-overflow-mode`
+  // together indicate inline overflow (mirroring `inlineOverflowOpen` below —
+  // fallback/popover overflow does NOT suppress hover), matching the
+  // priority order below (those states still win over hover).
 
   if (inlineOverflowOpen) {
     cellBg = "color-mix(in srgb, var(--sp-panel) 98%, transparent)";
@@ -202,13 +201,14 @@ export default function CalendarCell({
           : (inCurrentMonth ? `calendar-cell-${dateKey}` : undefined)
       }
       data-date-key={dateKey || undefined}
+      data-calcell="true"
+      data-selected={isSelected ? "true" : "false"}
       data-current-month={inCurrentMonth ? "true" : "false"}
       data-past-tone={pastTone || "none"}
       data-overflow-open={overflowOpen ? "true" : "false"}
       data-overflow-mode={overflowMode || "none"}
-      onPointerEnter={() => setHovered(true)}
+      data-drop-target={isDropTarget ? "true" : "false"}
       onPointerLeave={() => {
-        setHovered(false);
         quickActions?.leaveDropTarget?.(dateKey);
         quickActions?.leaveDeadlineDropTarget?.(dateKey);
       }}

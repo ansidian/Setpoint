@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billMatchesItemId, compute, payUrlForBill } from "./billsModel.js";
+import { billMatchesItemId, compute, getDayState, payUrlForBill } from "./billsModel.js";
 
 describe("billsModel range data", () => {
   it("groups open schedule range instances by composite id", () => {
@@ -40,6 +40,36 @@ describe("billsModel range data", () => {
 
     expect(result.itemsByDate).toEqual({});
     expect(result.itemsByDay).toEqual({});
+  });
+});
+
+describe("getDayState identity (PERF-01 follow-up)", () => {
+  it("returns the referentially-same grouped state for repeated calls with the same array reference", () => {
+    const rawItems = [
+      { id: "bill-1", name: "Rent", amount: 100, next_date: "2026-05-01", paid: false },
+      { id: "bill-2", name: "Electricity", amount: 50, next_date: "2026-05-01", paid: true },
+    ];
+
+    const first = getDayState(rawItems);
+    const second = getDayState(rawItems);
+
+    expect(second).toBe(first);
+  });
+
+  it("recomputes when a different array reference is passed, even with identical content", () => {
+    const rawItemsA = [{ id: "bill-1", name: "Rent", amount: 100, next_date: "2026-05-01", paid: false }];
+    const rawItemsB = [{ id: "bill-1", name: "Rent", amount: 100, next_date: "2026-05-01", paid: false }];
+
+    const stateA = getDayState(rawItemsA);
+    const stateB = getDayState(rawItemsB);
+
+    expect(stateB).not.toBe(stateA);
+    expect(stateB).toEqual(stateA);
+  });
+
+  it("still short-circuits when handed an already-resolved dayState object", () => {
+    const resolved = { activeItems: [], completedItems: [], items: [], activeCount: 0, completedCount: 0, totalCount: 0 };
+    expect(getDayState(resolved)).toBe(resolved);
   });
 });
 

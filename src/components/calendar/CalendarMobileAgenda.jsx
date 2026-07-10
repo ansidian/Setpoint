@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import BottomSheet from "../ui/BottomSheet.jsx";
 import CalendarModalAgendaRailContent from "./modal/CalendarModalAgendaRailContent.jsx";
@@ -33,7 +33,7 @@ function TodayPill({ onClick }) {
       onFocus={() => setHover(true)}
       onBlur={() => setHover(false)}
       style={{
-        minHeight: 32,
+        minHeight: "var(--sp-touch-min)",
         padding: "0 12px",
         borderRadius: 999,
         border: "1px solid color-mix(in srgb, var(--sp-accent) " + (hover ? "55%" : "32%") + ", transparent)",
@@ -85,6 +85,21 @@ export default function CalendarMobileAgenda(shellProps) {
   const floatingDeadlineDetail = floatingDetail?.detailKind === "deadline";
   const views = availableCalendarViews || ["events"];
 
+  // This component mounts inside the calendar KeepAliveTab (Activity): switching
+  // shell tabs hides it, which runs effect cleanup exactly like an unmount would,
+  // without detailOpen ever flipping to false. Close the detail sheet on that
+  // hide/unmount so it doesn't stay open-and-history-latched in the frozen tab —
+  // otherwise the next Back press pops an invisible sheet.
+  const detailOpenRef = useRef(detailOpen);
+  const onCloseFloatingDetailRef = useRef(onCloseFloatingDetail);
+  useEffect(() => {
+    detailOpenRef.current = detailOpen;
+    onCloseFloatingDetailRef.current = onCloseFloatingDetail;
+  });
+  useEffect(() => () => {
+    if (detailOpenRef.current) onCloseFloatingDetailRef.current?.();
+  }, []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--sp-panel)" }}>
       {/* Slim month strip */}
@@ -114,8 +129,10 @@ export default function CalendarMobileAgenda(shellProps) {
           {views.map((v) => {
             const active = v === view;
             return (
-              <button key={v} type="button" role="tab" aria-selected={active}
-                onClick={() => (active ? navigateToToday() : onViewChange(v))}
+              <button key={v} type="button" role="tab" aria-selected={active} className="sp-mobile-agenda-control"
+                onClick={() => {
+                  if (!active) onViewChange(v);
+                }}
                 style={{
                   flex: 1, minHeight: "var(--sp-touch-min)", borderRadius: 8, cursor: "pointer",
                   border: "1px solid " + (active ? "color-mix(in srgb, var(--sp-accent) 40%, transparent)" : "rgba(255,255,255,0.06)"),
@@ -135,6 +152,7 @@ export default function CalendarMobileAgenda(shellProps) {
         <CalendarModalAgendaRailContent
           ref={refs?.agendaRailRef}
           hideMiniCalendar
+          mobileAgenda
           view={view}
           viewYear={viewYear}
           viewMonth={viewMonth}

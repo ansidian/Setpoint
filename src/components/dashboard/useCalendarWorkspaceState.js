@@ -4,6 +4,7 @@ import {
   shouldClearCalendarFocusOnLeave,
 } from "./dashboardShellModel.js";
 import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
+import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.js";
 
 // Owns the dashboard shell's calendar-workspace state slice: which view is
 // showing, the one-shot focus/overlay deep-link state, the open-request counter,
@@ -36,7 +37,7 @@ export default function useCalendarWorkspaceState({
   const [calendarJumpTodayRequestId, setCalendarJumpTodayRequestId] = useState(0);
   const [calendarView, setCalendarView] = useState(() => {
     try {
-      const saved = localStorage.getItem("calendar:lastView");
+      const saved = readDemoSafeLocalStorage("calendar:lastView");
       if (saved === "bills" || saved === "events") return saved;
       return "events";
     } catch { return "events"; }
@@ -63,7 +64,7 @@ export default function useCalendarWorkspaceState({
     });
     if (!request) return;
     setCalendarView(request.view);
-    try { localStorage.setItem("calendar:lastView", request.view); } catch { /* ignore */ }
+    writeDemoSafeLocalStorage("calendar:lastView", request.view);
     setCalendarFocus(request.focusDate);
     setCalendarFocusItemId(request.focusItemId);
     setCalendarFocusOpenDetail(request.focusOpenDetail);
@@ -82,7 +83,7 @@ export default function useCalendarWorkspaceState({
   const changeCalendarView = (v) => {
     const nextView = normalizeCalendarWorkspaceView(v);
     setCalendarView(nextView);
-    try { localStorage.setItem("calendar:lastView", nextView); } catch { /* ignore */ }
+    writeDemoSafeLocalStorage("calendar:lastView", nextView);
     if (nextView === "bills") loadCalendarBills({ refreshLive: true });
   };
 

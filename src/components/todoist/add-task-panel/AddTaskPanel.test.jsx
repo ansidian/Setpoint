@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
 import useAddTaskPanelController from "./useAddTaskPanelController";
 import { ensureChrono } from "../../calendar/events/parseCalendarTitle.js";
+import { invalidateTodoistReferenceCache } from "./todoistReferenceCache.js";
 
 const mockCreateDeadline = vi.fn();
 const mockUpdateDeadline = vi.fn();
@@ -24,6 +25,10 @@ vi.mock("../../../api", () => ({
   createReminder: (...args) => mockCreateReminder(...args),
   deleteReminder: (...args) => mockDeleteReminder(...args),
 }));
+
+beforeEach(() => {
+  invalidateTodoistReferenceCache();
+});
 
 function PanelHarness(props) {
   const anchorRef = useRef(null);

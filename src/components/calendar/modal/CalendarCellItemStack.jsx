@@ -147,6 +147,14 @@ export default function CalendarCellItemStack({
       current === itemId ? null : current
     ));
   }, []);
+  // Shared by inline-overflow chips' onBeforeDragStart/onBeforeDeleteMenu so
+  // both stay referentially stable across renders instead of the inline
+  // arrow functions that used to be recreated every render, which defeated
+  // ItemChip's memo for every hidden chip on every stack re-render.
+  const closeInlineOverflowBeforeItemAction = useCallback(() => {
+    onCloseInlineOverflow?.();
+    onBeforeItemAction?.();
+  }, [onCloseInlineOverflow, onBeforeItemAction]);
 
   useLayoutEffect(() => {
     if (hiddenItemsNotificationRef.current === hiddenNotificationSignature) return;
@@ -313,14 +321,8 @@ export default function CalendarCellItemStack({
                 onSelectItem={onSelectItem}
                 onSetActive={setActiveChipId}
                 onClearActive={clearActiveChip}
-                onBeforeDragStart={() => {
-                  onCloseInlineOverflow?.();
-                  onBeforeItemAction?.();
-                }}
-                onBeforeDeleteMenu={() => {
-                  onCloseInlineOverflow?.();
-                  onBeforeItemAction?.();
-                }}
+                onBeforeDragStart={closeInlineOverflowBeforeItemAction}
+                onBeforeDeleteMenu={closeInlineOverflowBeforeItemAction}
                 inlineOverflowItem
                 stackRef={stackRef}
                 dateKey={dateKey}

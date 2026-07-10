@@ -13,12 +13,10 @@ import {
 } from "./parseCalendarTitle";
 import useCalendarLocationSuggestions from "./useCalendarLocationSuggestions";
 import useCalendarSources from "./useCalendarSources";
+import useEventReminderDrafts from "./useEventReminderDrafts";
+import useEventRecurrenceDraft from "./useEventRecurrenceDraft";
 import {
-  createEventReminderDraftFromCustom,
-  createEventReminderDraftFromOffset,
-  EVENT_REMINDER_PRESETS,
   eventReminderSourceFromEvent,
-  getEventReminderPresetState,
 } from "./calendarEventReminderModel";
 import {
   coerceEditingTitleAssist,
@@ -30,8 +28,6 @@ import {
   normalizeBatchDrafts,
   normalizeDraftForDirty,
   normalizeRecurrenceDraft,
-  parsePositiveInt,
-  todayYmd,
   validateBatchDrafts,
   validateRecurrenceDraft,
   validateSingleDraft,
@@ -55,11 +51,24 @@ export default function useCalendarEventEditor({
 }) {
   const [mode, setMode] = useState("detail");
   const [draft, setDraft] = useState(() => defaultDraft(null));
+  const {
+    eventReminders,
+    setEventReminders,
+    removedReminderIds,
+    setRemovedReminderIds,
+    reminderError,
+    setReminderError,
+    customReminder,
+    setCustomReminder,
+    updateCustomReminder,
+    addEventReminderPreset,
+    addCustomEventReminder,
+    removeEventReminder,
+    eventReminderPresetStates,
+  } = useEventReminderDrafts({ draft });
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const [batchDrafts, setBatchDrafts] = useState([]);
-  const [recurrenceDraft, setRecurrenceDraft] = useState(null);
-  const [manualRecurrenceOverride, setManualRecurrenceOverride] = useState(false);
   const [recurringEditScope, setRecurringEditScope] = useState(null);
   const [createSeedDraft, setCreateSeedDraft] = useState(() => defaultDraft(null));
   const [titleInput, setTitleInput] = useState("");
@@ -89,12 +98,21 @@ export default function useCalendarEventEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState(null);
   const [errorCode, setErrorCode] = useState(null);
+  const clearFieldError = useCallback(() => {
+    setError(null);
+    setErrorCode(null);
+  }, []);
+  const {
+    recurrenceDraft,
+    setRecurrenceDraft,
+    manualRecurrenceOverride,
+    setManualRecurrenceOverride,
+    updateRecurrenceDraft,
+    selectRecurrencePreset,
+    toggleRecurrenceWeekday,
+  } = useEventRecurrenceDraft({ draft, clearFieldError });
   const [touchedFields, setTouchedFields] = useState({});
   const [saveAttempted, setSaveAttempted] = useState(false);
-  const [eventReminders, setEventReminders] = useState([]);
-  const [removedReminderIds, setRemovedReminderIds] = useState([]);
-  const [reminderError, setReminderError] = useState(null);
-  const [customReminder, setCustomReminder] = useState({ date: "", time: "" });
   const editorHistoryTokenRef = useRef(null);
   const editorRequestIdRef = useRef(0);
   const selectLocationRef = useRef(null);
@@ -238,7 +256,7 @@ export default function useCalendarEventEditor({
       setCustomReminder({ date: "", time: "" });
       resetLocationSuggestions();
     }
-  }, [open, resetLocationSuggestions, view]);
+  }, [open, resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, view]);
 
   useEffect(() => {
     if (mode !== "editor") return;
@@ -304,7 +322,7 @@ export default function useCalendarEventEditor({
     if (!isEditingRecurring && !manualRecurrenceOverride) {
       setRecurrenceDraft((current) => (current ? null : current));
     }
-  }, [intentState.mode, intentState.recurrenceDraft, isEditingRecurring, manualRecurrenceOverride, mode, recurringEditScope]);
+  }, [intentState.mode, intentState.recurrenceDraft, isEditingRecurring, manualRecurrenceOverride, mode, recurringEditScope, setManualRecurrenceOverride, setRecurrenceDraft]);
 
   const clearEditorState = useCallback(() => {
     editorRequestIdRef.current += 1;
@@ -330,7 +348,7 @@ export default function useCalendarEventEditor({
     setReminderError(null);
     setCustomReminder({ date: "", time: "" });
     resetLocationSuggestions();
-  }, [resetLocationSuggestions]);
+  }, [resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
 
   const seedDefaultCalendar = useCallback((nextDraft, groups) => {
     if (nextDraft.accountId && nextDraft.calendarId) return nextDraft;
@@ -416,7 +434,7 @@ export default function useCalendarEventEditor({
     }
     setError(null);
     setErrorCode(null);
-  }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar, selectedDate, sourceGroupsRef]);
+  }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar, selectedDate, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, sourceGroupsRef]);
 
   const openEdit = useCallback(async (event) => {
     if (!editable || !event?.writable) return;
@@ -469,67 +487,7 @@ export default function useCalendarEventEditor({
       recurrenceDraft: event?.isRecurring && event?.recurrence ? normalizeRecurrenceDraft(event.recurrence, nextDraft) : null,
       recurringEditScope: null,
     });
-  }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar]);
-
-  const updateCustomReminder = useCallback((patch) => {
-    setCustomReminder((current) => ({ ...current, ...patch }));
-    setReminderError(null);
-  }, []);
-
-  const addReminderDraft = useCallback((nextReminder) => {
-    if (nextReminder.blocked) {
-      setReminderError(nextReminder.blockReason === "duplicate"
-        ? "That reminder is already on this event."
-        : nextReminder.blockReason === "past"
-          ? "Choose a future reminder time."
-          : "Choose an event start before adding a reminder.");
-      return;
-    }
-    setEventReminders((current) => [...current, nextReminder]);
-    setReminderError(null);
-  }, []);
-
-  const addEventReminderPreset = useCallback((offsetMinutes) => {
-    addReminderDraft(createEventReminderDraftFromOffset({
-      draft,
-      offsetMinutes,
-      existingReminders: eventReminders,
-    }));
-  }, [addReminderDraft, draft, eventReminders]);
-
-  const addCustomEventReminder = useCallback((selection = null) => {
-    const reminderSelection = selection || customReminder;
-    addReminderDraft(createEventReminderDraftFromCustom({
-      draft,
-      reminderDate: reminderSelection.date,
-      reminderTime: reminderSelection.time,
-      existingReminders: eventReminders,
-    }));
-  }, [addReminderDraft, customReminder, draft, eventReminders]);
-
-  const eventReminderPresetStates = useMemo(() => {
-    return Object.fromEntries(EVENT_REMINDER_PRESETS.map((preset) => [
-      preset.offsetMinutes,
-      getEventReminderPresetState({
-        draft,
-        offsetMinutes: preset.offsetMinutes,
-        existingReminders: eventReminders,
-      }),
-    ]));
-  }, [draft, eventReminders]);
-
-  const removeEventReminder = useCallback((reminder) => {
-    if (reminder?.id) {
-      setRemovedReminderIds((current) => (
-        current.includes(reminder.id) ? current : [...current, reminder.id]
-      ));
-    }
-    setEventReminders((current) => current.filter((entry) => {
-      if (reminder?.id) return entry.id !== reminder.id;
-      return entry.clientId !== reminder?.clientId;
-    }));
-    setReminderError(null);
-  }, []);
+  }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
 
   const closeEditor = useCallback(() => {
     clearEditorState();
@@ -546,7 +504,7 @@ export default function useCalendarEventEditor({
     setManualRecurrenceOverride(false);
     setError(null);
     setErrorCode(null);
-  }, [draft, editingEvent]);
+  }, [draft, editingEvent, setManualRecurrenceOverride, setRecurrenceDraft]);
 
   const updateField = useCallback((field, value, options = {}) => {
     const { markTouched = true, markOverride = true } = options;
@@ -635,85 +593,6 @@ export default function useCalendarEventEditor({
     setError(null);
     setErrorCode(null);
   }, [batchDrafts, effectiveTitle, intentState.mode, titleAssist.cleanTitle, titleAssist.singleDraft, titleInput]);
-
-  const updateRecurrenceDraft = useCallback((field, value) => {
-    setManualRecurrenceOverride(true);
-    setRecurrenceDraft((current) => {
-      const existing = normalizeRecurrenceDraft(current, draft);
-      if (field === "frequency") {
-        return normalizeRecurrenceDraft({
-          ...existing,
-          frequency: value,
-          weekdays: value === "weekly" ? existing.weekdays : [],
-        }, draft);
-      }
-      if (field === "interval") {
-        return {
-          ...existing,
-          interval: parsePositiveInt(value, 1),
-        };
-      }
-      if (field === "endsType") {
-        return normalizeRecurrenceDraft({
-          ...existing,
-          ends: value === "onDate"
-            ? { type: "onDate", untilDate: draft.startDate || todayYmd() }
-            : value === "afterCount"
-              ? { type: "afterCount", count: 1 }
-              : { type: "never" },
-        }, draft);
-      }
-      if (field === "untilDate") {
-        return {
-          ...existing,
-          ends: { type: "onDate", untilDate: value },
-        };
-      }
-      if (field === "count") {
-        return {
-          ...existing,
-          ends: { type: "afterCount", count: parsePositiveInt(value, 1) },
-        };
-      }
-      return existing;
-    });
-    setError(null);
-    setErrorCode(null);
-  }, [draft]);
-
-  const selectRecurrencePreset = useCallback((frequency) => {
-    setManualRecurrenceOverride(true);
-    if (!frequency) {
-      setRecurrenceDraft(null);
-      setError(null);
-      setErrorCode(null);
-      return;
-    }
-    setRecurrenceDraft((current) => normalizeRecurrenceDraft({
-      ...current,
-      frequency,
-      interval: current?.interval || 1,
-      ends: current?.ends || { type: "never" },
-    }, draft));
-    setError(null);
-    setErrorCode(null);
-  }, [draft]);
-
-  const toggleRecurrenceWeekday = useCallback((weekday) => {
-    setManualRecurrenceOverride(true);
-    setRecurrenceDraft((current) => {
-      const existing = normalizeRecurrenceDraft(current, draft);
-      const weekdays = existing.weekdays.includes(weekday)
-        ? existing.weekdays.filter((entry) => entry !== weekday)
-        : [...existing.weekdays, weekday];
-      return {
-        ...existing,
-        weekdays,
-      };
-    });
-    setError(null);
-    setErrorCode(null);
-  }, [draft]);
 
   const TITLE_DEBOUNCE_MS = 120;
 
@@ -851,7 +730,7 @@ export default function useCalendarEventEditor({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, titleAssist.locationQuery, upsertEvents, validationMessage]);
+  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, setEventReminders, setRemovedReminderIds, titleAssist.locationQuery, upsertEvents, validationMessage]);
 
   useEffect(() => {
     if (!pendingSaveRef.current) return;

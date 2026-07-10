@@ -526,6 +526,37 @@ describe("useCalendarDomainRange", () => {
     expect(renders).toBe(rendersAfterFirst);
   });
 
+  it("severs item identity between the published data and the month cache (mutation isolation)", async () => {
+    const fetchRange = vi.fn().mockResolvedValue({
+      upcoming: [
+        { id: "todo-may", title: "May task", due_date: "2026-05-12", source: "todoist" },
+      ],
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 0,
+    }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+
+    // Mutate a property directly on the published item — this is exactly the
+    // aliasing hazard clone() exists to prevent: if the combine loop handed
+    // back a shared reference into the cache, this write would corrupt the
+    // cached month entry too.
+    result.current.data.upcoming[0].title = "MUTATED";
+
+    // The month cache entry (the source of truth combine reads from) must be
+    // untouched by the mutation above. Under a naive reference-sharing combine
+    // (pushing the cached item by reference instead of copying it), this
+    // would read back "MUTATED" too.
+    const cached = result.current.getMonthData(2026, 4); // May is month index 4
+    expect(cached.upcoming[0].title).toBe("May task");
+  });
+
   it("does not publish a stale month-range response after a newer active range wins", async () => {
     let resolveApril;
     let resolveMay;
@@ -571,5 +602,30 @@ describe("useCalendarDomainRange", () => {
 
     expect(result.current.data.upcoming.map((item) => item.id)).toEqual(["todo-may"]);
     expect(result.current.dataRange).toMatchObject({ start: "2026-05-01", end: "2026-05-31" });
+  });
+
+  it("computes a DST-safe due-this-week window via calendar-day math, not now+168h", async () => {
+    // 2026-03-07 23:30 PST (the night before spring-forward). now + 7*86400000ms
+    // lands at 2026-03-15 00:30 PDT, so a fixed-ms shift would wrongly include
+    // 2026-03-15 (an 8-day window). Calendar-day math must exclude it.
+    vi.setSystemTime(new Date("2026-03-08T07:30:00.000Z"));
+    const fetchRange = vi.fn().mockResolvedValue({
+      upcoming: [
+        { id: "in", due_date: "2026-03-14", status: "incomplete", source: "todoist" },
+        { id: "out", due_date: "2026-03-15", status: "incomplete", source: "todoist" },
+      ],
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 0,
+    }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-03-01", "2026-03-31");
+    });
+
+    expect(result.current.data.stats.dueThisWeek).toBe(1);
   });
 });

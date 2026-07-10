@@ -5,6 +5,7 @@ import {
   planPrefetchMonthGroups,
   planVisibleMonthFetches,
 } from "./calendarRangeModel.js";
+import { addDaysYmd } from "../../components/calendar/calendarDateUtils.js";
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -24,7 +25,7 @@ function monthKeyFromDate(dateKey) {
 
 function clone(value) {
   if (value == null) return value;
-  return JSON.parse(JSON.stringify(value));
+  return structuredClone(value);
 }
 
 function dueDateOf(item) {
@@ -38,7 +39,10 @@ function itemIdentity(item) {
 
 function recalculateStats(items, existing = {}) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  // Calendar-day math, not now+168h: a fixed ms shift is DST-fragile (e.g.
+  // across spring-forward, +7*86400000ms from the night before can land 8
+  // Pacific calendar days out instead of 7).
+  const weekFromNow = addDaysYmd(today, 7);
   let incomplete = 0;
   let dueToday = 0;
   let dueThisWeek = 0;
@@ -102,7 +106,11 @@ function combineDeadlineDataForRange(entries, start, end, emptyData) {
       const identity = itemIdentity(item);
       if (seen.has(identity)) continue;
       seen.add(identity);
-      upcoming.push(clone(item));
+      // Shallow copy is sufficient: every mutation flow (dashboardTaskProjection.js)
+      // deep-clones the whole root before assigning top-level properties, and
+      // nothing mutates nested structure on these items post-combine — this
+      // copy only needs to sever top-level property aliasing with the cache.
+      upcoming.push({ ...item });
     }
   }
   return {
@@ -124,7 +132,10 @@ function combineBillsDataForRange(entries, start, end, emptyData) {
       const identity = occurrence?.id ?? `${occurrence?.scheduleId ?? ""}:${date}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
-      schedules.push(clone(occurrence));
+      // Shallow copy: bill occurrences have no mutation flow at all today
+      // (nothing calls updateData for the bills range) — a top-level copy is
+      // enough to sever aliasing with the cache should that ever change.
+      schedules.push({ ...occurrence });
     }
   }
   return { ...base, schedules };

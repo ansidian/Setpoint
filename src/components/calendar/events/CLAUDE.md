@@ -31,11 +31,13 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarRecurrenceSection.jsx` — full recurrence rule builder
 - `CalendarEventRecurrencePicker.jsx` — recurrence presets plus advanced options
 - `CalendarRecurringScopePrompt.jsx` — scope chooser (this/following/all) for recurring edits
+- `useEventRecurrenceDraft.js` — recurrence-draft sub-machine (draft + manual-override state, per-field/preset/weekday updates) lifted from useCalendarEventEditor; wraps normalize/validateRecurrenceDraft in calendarEventEditorModel.js
 
 ### Notes, reminders, location, source
 - `CalendarEventNotesField.jsx` — description textarea with compact collapse
 - `CalendarEventReminderChips.jsx` — reminder chips with status badges and removal
 - `calendarEventReminderModel.js` — reminder offsets, presets, sent-status tracking
+- `useEventReminderDrafts.js` — reminder-draft sub-machine (drafts, removal ids, custom picker state, preset states memo) lifted from useCalendarEventEditor; wraps calendarEventReminderModel.js
 - `CalendarLocationSuggestionsPanel.jsx` — Places autocomplete results with keyboard nav
 - `useCalendarLocationSuggestions.js` — async Places fetching with session tokens
 - `CalendarSourcePickerPanel.jsx` — account/calendar selector with grouping

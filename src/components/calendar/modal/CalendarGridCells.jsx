@@ -42,12 +42,15 @@ export default function CalendarGridCells({
   viewMonth,
   viewYear,
 }) {
-  const gridRows = buildGridRows(viewYear, viewMonth);
+  const gridRows = useMemo(() => buildGridRows(viewYear, viewMonth), [viewYear, viewMonth]);
   const cellGhostsByDate = useStableCellGhostsByDate(ghostPreview?.ghosts);
-  const cellLookup = {};
-  for (const cell of monthCells) {
-    if (cell.dateKey) cellLookup[cell.dateKey] = cell;
-  }
+  const cellLookup = useMemo(() => {
+    const m = {};
+    for (const cell of monthCells) {
+      if (cell.dateKey) m[cell.dateKey] = cell;
+    }
+    return m;
+  }, [monthCells]);
 
   const viewIsCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
 

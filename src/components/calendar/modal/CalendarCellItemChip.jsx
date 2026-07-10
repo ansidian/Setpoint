@@ -1,9 +1,11 @@
+import { memo, useMemo } from "react";
 import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { compactLeadingLabel } from "./CalendarCellItemChipModel.js";
 import { hasUpcomingReminder } from "../reminderDisplay.js";
 import { deadlineDragAllowed } from "../views/deadlines/calendarDeadlineRescheduleModel.js";
+import { isEventSelectionModifier } from "../events/calendarEventSelectionModel.js";
 
 function chipStyle({
   item,
@@ -147,10 +149,6 @@ function chipContentFit(item, metrics) {
 function metadataColor(item, selected) {
   if (selected) return item.leadingColor || item.accent || "var(--ea-accent)";
   return item.leadingColor || "rgba(205,214,244,0.62)";
-}
-
-function isEventSelectionModifier(event) {
-  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 export function CalendarChipStatusIcon({ item, selected, metrics }) {
@@ -398,7 +396,7 @@ export function MoreButton({
   );
 }
 
-export function ItemChip({
+export const ItemChip = memo(function ItemChip({
   item,
   selected,
   active,
@@ -425,6 +423,18 @@ export function ItemChip({
   // mutually exclusive with the event path (deadlines have no sourceEvent).
   const deadlineDragOk = !ghost && deadlineDragAllowed(item, quickActions?.deadlineDragEnabled);
   const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
+  // Ghost chips always render with selection/activation forced off, regardless
+  // of the live selected/batchSelected/active values above — keyed on the
+  // real props (not the ghost-forced ones) so the memo still holds for the
+  // common case where those props are genuinely unchanged.
+  const style = useMemo(() => chipStyle({
+    item,
+    selected: ghost ? false : selected,
+    batchSelected: ghost ? false : batchSelected,
+    pastTone,
+    active: ghost ? false : active,
+    metrics,
+  }), [item, selected, batchSelected, pastTone, active, metrics, ghost]);
 
   if (ghost) {
     return (
@@ -435,14 +445,7 @@ export function ItemChip({
         data-ghost-start={item.ghostStart || item.startDate || undefined}
         data-ghost-end={item.ghostEnd || item.endDate || undefined}
         aria-hidden="true"
-        style={chipStyle({
-          item,
-          selected: false,
-          batchSelected: false,
-          pastTone,
-          active: false,
-          metrics,
-        })}
+        style={style}
       >
       <ChipContent
         item={item}
@@ -554,14 +557,7 @@ export function ItemChip({
       onPointerLeave={() => onClearActive?.(String(item.id))}
       onFocus={() => onSetActive?.(String(item.id))}
       onBlur={() => onClearActive?.(String(item.id))}
-      style={chipStyle({
-        item,
-        selected,
-        batchSelected,
-        pastTone,
-        active,
-        metrics,
-      })}
+      style={style}
     >
       <ChipContent
         item={item}
@@ -572,4 +568,4 @@ export function ItemChip({
       <CalendarChipReminderMarker item={item} />
     </button>
   );
-}
+});
