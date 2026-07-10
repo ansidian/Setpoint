@@ -387,8 +387,6 @@ export default function CalendarModalShell({
             search={search}
           />
 
-          <CalendarGridWeekHeader gap={layout.weekHeaderGap} />
-
           <div
             data-testid="calendar-modal-body"
             data-search-layout={searchLayoutMode}
@@ -421,6 +419,7 @@ export default function CalendarModalShell({
                 overflow: "hidden",
               }}
             >
+              <CalendarGridWeekHeader gap={layout.weekHeaderGap} />
               <CalendarScrollContainer
                 view={view}
                 activeView={activeView}
