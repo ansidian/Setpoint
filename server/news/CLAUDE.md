@@ -21,12 +21,14 @@ summarization — metadata only, read-at-source. HTTP surface is
   feed-shaped-response sniffing, used by the add-source preview flow
 - `news-poller.js` — in-process interval worker: conditional-GET fetch,
   RSS/Atom parsing (`rss-parser`), item upsert, retention pruning, sweep/worker
-  lifecycle
+  lifecycle, and shared-host Reddit cooldown. Provider `Retry-After` windows
+  are persisted; a six-hour host cooldown is the fallback when absent.
 - `news-preview.js` — add-source validation: fetch the pasted URL, sample it
   directly if it's a feed, else follow one advertised autodiscovery link
-- `migration.test.js` — permanent guard for `026_news.sql`'s schema shape and
-  `027_news_mute_terms.sql`'s `muted_terms` column on `ea_news_topics` (lives
-  here, not with the migration files)
+- `migration.test.js` — permanent guard for `026_news.sql`'s schema shape,
+  `027_news_mute_terms.sql`'s topic filter column, and
+  `029_news_retry_after.sql`'s persisted source cooldown (lives here, not with
+  the migration files)
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
@@ -41,8 +43,9 @@ summarization — metadata only, read-at-source. HTTP surface is
   only the excess when older than 14 days — a deliberate deviation from pure
   age-based deletion so quiet feeds don't go empty (see the design spec).
 - Backoff: 5 consecutive failures pause a source to a ~6h retry cadence
-  (`shouldPollSource`); the poller and preview never let a feed error break the
-  page.
+  (`shouldPollSource`). Any Reddit 429 also pauses every enabled Reddit source
+  until its persisted `Retry-After` expires, falling back to six hours when the
+  header is missing or invalid. Feed errors never break the page.
 
 ## Related
 
@@ -50,4 +53,4 @@ summarization — metadata only, read-at-source. HTTP surface is
   `/topics/:id` name and/or `mutedTerms`, catalog import, preview,
   seen-marker, manual refresh)
 - `src/components/news/` — frontend consumer (see its map)
-- `docs/exec-plans/active/2026-07-04-news-tab-design.md` — design spec
+- `docs/exec-plans/completed/2026-07-04-news-tab-design.md` — design spec

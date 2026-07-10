@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.js";
 import {
   normalizeFeedItem, pruneNewsItems, stopNewsPollWorker,
-  startNewsPollWorker, sweepNewsSources, syncNewsSource,
+  parseRetryAfterAt, startNewsPollWorker, sweepNewsSources, syncNewsSource,
 } from "./news-poller.js";
 
 const RSS_XML = `<?xml version="1.0"?>
@@ -34,6 +34,30 @@ function mockResponse({ status = 200, body = "", headers = {}, url = "" } = {}) 
     text: async () => body,
   };
 }
+
+describe("parseRetryAfterAt", () => {
+  it("accepts both delta seconds and HTTP dates", () => {
+    const now = new Date("2026-07-04T12:00:00.000Z");
+    expect(parseRetryAfterAt("90", now)).toBe("2026-07-04T12:01:30.000Z");
+    expect(parseRetryAfterAt("Sat, 04 Jul 2026 12:05:00 GMT", now))
+      .toBe("2026-07-04T12:05:00.000Z");
+    expect(parseRetryAfterAt("not-a-window", now)).toBeNull();
+  });
+
+  it("preserves an expired HTTP date so it does not trigger the fallback cooldown", () => {
+    expect(parseRetryAfterAt(
+      "Sat, 04 Jul 2026 11:59:00 GMT",
+      new Date("2026-07-04T12:00:00.000Z"),
+    )).toBe("2026-07-04T11:59:00.000Z");
+  });
+
+  it("rejects delta seconds outside the JavaScript Date range", () => {
+    expect(parseRetryAfterAt(
+      "8640000000001",
+      new Date("2026-07-04T12:00:00.000Z"),
+    )).toBeNull();
+  });
+});
 
 async function seedSource(db, overrides = {}) {
   await db.execute({ sql: "INSERT INTO ea_news_topics (user_id, name, position) VALUES ('u1', 'T', 0)", args: [] });
@@ -181,6 +205,34 @@ describe("syncNewsSource", () => {
     expect(Number(row.consecutive_failures)).toBe(3);
     expect(row.last_status).toBe("parse_error");
   });
+
+  it("persists a 429 Retry-After window and clears it after a successful fetch", async () => {
+    const source = await seedSource(db);
+    const fetch429 = vi.fn().mockResolvedValue(mockResponse({
+      status: 429,
+      headers: { "retry-after": "120" },
+    }));
+    await syncNewsSource(source, {
+      dbClient: db,
+      fetchImpl: fetch429,
+      now: new Date("2026-07-04T12:00:00.000Z"),
+    });
+    const limited = (await db.execute(
+      "SELECT * FROM ea_news_sources WHERE id = 1",
+    )).rows[0];
+    expect(limited.retry_after_at).toBe("2026-07-04T12:02:00.000Z");
+
+    const fetch200 = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
+    await syncNewsSource(limited, {
+      dbClient: db,
+      fetchImpl: fetch200,
+      now: new Date("2026-07-04T12:03:00.000Z"),
+    });
+    const recovered = (await db.execute(
+      "SELECT retry_after_at FROM ea_news_sources WHERE id = 1",
+    )).rows[0];
+    expect(recovered.retry_after_at).toBeNull();
+  });
 });
 
 describe("pruneNewsItems", () => {
@@ -242,6 +294,127 @@ describe("sweepNewsSources + worker", () => {
     )).rows;
     expect(deferred).toHaveLength(1);
     expect(Number(deferred[0].consecutive_failures)).toBe(0);
+  });
+
+  it("pauses every reddit source for six hours after one receives 429, then retries the least-recent one", async () => {
+    const db = await createMigratedDb();
+    await db.execute("INSERT INTO ea_news_topics (user_id, name, position) VALUES ('u1', 'T', 0)");
+    for (const [title, feedUrl, lastFetchAt] of [
+      ["r/news", "https://www.reddit.com/r/news/.rss", "2026-07-04T11:20:00.000Z"],
+      ["r/politics", "https://www.reddit.com/r/politics/.rss", "2026-07-04T11:40:00.000Z"],
+      ["site", "https://site.test/feed", "2026-07-04T11:50:00.000Z"],
+    ]) {
+      await db.execute({
+        sql: `INSERT INTO ea_news_sources
+                (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
+              VALUES (1, 'rss', ?, ?, 1, 0, ?)`,
+        args: [title, feedUrl, lastFetchAt],
+      });
+    }
+    let sentReddit429 = false;
+    const fetchImpl = vi.fn(async (url) => {
+      if (url === "https://www.reddit.com/r/news/.rss" && !sentReddit429) {
+        sentReddit429 = true;
+        return mockResponse({ status: 429 });
+      }
+      return mockResponse({ status: 200, body: RSS_XML });
+    });
+
+    await sweepNewsSources({
+      dbClient: db, fetchImpl, now: new Date("2026-07-04T12:00:00.000Z"), staggerMs: 0,
+    });
+    const limited = (await db.execute(
+      "SELECT last_status, last_fetch_at FROM ea_news_sources WHERE title = 'r/news'",
+    )).rows[0];
+    expect(limited.last_status).toBe("429");
+    expect(limited.last_fetch_at).toBe("2026-07-04T12:00:00.000Z");
+
+    fetchImpl.mockClear();
+    const duringCooldown = await sweepNewsSources({
+      dbClient: db, fetchImpl, now: new Date("2026-07-04T13:00:00.000Z"), staggerMs: 0,
+    });
+    expect(duringCooldown.swept).toBe(1);
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(["https://site.test/feed"]);
+
+    fetchImpl.mockClear();
+    const afterCooldown = await sweepNewsSources({
+      dbClient: db, fetchImpl, now: new Date("2026-07-04T18:00:00.000Z"), staggerMs: 0,
+    });
+    expect(afterCooldown.swept).toBe(2);
+    const resumedUrls = fetchImpl.mock.calls.map(([url]) => url);
+    expect(resumedUrls.filter((url) => url.includes("reddit.com")))
+      .toEqual(["https://www.reddit.com/r/politics/.rss"]);
+    expect(resumedUrls).toContain("https://site.test/feed");
+  });
+
+  it("uses a persisted Retry-After window instead of the six-hour fallback", async () => {
+    const db = await createMigratedDb();
+    await db.execute("INSERT INTO ea_news_topics (user_id, name, position) VALUES ('u1', 'T', 0)");
+    await db.execute({
+      sql: `INSERT INTO ea_news_sources
+              (topic_id, kind, title, feed_url, enabled, consecutive_failures,
+               last_fetch_at, last_status, retry_after_at)
+            VALUES (1, 'rss', 'r/news', 'https://www.reddit.com/r/news/.rss',
+                    1, 1, '2026-07-04T12:00:00.000Z', '429', '2026-07-04T12:02:00.000Z')`,
+      args: [],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_news_sources
+              (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
+            VALUES (1, 'rss', 'r/politics', 'https://www.reddit.com/r/politics/.rss',
+                    1, 0, '2026-07-04T11:40:00.000Z')`,
+      args: [],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_news_sources
+              (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
+            VALUES (1, 'rss', 'site', 'https://site.test/feed',
+                    1, 0, '2026-07-04T11:50:00.000Z')`,
+      args: [],
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
+
+    await sweepNewsSources({
+      dbClient: db, fetchImpl, now: new Date("2026-07-04T12:01:00.000Z"), staggerMs: 0,
+    });
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(["https://site.test/feed"]);
+
+    fetchImpl.mockClear();
+    await sweepNewsSources({
+      dbClient: db, fetchImpl, now: new Date("2026-07-04T12:02:01.000Z"), staggerMs: 0,
+    });
+    const resumedUrls = fetchImpl.mock.calls.map(([url]) => url);
+    expect(resumedUrls.filter((url) => url.includes("reddit.com")))
+      .toEqual(["https://www.reddit.com/r/politics/.rss"]);
+    expect(resumedUrls).toContain("https://site.test/feed");
+  });
+
+  it("keeps the shared Reddit cooldown when the source that received 429 is disabled", async () => {
+    const db = await createMigratedDb();
+    await db.execute("INSERT INTO ea_news_topics (user_id, name, position) VALUES ('u1', 'T', 0)");
+    await db.execute({
+      sql: `INSERT INTO ea_news_sources
+              (topic_id, kind, title, feed_url, enabled, consecutive_failures,
+               last_fetch_at, last_status, retry_after_at)
+            VALUES (1, 'rss', 'r/news', 'https://www.reddit.com/r/news/.rss',
+                    0, 1, '2026-07-04T12:00:00.000Z', '429', '2026-07-04T12:05:00.000Z')`,
+      args: [],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_news_sources
+              (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
+            VALUES (1, 'rss', 'r/politics', 'https://www.reddit.com/r/politics/.rss',
+                    1, 0, '2026-07-04T11:40:00.000Z')`,
+      args: [],
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
+
+    const result = await sweepNewsSources({
+      dbClient: db, fetchImpl, now: new Date("2026-07-04T12:01:00.000Z"), staggerMs: 0,
+    });
+
+    expect(result.swept).toBe(0);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("rotates deferred same-host sources: least recently fetched goes first", async () => {
