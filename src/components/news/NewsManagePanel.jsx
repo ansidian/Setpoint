@@ -1,12 +1,12 @@
 import { createPortal } from "react-dom";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import useDismissablePortal from "../../hooks/useDismissablePortal.js";
 import {
   createNewsTopic, deleteNewsSource, deleteNewsTopic, renameNewsTopic,
   reorderNewsTopics, updateNewsSource, updateNewsTopicMutedTerms,
 } from "../../api.js";
-import { describeSourceHealth } from "./newsPageModel.js";
+import { describeSourceHealth, summarizeTopicSourceHealth } from "./newsPageModel.js";
 import NewsAddSourceForm from "./NewsAddSourceForm.jsx";
 import NewsCatalogPicker from "./NewsCatalogPicker.jsx";
 import { ManageButton } from "./manageUi.jsx";
@@ -17,6 +17,7 @@ function CloseButton({ onClick }) {
   return (
     <button
       type="button"
+      className="news-manage-close"
       aria-label="Close"
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
@@ -25,7 +26,7 @@ function CloseButton({ onClick }) {
       onBlur={() => setHover(false)}
       style={{
         display: "flex", alignItems: "center", justifyContent: "center",
-        width: 28, height: 28, borderRadius: 7, border: "none",
+        width: 28, height: 28, borderRadius: 8, border: "none",
         background: hover ? "rgba(255,255,255,0.08)" : "transparent",
         color: "var(--sp-subtext)", cursor: "pointer", transition: "background 150ms",
       }}
@@ -35,8 +36,60 @@ function CloseButton({ onClick }) {
   );
 }
 
-export default function NewsManagePanel({ open, onClose, news, onChanged }) {
+function TopicOverviewButton({ topic, onClick }) {
+  const [hover, setHover] = useState(false);
+  const sources = topic.sources || [];
+  const enabledSources = sources.filter((source) => source.enabled);
+  const sourceHealth = summarizeTopicSourceHealth(enabledSources);
+  const healthLabel = !sourceHealth
+    ? (sources.length === 0 ? "No sources" : (enabledSources.length === 0 ? "Paused" : "Healthy"))
+    : sourceHealth.label;
+  const healthColor = sourceHealth?.tone === "danger"
+    ? "var(--sp-rose)"
+    : (sourceHealth ? "var(--sp-cream)" : "var(--sp-subtext)");
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      style={{
+        width: "100%", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto",
+        alignItems: "center", gap: 12, padding: "12px 13px", borderRadius: 8,
+        border: `1px solid ${hover ? "rgba(255,255,255,0.13)" : "rgba(255,255,255,0.07)"}`,
+        background: hover ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.025)",
+        color: "var(--sp-text)", textAlign: "left", cursor: "pointer",
+        transition: "background 150ms, border-color 150ms",
+      }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{topic.name}</span>
+        <span style={{ display: "block", marginTop: 3, fontSize: 11, color: "var(--sp-subtext)" }}>
+          {enabledSources.length}/{sources.length} enabled
+        </span>
+      </span>
+      <span style={{
+        fontSize: 10.5, whiteSpace: "nowrap",
+        color: healthColor,
+      }}>
+        {healthLabel}
+      </span>
+      <span aria-hidden style={{ color: "var(--sp-subtext)", fontSize: 17 }}>›</span>
+    </button>
+  );
+}
+
+export default function NewsManagePanel({ open, onClose, news, onChanged, initialTopicId }) {
   const panelRef = useRef(null);
+  const returnFocusRef = useRef(null);
+  const [panelState, setPanelState] = useState(() => ({
+    open,
+    initialTopicId,
+    selectedTopicId: open ? (initialTopicId ?? null) : null,
+  }));
   const [newTopicName, setNewTopicName] = useState("");
   const [renamingId, setRenamingId] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -44,11 +97,83 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
   const [addSourceTopicId, setAddSourceTopicId] = useState(null);
   const [muteDrafts, setMuteDrafts] = useState({});
 
-  useDismissablePortal({ active: open, ref: panelRef, onDismiss: onClose });
+  if (panelState.open !== open || panelState.initialTopicId !== initialTopicId) {
+    setPanelState({
+      open,
+      initialTopicId,
+      selectedTopicId: open ? (initialTopicId ?? null) : null,
+    });
+    if (!open) {
+      setRenamingId(null);
+      setConfirmDeleteTopicId(null);
+      setAddSourceTopicId(null);
+    }
+  }
+
+  const showTopicOverview = () => {
+    setRenamingId(null);
+    setConfirmDeleteTopicId(null);
+    setAddSourceTopicId(null);
+    setPanelState((state) => ({ ...state, selectedTopicId: null }));
+  };
+
+  const closePanel = () => {
+    setRenamingId(null);
+    setConfirmDeleteTopicId(null);
+    setAddSourceTopicId(null);
+    onClose?.();
+  };
+
+  const focusableElements = () => [...(panelRef.current?.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+  ) || [])];
+
+  const focusPanel = () => {
+    (focusableElements()[0] || panelRef.current)?.focus();
+  };
+
+  const containPanelFocus = (event) => {
+    const focusable = focusableElements();
+    if (!focusable.length) {
+      event.preventDefault();
+      panelRef.current?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !panelRef.current?.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !panelRef.current?.contains(document.activeElement))) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    returnFocusRef.current = document.activeElement;
+    return () => {
+      const returnTarget = returnFocusRef.current;
+      returnFocusRef.current = null;
+      window.queueMicrotask(() => returnTarget?.focus?.());
+    };
+  }, [open]);
+
+  useDismissablePortal({
+    active: open,
+    ref: panelRef,
+    onDismiss: closePanel,
+    onActivate: focusPanel,
+    activateKey: panelState.selectedTopicId,
+    onTabKey: containPanelFocus,
+  });
 
   if (!open) return null;
 
   const topics = news?.topics || [];
+  const selectedTopic = topics.find((topic) => topic.id === panelState.selectedTopicId) || null;
+  const selectedTopicIndex = selectedTopic ? topics.indexOf(selectedTopic) : -1;
 
   async function handleCreateTopic() {
     const name = newTopicName.trim();
@@ -83,6 +208,7 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
     }
     setConfirmDeleteTopicId(null);
     await deleteNewsTopic(topicId);
+    setPanelState((state) => ({ ...state, selectedTopicId: null }));
     onChanged?.();
   }
 
@@ -126,85 +252,110 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
       />
       <div
         ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="news-sources-title"
+        tabIndex={-1}
         style={{
           position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 92vw)",
           background: "#16161e", isolation: "isolate", overscrollBehavior: "contain",
-          borderLeft: "1px solid rgba(255,255,255,0.08)", boxShadow: "-12px 0 32px rgba(0,0,0,0.4)",
+          borderLeft: "1px solid rgba(255,255,255,0.08)", boxShadow: "-20px 0 60px rgba(0,0,0,0.7)",
           display: "flex", flexDirection: "column", zIndex: 1000,
           animation: "newsPanelIn 200ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
-      }}
-      >
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--sp-text)" }}>Manage news</div>
-        <CloseButton onClick={onClose} />
-      </div>
-
-      <div style={{ padding: 16, overflowY: "auto", flex: 1, display: "grid", gap: 18 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            value={newTopicName}
-            onChange={(e) => setNewTopicName(e.target.value)}
-            placeholder="New topic name"
-            style={{ ...manageInputStyle, flex: 1 }}
-          />
-          <ManageButton onClick={handleCreateTopic} disabled={!newTopicName.trim()}>Add topic</ManageButton>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 10, padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+        }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+            {selectedTopic ? (
+              <ManageButton
+                onClick={showTopicOverview}
+                ariaLabel="Back to topics"
+              >
+                ←
+              </ManageButton>
+            ) : null}
+            <h2 id="news-sources-title" style={{
+              margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontSize: 14, fontWeight: 600, color: "var(--sp-text)",
+            }}>
+              {selectedTopic ? selectedTopic.name : "Sources"}
+            </h2>
+          </div>
+          <CloseButton onClick={closePanel} />
         </div>
 
-        {topics.length === 0 ? (
-          <NewsCatalogPicker onImported={onChanged} />
-        ) : (
-          topics.map((topic, index) => (
-            <div
-              key={topic.id}
-              style={{ display: "grid", gap: 8, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {renamingId === topic.id ? (
-                  <input
-                    autoFocus
-                    value={renameDraft}
-                    onChange={(e) => setRenameDraft(e.target.value)}
-                    onBlur={() => handleRenameCommit(topic.id)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleRenameCommit(topic.id); }}
-                    style={{ ...manageInputStyle, flex: 1 }}
-                  />
-                ) : (
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => { setRenamingId(topic.id); setRenameDraft(topic.name); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { setRenamingId(topic.id); setRenameDraft(topic.name); }
-                    }}
-                    style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--sp-text)", cursor: "pointer" }}
-                  >
-                    {topic.name}
-                  </div>
-                )}
-                <ManageButton onClick={() => handleMove(topic.id, -1)} disabled={index === 0} ariaLabel="Move up">
-                  ↑
-                </ManageButton>
-                <ManageButton
-                  onClick={() => handleMove(topic.id, 1)}
-                  disabled={index === topics.length - 1}
-                  ariaLabel="Move down"
+        {selectedTopic ? (
+          <div style={{ padding: 16, overflowY: "auto", flex: 1, display: "grid", alignContent: "start", gap: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {renamingId === selectedTopic.id ? (
+                <input
+                  autoFocus
+                  aria-label={`Topic name for ${selectedTopic.name}`}
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onBlur={() => handleRenameCommit(selectedTopic.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleRenameCommit(selectedTopic.id); }}
+                  style={{ ...manageInputStyle, flex: 1 }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  aria-label={`Rename ${selectedTopic.name}`}
+                  title="Rename topic"
+                  onClick={() => { setRenamingId(selectedTopic.id); setRenameDraft(selectedTopic.name); }}
+                  style={{
+                    flex: 1, padding: 0, border: "none", background: "transparent",
+                    color: "var(--sp-text)", font: "inherit", fontSize: 13, fontWeight: 600,
+                    textAlign: "left", cursor: "pointer",
+                  }}
                 >
-                  ↓
-                </ManageButton>
-                <ManageButton onClick={() => handleDeleteTopic(topic.id)}>
-                  {confirmDeleteTopicId === topic.id ? "Confirm?" : "Delete"}
-                </ManageButton>
-              </div>
+                  {selectedTopic.name}
+                </button>
+              )}
+              <ManageButton
+                onClick={() => handleMove(selectedTopic.id, -1)}
+                disabled={selectedTopicIndex === 0}
+                ariaLabel="Move up"
+              >
+                ↑
+              </ManageButton>
+              <ManageButton
+                onClick={() => handleMove(selectedTopic.id, 1)}
+                disabled={selectedTopicIndex === topics.length - 1}
+                ariaLabel="Move down"
+              >
+                ↓
+              </ManageButton>
+              <ManageButton onClick={() => handleDeleteTopic(selectedTopic.id)}>
+                {confirmDeleteTopicId === selectedTopic.id ? "Confirm?" : "Delete"}
+              </ManageButton>
+            </div>
 
-              <div style={{ display: "grid", gap: 6 }}>
-                {topic.sources.map((source) => {
+            <section style={{ display: "grid", gap: 9 }}>
+              <div style={{
+                fontSize: 10.5, fontWeight: 600, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: "var(--sp-subtext)",
+              }}>
+                Sources
+              </div>
+              <div style={{ display: "grid", gap: 7 }}>
+                {(selectedTopic.sources || []).map((source) => {
                   const health = describeSourceHealth(source);
+                  const healthColor = health.label === "Reddit delayed · 429"
+                    ? "var(--sp-cream)"
+                    : "var(--sp-rose)";
                   return (
-                    <div key={source.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                    <div
+                      key={source.id}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, minHeight: 30,
+                        padding: "3px 0", fontSize: 12,
+                      }}
+                    >
                       <input
                         type="checkbox"
                         aria-label={source.title}
@@ -220,13 +371,14 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
                         {source.title}
                       </span>
                       {health.failing ? (
-                        <span title={health.label} style={{ color: "var(--sp-rose)", fontSize: 10.5 }}>
+                        <span title={health.label} style={{ color: healthColor, fontSize: 10.5 }}>
                           {health.label}
                         </span>
                       ) : null}
                       {source.kind === "hn" ? (
                         <input
                           type="number"
+                          aria-label={`Minimum points for ${source.title}`}
                           value={source.minPoints ?? 50}
                           onChange={(e) => handleMinPointsChange(source, Number(e.target.value))}
                           style={{ ...manageInputStyle, width: 56, padding: "4px 6px" }}
@@ -238,10 +390,31 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
                     </div>
                   );
                 })}
+                {(selectedTopic.sources || []).length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: "var(--sp-subtext)" }}>No sources yet.</div>
+                ) : null}
               </div>
 
+              {addSourceTopicId === selectedTopic.id ? (
+                <NewsAddSourceForm
+                  topicId={selectedTopic.id}
+                  onAdded={() => { setAddSourceTopicId(null); onChanged?.(); }}
+                  onCancel={() => setAddSourceTopicId(null)}
+                />
+              ) : (
+                <div><ManageButton onClick={() => setAddSourceTopicId(selectedTopic.id)}>Add source</ManageButton></div>
+              )}
+            </section>
+
+            <section style={{ display: "grid", gap: 9 }}>
+              <div style={{
+                fontSize: 10.5, fontWeight: 600, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: "var(--sp-subtext)",
+              }}>
+                Muted terms
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-                {(topic.mutedTerms || []).map((term) => (
+                {(selectedTopic.mutedTerms || []).map((term) => (
                   <span
                     key={term}
                     style={{
@@ -254,7 +427,7 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
                     <button
                       type="button"
                       aria-label={`Unmute ${term}`}
-                      onClick={() => handleRemoveMutedTerm(topic, term)}
+                      onClick={() => handleRemoveMutedTerm(selectedTopic, term)}
                       style={{
                         border: "none", background: "transparent", color: "var(--sp-subtext)",
                         cursor: "pointer", fontSize: 12, lineHeight: 1, padding: "0 4px",
@@ -265,27 +438,44 @@ export default function NewsManagePanel({ open, onClose, news, onChanged }) {
                   </span>
                 ))}
                 <input
-                  value={muteDrafts[topic.id] || ""}
-                  onChange={(e) => setMuteDrafts((drafts) => ({ ...drafts, [topic.id]: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleAddMutedTerm(topic); }}
+                  aria-label={`Mute term for ${selectedTopic.name}`}
+                  value={muteDrafts[selectedTopic.id] || ""}
+                  onChange={(e) => setMuteDrafts((drafts) => ({ ...drafts, [selectedTopic.id]: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddMutedTerm(selectedTopic); }}
                   placeholder="Mute keyword…"
                   style={{ ...manageInputStyle, width: 130, padding: "4px 8px" }}
                 />
               </div>
-
-              {addSourceTopicId === topic.id ? (
-                <NewsAddSourceForm
-                  topicId={topic.id}
-                  onAdded={() => { setAddSourceTopicId(null); onChanged?.(); }}
-                  onCancel={() => setAddSourceTopicId(null)}
-                />
-              ) : (
-                <ManageButton onClick={() => setAddSourceTopicId(topic.id)}>Add source</ManageButton>
-              )}
+            </section>
+          </div>
+        ) : (
+          <div style={{ padding: 16, overflowY: "auto", flex: 1, display: "grid", alignContent: "start", gap: 18 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                aria-label="New topic name"
+                value={newTopicName}
+                onChange={(e) => setNewTopicName(e.target.value)}
+                placeholder="New topic name"
+                style={{ ...manageInputStyle, flex: 1 }}
+              />
+              <ManageButton onClick={handleCreateTopic} disabled={!newTopicName.trim()}>Add topic</ManageButton>
             </div>
-          ))
+
+            {topics.length === 0 ? (
+              <NewsCatalogPicker onImported={onChanged} />
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {topics.map((topic) => (
+                  <TopicOverviewButton
+                    key={topic.id}
+                    topic={topic}
+                    onClick={() => setPanelState((state) => ({ ...state, selectedTopicId: topic.id }))}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
-      </div>
       </div>
     </>,
     document.body,

@@ -20,7 +20,20 @@ export default function NewsTab({ active }) {
   const [prevNews, setPrevNews] = useState(news);
   const [dividerMarker, setDividerMarker] = useState(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [manageTopicId, setManageTopicId] = useState(null);
   const [hideSeen, setHideSeen] = useState(readHideSeen);
+
+  const openManage = (topicId = null) => {
+    setManageTopicId(topicId);
+    setManageOpen(true);
+  };
+
+  const closeManage = () => {
+    setManageOpen(false);
+    setManageTopicId(null);
+  };
+
+  if (!active && manageOpen) closeManage();
 
   const toggleHideSeen = () => {
     setHideSeen((prev) => {
@@ -79,12 +92,13 @@ export default function NewsTab({ active }) {
         onToggleHideSeen={toggleHideSeen}
         onMarkAllSeen={markAllSeen}
         onRefresh={refresh}
-        onOpenManage={() => setManageOpen(true)}
+        onOpenManage={openManage}
         onReload={reload}
       />
       <NewsManagePanel
         open={manageOpen}
-        onClose={() => setManageOpen(false)}
+        initialTopicId={manageTopicId}
+        onClose={closeManage}
         news={news}
         onChanged={() => reload({ background: true })}
       />

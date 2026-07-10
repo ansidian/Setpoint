@@ -32,22 +32,90 @@ const news = {
 };
 
 describe("NewsManagePanel", () => {
+  it("announces the Sources modal and moves focus inside it", async () => {
+    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={() => {}} />);
+    const dialog = screen.getByRole("dialog", { name: "Sources" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    await waitFor(() => expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /close/i }),
+    ));
+  });
+
+  it("shows a topic overview before drilling into a topic", () => {
+    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={() => {}} />);
+
+    expect(screen.getByText("1/1 enabled")).toBeTruthy();
+    expect(screen.getByText("1 feed needs attention")).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /feed a/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /AI.*1\/1 enabled.*1 feed needs attention/i }));
+
+    expect(screen.getByRole("checkbox", { name: /feed a/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to topics/i }));
+
+    expect(screen.getByRole("button", { name: /AI.*1\/1 enabled.*1 feed needs attention/i })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /feed a/i })).toBeNull();
+  });
+
+  it("opens directly to the requested topic", () => {
+    const focusedNews = {
+      ...news,
+      topics: [
+        ...news.topics,
+        {
+          id: 2, name: "Hardware", position: 1, items: [], mutedTerms: [],
+          sources: [{
+            id: 20, topicId: 2, kind: "rss", title: "Feed B", feedUrl: "https://b/f", siteUrl: null,
+            enabled: true, hnQuery: null, minPoints: null, lastStatus: "200", lastFetchAt: null,
+            consecutiveFailures: 0,
+          }],
+        },
+      ],
+    };
+
+    render(
+      <NewsManagePanel
+        open
+        initialTopicId={2}
+        onClose={() => {}}
+        news={focusedNews}
+        onChanged={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole("checkbox", { name: /feed b/i })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /feed a/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /back to topics/i })).toBeTruthy();
+  });
+
   it("toggling a source calls updateNewsSource and onChanged", async () => {
     const onChanged = vi.fn();
-    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={onChanged} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={onChanged} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /feed a/i }));
     await waitFor(() => expect(api.updateNewsSource).toHaveBeenCalledWith(10, { enabled: false }));
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("shows a failing badge for a backed-off source", () => {
-    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={() => {}} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
     expect(screen.getByText(/HTTP 403 · failing/)).toBeTruthy();
+  });
+
+  it("clears a pending topic deletion when returning to the overview", () => {
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    expect(screen.getByRole("button", { name: /confirm/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /back to topics/i }));
+    fireEvent.click(screen.getByRole("button", { name: /AI.*1\/1 enabled.*1 feed needs attention/i }));
+
+    expect(screen.getByRole("button", { name: /^delete$/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /confirm/i })).toBeNull();
   });
 
   it("add-source flow: check → confirm calls previewNewsSource then createNewsSource", async () => {
     const onChanged = vi.fn();
-    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={onChanged} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={onChanged} />);
     fireEvent.click(screen.getByRole("button", { name: /add source/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste a site or feed url/i), {
       target: { value: "https://x.com" },
@@ -62,7 +130,7 @@ describe("NewsManagePanel", () => {
 
   it("adds a mute term via the input and removes one via its chip", async () => {
     const onChanged = vi.fn();
-    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={onChanged} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={onChanged} />);
     fireEvent.change(screen.getByPlaceholderText(/mute keyword/i), { target: { value: " sponsored " } });
     fireEvent.keyDown(screen.getByPlaceholderText(/mute keyword/i), { key: "Enter" });
     await waitFor(() => expect(api.updateNewsTopicMutedTerms)
