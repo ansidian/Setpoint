@@ -71,7 +71,13 @@ function renderContainer(overrides = {}) {
     setSelectedItemId: vi.fn(),
     ...overrides,
   };
-  return render(<CalendarScrollContainer {...baseProps} />);
+  const result = render(<CalendarScrollContainer {...baseProps} />);
+  return {
+    ...result,
+    rerenderContainer: (nextOverrides = {}) => result.rerender(
+      <CalendarScrollContainer {...baseProps} {...nextOverrides} />,
+    ),
+  };
 }
 
 function monthOffset(targetIndex) {
@@ -227,6 +233,44 @@ describe("CalendarScrollContainer", () => {
     });
     const julyBlock = container.querySelector("[data-testid='month-block-2026-6']");
     expect(julyBlock?.textContent).toContain("Narwhal");
+  });
+
+  it("does not render a cached bills month through the events view after switching views", () => {
+    const transaction = {
+      id: "txn-may",
+      date: "2026-05-15",
+      payee: "Corner Market",
+      amount: 24.5,
+      direction: "expense",
+    };
+    const billsComputed = billsView.compute({
+      data: { schedules: [], transactions: [transaction], payeeMap: {} },
+      viewYear: CURRENT_YEAR,
+      viewMonth: CURRENT_MONTH,
+    });
+    const { rerenderContainer } = renderContainer({
+      view: "bills",
+      activeView: billsView,
+      itemsByDay: billsComputed.itemsByDay,
+      itemsByDate: billsComputed.itemsByDate,
+    });
+
+    rerenderContainer({
+      view: "bills",
+      activeView: billsView,
+      viewMonth: CURRENT_MONTH + 1,
+      itemsByDay: {},
+      itemsByDate: billsComputed.itemsByDate,
+    });
+
+    expect(() => rerenderContainer({
+      view: "events",
+      activeView: eventsView,
+      viewMonth: CURRENT_MONTH + 1,
+      viewData: { events: [], isLoading: false },
+      itemsByDay: {},
+      itemsByDate: {},
+    })).not.toThrow();
   });
 
   it("does not use native CSS scroll snap — settle alignment owns row snapping", () => {

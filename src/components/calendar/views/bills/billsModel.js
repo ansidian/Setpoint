@@ -38,13 +38,14 @@ export function formatFullDate(year, month, day, selectedDateKey) {
 
 function scheduleToBill(schedule, payeeMap) {
   if (!schedule?.conditions) {
+    const rawAmount = schedule.amount;
     return {
       id: schedule.id,
       scheduleId: schedule.scheduleId || schedule.id,
       transactionId: schedule.transactionId || null,
       name: schedule.name || schedule.payee || "Unknown",
       payee: schedule.payee || schedule.name || "Unknown",
-      amount: Number(schedule.amount || 0),
+      amount: rawAmount == null || rawAmount === "" ? Number.NaN : Number(rawAmount),
       next_date: schedule.next_date,
       paid: !!schedule.paid,
       type: schedule.type || "bill",
@@ -54,7 +55,10 @@ function scheduleToBill(schedule, payeeMap) {
   const amtCond = schedule.conditions?.find((c) => c.field === "amount");
   const payeeCond = schedule.conditions?.find((c) => c.field === "payee");
   const rawAmt = amtCond?.value;
-  const amountCents = typeof rawAmt === "object" && rawAmt !== null ? (rawAmt.num1 ?? 0) : (rawAmt ?? 0);
+  const rawAmountCents = typeof rawAmt === "object" && rawAmt !== null ? rawAmt.num1 : rawAmt;
+  const amountCents = rawAmountCents == null || rawAmountCents === ""
+    ? Number.NaN
+    : Number(rawAmountCents);
   const payeeName = payeeCond ? payeeMap[payeeCond.value] : schedule.name;
   return {
     id: schedule.id,
@@ -164,6 +168,7 @@ export function compute({ data, viewYear, viewMonth }) {
       const date = new Date(`${schedule.next_date}T00:00:00`);
       const day = date.getDate();
       const bill = scheduleToBill(schedule, payeeMap);
+      if (!Number.isFinite(bill.amount)) continue;
       if (!itemsByDate[schedule.next_date]) itemsByDate[schedule.next_date] = [];
       itemsByDate[schedule.next_date].push(bill);
       if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
@@ -175,8 +180,12 @@ export function compute({ data, viewYear, viewMonth }) {
   for (const transaction of transactions) {
     if (!transaction?.date) continue;
     const date = new Date(`${transaction.date}T00:00:00`);
+    if (transaction.amount == null || transaction.amount === "") continue;
+    const amount = Number(transaction.amount);
+    if (!Number.isFinite(amount)) continue;
     const item = {
       ...transaction,
+      amount,
       type: "transaction",
       name: transaction.payee || "Unknown",
     };
