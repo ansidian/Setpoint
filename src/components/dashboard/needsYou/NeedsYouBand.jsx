@@ -75,7 +75,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
 
   const allClearBlock = (
     <div style={!isMobile
-      ? { width: 190, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }
+      ? { width: 190, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }
       : { width: "100%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
       <CheckCircle2 size={18} color="var(--sp-green)" />
       <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-green)" }}>All clear</span>
@@ -134,7 +134,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
           <PriorityCard key={card.id} card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
         ))}
         {model.backfillCards.map((card) => (
-          <PriorityCard key={card.id} card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} />
+          <PriorityCard key={card.id} card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} onJump={onOpen} />
         ))}
         {model.moreCount > 0 && (
           <button
