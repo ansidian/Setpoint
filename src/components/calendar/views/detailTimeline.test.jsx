@@ -1239,6 +1239,45 @@ describe("calendar detail timeline", () => {
     expect(screen.getAllByText("Cleared").length).toBeGreaterThan(0);
   });
 
+  it("selects transactions into read-only detail and separates inflows from outflows", () => {
+    render(
+      billsView.renderDetail({
+        selectedDay: 19,
+        selectedDateKey: "2026-04-19",
+        viewYear: 2026,
+        viewMonth: 3,
+        data: {},
+        selectedItemId: "income-1",
+        items: billsView.getDayState([
+          { id: "income-1", name: "Employer", payee: "Employer", amount: 5000, date: "2026-04-19", direction: "income", category: "Income", account: "Checking", type: "transaction" },
+          { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", category: "Groceries", account: "Checking", type: "transaction" },
+        ]),
+      }),
+    );
+
+    expect(screen.getAllByText("+$5,000.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("Inflows")).toBeTruthy();
+    expect(screen.getByText("Outflows")).toBeTruthy();
+    expect(screen.getByText("Market")).toBeTruthy();
+  });
+
+  it("warns when the transaction range is truncated", () => {
+    render(
+      billsView.renderDetail({
+        selectedDay: 19,
+        selectedDateKey: "2026-04-19",
+        viewYear: 2026,
+        viewMonth: 3,
+        data: { transactionsTruncated: true },
+        items: billsView.getDayState([
+          { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", type: "transaction" },
+        ]),
+      }),
+    );
+
+    expect(screen.getByTestId("calendar-bills-source-warning").textContent).toMatch(/limited/i);
+  });
+
   it("shows a paid bill preview when a day has no unpaid bills", () => {
     render(
       <div>

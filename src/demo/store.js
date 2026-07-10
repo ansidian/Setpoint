@@ -1,4 +1,5 @@
 import { buildDemoNews } from "./newsData.js";
+import { buildDemoTransactions } from "./financeData.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WORK_COLOR = "#89b4fa";
@@ -201,13 +202,6 @@ function makeLaneCounts(lanes, carryover) {
   };
 }
 
-function filterDateRange(items, start, end, getDate) {
-  return items.filter((item) => {
-    const key = getDate(item);
-    return key >= start && key <= end;
-  });
-}
-
 function makeWorkdayStandups(today) {
   return monthDates(today)
     .filter(isWeekday)
@@ -358,6 +352,7 @@ function makeDemoSeed(now = new Date()) {
     bill({ id: "demo-card", payee: "Everyday Card", day: monthDay(today, 22), amount: 512.84 }),
     bill({ id: "demo-student-loan", payee: "Student Loan Servicer", day: monthDay(today, 28), amount: 220.00 }),
   ];
+  const transactions = buildDemoTransactions(dateKey(today), dateKey(yesterday));
   const payeeMap = Object.fromEntries(bills.map((entry) => [entry.scheduleId, entry.payee]));
 
   const lanes = {
@@ -755,6 +750,7 @@ function makeDemoSeed(now = new Date()) {
     calendarEvents,
     deadlines,
     bills,
+    transactions,
     activeSnapshot,
     settings,
     accounts: {
@@ -813,6 +809,3 @@ export function pacificYMD(ms) {
   return PACIFIC_YMD_FORMATTER.format(new Date(ms));
 }
 
-export function demoDateRange(items, start, end, getDate) {
-  return clone(filterDateRange(items, start, end, getDate));
-}

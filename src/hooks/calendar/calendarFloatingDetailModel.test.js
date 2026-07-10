@@ -69,6 +69,7 @@ describe("calendarFloatingDetailModel", () => {
 
   it("formats floating detail and editor labels from selected dates", () => {
     expect(formatFloatingDetailLabel("events", "2026-05-02", 2026, 4, null)).toBe("Event · Sat, May 2");
+    expect(formatFloatingDetailLabel("bills", "2026-05-02", 2026, 4, null, "transaction")).toBe("Transaction · Sat, May 2");
     expect(formatFloatingEditorLabel("create", "events", null, 2026, 4, 3, "deadline")).toBe("New deadline · Sun, May 3");
     expect(formatFloatingEditorLabel("edit", "bills", null, 2026, 4, null)).toBe("Edit bill · Selected");
   });

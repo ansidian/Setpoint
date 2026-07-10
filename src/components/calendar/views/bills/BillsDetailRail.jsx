@@ -9,6 +9,8 @@ import {
 import { formatAmount, daysLabel, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
 import { billMatchesItemId, formatFullDate, getDayState, getScheduleUrl, payUrlForBill } from "./billsModel.js";
 import BillSelectedCard from "./BillSelectedCard.jsx";
+import TransactionSelectedCard from "./TransactionSelectedCard.jsx";
+import { FINANCE_SOURCE_COLORS, transactionDirectionColor } from "./financeSourceColors.js";
 
 function BillSelectedActions({ bill, actualBudgetUrl, payUrl, compact = false }) {
   if (!bill) return null;
@@ -41,8 +43,8 @@ function BillSelectedActions({ bill, actualBudgetUrl, payUrl, compact = false })
   );
 }
 
-function SourceWarning({ errors = [] }) {
-  if (!errors.length) return null;
+function SourceWarning({ errors = [], transactionsTruncated = false }) {
+  if (!errors.length && !transactionsTruncated) return null;
   return (
     <div
       data-testid="calendar-bills-source-warning"
@@ -56,7 +58,11 @@ function SourceWarning({ errors = [] }) {
         lineHeight: 1.35,
       }}
     >
-      Actual bills are partially unavailable.
+      {errors.length && transactionsTruncated
+        ? "Actual finance data is partially unavailable, and transaction results are limited for this range."
+        : transactionsTruncated
+          ? "Transaction results are limited for this range."
+          : "Actual finance data is partially unavailable."}
     </div>
   );
 }
@@ -74,7 +80,7 @@ function toBillRailItem(bill, selectedBillId, onSelectItem) {
     complete: bill.paid,
     selected: billMatchesItemId(bill, selectedBillId),
     onClick: onSelectItem ? () => onSelectItem(String(bill.id)) : undefined,
-    dotColor: bill.paid ? "#a6e3a1" : bill.type === "transfer" ? "#b4befe" : urgency.accent,
+    dotColor: bill.paid ? "#a6e3a1" : bill.type === "transfer" ? FINANCE_SOURCE_COLORS.transfer : urgency.accent,
     trailing: (
       <span
         style={{
@@ -86,6 +92,26 @@ function toBillRailItem(bill, selectedBillId, onSelectItem) {
         }}
       >
         {formatAmount(bill.amount)}
+      </span>
+    ),
+  };
+}
+
+function toTransactionRailItem(transaction, selectedItemId, onSelectItem) {
+  const income = transaction.direction === "income";
+  const accent = transactionDirectionColor(transaction.direction);
+  return {
+    id: String(transaction.id),
+    timeLabel: income ? "Inflow" : "Outflow",
+    title: transaction.payee || transaction.name || "Unknown",
+    subtitle: transaction.category || "Uncategorized",
+    meta: transaction.account || "Transaction",
+    selected: billMatchesItemId(transaction, selectedItemId),
+    onClick: onSelectItem ? () => onSelectItem(String(transaction.id)) : undefined,
+    dotColor: accent,
+    trailing: (
+      <span style={{ color: accent, fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        {income ? "+" : "−"}{formatAmount(transaction.amount)}
       </span>
     ),
   };
@@ -105,14 +131,19 @@ function BillsDetail({
   const sourceErrors = Array.isArray(data?.errors) ? data.errors : [];
   const state = getDayState(items);
   const [showCompleted, setShowCompleted] = useState(state.activeCount === 0 && state.completedCount > 0);
-  const allItems = [...state.activeItems, ...state.completedItems];
+  const allItems = state.items;
   const selectedBill = allItems.find((bill) => billMatchesItemId(bill, selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
-  const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
-  const selectedPayUrl = selectedBill ? payUrlForBill(selectedBill, data?.payLinksByScheduleId) : null;
+  const selectedTransaction = selectedBill?.type === "transaction" ? selectedBill : null;
+  const selectedSchedule = selectedTransaction ? null : selectedBill;
+  const selectedScheduleUrl = selectedSchedule ? getScheduleUrl(selectedSchedule, actualBudgetUrl) : null;
+  const selectedPayUrl = selectedSchedule ? payUrlForBill(selectedSchedule, data?.payLinksByScheduleId) : null;
   const summary = [
     `${state.activeCount} unpaid`,
     state.completedCount ? `${state.completedCount} paid` : null,
+    state.transactionCount
+      ? `${state.transactionCount} transaction${state.transactionCount === 1 ? "" : "s"}`
+      : null,
     `${state.totalCount} total`,
   ].filter(Boolean).join(" · ");
 
@@ -122,9 +153,11 @@ function BillsDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={summary}
       accent="var(--sp-green)"
-      headerContent={selectedBill ? (
+      headerContent={selectedTransaction ? (
+        <TransactionSelectedCard transaction={selectedTransaction} compact={compactDetail} />
+      ) : selectedSchedule ? (
         <BillSelectedCard
-          bill={selectedBill}
+          bill={selectedSchedule}
           compact={compactDetail}
           actions={(selectedScheduleUrl || selectedPayUrl) ? (
             <BillSelectedActions
@@ -136,7 +169,12 @@ function BillsDetail({
           ) : null}
         />
       ) : null}
-      actionContent={<SourceWarning errors={sourceErrors} />}
+      actionContent={(
+        <SourceWarning
+          errors={sourceErrors}
+          transactionsTruncated={!!data?.transactionsTruncated}
+        />
+      )}
       sections={[
         {
           id: "active-bills",
@@ -152,6 +190,16 @@ function BillsDetail({
           itemCount: state.completedCount,
           items: state.completedItems.map((bill) => toBillRailItem(bill, selectedItemId, onSelectItem)),
         },
+        {
+          id: "transaction-inflows",
+          label: "Inflows",
+          items: state.incomeItems.map((transaction) => toTransactionRailItem(transaction, selectedItemId, onSelectItem)),
+        },
+        {
+          id: "transaction-outflows",
+          label: "Outflows",
+          items: state.expenseItems.map((transaction) => toTransactionRailItem(transaction, selectedItemId, onSelectItem)),
+        },
       ]}
     />
   );
@@ -164,13 +212,18 @@ function BillsFloatingDetail({
 }) {
   const actualBudgetUrl = data?.actualBudgetUrl;
   const state = getDayState(items);
-  const allItems = [...state.activeItems, ...state.completedItems];
+  const allItems = state.items;
   const selectedBill = allItems.find((bill) => billMatchesItemId(bill, selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
-  const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
-  const selectedPayUrl = selectedBill ? payUrlForBill(selectedBill, data?.payLinksByScheduleId) : null;
+  const selectedTransaction = selectedBill?.type === "transaction" ? selectedBill : null;
+  const selectedScheduleUrl = selectedBill && !selectedTransaction ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
+  const selectedPayUrl = selectedBill && !selectedTransaction ? payUrlForBill(selectedBill, data?.payLinksByScheduleId) : null;
 
   if (!selectedBill) return null;
+
+  if (selectedTransaction) {
+    return <TransactionSelectedCard transaction={selectedTransaction} compact={compactDetail} />;
+  }
 
   return (
     <BillSelectedCard

@@ -21,6 +21,24 @@
         "displayName": "Floating Panel Solid",
         "canonical": "#16161e",
         "purpose": "Opaque portal surface that prevents transparency bleed-through."
+      },
+      "finance-income": {
+        "role": "data",
+        "displayName": "Income Cyan",
+        "canonical": "#89dceb",
+        "purpose": "Income and inflow transactions; paired with a plus sign and Inflow label."
+      },
+      "finance-outflow": {
+        "role": "data",
+        "displayName": "Outflow Periwinkle",
+        "canonical": "#b4befe",
+        "purpose": "Routine expense transactions without danger or overdue semantics."
+      },
+      "finance-transfer": {
+        "role": "data",
+        "displayName": "Transfer Blue",
+        "canonical": "#89b4fa",
+        "purpose": "Neutral account-to-account movement and transfer schedules."
       }
     },
     "typographyMeta": {

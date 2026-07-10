@@ -131,6 +131,7 @@ function Marker({ marker, backdropColor = null }) {
     <span
       data-testid="calendar-mini-calendar-marker"
       data-marker-kind={marker.kind}
+      data-marker-source-kind={marker.sourceKind || undefined}
       data-marker-color={marker.color}
       data-marker-count={marker.count}
       data-marker-overflow={marker.representsOverflow ? "true" : "false"}

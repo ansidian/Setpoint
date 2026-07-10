@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { reuseMultiMonthBillsAgendaGroups } from "./billsAgendaModel.js";
+import { buildBillsAgendaGroups, reuseMultiMonthBillsAgendaGroups } from "./billsAgendaModel.js";
+import { compute } from "./billsModel.js";
 
 const bill = (id, next_date, amount = 100) => ({ id, name: id, amount, next_date });
 const bucket = (...bills) => ({ schedules: bills, payeeMap: {} });
@@ -54,5 +55,34 @@ describe("reuseMultiMonthBillsAgendaGroups", () => {
     expect(second.list[0]).toBe(first.list[0]);
     expect(second.list[1]).not.toBe(first.list[1]);
     expect(second.list[1].visibleGroups.map((g) => g.dateKey)).toContain("2026-06-20");
+  });
+});
+
+describe("buildBillsAgendaGroups transactions", () => {
+  it("maps transaction direction and signed amounts into agenda rows", () => {
+    const computed = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        schedules: [],
+        transactions: [
+          { id: "income-1", date: "2026-05-10", payee: "Employer", category: "Income", amount: 5000, direction: "income" },
+          { id: "expense-1", date: "2026-05-10", payee: "Market", category: "Groceries", amount: 42.1, direction: "expense" },
+        ],
+      },
+    });
+
+    const result = buildBillsAgendaGroups({
+      computed,
+      viewYear: 2026,
+      viewMonth: 4,
+      todayKey: "2026-05-01",
+    });
+    const items = result.groups.find((group) => group.dateKey === "2026-05-10").items;
+
+    expect(items).toEqual([
+      expect.objectContaining({ agendaItemKind: "transaction", agendaMeta: "Inflow", agendaAmount: "+$5,000.00", agendaDotColor: "#89dceb" }),
+      expect.objectContaining({ agendaItemKind: "transaction", agendaMeta: "Outflow", agendaAmount: "−$42.10", agendaDotColor: "#b4befe" }),
+    ]);
   });
 });

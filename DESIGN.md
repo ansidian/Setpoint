@@ -18,6 +18,9 @@ colors:
   success: "#a6e3a1"
   info: "#89b4fa"
   sky-info: "#89dceb"
+  finance-income: "#89dceb"
+  finance-outflow: "#b4befe"
+  finance-transfer: "#89b4fa"
   v3-page: "#f4f1f8"
   v3-app: "#ffffff"
   v3-rail: "#fbf9fe"
@@ -151,12 +154,16 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 - **Success Green** (`#a6e3a1`): Connected states, confirmations, recurring bills.
 - **Info Blue** (`#89b4fa`): Informational badges and neutral status.
 - **Income Cyan** (`#89dceb`): Income transactions and sky-info data.
+- **Outflow Periwinkle** (`#b4befe`): Routine spending and expense transactions; never urgency or failure.
+- **Transfer Blue** (`#89b4fa`): Neutral account-to-account movement and transfer schedules.
 
 ### Named Rules
 
 **The Accent Rarity Rule.** Lavender should guide attention, not coat the interface. On dense product screens, keep it to active controls, focus rings, selected states, and small emphasis.
 
 **The Source Color Rule.** Domain colors map to data meaning. Do not repurpose task, transaction, urgency, or source colors as decorative theme colors.
+
+**The Finance Direction Rule.** Inflows use cyan, outflows use periwinkle, and transfers use info blue. Rose remains reserved for overdue, missed, or error states; direction must also be conveyed by sign and label.
 
 ## 3. Typography
 

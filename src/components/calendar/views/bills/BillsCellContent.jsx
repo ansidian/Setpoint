@@ -4,6 +4,7 @@ import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
 import { getDayState, relativeDateLabel } from "./billsModel.js";
+import { FINANCE_SOURCE_COLORS, transactionDirectionColor } from "./financeSourceColors.js";
 
 const LG_BILL_CHIP_METRICS = {
   itemHeight: 36,
@@ -49,7 +50,7 @@ export function toBillDescriptor(bill) {
   const accent = bill.paid
     ? "#a6e3a1"
     : isTransfer
-      ? "#b4befe"
+      ? FINANCE_SOURCE_COLORS.transfer
       : days < 0
         ? "#f38ba8"
         : days === null || days > 3
@@ -77,6 +78,27 @@ export function toBillDescriptor(bill) {
     leadingColor: accent,
     complete: bill.paid,
     quiet: bill.paid,
+  };
+}
+
+export function toTransactionDescriptor(transaction) {
+  const income = transaction.direction === "income";
+  const accent = transactionDirectionColor(transaction.direction);
+  return {
+    id: String(transaction.id),
+    selectionId: String(transaction.id),
+    renderKey: `transaction:${transaction.id}`,
+    layoutId: `calendar-transaction-chip:${transaction.id}`,
+    matchItemIds: [String(transaction.id)],
+    sourceItem: transaction,
+    title: transaction.payee || transaction.name || "Unknown",
+    detail: income ? "Inflow" : "Outflow",
+    detailKind: "transaction",
+    leadingLabel: `${income ? "+" : "−"}${formatAmount(transaction.amount)}`,
+    preserveLeadingLabel: true,
+    accent,
+    leadingColor: accent,
+    quiet: !income,
   };
 }
 
@@ -108,7 +130,9 @@ const BillsCellItems = memo(function BillsCellItems({
 }) {
   const descriptors = useMemo(() => {
     const state = getDayState(items);
-    return state.items.map(toBillDescriptor);
+    return state.items.map((item) => (
+      item.type === "transaction" ? toTransactionDescriptor(item) : toBillDescriptor(item)
+    ));
   }, [items]);
 
   if (!descriptors.length) return null;

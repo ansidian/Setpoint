@@ -20,6 +20,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 ### Domains + integrations
 - `alfred.js` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
 - `calendar.js` — calendar CRUD, deadline reads, event search, reminder hydration
+- `calendar-bills-range.js` — composes bill occurrences with read-only Actual transactions and independent degradation
 - `dashboard.js` — dashboard state, current-data SSE stream, health checks
 - `notes.js` — notes CRUD and reordering
 - `news.js` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh

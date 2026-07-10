@@ -8,7 +8,6 @@ import {
 } from "./bills/billsModel.js";
 import { renderBillsCellContents } from "./bills/BillsCellContent.jsx";
 import { renderBillsDetail, renderBillsFloatingDetail } from "./bills/BillsDetailRail.jsx";
-import { renderBillsFooter } from "./bills/BillsFooter.jsx";
 import UtilityStatusButton from "./bills/UtilityStatusButton.jsx";
 
 const billsView = {
@@ -19,7 +18,6 @@ const billsView = {
   renderCellContents: renderBillsCellContents,
   renderDetail: renderBillsDetail,
   renderFloatingDetail: renderBillsFloatingDetail,
-  renderFooter: renderBillsFooter,
   HeaderExtras: UtilityStatusButton,
   getDefaultSelectedItemId,
   getItemId: (bill) => bill?.scheduleId || bill?.id,

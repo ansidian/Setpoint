@@ -76,11 +76,13 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
 
 function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
   const color = bill.agendaSelectedColor;
+  const itemKind = bill.agendaItemKind === "transaction" ? "transaction" : "bill";
   return (
     <button
       type="button"
       className="sp-agenda-touch"
-      data-testid="calendar-agenda-bill-row"
+      data-testid={`calendar-agenda-${itemKind}-row`}
+      data-item-kind={itemKind}
       data-item-id={bill.agendaItemId}
       data-calendar-match-item-ids={[bill.id, bill.scheduleId].filter(Boolean).join(" ")}
       onClick={(event) => onSelect(bill, event.currentTarget)}
@@ -211,7 +213,7 @@ function previewItemForBill(item) {
   const dateKey = item?.agendaDateKey || item?.dateKey || null;
   return {
     ...item,
-    kind: "bill",
+    kind: item?.agendaItemKind === "transaction" ? "transaction" : "bill",
     dateKey,
     agendaDateKey: dateKey,
     markerColor: item?.agendaDotColor || item?.agendaSelectedColor,
@@ -377,6 +379,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
                   anchorElement: element,
                   sourceCellElement: element,
                   anchorKind: "agenda-row",
+                  detailKind: item.agendaItemKind === "transaction" ? "transaction" : null,
                 })}
               />
             </span>

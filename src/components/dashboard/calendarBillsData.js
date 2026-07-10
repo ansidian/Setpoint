@@ -1,7 +1,7 @@
 export function makeCalendarBillsData(liveData, { pendingUpdate = false } = {}) {
   return {
     schedules: (liveData.allSchedules || []).map((schedule) => ({ ...schedule })),
-    recentTransactions: [],
+    transactions: [],
     payeeMap: liveData.payeeMap || {},
     actualBudgetUrl: liveData.actualBudgetUrl,
     syncHealth: liveData.billsSyncHealth || null,

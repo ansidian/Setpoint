@@ -55,6 +55,7 @@ import {
   requestCalendarSearchMirrorSync,
   upsertCalendarSearchMirrorOccurrence,
 } from "../calendar/calendar-search-mirror.js";
+import { readCalendarBillsRange } from "./calendar-bills-range.js";
 
 const router = Router();
 router.use(requireCookieSession);
@@ -507,26 +508,9 @@ router.get("/bills/range", async (req, res) => {
 
   try {
     const userId = process.env.EA_USER_ID;
-    const errors = [];
-    const data = await readBillsMirrorRange(userId, { start: range.start, end: range.end });
-    if (data.syncHealth?.state === "needs_sync") {
-      // Skip the reschedule when a future settle window is already armed, or the
-      // 2s poll collapses the 60s post-write settle to now (P1-5).
-      if (shouldScheduleImmediateBillsRefresh(data.syncHealth)) {
-        scheduleBillsMirrorRefresh(userId).catch((err) => {
-          console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
-        });
-      }
-    } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
-      requestBillsCurrentMaintenanceRefresh(userId, { now: new Date() }).catch((err) => {
-        console.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err.message);
-      });
-    }
-
     res.json({
-      ...data,
+      ...await readCalendarBillsRange(userId, range),
       minDate: range.minDate,
-      errors,
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {

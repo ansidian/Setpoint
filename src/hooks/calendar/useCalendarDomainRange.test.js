@@ -163,6 +163,10 @@ describe("useCalendarDomainRange", () => {
           next_date: `${month}-15`,
           paid: false,
         })),
+        transactions: months.flatMap((month) => ([
+          { id: `income-${month}`, date: `${month}-08`, amount: 5000, direction: "income", payee: "Employer" },
+          { id: `expense-${month}`, date: `${month}-20`, amount: 42, direction: "expense", payee: "Market" },
+        ])),
       };
     });
     const { result } = renderHook(() => useCalendarDomainRange({
@@ -185,6 +189,14 @@ describe("useCalendarDomainRange", () => {
       "2026-05-15",
       "2026-06-15",
     ]);
+    expect(result.current.data.transactions.map((transaction) => transaction.date)).toEqual([
+      "2026-04-08",
+      "2026-04-20",
+      "2026-05-08",
+      "2026-05-20",
+      "2026-06-08",
+      "2026-06-20",
+    ]);
 
     // Scrolling forward reuses cached months; only the new trailing edge is fetched.
     fetchRange.mockClear();
@@ -197,6 +209,14 @@ describe("useCalendarDomainRange", () => {
       "2026-05-15",
       "2026-06-15",
       "2026-07-15",
+    ]);
+    expect(result.current.data.transactions.map((transaction) => transaction.date)).toEqual([
+      "2026-05-08",
+      "2026-05-20",
+      "2026-06-08",
+      "2026-06-20",
+      "2026-07-08",
+      "2026-07-20",
     ]);
   });
 

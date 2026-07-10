@@ -23,8 +23,9 @@ function resolveName(value, rows) {
 }
 
 // Reads transactions from the on-disk budget copy (no SDK). direction "expense"
-// (default) = outflows (amount < 0); direction "income" = inflows (amount > 0).
-// Transfers are excluded in both directions. Names are resolved from the same
+// (default) = outflows (amount < 0); direction "income" = inflows (amount > 0);
+// direction "all" returns both with an explicit direction field. Transfers are
+// excluded in every mode. Names are resolved from the same
 // connection. Returns { unknownFilter } when a provided filter name does not
 // exist, else { transactions, truncated }. Throws { status: 503 } when the copy
 // is missing.
@@ -35,7 +36,11 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
   const minAmount = filters.minAmount ?? filters.min_amount;
   const maxAmount = filters.maxAmount ?? filters.max_amount;
   const notes = filters.notes;
-  const direction = filters.direction === "income" ? "income" : "expense";
+  const direction = filters.direction === "income"
+    ? "income"
+    : filters.direction === "all"
+      ? "all"
+      : "expense";
 
   const client = await openLocalBudgetClient(userId, options);
   try {
@@ -64,7 +69,9 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
       "t.date <= ?",
       "t.payee NOT IN (SELECT id FROM payees WHERE transfer_acct IS NOT NULL AND COALESCE(tombstone,0)=0)",
     ];
-    clauses.push(direction === "income" ? "t.amount > 0" : "t.amount < 0");
+    if (direction === "income") clauses.push("t.amount > 0");
+    else if (direction === "expense") clauses.push("t.amount < 0");
+    else clauses.push("t.amount != 0");
     const args = [actualDateInt(start), actualDateInt(end)];
     if (payeeF) { clauses.push("t.payee = ?"); args.push(payeeF); }
     if (categoryF) { clauses.push("t.category = ?"); args.push(categoryF); }
@@ -85,15 +92,19 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
             LIMIT ?`,
       args,
     });
-    const all = result.rows.map((r) => ({
-      id: r.id,
-      date: ymdFromActualDate(r.date),
-      amount: Math.abs(Number(r.amount || 0)) / 100,
-      payee: payeeName[r.payee] || "Unknown",
-      category: categoryName[r.category] || "Uncategorized",
-      account: accountName[r.account] || "",
-      notes: r.notes || "",
-    }));
+    const all = result.rows.map((r) => {
+      const rawAmount = Number(r.amount || 0);
+      return {
+        id: r.id,
+        date: ymdFromActualDate(r.date),
+        amount: Math.abs(rawAmount) / 100,
+        direction: rawAmount > 0 ? "income" : "expense",
+        payee: payeeName[r.payee] || "Unknown",
+        category: categoryName[r.category] || "Uncategorized",
+        account: accountName[r.account] || "",
+        notes: r.notes || "",
+      };
+    });
     const truncated = all.length > limit;
     return { transactions: truncated ? all.slice(0, limit) : all, truncated };
   } finally {
