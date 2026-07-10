@@ -1,12 +1,14 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { htmlToPlainText } from "./html-to-text.js";
+import { withTimeout } from "../platform/fetch-with-timeout.js";
 
 const ICLOUD_HOST = "imap.mail.me.com";
 const ICLOUD_PORT = 993;
+const ICLOUD_CONNECT_TIMEOUT_MS = 15_000;
 
 // --- Connection pool: one persistent connection per iCloud account ---
-const pool = new Map(); // email → { client, ready, lastUsed }
+const pool = new Map(); // email → { clientPromise, lastUsed }
 const POOL_TTL = 10 * 60 * 1000; // close idle connections after 10 min
 
 function createClient(email, password) {
@@ -16,40 +18,71 @@ function createClient(email, password) {
     secure: true,
     auth: { user: email, pass: password },
     logger: false,
+    // Belt-and-braces: ImapFlow's own connect timeout, in addition to the
+    // withTimeout race below (which is what actually guards against a
+    // connect() that never settles at all).
+    connectionTimeout: ICLOUD_CONNECT_TIMEOUT_MS,
   });
 }
 
-async function getPooledClient(email, password) {
+export async function getPooledClient(email, password) {
   const existing = pool.get(email);
   if (existing) {
+    const client = await existing.clientPromise;
     // Check if connection is still alive
-    if (existing.client.usable) {
+    if (client.usable) {
       existing.lastUsed = Date.now();
-      return existing.client;
+      return client;
     }
     // Dead connection — clean up
     pool.delete(email);
-    existing.client.close().catch(() => {});
+    client.close().catch(() => {});
   }
 
-  const client = createClient(email, password);
-  await client.connect();
-  pool.set(email, { client, lastUsed: Date.now() });
+  // Synchronously claim the pool slot with the in-flight connect promise
+  // BEFORE any await, so a concurrent second caller that reads `pool` finds
+  // this entry and awaits the same promise instead of racing its own
+  // createClient()+connect().
+  const entry = {
+    lastUsed: Date.now(),
+    clientPromise: (async () => {
+      const client = createClient(email, password);
+      try {
+        await withTimeout(client.connect(), ICLOUD_CONNECT_TIMEOUT_MS, "iCloud IMAP connect");
+      } catch (err) {
+        // Connect failed (including timeout) — evict so the next call
+        // retries with a fresh client, and best-effort tear down this one.
+        pool.delete(email);
+        try {
+          client.close?.();
+        } catch { /* connection already dead */ }
+        client.logout?.().catch(() => {});
+        throw err;
+      }
 
-  // Auto-cleanup on unexpected close or error
-  client.on("close", () => {
-    const entry = pool.get(email);
-    if (entry?.client === client) pool.delete(email);
-  });
+      // Auto-cleanup on unexpected close or error
+      client.on("close", () => {
+        const current = pool.get(email);
+        current?.clientPromise?.then((c) => {
+          if (c === client) pool.delete(email);
+        }).catch(() => {});
+      });
 
-  client.on("error", (err) => {
-    console.warn(`[iCloud] Connection error for ${email}: ${err.message}`);
-    const entry = pool.get(email);
-    if (entry?.client === client) pool.delete(email);
-    try { client.close?.()?.catch?.(() => {}); } catch { /* connection already dead */ }
-  });
+      client.on("error", (err) => {
+        console.warn(`[iCloud] Connection error for ${email}: ${err.message}`);
+        const current = pool.get(email);
+        current?.clientPromise?.then((c) => {
+          if (c === client) pool.delete(email);
+        }).catch(() => {});
+        try { client.close?.()?.catch?.(() => {}); } catch { /* connection already dead */ }
+      });
 
-  return client;
+      return client;
+    })(),
+  };
+  pool.set(email, entry);
+
+  return entry.clientPromise;
 }
 
 // Periodically close idle connections
@@ -58,7 +91,7 @@ const poolCleanupTimer = setInterval(() => {
   for (const [email, entry] of pool) {
     if (now - entry.lastUsed > POOL_TTL) {
       pool.delete(email);
-      entry.client.logout().catch(() => {});
+      entry.clientPromise.then((client) => client.logout().catch(() => {})).catch(() => {});
     }
   }
 }, 60_000);

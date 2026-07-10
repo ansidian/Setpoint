@@ -44,6 +44,7 @@ export {
   runDueBillsMirrorRefresh,
   scheduleBillsMirrorRefresh,
   startBillsMirrorRefreshWorker,
+  stopBillsMirrorRefreshWorker,
 } from "./bills-mirror-sync.js";
 
 // Actual metadata (accounts, payees, categories, schedules) is cached at four

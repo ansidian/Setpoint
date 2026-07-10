@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("../db/connection.js", () => ({ default: {} }));
 vi.mock("../platform/encryption.js", () => ({ decrypt: () => "mocked" }));
@@ -8,7 +8,7 @@ vi.mock("../calendar/calendar.js", () => ({ fetchCalendar: async () => [] }));
 vi.mock("../platform/weather.js", () => ({ fetchWeather: async () => ({}) }));
 vi.mock("../actual/actual.js", () => ({ getCategories: async () => [] }));
 
-const { carryForwardCompletedTodoist } = await import("./deadline-helpers.js");
+const { carryForwardCompletedTodoist, computeDeadlineStats } = await import("./deadline-helpers.js");
 
 describe("carryForwardCompletedTodoist", () => {
   it("carries completed rows forward when their due_date >= boundary", () => {
@@ -66,5 +66,27 @@ describe("carryForwardCompletedTodoist", () => {
     const newList = [{ id: "td-1", status: "incomplete" }];
     expect(carryForwardCompletedTodoist(newList, null, "2026-04-18")).toBe(newList);
     expect(carryForwardCompletedTodoist(newList, [], "2026-04-18")).toBe(newList);
+  });
+});
+
+describe("computeDeadlineStats: DST-safe due-this-week window", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("excludes an 8th day that a fixed 168h shift would wrongly include across spring-forward", () => {
+    // 2026-03-07 23:30 PST (the night before spring-forward). now + 7*86400000ms
+    // lands at 2026-03-15 00:30 PDT (only 167h of wall-clock elapsed since the
+    // DST jump loses an hour), so a fixed-ms shift would format weekFromNow as
+    // 2026-03-15 — an 8-day window. Calendar-day math must stay at 2026-03-14.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-08T07:30:00.000Z"));
+
+    const included = { id: "in", due_date: "2026-03-14", status: "incomplete" };
+    const excluded = { id: "out", due_date: "2026-03-15", status: "incomplete" };
+
+    const stats = computeDeadlineStats([included, excluded]);
+
+    expect(stats.dueThisWeek).toBe(1);
   });
 });

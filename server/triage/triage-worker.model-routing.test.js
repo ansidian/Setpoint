@@ -573,6 +573,61 @@ describe("email triage worker model routing", () => {
     expect(triageRow.rows[0]?.triage_status).not.toBe("failed");
   });
 
+  it("computes retry backoff from the actual post-claim attempt count", async () => {
+    __resetCurrentDashboardEventsForTests();
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Payment due for tuition",
+      from_name: "University Billing",
+      from_address: "billing@school.example",
+    });
+    const modelClient = {
+      classify: vi.fn().mockRejectedValue(
+        Object.assign(new Error("OpenAI triage API error (429)"), { status: 429, retryable: true }),
+      ),
+    };
+    const now = new Date("2026-05-03T12:20:00.000Z");
+
+    await processNextEmailTriageJob({ dbClient, modelClient, now });
+
+    // The claim made this the 1st real attempt, so backoff is 2^1 * 30s = 60s
+    // (not 2^0 * 30s computed from the stale pre-claim attempts of 0).
+    const jobRow = await dbClient.execute("SELECT scheduled_for FROM ea_triage_jobs LIMIT 1");
+    expect(jobRow.rows[0].scheduled_for).toBe(new Date(now.getTime() + 60_000).toISOString());
+  });
+
+  it("goes terminal on the 5th retryable failure instead of granting a 6th attempt", async () => {
+    __resetCurrentDashboardEventsForTests();
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Payment due for tuition",
+      from_name: "University Billing",
+      from_address: "billing@school.example",
+    });
+    // Seed 4 prior attempts; the claim bumps the DB row to 5 — the final
+    // permitted attempt under MAX_TRIAGE_RETRY_ATTEMPTS. A retryable failure
+    // here must fall through to the failure_fallback path, not re-queue.
+    await dbClient.execute("UPDATE ea_triage_jobs SET attempts = 4");
+    const modelClient = {
+      classify: vi.fn().mockRejectedValue(
+        Object.assign(new Error("OpenAI triage API error (429)"), { status: 429, retryable: true }),
+      ),
+    };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:20:00.000Z"),
+    });
+
+    expect(result.deferred).toBeUndefined();
+    const jobRow = await dbClient.execute("SELECT status, attempts FROM ea_triage_jobs LIMIT 1");
+    expect(jobRow.rows[0].status).toBe("complete"); // terminal: finalized via failure_fallback
+    expect(Number(jobRow.rows[0].attempts)).toBe(5); // exactly 5 real attempts, never 6
+    const triageRow = await dbClient.execute("SELECT triage_status FROM ea_email_triage LIMIT 1");
+    expect(triageRow.rows[0].triage_status).toBe("failed");
+  });
+
   it("re-queues a job when snapshot attach fails during finalize, not leaving it stuck running (P2-31)", async () => {
     __resetCurrentDashboardEventsForTests();
     const realDb = await createMigratedDb();

@@ -2,6 +2,12 @@
 // Returns the same normalized field shape as the Anthropic extractor so the
 // caller does not branch on provider.
 
+import { fetchWithTimeout } from "../../platform/fetch-with-timeout.js";
+
+// LLM completions legitimately run long; this deadline is a wedge-breaker
+// (guards against a hung connection), not a latency budget.
+const BILL_EXTRACT_TIMEOUT_MS = 120_000;
+
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -29,7 +35,7 @@ export const OPENAI_PROVIDER = {
       throw err;
     }
 
-    const apiRes = await fetch("https://api.openai.com/v1/responses", {
+    const apiRes = await fetchWithTimeout("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -49,7 +55,7 @@ export const OPENAI_PROVIDER = {
           },
         },
       }),
-    });
+    }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
 
     if (!apiRes.ok) {
       const text = await apiRes.text();

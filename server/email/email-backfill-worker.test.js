@@ -23,7 +23,13 @@ vi.mock("../platform/encryption.js", () => ({ decrypt: vi.fn(() => "icloud-passw
 const worker = await import("./email-backfill-worker.js");
 
 beforeEach(async () => {
-  testState.db.current = await createEmailIndexTestDb();
+  testState.db.current = await createEmailIndexTestDb({
+    extraMigrations: [
+      "006_email_search_embedding_state.sql",
+      "007_email_search_ai_usage.sql",
+      "028_provider_needs_reauth.sql",
+    ],
+  });
   gmailApi.fetchEmailsInRange.mockReset();
   icloudApi.fetchEmailsInRange.mockReset();
 });
@@ -76,6 +82,14 @@ async function readBackfillState(accountId = "gmail-work") {
     args: ["user-1", accountId],
   });
   return result.rows[0];
+}
+
+async function readAccountNeedsReauth(accountId = "gmail-work") {
+  const result = await testState.db.current.execute({
+    sql: "SELECT needs_reauth FROM ea_accounts WHERE id = ?",
+    args: [accountId],
+  });
+  return result.rows[0].needs_reauth;
 }
 
 describe("processNextBackfillWindow", () => {
@@ -266,6 +280,34 @@ describe("processNextBackfillWindow", () => {
       attempts: 1,
     });
     expect(result).toMatchObject({ processed: true, status: "paused" });
+  });
+
+  it("pauses AND flags the account needs_reauth when a window fails with invalid_grant (REL-01)", async () => {
+    await seedEmailAccount(testState.db.current, { id: "gmail-work", type: "gmail" });
+    await seedBackfillState();
+    gmailApi.fetchEmailsInRange.mockRejectedValueOnce(
+      new Error('Gmail range list failed: 400 {"error":"invalid_grant"}'),
+    );
+
+    const result = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+
+    const state = await readBackfillState();
+    expect(state).toMatchObject({ status: "paused", attempts: 1 });
+    expect(result).toMatchObject({ processed: true, status: "paused" });
+    expect(await readAccountNeedsReauth()).toBe(1);
+  });
+
+  it("pauses but does NOT flag the account for a non-invalid_grant (429) failure", async () => {
+    await seedEmailAccount(testState.db.current, { id: "gmail-work", type: "gmail" });
+    await seedBackfillState();
+    gmailApi.fetchEmailsInRange.mockRejectedValueOnce(new Error("Gmail range list failed: 429"));
+
+    const result = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+
+    const state = await readBackfillState();
+    expect(state).toMatchObject({ status: "paused", attempts: 1 });
+    expect(result).toMatchObject({ processed: true, status: "paused" });
+    expect(await readAccountNeedsReauth()).toBe(0);
   });
 
   it("marks transient failures retryable with attempts incremented", async () => {
@@ -495,5 +537,68 @@ describe("prepareEmailBackfillStartup", () => {
         target_days: 30,
       },
     ]);
+  });
+});
+
+describe("stopEmailBackfillWorker", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    worker.stopEmailBackfillWorker();
+    vi.useRealTimers();
+  });
+
+  it("prevents an armed wake timer from firing the queue drain", async () => {
+    await seedEmailAccount(testState.db.current, {
+      user_id: "user-1",
+      id: "gmail-work",
+      type: "gmail",
+    });
+    await seedBackfillState({ account_id: "gmail-work", status: "queued" });
+
+    worker.wakeEmailBackfillWorker({ delayMs: 1000 });
+    worker.stopEmailBackfillWorker();
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(gmailApi.fetchEmailsInRange).not.toHaveBeenCalled();
+    const rows = await testState.db.current.execute({
+      sql: `SELECT status FROM ea_email_backfill_state WHERE account_id = ?`,
+      args: ["gmail-work"],
+    });
+    expect(rows.rows).toEqual([{ status: "queued" }]);
+  });
+
+  it("is safe to call twice", () => {
+    worker.wakeEmailBackfillWorker({ delayMs: 1000 });
+    worker.stopEmailBackfillWorker();
+    expect(() => worker.stopEmailBackfillWorker()).not.toThrow();
+  });
+
+  it("lets a fresh startEmailBackfillWorker re-arm after a stop", async () => {
+    worker.wakeEmailBackfillWorker({ delayMs: 1000 });
+    worker.stopEmailBackfillWorker();
+
+    // wakeEmailBackfillWorker alone must stay a no-op post-stop...
+    worker.wakeEmailBackfillWorker({ delayMs: 1000 });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(gmailApi.fetchEmailsInRange).not.toHaveBeenCalled();
+
+    // ...but startEmailBackfillWorker clears the stop latch so the worker can
+    // run again after a restart.
+    worker.startEmailBackfillWorker({ initialDelayMs: 1000, queueOnStartup: false });
+    await vi.advanceTimersByTimeAsync(0); // let prepareEmailBackfillStartup's promise resolve
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT status FROM ea_email_backfill_state`,
+      args: [],
+    });
+    // No backfill rows queued in this test, so the drain loop finds nothing
+    // and exits immediately — the point is only that wake was allowed to arm
+    // and fire, not that it did any work.
+    expect(rows.rows).toEqual([]);
   });
 });

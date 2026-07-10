@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as emailService from "../../email/email-service.js";
+import { emailSearchLimiter } from "../../middleware/rate-limits.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
@@ -131,7 +132,7 @@ router.post("/email/arrival-grace/settle", async (_req, res) => {
   }
 });
 
-router.get("/email-search", async (req, res) => {
+router.get("/email-search", emailSearchLimiter, async (req, res) => {
   const { q, limit, offset, debug } = req.query;
   if (!q || !q.trim()) {
     return res.status(400).json({ message: "Query parameter 'q' is required" });

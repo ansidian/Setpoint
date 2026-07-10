@@ -146,8 +146,30 @@ async function createMigratedDb() {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE ea_accounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      email TEXT,
+      label TEXT,
+      needs_reauth INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE ea_settings (
+      user_id TEXT PRIMARY KEY,
+      todoist_needs_reauth INTEGER NOT NULL DEFAULT 0
+    );
   `);
   return db;
+}
+
+async function seedAccount({ id, email, needsReauth = false }) {
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_accounts (id, user_id, type, email, label, needs_reauth)
+          VALUES (?, 'u1', 'gmail', ?, ?, ?)`,
+    args: [id, email, email, needsReauth ? 1 : 0],
+  });
 }
 
 async function seedCache(cacheKey, payload, { fetchedAt, expiresAt } = {}) {
@@ -874,6 +896,46 @@ describe("GET /api/dashboard/current", () => {
       }),
       expect.objectContaining({ key: "bills", state: "current" }),
     ]));
+  });
+
+  it("surfaces flagged accounts/Todoist as loud reauth sources in dashboard system health (REL-01)", async () => {
+    await seedCache("weather_current", { temp: 64, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    await seedAccount({ id: "gmail-good", email: "good@example.com", needsReauth: false });
+    await seedAccount({ id: "gmail-revoked", email: "revoked@example.com", needsReauth: true });
+    await testState.db.current.execute({
+      sql: "INSERT INTO ea_settings (user_id, todoist_needs_reauth) VALUES ('u1', 1)",
+    });
+
+    const res = await getHealthResponse();
+
+    expect(res.status).toBe(200);
+    expect(res.body.providerHealth.reauth).toEqual({
+      accounts: [{ id: "gmail-revoked", email: "revoked@example.com", type: "gmail" }],
+      todoist: true,
+    });
+    expect(res.body.systemStatus.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: "reauth:gmail-revoked",
+        label: "Gmail (revoked@example.com)",
+        state: "needs_reauth",
+        severity: "error",
+      }),
+      expect.objectContaining({
+        key: "reauth:todoist",
+        state: "needs_reauth",
+        severity: "error",
+      }),
+    ]));
+    expect(res.body.systemStatus.state).toBe("unavailable");
   });
 
   it("starts a background current refresh and returns cached rows without waiting for providers", async () => {

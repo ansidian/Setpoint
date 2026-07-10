@@ -1,4 +1,7 @@
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+
 const FALLBACK_COLOR = 0xcba6da;
+const DISCORD_WEBHOOK_TIMEOUT_MS = 10_000;
 
 function parseSnapshot(reminder) {
   if (reminder?.payload_snapshot) return reminder.payload_snapshot;
@@ -92,11 +95,11 @@ function parseRetryAfterMs(response, bodyText) {
 }
 
 export async function sendDiscordWebhook(webhookUrl, payload, { fetchFn = fetch } = {}) {
-  const response = await fetchFn(webhookUrl, {
+  const response = await fetchWithTimeout(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  });
+  }, { timeoutMs: DISCORD_WEBHOOK_TIMEOUT_MS, fetchFn });
   if (response.ok) {
     return { ok: true, status: response.status };
   }

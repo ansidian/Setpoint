@@ -21,7 +21,13 @@ const gmailSync = await import("./gmail-sync.js");
 
 beforeEach(async () => {
   __resetCurrentDashboardEventsForTests();
-  testState.db.current = await createEmailIndexTestDb();
+  testState.db.current = await createEmailIndexTestDb({
+    extraMigrations: [
+      "006_email_search_embedding_state.sql",
+      "007_email_search_ai_usage.sql",
+      "028_provider_needs_reauth.sql",
+    ],
+  });
 });
 
 afterEach(async () => {
@@ -1344,5 +1350,173 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       { uid: "gmail-gmail-previous-a-msg-2", read: 0 },
       { uid: "gmail-gmail-previous-b-msg-2", read: 0 },
     ]);
+  });
+});
+
+// CORR-L08 investigation (Step 2): claimNextHistorySyncJob (gmail-sync.js) already
+// runs `UPDATE ... SET status='running', attempts = attempts + 1, ...` atomically
+// with the claim, and its claim SELECT already filters
+// `(scheduled_for IS NULL OR scheduled_for <= ?)` — identical shape to the triage
+// queue's claimNextEmailTriageJob in triage-job-store.js. HOWEVER the `job` object
+// the claim returns to the caller is the SELECT snapshot taken BEFORE that UPDATE
+// runs, so `job.attempts` in the catch block is the PRE-claim value, not the
+// current DB value — the DB's real current attempts is job.attempts + 1. The
+// requeue path must NOT increment attempts itself (the claim already did that in
+// the DB); it just needs to reason about the current count as job.attempts + 1
+// when deciding terminal-vs-requeue and when computing backoff via
+// triageRetryBackoffIso, reusing the same helper triage-worker.js uses.
+describe("processNextGmailHistorySyncJob bounded retry (CORR-L08)", () => {
+  async function seedHistorySyncJob({
+    accountId = "gmail-work",
+    attempts = 0,
+    scheduledFor = null,
+    idempotencyKey = "gmail_history_sync:user-1:gmail-work:retry-test",
+  } = {}) {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, idempotency_key,
+               priority, payload_json, status, attempts, scheduled_for)
+            VALUES (?, ?, NULL, 'gmail_history_sync', ?, 1, ?, 'queued', ?, ?)`,
+      args: [
+        "user-1",
+        accountId,
+        idempotencyKey,
+        JSON.stringify({ historyId: "200" }),
+        attempts,
+        scheduledFor,
+      ],
+    });
+  }
+
+  async function loadJobRow() {
+    const result = await testState.db.current.execute({
+      sql: `SELECT status, attempts, scheduled_for, last_error
+            FROM ea_triage_jobs WHERE job_type = 'gmail_history_sync'`,
+      args: [],
+    });
+    return result.rows[0];
+  }
+
+  it("requeues a transient failure as queued with attempts incremented and scheduled_for in the future", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    await seedHistorySyncJob({ attempts: 0 });
+    const now = new Date("2026-05-03T17:00:00.000Z");
+    const syncFn = vi.fn(async () => {
+      throw new Error("Gmail API 503: temporarily unavailable");
+    });
+
+    await expect(
+      gmailSync.processNextGmailHistorySyncJob({ dbClient: testState.db.current, now, syncFn }),
+    ).rejects.toThrow("Gmail API 503");
+
+    const row = await loadJobRow();
+    expect(row.status).toBe("queued");
+    // claimNextHistorySyncJob already incremented attempts 0 -> 1 atomically with
+    // the claim; the catch block must not increment it a second time.
+    expect(row.attempts).toBe(1);
+    expect(row.last_error).toBe("Gmail API 503: temporarily unavailable");
+    expect(new Date(row.scheduled_for).getTime()).toBeGreaterThan(now.getTime());
+  });
+
+  it("is not claimable before scheduled_for but is claimable once scheduled_for has passed", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    await seedHistorySyncJob({ attempts: 1 });
+    const failAt = new Date("2026-05-03T17:00:00.000Z");
+    const syncFn = vi.fn(async () => {
+      throw new Error("Gmail API 503: temporarily unavailable");
+    });
+    await expect(
+      gmailSync.processNextGmailHistorySyncJob({ dbClient: testState.db.current, now: failAt, syncFn }),
+    ).rejects.toThrow();
+    const afterFailure = await loadJobRow();
+    const scheduledFor = new Date(afterFailure.scheduled_for);
+
+    // Attempt to claim again immediately (before scheduled_for): claim query must
+    // skip it, so processNextGmailHistorySyncJob sees nothing to do.
+    const tooSoon = new Date(scheduledFor.getTime() - 1000);
+    const notClaimedResult = await gmailSync.processNextGmailHistorySyncJob({
+      dbClient: testState.db.current,
+      now: tooSoon,
+      syncFn: vi.fn(),
+    });
+    expect(notClaimedResult).toEqual({ processed: false });
+
+    // Once scheduled_for has passed, the same job becomes claimable again.
+    const afterBackoff = new Date(scheduledFor.getTime() + 1000);
+    const successSyncFn = vi.fn(async () => ({ indexed: 0, queued: 0 }));
+    const claimedResult = await gmailSync.processNextGmailHistorySyncJob({
+      dbClient: testState.db.current,
+      now: afterBackoff,
+      syncFn: successSyncFn,
+    });
+    expect(claimedResult.processed).toBe(true);
+    expect(successSyncFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks the job terminally failed once the 5th failure is reached, without a scheduled_for requeue", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    // Seed at attempts=4: claimNextHistorySyncJob increments to 5 on claim, which
+    // is MAX_GMAIL_HISTORY_SYNC_ATTEMPTS — this failure must be terminal.
+    await seedHistorySyncJob({ attempts: 4 });
+    const now = new Date("2026-05-03T17:00:00.000Z");
+    const syncFn = vi.fn(async () => {
+      throw new Error("Gmail API 503: temporarily unavailable");
+    });
+
+    await expect(
+      gmailSync.processNextGmailHistorySyncJob({ dbClient: testState.db.current, now, syncFn }),
+    ).rejects.toThrow("Gmail API 503");
+
+    const row = await loadJobRow();
+    expect(row.status).toBe("failed");
+    expect(row.attempts).toBe(5);
+    expect(row.last_error).toBe("Gmail API 503: temporarily unavailable");
+  });
+
+  it("fails immediately on invalid_grant and flags the account for reauth, without consuming a retry", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    await seedHistorySyncJob({ attempts: 0 });
+    const now = new Date("2026-05-03T17:00:00.000Z");
+    const syncFn = vi.fn(async () => {
+      throw new Error("invalid_grant: Token has been expired or revoked.");
+    });
+
+    await expect(
+      gmailSync.processNextGmailHistorySyncJob({ dbClient: testState.db.current, now, syncFn }),
+    ).rejects.toThrow("invalid_grant");
+
+    const row = await loadJobRow();
+    expect(row.status).toBe("failed");
+    expect(row.last_error).toBe("invalid_grant: Token has been expired or revoked.");
+
+    const account = await testState.db.current.execute({
+      sql: `SELECT needs_reauth FROM ea_accounts WHERE id = ?`,
+      args: ["gmail-work"],
+    });
+    expect(Number(account.rows[0].needs_reauth)).toBe(1);
   });
 });

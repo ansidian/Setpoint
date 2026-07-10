@@ -287,6 +287,18 @@ export function startBillsMirrorRefreshWorker({
   return { started: true };
 }
 
+// REL-03: stop the refresh-worker interval and every per-user pending-refresh
+// timer in BILLS_MIRROR_REFRESH_TIMERS so no queued refresh fires after
+// shutdown. Idempotent — safe to call twice.
+export function stopBillsMirrorRefreshWorker() {
+  if (billsMirrorRefreshWorkerTimer) {
+    clearInterval(billsMirrorRefreshWorkerTimer);
+    billsMirrorRefreshWorkerTimer = null;
+  }
+  for (const timer of BILLS_MIRROR_REFRESH_TIMERS.values()) clearTimeout(timer);
+  BILLS_MIRROR_REFRESH_TIMERS.clear();
+}
+
 export async function refreshBillsMirror(userId, {
   actualBudgetUrl = null,
   dbClient = db,

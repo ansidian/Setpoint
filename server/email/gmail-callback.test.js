@@ -24,7 +24,13 @@ const { handleCallback } = await import("./gmail.js");
 
 describe("gmail callback canonicalization", () => {
   beforeEach(async () => {
-    testState.db.current = await createEmailIndexTestDb();
+    testState.db.current = await createEmailIndexTestDb({
+      extraMigrations: [
+        "006_email_search_embedding_state.sql",
+        "007_email_search_ai_usage.sql",
+        "028_provider_needs_reauth.sql",
+      ],
+    });
     fetch.mockReset();
   });
 
@@ -99,5 +105,33 @@ describe("gmail callback canonicalization", () => {
       refresh_token: "rtok",
       scopes: ["https://www.googleapis.com/auth/gmail.modify"],
     });
+  });
+
+  it("sends the token-exchange and profile fetches with an AbortSignal (REL-02)", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-fresh",
+      type: "gmail",
+      email: "user@example.com",
+      label: "Work",
+    });
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: "tok",
+          refresh_token: "rtok",
+          expires_in: 3600,
+          scope: "https://www.googleapis.com/auth/gmail.modify",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ emailAddress: "user@example.com" }),
+      });
+
+    await handleCallback("auth-code", "ignored", "user-1");
+
+    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetch.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
   });
 });

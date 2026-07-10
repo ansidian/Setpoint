@@ -1,4 +1,8 @@
+import { fetchWithTimeout } from "./fetch-with-timeout.js";
+
 const PIRATE_WEATHER_API_KEY = process.env.PIRATE_WEATHER_API_KEY;
+const PIRATE_WEATHER_TIMEOUT_MS = 10_000;
+const NOMINATIM_TIMEOUT_MS = 10_000;
 
 // Pirate Weather (Dark Sky-compatible) condition → lucide icon name.
 // Frontend resolves the name to a component via src/lib/icons.jsx.
@@ -120,7 +124,7 @@ async function refreshWeather(cacheKey, lat, lng) {
   if (weatherRefresh && weatherRefresh.key === cacheKey) return weatherRefresh.promise;
   const promise = (async () => {
     const url = `https://api.pirateweather.net/forecast/${PIRATE_WEATHER_API_KEY}/${lat},${lng}?exclude=minutely,flags&units=us`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, {}, { timeoutMs: PIRATE_WEATHER_TIMEOUT_MS });
     if (!res.ok) {
       if (weatherCache.data) {
         console.warn("Pirate Weather error, returning cached data");
@@ -166,9 +170,9 @@ export async function fetchWeather(lat, lng) {
 // Geocode using OpenStreetMap Nominatim (free, no key required)
 export async function geocodeLocation(query) {
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: { "User-Agent": "Setpoint/1.0" },
-  });
+  }, { timeoutMs: NOMINATIM_TIMEOUT_MS });
   if (!res.ok) throw new Error(`Geocoding error: ${res.status}`);
   const data = await res.json();
 

@@ -197,6 +197,16 @@ describe("Bill Pay routes", () => {
     expect(mockBillsService.hydrateActualCache).toHaveBeenCalledWith("user-1");
   });
 
+  it("rejects a dangerous-scheme serverURL for /actual/test without calling billsService (SEC-05)", async () => {
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/test")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ serverURL: "gopher://internal", password: "pw", syncId: "sync-1" });
+
+    expect(res.status).toBe(400);
+    expect(mockBillsService.testConnection).not.toHaveBeenCalled();
+  });
+
   it("validates the local Actual cache through briefing cookie auth", async () => {
     mockBillsService.getActualCacheStatus.mockResolvedValueOnce({
       success: true,
@@ -221,5 +231,24 @@ describe("Bill Pay routes", () => {
       backupCount: 1,
     });
     expect(mockBillsService.getActualCacheStatus).toHaveBeenCalledWith("user-1");
+  });
+});
+
+describe("POST /bills/extract rate limiting (REL-08)", () => {
+  it("returns 429 on the 21st request and stops calling billsService.extractBill after 20", async () => {
+    mockBillsService.extractBill.mockResolvedValue({ payee: "Power", amount: 42 });
+
+    const app = makeApp();
+    let lastRes;
+    for (let i = 0; i < 21; i += 1) {
+      lastRes = await request(app)
+        .post("/api/briefing/bills/extract")
+        .set("Cookie", ["ea_session=cookie-session"])
+        .send({ subject: "Power bill", from: "billing@example.test", body: "Statement balance: $42" });
+    }
+
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body).toEqual({ message: "Too many bill-extract requests, try again later" });
+    expect(mockBillsService.extractBill).toHaveBeenCalledTimes(20);
   });
 });

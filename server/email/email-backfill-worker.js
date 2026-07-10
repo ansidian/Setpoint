@@ -3,6 +3,7 @@ import { decrypt } from "../platform/encryption.js";
 import { fetchEmailsInRange as fetchGmailEmailsInRange } from "./gmail.js";
 import { fetchEmailsInRange as fetchIcloudEmailsInRange } from "./icloud.js";
 import { indexEmails, queueEmailIndexBackfill } from "./email-index.js";
+import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.js";
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_TARGET_DAYS = 365;
@@ -18,6 +19,10 @@ const MAX_BACKFILL_ATTEMPTS = 5;
 
 let workerTimer = null;
 let workerRunning = false;
+// REL-03: set by stopEmailBackfillWorker so an in-flight drainBackfillQueue
+// loop (bounded by REL-02's fetch deadlines, not aborted here) stops
+// re-arming the wake timer once it finishes its current window.
+let stopping = false;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -225,6 +230,13 @@ async function persistWindowSuccess(state, window, result, { now }) {
 
 async function persistWindowFailure(state, window, err, attempts) {
   const status = classifyFailure(err, attempts);
+  if (isInvalidGrantError(err?.message)) {
+    try {
+      await markAccountNeedsReauth(state.account_id);
+    } catch (markErr) {
+      console.error("[EA Backfill] Failed to mark needs_reauth:", markErr.message);
+    }
+  }
   const cursor = {
     ...parseCursor(state),
     currentWindow: { start: window.start, end: window.end },
@@ -343,7 +355,7 @@ async function drainBackfillQueue({ pauseMs = DEFAULT_PAUSE_MS } = {}) {
   if (workerRunning) return;
   workerRunning = true;
   try {
-    while (true) {
+    while (!stopping) {
       const result = await processNextBackfillWindow();
       if (!result.processed) break;
       if (result.status === "paused") continue;
@@ -357,7 +369,7 @@ async function drainBackfillQueue({ pauseMs = DEFAULT_PAUSE_MS } = {}) {
 }
 
 export function wakeEmailBackfillWorker({ delayMs = 0, pauseMs = DEFAULT_PAUSE_MS } = {}) {
-  if (workerTimer || workerRunning) return;
+  if (stopping || workerTimer || workerRunning) return;
   workerTimer = setTimeout(() => {
     workerTimer = null;
     drainBackfillQueue({ pauseMs }).catch((err) =>
@@ -367,12 +379,29 @@ export function wakeEmailBackfillWorker({ delayMs = 0, pauseMs = DEFAULT_PAUSE_M
   workerTimer.unref?.();
 }
 
+// REL-03: stop the wake timer from firing and prevent any further re-arming.
+// Does not abort a drain loop already in flight — REL-02's fetch deadlines
+// already bound each window, and the `stopping` check above/in the drain loop
+// stops it from picking up further windows once the current one finishes.
+// Idempotent — safe to call twice.
+export function stopEmailBackfillWorker() {
+  stopping = true;
+  if (workerTimer) {
+    clearTimeout(workerTimer);
+    workerTimer = null;
+  }
+}
+
 export function startEmailBackfillWorker({
   initialDelayMs = 5000,
   pauseMs = DEFAULT_PAUSE_MS,
   targetDays = DEFAULT_TARGET_DAYS,
   queueOnStartup = parseBooleanEnv(process.env.EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP),
 } = {}) {
+  // Idempotent restart: clear a prior stopEmailBackfillWorker() latch so a
+  // fresh start can re-arm the wake timer (wakeEmailBackfillWorker itself
+  // stays a no-op post-stop for any other caller).
+  stopping = false;
   prepareEmailBackfillStartup({ queueOnStartup, targetDays })
     .then(() => wakeEmailBackfillWorker({ delayMs: initialDelayMs, pauseMs }))
     .catch((err) => console.error("[EA Backfill] Startup failed:", err.message));

@@ -61,10 +61,23 @@ export function sweepAlfredConversations({ now = Date.now() } = {}) {
   }
 }
 
+let sweeperTimer = null;
+
 export function startAlfredConversationSweeper() {
-  const timer = setInterval(() => sweepAlfredConversations(), SWEEP_INTERVAL_MS);
-  timer.unref?.();
-  return timer;
+  if (sweeperTimer) {
+    clearInterval(sweeperTimer);
+    sweeperTimer = null;
+  }
+  sweeperTimer = setInterval(() => sweepAlfredConversations(), SWEEP_INTERVAL_MS);
+  sweeperTimer.unref?.();
+  return sweeperTimer;
+}
+
+export function stopAlfredConversationSweeper() {
+  if (sweeperTimer) {
+    clearInterval(sweeperTimer);
+    sweeperTimer = null;
+  }
 }
 
 export function _clearAlfredConversationsForTest() {

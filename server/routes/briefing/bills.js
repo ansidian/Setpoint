@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.js";
 import * as billsService from "../../bills/bills-service.js";
+import { validateActualBudgetUrl } from "../../platform/settings-schemas.js";
+import { billExtractLimiter } from "../../middleware/rate-limits.js";
 
 const router = Router();
 const quickTxnRouter = Router();
@@ -90,7 +92,7 @@ quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("ac
   }
 });
 
-router.post("/bills/extract", async (req, res) => {
+router.post("/bills/extract", billExtractLimiter, async (req, res) => {
   const { subject, from, body } = req.body || {};
   if (!body || typeof body !== "string") {
     return res.status(400).json({ message: "body is required" });
@@ -195,6 +197,12 @@ router.get("/actual/categories", async (_req, res) => {
 
 router.post("/actual/test", async (req, res) => {
   const { serverURL, password, syncId } = req.body || {};
+  if (serverURL) {
+    const validation = validateActualBudgetUrl(serverURL);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message, success: false });
+    }
+  }
   const overrides = serverURL && syncId ? { serverURL, password, syncId } : null;
   try {
     res.json(await billsService.testConnection(EA_USER_ID, overrides));

@@ -8,6 +8,7 @@ vi.hoisted(() => {
 import {
   __resetWeatherCacheForTests,
   fetchWeather,
+  geocodeLocation,
   normalizeWeatherPayload,
 } from "./weather.js";
 
@@ -120,5 +121,30 @@ describe("fetchWeather caching", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false, status: 500, text: async () => "boom" });
 
     await expect(fetchWeather(3.03, 3.03)).rejects.toThrow(/Pirate Weather error/);
+  });
+
+  it("sends the Pirate Weather request with an AbortSignal", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse(payload(60)));
+
+    await fetchWeather(4.04, 4.04);
+
+    expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("geocodeLocation", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends the Nominatim geocode request with an AbortSignal", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [{ display_name: "Somewhere", lat: "1.0", lon: "2.0" }],
+    });
+
+    await geocodeLocation("Somewhere");
+
+    expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

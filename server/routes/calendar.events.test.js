@@ -298,6 +298,74 @@ describe("calendar event routes", () => {
     expect(createCalendarEvent).toHaveBeenCalledTimes(2);
   });
 
+  it("loads the account config once per batch request regardless of item count (PERF-06)", async () => {
+    loadUserConfig.mockResolvedValue({
+      accounts: [
+        {
+          id: "gmail-main",
+          type: "gmail",
+          email: "me@example.com",
+          label: "Google",
+          calendar_enabled: 1,
+        },
+        {
+          id: "gmail-alt",
+          type: "gmail",
+          email: "alt@example.com",
+          label: "Google Alt",
+          calendar_enabled: 1,
+        },
+      ],
+      settings: {},
+    });
+    createCalendarEvent
+      .mockResolvedValueOnce({ id: "event-1", title: "Tue shift" })
+      .mockResolvedValueOnce({ id: "event-2", title: "Wed shift" });
+
+    const res = await request(makeApp())
+      .post("/api/calendar/events/batch")
+      .send({
+        items: [
+          {
+            accountId: "gmail-main",
+            calendarId: "primary",
+            title: "Tue shift",
+            allDay: false,
+            startDate: "2026-04-21",
+            endDate: "2026-04-21",
+            startTime: "04:15",
+            endTime: "07:30",
+          },
+          {
+            accountId: "gmail-alt",
+            calendarId: "primary",
+            title: "Wed shift",
+            allDay: false,
+            startDate: "2026-04-22",
+            endDate: "2026-04-22",
+            startTime: "04:15",
+            endTime: "07:30",
+          },
+          {
+            accountId: "gmail-missing",
+            calendarId: "primary",
+            title: "Thu shift",
+            allDay: false,
+            startDate: "2026-04-23",
+            endDate: "2026-04-23",
+            startTime: "04:15",
+            endTime: "07:30",
+          },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.created).toHaveLength(2);
+    expect(res.body.failed).toHaveLength(1);
+    expect(res.body.failed[0].code).toBe("calendar_account_not_found");
+    expect(loadUserConfig).toHaveBeenCalledTimes(1);
+  });
+
   it("updates a calendar event", async () => {
     updateCalendarEvent.mockResolvedValue({
       id: "event-1",
@@ -493,6 +561,57 @@ describe("calendar event routes", () => {
         calendarId: "primary",
       }),
     );
+  });
+
+  it("still returns success when reminder cleanup fails after a successful delete", async () => {
+    // Google has already deleted the event by the time deleteSourceReminders runs.
+    // A rejection here must NOT 500 the route — that would make the client revert
+    // an event Google no longer has (the inverse ghost).
+    deleteCalendarEvent.mockResolvedValue(undefined);
+    reminderService.deleteSourceReminders.mockRejectedValueOnce(new Error("reminder store down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(makeApp())
+      .delete("/api/calendar/events/event-1")
+      .send({ accountId: "gmail-main", calendarId: "primary", etag: '"etag-1"' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(deleteCalendarEvent).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("still returns the updated event when reminder recompute fails after a successful update", async () => {
+    updateCalendarEvent.mockResolvedValue({
+      id: "event-1",
+      title: "Updated",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: Date.parse("2026-04-20T16:00:00.000Z"),
+    });
+    reminderService.recomputeUnsentRemindersForSource.mockRejectedValueOnce(new Error("reminder store down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await request(makeApp())
+      .patch("/api/calendar/events/event-1")
+      .send({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        etag: '"etag-1"',
+        title: "Updated",
+        allDay: false,
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "09:00",
+        endTime: "09:30",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.event).toMatchObject({ id: "event-1", title: "Updated" });
+    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it("surfaces typed calendar errors from create", async () => {

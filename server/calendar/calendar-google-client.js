@@ -1,11 +1,29 @@
 import db from "../db/connection.js";
 import { decrypt, encrypt } from "../platform/encryption.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.js";
 
 export const CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 export const CALENDAR_FULL_SCOPE = "https://www.googleapis.com/auth/calendar";
 
+const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
+const CALENDAR_API_TIMEOUT_MS = 30_000;
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+// Google's OAuth token responses normally carry expires_in (seconds), but a
+// malformed/partial response can omit it. Defaulting to this TTL keeps
+// expires_at finite so the refresh guard stays deterministic instead of
+// computing NaN (NaN < anything is false, which would silently wedge refresh).
+const DEFAULT_TOKEN_TTL_SECONDS = 3600;
+
+// Compute an absolute expiry (ms epoch) from a token response's expires_in,
+// falling back to DEFAULT_TOKEN_TTL_SECONDS when it is missing or non-finite.
+function computeExpiresAt(expiresIn, now = Date.now()) {
+  const ttl = Number.isFinite(expiresIn) ? expiresIn : DEFAULT_TOKEN_TTL_SECONDS;
+  return now + ttl * 1000;
+}
 
 export class CalendarServiceError extends Error {
   constructor(status, code, message, details = {}) {
@@ -54,8 +72,8 @@ async function persistCredentials(accountId, credentials) {
 export async function getAuthorizedAccount(account) {
   const credentials = await getAccountCredentials(account);
 
-  if (credentials.expires_at < Date.now() + 5 * 60 * 1000) {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
+  if (!Number.isFinite(credentials.expires_at) || credentials.expires_at < Date.now() + 5 * 60 * 1000) {
+    const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -64,20 +82,35 @@ export async function getAuthorizedAccount(account) {
         refresh_token: credentials.refresh_token,
         grant_type: "refresh_token",
       }),
-    });
+    }, { timeoutMs: TOKEN_REFRESH_TIMEOUT_MS });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      if (isInvalidGrantError(text)) {
+        try {
+          await markAccountNeedsReauth(account.id);
+        } catch (markErr) {
+          console.error("[Calendar] Failed to mark needs_reauth:", markErr.message);
+        }
+      }
       throwCalendarError(401, "calendar_token_refresh_failed", `Calendar token refresh failed: ${text || res.status}`);
     }
 
     const data = await res.json();
     credentials.access_token = data.access_token;
-    credentials.expires_at = Date.now() + data.expires_in * 1000;
+    credentials.expires_at = computeExpiresAt(data.expires_in);
     if (data.refresh_token) credentials.refresh_token = data.refresh_token;
     if (data.scope) credentials.scopes = data.scope.split(" ").filter(Boolean);
 
     await persistCredentials(account.id, credentials);
+
+    if (account.needs_reauth) {
+      try {
+        await clearAccountNeedsReauth(account.id);
+      } catch (clearErr) {
+        console.error("[Calendar] Failed to clear needs_reauth:", clearErr.message);
+      }
+    }
   }
 
   return {
@@ -98,7 +131,7 @@ export async function googleCalendarFetch(auth, path, { method = "GET", query, b
     }
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method,
     headers: {
       Authorization: `Bearer ${auth.accessToken}`,
@@ -106,7 +139,7 @@ export async function googleCalendarFetch(auth, path, { method = "GET", query, b
       ...headers,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  }, { timeoutMs: CALENDAR_API_TIMEOUT_MS });
 
   if (res.status === 412) {
     throwCalendarError(409, "calendar_event_conflict", "This event changed elsewhere. Reload and try again.");

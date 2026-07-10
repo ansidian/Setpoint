@@ -30,6 +30,7 @@ import {
   getGooglePlaceDetails,
   suggestGooglePlaces,
 } from "../platform/google-places.js";
+import { placesLimiter } from "../middleware/rate-limits.js";
 import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,
@@ -67,9 +68,7 @@ function handleCalendarRouteError(res, err, fallbackMessage) {
   return res.status(500).json({ code: "calendar_route_error", message: fallbackMessage });
 }
 
-async function loadCalendarAccount(accountId) {
-  const userId = process.env.EA_USER_ID;
-  const { accounts } = await loadUserConfig(userId);
+function resolveCalendarAccount(accounts, accountId) {
   const account = accounts.find(
     (entry) => entry.id === accountId && entry.type === "gmail" && entry.calendar_enabled,
   );
@@ -80,6 +79,12 @@ async function loadCalendarAccount(accountId) {
     throw err;
   }
   return account;
+}
+
+async function loadCalendarAccount(accountId) {
+  const userId = process.env.EA_USER_ID;
+  const { accounts } = await loadUserConfig(userId);
+  return resolveCalendarAccount(accounts, accountId);
 }
 
 router.get("/deadlines", async (_req, res) => {
@@ -545,7 +550,7 @@ router.get("/calendars", async (_req, res) => {
   }
 });
 
-router.get("/places/suggest", async (req, res) => {
+router.get("/places/suggest", placesLimiter, async (req, res) => {
   const query = String(req.query.q || "").trim();
   const sessionToken = String(req.query.sessionToken || "").trim();
   if (!query) {
@@ -569,7 +574,7 @@ router.get("/places/suggest", async (req, res) => {
   }
 });
 
-router.get("/places/:placeId", async (req, res) => {
+router.get("/places/:placeId", placesLimiter, async (req, res) => {
   const { placeId } = req.params;
   const sessionToken = String(req.query.sessionToken || "").trim();
 
@@ -633,11 +638,12 @@ router.post("/events/batch", async (req, res) => {
   try {
     const created = [];
     const failed = [];
+    const { accounts } = await loadUserConfig(process.env.EA_USER_ID);
 
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index] || {};
       try {
-        const account = await loadCalendarAccount(item.accountId);
+        const account = resolveCalendarAccount(accounts, item.accountId);
         const event = await createCalendarEvent(account, item);
         scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
         created.push({ index, event });
@@ -718,14 +724,22 @@ router.patch("/events/:eventId", async (req, res) => {
     scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
     const anchorAt = calendarEventAnchorAt(event);
     if (anchorAt) {
-      await recomputeUnsentRemindersForSource({
-        userId: process.env.EA_USER_ID,
-        sourceType: "calendar_event",
-        sourceItemId: eventId,
-        sourceOccurrenceId: eventOccurrenceIdentity({ event, originalStartTime, scope }),
-        anchorKind: "event_start",
-        anchorAt,
-      });
+      // Reminder bookkeeping runs AFTER Google has already applied the update.
+      // A failure here must not 500 the route — that would make the client revert
+      // an edit Google has kept (the inverse ghost). A stale/unsent reminder is
+      // benign next to a diverged UI, so log and still return the updated event.
+      try {
+        await recomputeUnsentRemindersForSource({
+          userId: process.env.EA_USER_ID,
+          sourceType: "calendar_event",
+          sourceItemId: eventId,
+          sourceOccurrenceId: eventOccurrenceIdentity({ event, originalStartTime, scope }),
+          anchorKind: "event_start",
+          anchorAt,
+        });
+      } catch (err) {
+        console.error("[Calendar] reminder recompute after event update failed:", err.message);
+      }
     }
     res.json({ event });
   } catch (err) {
@@ -753,16 +767,23 @@ router.delete("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
-    await deleteSourceReminders({
-      userId: process.env.EA_USER_ID,
-      sourceType: "calendar_event",
-      sourceItemId: eventId,
-      sourceOccurrenceId: eventOccurrenceIdentity({
-        event: { isRecurring: !!(recurringEventId || originalStartTime), originalStartTime },
-        originalStartTime,
-        scope,
-      }),
-    });
+    // Google has already deleted the event; reminder cleanup is post-success
+    // bookkeeping. Never fail the response on it — a 500 here would revert a
+    // deletion Google has applied (the inverse ghost). Log and still return ok.
+    try {
+      await deleteSourceReminders({
+        userId: process.env.EA_USER_ID,
+        sourceType: "calendar_event",
+        sourceItemId: eventId,
+        sourceOccurrenceId: eventOccurrenceIdentity({
+          event: { isRecurring: !!(recurringEventId || originalStartTime), originalStartTime },
+          originalStartTime,
+          scope,
+        }),
+      });
+    } catch (err) {
+      console.error("[Calendar] reminder cleanup after event delete failed:", err.message);
+    }
     res.json({ ok: true });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to delete calendar event");

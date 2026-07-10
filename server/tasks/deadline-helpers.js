@@ -17,7 +17,12 @@ export function carryForwardCompletedTodoist(newList, prevList, boundary) {
 export function computeDeadlineStats(deadlines) {
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" });
   const today = fmt.format(new Date());
-  const weekFromNow = fmt.format(new Date(Date.now() + 7 * 86400000));
+  // Calendar-day math, not now+168h: a fixed ms shift is DST-fragile (e.g.
+  // across spring-forward, +7*86400000ms from the night before can land 8
+  // Pacific calendar days out instead of 7).
+  const d = new Date(today + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 7);
+  const weekFromNow = d.toISOString().slice(0, 10);
   let totalPoints = 0;
   let dueToday = 0;
   let dueThisWeek = 0;

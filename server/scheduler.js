@@ -486,32 +486,3 @@ export async function stopScheduler() {
     }
   }
 }
-
-let shutdownInFlight = null;
-function handleShutdownSignal(signal) {
-  if (shutdownInFlight) return shutdownInFlight;
-  console.log(`[EA Scheduler] Received ${signal} — draining workers before exit`);
-  shutdownInFlight = stopScheduler()
-    .catch((err) => console.error("[EA Scheduler] Shutdown drain failed:", err?.message || err))
-    .finally(() => {
-      // NOTE (out of scope): the HTTP server reference lives in server/index.js,
-      // so the listening socket is not closed here. index.js must own
-      // server.close() and call stopScheduler() before process.exit().
-      process.exit(0);
-    });
-  return shutdownInFlight;
-}
-
-// Register the drain handler when running as a real server process. Skipped
-// under Vitest (NODE_ENV=test / VITEST set) so the suite isn't torn down by a
-// process.exit() on signal; stopScheduler/handleShutdownSignal stay unit-testable
-// directly. The listenerCount check guards against duplicate registration if the
-// module is imported more than once.
-const RUNNING_UNDER_TEST = process.env.VITEST != null || process.env.NODE_ENV === "test";
-if (!RUNNING_UNDER_TEST) {
-  for (const signal of ["SIGTERM", "SIGINT"]) {
-    if (process.listenerCount(signal) === 0) {
-      process.on(signal, () => handleShutdownSignal(signal));
-    }
-  }
-}

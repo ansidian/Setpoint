@@ -26,4 +26,20 @@ describe("fetchTodoistSyncResources", () => {
       }),
     );
   });
+
+  it("sends the sync request with an AbortSignal", async () => {
+    const fetchFn = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ sync_token: "next" }),
+    }));
+
+    await fetchTodoistSyncResources({
+      token: "todoist-token",
+      syncToken: "*",
+      resourceTypes: ["items", "projects", "labels"],
+      fetchFn,
+    });
+
+    expect(fetchFn.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
 });

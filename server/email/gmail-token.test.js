@@ -121,4 +121,108 @@ describe("getValidToken expires_at handling (P3-48)", () => {
     expect(token).toBe("valid");
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("sends the token refresh request with an AbortSignal", async () => {
+    testState.storedCredentials.current = JSON.stringify({
+      access_token: "old",
+      refresh_token: "rtok",
+      expires_at: Date.now() - 1000,
+    });
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: "fresh", expires_in: 3600 }),
+    });
+
+    await getAccessToken(account);
+
+    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("needs_reauth signaling on refresh (REL-01)", () => {
+  beforeEach(async () => {
+    testState.db.current = await createEmailIndexTestDb({
+      extraMigrations: [
+        "006_email_search_embedding_state.sql",
+        "007_email_search_ai_usage.sql",
+        "028_provider_needs_reauth.sql",
+      ],
+    });
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      type: "gmail",
+      email: "work@example.com",
+    });
+    fetch.mockReset();
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+    testState.storedCredentials.current = null;
+  });
+
+  async function readNeedsReauth(accountId = "gmail-work") {
+    const rows = await testState.db.current.execute({
+      sql: "SELECT needs_reauth FROM ea_accounts WHERE id = ?",
+      args: [accountId],
+    });
+    return rows.rows[0].needs_reauth;
+  }
+
+  const account = { id: "gmail-work", email: "work@example.com", credentials_encrypted: "stub" };
+
+  it("marks the account needs_reauth on an invalid_grant refresh failure, and still throws", async () => {
+    testState.storedCredentials.current = JSON.stringify({
+      access_token: "old",
+      refresh_token: "rtok",
+      expires_at: Date.now() - 1000,
+    });
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      text: async () => '{"error":"invalid_grant"}',
+    });
+
+    await expect(getAccessToken(account)).rejects.toThrow(/Token refresh failed/);
+
+    expect(await readNeedsReauth()).toBe(1);
+  });
+
+  it("does not mark needs_reauth on a non-invalid_grant (429) refresh failure", async () => {
+    testState.storedCredentials.current = JSON.stringify({
+      access_token: "old",
+      refresh_token: "rtok",
+      expires_at: Date.now() - 1000,
+    });
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      text: async () => "Too Many Requests",
+    });
+
+    await expect(getAccessToken(account)).rejects.toThrow(/Token refresh failed/);
+
+    expect(await readNeedsReauth()).toBe(0);
+  });
+
+  it("clears needs_reauth on a successful refresh for a previously flagged account", async () => {
+    await testState.db.current.execute({
+      sql: "UPDATE ea_accounts SET needs_reauth = 1 WHERE id = ?",
+      args: ["gmail-work"],
+    });
+    testState.storedCredentials.current = JSON.stringify({
+      access_token: "old",
+      refresh_token: "rtok",
+      expires_at: Date.now() - 1000,
+    });
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: "fresh", expires_in: 3600 }),
+    });
+
+    const flaggedAccount = { ...account, needs_reauth: 1 };
+    const token = await getAccessToken(flaggedAccount);
+
+    expect(token).toBe("fresh");
+    expect(await readNeedsReauth()).toBe(0);
+  });
 });

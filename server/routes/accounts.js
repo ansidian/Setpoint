@@ -114,10 +114,11 @@ router.get("/accounts", async (req, res) => {
   const userId = process.env.EA_USER_ID;
   try {
     const result = await db.execute({
-      sql: "SELECT id, type, email, label, color, icon, calendar_enabled, sort_order, created_at FROM ea_accounts WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC",
+      sql: "SELECT id, type, email, label, color, icon, calendar_enabled, sort_order, created_at, needs_reauth FROM ea_accounts WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC",
       args: [userId],
     });
-    res.json(canonicalizeConfiguredAccounts(result.rows));
+    const accounts = result.rows.map((row) => ({ ...row, needs_reauth: !!row.needs_reauth }));
+    res.json(canonicalizeConfiguredAccounts(accounts));
   } catch (err) {
     console.error("Error listing accounts:", err);
     res.status(500).json({ message: "Failed to list accounts" });

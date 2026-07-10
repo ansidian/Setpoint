@@ -247,6 +247,20 @@ describe("actual.js metadata cache", () => {
     expect(actualApi.init).toHaveBeenCalledTimes(2);
     expect(actualApi.getAccounts).toHaveBeenCalledTimes(2);
   });
+
+  it("prunes local backups only once across successive successful operations", async () => {
+    actualLocalMock.actualDataDir.mockReturnValue("/var/ea-actual");
+    actualLocalMock.findLocalBudgetDir.mockResolvedValue({
+      budgetDir: "/var/ea-actual/Budget-Local",
+      metadata: { id: "Budget-Local", groupId: "sync-123", cloudFileId: "file-1" },
+    });
+    const { getMetadata } = await import("./actual-core.js");
+
+    await getMetadata("user1");
+    await getMetadata("user1", { forceRefresh: true });
+
+    expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("actual.js sendBill mutex", () => {
@@ -339,6 +353,39 @@ describe("actual.js sendBill mutex", () => {
 
     expect(order).toEqual(["init-1-start", "init-1-end"]);
     expect(actualApi.addTransactions).toHaveBeenCalled();
+  });
+
+  it("does not reuse a same-named bill schedule for a transfer", async () => {
+    actualApiState.schedules = [
+      { id: "sched-bill", name: "Visa", rule: "rule-1", next_date: "2026-08-01", completed: false },
+    ];
+    actualApiState.rules = [
+      { id: "rule-1", conditions: [{ op: "is", field: "amount", value: -50000 }] },
+    ];
+    const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString("en-CA", {
+      timeZone: "America/Los_Angeles",
+    });
+    const { sendBill } = await import("./actual-core.js");
+    const actualApi = (await import("@actual-app/api")).default;
+
+    await sendBill({
+      type: "transfer",
+      schedule_name: "Visa",
+      amount: 500,
+      due_date: tomorrow,
+      from_account_id: "a2",
+      to_account_id: "a1",
+    }, "user1");
+
+    expect(actualApi.createSchedule).toHaveBeenCalledWith({
+      name: "Visa",
+      date: tomorrow,
+      amount: 50000,
+    });
+    expect(actualApi.internal.send).not.toHaveBeenCalledWith(
+      "schedule/update",
+      expect.objectContaining({ schedule: expect.objectContaining({ id: "sched-bill" }) }),
+    );
   });
 
   it("sends an explicit empty note for one-time bill pay transactions when notes are blank", async () => {

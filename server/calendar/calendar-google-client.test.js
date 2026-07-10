@@ -17,7 +17,7 @@ const {
   invalidateCalendarListCache,
   listCalendarsForAccount,
 } = await import("./calendar.js");
-const { getRawEvent } = await import("./calendar-google-client.js");
+const { getRawEvent, getAuthorizedAccount } = await import("./calendar-google-client.js");
 
 const account = {
   id: "acct-1",
@@ -94,6 +94,64 @@ describe("OAuth token refresh", () => {
     });
   });
 
+  it("marks the account needs_reauth on an invalid_grant refresh failure (REL-01)", async () => {
+    mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
+    fetch.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
+
+    await expect(getAuthorizedAccount(account)).rejects.toMatchObject({
+      code: "calendar_token_refresh_failed",
+    });
+
+    expect(db.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringContaining("needs_reauth = 1"),
+      args: ["acct-1"],
+    }));
+  });
+
+  it("does not mark needs_reauth on a non-invalid_grant (e.g. rate limit) refresh failure", async () => {
+    mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
+    fetch.mockResolvedValueOnce(jsonResponse({ error: "rate_limit_exceeded" }, 429));
+
+    await expect(getAuthorizedAccount(account)).rejects.toMatchObject({
+      code: "calendar_token_refresh_failed",
+    });
+
+    expect(db.execute).not.toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringContaining("needs_reauth = 1"),
+    }));
+  });
+
+  it("clears needs_reauth on a successful refresh for a previously flagged account", async () => {
+    mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
+    fetch.mockResolvedValueOnce(jsonResponse({
+      access_token: "token-2",
+      expires_in: 3600,
+      scope: "https://www.googleapis.com/auth/calendar.events",
+    }));
+
+    await getAuthorizedAccount({ ...account, needs_reauth: 1 });
+
+    expect(db.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringContaining("needs_reauth = 0"),
+      args: ["acct-1"],
+    }));
+  });
+
+  it("does not attempt to clear needs_reauth on a successful refresh when the flag was never set", async () => {
+    mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
+    fetch.mockResolvedValueOnce(jsonResponse({
+      access_token: "token-2",
+      expires_in: 3600,
+      scope: "https://www.googleapis.com/auth/calendar.events",
+    }));
+
+    await getAuthorizedAccount({ ...account, needs_reauth: 0 });
+
+    expect(db.execute).not.toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringContaining("needs_reauth = 0"),
+    }));
+  });
+
   it("skips the refresh entirely when the token is still valid", async () => {
     fetch.mockResolvedValueOnce(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
@@ -104,6 +162,82 @@ describe("OAuth token refresh", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(String(fetch.mock.calls[0][0])).toContain("users/me/calendarList");
     expect(db.execute).not.toHaveBeenCalled();
+  });
+
+  it("sends the token refresh request with an AbortSignal", async () => {
+    mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
+    fetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: "token-2",
+        expires_in: 3600,
+        scope: "https://www.googleapis.com/auth/calendar.events",
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
+      }));
+
+    await listCalendarsForAccount(account);
+
+    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("sends the generic Google Calendar API fetch with an AbortSignal", async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
+    }));
+
+    await listCalendarsForAccount(account);
+
+    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("forces a refresh when the stored expires_at is non-finite, rather than treating it as valid", async () => {
+    // A malformed credential whose expires_at is non-finite must not pass the
+    // guard. With the old guard `expires_at < Date.now() + ...`, a non-numeric
+    // value coerces to NaN and `NaN < anything` is false, so refresh is skipped
+    // and every call 401s after the real token expires. The fix treats a
+    // non-finite expires_at as already-expired and forces a refresh.
+    mocks.credentials = freshCredentials({ expires_at: "not-a-number" });
+    fetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: "token-2",
+        expires_in: 3600,
+        scope: "https://www.googleapis.com/auth/calendar.events",
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
+      }));
+
+    await listCalendarsForAccount(account);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const [refreshUrl, refreshInit] = fetch.mock.calls[0];
+    expect(String(refreshUrl)).toBe("https://oauth2.googleapis.com/token");
+    expect(String(refreshInit.body)).toContain("grant_type=refresh_token");
+  });
+
+  it("persists a finite expires_at (default TTL) when the refresh response omits expires_in", async () => {
+    mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
+    fetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: "token-2",
+        expires_in: undefined,
+        scope: "https://www.googleapis.com/auth/calendar.events",
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
+      }));
+
+    const before = Date.now();
+    await listCalendarsForAccount(account);
+
+    const persistedArgs = db.execute.mock.calls.find(([call]) =>
+      call.sql.includes("UPDATE ea_accounts"))[0].args;
+    const persisted = JSON.parse(persistedArgs[0]);
+
+    expect(Number.isFinite(persisted.expires_at)).toBe(true);
+    // Default TTL is 3600s; allow slack for clock drift during the test.
+    expect(persisted.expires_at).toBeGreaterThanOrEqual(before + 3600_000 - 1000);
   });
 });
 

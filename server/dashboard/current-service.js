@@ -387,12 +387,33 @@ export async function requestBillsCurrentMaintenanceRefresh(userId, {
   return { scheduled: true, due: true, refresh: refreshPlan };
 }
 
+async function loadReauthHealth(userId, { dbClient = db } = {}) {
+  const [accountsResult, settingsResult] = await Promise.all([
+    dbClient.execute({
+      sql: "SELECT id, email, type FROM ea_accounts WHERE user_id = ? AND needs_reauth = 1",
+      args: [userId],
+    }),
+    dbClient.execute({
+      sql: "SELECT todoist_needs_reauth FROM ea_settings WHERE user_id = ?",
+      args: [userId],
+    }),
+  ]);
+  return {
+    accounts: accountsResult.rows.map((row) => ({ id: row.id, email: row.email, type: row.type })),
+    todoist: !!settingsResult.rows[0]?.todoist_needs_reauth,
+  };
+}
+
 export async function getDashboardSystemHealth(userId, {
   dbClient = db,
   now = new Date(),
 } = {}) {
   const rows = await loadCacheRows(userId, { dbClient });
-  const providerHealth = await loadProviderHealth(userId, rows, { now });
+  const [providerHealth, reauth] = await Promise.all([
+    loadProviderHealth(userId, rows, { now }),
+    loadReauthHealth(userId, { dbClient }),
+  ]);
+  providerHealth.reauth = reauth;
   return {
     providerHealth,
     systemStatus: composeSystemStatus(providerHealth),

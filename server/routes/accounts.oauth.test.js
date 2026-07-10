@@ -181,6 +181,47 @@ describe("accounts Gmail OAuth binding", () => {
   });
 });
 
+describe("GET /accounts needs_reauth", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    testState.db.current = await createAuthTestDb();
+    await seedSession(testState.db.current, "cookie-session");
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+  });
+
+  it("includes needs_reauth: false for an account in good standing", async () => {
+    await seedGmailAccount(testState.db.current, { id: "gmail-good", email: "good@example.com" });
+
+    const res = await request(makeApp())
+      .get("/api/ea/accounts")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    const account = res.body.find((a) => a.id === "gmail-good");
+    expect(account.needs_reauth).toBe(false);
+  });
+
+  it("includes needs_reauth: true for an account flagged by a revoked grant", async () => {
+    await seedGmailAccount(testState.db.current, { id: "gmail-flagged", email: "flagged@example.com" });
+    await testState.db.current.execute({
+      sql: "UPDATE ea_accounts SET needs_reauth = 1 WHERE id = ?",
+      args: ["gmail-flagged"],
+    });
+
+    const res = await request(makeApp())
+      .get("/api/ea/accounts")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    const account = res.body.find((a) => a.id === "gmail-flagged");
+    expect(account.needs_reauth).toBe(true);
+  });
+});
+
 async function seedCsrfToken({ token, browserBind, label }) {
   await testState.db.current.execute({
     sql: `INSERT INTO ea_csrf_tokens

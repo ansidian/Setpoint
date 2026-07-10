@@ -1,8 +1,11 @@
 import db from "../db/connection.js";
 import { decrypt, encrypt } from "../platform/encryption.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+import { isInvalidGrantError, markTodoistNeedsReauth, clearTodoistNeedsReauth } from "../platform/provider-reauth.js";
 
 const TODOIST_OAUTH_TOKEN_URL = "https://api.todoist.com/oauth/access_token";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
+const OAUTH_TOKEN_TIMEOUT_MS = 10_000;
 
 export class TodoistOAuthRefreshError extends Error {
   constructor(message, { status = null, body = "" } = {}) {
@@ -47,7 +50,8 @@ async function loadTodoistTokenSettings(userId, dbClient) {
                    todoist_oauth_refresh_token_encrypted,
                    todoist_oauth_access_token_expires_at,
                    todoist_oauth_scope,
-                   todoist_oauth_token_type
+                   todoist_oauth_token_type,
+                   todoist_needs_reauth
             FROM ea_settings
             WHERE user_id = ?`,
       args: [userId],
@@ -83,11 +87,11 @@ async function refreshTodoistOAuthToken({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
-  const res = await fetchFn(TODOIST_OAUTH_TOKEN_URL, {
+  const res = await fetchWithTimeout(TODOIST_OAUTH_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
-  });
+  }, { timeoutMs: OAUTH_TOKEN_TIMEOUT_MS, fetchFn });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -177,16 +181,37 @@ export async function getTodoistApiToken(userId, {
     return accessToken;
   }
 
-  const response = await refreshTodoistOAuthToken({
-    refreshToken: decrypted(refreshTokenEncrypted),
-    env,
-    fetchFn,
-  });
+  let response;
+  try {
+    response = await refreshTodoistOAuthToken({
+      refreshToken: decrypted(refreshTokenEncrypted),
+      env,
+      fetchFn,
+    });
+  } catch (err) {
+    if (isInvalidGrantError(err.body)) {
+      try {
+        await markTodoistNeedsReauth(userId, { dbClient });
+      } catch (markErr) {
+        console.error("[Todoist] Failed to mark todoist_needs_reauth:", markErr.message);
+      }
+    }
+    throw err;
+  }
   const stored = await persistTodoistOAuthTokenResponse(userId, response, {
     dbClient,
     now,
     existingRefreshTokenEncrypted: refreshTokenEncrypted,
   });
+
+  if (settings.todoist_needs_reauth) {
+    try {
+      await clearTodoistNeedsReauth(userId, { dbClient });
+    } catch (clearErr) {
+      console.error("[Todoist] Failed to clear todoist_needs_reauth:", clearErr.message);
+    }
+  }
+
   return stored.accessToken;
 }
 

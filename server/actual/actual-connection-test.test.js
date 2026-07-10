@@ -79,6 +79,23 @@ describe("testActualConnectionHttp", () => {
     expect(global.fetch.mock.calls[0][0]).toBe("https://override.example.com/account/login");
   });
 
+  it("does not reflect the remote error reason in the thrown message (SEC-05)", async () => {
+    settingsRow();
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ status: "error", reason: "internal-banner-xyz" }));
+
+    const { testActualConnectionHttp } = await import("./actual-connection-test.js");
+
+    let caught = null;
+    try {
+      await testActualConnectionHttp("u1");
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught.message).not.toContain("internal-banner-xyz");
+  });
+
   it("fails fast when the hosted Actual server stalls", async () => {
     settingsRow();
     process.env.EA_ACTUAL_TEST_TIMEOUT_MS = "1";

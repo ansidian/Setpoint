@@ -621,14 +621,14 @@ describe("auth boundaries", () => {
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({
-        discord_webhook_url: "https://discord.example/webhook",
+        discord_webhook_url: "https://discord.com/api/webhooks/1/webhook",
         discord_user_id: "123456789",
       });
 
     expect(res.status).toBe(200);
     const settings = await getSettingsRow();
     expect(settings).toMatchObject({
-      discord_webhook_url_encrypted: "enc:https://discord.example/webhook",
+      discord_webhook_url_encrypted: "enc:https://discord.com/api/webhooks/1/webhook",
       discord_user_id: "123456789",
     });
 

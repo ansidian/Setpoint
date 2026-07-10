@@ -103,4 +103,20 @@ describe("Gmail Pub/Sub push route", () => {
     expect(res.status).toBe(401);
     expect(gmailSyncApi.enqueueHistorySyncFromPubSub).not.toHaveBeenCalled();
   });
+
+  it("fails closed when GMAIL_PUBSUB_PUSH_TOKEN is unset (dev env no longer grants access)", async () => {
+    vi.stubEnv("GMAIL_PUBSUB_PUSH_TOKEN", "");
+    vi.stubEnv("NODE_ENV", "development");
+
+    try {
+      const res = await request(makeApp())
+        .post("/api/gmail/push")
+        .send({ message: { data: "abc", messageId: "pubsub-unset-token" } });
+
+      expect(res.status).toBe(401);
+      expect(gmailSyncApi.enqueueHistorySyncFromPubSub).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

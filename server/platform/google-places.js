@@ -1,6 +1,9 @@
+import { fetchWithTimeout } from "./fetch-with-timeout.js";
+
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 const GOOGLE_PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
+const GOOGLE_PLACES_TIMEOUT_MS = 10_000;
 const RESTRICTED_RADIUS_METERS = 12_000;
 const BIASED_RADIUS_METERS = 24_000;
 // Target number of suggestions before widening the search radius from
@@ -60,7 +63,7 @@ function rankPredictions(predictions) {
 }
 
 async function autocompleteRequest(body) {
-  const res = await fetch(GOOGLE_PLACES_AUTOCOMPLETE_URL, {
+  const res = await fetchWithTimeout(GOOGLE_PLACES_AUTOCOMPLETE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -73,7 +76,7 @@ async function autocompleteRequest(body) {
       ].join(","),
     },
     body: JSON.stringify(body),
-  });
+  }, { timeoutMs: GOOGLE_PLACES_TIMEOUT_MS });
 
   if (!res.ok) {
     throw buildPlacesError(
@@ -153,12 +156,12 @@ export async function getGooglePlaceDetails(placeId, options = {}) {
     url.searchParams.set("sessionToken", options.sessionToken);
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: {
       "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
       "X-Goog-FieldMask": "id,displayName,formattedAddress,location,googleMapsUri",
     },
-  });
+  }, { timeoutMs: GOOGLE_PLACES_TIMEOUT_MS });
 
   if (!res.ok) {
     throw buildPlacesError(

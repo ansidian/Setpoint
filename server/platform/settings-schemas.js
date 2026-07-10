@@ -127,6 +127,46 @@ export function validateImportantSenders(senders) {
   return { valid: true, value: senders };
 }
 
+// actual_budget_url (SEC-05): the owner's Actual Budget server is legitimately
+// self-hosted on a LAN/loopback address (e.g. http://localhost:5006), so this
+// deliberately does NOT reject private/loopback hosts. It only closes off
+// dangerous schemes (file:, gopher:, etc.) and unparseable strings by requiring
+// http:/https: via new URL().
+export function validateActualBudgetUrl(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (trimmed === "") return { valid: true, value: "" };
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { valid: false, message: "actual_budget_url must be a valid http(s) URL" };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { valid: false, message: "actual_budget_url must use http or https" };
+  }
+  return { valid: true, value: trimmed };
+}
+
+const DISCORD_WEBHOOK_HOSTS = new Set(["discord.com", "discordapp.com"]);
+
+// discord_webhook_url (SEC-05): Discord webhook URLs are always
+// https://discord.com/api/webhooks/... (or the legacy discordapp.com host), so
+// unlike actual_budget_url this can safely be pinned to https + those hosts.
+export function validateDiscordWebhookUrl(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (trimmed === "") return { valid: true, value: "" };
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { valid: false, message: "discord_webhook_url must be a valid Discord webhook URL" };
+  }
+  if (parsed.protocol !== "https:" || !DISCORD_WEBHOOK_HOSTS.has(parsed.hostname)) {
+    return { valid: false, message: "discord_webhook_url must be an https://discord.com (or discordapp.com) webhook URL" };
+  }
+  return { valid: true, value: trimmed };
+}
+
 const UTILITY_PAY_URL_RE = /^https?:\/\//i;
 
 // Pay-link entries match a bill by stable Actual scheduleId; `url` opens in a new
