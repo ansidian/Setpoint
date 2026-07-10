@@ -150,7 +150,7 @@ describe("Dashboard refresh wiring", () => {
     vi.useRealTimers();
   });
 
-  it("keeps timer refresh from invalidating calendar range while reconciling current data", () => {
+  it("uses a light current-data fetch for timer refresh without starting a heavy snapshot sync", () => {
     render(
       <BrowserRouter>
         <Dashboard />
@@ -161,8 +161,8 @@ describe("Dashboard refresh wiring", () => {
 
     expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
     expect(mocks.activeSnapshotRefresh).not.toHaveBeenCalled();
-    expect(mocks.currentRefreshNow).not.toHaveBeenCalled();
-    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
+    expect(mocks.currentRefreshNow).toHaveBeenCalledTimes(1);
+    expect(mocks.activeSnapshotSync).not.toHaveBeenCalled();
     expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
     expect(mocks.markCalendarRangeStale).not.toHaveBeenCalled();
     expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
@@ -174,7 +174,7 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.markCalendarRangeStale).toHaveBeenCalledTimes(1);
     expect(mocks.refreshCalendarRangeInPlace).not.toHaveBeenCalled();
     expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
-    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(2);
+    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
     expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
     expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(2);
   });

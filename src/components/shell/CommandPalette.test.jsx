@@ -295,4 +295,147 @@ describe("CommandPalette", () => {
       payload: "bills",
     }));
   });
+
+  it("input has role combobox with aria-activedescendant pointing at the first option id on open", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Jump to anything…");
+    expect(input.getAttribute("role")).toBe("combobox");
+    expect(input.getAttribute("aria-expanded")).toBe("true");
+    expect(input.getAttribute("aria-autocomplete")).toBe("list");
+    expect(input.getAttribute("aria-controls")).toBe("command-palette-listbox");
+    expect(input.getAttribute("aria-label")).toBe("Command palette");
+    // First item is go-dashboard, so aria-activedescendant should point to that
+    expect(input.getAttribute("aria-activedescendant")).toBe("command-palette-option-go-dashboard");
+  });
+
+  it("list container has role listbox with id command-palette-listbox", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const listbox = document.getElementById("command-palette-listbox");
+    expect(listbox).toBeTruthy();
+    expect(listbox.getAttribute("role")).toBe("listbox");
+  });
+
+  it("options have role option with id and aria-selected attribute", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const dashboardOption = document.getElementById("command-palette-option-go-dashboard");
+    expect(dashboardOption).toBeTruthy();
+    expect(dashboardOption.getAttribute("role")).toBe("option");
+    expect(dashboardOption.getAttribute("aria-selected")).toBe("true");
+
+    const inboxOption = document.getElementById("command-palette-option-go-inbox");
+    expect(inboxOption).toBeTruthy();
+    expect(inboxOption.getAttribute("role")).toBe("option");
+    expect(inboxOption.getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("options are not tab-focusable (tabIndex absent)", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const dashboardOption = document.getElementById("command-palette-option-go-dashboard");
+    expect(dashboardOption.getAttribute("tabIndex")).toBeNull();
+
+    const inboxOption = document.getElementById("command-palette-option-go-inbox");
+    expect(inboxOption.getAttribute("tabIndex")).toBeNull();
+  });
+
+  it("ArrowDown moves aria-activedescendant to the second option and updates aria-selected", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Jump to anything…");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    expect(input.getAttribute("aria-activedescendant")).toBe("command-palette-option-go-inbox");
+
+    const dashboardOption = document.getElementById("command-palette-option-go-dashboard");
+    const inboxOption = document.getElementById("command-palette-option-go-inbox");
+    expect(dashboardOption.getAttribute("aria-selected")).toBe("false");
+    expect(inboxOption.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("filtering keeps aria-activedescendant pointing to a valid option id", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Jump to anything…");
+    // Move to third item
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    // Filter to only "calendar" commands
+    fireEvent.change(input, { target: { value: "calendar" } });
+
+    // After filtering, cursor should clamp to the first (and only) match
+    // aria-activedescendant should point to a valid option
+    const activedescendant = input.getAttribute("aria-activedescendant");
+    expect(activedescendant).toBeTruthy();
+    expect(document.getElementById(activedescendant)).toBeTruthy();
+
+    // The only calendar match should be "Go to Calendar"
+    expect(screen.getByText("Go to Calendar")).toBeTruthy();
+    expect(activedescendant).toBe("command-palette-option-calendar");
+  });
+
+  it("empty state div has role status for screen reader announcement", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Jump to anything…");
+    fireEvent.change(input, { target: { value: "zzzznotacommand" } });
+
+    // Find all divs in the listbox and check for the one with role="status"
+    const listbox = document.getElementById("command-palette-listbox");
+    const emptyDiv = listbox.querySelector("[role='status']");
+    expect(emptyDiv).toBeTruthy();
+    expect(emptyDiv.textContent).toBe("No matches.");
+  });
 });

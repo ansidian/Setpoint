@@ -14,6 +14,7 @@ export default function NoteEditor({
   placeholder = "",
   submitOnEnter = false,
   editorApiRef,
+  ariaLabel = "Note",
 }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
@@ -47,6 +48,7 @@ export default function NoteEditor({
         doc: value,
         extensions: [
           buildNoteEditorExtensions({ callbacksRef: cbRef, placeholderText: placeholder }),
+          EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
           EditorView.domEventHandlers({ blur: () => {
             if (destroyingRef.current) return false; // ignore the blur emitted by view.destroy()
             onBlurRef.current?.(viewRef.current?.state.doc.toString() ?? "");

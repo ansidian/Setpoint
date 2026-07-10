@@ -1,9 +1,10 @@
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import { dayBucketLabel } from "../../../lib/shell-helpers";
 import Tooltip from "../../shared/Tooltip";
 import TimelineRow from "./TimelineRow";
 import TimelineNowMarker from "./TimelineNowMarker";
 import {
+  deriveTimelineRowState,
   formatFullDateForOffset,
   GUTTER,
   MOBILE_GUTTER,
@@ -32,6 +33,15 @@ export default function TimelineDayGroup({
   // event is live, resolveTodayNowMarkerIndex returns null and the in-card
   // progress line in TimelineRow owns the marker instead.
   const nowMarkerIndex = !isMobile && isToday ? resolveTodayNowMarkerIndex(items, now) : null;
+
+  // Memoized on [items, now, isMobile] so an unrelated parent re-render (items
+  // and now both unchanged) reuses the same derived-state objects, keeping
+  // each row's props referentially stable and letting TimelineRow's own memo
+  // bail — only a real tick (or a day/mobile change) recomputes this.
+  const rowStates = useMemo(
+    () => items.map((item) => deriveTimelineRowState(item, now, { isMobile })),
+    [items, now, isMobile],
+  );
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -103,10 +113,14 @@ export default function TimelineDayGroup({
             {nowMarkerIndex === index && <TimelineNowMarker now={now} accent={accent} />}
             <TimelineRow
               item={item}
-              now={now}
               accent={accent}
               onJump={onJump}
               isMobile={isMobile}
+              isPast={rowStates[index].isPast}
+              isLive={rowStates[index].isLive}
+              overdueText={rowStates[index].overdueText}
+              reminderSummary={rowStates[index].reminderSummary}
+              liveMarker={rowStates[index].liveMarker}
             />
           </Fragment>
         ))}

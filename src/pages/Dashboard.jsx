@@ -20,6 +20,7 @@ import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 import {
   resolveDashboardCurrentEventPlan,
   resolveDashboardRefreshPlan,
+  shouldTriggerSyncHotkey,
 } from "./Dashboard.refreshModel";
 
 const SYNC_WATCHDOG_MS = 45_000;
@@ -42,8 +43,13 @@ export default function Dashboard() {
   const calendarRange = useCalendarRange();
   const calendarBillsRefreshRequestedRef = useRef(false);
   const refreshLiveDataNow = liveData.refreshNow;
-  const billsCurrentRefreshing = liveData.providerHealth?.currentData?.sources?.some((source) =>
+  const currentDomainSources = liveData.providerHealth?.currentData?.sources || [];
+  const billsCurrentRefreshing = currentDomainSources.some((source) =>
     source.key === "bills_current" && source.state === "refreshing",
+  );
+  const domainRefreshing = currentDomainSources.some((source) =>
+    (source.key === "bills_current" || source.key === "deadlines_current")
+      && source.state === "refreshing",
   );
   const deadlinesCache = useStaleDomainCache({
     fetchDomain: getCalendarDeadlines,
@@ -146,9 +152,10 @@ export default function Dashboard() {
     }
     return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
   }, [activeSnapshot, currentSyncing, markBillRangeStale, markCalendarRangeStale, markDeadlineRangeStale, refreshCalendarDomains, refreshCalendarRangeInPlace]);
-  const handleTimerQuickRefresh = useCallback(() => (
-    runDashboardRefresh("timer")
-  ), [runDashboardRefresh]);
+  const handleTimerQuickRefresh = useCallback(() => {
+    setLastQuickRefreshAt(Date.now());
+    return refreshLiveDataNow?.() ?? Promise.resolve();
+  }, [refreshLiveDataNow]);
   const handleExplicitQuickRefresh = useCallback(() => {
     return runDashboardRefresh("explicit");
   }, [runDashboardRefresh]);
@@ -160,9 +167,10 @@ export default function Dashboard() {
   // R hotkey maps to the explicit Sync now action.
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      if (e.repeat || e.key !== "r") return;
-      if (bd.refreshing || currentSyncing) return;
+      if (!shouldTriggerSyncHotkey(e, {
+        refreshing: bd.refreshing,
+        syncing: currentSyncing,
+      })) return;
       handleExplicitQuickRefresh();
     }
     window.addEventListener("keydown", onKeyDown);
@@ -224,7 +232,7 @@ export default function Dashboard() {
             actions={(
               <>
                 <Button onClick={handleExplicitQuickRefresh}>Sync now</Button>
-                <Button variant="outline" render={<Link to="/settings" />}>Settings</Button>
+                <Button variant="outline" nativeButton={false} render={<Link to="/settings" />}>Settings</Button>
               </>
             )}
             minHeight={360}
@@ -253,6 +261,7 @@ export default function Dashboard() {
           calendarDeadlines={deadlinesCache.data}
           calendarDeadlinesLoading={deadlinesCache.loading}
           calendarDeadlinesError={deadlinesCache.error}
+          domainRefreshing={domainRefreshing}
           loadCalendarDeadlines={loadCalendarDeadlines}
           calendarBillsData={billsCache.data}
           calendarBillRange={billsCache.range}

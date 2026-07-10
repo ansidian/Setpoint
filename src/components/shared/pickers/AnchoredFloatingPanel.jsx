@@ -14,17 +14,31 @@ import BottomSheet from "@/components/ui/BottomSheet";
 // the desktop path — and the panel's useDismissablePortal never runs on mobile,
 // where panelRef is unattached and the first in-sheet tap would read as
 // "outside" and close the sheet.
-export default function AnchoredFloatingPanel({ disableMobileSheet = false, hideTitle = false, ...props }) {
+//
+// Mobile sheet intentionally ignores: anchorRef/panelRef (no anchoring),
+// width/minWidth/maxWidth/matchAnchorWidth (sheet is full-width), style
+// (desktop slab styling doesn't apply), role (both paths are dialogs).
+// `height` and `ariaLabel` are translated; `open` gates the sheet (see below).
+export default function AnchoredFloatingPanel({ open = true, disableMobileSheet = false, hideTitle = false, ...props }) {
   const isMobile = useIsMobile();
   if (isMobile && !disableMobileSheet) {
     return (
-      <BottomSheet open onClose={props.onClose} title={props.ariaLabel} hideTitle={hideTitle}>
+      <BottomSheet
+        open={open}
+        onClose={props.onClose}
+        title={props.ariaLabel}
+        hideTitle={hideTitle}
+        height={typeof props.height === "number" ? `min(${props.height}px, 70vh)` : props.height}
+      >
         {props.children}
       </BottomSheet>
     );
   }
   // hideTitle is mobile-only (the desktop panel has no header), so it is
-  // intentionally not forwarded to AnchoredPanelDesktop.
+  // intentionally not forwarded to AnchoredPanelDesktop. Same for `open`: the
+  // desktop anchored panel stays mounted regardless (e.g. while a sibling
+  // editor is open) — only the mobile sheet needs an open gate to avoid
+  // stacking two BottomSheets.
   return <AnchoredPanelDesktop {...props} />;
 }
 

@@ -4,8 +4,10 @@ import {
   calendarContentSignature,
   currentToBriefing,
   currentToLiveData,
+  deadlineContentSignature,
   hasActiveRefreshWork,
   stabilizeCalendar,
+  stabilizeDeadlines,
 } from "./currentDashboardModel.js";
 
 describe("current dashboard model", () => {
@@ -98,6 +100,51 @@ describe("current dashboard model", () => {
     expect(calendarContentSignature(a)).toBe(calendarContentSignature(b));
     expect(calendarContentSignature(a)).not.toBe(calendarContentSignature(c));
     expect(calendarContentSignature(null)).toBe("null");
+  });
+
+  it("computes an equal deadline content signature for equivalent-content upcoming arrays", () => {
+    const a = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
+    const b = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
+    expect(deadlineContentSignature(a)).toBe(deadlineContentSignature(b));
+  });
+
+  it("changes the deadline content signature when status, due_date, _completing, or length differ", () => {
+    const base = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
+    const differentStatus = [{ ...base[0], status: "complete" }];
+    const differentDueDate = [{ ...base[0], due_date: "2026-05-06" }];
+    const completing = [{ ...base[0], _completing: true }];
+    const longer = [...base, { id: "deadline-2", due_date: "2026-05-07", status: "incomplete" }];
+
+    const baseSig = deadlineContentSignature(base);
+    expect(deadlineContentSignature(differentStatus)).not.toBe(baseSig);
+    expect(deadlineContentSignature(differentDueDate)).not.toBe(baseSig);
+    expect(deadlineContentSignature(completing)).not.toBe(baseSig);
+    expect(deadlineContentSignature(longer)).not.toBe(baseSig);
+  });
+
+  it("falls back to todoist_id and handles null/invalid input like calendarContentSignature", () => {
+    const a = [{ todoist_id: "todo-1", due_date: "2026-05-05", status: "incomplete" }];
+    const b = [{ todoist_id: "todo-1", due_date: "2026-05-05", status: "incomplete" }];
+    const c = [{ todoist_id: "todo-2", due_date: "2026-05-05", status: "incomplete" }];
+    expect(deadlineContentSignature(a)).toBe(deadlineContentSignature(b));
+    expect(deadlineContentSignature(a)).not.toBe(deadlineContentSignature(c));
+    expect(deadlineContentSignature(null)).toBe("null");
+    expect(deadlineContentSignature(undefined)).toBe("null");
+    expect(deadlineContentSignature("nope")).toBe("invalid");
+  });
+
+  it("reuses the prior deadlines reference when contents are equivalent across polls", () => {
+    const prev = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
+    // A freshly re-parsed array with identical contents (new object identities).
+    const nextEqual = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
+    expect(stabilizeDeadlines(prev, nextEqual)).toBe(prev);
+
+    // A genuine content change must adopt the new reference.
+    const nextChanged = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "complete" }];
+    expect(stabilizeDeadlines(prev, nextChanged)).toBe(nextChanged);
+
+    // Identical reference passes through untouched.
+    expect(stabilizeDeadlines(prev, prev)).toBe(prev);
   });
 
   it("detects active current refresh work across source and snapshot health", () => {

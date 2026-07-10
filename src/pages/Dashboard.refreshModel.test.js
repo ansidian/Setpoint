@@ -2,9 +2,75 @@ import { describe, expect, it } from "vitest";
 import {
   resolveDashboardCurrentEventPlan,
   resolveDashboardRefreshPlan,
+  shouldTriggerSyncHotkey,
 } from "./Dashboard.refreshModel.js";
 
 describe("dashboard refresh model", () => {
+  it("triggers sync for a plain R keydown from the page body", () => {
+    expect(shouldTriggerSyncHotkey({
+      key: "r",
+      target: { tagName: "BODY", isContentEditable: false },
+    })).toBe(true);
+  });
+
+  it("ignores keys other than lowercase R", () => {
+    expect(shouldTriggerSyncHotkey({
+      key: "x",
+      target: { tagName: "BODY", isContentEditable: false },
+    })).toBe(false);
+  });
+
+  it("ignores repeated R keydowns", () => {
+    expect(shouldTriggerSyncHotkey({
+      key: "r",
+      repeat: true,
+      target: { tagName: "BODY", isContentEditable: false },
+    })).toBe(false);
+  });
+
+  it("ignores modified R keydowns", () => {
+    for (const modifier of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) {
+      expect(shouldTriggerSyncHotkey({
+        key: "r",
+        [modifier]: true,
+        target: { tagName: "BODY", isContentEditable: false },
+      })).toBe(false);
+    }
+  });
+
+  it("ignores R keydowns from contenteditable targets", () => {
+    expect(shouldTriggerSyncHotkey({
+      key: "r",
+      target: { tagName: "DIV", isContentEditable: true },
+    })).toBe(false);
+  });
+
+  it("ignores R keydowns from select controls", () => {
+    expect(shouldTriggerSyncHotkey({
+      key: "r",
+      target: { tagName: "SELECT", isContentEditable: false },
+    })).toBe(false);
+  });
+
+  it("ignores R keydowns from text-entry controls", () => {
+    for (const tagName of ["INPUT", "TEXTAREA"]) {
+      expect(shouldTriggerSyncHotkey({
+        key: "r",
+        target: { tagName, isContentEditable: false },
+      })).toBe(false);
+    }
+  });
+
+  it("ignores R while dashboard refresh or current sync work is active", () => {
+    const event = {
+      key: "r",
+      target: { tagName: "BODY", isContentEditable: false },
+    };
+
+    expect(shouldTriggerSyncHotkey(event, { refreshing: true })).toBe(false);
+    expect(shouldTriggerSyncHotkey(event, { syncing: true })).toBe(false);
+  });
+
   it("keeps timer refresh separate from explicit user refresh work", () => {
     expect(resolveDashboardRefreshPlan({ trigger: "timer" })).toMatchObject({
       shouldRun: true,

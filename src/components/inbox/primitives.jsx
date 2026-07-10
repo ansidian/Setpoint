@@ -230,7 +230,7 @@ export function NumberField({
 export function QuickAction({
   icon: Icon, label, onClick, primary, danger,
   accent = "#cba6da", buttonRef, ariaLabel, tooltip,
-  holdProgress = 0, holdColor, keyHint, touch = false,
+  keyHint, touch = false, disabled = false,
 }) {
   const [hover, setHover] = useState(false);
   const iconOnly = !label;
@@ -239,9 +239,10 @@ export function QuickAction({
     <button
       ref={buttonRef}
       type="button"
+      disabled={disabled}
       onClick={onClick}
       aria-label={iconOnly ? accessibleLabel : ariaLabel}
-      onMouseEnter={() => setHover(true)}
+      onMouseEnter={() => { if (!disabled) setHover(true); }}
       onMouseLeave={() => setHover(false)}
       style={{
         position: "relative", overflow: "hidden",
@@ -253,8 +254,9 @@ export function QuickAction({
         padding: iconOnly ? 0 : "0 11px",
         borderRadius: 8,
         fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-        cursor: "pointer", transition: "background 150ms, border-color 150ms, color 150ms, transform 150ms",
-        transform: hover ? "translateY(-1px)" : "translateY(0)",
+        cursor: disabled ? "not-allowed" : "pointer", transition: "background 150ms, border-color 150ms, color 150ms, transform 150ms",
+        transform: hover && !disabled ? "translateY(-1px)" : "translateY(0)",
+        opacity: disabled ? 0.55 : 1,
         background: primary ? `linear-gradient(135deg, ${accent}38, color-mix(in srgb, var(--sp-cyan) 18%, transparent))`
                  : hover ? "rgba(255,255,255,0.05)"
                  : "rgba(255,255,255,0.02)",
@@ -264,20 +266,6 @@ export function QuickAction({
         whiteSpace: "nowrap",
       }}
     >
-      {holdProgress > 0 && holdColor && (
-        <span
-          aria-hidden
-          style={{
-            position: "absolute", left: 0, top: 0, bottom: 0,
-            width: "100%",
-            background: `linear-gradient(90deg, ${holdColor}38, ${holdColor}1f)`,
-            pointerEvents: "none",
-            transform: `scaleX(${holdProgress})`,
-            transformOrigin: "left center",
-            transition: "transform 40ms linear",
-          }}
-        />
-      )}
       {Icon && <Icon size={11} style={{ position: "relative" }} />}
       {label && <span style={{ position: "relative" }}>{label}</span>}
       {keyHint && (

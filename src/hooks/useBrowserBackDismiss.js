@@ -64,6 +64,21 @@ export default function useBrowserBackDismiss({
     return undefined;
   }, [enabled, historyKey]);
 
+  // Mount-style consumers (rendered conditionally by a parent, e.g.
+  // AnchoredFloatingPanel) unmount instead of flipping `enabled` false, so the
+  // effect above never re-runs its unwind branch — this leaks the pushed entry.
+  // Empty deps: runs once on unmount regardless of how `enabled` changed.
+  useEffect(() => {
+    return () => {
+      const token = entryTokenRef.current;
+      if (token && window.history.state?.[historyKey] === token) {
+        window.history.back();
+      }
+      entryTokenRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only cleanup by design
+  }, []);
+
   return useCallback(() => {
     if (typeof window === "undefined") {
       onDismissRef.current?.();

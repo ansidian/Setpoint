@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   markEmailAsRead,
   markEmailAsUnread,
@@ -172,6 +172,24 @@ export default function useInboxActionDispatch({
   snapshotPendingRef,
   snapshotRequestRef,
 }) {
+  // Screen-reader announcement for the dispatch's silent (non-toast) mutations
+  // only. Toast-producing actions already get an aria-live region for free via
+  // InboxUndoToast (role="status" aria-live="polite"); this covers the gap —
+  // e.g. toggle-read, which never calls replaceUndoSlot.
+  const [announcement, setAnnouncement] = useState("");
+
+  // Two consecutive announcements that happen to produce the same string
+  // (e.g. "Marked as unread" on email A, then email B) would otherwise hit
+  // React's identical-value setState bailout: the DOM text node never
+  // actually changes, so most screen readers won't re-announce. Clearing to
+  // "" first — on a separate microtask, so it commits as its own render
+  // before the real text is set — forces the live region through an
+  // empty→text transition every time, regardless of whether the text repeats.
+  const announce = useCallback((text) => {
+    setAnnouncement("");
+    queueMicrotask(() => setAnnouncement(text));
+  }, []);
+
   const runSnapshotCommand = useCallback((kind, email, payload) => {
     if (isCatchUpEmail(email)) return;
     if (readOnly) return;
@@ -251,7 +269,7 @@ export default function useInboxActionDispatch({
     snapshotRequestRef,
   ]);
 
-  return useCallback((kind, payload) => {
+  const dispatch = useCallback((kind, payload) => {
     if (!selectedEmail) return;
 
     const id = selectedEmail.id;
@@ -411,8 +429,14 @@ export default function useInboxActionDispatch({
         onLiveReadOverrideChange(uid, !markingUnread);
       }
       const call = markingUnread ? markEmailAsUnread : markEmailAsRead;
-      call(uid).catch(() => {});
+      call(uid).catch(() => {
+        if (selectedEmail._live || selectedEmail._activeSnapshot) {
+          onLiveReadOverrideChange(uid, markingUnread);
+        }
+        updateIndexedSearchRead(uid, markingUnread);
+      });
       updateIndexedSearchRead(uid, !markingUnread);
+      announce(markingUnread ? "Marked as unread" : "Marked as read");
       if (markingUnread) closeSelectedEmail();
       return;
     }
@@ -432,5 +456,8 @@ export default function useInboxActionDispatch({
     setSnoozedMap,
     setPinnedOverrides,
     runSnapshotCommand,
+    announce,
   ]);
+
+  return { onAction: dispatch, announcement };
 }

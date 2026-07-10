@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveInboxHotkeyAction } from "./inboxHotkeys";
+import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 
 const snapshotEmail = {
   id: "msg-1",
@@ -8,6 +8,60 @@ const snapshotEmail = {
   _activeSnapshot: true,
   _lane: "needs_attention",
 };
+
+describe("shouldSuspendInboxHotkeys", () => {
+  it("does not suspend for an unrelated mounted dialog while focus remains on the body", () => {
+    const inboxTarget = document.createElement("div");
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.append(inboxTarget, dialog);
+
+    expect(document.activeElement).toBe(document.body);
+    expect(shouldSuspendInboxHotkeys(inboxTarget)).toBe(false);
+
+    inboxTarget.remove();
+    dialog.remove();
+  });
+
+  it("suspends while focus is inside a dialog", () => {
+    const inboxTarget = document.createElement("div");
+    const dialog = document.createElement("div");
+    const dialogButton = document.createElement("button");
+    dialog.setAttribute("role", "dialog");
+    dialog.append(dialogButton);
+    document.body.append(inboxTarget, dialog);
+    dialogButton.focus();
+
+    expect(shouldSuspendInboxHotkeys(inboxTarget)).toBe(true);
+
+    inboxTarget.remove();
+    dialog.remove();
+  });
+
+  it("suspends when the keydown target is inside a menu", () => {
+    const menu = document.createElement("div");
+    const menuTarget = document.createElement("button");
+    menu.setAttribute("role", "menu");
+    menu.append(menuTarget);
+    document.body.append(menu);
+
+    expect(shouldSuspendInboxHotkeys(menuTarget)).toBe(true);
+
+    menu.remove();
+  });
+
+  it("suspends when the keydown target has an explicit suspension ancestor", () => {
+    const suspensionBoundary = document.createElement("div");
+    const target = document.createElement("button");
+    suspensionBoundary.dataset.suspendInboxHotkeys = "true";
+    suspensionBoundary.append(target);
+    document.body.append(suspensionBoundary);
+
+    expect(shouldSuspendInboxHotkeys(target)).toBe(true);
+
+    suspensionBoundary.remove();
+  });
+});
 
 describe("resolveInboxHotkeyAction", () => {
   it("maps mutable snapshot rows to lifecycle and lane actions", () => {

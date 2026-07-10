@@ -15,6 +15,7 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
                   : email.urgency === "medium" ? "#fab387"
                   : "#a6adc8";
   const dimmed = email.read;
+  const snapshotPending = !!email._optimisticSnapshotPending;
   const summaryColor = dimmed ? "rgba(205,214,244,0.76)" : "rgba(205,214,244,0.82)";
   const barColor = untriaged ? "#89b4fa" : (L ? L.color : "#6c7086");
   const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
@@ -32,6 +33,7 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
   return (
     <div
       role="button"
+      aria-busy={snapshotPending || undefined}
       tabIndex={0}
       onClick={() => onOpen(email)}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(email); }}
@@ -45,7 +47,7 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
         background: selected ? `${accent}14` : hover ? "rgba(255,255,255,0.025)" : "transparent",
         boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
         transition: "background 120ms, box-shadow 120ms",
-        opacity: email._providerRemoved ? 0.55 : dimmed && !hover ? 0.82 : 1,
+        opacity: snapshotPending ? 0.6 : email._providerRemoved ? 0.55 : dimmed && !hover ? 0.82 : 1,
         // Skip layout+paint for offscreen rows (the dominant cost at large N);
         // reserve a representative row height so the scrollbar does not jump
         // before the row is first rendered. Pure CSS containment.
@@ -248,6 +250,7 @@ function rowKeyFields(email) {
     email.subject, email.preview, email.date,
     email.urgentFlag?.label, email.urgentFlag,
     email._pinned, email._providerRemoved,
+    email._optimisticSnapshotPending,
   ];
 }
 

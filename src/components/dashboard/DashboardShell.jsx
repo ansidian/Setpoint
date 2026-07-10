@@ -2,7 +2,9 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense, 
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav.jsx";
+import { TAB_LABELS } from "../shell/ShellTabs.jsx";
 import { useDashboard } from "../../context/DashboardContext";
+import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.js";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
 import { DashboardBody } from "./DashboardBody";
@@ -52,11 +54,22 @@ const SHELL_PREFS = Object.freeze({
   showPreview: true,
 });
 
+// ShellTabs (the tablist owning id="shell-tab-{key}") only renders on desktop
+// (see ShellHeader.jsx's `{!isMobile && <ShellTabs ... />}`), so on mobile the
+// id a tabpanel's aria-labelledby would point at doesn't exist — a dangling
+// IDREF. Fall back to a plain aria-label built from the same TAB_LABELS the
+// desktop tabs already use, rather than introducing a second label table.
+function tabPanelA11yProps(key, isMobile) {
+  return isMobile
+    ? { "aria-label": TAB_LABELS[key] }
+    : { "aria-labelledby": `shell-tab-${key}` };
+}
+
 export function DashboardShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef, calendarDeadlines, calendarDeadlinesLoading,
-  calendarDeadlinesError = false, loadCalendarDeadlines = () => {},
-  calendarBillsData, calendarBillRange, calendarDeadlineRange, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
+  calendarDeadlinesError = false, loadCalendarDeadlines = () => {}, calendarBillsData, calendarBillRange,
+  calendarDeadlineRange, domainRefreshing = false, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
 }) {
   const isMobile = useIsMobile();
   const {
@@ -67,7 +80,7 @@ export function DashboardShell({
   } = useDashboard();
   const [tab, setTab] = useState(() => {
     try {
-      const saved = localStorage.getItem("ea:tab");
+      const saved = readDemoSafeLocalStorage("ea:tab");
       if (saved === "inbox") return "inbox";
       if (saved === "notes") return "notes";
       return "dashboard";
@@ -76,7 +89,7 @@ export function DashboardShell({
     }
   });
   useEffect(() => {
-    try { localStorage.setItem("ea:tab", tab); } catch { /* ignore */ }
+    writeDemoSafeLocalStorage("ea:tab", tab);
   }, [tab]);
   // Reflect the active tab as a root attribute so global CSS can hide
   // calendar-owned document.body portals (the floating detail panel) when the
@@ -90,13 +103,10 @@ export function DashboardShell({
   // Warm the lazy inbox chunk after first paint so the first dashboard->inbox
   // switch is instant instead of staring at a blank fetch.
   useWarmImport(importInboxView);
-  // Same for the calendar chunk so the first switch to the calendar tab is
-  // instant without eager-mounting the heavy modal at boot.
-  useWarmImport(importCalendar);
-  // And the notes chunk so the first switch to the notes tab is instant.
-  useWarmImport(importNotesTab);
-  // And the news chunk so the first switch to the news tab is instant.
-  useWarmImport(importNewsTab);
+  // Warm heavier secondary tabs on desktop only; mobile loads them on first use.
+  useWarmImport(importCalendar, { enabled: !isMobile });
+  useWarmImport(importNotesTab, { enabled: !isMobile });
+  useWarmImport(importNewsTab, { enabled: !isMobile });
   // Mobile shell history is owned here (the parent) so the tab entry and the
   // reader entry are pushed in a deterministic order (tab, then reader) for both
   // entry points: tapping a list row and opening an email from a dashboard rail.
@@ -467,6 +477,7 @@ export function DashboardShell({
         ref={dashboardScrollRef}
         onScroll={handleSharedScroll}
         data-testid="shell-scroll-region"
+        data-scroll-lock-target=""
         style={{
           flex: 1,
           overflow: (tab === "dashboard" || tab === "calendar" || tab === "notes") && !isMobile ? "hidden" : "auto",
@@ -480,70 +491,117 @@ export function DashboardShell({
             instead of a ternary that unmounts/remounts per switch — fixes the
             switch freeze + "scroll into blank", and keeps a dashboard data
             refresh from reconciling the hidden tab. */}
+        {/* role="tabpanel" wrapper per panel, named via tabPanelA11yProps
+            (A11Y-05): aria-labelledby the desktop ShellTabs button when it
+            exists, else (mobile, where ShellTabs doesn't render) a plain
+            aria-label from the same TAB_LABELS — a dangling aria-labelledby
+            otherwise. KeepAliveTab renders no DOM node of its own (Activity +
+            a memo pass-through), so the wrapper lives INSIDE it, as a direct
+            child of Activity — Activity hides a subtree by setting
+            display:none!important on each host instance within it, so this
+            wrapper's display:contents is hidden/restored right along with the
+            rest of an inactive tab's DOM. Does not touch KeepAliveTab itself. */}
         <KeepAliveTab active={tab === "dashboard"}>
-          <DashboardBody
-            liveData={liveData}
-            activeSnapshot={activeSnapshot?.snapshot}
-            calendarRange={calendarRange}
-            accent={accent}
-            isMobile={isMobile}
-            calendarDeadlines={dashboardCalendarDeadlines}
-            calendarDeadlinesError={!!calendarDeadlinesError}
-            onOpenEmail={openEmailInInbox}
-            onOpenDeadline={(task, anchor) => {
-              setItemSheet((prev) => nextItemSheet(prev, { kind: "deadline", item: task, anchorRef: { current: anchor || null } }));
-            }}
-            onOpenBillsCalendar={(date, itemId, item, anchor) => {
-              if (item) { setItemSheet((prev) => nextItemSheet(prev, { kind: "bill", item, date, itemId, anchorRef: { current: anchor || null } })); return; }
-              openBillInCalendar(date, itemId);
-            }}
-            onOpenEventsCalendar={(date, itemId, item, anchor) => {
-              if (item) { setItemSheet((prev) => nextItemSheet(prev, { kind: "event", item, date, itemId, anchorRef: { current: anchor || null } })); return; }
-              openEventInCalendar(date, itemId);
-            }}
-          />
+          <div
+            role="tabpanel"
+            id="shell-tabpanel-dashboard"
+            {...tabPanelA11yProps("dashboard", isMobile)}
+            style={{ display: "contents" }}
+          >
+            <DashboardBody
+              liveData={liveData}
+              activeSnapshot={activeSnapshot?.snapshot}
+              calendarRange={calendarRange}
+              accent={accent}
+              isMobile={isMobile}
+              calendarDeadlines={dashboardCalendarDeadlines}
+              calendarDeadlinesLoading={calendarDeadlinesLoading}
+              calendarDeadlinesError={!!calendarDeadlinesError}
+              domainRefreshing={domainRefreshing}
+              onOpenEmail={openEmailInInbox}
+              onOpenDeadline={(task, anchor) => {
+                setItemSheet((prev) => nextItemSheet(prev, { kind: "deadline", item: task, anchorRef: { current: anchor || null } }));
+              }}
+              onOpenBillsCalendar={(date, itemId, item, anchor) => {
+                if (item) { setItemSheet((prev) => nextItemSheet(prev, { kind: "bill", item, date, itemId, anchorRef: { current: anchor || null } })); return; }
+                openBillInCalendar(date, itemId);
+              }}
+              onOpenEventsCalendar={(date, itemId, item, anchor) => {
+                if (item) { setItemSheet((prev) => nextItemSheet(prev, { kind: "event", item, date, itemId, anchorRef: { current: anchor || null } })); return; }
+                openEventInCalendar(date, itemId);
+              }}
+            />
+          </div>
         </KeepAliveTab>
         <KeepAliveTab active={tab === "inbox"}>
-          <Suspense fallback={<InboxMountFallback />}>
-            <InboxView
-              accent={accent}
-              customize={SHELL_PREFS}
-              emailAccounts={[]}
-              briefingSummary=""
-              briefingGeneratedAt={liveData.briefingGeneratedAt}
-              liveEmails={liveData.liveEmails}
-              liveEmailsLoading={liveEmailsLoading}
-              activeSnapshot={inboxActiveSnapshot}
-              liveReadOverrides={liveReadOverrides}
-              onLiveReadOverrideChange={handleLiveReadOverrideChange}
-              snoozedEntries={liveData.snoozedEntries}
-              resurfacedEntries={liveData.resurfacedEntries}
-              onOpenDashboard={() => setShellTab("dashboard")}
-              onRefresh={onQuickRefresh}
-              commitPendingUndoSignal={calendarOpenRequestId}
-              isMobile={isMobile}
-              onAskAlfred={askAlfred}
-            />
-          </Suspense>
+          <div
+            role="tabpanel"
+            id="shell-tabpanel-inbox"
+            {...tabPanelA11yProps("inbox", isMobile)}
+            style={{ display: "contents" }}
+          >
+            <Suspense fallback={<InboxMountFallback />}>
+              <InboxView
+                accent={accent}
+                customize={SHELL_PREFS}
+                emailAccounts={[]}
+                briefingSummary=""
+                briefingGeneratedAt={liveData.briefingGeneratedAt}
+                liveEmails={liveData.liveEmails}
+                liveEmailsLoading={liveEmailsLoading}
+                activeSnapshot={inboxActiveSnapshot}
+                liveReadOverrides={liveReadOverrides}
+                onLiveReadOverrideChange={handleLiveReadOverrideChange}
+                snoozedEntries={liveData.snoozedEntries}
+                resurfacedEntries={liveData.resurfacedEntries}
+                onOpenDashboard={() => setShellTab("dashboard")}
+                onRefresh={onQuickRefresh}
+                commitPendingUndoSignal={calendarOpenRequestId}
+                isMobile={isMobile}
+                onAskAlfred={askAlfred}
+              />
+            </Suspense>
+          </div>
         </KeepAliveTab>
         <KeepAliveTab active={tab === "calendar"}>
-          {calendarMounted ? (
-            <Suspense fallback={null}>
-              <DashboardCalendarModalMount {...calendarMountProps} />
-            </Suspense>
-          ) : null}
+          <div
+            role="tabpanel"
+            id="shell-tabpanel-calendar"
+            {...tabPanelA11yProps("calendar", isMobile)}
+            style={{ display: "contents" }}
+          >
+            {calendarMounted ? (
+              <Suspense fallback={null}>
+                <DashboardCalendarModalMount {...calendarMountProps} />
+              </Suspense>
+            ) : null}
+          </div>
         </KeepAliveTab>
         <KeepAliveTab active={tab === "notes"}>
-          <Suspense fallback={null}>
-            <NotesTab accent={accent} isMobile={isMobile} />
-          </Suspense>
+          <div
+            role="tabpanel"
+            id="shell-tabpanel-notes"
+            {...tabPanelA11yProps("notes", isMobile)}
+            style={{ display: "contents" }}
+          >
+            <Suspense fallback={null}>
+              <NotesTab accent={accent} isMobile={isMobile} />
+            </Suspense>
+          </div>
         </KeepAliveTab>
         <KeepAliveTab active={tab === "news"}>
-          {newsMounted ? (
-            <Suspense fallback={null}>
-              <NewsTab active={tab === "news"} />
-            </Suspense>
-          ) : null}
+          <div
+            role="tabpanel"
+            id="shell-tabpanel-news"
+            {...tabPanelA11yProps("news", isMobile)}
+            style={{ display: "contents" }}
+          >
+            {newsMounted ? (
+              <Suspense fallback={null}>
+                <NewsTab active={tab === "news"} />
+              </Suspense>
+            ) : null}
+          </div>
         </KeepAliveTab>
       </div>
 

@@ -196,8 +196,6 @@ export default function MobileInboxView({
   unreadInView,
   markAllVisibleRead,
   onAction,
-  trashHold,
-  snoozeHold,
   showTriage,
   showDraft,
   showPreview,
@@ -208,6 +206,7 @@ export default function MobileInboxView({
   readOnly = false,
   undo,
   onUndo,
+  announcement,
 }) {
   const snapshotSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
@@ -242,8 +241,6 @@ export default function MobileInboxView({
           showDraft={showDraft}
           billOpen={billOpen}
           setBillOpen={setBillOpen}
-          trashHoldProgress={trashHold.progress}
-          snoozeHoldProgress={snoozeHold.progress}
           isMobile
           readOnly={readOnly}
         />
@@ -562,6 +559,7 @@ export default function MobileInboxView({
         onClose={() => setMobileFiltersOpen(false)}
       />
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
+      <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
     </div>
   );
 }

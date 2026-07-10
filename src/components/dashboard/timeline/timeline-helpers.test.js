@@ -68,6 +68,26 @@ describe("timeline helpers", () => {
     it("does not hold for an events-only cold load when the events filter is off", () => {
       expect(shouldHoldPartialTimeline({ eventLoadingState: "empty_loading", filtersEvents: false })).toBe(false);
     });
+
+    it("holds while filtered deadlines are still loading", () => {
+      expect(shouldHoldPartialTimeline({
+        eventLoadingState: "ready",
+        filtersEvents: true,
+        filtersDeadlines: true,
+        deadlinesLoading: true,
+        hasDeadlineRows: false,
+      })).toBe(true);
+    });
+
+    it("shows the honest empty state once deadline loading settles", () => {
+      expect(shouldHoldPartialTimeline({
+        eventLoadingState: "ready",
+        filtersEvents: true,
+        filtersDeadlines: true,
+        deadlinesLoading: false,
+        hasDeadlineRows: false,
+      })).toBe(false);
+    });
   });
 
   describe("formatNowMarkerLabel", () => {

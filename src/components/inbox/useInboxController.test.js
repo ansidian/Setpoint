@@ -66,6 +66,13 @@ describe("useInboxController resolves hardcoded prefs without a customize store"
     expect(result.current.layout).toBe("two-pane");
     expect(result.current.grouping).toBe("flat");
   });
+
+  it("does not expose inert hold-to-confirm state", () => {
+    const { result } = renderController();
+
+    expect(result.current).not.toHaveProperty("trashHold");
+    expect(result.current).not.toHaveProperty("snoozeHold");
+  });
 });
 
 describe("useInboxController pinned rows", () => {

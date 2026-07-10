@@ -12,6 +12,7 @@ import {
 import { SETTINGS_PRIMARY_BUTTON_CLASS } from "@/components/settings/settings-core";
 
 export default function TodoistCard({ settings }) {
+  const needsReauth = !!settings?.todoist_needs_reauth;
   const [todoistToken, setTodoistToken] = useState("");
   const [todoistConfigured, setTodoistConfigured] = useState(false);
   const [todoistDirty, setTodoistDirty] = useState(false);
@@ -63,17 +64,34 @@ export default function TodoistCard({ settings }) {
           </FieldHint>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            onClick={handleSaveTodoistSecret}
-            className={SETTINGS_PRIMARY_BUTTON_CLASS}
-            disabled={!todoistDirty || todoistSavingSecret}
-            size="sm"
-          >
-            {todoistSavingSecret ? "Saving…" : "Save"}
-          </Button>
+          {needsReauth && !todoistDirty ? (
+            <Button
+              onClick={() => {
+                setTodoistToken("");
+                setTodoistDirty(true);
+              }}
+              className="border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 text-[var(--sp-cream)] hover:bg-[var(--sp-cream)]/16 hover:border-[var(--sp-cream)]/28 hover:-translate-y-px active:translate-y-0"
+              size="sm"
+            >
+              Reconnect
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSaveTodoistSecret}
+              className={SETTINGS_PRIMARY_BUTTON_CLASS}
+              disabled={!todoistDirty || todoistSavingSecret}
+              size="sm"
+            >
+              {todoistSavingSecret ? "Saving…" : "Save"}
+            </Button>
+          )}
           {todoistConfigured && !todoistDirty ? (
             <>
-              <StatusPill tone="success">Connected</StatusPill>
+              {needsReauth ? (
+                <StatusPill tone="warning">Reconnect needed</StatusPill>
+              ) : (
+                <StatusPill tone="success">Connected</StatusPill>
+              )}
               <button
                 type="button"
                 onClick={() => {

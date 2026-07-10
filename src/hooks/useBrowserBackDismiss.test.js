@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import useBrowserBackDismiss from "./useBrowserBackDismiss";
 
@@ -35,6 +35,7 @@ describe("useBrowserBackDismiss", () => {
 
   afterEach(() => {
     window.history.replaceState({}, "", "/");
+    vi.restoreAllMocks();
   });
 
   it("closes an owned surface when browser back is pressed", async () => {
@@ -85,5 +86,41 @@ describe("useBrowserBackDismiss", () => {
     await waitFor(() => {
       expect(result.current.parentOpen).toBe(false);
     });
+  });
+
+  it("unwinds its history entry on unmount while still enabled (mount-style consumers)", () => {
+    const backSpy = vi.spyOn(window.history, "back");
+    const { unmount } = renderHook(() => useBrowserBackDismiss({
+      enabled: true,
+      historyKey: "eaTestUnmountDismiss",
+      onDismiss: () => {},
+    }));
+
+    expect(window.history.state.eaTestUnmountDismiss).toBeTruthy();
+
+    unmount();
+
+    expect(backSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not unwind again on unmount after the entry was already popped", async () => {
+    const onDismiss = vi.fn();
+    const { unmount } = renderHook(() => useBrowserBackDismiss({
+      enabled: true,
+      historyKey: "eaTestPopThenUnmount",
+      onDismiss,
+    }));
+
+    act(() => {
+      window.history.back();
+    });
+    await waitFor(() => {
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    const backSpy = vi.spyOn(window.history, "back");
+    unmount();
+
+    expect(backSpy).not.toHaveBeenCalled();
   });
 });

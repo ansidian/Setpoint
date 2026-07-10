@@ -337,7 +337,7 @@ export default function useInboxController({
     if (next) setSelectedId(next.id || next.uid);
   }, [visibleEmails, selectedId, setSelectedId]);
 
-  const onAction = useInboxActionDispatch({
+  const { onAction, announcement } = useInboxActionDispatch({
     selectedEmail,
     readOnly,
     moveBy,
@@ -432,10 +432,9 @@ export default function useInboxController({
     unreadInView,
     markAllVisibleRead,
     onAction,
+    announcement,
     undo,
     onUndo,
-    trashHold: { active: false, progress: 0 },
-    snoozeHold: { active: false, progress: 0 },
     showTriage: true,
     showDraft: false,
     showPreview: true,

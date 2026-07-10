@@ -14,7 +14,8 @@ export function RefreshButton({
   return (
     <button
       type="button"
-      aria-label="Sync now"
+      aria-label={refreshing ? "Syncing" : "Sync now"}
+      aria-busy={busy}
       onPointerDown={() => {
         setPressed(true);
       }}
@@ -60,7 +61,7 @@ export function RefreshButton({
         color="var(--sp-mantle)"
         style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}
       />
-      <span style={{ position: "relative", whiteSpace: "nowrap" }}>
+      <span role="status" aria-live="polite" style={{ position: "relative", whiteSpace: "nowrap" }}>
         {refreshing ? "Syncing…" : "Sync now"}
       </span>
       {!isMobile && (

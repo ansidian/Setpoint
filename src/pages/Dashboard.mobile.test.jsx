@@ -530,8 +530,8 @@ describe("DashboardShell mobile behavior", () => {
     renderShell();
 
     // Desktop renders the Calendar tab button in the ShellHeader tablist.
-    expect(screen.getByRole("button", { name: /calendar/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /dashboard/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /inbox/i })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /calendar/i })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /dashboard/i })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /inbox/i })).toBeTruthy();
   });
 });

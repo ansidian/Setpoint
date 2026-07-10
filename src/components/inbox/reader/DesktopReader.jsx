@@ -221,8 +221,6 @@ export default function DesktopReader({
   billOpen,
   billMounted,
   setBillOpen,
-  trashHoldProgress,
-  snoozeHoldProgress,
   snoozeBtnRef,
   snoozeOpen,
   setSnoozeOpen,
@@ -249,6 +247,7 @@ export default function DesktopReader({
   } = resolveReaderActions(email, { readOnly });
   const showReadAction = showMutableActions;
   const showBillToggle = billToggleEligible;
+  const snapshotPending = !!email._optimisticSnapshotPending;
 
   return (
     <div
@@ -262,6 +261,7 @@ export default function DesktopReader({
       }}
     >
       <div
+        data-suspend-inbox-hotkeys={snoozeOpen ? "true" : undefined}
         style={{
           padding: "14px 20px",
           display: "flex",
@@ -290,6 +290,7 @@ export default function DesktopReader({
             onClick={() => onAction("snapshot-reopen")}
             accent="#a6e3a1"
             keyHint="H"
+            disabled={snapshotPending}
           />
         )}
         {canMoveToNeeds && (
@@ -300,6 +301,7 @@ export default function DesktopReader({
             onClick={() => onAction("snapshot-move-lane", "needs_attention")}
             accent="#f38ba8"
             keyHint="A"
+            disabled={snapshotPending}
           />
         )}
         {canMoveToFyi && (
@@ -310,6 +312,7 @@ export default function DesktopReader({
             onClick={() => onAction("snapshot-move-lane", "fyi")}
             accent="#89b4fa"
             keyHint="F"
+            disabled={snapshotPending}
           />
         )}
         {canMoveToNoise && (
@@ -320,6 +323,7 @@ export default function DesktopReader({
             onClick={() => onAction("snapshot-move-lane", "noise")}
             accent="#a6adc8"
             keyHint="N"
+            disabled={snapshotPending}
           />
         )}
         {canHandle && (
@@ -330,6 +334,7 @@ export default function DesktopReader({
             onClick={() => onAction("snapshot-handled")}
             accent="#a6e3a1"
             keyHint="H"
+            disabled={snapshotPending}
           />
         )}
         {canDismiss && (
@@ -340,6 +345,7 @@ export default function DesktopReader({
             onClick={() => onAction("snapshot-dismiss")}
             accent="#f9e2af"
             keyHint="D"
+            disabled={snapshotPending}
           />
         )}
         {showReadAction && (
@@ -370,8 +376,6 @@ export default function DesktopReader({
             buttonRef={snoozeBtnRef}
             onClick={() => setSnoozeOpen((value) => !value)}
             accent={accent}
-            holdProgress={snoozeHoldProgress}
-            holdColor="#f97316"
             keyHint="S"
           />
         )}
@@ -400,8 +404,6 @@ export default function DesktopReader({
             danger
             onClick={() => onAction("trash")}
             accent={accent}
-            holdProgress={trashHoldProgress}
-            holdColor="#f38ba8"
             keyHint="E"
           />
         )}

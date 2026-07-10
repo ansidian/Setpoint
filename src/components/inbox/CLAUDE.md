@@ -54,6 +54,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `reader/MobileBillDrawer.jsx` — mobile slide-up bill-pay sheet (expand/collapse affordance) extracted from MobileReader
 - `reader/MobileReaderHeader.jsx` — mobile reader subject/sender/status-pills/briefing-triage header block extracted from MobileReader
 - `reader/MobileActionRow.jsx` — single-row mobile action buttons
+- `reader/MobileTriageBar.jsx` — always-visible mobile reader bar for primary one-tap triage verbs
 - `reader/MobileReaderControls.jsx` — pill badges and inline mobile controls
 - `reader/readerActionsModel.js` — shared action visibility for both reader panes; delegates snapshot lifecycle gating to `activeSnapshotWorkflowModel` so buttons match the hotkeys/dispatch (incl. the `snapshot_item_id` guard)
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BarChart3,
   History,
@@ -14,8 +14,8 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger, isMobile }) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
+      role="menuitem"
+      tabIndex={-1}
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onClick?.();
@@ -54,6 +54,8 @@ function MenuLink({ icon, label, to, onClick, isMobile }) {
   return (
     <Link
       to={to}
+      role="menuitem"
+      tabIndex={-1}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -77,7 +79,7 @@ function MenuLink({ icon, label, to, onClick, isMobile }) {
   );
 }
 
-function OverflowButton({ open, onClick, isMobile }) {
+function OverflowButton({ open, onClick, isMobile, triggerRef }) {
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   const active = hover || open;
@@ -86,7 +88,10 @@ function OverflowButton({ open, onClick, isMobile }) {
   return (
     <button
       type="button"
+      ref={triggerRef}
       aria-label="Open more actions"
+      aria-haspopup="menu"
+      aria-expanded={open}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => {
@@ -123,11 +128,102 @@ export function OverflowMenu({
   onOpenHistory,
   onOpenAnalytics,
 }) {
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // Keep the latest onCloseMenu in a ref so the keydown-listener effect below
+  // doesn't need it in its dependency array — only `menuOpen` should control
+  // when that effect (re)runs. Otherwise a non-memoized onCloseMenu identity
+  // changing on an unrelated parent re-render would re-run the whole effect
+  // and yank focus back to the first item mid-navigation.
+  const onCloseMenuRef = useRef(onCloseMenu);
+  useEffect(() => {
+    onCloseMenuRef.current = onCloseMenu;
+  });
+
+  // Focus the first menuitem exactly once when the menu opens. Deliberately
+  // depends only on menuOpen so it never re-fires from an unrelated re-render.
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const menuNode = menuRef.current;
+    const firstItem = menuNode?.querySelector('[role="menuitem"]');
+    firstItem?.focus();
+  }, [menuOpen]);
+
+  // Attach the keydown listener once per open/close cycle. Reads onCloseMenu
+  // through the ref above so it always calls the latest callback without
+  // needing to be in this effect's dependency array.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const menuNode = menuRef.current;
+    if (!menuNode) return undefined;
+
+    const getItems = () => Array.from(menuNode.querySelectorAll('[role="menuitem"]'));
+
+    const handleKeyDown = (event) => {
+      const currentItems = getItems();
+      const currentIndex = currentItems.indexOf(document.activeElement);
+
+      switch (event.key) {
+        case "Escape": {
+          event.preventDefault();
+          onCloseMenuRef.current();
+          triggerRef.current?.focus();
+          break;
+        }
+        case "ArrowDown": {
+          event.preventDefault();
+          const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % currentItems.length;
+          currentItems[nextIndex]?.focus();
+          break;
+        }
+        case "ArrowUp": {
+          event.preventDefault();
+          const prevIndex =
+            currentIndex === -1
+              ? currentItems.length - 1
+              : (currentIndex - 1 + currentItems.length) % currentItems.length;
+          currentItems[prevIndex]?.focus();
+          break;
+        }
+        case "Home": {
+          event.preventDefault();
+          currentItems[0]?.focus();
+          break;
+        }
+        case "End": {
+          event.preventDefault();
+          currentItems[currentItems.length - 1]?.focus();
+          break;
+        }
+        case "Tab": {
+          onCloseMenuRef.current();
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
+    menuNode.addEventListener("keydown", handleKeyDown);
+    return () => menuNode.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
+
   return (
     <>
-      <OverflowButton open={menuOpen} onClick={onToggleMenu} isMobile={isMobile} />
+      <OverflowButton
+        open={menuOpen}
+        onClick={onToggleMenu}
+        isMobile={isMobile}
+        triggerRef={triggerRef}
+      />
       {menuOpen && (
         <div
+          ref={menuRef}
+          role="menu"
+          aria-label="More actions"
           style={{
             position: "absolute",
             right: 0,

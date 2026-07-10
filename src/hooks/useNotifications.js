@@ -23,6 +23,11 @@ function saveSet(key, set) {
   localStorage.setItem(key, JSON.stringify(arr));
 }
 
+export function calendarNotificationKey(event) {
+  const id = event?.id ?? event?.iCalUID ?? "";
+  return `${id}|${event?.title ?? ""}|${event?.startMs ?? ""}`;
+}
+
 const hasNotificationAPI = typeof Notification !== "undefined";
 
 function notify(title, body) {
@@ -68,7 +73,7 @@ export default function useNotifications(liveData) {
       if (event.passed || event.allDay || !event.startMs) continue;
       const timeUntil = event.startMs - now;
       if (timeUntil > 0 && timeUntil <= CALENDAR_LEAD_TIME_MS) {
-        const eventKey = `${event.title}-${event.startMs}`;
+        const eventKey = calendarNotificationKey(event);
         if (!notifiedEvents.has(eventKey)) {
           const mins = Math.round(timeUntil / 60000);
           notify(

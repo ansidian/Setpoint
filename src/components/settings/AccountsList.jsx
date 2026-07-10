@@ -30,7 +30,7 @@ const SETTINGS_PRIMARY_BUTTON_CLASS =
 const SETTINGS_GHOST_BUTTON_CLASS =
   "border border-white/[0.08] bg-white/[0.03] text-foreground hover:bg-white/[0.05] hover:border-white/[0.14]";
 
-function AccountRow({ acc, accounts, setAccounts, onRemove }) {
+function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, onReconnectICloud }) {
   const [editing, setEditing] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [label, setLabel] = useState(acc.label || acc.email);
@@ -113,6 +113,11 @@ function AccountRow({ acc, accounts, setAccounts, onRemove }) {
             <div className="mt-1 truncate text-[11px] text-muted-foreground/75">
               {acc.email}
             </div>
+            {acc.needs_reauth ? (
+              <div className="mt-1 text-[11px] font-medium text-[var(--sp-cream)]">
+                Access revoked
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -120,6 +125,22 @@ function AccountRow({ acc, accounts, setAccounts, onRemove }) {
           className="flex flex-wrap items-center gap-2"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          {acc.needs_reauth ? (
+            <Button
+              size="xs"
+              onClick={() => {
+                if (acc.type === "icloud") {
+                  onReconnectICloud?.(acc.email);
+                } else {
+                  onReconnectGmail?.();
+                }
+              }}
+              className="border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 text-[var(--sp-cream)] hover:bg-[var(--sp-cream)]/16 hover:border-[var(--sp-cream)]/28"
+            >
+              Reconnect
+            </Button>
+          ) : null}
+
           {acc.type === "gmail" ? (
             <button
               onClick={async () => {
@@ -269,7 +290,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove }) {
   );
 }
 
-export default function AccountsList({ accounts, setAccounts, onRemove }) {
+export default function AccountsList({ accounts, setAccounts, onRemove, onReconnectGmail, onReconnectICloud }) {
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function handleDragEnd(event) {
@@ -293,6 +314,8 @@ export default function AccountsList({ accounts, setAccounts, onRemove }) {
               accounts={accounts}
               setAccounts={setAccounts}
               onRemove={onRemove}
+              onReconnectGmail={onReconnectGmail}
+              onReconnectICloud={onReconnectICloud}
             />
           ))}
         </div>

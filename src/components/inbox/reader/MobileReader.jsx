@@ -1,16 +1,13 @@
 import { useRef, useState } from "react";
 import {
   ArrowLeft,
-  BellOff,
   Check,
-  Clock,
   CreditCard,
   FileText,
   ExternalLink,
   Mail,
   MailOpen,
   Pin,
-  Trash2,
   XCircle,
   Zap,
 } from "lucide-react";
@@ -24,6 +21,7 @@ import MobileActionRow from "./MobileActionRow";
 import { resolveReaderActions } from "./readerActionsModel.js";
 import MobileBillDrawer from "./MobileBillDrawer";
 import MobileReaderHeader from "./MobileReaderHeader";
+import MobileTriageBar from "./MobileTriageBar";
 
 export default function MobileReader({
   email,
@@ -43,6 +41,7 @@ export default function MobileReader({
   readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
+  const actions = resolveReaderActions(email, { readOnly });
   const {
     catchUp,
     isQueuedSnapshot,
@@ -50,17 +49,14 @@ export default function MobileReader({
     showMutableActions,
     showDestructiveActions,
     billToggleEligible,
-    showSnapshotWorkflowActions,
     canReopen,
-    canHandle,
     canDismiss,
     canMoveToNeeds,
-    canMoveToFyi,
-    canMoveToNoise,
     canPin,
     pinned,
-  } = resolveReaderActions(email, { readOnly });
+  } = actions;
   const showBillToggle = showDestructiveActions && billToggleEligible;
+  const snapshotPending = !!email._optimisticSnapshotPending;
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
@@ -70,6 +66,21 @@ export default function MobileReader({
     setActionsOpen(false);
     onAction(kind, payload);
   };
+  const openSnoozePicker = () => {
+    setActionsOpen(false);
+    setSnoozeOpen(true);
+  };
+  const overflowActionCount = [
+    canPin,
+    showBillToggle,
+    !catchUp && !!email.claude?.draftReply,
+    canReopen,
+    canMoveToNeeds,
+    canDismiss,
+    showMutableActions,
+    !!gmailUrl,
+  ].filter(Boolean).length;
+  const overflowPanelHeight = Math.min(360, 72 + overflowActionCount * 52);
 
   return (
     <div
@@ -157,6 +168,13 @@ export default function MobileReader({
           triageSummary={triageSummary}
         />
 
+        <MobileTriageBar
+          actions={actions}
+          onAction={onAction}
+          onSnooze={openSnoozePicker}
+          snapshotPending={snapshotPending}
+        />
+
         {drafting && !catchUp && email.claude?.draftReply && (
           <div
             data-testid="inbox-mobile-draft-panel"
@@ -198,7 +216,7 @@ export default function MobileReader({
           panelRef={actionsPanelRef}
           onClose={() => setActionsOpen(false)}
           width={220}
-          height={showSnapshotWorkflowActions ? 420 : showBillToggle || email.claude?.draftReply ? 320 : 260}
+          height={overflowPanelHeight}
           role="menu"
           ariaLabel="Email actions"
           style={{
@@ -241,6 +259,7 @@ export default function MobileReader({
               <MobileActionRow
                 icon={Check}
                 label="Reopen"
+                disabled={snapshotPending}
                 onClick={() => handleAction("snapshot-reopen")}
               />
             )}
@@ -248,34 +267,15 @@ export default function MobileReader({
               <MobileActionRow
                 icon={Zap}
                 label="Move to Needs"
+                disabled={snapshotPending}
                 onClick={() => handleAction("snapshot-move-lane", "needs_attention")}
-              />
-            )}
-            {canMoveToFyi && (
-              <MobileActionRow
-                icon={FileText}
-                label="Move to FYI"
-                onClick={() => handleAction("snapshot-move-lane", "fyi")}
-              />
-            )}
-            {canMoveToNoise && (
-              <MobileActionRow
-                icon={BellOff}
-                label="Move to Noise"
-                onClick={() => handleAction("snapshot-move-lane", "noise")}
-              />
-            )}
-            {canHandle && (
-              <MobileActionRow
-                icon={Check}
-                label="Handled"
-                onClick={() => handleAction("snapshot-handled")}
               />
             )}
             {canDismiss && (
               <MobileActionRow
                 icon={XCircle}
                 label="Dismiss"
+                disabled={snapshotPending}
                 onClick={() => handleAction("snapshot-dismiss")}
               />
             )}
@@ -286,16 +286,6 @@ export default function MobileReader({
                 onClick={() => handleAction("toggle-read")}
               />
             )}
-            {showDestructiveActions && (
-              <MobileActionRow
-                icon={Clock}
-                label="Snooze"
-                onClick={() => {
-                  setActionsOpen(false);
-                  setSnoozeOpen(true);
-                }}
-              />
-            )}
             {gmailUrl && (
               <MobileActionRow
                 icon={ExternalLink}
@@ -304,14 +294,6 @@ export default function MobileReader({
                   setActionsOpen(false);
                   window.open(gmailUrl, "_blank", "noopener,noreferrer");
                 }}
-              />
-            )}
-            {showDestructiveActions && (
-              <MobileActionRow
-                icon={Trash2}
-                label="Trash"
-                danger
-                onClick={() => handleAction("trash")}
               />
             )}
           </div>

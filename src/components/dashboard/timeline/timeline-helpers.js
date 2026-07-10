@@ -1,4 +1,5 @@
-import { dayBucket, eventState, pacificClock } from "../../../lib/shell-helpers";
+import { dayBucket, eventState, overdueLabel, pacificClock } from "../../../lib/shell-helpers";
+import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 
 // NOTE: literal hexes (not --sp-* tokens) because these values are consumed via
 // `${color}NN` hex-alpha string concat in TimelineRow (e.g. `${color}1e`); a
@@ -43,8 +44,16 @@ export function formatFullDateForOffset(offset, now) {
  * timeline flash empty on every SSE refresh and on every return to the
  * dashboard, which reads as "the calendar stopped loading".
  */
-export function shouldHoldPartialTimeline({ eventLoadingState, filtersEvents }) {
-  return !!filtersEvents && eventLoadingState === "empty_loading";
+export function shouldHoldPartialTimeline({
+  eventLoadingState,
+  filtersEvents,
+  filtersDeadlines,
+  deadlinesLoading,
+  hasDeadlineRows,
+}) {
+  const eventsCold = !!filtersEvents && eventLoadingState === "empty_loading";
+  const deadlinesCold = !!filtersDeadlines && !!deadlinesLoading && !hasDeadlineRows;
+  return eventsCold || deadlinesCold;
 }
 
 export function buildTimelineGroups(items, now, filters, { minDay = null } = {}) {
@@ -120,6 +129,44 @@ export function resolveTodayNowMarkerIndex(items, now) {
     else break;
   }
   return index;
+}
+
+/**
+ * Derive the `now`-dependent primitives TimelineRow needs (isPast/isLive,
+ * the deadline overdue label, the reminder summary, and — for the live event
+ * row only — the in-card progress-line inputs). Callers memoize this per item
+ * on `[items, now, isMobile]` so a 30s tick that changes none of these values
+ * for a given row keeps that row's props referentially stable, letting
+ * TimelineRow's own `memo` bail instead of re-rendering every row.
+ */
+export function deriveTimelineRowState(item, now, { isMobile = false } = {}) {
+  let isPast = false;
+  let isLive = false;
+  let overdueText = null;
+
+  if (item.kind === "event") {
+    const event = item.data;
+    const isAllDayEvent = !!event.allDay;
+    const state = isAllDayEvent ? "future" : eventState(event, now);
+    isPast = state === "past";
+    isLive = state === "live";
+  } else if (item.kind === "deadline") {
+    const deadline = item.data;
+    isPast = deadline.status === "complete";
+    if (deadline.status !== "complete") {
+      overdueText = overdueLabel(item.dueAtMs, now);
+    }
+  }
+
+  const reminderSummary = formatReminderSummary(item.data, { now });
+
+  let liveMarker = null;
+  if (isLive && !isMobile && item.kind === "event" && item.startMs != null && item.endMs != null) {
+    const pct = percentElapsed(item.startMs, item.endMs, now);
+    liveMarker = { pct, label: formatNowMarkerLabel(now, pct) };
+  }
+
+  return { isPast, isLive, overdueText, reminderSummary, liveMarker };
 }
 
 /**

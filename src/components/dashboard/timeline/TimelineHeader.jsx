@@ -32,6 +32,8 @@ function TimelineRefreshStatus({ accent }) {
   return (
     <div
       data-testid="timeline-refresh-status"
+      role="status"
+      aria-live="polite"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -58,7 +60,7 @@ function TimelineRefreshStatus({ accent }) {
           animation: "dashPulse 1.8s ease-in-out infinite",
         }}
       />
-      Updating Google Calendar
+      Updating timeline
     </div>
   );
 }

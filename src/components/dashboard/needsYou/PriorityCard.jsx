@@ -20,6 +20,7 @@ function CardActionButton({ tone, label, onClick }) {
   return (
     <button
       type="button"
+      className="sp-focus-ring"
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       onMouseEnter={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
@@ -30,7 +31,7 @@ function CardActionButton({ tone, label, onClick }) {
         border: `1px solid color-mix(in srgb, ${tone} ${active ? 46 : 24}%, transparent)`,
         background: `color-mix(in srgb, ${tone} ${active ? 18 : 9}%, transparent)`,
         color: tone, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-        whiteSpace: "nowrap", outline: "none",
+        whiteSpace: "nowrap",
         transform: active ? "translateY(-1px)" : "none",
         transition: "background 130ms ease, border-color 130ms ease, transform 130ms ease",
       }}

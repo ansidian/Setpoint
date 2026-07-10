@@ -19,6 +19,7 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
   });
   const [searchLimit, setSearchLimit] = useState(30);
   const searchRequestRef = useRef(0);
+  const searchAbortRef = useRef(null);
   // Tracks the query the current searchLimit was grown for, so the term-change
   // effect below can tell "limit already reset for this term" apart from
   // "term changed, reset the limit" without re-triggering on every render.
@@ -70,7 +71,10 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
     }));
 
     const timeout = setTimeout(() => {
-      searchEmails(term, searchLimit)
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+      searchEmails(term, searchLimit, { signal: controller.signal })
         .then((data) => {
           if (searchRequestRef.current !== requestId) return;
           // Reconcile fresh results against the latest read state: session-wide
@@ -83,6 +87,7 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
           setIndexedSearch(normalizeIndexedSearchResults(data, readOverrides));
         })
         .catch((err) => {
+          if (err?.name === "AbortError") return;
           if (searchRequestRef.current !== requestId) return;
           setIndexedSearch({
             query: term,
@@ -96,7 +101,13 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
         });
     }, 250);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+        searchAbortRef.current = null;
+      }
+    };
   // Intentionally exclude liveReadOverrides from deps. Some callers pass
   // object-literal read override defaults, and including that object here
   // would restart the debounce after every search-state render.

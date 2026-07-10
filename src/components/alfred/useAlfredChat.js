@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { deleteAlfredConversation, runAlfredStream } from "../../api";
+import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.js";
 import {
   alfredModelByKey,
   applyAlfredEvent,
@@ -14,7 +15,7 @@ const MODEL_STORAGE_KEY = "alfred:model";
 // (and the server allowlist) doesn't know.
 function loadStoredModelKey() {
   try {
-    return alfredModelByKey(localStorage.getItem(MODEL_STORAGE_KEY)).key;
+    return alfredModelByKey(readDemoSafeLocalStorage(MODEL_STORAGE_KEY)).key;
   } catch {
     return DEFAULT_ALFRED_MODEL_KEY;
   }
@@ -29,7 +30,7 @@ export default function useAlfredChat() {
   const setModelKey = useCallback((key) => {
     const valid = alfredModelByKey(key).key;
     setModelKeyState(valid);
-    try { localStorage.setItem(MODEL_STORAGE_KEY, valid); } catch { /* ignore */ }
+    writeDemoSafeLocalStorage(MODEL_STORAGE_KEY, valid);
   }, []);
 
   const modelKeyRef = useRef(modelKey);

@@ -23,6 +23,10 @@ function render(initialProps = { search: "", liveReadOverrides: {} }) {
   return renderHook((props) => useIndexedSearch(props), { initialProps });
 }
 
+function signalOptions() {
+  return expect.objectContaining({ signal: expect.any(AbortSignal) });
+}
+
 async function flushDebounce() {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(250);
@@ -58,7 +62,7 @@ describe("useIndexedSearch", () => {
     await flushDebounce();
 
     expect(searchEmails).toHaveBeenCalledTimes(1);
-    expect(searchEmails).toHaveBeenCalledWith("hello", 30);
+    expect(searchEmails).toHaveBeenCalledWith("hello", 30, signalOptions());
     expect(result.current.indexedSearch.loading).toBe(false);
     expect(result.current.indexedSearch.emails).toHaveLength(1);
     // read is merged up from the session-wide live override map.
@@ -76,7 +80,7 @@ describe("useIndexedSearch", () => {
     await flushDebounce();
 
     expect(searchEmails).toHaveBeenCalledTimes(1);
-    expect(searchEmails).toHaveBeenCalledWith("foobar", 30);
+    expect(searchEmails).toHaveBeenCalledWith("foobar", 30, signalOptions());
     expect(result.current.indexedSearch.emails).toHaveLength(1);
   });
 
@@ -92,11 +96,11 @@ describe("useIndexedSearch", () => {
 
     const { result, rerender } = render({ search: "foo", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(1, "foo", 30);
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "foo", 30, signalOptions());
 
     rerender({ search: "foobar", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(2, "foobar", 30);
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "foobar", 30, signalOptions());
 
     // Newest (request 2) lands first and wins.
     await act(async () => {
@@ -111,6 +115,30 @@ describe("useIndexedSearch", () => {
       await Promise.resolve();
     });
     expect(result.current.indexedSearch.emails.map((e) => e.uid)).toEqual(["from-newest"]);
+  });
+
+  it("aborts an in-flight request when a newer query supersedes it", async () => {
+    searchEmails.mockImplementation(() => new Promise(() => {}));
+
+    const { rerender } = render({ search: "foo", liveReadOverrides: {} });
+    await flushDebounce();
+    const firstSignal = searchEmails.mock.calls[0][2].signal;
+
+    rerender({ search: "foobar", liveReadOverrides: {} });
+    await flushDebounce();
+    const secondSignal = searchEmails.mock.calls[1][2].signal;
+
+    expect(firstSignal.aborted).toBe(true);
+    expect(secondSignal.aborted).toBe(false);
+  });
+
+  it("does not surface an AbortError as search failure state", async () => {
+    searchEmails.mockRejectedValue(Object.assign(new Error("aborted"), { name: "AbortError" }));
+
+    const { result } = render({ search: "hello", liveReadOverrides: {} });
+    await flushDebounce();
+
+    expect(result.current.indexedSearch.error).toBeNull();
   });
 
   it("surfaces a search error while retaining the active query and clearing loading", async () => {
@@ -183,7 +211,7 @@ describe("useIndexedSearch", () => {
     const { result } = render({ search: "hello", liveReadOverrides: {} });
     await flushDebounce();
 
-    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30);
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30, signalOptions());
 
     searchEmails.mockResolvedValue({
       results: [searchResult("m1"), searchResult("m2")],
@@ -194,7 +222,7 @@ describe("useIndexedSearch", () => {
     act(() => result.current.loadMoreIndexedSearch());
     await flushDebounce();
 
-    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60);
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60, signalOptions());
     expect(result.current.indexedSearch.emails.map((e) => e.uid)).toEqual(["m1", "m2"]);
   });
 
@@ -203,15 +231,15 @@ describe("useIndexedSearch", () => {
 
     const { result, rerender } = render({ search: "hello", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30);
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30, signalOptions());
 
     act(() => result.current.loadMoreIndexedSearch());
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60);
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60, signalOptions());
 
     rerender({ search: "newterm", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(3, "newterm", 30);
+    expect(searchEmails).toHaveBeenNthCalledWith(3, "newterm", 30, signalOptions());
   });
 
   it("stops growing at the 100 ceiling: hasMore becomes false and further loadMore calls do not refetch", async () => {
@@ -219,19 +247,19 @@ describe("useIndexedSearch", () => {
 
     const { result } = render({ search: "hello", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30);
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30, signalOptions());
 
     act(() => result.current.loadMoreIndexedSearch()); // -> 60
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60);
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60, signalOptions());
 
     act(() => result.current.loadMoreIndexedSearch()); // -> 90
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(3, "hello", 90);
+    expect(searchEmails).toHaveBeenNthCalledWith(3, "hello", 90, signalOptions());
 
     act(() => result.current.loadMoreIndexedSearch()); // -> 100 (clamped)
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(4, "hello", 100);
+    expect(searchEmails).toHaveBeenNthCalledWith(4, "hello", 100, signalOptions());
 
     // Server still says has_more: true, but the ceiling caps surfaced hasMore.
     expect(result.current.indexedSearch.hasMore).toBe(false);

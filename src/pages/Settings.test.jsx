@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 
@@ -109,14 +109,14 @@ describe("Settings page", () => {
 
     expect(await screen.findByTestId("settings-accounts-section")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actual Budget" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Actual Budget" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("settings-actual-section")).toBeTruthy();
     });
     expect(window.location.search).toBe("?tab=actual");
 
-    fireEvent.click(screen.getByRole("button", { name: "System" }));
+    fireEvent.click(screen.getByRole("tab", { name: "System" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("settings-system-section")).toBeTruthy();
@@ -129,13 +129,13 @@ describe("Settings page", () => {
 
     expect(await screen.findByTestId("settings-accounts-section")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Email Automation" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Email Automation" }));
     await waitFor(() => {
       expect(screen.getByTestId("settings-briefing-section")).toBeTruthy();
     });
     expect(window.location.search).toBe("?tab=briefing");
 
-    fireEvent.click(screen.getByRole("button", { name: "System" }));
+    fireEvent.click(screen.getByRole("tab", { name: "System" }));
     await waitFor(() => {
       expect(screen.getByTestId("settings-system-section")).toBeTruthy();
     });
@@ -169,6 +169,63 @@ describe("Settings page", () => {
       expect(mockApi.updateSettings).toHaveBeenCalledWith({
         triage_sound_settings: mockApi.soundSettingsPayload,
       });
+    });
+  });
+});
+
+describe("Settings sections tablist (WAI-ARIA)", () => {
+  it("exposes a tablist with one selected tab and a labelled tabpanel", async () => {
+    renderSettings();
+    await screen.findByTestId("settings-accounts-section");
+
+    const tablist = screen.getByRole("tablist", { name: "Settings sections" });
+    const tabs = within(tablist).getAllByRole("tab");
+    expect(tabs).toHaveLength(4);
+
+    const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
+    expect(selected).toHaveLength(1);
+    expect(selected[0].textContent).toBe("Accounts & Integrations");
+
+    for (const tab of tabs) {
+      const isActive = tab.textContent === "Accounts & Integrations";
+      expect(tab.tabIndex).toBe(isActive ? 0 : -1);
+    }
+
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.getAttribute("aria-label")).toBe("Accounts & Integrations");
+  });
+
+  it("ArrowDown moves selection to the next section and switches content (vertical strip)", async () => {
+    renderSettings();
+    await screen.findByTestId("settings-accounts-section");
+
+    const activeTab = screen.getByRole("tab", { name: "Accounts & Integrations" });
+    activeTab.focus();
+    fireEvent.keyDown(activeTab, { key: "ArrowDown" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-actual-section")).toBeTruthy();
+    });
+    expect(screen.getByRole("tab", { name: "Actual Budget" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-label")).toBe("Actual Budget");
+  });
+
+  it("Home and End jump to the first and last section", async () => {
+    renderSettings();
+    await screen.findByTestId("settings-accounts-section");
+
+    const activeTab = screen.getByRole("tab", { name: "Accounts & Integrations" });
+    activeTab.focus();
+    fireEvent.keyDown(activeTab, { key: "End" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-system-section")).toBeTruthy();
+    });
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "System" }), { key: "Home" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-accounts-section")).toBeTruthy();
     });
   });
 });

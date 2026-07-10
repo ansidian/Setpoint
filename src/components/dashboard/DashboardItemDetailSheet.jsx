@@ -118,6 +118,7 @@ export default function DashboardItemDetailSheet({
         anchorRef={anchorRef}
         onClose={onClose}
         ariaLabel={KIND_LABEL[kind] || "Details"}
+        open={!editing}
         hideTitle
         width={360}
         maxWidth={380}

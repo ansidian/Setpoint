@@ -1,18 +1,48 @@
+import { useRef } from "react";
 import { CalendarDays, Inbox, LayoutList, Newspaper, Notebook } from "lucide-react";
 import { Kbd } from "./Kbd.jsx";
 
 const TAB_ICONS = {
   dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays, notes: Notebook, news: Newspaper,
 };
-const TAB_LABELS = {
+// Exported so DashboardShell's tabpanel wrappers can reuse the same label
+// text for their mobile aria-label fallback (ShellTabs doesn't render on
+// mobile, so the ids these labels would otherwise resolve via aria-labelledby
+// don't exist there).
+// eslint-disable-next-line react-refresh/only-export-components
+export const TAB_LABELS = {
   dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes", news: "News",
 };
 const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3", notes: "4", news: "5" };
+const TABS = ["dashboard", "inbox", "calendar", "notes", "news"];
 
+// WAI-ARIA tabs pattern (https://www.w3.org/WAI/ARIA/apg/patterns/tabs/):
+// activation-follows-focus roving tabindex. There are only 5 cheap, always-
+// mounted (KeepAliveTab) panels, so moving focus with the arrow keys also
+// switches the tab immediately instead of requiring a separate activation key.
 export function ShellTabs({ tab, onTab, inboxUnreadSignalCount }) {
-  const tabs = ["dashboard", "inbox", "calendar", "notes", "news"];
+  const tabs = TABS;
+  const tabRefs = useRef({});
+
+  function handleKeyDown(event) {
+    const currentIndex = tabs.indexOf(tab);
+    let nextIndex = null;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    onTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  }
+
   return (
     <div
+      role="tablist"
+      aria-label="Primary"
       style={{
         display: "flex",
         gap: 2,
@@ -29,8 +59,16 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount }) {
         return (
           <button
             key={tabKey}
+            ref={(el) => { tabRefs.current[tabKey] = el; }}
             type="button"
+            role="tab"
+            id={`shell-tab-${tabKey}`}
+            aria-controls={`shell-tabpanel-${tabKey}`}
+            aria-selected={tab === tabKey}
+            tabIndex={tab === tabKey ? 0 : -1}
+            className="sp-focus-ring"
             onClick={() => onTab(tabKey)}
+            onKeyDown={handleKeyDown}
             style={{
               padding: "5px 12px",
               borderRadius: 7,

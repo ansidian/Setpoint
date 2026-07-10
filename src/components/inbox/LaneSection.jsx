@@ -7,9 +7,8 @@ import { StickyHeader, LaneIcon } from "./primitives";
 // noise-unread pill, chevron) plus the expanded row body. Memoized as a render
 // boundary so a lane with referentially-stable props can skip re-rendering when
 // other lanes change. `renderRows` is passed in so the row markup stays owned by
-// InboxList. Note: InboxList currently recreates `renderRows` each render, so the
-// runtime bail-out is not yet fully realized -- prop-identity stabilization is a
-// deferred follow-up (design spec SS6.3).
+// InboxList — callers must pass a stable renderRows (see InboxList.jsx) or this
+// memo boundary is defeated.
 function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, renderRows }) {
   return (
     <div>

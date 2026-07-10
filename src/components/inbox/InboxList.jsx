@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Mail, Search, CheckCheck, RefreshCw,
   ChevronRight, ChevronDown, X,
@@ -121,7 +121,11 @@ export default function InboxList({
     return g;
   }, [emails, layout]);
 
-  const renderRows = (list) => list.map((email) => {
+  // Stable across unrelated InboxList re-renders (filters, sheet toggles, hover
+  // state, etc.) so LaneSection's memo actually engages — see LaneSection.jsx.
+  // selectedId and nowTick still legitimately churn this on selection changes
+  // and the relative-time tick.
+  const renderRows = useCallback((list) => list.map((email) => {
     const rowKey = email.id || email.uid;
     return (
       <div
@@ -139,7 +143,7 @@ export default function InboxList({
         />
       </div>
     );
-  });
+  }), [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick]);
 
   return (
     <div

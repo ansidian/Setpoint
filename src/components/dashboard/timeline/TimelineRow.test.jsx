@@ -1,6 +1,14 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import TimelineRow from "./TimelineRow.jsx";
+import { deriveTimelineRowState } from "./timeline-helpers.js";
+
+// TimelineRow (PERF-L01) no longer accepts a raw `now` prop — its now-derived
+// primitives (isPast/isLive/overdueText/reminderSummary/liveMarker) come from
+// deriveTimelineRowState, computed here the same way TimelineDayGroup does.
+function timelineRowProps(item, now, { isMobile } = {}) {
+  return { ...deriveTimelineRowState(item, now, { isMobile }), item, isMobile };
+}
 
 describe("TimelineRow", () => {
   afterEach(() => {
@@ -40,8 +48,8 @@ describe("TimelineRow", () => {
 
     render(
       <>
-        <TimelineRow accent="#cba6da" item={upcomingEvent} now={now} />
-        <TimelineRow accent="#cba6da" item={firedDeadline} now={now} />
+        <TimelineRow accent="#cba6da" {...timelineRowProps(upcomingEvent, now)} />
+        <TimelineRow accent="#cba6da" {...timelineRowProps(firedDeadline, now)} />
       </>,
     );
 
@@ -67,7 +75,7 @@ describe("TimelineRow", () => {
       },
     };
 
-    render(<TimelineRow accent="#cba6da" item={deadline} now={now} />);
+    render(<TimelineRow accent="#cba6da" {...timelineRowProps(deadline, now)} />);
 
     const row = screen.getByTestId("timeline-row-desktop");
     expect(row.textContent).toContain("Deadline");
@@ -93,7 +101,7 @@ describe("TimelineRow", () => {
       },
     };
 
-    render(<TimelineRow accent="#cba6da" item={deadline} now={now} />);
+    render(<TimelineRow accent="#cba6da" {...timelineRowProps(deadline, now)} />);
 
     expect(screen.getByTestId("timeline-row-dot").firstElementChild?.style.background).toBe("#e44332");
   });
@@ -113,7 +121,7 @@ describe("TimelineRow", () => {
       },
     };
 
-    render(<TimelineRow accent="#cba6da" item={allDayEvent} now={now} />);
+    render(<TimelineRow accent="#cba6da" {...timelineRowProps(allDayEvent, now)} />);
 
     expect(screen.getByText("All day")).toBeTruthy();
     expect(screen.queryByText("5:00 am")).toBeNull();
@@ -141,7 +149,7 @@ describe("TimelineRow", () => {
       },
     };
 
-    render(<TimelineRow accent="#cba6da" item={birthdayEvent} now={now} />);
+    render(<TimelineRow accent="#cba6da" {...timelineRowProps(birthdayEvent, now)} />);
 
     const row = screen.getByTestId("timeline-row-desktop");
     expect(row.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
@@ -165,14 +173,14 @@ describe("TimelineRow", () => {
       data: { id: "past-1", title: "Earlier standup", startMs: new Date("2026-05-05T18:00:00.000Z").getTime(), endMs: new Date("2026-05-05T19:00:00.000Z").getTime() },
     };
 
-    render(<TimelineRow accent="#cba6da" item={liveEvent} now={now} />);
+    render(<TimelineRow accent="#cba6da" {...timelineRowProps(liveEvent, now)} />);
     const marker = screen.getByTestId("timeline-now-marker");
     expect(marker.textContent).toContain("NOW");
     expect(marker.textContent).toContain("% elapsed");
     expect(marker.textContent).toContain("42%");
 
     cleanup();
-    render(<TimelineRow accent="#cba6da" item={pastEvent} now={now} />);
+    render(<TimelineRow accent="#cba6da" {...timelineRowProps(pastEvent, now)} />);
     expect(screen.queryByTestId("timeline-now-marker")).toBeNull();
   });
 });

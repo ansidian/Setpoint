@@ -1,3 +1,14 @@
+@import "@fontsource/montserrat/latin-300.css";
+@import "@fontsource/montserrat/latin-400.css";
+@import "@fontsource/montserrat/latin-500.css";
+@import "@fontsource/montserrat/latin-600.css";
+@import "@fontsource/montserrat/latin-700.css";
+@import "@fontsource/fira-code/latin-400.css";
+@import "@fontsource/fira-code/latin-500.css";
+@import "@fontsource/fira-code/latin-600.css";
+@import "@fontsource/instrument-serif/latin-400.css";
+@import "@fontsource/instrument-serif/latin-400-italic.css";
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -207,6 +218,33 @@ body {
 @media (max-width: 639px) {
   input, textarea, select { font-size: 16px; }
   :root { --sp-note-editor-font: 16px; }
+  .sp-agenda-touch { min-height: var(--sp-touch-min) !important; }
+
+  .sp-mobile-agenda-control {
+    transition: transform 170ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 170ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .sp-mobile-agenda-control:hover,
+  .sp-mobile-agenda-control:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--sp-accent) 24%, transparent);
+  }
+  .sp-mobile-agenda-control:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, transparent);
+    outline-offset: 2px;
+  }
+  .sp-mobile-agenda-control:active {
+    transform: translateY(0) scale(0.98);
+  }
+}
+
+@media (max-width: 639px) and (prefers-reduced-motion: reduce) {
+  .sp-mobile-agenda-control,
+  .sp-mobile-agenda-control:hover,
+  .sp-mobile-agenda-control:focus-visible,
+  .sp-mobile-agenda-control:active {
+    transform: none;
+    transition: none;
+  }
 }
 
 /* Display serif (hero greeting) — overridable via --serif-choice */
@@ -263,6 +301,11 @@ body {
 @keyframes newsPanelIn { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes newsBackdropIn { from { opacity: 0; } to { opacity: 1; } }
 
+.sp-focus-ring:focus-visible {
+  outline: 2px solid var(--sp-lavender);
+  outline-offset: 2px;
+}
+
 [data-calendar-focus-ring="true"]:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, transparent);
   outline-offset: 2px;
@@ -272,6 +315,23 @@ body {
 [data-calendar-suppress-focus-ring="true"] [data-calendar-focus-ring="true"]:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+/* CalendarCell hover (PERF-L03): kept in CSS, not React state, so hovering
+   a cell never re-renders it / re-invokes renderCellContents. `!important`
+   is required to win over the cell's own inline background/border-color
+   (computed per selected/past-tone/etc state). The `:not()` guards preserve
+   the original priority order — drop-target and inline-overflow (not
+   fallback/popover overflow) still win over hover, matching
+   CalendarCell.jsx's style branch order (`inlineOverflowOpen`). The
+   out-of-month rule is more specific (extra attribute selector) so it wins
+   over the base rule without relying on source order. */
+[data-calcell="true"][data-selected="false"]:not([data-drop-target="true"]):not([data-overflow-open="true"][data-overflow-mode="inline"]):hover {
+  background: rgba(255, 255, 255, 0.035) !important;
+  border-color: rgba(255, 255, 255, 0.085) !important;
+}
+[data-calcell="true"][data-selected="false"][data-current-month="false"]:not([data-drop-target="true"]):not([data-overflow-open="true"][data-overflow-mode="inline"]):hover {
+  background: rgba(255, 255, 255, 0.018) !important;
 }
 
 [data-calendar-suppress-focus-ring="true"] :focus {
@@ -375,6 +435,38 @@ body {
   background: color-mix(in srgb, var(--sp-accent) 16%, transparent);
   color: color-mix(in srgb, var(--sp-accent) 85%, white);
 }
+.inbox-mobile-triage-button {
+  transition:
+    transform 150ms ease-out,
+    background 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    box-shadow 150ms ease-out;
+}
+.inbox-mobile-triage-button:hover,
+.inbox-mobile-triage-button:focus-visible {
+  border-color: rgba(255,255,255,0.14) !important;
+  background: rgba(255,255,255,0.06) !important;
+  color: #fff !important;
+  transform: translateY(-1px) !important;
+}
+.inbox-mobile-triage-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent);
+}
+.inbox-mobile-triage-button:active {
+  background: rgba(255,255,255,0.09) !important;
+  transform: translateY(0) !important;
+}
+.inbox-mobile-triage-button--danger:hover,
+.inbox-mobile-triage-button--danger:focus-visible {
+  border-color: color-mix(in srgb, var(--sp-rose) 32%, transparent) !important;
+  background: color-mix(in srgb, var(--sp-rose) 13%, transparent) !important;
+  color: color-mix(in srgb, var(--sp-rose) 88%, white) !important;
+}
+.inbox-mobile-triage-button--danger:active {
+  background: color-mix(in srgb, var(--sp-rose) 17%, transparent) !important;
+}
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
@@ -391,6 +483,10 @@ body {
   .analytics-trigger-button:hover,
   .analytics-trigger-button:focus-visible {
     transform: translateY(0);
+  }
+  .inbox-mobile-triage-button:hover,
+  .inbox-mobile-triage-button:focus-visible {
+    transform: translateY(0) !important;
   }
   /* Note: the AI-shimmer gradient (BillBadgeHeader) is already held static for reduced-motion by
      the global `*, *::before, *::after { animation-duration: 0.01ms }` reset further below. */

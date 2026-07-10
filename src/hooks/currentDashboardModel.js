@@ -26,6 +26,28 @@ export function stabilizeCalendar(prev, next) {
   return next;
 }
 
+// Mirrors calendarContentSignature for the deadlines domain: covers the fields
+// that affect rendering (id/due_date/due_time/status/_completing) so a fresh
+// `liveDeadlines.upcoming` array from an unchanged poll can reuse the prior
+// reference — see currentDashboardModel usage note above.
+export function deadlineContentSignature(upcoming) {
+  if (!Array.isArray(upcoming)) return upcoming == null ? "null" : "invalid";
+  let sig = `${upcoming.length}`;
+  for (const item of upcoming) {
+    const id = item?.id ?? item?.todoist_id ?? "";
+    sig += `|${id}:${item?.due_date ?? ""}:${item?.due_time ?? ""}:${item?.status ?? ""}:${item?._completing ? 1 : 0}`;
+  }
+  return sig;
+}
+
+// Mirrors stabilizeCalendar for the deadlines domain (see stableCalendarRef in
+// useCurrentDashboard.js for the ref-caching call-site pattern this pairs with).
+export function stabilizeDeadlines(prev, next) {
+  if (prev === next) return next;
+  if (deadlineContentSignature(prev) === deadlineContentSignature(next)) return prev;
+  return next;
+}
+
 export function hasActiveRefreshWork(current) {
   const currentSources = current?.providerHealth?.currentData?.sources || [];
   return currentSources.some((source) => source.state === "refreshing")

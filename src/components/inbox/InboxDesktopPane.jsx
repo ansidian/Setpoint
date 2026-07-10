@@ -45,8 +45,6 @@ function InboxDesktopPane({
   unreadInView,
   onAction,
   markAllVisibleRead,
-  trashHold,
-  snoozeHold,
   showTriage,
   showDraft,
   showPreview,
@@ -60,6 +58,7 @@ function InboxDesktopPane({
   readOnly = false,
   undo,
   onUndo,
+  announcement,
 }) {
   return (
     <div
@@ -176,8 +175,6 @@ function InboxDesktopPane({
               showDraft={showDraft}
               billOpen={billOpen}
               setBillOpen={setBillOpen}
-              trashHoldProgress={trashHold.progress}
-              snoozeHoldProgress={snoozeHold.progress}
               isMobile={false}
               readOnly={readOnly}
             />
@@ -185,6 +182,7 @@ function InboxDesktopPane({
         </div>
       </div>
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
+      <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
     </div>
   );
 }

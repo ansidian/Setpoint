@@ -17,7 +17,13 @@ export async function readSseStream(body, onEvent) {
         .map((line) => line.slice(5).trim())
         .join("");
       if (!payload) continue;
-      onEvent(JSON.parse(payload));
+      let parsed;
+      try {
+        parsed = JSON.parse(payload);
+      } catch {
+        continue;
+      }
+      onEvent(parsed);
     }
   };
 

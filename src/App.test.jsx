@@ -5,6 +5,10 @@ const mockApi = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   prefetchCurrentDashboard: vi.fn(),
 }));
+const routeFailures = vi.hoisted(() => ({
+  login: false,
+  settings: false,
+}));
 
 vi.mock("./api", () => ({
   checkAuth: mockApi.checkAuth,
@@ -13,6 +17,7 @@ vi.mock("./api", () => ({
 
 vi.mock("./pages/Login", () => ({
   default: function LoginMock() {
+    if (routeFailures.login) throw new Error("Login render failed");
     return <div data-testid="login-page">login</div>;
   },
 }));
@@ -23,8 +28,9 @@ vi.mock("./pages/Dashboard", () => ({
   },
 }));
 
-vi.mock("./pages/Settings", () => ({
-  default: function SettingsMock() {
+vi.mock("./pages/SettingsRoute", () => ({
+  default: function SettingsRouteMock() {
+    if (routeFailures.settings) throw new Error("Settings render failed");
     return <div data-testid="settings-page">settings</div>;
   },
 }));
@@ -34,6 +40,8 @@ const { resolveRouterBasename } = await import("./routerBase.js");
 
 describe("App auth redirects", () => {
   beforeEach(() => {
+    routeFailures.login = false;
+    routeFailures.settings = false;
     mockApi.checkAuth.mockResolvedValue({ authenticated: true });
     window.history.replaceState({}, "", "/");
     window.matchMedia = vi.fn().mockReturnValue({
@@ -98,6 +106,27 @@ describe("App auth redirects", () => {
 
     expect(await screen.findByTestId("login-page")).toBeTruthy();
     expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
+  });
+
+  it("shows a recoverable fallback when Login throws during render", async () => {
+    routeFailures.login = true;
+    mockApi.checkAuth.mockResolvedValue({ authenticated: false });
+    window.history.replaceState({}, "", "/login");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "This view hit an error" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("shows a recoverable fallback when Settings throws during render", async () => {
+    routeFailures.settings = true;
+    window.history.replaceState({}, "", "/settings");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "This view hit an error" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
   it("bypasses auth checks in demo mode", async () => {

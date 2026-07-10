@@ -2,11 +2,11 @@ import { useEffect, useRef } from "react";
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-// Single refresh cadence: 5-min visibility-gated interval + tab focus (with
-// cooldown). Every trigger calls onQuickRefresh, which animates the refresh
-// pill and also pulls live data in parallel — so there's no separate
-// "silent" path. Tab focus is cooldown-gated to the same 5-min window so
-// rapid tab-switching doesn't hammer the refresh.
+// Single cadence scheduler: 5-min visibility-gated interval + tab focus (with
+// cooldown). The consumer decides whether this callback is a light fetch or a
+// heavier sync; Dashboard deliberately supplies its light current-data fetch.
+// Tab focus is cooldown-gated to the same 5-min window so rapid tab-switching
+// does not hammer the refresh endpoint.
 export default function useAutoRefresh({
   disabled = false,
   lastQuickRefreshAt,

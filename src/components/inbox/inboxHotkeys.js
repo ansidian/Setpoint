@@ -4,7 +4,9 @@ export function shouldSuspendInboxHotkeys(target) {
   if (isEditableKeyTarget(target)) return true;
   if (target?.closest?.("[data-suspend-inbox-hotkeys='true']")) return true;
   if (target?.closest?.('[role="menu"], [role="dialog"], [role="listbox"]')) return true;
-  return !!document.querySelector('[role="menu"], [role="dialog"], [role="listbox"]');
+  const active = document.activeElement;
+  return !!(active && active !== document.body
+    && active.closest?.('[role="menu"], [role="dialog"], [role="listbox"]'));
 }
 
 export function resolveInboxHotkeyAction(key, selectedEmail, readOnly) {

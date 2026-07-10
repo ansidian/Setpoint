@@ -43,4 +43,27 @@ describe("readSseStream", () => {
     await readSseStream(streamOf([": keepalive\n\n", frame("run_end", {})]), onEvent);
     expect(onEvent).toHaveBeenCalledTimes(1);
   });
+
+  it("skips a malformed frame and continues reading later events", async () => {
+    const onEvent = vi.fn();
+
+    await readSseStream(streamOf([
+      frame("run_start", { conversation_id: "c1" }),
+      "data: {not json\n\n",
+      frame("run_end", { stop_reason: "end_turn" }),
+    ]), onEvent);
+
+    expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      "run_start", "run_end",
+    ]);
+  });
+
+  it("propagates errors thrown by the event consumer", async () => {
+    const consumerError = new Error("consumer failed");
+
+    await expect(readSseStream(
+      streamOf([frame("run_start", { conversation_id: "c1" })]),
+      () => { throw consumerError; },
+    )).rejects.toBe(consumerError);
+  });
 });

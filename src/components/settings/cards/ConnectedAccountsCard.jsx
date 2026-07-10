@@ -51,6 +51,11 @@ export default function ConnectedAccountsCard({ accounts, setAccounts }) {
     }
   }
 
+  function handleReconnectICloud(email) {
+    setIcloudError(null);
+    setIcloudForm({ email: email || "", password: "", show: true });
+  }
+
   async function handleRemoveAccount(id) {
     try {
       await removeAccount(id);
@@ -73,6 +78,8 @@ export default function ConnectedAccountsCard({ accounts, setAccounts }) {
               accounts={accounts}
               setAccounts={setAccounts}
               onRemove={handleRemoveAccount}
+              onReconnectGmail={handleAddGmail}
+              onReconnectICloud={handleReconnectICloud}
             />
           </Suspense>
         ) : (
