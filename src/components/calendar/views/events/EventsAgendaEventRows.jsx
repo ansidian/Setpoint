@@ -7,6 +7,7 @@ import {
 } from "../../googleSpecialDateModel.js";
 import { colorWithAlpha, contrastText } from "./eventsAgendaColor.js";
 import { formatReminderSummary } from "../../reminderDisplay.js";
+import { isEventSelectionModifier } from "../../events/calendarEventSelectionModel.js";
 
 function agendaEventMatchItemIds(event) {
   return [
@@ -20,10 +21,6 @@ function agendaEventMatchItemIds(event) {
 
 function isPastTimedEventToday(event, dateKey, todayKey) {
   return dateKey === todayKey && Number.isFinite(event?.endMs) && event.endMs < Date.now();
-}
-
-function isEventSelectionModifier(event) {
-  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 export function AllDayChip({
@@ -45,6 +42,7 @@ export function AllDayChip({
   return (
     <button
       type="button"
+      className="sp-agenda-touch"
       data-testid="calendar-agenda-event-chip"
       data-item-id={event.agendaItemId}
       data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
@@ -190,6 +188,7 @@ export function TimedRow({
   return (
     <button
       type="button"
+      className="sp-agenda-touch"
       data-testid="calendar-agenda-event-row"
       data-item-id={event.agendaItemId}
       data-calendar-match-item-ids={agendaEventMatchItemIds(event)}

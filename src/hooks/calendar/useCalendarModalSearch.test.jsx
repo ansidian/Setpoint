@@ -17,6 +17,10 @@ async function flushPromises() {
   await Promise.resolve();
 }
 
+function searchArgs(scope, q) {
+  return { scope, q, limit: 50, signal: expect.any(AbortSignal) };
+}
+
 describe("useCalendarModalSearch", () => {
   afterEach(() => {
     cleanup();
@@ -46,7 +50,7 @@ describe("useCalendarModalSearch", () => {
     });
 
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
-    expect(searchApi).toHaveBeenCalledWith({ scope: "events", q: "fi", limit: 50 });
+    expect(searchApi).toHaveBeenCalledWith(searchArgs("events", "fi"));
     await act(async () => {
       first.resolve({
         results: [{ id: "event:first", itemId: "first", title: "First" }],
@@ -65,14 +69,14 @@ describe("useCalendarModalSearch", () => {
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
     expect(result.current.pending).toBe(true);
     expect(result.current.results).toEqual([]);
-    expect(searchApi).toHaveBeenLastCalledWith({ scope: "events", q: "fin", limit: 50 });
+    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "fin"));
 
     act(() => {
       result.current.setQuery("final");
     });
 
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
-    expect(searchApi).toHaveBeenLastCalledWith({ scope: "events", q: "final", limit: 50 });
+    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "final"));
 
     await act(async () => {
       third.resolve({
@@ -96,6 +100,82 @@ describe("useCalendarModalSearch", () => {
       expect(result.current.coverage.sources.map((source) => source.key)).toEqual(["deadlines"]);
       expect(result.current.truncated).toBe(true);
     });
+  });
+
+  it("aborts superseded requests in the active search scope", async () => {
+    const searchApi = vi.fn(() => new Promise(() => {}));
+    const { result, rerender } = renderHook(
+      ({ view }) => useCalendarModalSearch({
+        modalOpen: true,
+        view,
+        searchApi,
+        debounceMs: 0,
+      }),
+      { initialProps: { view: "events" } },
+    );
+
+    act(() => {
+      result.current.openSearch();
+      result.current.setQuery("first event");
+    });
+    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    const firstEventSignal = searchApi.mock.calls[0][0].signal;
+
+    rerender({ view: "bills" });
+    act(() => result.current.setQuery("rent"));
+    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
+    const billSignal = searchApi.mock.calls[1][0].signal;
+
+    rerender({ view: "events" });
+    act(() => result.current.setQuery("final event"));
+    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
+    const secondEventSignal = searchApi.mock.calls[2][0].signal;
+
+    expect(firstEventSignal.aborted).toBe(true);
+    expect(billSignal.aborted).toBe(true);
+    expect(secondEventSignal.aborted).toBe(false);
+  });
+
+  it("aborts the active request when search closes", async () => {
+    const searchApi = vi.fn(() => new Promise(() => {}));
+    const { result } = renderHook(() => useCalendarModalSearch({
+      modalOpen: true,
+      view: "events",
+      searchApi,
+      debounceMs: 0,
+    }));
+
+    act(() => {
+      result.current.openSearch();
+      result.current.setQuery("final");
+    });
+    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    const signal = searchApi.mock.calls[0][0].signal;
+
+    act(() => result.current.closeSearch());
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("does not surface an AbortError as calendar search failure state", async () => {
+    const searchApi = vi.fn().mockRejectedValue(
+      Object.assign(new Error("aborted"), { name: "AbortError" }),
+    );
+    const { result } = renderHook(() => useCalendarModalSearch({
+      modalOpen: true,
+      view: "events",
+      searchApi,
+      debounceMs: 0,
+    }));
+
+    act(() => {
+      result.current.openSearch();
+      result.current.setQuery("final");
+    });
+
+    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    expect(result.current.error).toBeNull();
   });
 
   it("handles keyboard highlight, enter activation advance, and escape clear-close", () => {
@@ -240,7 +320,7 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("rent");
     });
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
-    expect(searchApi).toHaveBeenLastCalledWith({ scope: "bills", q: "rent", limit: 50 });
+    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("bills", "rent"));
     await act(async () => {
       billsFirst.resolve({
         results: [{ id: "bill:rent", itemId: "bill-rent", title: "Rent" }],
@@ -259,7 +339,7 @@ describe("useCalendarModalSearch", () => {
       expect(result.current.pending).toBe(true);
     });
     expect(searchApi).toHaveBeenCalledTimes(3);
-    expect(searchApi).toHaveBeenLastCalledWith({ scope: "events", q: "final", limit: 50 });
+    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "final"));
 
     await act(async () => {
       eventsRefresh.resolve({

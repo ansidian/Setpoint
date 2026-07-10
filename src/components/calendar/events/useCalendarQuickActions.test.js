@@ -104,6 +104,95 @@ describe("useCalendarQuickActions batch delete partial failure", () => {
   });
 });
 
+describe("useCalendarQuickActions delete timeout settles by reverting", () => {
+  it("restores the event and surfaces an error status when a delete times out", async () => {
+    const timeoutErr = Object.assign(
+      new Error("Request timed out — check the calendar before retrying; the change may not have saved."),
+      { code: "request_timeout" },
+    );
+    deleteCalendarEvent.mockRejectedValue(timeoutErr);
+    const event = {
+      id: "event-timeout",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      allDay: false,
+      isRecurring: false,
+      writable: true,
+      etag: '"etag-timeout"',
+    };
+    const upsertEvents = vi.fn();
+    const removeEvent = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents,
+      removeEvent,
+      onEventDeleted: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.openContextMenu({ event, x: 80, y: 80 });
+    });
+    act(() => {
+      result.current.requestDelete();
+    });
+    await act(async () => {
+      await result.current.confirmContextDelete();
+    });
+
+    // The optimistic removal is reverted (event re-upserted) and the timeout is
+    // surfaced — the mutation SETTLED rather than leaving the grid diverged.
+    expect(removeEvent).toHaveBeenCalledWith("event-timeout");
+    expect(upsertEvents).toHaveBeenCalledWith(event);
+    expect(result.current.status).toMatchObject({ tone: "error" });
+    expect(result.current.status.message).toContain("timed out");
+  });
+});
+
+describe("useCalendarQuickActions marks months stale after failed mutations", () => {
+  it("marks the event's months stale after a delete rejects and reverts", async () => {
+    deleteCalendarEvent.mockRejectedValue(new Error("Provider down."));
+    const event = {
+      id: "event-stale",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      allDay: false,
+      isRecurring: false,
+      writable: true,
+      etag: '"etag-stale"',
+    };
+    const upsertEvents = vi.fn();
+    const removeEvent = vi.fn();
+    const markStale = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents,
+      removeEvent,
+      markStale,
+      onEventDeleted: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.openContextMenu({ event, x: 80, y: 80 });
+    });
+    act(() => {
+      result.current.requestDelete();
+    });
+    await act(async () => {
+      await result.current.confirmContextDelete();
+    });
+
+    // The optimistic removal is reverted AND the touched months are marked stale
+    // so the next range pass re-fetches truth from Google (self-heals a mutation
+    // that may have applied server-side before the client gave up).
+    expect(upsertEvents).toHaveBeenCalledWith(event);
+    expect(markStale).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
+  });
+});
+
 describe("useCalendarQuickActions clipboard paste failure", () => {
   it("surfaces an error status when a single-item paste create rejects", async () => {
     createCalendarEvent.mockRejectedValue(new Error("Provider down."));
@@ -361,6 +450,212 @@ describe("useCalendarQuickActions clone races", () => {
     expect(onEventDeleted).toHaveBeenCalledWith("google-created-copy-late-delete", expect.objectContaining({
       id: "google-created-copy-late-delete",
     }));
+  });
+});
+
+describe("useCalendarQuickActions clipboard paste delete-during-create race", () => {
+  function makeSource(overrides) {
+    return {
+      title: "Paste race",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      allDay: false,
+      writable: true,
+      ...overrides,
+    };
+  }
+
+  it("deletes the created event when a single paste row is deleted before its create resolves", async () => {
+    let resolveCreate;
+    createCalendarEvent.mockReturnValue(new Promise((resolve) => {
+      resolveCreate = resolve;
+    }));
+    deleteCalendarEvent.mockResolvedValue({});
+    const clipboard = createCalendarEventClipboard(
+      createCalendarEventSelectionSet([makeSource({ id: "event-paste-race" })]),
+    );
+    const upsertEvents = vi.fn();
+    const removeEvent = vi.fn();
+    const onEventDeleted = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents,
+      removeEvent,
+      onSelectEvent: vi.fn(),
+      onEventDeleted,
+    }));
+
+    act(() => {
+      result.current.pasteEvent(clipboard, "2026-04-22");
+    });
+    const optimisticEvent = upsertEvents.mock.calls[0][0];
+    expect(optimisticEvent.id).toMatch(/^optimistic-calendar-copy-/);
+
+    // Delete the optimistic paste row while its create is still in flight.
+    await act(async () => {
+      result.current.openContextMenu({ event: optimisticEvent, x: 80, y: 80 });
+    });
+    act(() => {
+      result.current.requestDelete();
+    });
+    await act(async () => {
+      await result.current.confirmContextDelete();
+    });
+
+    // No server delete of the optimistic id (nothing exists on Google yet), and
+    // the optimistic row is pulled from the grid.
+    expect(deleteCalendarEvent).not.toHaveBeenCalledWith(optimisticEvent.id, expect.anything());
+    expect(removeEvent).toHaveBeenCalledWith(optimisticEvent.id);
+
+    // The create lands after the delete: the event must be deleted on Google,
+    // NOT resurrected in the grid (the ghost-delete inverse).
+    await act(async () => {
+      resolveCreate({
+        event: {
+          ...optimisticEvent,
+          id: "google-created-paste",
+          etag: '"etag-paste"',
+        },
+      });
+    });
+
+    expect(upsertEvents).not.toHaveBeenCalledWith(expect.objectContaining({ id: "google-created-paste" }));
+    expect(deleteCalendarEvent).toHaveBeenCalledWith("google-created-paste", expect.objectContaining({
+      accountId: "gmail-main",
+      calendarId: "primary",
+      etag: '"etag-paste"',
+    }));
+  });
+
+  it("routes a normal server delete when a paste row is deleted after its create reconciles", async () => {
+    createCalendarEvent.mockResolvedValue({
+      event: {
+        id: "google-created-paste-late",
+        title: "Paste race",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-22T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+        allDay: false,
+        isRecurring: false,
+        writable: true,
+        etag: '"etag-late"',
+      },
+    });
+    deleteCalendarEvent.mockResolvedValue({});
+    const clipboard = createCalendarEventClipboard(
+      createCalendarEventSelectionSet([makeSource({ id: "event-paste-late" })]),
+    );
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents: vi.fn(),
+      removeEvent: vi.fn(),
+      onSelectEvent: vi.fn(),
+      onReconcileSelection: vi.fn(),
+      onEventDeleted: vi.fn(),
+    }));
+
+    // Let the create resolve and reconcile the optimistic row into a real event.
+    await act(async () => {
+      await result.current.pasteEvent(clipboard, "2026-04-22");
+    });
+
+    // Deleting the reconciled (non-optimistic) event takes the ordinary delete
+    // path — a guard that reconciliation does not leave the event flagged optimistic.
+    const realEvent = {
+      id: "google-created-paste-late",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-22T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+      allDay: false,
+      isRecurring: false,
+      writable: true,
+      etag: '"etag-late"',
+    };
+    await act(async () => {
+      result.current.openContextMenu({ event: realEvent, x: 80, y: 80 });
+    });
+    act(() => {
+      result.current.requestDelete();
+    });
+    await act(async () => {
+      await result.current.confirmContextDelete();
+    });
+
+    expect(deleteCalendarEvent).toHaveBeenCalledWith("google-created-paste-late", expect.objectContaining({
+      etag: '"etag-late"',
+    }));
+  });
+
+  it("deletes only the mid-flight-deleted row's created event in a batch paste", async () => {
+    let resolveBatch;
+    createCalendarEventsBatch.mockReturnValue(new Promise((resolve) => {
+      resolveBatch = resolve;
+    }));
+    deleteCalendarEvent.mockResolvedValue({});
+    const first = makeSource({
+      id: "event-batch-a",
+      title: "Batch A",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+    });
+    const second = makeSource({
+      id: "event-batch-b",
+      title: "Batch B",
+      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
+    });
+    const clipboard = createCalendarEventClipboard(createCalendarEventSelectionSet([first, second]));
+    const upsertEvents = vi.fn();
+    const removeEvent = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents,
+      removeEvent,
+      onSelectEvent: vi.fn(),
+      onEventDeleted: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.pasteEvent(clipboard, "2026-04-22");
+    });
+    const optimisticEvents = upsertEvents.mock.calls
+      .map(([event]) => event)
+      .filter((event) => String(event.id).startsWith("optimistic-calendar-copy-"));
+    expect(optimisticEvents).toHaveLength(2);
+    const secondOptimistic = optimisticEvents[1];
+
+    // Delete the second row while the batch create is still in flight.
+    await act(async () => {
+      result.current.openContextMenu({ event: secondOptimistic, x: 80, y: 80 });
+    });
+    act(() => {
+      result.current.requestDelete();
+    });
+    await act(async () => {
+      await result.current.confirmContextDelete();
+    });
+
+    // Batch resolves — the server created BOTH events.
+    await act(async () => {
+      resolveBatch({
+        created: [
+          { index: 0, event: { id: "google-batch-a", accountId: "gmail-main", calendarId: "primary", etag: '"etag-a"', writable: true } },
+          { index: 1, event: { id: "google-batch-b", accountId: "gmail-main", calendarId: "primary", etag: '"etag-b"', writable: true } },
+        ],
+        failed: [],
+      });
+    });
+
+    // Row #1 upserts as a live event; row #2's created event is deleted on the
+    // server (not resurrected), and row #1's is never touched.
+    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({ id: "google-batch-a" }));
+    expect(upsertEvents).not.toHaveBeenCalledWith(expect.objectContaining({ id: "google-batch-b" }));
+    expect(deleteCalendarEvent).toHaveBeenCalledWith("google-batch-b", expect.objectContaining({ etag: '"etag-b"' }));
+    expect(deleteCalendarEvent).not.toHaveBeenCalledWith("google-batch-a", expect.anything());
   });
 });
 

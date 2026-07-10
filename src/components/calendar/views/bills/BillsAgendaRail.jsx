@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
+import { Receipt } from "lucide-react";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaMonthScrollContainer from "../agenda/AgendaMonthScrollContainer.jsx";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
@@ -78,6 +79,7 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
   return (
     <button
       type="button"
+      className="sp-agenda-touch"
       data-testid="calendar-agenda-bill-row"
       data-item-id={bill.agendaItemId}
       data-calendar-match-item-ids={[bill.id, bill.scheduleId].filter(Boolean).join(" ")}
@@ -165,22 +167,38 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
   );
 }
 
-function EmptyBillDay({ fallback }) {
+function EmptyBillDay({ fallback, mobileAgenda, monthName }) {
+  const enriched = mobileAgenda && fallback;
   return (
     <div
       style={{
-        padding: "12px 10px",
+        padding: enriched ? "28px 16px" : "12px 10px",
         borderRadius: 8,
         border: "1px solid rgba(255,255,255,0.055)",
         background: "rgba(255,255,255,0.025)",
         color: "rgba(205,214,244,0.64)",
         fontSize: 12,
         lineHeight: 1.4,
+        ...(enriched ? {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          textAlign: "center",
+          gap: 8,
+        } : null),
       }}
     >
-      <div style={{ fontWeight: 650, color: "rgba(205,214,244,0.82)" }}>
-        {fallback ? "No Bills This Month" : "No Bills"}
-      </div>
+      {enriched ? (
+        <>
+          <Receipt size={28} aria-hidden="true" style={{ color: "var(--color-text-faint)" }} />
+          <div style={{ fontWeight: 650, color: "rgba(205,214,244,0.82)" }}>No bills due in {monthName}</div>
+          <div style={{ color: "var(--color-text-faint)" }}>Days you add will appear here.</div>
+        </>
+      ) : (
+        <div style={{ fontWeight: 650, color: "rgba(205,214,244,0.82)" }}>
+          {fallback ? "No Bills This Month" : "No Bills"}
+        </div>
+      )}
     </div>
   );
 }
@@ -224,6 +242,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   getMonthBills = null,
   billsRange = null,
   dataRevision = 0,
+  mobileAgenda = false,
 }, ref) {
   const todayKey = ymdFromParts(currentYear, currentMonth, todayDate);
   const forceVisibleDateKey = entryScrollTargetDateKey || selectedDateKey;
@@ -364,13 +383,17 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
           ))}
           {!group.hasBills && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
             <div ref={(node) => regContent(group.dateKey, node)}>
-              <EmptyBillDay fallback={group.isFallback} />
+              <EmptyBillDay
+                fallback={group.isFallback}
+                mobileAgenda={mobileAgenda}
+                monthName={groupDate(group)?.toLocaleDateString("en-US", { month: "long" })}
+              />
             </div>
           ) : null}
         </>
       )}
     />
-  ), [todayKey, selectedDateKey, selectedItemId, onDateAction, onBillAction]);
+  ), [todayKey, selectedDateKey, selectedItemId, onDateAction, onBillAction, mobileAgenda]);
 
   return (
     <AgendaRailWithMiniCalendar

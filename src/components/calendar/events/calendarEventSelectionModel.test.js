@@ -6,6 +6,7 @@ import {
   getOrderedCalendarEventSelection,
   isCalendarEventSelected,
   isCalendarEventSelectionEligible,
+  isEventSelectionModifier,
   planCalendarEventClipboardPaste,
   removeCalendarEventSelection,
   resolveCalendarEventActionScope,
@@ -274,6 +275,21 @@ describe("calendarEventSelectionModel", () => {
           colorId: "7",
         },
       ],
+    });
+  });
+
+  describe("isEventSelectionModifier", () => {
+    it("returns true when metaKey, ctrlKey, or both are set", () => {
+      expect(isEventSelectionModifier({ metaKey: true })).toBe(true);
+      expect(isEventSelectionModifier({ ctrlKey: true })).toBe(true);
+      expect(isEventSelectionModifier({ metaKey: true, ctrlKey: true })).toBe(true);
+    });
+
+    it("returns false for missing, empty, or non-modifier events", () => {
+      expect(isEventSelectionModifier({})).toBe(false);
+      expect(isEventSelectionModifier({ shiftKey: true })).toBe(false);
+      expect(isEventSelectionModifier(null)).toBe(false);
+      expect(isEventSelectionModifier(undefined)).toBe(false);
     });
   });
 });

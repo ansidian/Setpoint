@@ -1,4 +1,4 @@
-import { ymdFromParts } from "../../components/calendar/calendarDateUtils.js";
+import { pacificTodayParts, ymdFromParts } from "../../components/calendar/calendarDateUtils.js";
 
 export function parseFocusDate(focusDate) {
   if (!focusDate) return null;
@@ -50,9 +50,9 @@ export function buildCalendarModalSyncSnapshot({
   pendingFocusDate,
   pendingFocusItemId,
 }) {
-  const today = new Date();
-  const todayViewDate = { month: today.getMonth(), year: today.getFullYear() };
-  const todayDateKey = ymdFromParts(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayParts = pacificTodayParts();
+  const todayViewDate = { month: todayParts.month, year: todayParts.year };
+  const todayDateKey = ymdFromParts(todayParts.year, todayParts.month, todayParts.day);
   const didOpen = !prevOpen && open;
   const didViewChange = prevView !== view;
   const didOpenRequest = open && prevOpenRequestId !== openRequestId;
@@ -79,7 +79,7 @@ export function buildCalendarModalSyncSnapshot({
       nextSelectedItemId = focusItemId ? String(focusItemId) : null;
     } else {
       nextViewDate = todayViewDate;
-      nextSelectedDay = today.getDate();
+      nextSelectedDay = todayParts.day;
       nextSelectedDateKey = todayDateKey;
       nextSelectedItemId = null;
     }
@@ -98,7 +98,7 @@ export function buildCalendarModalSyncSnapshot({
       nextSelectedItemId = String(focusItemId);
     } else {
       nextViewDate = todayViewDate;
-      nextSelectedDay = today.getDate();
+      nextSelectedDay = todayParts.day;
       nextSelectedDateKey = todayDateKey;
       nextSelectedItemId = null;
     }

@@ -141,3 +141,50 @@ describe("CalendarCell deadline drag-drop", () => {
     expect(dropEvent).not.toHaveBeenCalled();
   });
 });
+
+describe("CalendarCell hover isolation (PERF-L03)", () => {
+  it("does not re-invoke renderCellContents on pointer hover, and still fires drag-drop cleanup on pointer leave", () => {
+    const renderCellContents = vi.fn(() => null);
+    const leaveDropTarget = vi.fn();
+    const leaveDeadlineDropTarget = vi.fn();
+    render(
+      <CalendarCell
+        {...baseCellProps}
+        renderCellContents={renderCellContents}
+        quickActions={{ leaveDropTarget, leaveDeadlineDropTarget }}
+      />,
+    );
+
+    const cell = screen.getByRole("gridcell");
+    const callsAfterInitialRender = renderCellContents.mock.calls.length;
+
+    fireEvent.pointerEnter(cell);
+    fireEvent.pointerLeave(cell);
+
+    expect(renderCellContents).toHaveBeenCalledTimes(callsAfterInitialRender);
+    expect(leaveDropTarget).toHaveBeenCalledWith("2026-04-07");
+    expect(leaveDeadlineDropTarget).toHaveBeenCalledWith("2026-04-07");
+  });
+
+  // The CSS hover-suppression rule in index.css guards on
+  // `[data-overflow-open="true"][data-overflow-mode="inline"]` so that only
+  // inline overflow suppresses hover, matching the original
+  // `inlineOverflowOpen` JS condition — fallback (popover) overflow must NOT
+  // suppress hover. CSS itself can't be asserted in this test environment,
+  // so these pin the data-attribute wiring the CSS selector depends on.
+  it("renders data-overflow-mode=\"inline\" (with data-overflow-open=\"true\") when inline overflow is open, which the CSS hover guard suppresses", () => {
+    render(<CalendarCell {...baseCellProps} overflowOpen overflowMode="inline" />);
+
+    const cell = screen.getByRole("gridcell");
+    expect(cell.getAttribute("data-overflow-open")).toBe("true");
+    expect(cell.getAttribute("data-overflow-mode")).toBe("inline");
+  });
+
+  it("renders data-overflow-mode=\"fallback\" when overflow is open in fallback/popover mode, which the CSS hover guard must NOT suppress", () => {
+    render(<CalendarCell {...baseCellProps} overflowOpen overflowMode="fallback" />);
+
+    const cell = screen.getByRole("gridcell");
+    expect(cell.getAttribute("data-overflow-open")).toBe("true");
+    expect(cell.getAttribute("data-overflow-mode")).toBe("fallback");
+  });
+});

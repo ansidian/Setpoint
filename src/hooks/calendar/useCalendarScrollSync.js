@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
+import { pacificTodayParts } from "../../components/calendar/calendarDateUtils.js";
 import {
   agendaCrossesGridBoundary,
   agendaTargetForGridMonth,
@@ -121,9 +122,9 @@ export default function useCalendarScrollSync({
     if (isDirtyCheck()) { shakeEditor(); return false; }
     suppressBoth();
     requestAgendaScroll({ type: "today" });
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
+    const todayParts = pacificTodayParts();
+    const year = todayParts.year;
+    const month = todayParts.month;
     if (year !== viewDate.year || month !== viewDate.month) {
       setViewDate({ year, month });
       setFetchAnchor({ year, month });

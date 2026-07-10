@@ -148,6 +148,75 @@ describe("DashboardContext deadline single-owner state", () => {
     expect(remainingDeadlines.upcoming).toEqual([]);
   });
 
+  it("handleCompleteTask resolves true on success and false when completeDeadlineOccurrence rejects", async () => {
+    const successTask = {
+      id: "todo-return-true",
+      title: "Succeeds",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const failTask = {
+      id: "todo-return-false",
+      title: "Fails",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    let capturedResult;
+
+    function ReturnProbe({ task }) {
+      const { handleCompleteTask } = useDashboard();
+      return (
+        <button
+          type="button"
+          onClick={async () => {
+            capturedResult = await handleCompleteTask(task.id, task);
+          }}
+        >
+          CompleteAndCapture
+        </button>
+      );
+    }
+
+    // Success case.
+    const successDeadlines = { upcoming: [successTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+    const setCalendarDeadlinesSuccess = vi.fn((updater) => updater(successDeadlines));
+    completeDeadlineOccurrence.mockResolvedValueOnce({});
+
+    const { unmount } = render(
+      <DashboardProvider deadlines={successDeadlines} setCalendarDeadlines={setCalendarDeadlinesSuccess}>
+        <ReturnProbe task={successTask} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("CompleteAndCapture"));
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(600);
+    });
+
+    expect(capturedResult).toBe(true);
+    unmount();
+
+    // Failure case.
+    const failDeadlines = { upcoming: [failTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+    const setCalendarDeadlinesFail = vi.fn((updater) => updater(failDeadlines));
+    completeDeadlineOccurrence.mockRejectedValueOnce(new Error("provider down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <DashboardProvider deadlines={failDeadlines} setCalendarDeadlines={setCalendarDeadlinesFail}>
+        <ReturnProbe task={failTask} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("CompleteAndCapture"));
+    });
+
+    expect(capturedResult).toBe(false);
+    errorSpy.mockRestore();
+  });
+
   it("reverts the optimistic completing flag and never completes when the server rejects", async () => {
     const task = {
       id: "todo-fails",
@@ -440,6 +509,45 @@ describe("DashboardContext deadline single-owner state", () => {
     expect(setCalendarDeadlines).not.toHaveBeenCalled();
   });
 
+  it("persists with the live cache due_time when the task is edited between drag-start and drop", async () => {
+    // A task is dragged (snapshot has due_time: "3:00 PM") and dropped after being
+    // edited in the row (live cache now has due_time: "4:00 PM"). The persistence
+    // must use the live cache's time (the source of truth), not the stale drag snapshot.
+    const dragSnapshot = {
+      id: "todo-stale-time",
+      title: "Timed task",
+      due_date: "2026-04-21",
+      due_time: "3:00 PM",
+      status: "incomplete",
+    };
+    const liveTask = {
+      id: "todo-stale-time",
+      title: "Timed task",
+      due_date: "2026-04-21",
+      due_time: "4:00 PM",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [liveTask],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    updateDeadline.mockResolvedValue({});
+
+    render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={dragSnapshot} moveTarget="2026-04-25" />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Move"));
+    });
+
+    // The persistence must use the live cache time (4:00 PM), not the stale snapshot time (3:00 PM).
+    expect(updateDeadline).toHaveBeenCalledWith("todo-stale-time", { dueDate: "2026-04-25", dueTime: "4:00 PM" });
+  });
+
   it("optimistically lands a full chip (with title) when the target cache lacks the task", async () => {
     // Reproduces a cross-month move: the per-month range cache the updater runs
     // against does NOT already hold the task, so the optimistic upsert takes its
@@ -475,5 +583,151 @@ describe("DashboardContext deadline single-owner state", () => {
       due_date: "2026-04-25",
       title: "Pay rent",
     });
+  });
+
+  it("keeps the context value referentially stable across a deadlines identity change with the same content", () => {
+    const task = {
+      id: "todo-stable",
+      title: "Stable task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const deadlines1 = { upcoming: [task], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+    const setCalendarDeadlines = vi.fn();
+    const capturedValues = [];
+
+    function ValueProbe() {
+      capturedValues.push(useDashboard());
+      return null;
+    }
+
+    const { rerender } = render(
+      <DashboardProvider deadlines={deadlines1} setCalendarDeadlines={setCalendarDeadlines}>
+        <ValueProbe />
+      </DashboardProvider>,
+    );
+
+    // Same content, new object/array identity — simulates a poll refetch that
+    // returns an unchanged deadlines view.
+    const deadlines2 = { upcoming: [{ ...task }], stats: { ...deadlines1.stats } };
+    rerender(
+      <DashboardProvider deadlines={deadlines2} setCalendarDeadlines={setCalendarDeadlines}>
+        <ValueProbe />
+      </DashboardProvider>,
+    );
+
+    expect(capturedValues).toHaveLength(2);
+    expect(capturedValues[1]).toBe(capturedValues[0]);
+  });
+
+  it("handleCompleteTask observes latest deadlines at call time, not a stale closure", async () => {
+    const staleTask = { id: "todo-latest", due_date: "2026-04-01", status: "incomplete" };
+    const freshTask = { id: "todo-latest", due_date: "2026-04-30", status: "incomplete" };
+    const deadlines1 = { upcoming: [staleTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+    const deadlines2 = { upcoming: [freshTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines2));
+
+    const { rerender } = render(
+      <DashboardProvider deadlines={deadlines1} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={staleTask} />
+      </DashboardProvider>,
+    );
+
+    rerender(
+      <DashboardProvider deadlines={deadlines2} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={staleTask} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+    });
+
+    expect(completeDeadlineOccurrence).toHaveBeenCalledWith("todo-latest", "2026-04-30");
+  });
+
+  it("the 600ms completion timer is a no-op once a refetch already removed the task", async () => {
+    const task = {
+      id: "todo-refetched-away",
+      title: "Refetched-away task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+
+    const { rerender } = render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+      await Promise.resolve();
+    });
+
+    // A refetch lands before the 600ms timer fires and the task is no longer
+    // in the (new) deadlines view — e.g. it scrolled out of the visible range.
+    const refetchedDeadlines = {
+      upcoming: [],
+      stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    rerender(
+      <DashboardProvider deadlines={refetchedDeadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    const callsBeforeAdvance = setCalendarDeadlines.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+
+    // The timer must not have fired a mutation — the task is gone, so
+    // removeCompletedTask should have bailed before touching the store.
+    expect(setCalendarDeadlines.mock.calls.length).toBe(callsBeforeAdvance);
+  });
+
+  it("cancels the pending completion timer on unmount", async () => {
+    const task = {
+      id: "todo-unmount",
+      title: "Unmount task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { unmount } = render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+      await Promise.resolve();
+    });
+
+    const callsBeforeUnmount = setCalendarDeadlines.mock.calls.length;
+    unmount();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+
+    // Unmounting must clear the pending timer: no further store mutation and
+    // no "state update on an unmounted component" warning.
+    expect(setCalendarDeadlines.mock.calls.length).toBe(callsBeforeUnmount);
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

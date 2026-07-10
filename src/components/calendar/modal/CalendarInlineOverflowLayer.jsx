@@ -7,6 +7,7 @@ import {
 } from "./CalendarCellItemChip.jsx";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 import { deadlineDragAllowed } from "../views/deadlines/calendarDeadlineRescheduleModel.js";
+import { isEventSelectionModifier } from "../events/calendarEventSelectionModel.js";
 
 function inlineOverflowItemStyle({ item, selected, active, batchSelected = false }) {
   const specialDate = item.specialDate === true;
@@ -59,10 +60,6 @@ function inlineOverflowItemStyle({ item, selected, active, batchSelected = false
     fontFamily: "inherit",
     transition: "background 140ms, border-color 140ms, color 140ms",
   };
-}
-
-function isEventSelectionModifier(event) {
-  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {

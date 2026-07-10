@@ -6,7 +6,7 @@ import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
 import MiniCalendar, { AgendaRailWithMiniCalendar } from "../agenda/MiniCalendar.jsx";
 import EventsAgendaDeadlineRow from "./EventsAgendaDeadlineRow.jsx";
 import { AllDayChip, TimedRow } from "./EventsAgendaEventRows.jsx";
-import { AgendaSkeleton, WeatherHeader } from "./EventsAgendaRailParts.jsx";
+import { AgendaSkeleton, EmptyEventDay, WeatherHeader } from "./EventsAgendaRailParts.jsx";
 import {
   agendaHasSelectedHiddenAllDay,
   buildEventsAgendaGroups,
@@ -17,7 +17,6 @@ import { useAgendaFetch } from "../../../../hooks/calendar/useAgendaFetch.js";
 import { scrollCommandTargetMonth } from "../../../../hooks/calendar/agendaFetchModel.js";
 
 const EVENT_SCROLL_TOP_OFFSET = 44;
-
 function keyForEvent(event, dateKey) {
   return `${event.agendaItemId || event.id}-${dateKey}`;
 }
@@ -160,6 +159,7 @@ const MonthAgendaSection = memo(function MonthAgendaSection({
   onPreviewStart,
   onPreviewEnd,
   dragEventRef,
+  mobileAgenda,
 }) {
   return (
     <AgendaRailShell
@@ -231,6 +231,7 @@ const MonthAgendaSection = memo(function MonthAgendaSection({
                 {hiddenAllDayCount > 0 ? (
                   <button
                     type="button"
+                    className="sp-agenda-touch sp-mobile-agenda-control"
                     onClick={() => onExpandDay(g.dateKey)}
                     style={{
                       display: "inline-flex",
@@ -291,20 +292,12 @@ const MonthAgendaSection = memo(function MonthAgendaSection({
               );
             })}
             {showNoEvents ? (
-              <div
-                ref={(node) => regContent(g.dateKey, node)}
-                style={{
-                  padding: "12px 10px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255,255,255,0.055)",
-                  background: "rgba(255,255,255,0.025)",
-                  color: "rgba(205,214,244,0.64)",
-                  fontSize: 12,
-                  lineHeight: 1.4,
-                }}
-              >
-                <div style={{ fontWeight: 650, color: "rgba(205,214,244,0.82)" }}>No Events</div>
-              </div>
+              <EmptyEventDay
+                contentRef={(node) => regContent(g.dateKey, node)}
+                fallback={g.isFallback}
+                mobileAgenda={mobileAgenda}
+                monthName={groupDate(g)?.toLocaleDateString("en-US", { month: "long" })}
+              />
             ) : null}
           </>
         );
@@ -339,6 +332,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   onMiniCalendarDateAction,
   onMiniCalendarDateCreate,
   hideMiniCalendar = false,
+  mobileAgenda = false,
   onEventAction,
   getMonthEvents = null,
   eventsRange = null,
@@ -531,8 +525,9 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
       onPreviewStart={startHoverPreview}
       onPreviewEnd={endHoverPreview}
       dragEventRef={dragEventRef}
+      mobileAgenda={mobileAgenda}
     />
-  ), [todayKey, selectedDateKey, selectedItemId, eventQuickActions, expandedDays, expandDay, handleDateAction, handleEventSelect, handleDeadlineSelect, dirtyBlocked, startHoverPreview, endHoverPreview]);
+  ), [todayKey, selectedDateKey, selectedItemId, eventQuickActions, expandedDays, expandDay, handleDateAction, handleEventSelect, handleDeadlineSelect, dirtyBlocked, startHoverPreview, endHoverPreview, mobileAgenda]);
 
   return (
     <AgendaRailWithMiniCalendar

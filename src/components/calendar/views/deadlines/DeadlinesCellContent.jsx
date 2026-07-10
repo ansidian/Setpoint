@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+import { memo, useMemo } from "react";
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { minutesFromDisplayTime } from "../../ghostPreview.js";
@@ -24,13 +26,27 @@ const MD_DEADLINE_CHIP_METRICS = {
   fallback: 2,
 };
 
-function resolveDeadlineChipMetrics(layout) {
+function computeDeadlineChipMetrics(layout) {
   const tier = layout?.tier;
   const base = tier === "xl" || tier === "lg" ? LG_DEADLINE_CHIP_METRICS : MD_DEADLINE_CHIP_METRICS;
   return {
     ...base,
     ...getCalendarCellCapacity(layout),
   };
+}
+
+// `layout` objects are frozen per-tier singletons (see calendarLayout.js), so a
+// WeakMap keyed on the layout object identity gives every cell/render the same
+// metrics object for the same tier.
+const deadlineChipMetricsCache = new WeakMap();
+
+export function resolveDeadlineChipMetrics(layout) {
+  if (!layout || typeof layout !== "object") return computeDeadlineChipMetrics(layout);
+  const cached = deadlineChipMetricsCache.get(layout);
+  if (cached) return cached;
+  const metrics = computeDeadlineChipMetrics(layout);
+  deadlineChipMetricsCache.set(layout, metrics);
+  return metrics;
 }
 
 function toDeadlineDescriptor(task) {
@@ -89,6 +105,71 @@ function orderDeadlineDescriptors(items) {
   });
 }
 
+// Builds the ordered chip descriptor array inside useMemo so an untouched
+// cell keeps the same array/descriptor identities across re-renders it can't
+// avoid (e.g. a sibling cell's selection change re-rendering the whole grid).
+const DeadlinesCellItems = memo(function DeadlinesCellItems({
+  day,
+  dateKey,
+  items,
+  ghosts,
+  selectedItemId,
+  onSelectItem,
+  onOpenOverflow,
+  pastTone,
+  metrics,
+  overflowOpen,
+  overflowAnchorKey,
+  inlineOverflowOpen,
+  inlineOverflowAutoFocus,
+  inlineOverflowVisibleCount,
+  inlineOverflowExternal,
+  onInlineOverflowInteraction,
+  onCloseInlineOverflow,
+  onHiddenItemsChange,
+  onBeforeItemAction,
+  suppressedSelectedHiddenAutoOpenKey,
+  quickActions,
+}) {
+  const descriptors = useMemo(() => {
+    const state = getDayState(items);
+    const singleDayGhosts = ghosts.filter((ghost) => (
+      ghost?.kind === "deadline" && ghost.startDate === dateKey
+    ));
+    return orderDeadlineDescriptors([
+      ...state.items.map(toDeadlineDescriptor),
+      ...singleDayGhosts.map(toDeadlineGhostDescriptor),
+    ]);
+  }, [items, ghosts, dateKey]);
+
+  if (!descriptors.length) return null;
+
+  return (
+    <CalendarCellItemStack
+      day={day}
+      dateKey={dateKey}
+      items={descriptors}
+      selectedItemId={selectedItemId}
+      onSelectItem={onSelectItem}
+      onOpenOverflow={onOpenOverflow}
+      pastTone={pastTone}
+      metrics={metrics}
+      overflowOpen={overflowOpen}
+      overflowAnchorKey={overflowAnchorKey}
+      inlineOverflowOpen={inlineOverflowOpen}
+      inlineOverflowAutoFocus={inlineOverflowAutoFocus}
+      inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      inlineOverflowExternal={inlineOverflowExternal}
+      onInlineOverflowInteraction={onInlineOverflowInteraction}
+      onCloseInlineOverflow={onCloseInlineOverflow}
+      onHiddenItemsChange={onHiddenItemsChange}
+      onBeforeItemAction={onBeforeItemAction}
+      suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
+      quickActions={quickActions}
+    />
+  );
+});
+
 export function renderDeadlinesCellContents({
   items,
   pastTone,
@@ -112,22 +193,12 @@ export function renderDeadlinesCellContents({
   dateKey,
   ghosts = [],
 }) {
-  const state = getDayState(items);
-  const singleDayGhosts = ghosts.filter((ghost) => (
-    ghost?.kind === "deadline" && ghost.startDate === dateKey
-  ));
-  const descriptors = orderDeadlineDescriptors([
-    ...state.items.map(toDeadlineDescriptor),
-    ...singleDayGhosts.map(toDeadlineGhostDescriptor),
-  ]);
-
-  if (!descriptors.length) return null;
-
   return (
-    <CalendarCellItemStack
+    <DeadlinesCellItems
       day={day}
       dateKey={dateKey}
-      items={descriptors}
+      items={items}
+      ghosts={ghosts}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}

@@ -51,6 +51,7 @@ export default function useCalendarModalSearch({
   const [focusRequestId, setFocusRequestId] = useState(0);
   const [focusSelectAll, setFocusSelectAll] = useState(false);
   const requestSeqRef = useRef({ events: 0, bills: 0 });
+  const abortControllersRef = useRef({ events: null, bills: null });
   const snapshotsRef = useRef(snapshots);
 
   const scope = searchScopeForCalendarView(view);
@@ -70,6 +71,12 @@ export default function useCalendarModalSearch({
   useEffect(() => {
     snapshotsRef.current = snapshots;
   }, [snapshots]);
+
+  useEffect(() => () => {
+    for (const controller of Object.values(abortControllersRef.current)) {
+      controller?.abort();
+    }
+  }, []);
 
   const updateSnapshot = useCallback((targetScope, updater) => {
     setSnapshots((current) => {
@@ -204,6 +211,10 @@ export default function useCalendarModalSearch({
   useEffect(() => {
     if (modalOpen) return undefined;
     const timerId = window.setTimeout(() => {
+      for (const searchScope of SEARCH_SCOPES) {
+        abortControllersRef.current[searchScope]?.abort();
+        abortControllersRef.current[searchScope] = null;
+      }
       const nextSnapshots = initialSearchSnapshots();
       setOpen(false);
       setSnapshots(nextSnapshots);
@@ -217,9 +228,12 @@ export default function useCalendarModalSearch({
 
   useEffect(() => {
     if (!modalOpen || !open) return undefined;
+    const controllers = abortControllersRef.current;
     const trimmed = query.trim();
     if (trimmed.length < MIN_QUERY_LENGTH) {
       requestSeqRef.current[scope] = (requestSeqRef.current[scope] || 0) + 1;
+      controllers[scope]?.abort();
+      controllers[scope] = null;
       const shortQueryTimerId = window.setTimeout(() => {
         updateSnapshot(scope, (current) => ({
           pending: false,
@@ -237,9 +251,14 @@ export default function useCalendarModalSearch({
 
     const requestId = (requestSeqRef.current[scope] || 0) + 1;
     requestSeqRef.current[scope] = requestId;
+    let effectController = null;
     const timerId = window.setTimeout(() => {
       updateSnapshot(scope, { pending: true, error: null });
-      searchApi({ scope, q: trimmed, limit })
+      controllers[scope]?.abort();
+      const controller = new AbortController();
+      effectController = controller;
+      controllers[scope] = controller;
+      searchApi({ scope, q: trimmed, limit, signal: controller.signal })
         .then((payload) => {
           const currentSnapshot = snapshotsRef.current[scope] || emptySearchSnapshot();
           if (
@@ -266,6 +285,7 @@ export default function useCalendarModalSearch({
           });
         })
         .catch((err) => {
+          if (err?.name === "AbortError") return;
           if (requestSeqRef.current[scope] !== requestId) return;
           updateSnapshot(scope, { error: err });
         })
@@ -274,7 +294,13 @@ export default function useCalendarModalSearch({
         });
     }, debounceMs);
 
-    return () => window.clearTimeout(timerId);
+    return () => {
+      window.clearTimeout(timerId);
+      effectController?.abort();
+      if (controllers[scope] === effectController) {
+        controllers[scope] = null;
+      }
+    };
   }, [debounceMs, limit, modalOpen, open, query, scope, searchApi, updateSnapshot]);
 
   return {

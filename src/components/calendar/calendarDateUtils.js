@@ -96,3 +96,8 @@ export function sameYmdMonth(value, year, month) {
   const parsed = parseYmd(value);
   return !!parsed && parsed.year === year && parsed.month === month;
 }
+
+// {year, month (0-indexed), day} of "now" in Pacific — the calendar's today seed.
+export function pacificTodayParts(now = new Date()) {
+  return parseYmd(pacificYMD(now.getTime()));
+}

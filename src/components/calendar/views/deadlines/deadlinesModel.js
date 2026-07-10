@@ -1,4 +1,4 @@
-import { parseDueDate } from "../../../../lib/dashboard-helpers";
+import { parseDueDate, toPacificDate, todayPacific } from "../../../../lib/dashboard-helpers";
 import { dueDateToMs } from "../../../../lib/shell-helpers";
 import { isDemoMode } from "../../../../demo/config.js";
 import { parseYmd } from "../../calendarDateUtils.js";
@@ -123,8 +123,7 @@ export function getDefaultSelectedItemId(items = []) {
 export function compute({ data, viewYear, viewMonth }) {
   const all = deadlineItemsFromData(data);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayYmd = todayPacific();
 
   const itemsByDay = {};
   const itemsByDate = {};
@@ -134,7 +133,7 @@ export function compute({ data, viewYear, viewMonth }) {
     const dueDate = parseDueDate(task.due_date);
     if (Number.isNaN(dueDate.getTime())) continue;
 
-    if (normalizeStatus(task.status) !== "complete" && dueDate < today) {
+    if (normalizeStatus(task.status) !== "complete" && toPacificDate(task.due_date) < todayYmd) {
       if (!earliestOverdue || dueDate < earliestOverdue) earliestOverdue = dueDate;
     }
 

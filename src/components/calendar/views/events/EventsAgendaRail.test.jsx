@@ -351,6 +351,54 @@ describe("EventsAgendaRail", () => {
     expect(screen.queryByRole("button", { name: /create event/i })).toBeNull();
   });
 
+  it("renders an enriched empty-month state in the mobile agenda", () => {
+    const { container } = renderRail({
+      events: [],
+      currentMonth: 3,
+      selectedDateKey: null,
+      mobileAgenda: true,
+    });
+
+    const primary = screen.getByText("Nothing scheduled in May");
+    const secondary = screen.getByText("Days you add will appear here.");
+    const card = primary.parentElement;
+    expect(card.style.padding).toBe("28px 16px");
+    expect(card.style.alignItems).toBe("center");
+    expect(card.style.textAlign).toBe("center");
+    expect(secondary.style.color).toBe("var(--color-text-faint)");
+    expect(container.querySelector("svg.lucide-calendar-x-2")).toBeTruthy();
+    expect(screen.queryByText("No Events")).toBeNull();
+  });
+
+  it("keeps mobile per-day empty cards compact", () => {
+    renderRail({
+      currentMonth: 3,
+      selectedDateKey: "2026-05-02",
+      mobileAgenda: true,
+    });
+
+    const label = screen.getByText("No Events");
+    expect(label.parentElement.style.padding).toBe("12px 10px");
+    expect(screen.queryByText(/Nothing scheduled in/)).toBeNull();
+  });
+
+  it("keeps the desktop-default empty-month card unchanged", () => {
+    renderRail({
+      events: [],
+      currentMonth: 3,
+      selectedDateKey: null,
+    });
+
+    const label = screen.getByText("No Events");
+    const card = label.parentElement;
+    expect(card.style.padding).toBe("12px 10px");
+    expect(card.parentElement?.tagName).toBe("SECTION");
+    expect(card.style.display).toBe("");
+    expect(card.style.textAlign).toBe("");
+    expect(screen.queryByText(/Nothing scheduled in/)).toBeNull();
+    expect(screen.queryByText("Days you add will appear here.")).toBeNull();
+  });
+
   it("renders today's header and empty target when today has no events", () => {
     renderRail({
       todayDate: 2,
@@ -379,6 +427,23 @@ describe("EventsAgendaRail", () => {
     expect(within(rail).getByText("+1")).toBeTruthy();
     expect(within(rail).getByText("WEDNESDAY 5/6/26")).toBeTruthy();
     expect(within(rail).getByText("72°/55°")).toBeTruthy();
+  });
+
+  it("marks shared event rows, all-day chips, and overflow controls as mobile agenda touch targets", () => {
+    renderRail({
+      events: [
+        event({ id: "timed", title: "Planning", start: "2026-05-05T16:00:00.000Z", end: "2026-05-05T17:00:00.000Z" }),
+        event({ id: "a", title: "A", allDay: true, start: "2026-05-05T07:00:00.000Z", end: "2026-05-06T07:00:00.000Z" }),
+        event({ id: "b", title: "B", allDay: true, start: "2026-05-05T07:00:00.000Z", end: "2026-05-06T07:00:00.000Z" }),
+        event({ id: "c", title: "C", allDay: true, start: "2026-05-05T07:00:00.000Z", end: "2026-05-06T07:00:00.000Z" }),
+      ],
+    });
+
+    expect(screen.getByTestId("calendar-agenda-event-row").classList.contains("sp-agenda-touch")).toBe(true);
+    expect(screen.getAllByTestId("calendar-agenda-event-chip")[0].classList.contains("sp-agenda-touch")).toBe(true);
+    const expandButton = screen.getByText("+1").closest("button");
+    expect(expandButton?.classList.contains("sp-agenda-touch")).toBe(true);
+    expect(expandButton?.classList.contains("sp-mobile-agenda-control")).toBe(true);
   });
 
   it("updates the Mini Calendar hover preview immediately as agenda rows change", () => {

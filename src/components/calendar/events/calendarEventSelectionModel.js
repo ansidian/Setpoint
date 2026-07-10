@@ -44,6 +44,12 @@ export function isCalendarEventSelectionEligible(event) {
   );
 }
 
+// Shared modifier predicate for the cmd/ctrl multi-select gesture. Every calendar
+// surface that forwards modifier-clicks must use this single definition (FLOWS.md flow 5).
+export function isEventSelectionModifier(event) {
+  return !!(event?.metaKey || event?.ctrlKey);
+}
+
 export function calendarEventSelectionIdentity(event) {
   if (!isCalendarEventSelectionEligible(event)) return null;
   const seriesOrEventId = stablePart(event.recurringEventId || event.id);

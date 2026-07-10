@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import eventsView from "../../components/calendar/views/eventsView.jsx";
 import { getCalendarLayoutMetrics } from "../../components/calendar/calendarLayout.js";
 import useCalendarEventEditor from "../../components/calendar/events/useCalendarEventEditor.js";
 import useDeadlineQuickActions from "../../components/calendar/views/deadlines/useDeadlineQuickActions.js";
 import { getDeadlineSelectionId } from "../../components/calendar/views/deadlines/deadlinesModel.js";
-import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
-import CalendarMobileAgenda from "../../components/calendar/CalendarMobileAgenda.jsx";
 import buildCalendarModalShellProps from "../../components/calendar/modal/buildCalendarModalShellProps.js";
 import useIsMobile from "../useIsMobile";
+import { CalendarMobileAgenda, CalendarModalShell } from "./calendarShellLoaders.jsx";
 import {
   getMultiMonthGridRange,
   getVisibleGridRange,
@@ -225,6 +224,7 @@ export default function useCalendarModalController({
   const eventsRefreshRange = eventsData?.refreshRange || null;
   const eventsUpsertEvents = eventsData?.upsertEvents || null;
   const eventsRemoveEvent = eventsData?.removeEvent || null;
+  const eventsMarkStale = eventsData?.markStale || null;
   const eventsGetEvents = eventsData?.getEvents || null;
   const eventsHasMonth = eventsData?.hasMonth || null;
   const eventsIsMonthLoading = eventsData?.isMonthLoading || null;
@@ -476,6 +476,7 @@ export default function useCalendarModalController({
     eventsRefreshRange,
     eventsUpsertEvents,
     eventsRemoveEvent,
+    eventsMarkStale,
     floatingDetailRef,
     setFloatingDetail,
     setSelectedItemId,
@@ -1151,7 +1152,7 @@ export default function useCalendarModalController({
     availableCalendarViews,
   });
 
-  return isMobile
-    ? <CalendarMobileAgenda {...shellProps} />
-    : <CalendarModalShell {...shellProps} />;
+  return (
+    <Suspense fallback={null}>{isMobile ? <CalendarMobileAgenda {...shellProps} /> : <CalendarModalShell {...shellProps} />}</Suspense>
+  );
 }

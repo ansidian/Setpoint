@@ -47,6 +47,53 @@ describe("BillsAgendaRail", () => {
     expect(screen.getByText("No Bills")).toBeTruthy();
   });
 
+  it("renders an enriched empty-month state in the mobile agenda", () => {
+    const { container } = renderRail({
+      data: { schedules: [] },
+      currentMonth: 3,
+      selectedDateKey: null,
+      mobileAgenda: true,
+    });
+
+    const primary = screen.getByText("No bills due in May");
+    const secondary = screen.getByText("Days you add will appear here.");
+    const card = primary.parentElement;
+    expect(card.style.padding).toBe("28px 16px");
+    expect(card.style.alignItems).toBe("center");
+    expect(card.style.textAlign).toBe("center");
+    expect(secondary.style.color).toBe("var(--color-text-faint)");
+    expect(container.querySelector("svg.lucide-receipt")).toBeTruthy();
+    expect(screen.queryByText("No Bills This Month")).toBeNull();
+  });
+
+  it("keeps mobile per-day empty cards compact", () => {
+    renderRail({
+      currentMonth: 3,
+      selectedDateKey: "2026-05-02",
+      mobileAgenda: true,
+    });
+
+    const label = screen.getByText("No Bills");
+    expect(label.parentElement.style.padding).toBe("12px 10px");
+    expect(screen.queryByText(/No bills due in/)).toBeNull();
+  });
+
+  it("keeps the desktop-default empty-month card unchanged", () => {
+    renderRail({
+      data: { schedules: [] },
+      currentMonth: 3,
+      selectedDateKey: null,
+    });
+
+    const label = screen.getByText("No Bills This Month");
+    const card = label.parentElement;
+    expect(card.style.padding).toBe("12px 10px");
+    expect(card.style.display).toBe("");
+    expect(card.style.textAlign).toBe("");
+    expect(screen.queryByText(/No bills due in/)).toBeNull();
+    expect(screen.queryByText("Days you add will appear here.")).toBeNull();
+  });
+
   it("keeps Mini Calendar markers scoped to Bills and previews focused bill rows", () => {
     renderRail({
       data: {
@@ -71,6 +118,7 @@ describe("BillsAgendaRail", () => {
 
     fireEvent.focus(screen.getByTestId("calendar-agenda-bill-row"));
 
+    expect(screen.getByTestId("calendar-agenda-bill-row").classList.contains("sp-agenda-touch")).toBe(true);
     expect(mayFive.getAttribute("data-hover-preview")).toBe("active");
     expect(mayFive.getAttribute("data-hover-preview-color")).toBe("#89b4fa");
   });

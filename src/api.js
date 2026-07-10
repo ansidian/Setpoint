@@ -1,21 +1,49 @@
 import { isDemoMode } from "./demo/config.js";
-import { handleDemoApiRequest } from "./demo/apiAdapter.js";
 import { readSseStream } from "./lib/sseStream.js";
 
 async function apiFetch(path, options = {}) {
-  if (isDemoMode()) {
+  // Keep this literal env check: Vite must eliminate the adapter import from production builds.
+  if (import.meta.env.VITE_EA_DEMO === "1") {
+    const { handleDemoApiRequest } = await import("./demo/apiAdapter.js");
     return handleDemoApiRequest(path, options);
   }
-  const { redirectOnAuthFailure = true, ...fetchOptions } = options;
+  const { redirectOnAuthFailure = true, timeoutMs, ...fetchOptions } = options;
 
-  const res = await fetch(path, {
-    ...fetchOptions,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Requested-With": "Setpoint",
-      ...fetchOptions.headers,
-    },
-  });
+  // A request that never settles (stalled TCP, dead network) would otherwise
+  // leave an optimistic mutation applied forever with no revert path — the
+  // 2026-07-06 calendar ghost-delete incident. When timeoutMs is set we arm an
+  // AbortSignal.timeout so fetch rejects, and the rejection flows to the caller's
+  // catch (which reverts). Only opted-in helpers pass timeoutMs — SSE streams and
+  // long snapshot reads must not inherit a deadline. No current timeoutMs caller
+  // also supplies options.signal, so timeoutMs simply provides the signal; if that
+  // ever changes, compose the two via AbortSignal.any here.
+  const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : fetchOptions.signal;
+
+  let res;
+  try {
+    res = await fetch(path, {
+      ...fetchOptions,
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "Setpoint",
+        ...fetchOptions.headers,
+      },
+    });
+  } catch (err) {
+    // AbortSignal.timeout rejects the fetch with a TimeoutError; translate it into
+    // a settled, caller-friendly error. A caller-supplied AbortController abort
+    // surfaces as AbortError and is left untouched — search cancellation depends
+    // on seeing AbortError (see the calendar search abort flow).
+    if (timeoutMs && err?.name === "TimeoutError") {
+      const timeoutErr = new Error(
+        "Request timed out — check the calendar before retrying; the change may not have saved.",
+      );
+      timeoutErr.code = "request_timeout";
+      throw timeoutErr;
+    }
+    throw err;
+  }
 
   if (res.status === 401 && redirectOnAuthFailure) {
     window.location.href = "/login";
@@ -93,7 +121,7 @@ export const deletePasskeyCredential = (credentialId) => (
 );
 export const listApiTokens = () => apiFetch("/api/auth/api-tokens");
 export const createApiToken = (label, scopes) => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
-export const revokeApiToken = (id) => apiFetch(`/api/auth/api-tokens/${id}`, { method: "DELETE" });
+export const revokeApiToken = (id) => apiFetch(`/api/auth/api-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Current snapshot and operational dashboard data
 export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
@@ -216,7 +244,7 @@ export const unpinEmail = (uid) =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/pin`, { method: "DELETE" });
 export const completeTask = (taskId) => apiFetch(`/api/briefing/complete-task/${encodeURIComponent(taskId)}`, { method: "POST" });
 export const dismissTombstone = (todoistId) =>
-  apiFetch(`/api/briefing/tombstone/${todoistId}`, { method: "DELETE" });
+  apiFetch(`/api/briefing/tombstone/${encodeURIComponent(todoistId)}`, { method: "DELETE" });
 export const markEmailAsRead = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-read`, { method: "POST" });
 export const markEmailAsUnread = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-unread`, { method: "POST" });
 export const trashEmail = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/trash`, { method: "POST" });
@@ -281,12 +309,12 @@ export const completeDeadlineOccurrence = (id, occurrenceDate) =>
   );
 export const getCalendarBillsRange = (start, end) =>
   apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
-export const getCalendarSearch = ({ scope, q, limit } = {}) => {
+export const getCalendarSearch = ({ scope, q, limit, signal } = {}) => {
   const params = new URLSearchParams();
   if (scope) params.set("scope", scope);
   if (q) params.set("q", q);
   if (limit) params.set("limit", String(limit));
-  return apiFetch(`/api/calendar/search?${params.toString()}`);
+  return apiFetch(`/api/calendar/search?${params.toString()}`, { signal });
 };
 // Calendar range fetch — used by useCalendarRange hook
 export const getCalendarRange = (start, end, { signal } = {}) =>
@@ -296,14 +324,20 @@ export const getCalendarPlaceSuggestions = (query, sessionToken) =>
   apiFetch(`/api/calendar/places/suggest?q=${encodeURIComponent(query)}${sessionToken ? `&sessionToken=${encodeURIComponent(sessionToken)}` : ""}`);
 export const getCalendarPlaceDetails = (placeId, sessionToken) =>
   apiFetch(`/api/calendar/places/${encodeURIComponent(placeId)}${sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : ""}`);
+// Client-side deadline for calendar write mutations so a stalled request always
+// settles (see apiFetch). 60s deliberately clears the server's own worst case —
+// a 30s Google budget + 10s token refresh, and up to 4 chained Google calls on
+// recurring "following" flows — so a slow-but-succeeding server write is not
+// aborted into an inverse ghost. Reads/SSE intentionally opt out.
+const CALENDAR_MUTATION_TIMEOUT_MS = 60_000;
 export const createCalendarEvent = (data) =>
-  apiFetch("/api/calendar/events", { method: "POST", body: JSON.stringify(data) });
+  apiFetch("/api/calendar/events", { method: "POST", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 export const createCalendarEventsBatch = (items) =>
-  apiFetch("/api/calendar/events/batch", { method: "POST", body: JSON.stringify({ items }) });
+  apiFetch("/api/calendar/events/batch", { method: "POST", body: JSON.stringify({ items }), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 export const updateCalendarEvent = (eventId, data) =>
-  apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(data) });
+  apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 export const deleteCalendarEvent = (eventId, data) =>
-  apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "DELETE", body: JSON.stringify(data) });
+  apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "DELETE", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 
 // Todoist
 export const getTodoistProjects = () => apiFetch("/api/briefing/todoist/projects");
@@ -330,8 +364,8 @@ export const hydrateActualBudgetCache = () => apiFetch("/api/briefing/actual/cac
 export const getAccounts = () => apiFetch("/api/ea/accounts");
 export const getGmailAuthUrl = () => apiFetch("/api/ea/accounts/gmail/auth");
 export const addICloudAccount = (email, password) => apiFetch("/api/ea/accounts/icloud", { method: "POST", body: JSON.stringify({ email, password }) });
-export const updateAccount = (id, data) => apiFetch(`/api/ea/accounts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-export const removeAccount = (id) => apiFetch(`/api/ea/accounts/${id}`, { method: "DELETE" });
+export const updateAccount = (id, data) => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
+export const removeAccount = (id) => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const reorderAccounts = (order) => apiFetch("/api/ea/accounts/reorder", { method: "PATCH", body: JSON.stringify({ order }) });
 export const getSettings = () => apiFetch("/api/ea/settings");
 export const updateSettings = (data) => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
@@ -350,10 +384,10 @@ export const skipSchedule = (index, skip = true) => apiFetch("/api/ea/schedules/
 export const getModels = () => apiFetch("/api/ea/models");
 export const getBillExtractModels = () => apiFetch("/api/ea/bill-extract-models");
 
-export const searchEmails = (query, limit) => {
+export const searchEmails = (query, limit, { signal } = {}) => {
   const params = new URLSearchParams({ q: query });
   if (limit) params.set("limit", limit);
-  return apiFetch(`/api/briefing/email-search?${params}`);
+  return apiFetch(`/api/briefing/email-search?${params}`, { signal });
 };
 
 // Alfred — streaming run + conversation reset. Not apiFetch: the response is
@@ -397,11 +431,11 @@ export const updateImportantSenders = (senders) => apiFetch("/api/ea/important-s
 // Notes
 export const getNotes = () => apiFetch("/api/notes");
 export const createNote = (content) => apiFetch("/api/notes", { method: "POST", body: JSON.stringify({ content }) });
-export const updateNote = (id, content) => apiFetch(`/api/notes/${id}`, { method: "PATCH", body: JSON.stringify({ content }) });
-export const deleteNote = (id) => apiFetch(`/api/notes/${id}`, { method: "DELETE" });
+export const updateNote = (id, content) => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ content }) });
+export const deleteNote = (id) => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const reorderNotes = (noteIds) => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
 export const archiveNote = (id, archived) =>
-  apiFetch(`/api/notes/${id}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) });
+  apiFetch(`/api/notes/${encodeURIComponent(id)}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) });
 
 // News
 export const getNews = () => apiFetch("/api/news");
@@ -412,13 +446,13 @@ export const refreshNews = () => apiFetch("/api/news/refresh", { method: "POST" 
 export const createNewsTopic = (name) =>
   apiFetch("/api/news/topics", { method: "POST", body: JSON.stringify({ name }) });
 export const renameNewsTopic = (id, name) =>
-  apiFetch(`/api/news/topics/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+  apiFetch(`/api/news/topics/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
 export const updateNewsTopicMutedTerms = (id, mutedTerms) =>
-  apiFetch(`/api/news/topics/${id}`, { method: "PATCH", body: JSON.stringify({ mutedTerms }) });
+  apiFetch(`/api/news/topics/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ mutedTerms }) });
 export const reorderNewsTopics = (ids) =>
   apiFetch("/api/news/topics/reorder", { method: "POST", body: JSON.stringify({ ids }) });
 export const deleteNewsTopic = (id) =>
-  apiFetch(`/api/news/topics/${id}`, { method: "DELETE" });
+  apiFetch(`/api/news/topics/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const importNewsStarterTopics = (names) =>
   apiFetch("/api/news/topics/import-starter", { method: "POST", body: JSON.stringify({ names }) });
 export const previewNewsSource = (url) =>
@@ -426,6 +460,6 @@ export const previewNewsSource = (url) =>
 export const createNewsSource = (data) =>
   apiFetch("/api/news/sources", { method: "POST", body: JSON.stringify(data) });
 export const updateNewsSource = (id, data) =>
-  apiFetch(`/api/news/sources/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  apiFetch(`/api/news/sources/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteNewsSource = (id) =>
-  apiFetch(`/api/news/sources/${id}`, { method: "DELETE" });
+  apiFetch(`/api/news/sources/${encodeURIComponent(id)}`, { method: "DELETE" });

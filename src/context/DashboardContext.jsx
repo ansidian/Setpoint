@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useMemo } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef } from "react";
 import { completeDeadlineOccurrence, updateDeadline } from "../api";
 import { buildDeadlineReschedulePayload } from "../components/calendar/views/deadlines/calendarDeadlineRescheduleModel.js";
 import {
@@ -20,16 +20,46 @@ export function DashboardProvider({
   onTaskCompletionIntent = null,
   children,
 }) {
+  // Ref-read so the action callbacks (and thus the context value) stay stable
+  // across deadline refetches/optimistic edits — only setCalendarDeadlines
+  // identity should ever recreate them.
+  const deadlinesRef = useRef(deadlines);
+  useEffect(() => {
+    deadlinesRef.current = deadlines;
+  });
+
+  // Pending 600ms post-complete removal timers (see handleCompleteTask),
+  // keyed by their setTimeout id so they can be cancelled on unmount — an
+  // in-flight timer firing after unmount would call a stale setCalendarDeadlines
+  // closure against an unmounted tree.
+  const completionTimersRef = useRef(new Set());
+  useEffect(() => {
+    const timers = completionTimersRef.current;
+    return () => {
+      for (const id of timers) clearTimeout(id);
+      timers.clear();
+    };
+  }, []);
+
   // Single owner: every task mutation funnels through this one apply so the
   // calendar-deadlines domain cache is the only optimistic store — no surface
   // can drift from another. When the cache is still empty (dashboard rendering
   // the live fallback), seed it from the current deadlines view so optimistic
   // flags like _completing are never lost.
   const applyTaskMutation = useCallback((transform) => {
-    setCalendarDeadlines?.((prev) => transform(prev || deadlines || EMPTY_DEADLINES));
-  }, [deadlines, setCalendarDeadlines]);
+    setCalendarDeadlines?.((prev) => transform(prev || deadlinesRef.current || EMPTY_DEADLINES));
+  }, [setCalendarDeadlines]);
 
   const removeCompletedTask = useCallback((taskId) => {
+    // The 600ms timer that schedules this can fire after a refetch already
+    // dropped the task from view (moved out of range, deleted, etc). Bail
+    // before touching the store so a genuinely absent task never triggers a
+    // cache write — applyDeadlineComplete is identity-no-op-safe on its own,
+    // but useStaleDomainCache/useCalendarDomainRange don't compare identities,
+    // so a same-reference return alone wouldn't stop the republish.
+    const liveTask = deadlinesRef.current?.upcoming?.find((t) => deadlineMatches(t, taskId));
+    if (!liveTask) return;
+
     // Keep completed tasks visible everywhere (dashboard + calendar): flip
     // status to "complete" and clear the transient _completing flash flag so
     // the row renders with the strikethrough/dim treatment.
@@ -37,7 +67,7 @@ export function DashboardProvider({
   }, [applyTaskMutation]);
 
   const handleCompleteTask = useCallback(async (taskId, taskSnapshot = null) => {
-    const existingTask = deadlines?.upcoming?.find((t) => deadlineMatches(t, taskId))
+    const existingTask = deadlinesRef.current?.upcoming?.find((t) => deadlineMatches(t, taskId))
       || (deadlineMatches(taskSnapshot, taskId) ? taskSnapshot : null);
     if (!existingTask || !existingTask.due_date || existingTask._completing || existingTask.status === "complete") return;
 
@@ -53,12 +83,19 @@ export function DashboardProvider({
     } catch (err) {
       console.error("[Briefing] Complete task failed:", err.message);
       applyTaskMutation((root) => clearDeadlineCompleting(root, taskId));
-      return;
+      return false;
     }
 
     onTaskCompleted?.(taskId);
-    setTimeout(() => removeCompletedTask(taskId), 600);
-  }, [applyTaskMutation, deadlines?.upcoming, onTaskCompleted, onTaskCompletionIntent, removeCompletedTask]);
+    // Keep the 600ms UX delay (it drives the exit-flash treatment), but track
+    // the id so an unmount can cancel it before it fires.
+    const timerId = setTimeout(() => {
+      completionTimersRef.current.delete(timerId);
+      removeCompletedTask(taskId);
+    }, 600);
+    completionTimersRef.current.add(timerId);
+    return true;
+  }, [applyTaskMutation, onTaskCompleted, onTaskCompletionIntent, removeCompletedTask]);
 
   const handleUpdateTask = useCallback((updatedTask) => {
     applyTaskMutation((root) => applyDeadlineUpsert(root, updatedTask, { merge: true }));
@@ -81,7 +118,7 @@ export function DashboardProvider({
   const handleMoveTask = useCallback(async (task, targetDate) => {
     const taskId = task?.id;
     if (!taskId || !targetDate) return;
-    const existingTask = deadlines?.upcoming?.find((t) => deadlineMatches(t, taskId)) || task;
+    const existingTask = deadlinesRef.current?.upcoming?.find((t) => deadlineMatches(t, taskId)) || task;
     const originalDueDate = existingTask?.due_date ?? task?.due_date ?? null;
     // Same-day (or an undated source) → nothing to move.
     if (!originalDueDate || originalDueDate === targetDate) return;
@@ -93,12 +130,12 @@ export function DashboardProvider({
     applyTaskMutation((root) => applyDeadlineUpsert(root, { ...existingTask, due_date: targetDate }, { merge: true }));
 
     try {
-      await updateDeadline(taskId, buildDeadlineReschedulePayload(task, targetDate));
+      await updateDeadline(taskId, buildDeadlineReschedulePayload(existingTask, targetDate));
     } catch (err) {
       console.error("[Briefing] Move task failed:", err.message);
       applyTaskMutation((root) => applyDeadlineUpsert(root, { ...existingTask, due_date: originalDueDate }, { merge: true }));
     }
-  }, [applyTaskMutation, deadlines?.upcoming]);
+  }, [applyTaskMutation]);
 
   const value = useMemo(() => ({
     handleCompleteTask,

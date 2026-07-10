@@ -58,6 +58,7 @@ export default function EventsAgendaDeadlineRow({
       key={`deadline-${deadline.agendaItemId}-${dateKey}`}
       ref={(node) => registerRow(`${deadline.agendaItemId}-${dateKey}`, node, dateKey)}
       type="button"
+      className="sp-agenda-touch"
       data-testid="calendar-agenda-deadline-row"
       data-item-id={deadline.agendaItemId}
       onClick={(clickEvent) => onSelect(deadline, clickEvent.currentTarget)}

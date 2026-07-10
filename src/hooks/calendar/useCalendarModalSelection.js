@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ymdFromParts } from "../../components/calendar/calendarDateUtils.js";
+import { pacificTodayParts, ymdFromParts } from "../../components/calendar/calendarDateUtils.js";
 import {
   buildCalendarModalSyncSnapshot,
   parseFocusDate,
@@ -13,10 +13,10 @@ export default function useCalendarModalSelection({
   focusItemId,
   openRequestId,
 }) {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  const todayDate = now.getDate();
+  const todayParts = pacificTodayParts();
+  const currentMonth = todayParts.month;
+  const currentYear = todayParts.year;
+  const todayDate = todayParts.day;
   const initialFocus = open ? parseFocusDate(focusDate) : null;
   const shouldSeedToday = open;
   const currentViewDate = { month: currentMonth, year: currentYear };

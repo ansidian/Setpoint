@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+import { memo, useMemo } from "react";
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
@@ -17,13 +19,27 @@ const MD_BILL_CHIP_METRICS = {
   fallback: 2,
 };
 
-function resolveBillChipMetrics(layout) {
+function computeBillChipMetrics(layout) {
   const tier = layout?.tier;
   const base = tier === "xl" || tier === "lg" ? LG_BILL_CHIP_METRICS : MD_BILL_CHIP_METRICS;
   return {
     ...base,
     ...getCalendarCellCapacity(layout),
   };
+}
+
+// `layout` objects are frozen per-tier singletons (see calendarLayout.js), so a
+// WeakMap keyed on the layout object identity gives every cell/render the same
+// metrics object for the same tier.
+const billChipMetricsCache = new WeakMap();
+
+export function resolveBillChipMetrics(layout) {
+  if (!layout || typeof layout !== "object") return computeBillChipMetrics(layout);
+  const cached = billChipMetricsCache.get(layout);
+  if (cached) return cached;
+  const metrics = computeBillChipMetrics(layout);
+  billChipMetricsCache.set(layout, metrics);
+  return metrics;
 }
 
 export function toBillDescriptor(bill) {
@@ -64,6 +80,66 @@ export function toBillDescriptor(bill) {
   };
 }
 
+// Builds the ordered chip descriptor array inside useMemo so an untouched
+// cell keeps the same array/descriptor identities across re-renders it can't
+// avoid (e.g. a sibling cell's selection change re-rendering the whole grid).
+const BillsCellItems = memo(function BillsCellItems({
+  day,
+  dateKey,
+  items,
+  selectedItemId,
+  onSelectItem,
+  onOpenOverflow,
+  pastTone,
+  metrics,
+  overflowOpen,
+  overflowAnchorKey,
+  inlineOverflowOpen,
+  inlineOverflowAutoFocus,
+  inlineOverflowVisibleCount,
+  inlineOverflowExternal,
+  onInlineOverflowInteraction,
+  onCloseInlineOverflow,
+  onHiddenItemsChange,
+  onBeforeItemAction,
+  onOverflowReanchorRequestHandled,
+  overflowReanchorDateKey,
+  suppressedSelectedHiddenAutoOpenKey,
+}) {
+  const descriptors = useMemo(() => {
+    const state = getDayState(items);
+    return state.items.map(toBillDescriptor);
+  }, [items]);
+
+  if (!descriptors.length) return null;
+
+  return (
+    <CalendarCellItemStack
+      day={day}
+      dateKey={dateKey}
+      items={descriptors}
+      selectedItemId={selectedItemId}
+      onSelectItem={onSelectItem}
+      onOpenOverflow={onOpenOverflow}
+      pastTone={pastTone}
+      metrics={metrics}
+      overflowOpen={overflowOpen}
+      overflowAnchorKey={overflowAnchorKey}
+      inlineOverflowOpen={inlineOverflowOpen}
+      inlineOverflowAutoFocus={inlineOverflowAutoFocus}
+      inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      inlineOverflowExternal={inlineOverflowExternal}
+      onInlineOverflowInteraction={onInlineOverflowInteraction}
+      onCloseInlineOverflow={onCloseInlineOverflow}
+      onHiddenItemsChange={onHiddenItemsChange}
+      onBeforeItemAction={onBeforeItemAction}
+      onOverflowReanchorRequestHandled={onOverflowReanchorRequestHandled}
+      overflowReanchorDateKey={overflowReanchorDateKey}
+      suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
+    />
+  );
+});
+
 export function renderBillsCellContents({
   items,
   pastTone,
@@ -87,16 +163,11 @@ export function renderBillsCellContents({
   day,
   dateKey,
 }) {
-  const state = getDayState(items);
-  const descriptors = state.items.map(toBillDescriptor);
-
-  if (!descriptors.length) return null;
-
   return (
-    <CalendarCellItemStack
+    <BillsCellItems
       day={day}
       dateKey={dateKey}
-      items={descriptors}
+      items={items}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}

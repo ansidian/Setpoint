@@ -3,6 +3,7 @@ import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 import { spanLaneMetrics, spanSegmentDisplay } from "./calendarEventSpanLayout.js";
+import { isEventSelectionModifier } from "../events/calendarEventSelectionModel.js";
 
 function clickedSegmentDate(segment, event) {
   if (!event?.currentTarget || !Number.isFinite(event.clientX)) return segment.segmentStart;
@@ -74,10 +75,6 @@ function spanSegmentStyle(segment, layout, selected, active, batchSelected = fal
     cursor: ghost ? "default" : "pointer",
     transition: "background 140ms, border-color 140ms, box-shadow 140ms, color 140ms",
   };
-}
-
-function isEventSelectionModifier(event) {
-  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 function spanTitleFit(title) {

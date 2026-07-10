@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { acquireScrollLock } from "@/lib/scrollLock.js";
 
 // All the floating-panel DOM/portal mechanics for the add-task panel: anchored
 // positioning, mobile virtual-keyboard offset, ResizeObserver reflow, the
@@ -167,14 +168,8 @@ export default function useAddTaskPanelPlacement({
 
   useEffect(() => {
     if (!isMobile || isInline) return undefined;
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevBodyOverflow;
-      document.documentElement.style.overflow = prevHtmlOverflow;
-    };
+    const release = acquireScrollLock();
+    return release;
   }, [isInline, isMobile]);
 
   useEffect(() => {

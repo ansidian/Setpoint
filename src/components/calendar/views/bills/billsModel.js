@@ -91,9 +91,31 @@ function groupBills(items = []) {
   };
 }
 
+// billsView.compute() already pre-groups every itemsByDay/itemsByDate value
+// via groupBills() before storing it (see compute() below), so by the time
+// the grid's real render path calls getDayState on that value, it already
+// has an `activeItems` property and getDayState's own short-circuit
+// (`if (rawItems?.activeItems) return rawItems;`) hands back that same
+// stable reference — no fresh object, no defeated memo. This WeakMap cache
+// is never reached by that path. It exists as a defensive fallback for any
+// caller that invokes getDayState (or the raw-array-accepting
+// getDefaultSelectedItemId / hasOverdue below) with a genuine ungrouped
+// array directly — no such caller exists in the current codebase, but the
+// shared view-object contract (mirrored by eventsView/deadlinesModel)
+// documents these functions as accepting raw items, so a caller could pass
+// one in the future. If that happens, this cache keeps repeated calls with
+// the same array reference from reallocating a fresh grouped object each
+// time.
+const billDayStateCache = new WeakMap();
+
 export function getDayState(rawItems) {
   if (rawItems?.activeItems) return rawItems;
-  return groupBills(Array.isArray(rawItems) ? rawItems : []);
+  if (!Array.isArray(rawItems)) return groupBills([]);
+  const cached = billDayStateCache.get(rawItems);
+  if (cached) return cached;
+  const state = groupBills(rawItems);
+  billDayStateCache.set(rawItems, state);
+  return state;
 }
 
 export function getDefaultSelectedItemId(items = []) {

@@ -104,6 +104,7 @@ describe("EventsAgendaDeadlineRow", () => {
 
     const progressStatus = screen.getByTestId("events-agenda-deadline-status-deadline:todo-0:2026-05-12");
     const completeStatus = screen.getByTestId("events-agenda-deadline-status-todoist:todo-1");
+    expect(screen.getAllByTestId("calendar-agenda-deadline-row")[0].classList.contains("sp-agenda-touch")).toBe(true);
     expect(progressStatus.textContent).toContain("In progress");
     expect(progressStatus.querySelector("[data-events-agenda-deadline-status-icon='in_progress']")?.getAttribute("aria-hidden")).toBe("true");
     expect(progressStatus.getAttribute("title")).toBeNull();

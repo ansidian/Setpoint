@@ -4,8 +4,6 @@ import {
   createReminder,
   deleteDeadline,
   deleteReminder,
-  getTodoistLabels,
-  getTodoistProjects,
   listReminders,
   updateDeadline,
 } from "../../../api";
@@ -30,6 +28,10 @@ import {
 import { canSubmitTask } from "./submitPayload";
 import { submitAddTaskFlow } from "./submitAddTaskFlow.js";
 import useAddTaskPanelPlacement from "./useAddTaskPanelPlacement.js";
+import {
+  getCachedTodoistLabels,
+  getCachedTodoistProjects,
+} from "./todoistReferenceCache.js";
 import {
   createTodoistReminderDraftFromCustom,
   createTodoistReminderDraftFromOffset,
@@ -156,7 +158,7 @@ export default function useAddTaskPanelController({
   }, [deleting, editingTask, isEdit, onTaskDeleted, requestClose]);
 
   useEffect(() => {
-    getTodoistProjects()
+    getCachedTodoistProjects()
       .then((list) => {
         const sorted = [...list].sort((a, b) => {
           if (a.isInbox) return -1;
@@ -166,7 +168,7 @@ export default function useAddTaskPanelController({
         setProjects(sorted);
       })
       .catch(() => {});
-    getTodoistLabels().then(setLabels).catch(() => {});
+    getCachedTodoistLabels().then(setLabels).catch(() => {});
   }, []);
 
   // Warm chrono-node on mount so the common paste-then-submit case usually has the

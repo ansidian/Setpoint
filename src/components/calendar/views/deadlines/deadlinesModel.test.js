@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canNavigateBack,
   compute,
@@ -68,5 +68,47 @@ describe("deadlinesModel range navigation", () => {
   it("uses Todoist red as the deadline source accent fallback", () => {
     expect(deadlineAccentFor({ id: "todo-1", title: "Mop and Clean" })).toBe("#e44332");
     expect(deadlineAccentFor({ id: "custom", color: "#89b4fa" })).toBe("#89b4fa");
+  });
+
+  describe("overdue classification in Pacific time", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      // 2026-07-06T05:30:00Z is still 2026-07-05 in Pacific (America/Los_Angeles, UTC-7 in July).
+      vi.setSystemTime(new Date("2026-07-06T05:30:00Z"));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("does not treat a task due today (Pacific) as overdue", () => {
+      const result = compute({
+        viewYear: 2026,
+        viewMonth: 6,
+        data: {
+          upcoming: [
+            { id: "due-today", title: "Due today", due_date: "2026-07-05", status: "incomplete" },
+          ],
+        },
+      });
+
+      expect(result.earliestOverdue).toBeNull();
+    });
+
+    it("treats a task due yesterday (Pacific) as overdue", () => {
+      const result = compute({
+        viewYear: 2026,
+        viewMonth: 6,
+        data: {
+          upcoming: [
+            { id: "due-today", title: "Due today", due_date: "2026-07-05", status: "incomplete" },
+            { id: "overdue", title: "Overdue", due_date: "2026-07-04", status: "incomplete" },
+          ],
+        },
+      });
+
+      expect(result.earliestOverdue).not.toBeNull();
+      expect(result.earliestOverdue.getDate()).toBe(4);
+    });
   });
 });

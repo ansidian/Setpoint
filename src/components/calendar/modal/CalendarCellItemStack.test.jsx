@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarCellItemStack from "./CalendarCellItemStack.jsx";
+import { ItemChip } from "./CalendarCellItemChip.jsx";
 import { getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
 const metrics = {
@@ -676,6 +677,120 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("Planning block");
     expect(screen.getByText("+1 more")).toBeTruthy();
     expect(screen.queryByText("Earlier hold")).toBeNull();
+  });
+
+  describe("chip render stability (PERF-02)", () => {
+    // `ItemChip` is exported as `React.memo(...)`; its render function lives
+    // at `ItemChip.type`. Swapping that in and out around a render lets us
+    // count real render-function invocations without touching production
+    // code, while leaving memo's own prop-comparison bailout untouched.
+    function spyOnItemChipRenders() {
+      const originalType = ItemChip.type;
+      let renderCount = 0;
+      ItemChip.type = (props) => {
+        renderCount += 1;
+        return originalType(props);
+      };
+      return {
+        count: () => renderCount,
+        restore: () => {
+          ItemChip.type = originalType;
+        },
+      };
+    }
+
+    it("does not re-render chips when the stack rerenders with referentially identical props", () => {
+      const spy = spyOnItemChipRenders();
+      try {
+        const items = [
+          { id: "item-1", leadingLabel: "9:00 AM", title: "First" },
+          { id: "item-2", leadingLabel: "10:00 AM", title: "Second" },
+          { id: "item-3", leadingLabel: "11:00 AM", title: "Third" },
+        ];
+        const props = {
+          day: 20,
+          dateKey: "2026-05-20",
+          items,
+          selectedItemId: null,
+          onSelectItem: vi.fn(),
+          onBeforeItemAction: vi.fn(),
+          metrics: { ...metrics, fullVisibleCount: 3 },
+        };
+
+        const { rerender } = render(<CalendarCellItemStack {...props} />);
+        expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(3);
+        const initialCount = spy.count();
+        expect(initialCount).toBe(3);
+
+        rerender(<CalendarCellItemStack {...props} />);
+
+        expect(spy.count()).toBe(initialCount);
+      } finally {
+        spy.restore();
+      }
+    });
+
+    it("only re-renders the chip whose selection actually changed", () => {
+      const spy = spyOnItemChipRenders();
+      try {
+        const items = [
+          { id: "item-1", leadingLabel: "9:00 AM", title: "First" },
+          { id: "item-2", leadingLabel: "10:00 AM", title: "Second" },
+          { id: "item-3", leadingLabel: "11:00 AM", title: "Third" },
+        ];
+        const baseProps = {
+          day: 20,
+          dateKey: "2026-05-20",
+          items,
+          onSelectItem: vi.fn(),
+          onBeforeItemAction: vi.fn(),
+          metrics: { ...metrics, fullVisibleCount: 3 },
+        };
+
+        const { rerender } = render(
+          <CalendarCellItemStack {...baseProps} selectedItemId={null} />,
+        );
+        const initialCount = spy.count();
+        expect(initialCount).toBe(3);
+
+        rerender(<CalendarCellItemStack {...baseProps} selectedItemId="item-2" />);
+
+        expect(spy.count()).toBe(initialCount + 1);
+      } finally {
+        spy.restore();
+      }
+    });
+
+    it("keeps inline-overflow chip handlers stable across unrelated stack rerenders", () => {
+      const spy = spyOnItemChipRenders();
+      try {
+        const items = [
+          { id: "visible-1", leadingLabel: "9:00 AM", title: "Visible" },
+          { id: "hidden-1", leadingLabel: "10:00 AM", title: "Hidden one" },
+          { id: "hidden-2", leadingLabel: "11:00 AM", title: "Hidden two" },
+        ];
+        const props = {
+          day: 20,
+          dateKey: "2026-05-20",
+          items,
+          metrics: { ...metrics, fullVisibleCount: 1, overflowVisibleCount: 2 },
+          inlineOverflowOpen: true,
+          inlineOverflowVisibleCount: 2,
+          onCloseInlineOverflow: vi.fn(),
+          onBeforeItemAction: vi.fn(),
+        };
+
+        const { rerender } = render(<CalendarCellItemStack {...props} />);
+        const initialCount = spy.count();
+        expect(initialCount).toBeGreaterThan(0);
+
+        rerender(<CalendarCellItemStack {...props} />);
+
+        expect(spy.count()).toBe(initialCount);
+      } finally {
+        spy.restore();
+      }
+    });
   });
 
 });
