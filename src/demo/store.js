@@ -22,9 +22,7 @@ const PACIFIC_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
 let cachedSeed = null;
 let cachedDateKey = null;
 
-function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
-}
+const clone = (value) => value == null ? value : structuredClone(value);
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -804,6 +802,8 @@ export function getDemoSeed() {
   }
   return cachedSeed;
 }
+
+export const forkDemoSeedForMutation = () => (cachedSeed = clone(getDemoSeed()));
 
 export function readDemoSeed() {
   return clone(getDemoSeed());

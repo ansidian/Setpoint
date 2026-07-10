@@ -51,6 +51,23 @@ describe("demo mode in-memory mutations", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("keeps bulk read state and demo task references available across reads", async () => {
+    const api = await importDemoApi();
+
+    await api.markAllEmailsAsRead(["demo-email-budget", "demo-email-prod-alert"]);
+    const rows = snapshotRows((await api.getCurrentDashboard()).activeSnapshot);
+    expect(rows.find((row) => row.uid === "demo-email-budget").read).toBe(true);
+    expect(rows.find((row) => row.uid === "demo-email-prod-alert").read).toBe(true);
+
+    await expect(api.getTodoistProjects()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: expect.any(String), name: "Inbox", isInbox: true }),
+    ]));
+    await expect(api.getTodoistLabels()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: expect.any(String), name: expect.any(String) }),
+    ]));
+    await expect(api.dismissTombstone("demo-task-link")).resolves.toEqual({ ok: true });
+  });
+
   it("mutates notes and resets them when the app reloads", async () => {
     const api = await importDemoApi();
 
