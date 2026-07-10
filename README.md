@@ -1,6 +1,6 @@
 # Setpoint
 
-![Setpoint](public/repo-hero.png)
+![Setpoint](docs/assets/repo-hero.png)
 
 A personal executive-assistant dashboard that consolidates email, calendar, tasks, reminders, weather, bills, and notes into one current operational view. It is built to solve the daily problem of managing multiple inboxes, calendars, tasks, and financial signals without losing important work in the noise.
 

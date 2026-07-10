@@ -98,7 +98,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 8. `server/routes/calendar.js:calendarSearchResponse` — merges mirror events + deadline candidates, builds coverage sources; stale/dirty mirror health triggers `requestCalendarSearchMirrorRepair` fire-and-forget
 9. `server/calendar/calendar-search-mirror.js:listCalendarSearchMirrorOccurrences` — SQL LIKE over `ea_calendar_search_occurrences`, ordered by distance from today
 10. `server/calendar/calendar-search.js:rankCalendarSearchCandidates` — ranks/truncates combined candidates to the client limit
-11. `src/hooks/calendar/useCalendarModalController.jsx:activateCalendarSearchResult` — on activation: blocks if editor dirty, switches view, sets selection + pending detail focus
+11. `src/hooks/calendar/useCalendarSearchActivation.js:activateCalendarSearchResult` — on activation: blocks if editor dirty, switches view, sets selection + pending detail focus
 12. `src/hooks/calendar/useCalendarModalController.jsx:useCalendarModalController` — builds viewData.events (prev/current/next month) and the search shell, hands both to shell props
 
 **Caches:** per-month events cache in `src/hooks/calendar/useCalendarRange.js` (30-min TTL, ±3-month prefetch radius; invalidated by explicit sync, patched by editor saves); per-scope search snapshots in `src/hooks/calendar/useCalendarModalSearch.js` (reset on query change/modal close); server mirror `ea_calendar_search_occurrences` owned by `server/calendar/calendar-search-mirror.js` (`syncCalendarSearchMirror` full/incremental + 15-min backstop worker; write-through upserts on single-event mutations in `server/routes/calendar.js`, recurring edits mark dirty for async repair).
@@ -111,7 +111,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **Trigger:** cmd/ctrl-click on any calendar event surface in the events view toggles the multi-selection set; bare cmd/ctrl while the floating detail is open promotes the focused event into the set or dismisses the panel.
 
-Surface handlers — ALL of them forward modifier-clicks unconditionally (each duplicates a local `isEventSelectionModifier`); a fix to this gesture must touch every one:
+Surface handlers — ALL of them forward modifier-clicks unconditionally (each uses the shared `isEventSelectionModifier` predicate); a fix to this gesture must touch every surface:
 
 1. `src/components/calendar/modal/CalendarCellItemChip.jsx:ItemChip` — month-grid chip (also rendered as inline-overflow item)
 2. `src/components/calendar/modal/CalendarEventSpanOverlay.jsx:CalendarEventSpanOverlay` — multi-day/all-day span segments incl. birthday spans
@@ -124,15 +124,15 @@ Surface handlers — ALL of them forward modifier-clicks unconditionally (each d
 
 Selection path:
 
-7. `src/hooks/calendar/useCalendarModalController.jsx:toggleCalendarEventSelectionSet` — events-view guard; identity-less special dates (birthdays) are dismiss-only; a dirty floating editor shakes instead of toggling; closes editor/detail, seeds the set with the prior selection
+7. `src/hooks/calendar/useCalendarEventSelectionSet.js:toggleCalendarEventSelectionSet` — events-view guard; identity-less special dates (birthdays) are dismiss-only; a dirty floating editor shakes instead of toggling; closes editor/detail, seeds the set with the prior selection
 8. `src/components/calendar/events/calendarEventSelectionModel.js:toggleCalendarEventSelection` — immutable toggle keyed by `calendarEventSelectionIdentity` (account::calendar::series::occurrence)
 9. `src/hooks/calendar/useCalendarModalHotkeys.js:handleKey` — bare Meta/Control with a detail-mode panel open calls the begin-selection callback, falling through to dismissal for ineligible items
-10. `src/hooks/calendar/useCalendarModalController.jsx:addSelectedCalendarEventToSelectionSet` — returns false for identity-less events so the hotkey dismisses the panel instead
+10. `src/hooks/calendar/useCalendarEventSelectionSet.js:addSelectedCalendarEventToSelectionSet` — returns false for identity-less events so the hotkey dismisses the panel instead
 11. `src/components/calendar/modal/CalendarCellOverflowPopover.jsx` — the overflow popover's own pointerdown handler carves out grid cells, rails, and floating-detail targets so it stays open during multi-select (the calendar is a shell tab now; there is no surface-level outside-dismiss)
 12. `src/components/calendar/modal/CalendarGrid.jsx:handleSelectDay` — plain clicks clear the selection set unless the anchor preserves it (`handleSelectItem` likewise)
-13. `src/hooks/calendar/useCalendarModalController.jsx:requestSelectedCalendarEventDelete` — Delete/Backspace batch-deletes the set; cmd+C copies via `copySelectedCalendarEvent`
+13. `src/hooks/calendar/useCalendarEventSelectionSet.js:requestSelectedCalendarEventDelete` — Delete/Backspace batch-deletes the set; cmd+C copies via `copySelectedCalendarEvent`
 
-**State:** the multi-selection set lives only in `src/hooks/calendar/useCalendarModalController.jsx` (React state + ref mirror), shaped by `src/components/calendar/events/calendarEventSelectionModel.js`; client-only, never persisted. The single day/item focus is separate, owned by `src/hooks/calendar/useCalendarModalSelection.js` + `src/hooks/calendar/calendarModalSelectionModel.js`.
+**State:** the multi-selection set lives in `src/hooks/calendar/useCalendarEventSelectionSet.js` (React state + ref mirror, hosted by the controller), shaped by `src/components/calendar/events/calendarEventSelectionModel.js`; client-only, never persisted. The single day/item focus is separate, owned by `src/hooks/calendar/useCalendarModalSelection.js` + `src/hooks/calendar/calendarModalSelectionModel.js`.
 
 **SSE:** none — purely client-side state.
 
