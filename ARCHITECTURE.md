@@ -418,7 +418,7 @@ Model selection is user-configurable through `/api/ea/models`, defaults to Anthr
 
 ## News Tab
 
-The fifth shell tab: RSS/Atom headlines only, no AI classification or summarization, $0 running cost. Migration `026_news.sql` adds `ea_news_topics` (owner-named topic sections), `ea_news_sources` (per-topic feed rows; `kind='hn'` sources build their `hnrss.org` URL from `hn_query`/`min_points` instead of storing one), and `ea_news_items` (a rolling window keyed unique on `(source_id, guid)`, plus `ea_settings.news_last_seen_at` for the single seen-marker). `server/news/news-poller.js` is an in-process interval worker (mirrors the `bills-mirror-sync`/`calendar-search-mirror` pattern): a 20-minute sweep does conditional-GET fetches (`ETag`/`Last-Modified`, 10s timeout), parses with `rss-parser`, upserts items, self-heals redirected feed URLs, and backs a source off to a ~6h retry cadence after 5 consecutive failures. Retention keeps the newest 30 items per source and additionally deletes anything older than 14 days beyond that. `server/routes/news.js` exposes the page payload (`GET /api/news`), topic/source CRUD, starter-catalog import, an add-source preview endpoint (fetches the pasted URL and follows one autodiscovered `<link rel=alternate>` if it isn't already a feed), the seen-marker bump, and a debounced manual refresh.
+The fifth shell tab: RSS/Atom headlines only, no AI classification or summarization, $0 running cost. Migration `026_news.sql` adds `ea_news_topics` (owner-named topic sections), `ea_news_sources` (per-topic feed rows; `kind='hn'` sources build their `hnrss.org` URL from `hn_query`/`min_points` instead of storing one), and `ea_news_items` (a rolling window keyed unique on `(source_id, guid)`, plus `ea_settings.news_last_seen_at` for the single seen-marker); `029_news_retry_after.sql` adds durable provider retry windows. `server/news/news-poller.js` is an in-process interval worker (mirrors the `bills-mirror-sync`/`calendar-search-mirror` pattern): a 20-minute sweep does conditional-GET fetches (`ETag`/`Last-Modified`, 10s timeout), parses with `rss-parser`, upserts items, self-heals redirected feed URLs, and backs a source off to a ~6h retry cadence after 5 consecutive failures. Reddit 429s pause the shared Reddit host until the provider's persisted `Retry-After` expires, with six hours as the fallback. Retention keeps the newest 30 items per source and additionally deletes anything older than 14 days beyond that. `server/routes/news.js` exposes the page payload (`GET /api/news`), topic/source CRUD, starter-catalog import, an add-source preview endpoint (fetches the pasted URL and follows one autodiscovered `<link rel=alternate>` if it isn't already a feed), the seen-marker bump, and a debounced manual refresh.
 
 ## Data Sources
 
@@ -623,7 +623,7 @@ erDiagram
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_news_items` | `026_news.sql` |
-| `ea_news_sources` | `026_news.sql` |
+| `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |

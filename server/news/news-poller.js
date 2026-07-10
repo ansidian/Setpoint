@@ -14,6 +14,20 @@ const NEWS_RETENTION_DAYS = 14;
 const NEWS_RETAINED_PER_SOURCE = 30;
 const MANUAL_SWEEP_MIN_GAP_MS = 60_000;
 
+export function parseRetryAfterAt(value, now = new Date()) {
+  const raw = String(value ?? "").trim();
+  const nowMs = new Date(now).getTime();
+  if (!raw || !Number.isFinite(nowMs)) return null;
+  if (/^\d+$/.test(raw)) {
+    const targetMs = nowMs + Number(raw) * 1000;
+    const target = new Date(targetMs);
+    return Number.isFinite(target.getTime()) ? target.toISOString() : null;
+  }
+  const targetMs = Date.parse(raw);
+  if (!Number.isFinite(targetMs)) return null;
+  return new Date(targetMs).toISOString();
+}
+
 const parser = new Parser({
   customFields: {
     item: [
@@ -50,6 +64,7 @@ export async function fetchFeedResponse(url, {
       body,
       etag: response.headers.get("etag"),
       lastModified: response.headers.get("last-modified"),
+      retryAfter: response.headers.get("retry-after"),
       finalUrl: response.url || url,
     };
   } finally {
@@ -91,12 +106,13 @@ export function normalizeFeedItem(raw) {
   };
 }
 
-async function recordSourceFailure(source, status, { dbClient, nowIso }) {
+async function recordSourceFailure(source, status, { dbClient, nowIso, retryAfterAt = null }) {
   await dbClient.execute({
     sql: `UPDATE ea_news_sources
-          SET last_fetch_at = ?, last_status = ?, consecutive_failures = consecutive_failures + 1
+          SET last_fetch_at = ?, last_status = ?, consecutive_failures = consecutive_failures + 1,
+              retry_after_at = ?
           WHERE id = ?`,
-    args: [nowIso, status, source.id],
+    args: [nowIso, status, retryAfterAt, source.id],
   });
 }
 
@@ -114,13 +130,17 @@ export async function syncNewsSource(source, { dbClient = db, fetchImpl = fetch,
   }
   if (response.status === 304) {
     await dbClient.execute({
-      sql: "UPDATE ea_news_sources SET last_fetch_at = ?, last_status = '304', consecutive_failures = 0 WHERE id = ?",
+      sql: `UPDATE ea_news_sources
+            SET last_fetch_at = ?, last_status = '304', consecutive_failures = 0,
+                retry_after_at = NULL
+            WHERE id = ?`,
       args: [nowIso, source.id],
     });
     return { ok: true, status: "304", inserted: 0 };
   }
   if (response.status !== 200) {
-    await recordSourceFailure(source, String(response.status), { dbClient, nowIso });
+    const retryAfterAt = response.status === 429 ? parseRetryAfterAt(response.retryAfter, now) : null;
+    await recordSourceFailure(source, String(response.status), { dbClient, nowIso, retryAfterAt });
     return { ok: false, status: String(response.status) };
   }
   let feed;
@@ -151,7 +171,7 @@ export async function syncNewsSource(source, { dbClient = db, fetchImpl = fetch,
   await dbClient.execute({
     sql: `UPDATE ea_news_sources
           SET etag = ?, last_modified = ?, last_fetch_at = ?, last_status = '200',
-              consecutive_failures = 0, feed_url = ?
+              consecutive_failures = 0, retry_after_at = NULL, feed_url = ?
           WHERE id = ?`,
     args: [response.etag, response.lastModified, nowIso, finalUrl, source.id],
   });
@@ -180,6 +200,7 @@ export async function pruneNewsItems({ dbClient = db, now = new Date() } = {}) {
 // list least-recently-fetched-first makes deferred same-host sources rotate
 // fairly instead of starving behind the same winner every sweep.
 const ONE_FETCH_PER_SWEEP_HOSTS = ["reddit.com"];
+const LIMITED_HOST_429_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 function rateLimitedFeedHost(feedUrl) {
   let host;
@@ -191,6 +212,28 @@ function rateLimitedFeedHost(feedUrl) {
   return ONE_FETCH_PER_SWEEP_HOSTS.find((limited) => host === limited || host.endsWith(`.${limited}`)) ?? null;
 }
 
+function rateLimitedHostsOnCooldown(sources, now) {
+  const nowMs = new Date(now).getTime();
+  const coolingDown = new Set();
+  for (const source of sources) {
+    if (String(source.last_status) !== "429" || !source.last_fetch_at) continue;
+    const limitedHost = rateLimitedFeedHost(resolveSourceFeedUrl(source));
+    if (!limitedHost) continue;
+    if (source.retry_after_at) {
+      const retryAfterMs = new Date(source.retry_after_at).getTime();
+      if (Number.isFinite(retryAfterMs)) {
+        if (nowMs < retryAfterMs) coolingDown.add(limitedHost);
+        continue;
+      }
+    }
+    const lastFetchMs = new Date(source.last_fetch_at).getTime();
+    if (Number.isFinite(lastFetchMs) && nowMs - lastFetchMs < LIMITED_HOST_429_COOLDOWN_MS) {
+      coolingDown.add(limitedHost);
+    }
+  }
+  return coolingDown;
+}
+
 let sweepInFlight = false;
 
 export async function sweepNewsSources({
@@ -200,8 +243,10 @@ export async function sweepNewsSources({
   if (sweepInFlight) return { swept: 0, skipped: true };
   sweepInFlight = true;
   try {
-    const result = await dbClient.execute({ sql: "SELECT * FROM ea_news_sources WHERE enabled = 1", args: [] });
-    const due = (result.rows || [])
+    const result = await dbClient.execute({ sql: "SELECT * FROM ea_news_sources", args: [] });
+    const sources = result.rows || [];
+    const coolingDownLimitedHosts = rateLimitedHostsOnCooldown(sources, now);
+    const due = sources
       .filter((source) => shouldPollSource(source, now))
       .sort((a, b) => String(a.last_fetch_at || "").localeCompare(String(b.last_fetch_at || "")));
     const fetchedLimitedHosts = new Set();
@@ -209,6 +254,7 @@ export async function sweepNewsSources({
     for (const source of due) {
       const limitedHost = rateLimitedFeedHost(resolveSourceFeedUrl(source));
       if (limitedHost) {
+        if (coolingDownLimitedHosts.has(limitedHost)) continue;
         if (fetchedLimitedHosts.has(limitedHost)) continue;
         fetchedLimitedHosts.add(limitedHost);
       }

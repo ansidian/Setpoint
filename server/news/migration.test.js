@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.js";
 
-describe("026_news migration", () => {
+describe("news migrations", () => {
   it("creates the news tables with the expected columns", async () => {
     const db = await createMigratedDb();
     const topics = await db.execute("PRAGMA table_info(ea_news_topics)");
@@ -15,7 +15,7 @@ describe("026_news migration", () => {
       expect.arrayContaining([
         "id", "topic_id", "kind", "title", "feed_url", "site_url", "enabled",
         "hn_query", "min_points", "etag", "last_modified", "last_fetch_at",
-        "last_status", "consecutive_failures",
+        "last_status", "consecutive_failures", "retry_after_at",
       ]),
     );
     const items = await db.execute("PRAGMA table_info(ea_news_items)");
