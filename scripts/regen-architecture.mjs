@@ -144,8 +144,15 @@ export function renderHooksList(rows) {
 import fs from "node:fs/promises"
 import path from "node:path"
 import process from "node:process"
+import { pathToFileURL } from "node:url"
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "dist-demo", ".git"])
+
+// path.relative() returns OS-native separators; rendered output (and the
+// "/"-split tree formatter) must stay POSIX-style regardless of platform.
+function toPosixRelative(from, to) {
+  return path.relative(from, to).split(path.sep).join("/")
+}
 
 async function listSubdirs(dirAbs, maxDepth, baseAbs = dirAbs, currentDepth = 1) {
   const result = []
@@ -160,7 +167,7 @@ async function listSubdirs(dirAbs, maxDepth, baseAbs = dirAbs, currentDepth = 1)
     if (!entry.isDirectory()) continue
     if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".")) continue
     const childAbs = path.join(dirAbs, entry.name)
-    result.push(path.relative(baseAbs, childAbs))
+    result.push(toPosixRelative(baseAbs, childAbs))
     if (currentDepth < maxDepth) {
       result.push(...(await listSubdirs(childAbs, maxDepth, baseAbs, currentDepth + 1)))
     }
@@ -220,7 +227,7 @@ export async function regenerateArchitecture({ rootDir }) {
   for (const fileAbs of routeFiles) {
     const prefix = filePrefix.get(fileAbs) ?? ""
     const source = await fs.readFile(fileAbs, "utf8")
-    const rel = path.relative(rootDir, fileAbs)
+    const rel = toPosixRelative(rootDir, fileAbs)
     for (const r of extractRoutes(source, rel)) {
       routeRows.push({ method: r.method, path: prefix + r.path, file: rel })
     }
@@ -257,7 +264,7 @@ export async function regenerateArchitecture({ rootDir }) {
   for (const fileAbs of hookFiles) {
     const source = await fs.readFile(fileAbs, "utf8")
     const exportName = extractHookExport(source)
-    const rel = path.relative(rootDir, fileAbs)
+    const rel = toPosixRelative(rootDir, fileAbs)
     hookRows.push({ file: rel, export: exportName ?? "" })
   }
   const hooksBody = renderHooksList(hookRows)
@@ -270,7 +277,7 @@ export async function regenerateArchitecture({ rootDir }) {
   return content
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`
+const isMain = process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href
 if (isMain) {
   const rootDir = process.cwd()
   const start = performance.now()
