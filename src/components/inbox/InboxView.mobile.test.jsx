@@ -11,6 +11,10 @@ import {
 } from "./test-utils/inboxFixtures.js";
 import { resetInboxSession } from "./useInboxSessionState.js";
 
+function signalOptions() {
+  return expect.objectContaining({ signal: expect.any(AbortSignal) });
+}
+
 const activeSnapshotMock = vi.hoisted(() => ({
   state: {
     snapshot: null,
@@ -196,7 +200,7 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 30);
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 30, signalOptions());
     });
     expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
     expect(screen.queryByText("Budget dinner plans")).toBeNull();
@@ -237,7 +241,7 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 30);
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 30, signalOptions());
     });
     expect(await screen.findByText("1 of 42 indexed")).toBeTruthy();
   });
@@ -277,7 +281,7 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 30);
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 30, signalOptions());
     });
     expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
 
@@ -285,7 +289,7 @@ describe("InboxView mobile", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 60);
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 60, signalOptions());
     });
   });
 
@@ -353,7 +357,7 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("tuition", 30);
+      expect(searchEmails).toHaveBeenCalledWith("tuition", 30, signalOptions());
     });
     await waitFor(() => {
       expect(screen.getByText("No indexed mail matches")).toBeTruthy();
@@ -421,6 +425,81 @@ describe("InboxView mobile", () => {
     expect(screen.queryByTestId("inbox-mobile-reader")).toBeNull();
     expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
     expect(screen.getByText("Fresh live ping")).toBeTruthy();
+  });
+
+  it("announces a silent toggle-read mutation via a status region and replaces the text on a subsequent toggle", async () => {
+    // renderInbox() does not wire onLiveReadOverrideChange to real state, so
+    // this test builds its own harness (mirroring the "updates active
+    // snapshot read state" test below) where toggling read actually flips
+    // the email's read state across a re-render.
+    function ReadOverrideHarness() {
+      const [readOverrides, setReadOverrides] = useState({});
+      return (
+        <InboxView
+          accent="#cba6da"
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          liveEmails={[]}
+          liveReadOverrides={readOverrides}
+          onLiveReadOverrideChange={(uid, read) => {
+            setReadOverrides((prev) => ({ ...prev, [uid]: read }));
+          }}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          seedSelectedId="snapshot-msg-1"
+          isMobile
+        />
+      );
+    }
+
+    activeSnapshotMock.state = {
+      snapshot: makeActiveSnapshot(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <ReadOverrideHarness />
+      </DashboardProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(markEmailAsRead).toHaveBeenCalledWith("snapshot-msg-1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Mark unread/i }));
+
+    // The mutation is silent (no undo toast) but must still land in a live
+    // region so assistive tech announces it. The real text is set via a
+    // microtask (clear-to-"" then set) so the region always goes through an
+    // empty→text transition, even when consecutive announcements repeat the
+    // same string — wait for that microtask to flush.
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe("Marked as unread");
+    });
+
+    // Re-open the (now unread) row and toggle it back to read: the status
+    // region's text must be replaced, not merely appended to.
+    fireEvent.click(screen.getByText("Snapshot action"));
+    fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Mark read/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe("Marked as read");
+    });
   });
 
   it("updates active snapshot read state immediately when opening and toggling mail", async () => {

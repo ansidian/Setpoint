@@ -80,9 +80,11 @@ export default function App() {
         <Routes>
           <Route path="/login" element={
             authenticated ? <Navigate to="/" replace /> : (
-              <Suspense fallback={<AuthSpinner />}>
-                <Login onLogin={() => setAuthenticated(true)} />
-              </Suspense>
+              <RecoverableErrorBoundary>
+                <Suspense fallback={<AuthSpinner />}>
+                  <Login onLogin={() => setAuthenticated(true)} />
+                </Suspense>
+              </RecoverableErrorBoundary>
             )
           } />
           <Route path="/" element={
@@ -96,9 +98,11 @@ export default function App() {
           } />
           <Route path="/settings" element={
             authenticated ? (
-              <Suspense fallback={<AuthSpinner />}>
-                <SettingsRoute />
-              </Suspense>
+              <RecoverableErrorBoundary>
+                <Suspense fallback={<AuthSpinner />}>
+                  <SettingsRoute />
+                </Suspense>
+              </RecoverableErrorBoundary>
             ) : <Navigate to="/login" replace />
           } />
         </Routes>

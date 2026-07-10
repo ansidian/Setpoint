@@ -59,13 +59,16 @@ export function defaultSnoozeTs() {
 }
 
 // Build snooze presets from a caller-provided nowMs. The caller (SnoozePicker)
-// re-renders this every minute so the "+6h" / "+24h" preview labels stay
+// re-renders this every minute so the fixed-duration preview labels stay
 // accurate while the picker is open — no stale times after the user leaves
 // the picker up for a while.
 export function buildSnoozePresets(nowMs) {
   return [
+    { key: "1h", label: "1 hour", at: nowMs + 3600_000 },
     { key: "6h", label: "6 hours", at: nowMs + 6 * 3600_000 },
     { key: "24h", label: "24 hours", at: nowMs + 24 * 3600_000 },
+    { key: "3d", label: "3 days", at: nowMs + 3 * 24 * 3600_000 },
+    { key: "1w", label: "1 week", at: nowMs + 7 * 24 * 3600_000 },
   ];
 }
 

@@ -8,6 +8,7 @@ import TimelineRow from "./timeline/TimelineRow";
 import {
   buildTimelineGroups,
   buildTodayTomorrowRestGroups,
+  deriveTimelineRowState,
   formatFullDateForOffset,
   shouldHoldPartialTimeline,
 } from "./timeline/timeline-helpers";
@@ -33,8 +34,10 @@ function TodayTimeline({
   isMobile = false,
   events = [],
   deadlines = [],
+  deadlinesLoading = false,
   onJump,
   eventLoadingState = "ready",
+  domainRefreshing = false,
   scrollContained = true,
 }) {
   const [filters, setFilters] = useState({ events: true, deadlines: true });
@@ -87,10 +90,13 @@ function TodayTimeline({
   const holdPartialTimeline = shouldHoldPartialTimeline({
     eventLoadingState,
     filtersEvents: filters.events,
+    filtersDeadlines: filters.deadlines,
+    deadlinesLoading,
+    hasDeadlineRows: deadlines.length > 0,
   });
   const showEventSkeletons = holdPartialTimeline;
   const visibleGroups = holdPartialTimeline ? [] : groups;
-  const showRefreshStatus = eventLoadingState === "refreshing";
+  const showRefreshStatus = eventLoadingState === "refreshing" || domainRefreshing;
   const containScroll = !isMobile && scrollContained;
 
   return (
@@ -262,11 +268,23 @@ function TomorrowGroup({ accent, count, items, label, now, onJump, onToggle, ope
       </button>
       {open && (
         <div style={{ padding: "4px 6px 6px 28px" }}>
-          {items.map((item, i) => (
-            <div key={`tom-${item.kind}-${i}`}>
-              <TimelineRow item={item} now={now} accent={accent} onJump={onJump} />
-            </div>
-          ))}
+          {items.map((item, i) => {
+            const rowState = deriveTimelineRowState(item, now);
+            return (
+              <div key={`tom-${item.kind}-${i}`}>
+                <TimelineRow
+                  item={item}
+                  accent={accent}
+                  onJump={onJump}
+                  isPast={rowState.isPast}
+                  isLive={rowState.isLive}
+                  overdueText={rowState.overdueText}
+                  reminderSummary={rowState.reminderSummary}
+                  liveMarker={rowState.liveMarker}
+                />
+              </div>
+            );
+          })}
           {items.length === 0 && (
             <div style={{ fontSize: 11, color: "var(--color-text-faint)", padding: "6px 0" }}>Nothing scheduled tomorrow.</div>
           )}

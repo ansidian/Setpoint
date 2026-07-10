@@ -1,19 +1,9 @@
 import { useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-
-// walk up from el to find the nearest scrollable ancestor inside boundary
-function findScrollableParent(el, boundary) {
-  let node = el;
-  while (node && node !== boundary) {
-    const style = getComputedStyle(node);
-    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
-      return node;
-    }
-    node = node.parentElement;
-  }
-  return boundary;
-}
+import { findScrollableParent, shouldDismissOnDragEnd, shouldEngageDrag } from "./bottomSheetModel.js";
+import { acquireScrollLock } from "@/lib/scrollLock.js";
+import useBrowserBackDismiss from "@/hooks/useBrowserBackDismiss.js";
 
 // `height` (optional) forces a definite sheet height, overriding `maxHeight`.
 // Pass this when hosting content that fills its parent via flex-1 / h-full
@@ -33,6 +23,12 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
   const dragCurrentY = useRef(null);
   const isDragging = useRef(false);
   const activeScrollEl = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  // browser/Android Back dismisses the sheet like Escape does — every consumer
+  // (all 4 direct importers + AnchoredFloatingPanel's fan-out) inherits this.
+  // No isMobile gate: BottomSheet only renders on mobile surfaces by convention.
+  useBrowserBackDismiss({ enabled: open, historyKey: "eaBottomSheet", onDismiss: onClose });
 
   // close on escape
   useEffect(() => {
@@ -42,12 +38,50 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  // lock body scroll when open
+  // move focus into the dialog on open, restore it to the trigger on close
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    previousFocusRef.current = document.activeElement;
+    sheetRef.current?.focus({ preventScroll: true });
+    return () => {
+      const prev = previousFocusRef.current;
+      if (prev?.isConnected) {
+        try {
+          prev.focus({ preventScroll: true });
+        } catch {
+          // saved element may live in a hidden/frozen subtree (e.g. Activity re-show)
+        }
+      }
+    };
+  }, [open]);
+
+  const onKeyDown = useCallback((e) => {
+    if (e.key !== "Tab") return;
+    const focusables = sheetRef.current?.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusables || focusables.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
+  // lock scroll when open (shared, ref-counted — see src/lib/scrollLock.js)
+  useEffect(() => {
+    if (!open) return undefined;
+    const release = acquireScrollLock();
+    return release;
   }, [open]);
 
   const onTouchStart = useCallback((e) => {
@@ -56,7 +90,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     // Drag-to-dismiss should only engage when that container is at scrollTop 0.
     const scrollEl = findScrollableParent(e.target, contentRef.current);
     activeScrollEl.current = scrollEl;
-    if (scrollEl && scrollEl.scrollTop > 0) {
+    if (!shouldEngageDrag(scrollEl)) {
       isDragging.current = false;
       return;
     }
@@ -81,7 +115,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     if (sheetRef.current) {
       sheetRef.current.style.transition = "";
     }
-    if (dragCurrentY.current > 100) {
+    if (shouldDismissOnDragEnd(dragCurrentY.current)) {
       onClose();
     } else if (sheetRef.current) {
       sheetRef.current.style.transform = "translateY(0)";
@@ -110,6 +144,8 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
         role="dialog"
         aria-modal="true"
         aria-label={title || undefined}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
         className="absolute bottom-0 left-0 right-0 flex flex-col animate-[slideUp_300ms_cubic-bezier(0.16,1,0.3,1)]"
         style={{
           ...(height ? { height } : { maxHeight }),

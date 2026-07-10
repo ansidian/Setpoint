@@ -7,7 +7,7 @@ import {
   ThreeTierLayout,
   DashboardSurface,
 } from "./layout/DashboardScenePrimitives";
-import { calendarContentSignature } from "../../hooks/currentDashboardModel";
+import { calendarContentSignature, stabilizeDeadlines } from "../../hooks/currentDashboardModel";
 import { markSnapshotItemHandled } from "../../api";
 import { useDashboard } from "../../context/DashboardContext";
 
@@ -15,7 +15,9 @@ const EMPTY_EMAIL_ACCOUNTS = [];
 
 function DashboardBodyInner({
   liveData, activeSnapshot, calendarRange, accent,
-  isMobile = false, calendarDeadlines = undefined, calendarDeadlinesError = false,
+  isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false,
+  calendarDeadlinesError = false,
+  domainRefreshing = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
 }) {
   const { handleCompleteTask } = useDashboard();
@@ -67,12 +69,28 @@ function DashboardBodyInner({
   const calendarDeadlinesReady = calendarDeadlines != null;
   const allowCurrentDeadlineFallback = calendarDeadlines === undefined || calendarDeadlinesError;
   const currentDeadlines = liveData.liveDeadlines || {};
+  // Content-stabilize the live fallback like liveCalendar/stableCalendarRef in
+  // useCurrentDashboard.js: getCurrentDashboard() hands back a freshly-parsed
+  // `deadlines.upcoming` array on every poll even when nothing changed, which
+  // otherwise busts every downstream consumer of `deadlines` (band model,
+  // ComingUp, DashboardProvider) each poll.
+  const liveUpcomingRef = useRef([]);
+  /* eslint-disable react-hooks/refs -- ref-cache-by-signature pattern, identical
+     in shape to stableCalendarRef in useCurrentDashboard.js (which lints clean
+     under this same rule); the rule's static analysis doesn't recognize the two
+     call sites as equivalent. */
+  const liveUpcoming = useMemo(() => {
+    const next = stabilizeDeadlines(liveUpcomingRef.current, currentDeadlines.upcoming || []);
+    liveUpcomingRef.current = next;
+    return next;
+  }, [currentDeadlines.upcoming]);
+  /* eslint-enable react-hooks/refs */
   const deadlines = useMemo(
     () => {
       if (calendarDeadlinesReady) return calendarDeadlines?.upcoming || [];
-      return allowCurrentDeadlineFallback ? currentDeadlines.upcoming || [] : [];
+      return allowCurrentDeadlineFallback ? liveUpcoming : [];
     },
-    [allowCurrentDeadlineFallback, calendarDeadlines?.upcoming, calendarDeadlinesReady, currentDeadlines.upcoming],
+    [allowCurrentDeadlineFallback, calendarDeadlines?.upcoming, calendarDeadlinesReady, liveUpcoming],
   );
   const bills = liveData.liveBills || [];
   const activeSnapshotEmailAccounts = useMemo(() => {
@@ -161,15 +179,19 @@ function DashboardBodyInner({
 
   // Wire the band's "handled" action straight to the snapshot endpoint; it emits
   // the SSE the dashboard refetches on, so no extra dispatch hook is needed here.
+  // The promise is returned (not swallowed) so the band can revert its
+  // optimistic hide and surface an error when the request fails.
   const handleMarkHandled = useCallback((snapshotItemId) => {
-    if (snapshotItemId != null) Promise.resolve(markSnapshotItemHandled(snapshotItemId)).catch(() => {});
+    if (snapshotItemId != null) return Promise.resolve(markSnapshotItemHandled(snapshotItemId));
   }, []);
 
   // Deadline "Mark done" in the band routes through the same canonical completer
   // the deadline popover uses (optimistic flag → completeDeadlineOccurrence →
-  // revert on failure), so the Todoist task is actually marked complete.
+  // revert on failure), so the Todoist task is actually marked complete. The
+  // promise (and its resolved true/false) is returned so the band can revert
+  // its own optimistic hide and surface an error on failure.
   const handleCompleteDeadline = useCallback((id, data) => {
-    Promise.resolve(handleCompleteTask(id, data)).catch(() => {});
+    return handleCompleteTask(id, data);
   }, [handleCompleteTask]);
 
   const band = (
@@ -188,7 +210,9 @@ function DashboardBodyInner({
 
   const timeline = (
     <TodayTimeline accent={accent} isMobile={isMobile} events={displayEvents} deadlines={deadlines}
-      onJump={handleRailJump} eventLoadingState={eventLoadingState} scrollContained={!isMobile} />
+      onJump={handleRailJump} eventLoadingState={eventLoadingState}
+      domainRefreshing={domainRefreshing} deadlinesLoading={calendarDeadlinesLoading}
+      scrollContained={!isMobile} />
   );
 
   const timelinePanel = (

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, Check, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -132,7 +133,36 @@ export function SkeletonCard({ lines = 2 }) {
   );
 }
 
+// WAI-ARIA tabs pattern (https://www.w3.org/WAI/ARIA/apg/patterns/tabs/):
+// activation-follows-focus roving tabindex, same as ShellTabs. The strip is a
+// row on phones but becomes a vertical column at the `md:` breakpoint (see the
+// `md:flex-col` class below), so ArrowUp/ArrowDown are wired alongside
+// ArrowLeft/ArrowRight rather than picking one axis.
 export function SettingsLayout({ activeTab, onTabChange, headerAction, children }) {
+  const tabRefs = useRef({});
+  const activeTabMeta = TABS.find((tab) => tab.id === activeTab);
+
+  function handleTabKeyDown(event) {
+    const ids = TABS.map((tab) => tab.id);
+    const currentIndex = ids.indexOf(activeTab);
+    let nextIndex = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % ids.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + ids.length) % ids.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = ids.length - 1;
+    }
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextId = ids[nextIndex];
+    onTabChange(nextId);
+    tabRefs.current[nextId]?.focus();
+  }
+
   return (
     <div className="relative isolate min-h-screen px-4 py-4 text-foreground sm:px-6 sm:py-6">
       <div
@@ -174,18 +204,29 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
               <div className="px-2 pb-2 text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 Sections
               </div>
-              <div className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0">
+              <div
+                role="tablist"
+                aria-label="Settings sections"
+                className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0"
+              >
                 {TABS.map((tab) => {
+                  const isSelected = activeTab === tab.id;
                   const className = cn(
                     "rounded-lg border px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap transition-all",
-                    activeTab === tab.id
+                    isSelected
                       ? "border-primary/20 bg-primary/[0.12] text-primary shadow-[0_0_8px_rgba(203,166,218,0.18)]"
                       : "border-transparent text-muted-foreground hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-foreground"
                   );
 
                   if (!onTabChange) {
                     return (
-                      <div key={tab.id} className={className}>
+                      <div
+                        key={tab.id}
+                        role="tab"
+                        aria-disabled="true"
+                        aria-selected={isSelected}
+                        className={className}
+                      >
                         {tab.label}
                       </div>
                     );
@@ -194,8 +235,13 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
                   return (
                     <button
                       key={tab.id}
+                      ref={(el) => { tabRefs.current[tab.id] = el; }}
                       type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      tabIndex={isSelected ? 0 : -1}
                       onClick={() => onTabChange(tab.id)}
+                      onKeyDown={handleTabKeyDown}
                       className={className}
                     >
                       {tab.label}
@@ -206,7 +252,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
             </div>
           </nav>
 
-          <div className="min-w-0">
+          <div className="min-w-0" role="tabpanel" aria-label={activeTabMeta?.label}>
             {children}
           </div>
         </div>

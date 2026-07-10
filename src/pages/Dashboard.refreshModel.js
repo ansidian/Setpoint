@@ -1,3 +1,20 @@
+export function shouldTriggerSyncHotkey(event = {}, { refreshing = false, syncing = false } = {}) {
+  return (
+    event.key === "r"
+    && !refreshing
+    && !syncing
+    && !event.repeat
+    && !event.altKey
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.shiftKey
+    && !event.target?.isContentEditable
+    && event.target?.tagName !== "INPUT"
+    && event.target?.tagName !== "TEXTAREA"
+    && event.target?.tagName !== "SELECT"
+  );
+}
+
 export function resolveDashboardRefreshPlan({
   trigger = "timer",
   currentSyncing = false,

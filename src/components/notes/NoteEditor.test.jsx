@@ -42,4 +42,22 @@ describe("NoteEditor", () => {
     );
     expect(container.querySelector(".cm-editor")).toBeTruthy();
   });
+
+  it("renders with a custom ariaLabel on the content editor", () => {
+    const { container } = render(
+      <NoteEditor value="hello" ariaLabel="New note" onChange={() => {}} />,
+    );
+    const contentEl = container.querySelector(".cm-content");
+    expect(contentEl).toBeTruthy();
+    expect(contentEl?.getAttribute("aria-label")).toBe("New note");
+  });
+
+  it("renders with the default ariaLabel when not specified", () => {
+    const { container } = render(
+      <NoteEditor value="hello" onChange={() => {}} />,
+    );
+    const contentEl = container.querySelector(".cm-content");
+    expect(contentEl).toBeTruthy();
+    expect(contentEl?.getAttribute("aria-label")).toBe("Note");
+  });
 });

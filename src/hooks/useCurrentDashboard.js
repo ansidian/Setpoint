@@ -14,6 +14,7 @@ import {
 } from "./currentDashboardModel.js";
 
 const POST_CLICK_POLL_MS = 2_000;
+const POST_CLICK_POLL_MAX_STEP_MS = 16_000;
 const POST_CLICK_POLL_MAX_MS = 45_000;
 
 function sleep(ms) {
@@ -69,6 +70,7 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     if (!initialData?.refresh || initialData.refresh.scheduled?.length === 0) return initialData;
     let latest = initialData;
     const startedAt = Date.now();
+    let delay = POST_CLICK_POLL_MS;
     while (
       mountedRef.current
       && !document.hidden
@@ -76,7 +78,8 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       && hasActiveRefreshWork(latest)
       && Date.now() - startedAt < POST_CLICK_POLL_MAX_MS
     ) {
-      await sleep(POST_CLICK_POLL_MS);
+      await sleep(delay);
+      delay = Math.min(delay * 2, POST_CLICK_POLL_MAX_STEP_MS);
       if (!mountedRef.current || document.hidden || (seq != null && seq !== requestSeqRef.current)) break;
       latest = await getCurrentDashboard();
       applyCurrent(latest, seq);

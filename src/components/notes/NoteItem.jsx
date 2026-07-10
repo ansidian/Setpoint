@@ -149,6 +149,7 @@ export default function NoteItem({
             autoFocus
             placeholder=""
             submitOnEnter
+            ariaLabel="Edit note"
           />
         ) : (
           <>

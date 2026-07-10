@@ -42,6 +42,7 @@ function renderDashboardBody({
   calendarDeadlines = undefined,
   calendarDeadlinesLoading = false,
   calendarDeadlinesError = false,
+  domainRefreshing = false,
 }) {
   return render(
     <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
@@ -71,6 +72,7 @@ function renderDashboardBody({
         calendarDeadlines={calendarDeadlines}
         calendarDeadlinesLoading={calendarDeadlinesLoading}
         calendarDeadlinesError={calendarDeadlinesError}
+        domainRefreshing={domainRefreshing}
         onOpenEmail={() => {}}
         onOpenDeadline={onOpenDeadline}
         onOpenBillsCalendar={onOpenBillsCalendar}
@@ -81,6 +83,17 @@ function renderDashboardBody({
 }
 
 describe("Dashboard event loading", () => {
+  it("shows the timeline refresh status while deadlines or bills refresh", async () => {
+    renderDashboardBody({
+      briefing: makeBriefing([]),
+      ensureRange: vi.fn().mockResolvedValue([]),
+      domainRefreshing: true,
+    });
+    await act(async () => {});
+
+    expect(screen.getByRole("status")).toBeTruthy();
+  });
+
   it("keeps seeded events on the timeline while a warm refresh is in flight", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
@@ -115,6 +128,21 @@ describe("Dashboard event loading", () => {
     expect(screen.getAllByText("Essay").length).toBeGreaterThan(0);
     expect(within(screen.getByTestId("today-timeline")).queryByText("Essay")).toBeNull();
     expect(screen.queryByTestId("timeline-refresh-status")).toBeNull();
+  });
+
+  it("holds the timeline skeleton while an empty deadline feed is still loading", async () => {
+    const briefing = makeBriefing([]);
+    briefing.deadlines = { upcoming: [], stats: {} };
+    renderDashboardBody({
+      briefing,
+      ensureRange: vi.fn().mockResolvedValue([]),
+      calendarDeadlinesLoading: true,
+    });
+    await act(async () => {});
+
+    const timeline = screen.getByTestId("today-timeline");
+    expect(within(timeline).getByTestId("dashboard-event-skeletons")).toBeTruthy();
+    expect(within(timeline).queryByText("Nothing on the calendar matching this filter.")).toBeNull();
   });
 
   it("uses live calendar deadlines over stale briefing deadlines", () => {

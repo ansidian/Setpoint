@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MobileReader from "./MobileReader.jsx";
 
@@ -68,23 +68,40 @@ describe("MobileReader bill extraction", () => {
     }));
   });
 
-  it("keeps mobile actions tap-first without desktop key hints", () => {
-    renderMobileReader({
+  it("promotes the primary triage verbs while the overflow keeps the long tail", () => {
+    const { onAction } = renderMobileReader({
       email: {
         hasBill: false,
+        uid: "gmail-work-abc123",
+        account_id: "work",
+        account_email: "work@example.test",
         _activeSnapshot: true,
         _lane: "needs_attention",
       },
     });
 
+    const triageBar = screen.getByTestId("inbox-mobile-triage-bar");
+    expect(within(triageBar).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Handled",
+      "FYI",
+      "Noise",
+      "Snooze",
+      "Trash",
+    ]);
+    fireEvent.click(within(triageBar).getByRole("button", { name: "Handled" }));
+    expect(onAction).toHaveBeenCalledWith("snapshot-handled");
+
     fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
 
-    expect(screen.getByText("Handled")).toBeTruthy();
-    expect(screen.getByText("Snooze")).toBeTruthy();
-    expect(screen.getByText("Trash")).toBeTruthy();
-    expect(screen.queryByText("H")).toBeNull();
-    expect(screen.queryByText("S")).toBeNull();
-    expect(screen.queryByText("E")).toBeNull();
+    const actionsMenu = screen.getByTestId("inbox-mobile-actions-menu");
+    expect(within(actionsMenu).getByText("Pin")).toBeTruthy();
+    expect(within(actionsMenu).getByText("Mark read")).toBeTruthy();
+    expect(within(actionsMenu).getByText("Open in Gmail")).toBeTruthy();
+    expect(within(actionsMenu).queryByText("Handled")).toBeNull();
+    expect(within(actionsMenu).queryByText("Move to FYI")).toBeNull();
+    expect(within(actionsMenu).queryByText("Move to Noise")).toBeNull();
+    expect(within(actionsMenu).queryByText("Snooze")).toBeNull();
+    expect(within(actionsMenu).queryByText("Trash")).toBeNull();
   });
 
   it("hides mobile bill pay for triaged non-bill emails", () => {
@@ -101,7 +118,7 @@ describe("MobileReader bill extraction", () => {
     expect(screen.queryByText("Open bill pay")).toBeNull();
   });
 
-  it("allows FYI snapshot rows to be marked handled from the tap menu", () => {
+  it("allows FYI snapshot rows to be marked handled from the one-tap bar", () => {
     renderMobileReader({
       email: {
         hasBill: false,
@@ -110,10 +127,9 @@ describe("MobileReader bill extraction", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    expect(screen.getByText("Handled")).toBeTruthy();
-    expect(screen.queryByText("Move to FYI")).toBeNull();
+    const triageBar = screen.getByTestId("inbox-mobile-triage-bar");
+    expect(within(triageBar).getByText("Handled")).toBeTruthy();
+    expect(within(triageBar).queryByText("FYI")).toBeNull();
   });
 
   it("limits Catch-up rows to read state and Gmail open actions", () => {
@@ -160,16 +176,19 @@ describe("MobileReader bill extraction", () => {
     expect(screen.getByText("Queued")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
 
-    expect(screen.getByText("Dismiss")).toBeTruthy();
-    expect(screen.getByText("Open bill pay")).toBeTruthy();
-    expect(screen.getByText("Snooze")).toBeTruthy();
-    expect(screen.getByText("Trash")).toBeTruthy();
-    expect(screen.queryByText("Move to Needs")).toBeNull();
-    expect(screen.queryByText("Move to FYI")).toBeNull();
-    expect(screen.queryByText("Move to Noise")).toBeNull();
-    expect(screen.queryByText("Handled")).toBeNull();
+    const actionsMenu = screen.getByTestId("inbox-mobile-actions-menu");
+    expect(within(actionsMenu).getByText("Dismiss")).toBeTruthy();
+    expect(within(actionsMenu).getByText("Open bill pay")).toBeTruthy();
+    expect(within(actionsMenu).queryByText("Move to Needs")).toBeNull();
 
-    fireEvent.click(screen.getByText("Dismiss"));
+    const triageBar = screen.getByTestId("inbox-mobile-triage-bar");
+    expect(within(triageBar).getByText("Snooze")).toBeTruthy();
+    expect(within(triageBar).getByText("Trash")).toBeTruthy();
+    expect(within(triageBar).queryByText("FYI")).toBeNull();
+    expect(within(triageBar).queryByText("Noise")).toBeNull();
+    expect(within(triageBar).queryByText("Handled")).toBeNull();
+
+    fireEvent.click(within(actionsMenu).getByText("Dismiss"));
     expect(onAction).toHaveBeenCalledWith("snapshot-dismiss", undefined);
   });
 

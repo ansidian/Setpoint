@@ -5,6 +5,7 @@ export default function MobileActionRow({
   active = false,
   danger = false,
   accent = null,
+  disabled = false,
 }) {
   const IconComponent = icon;
   const accentActive = !danger && active && accent;
@@ -14,6 +15,7 @@ export default function MobileActionRow({
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       style={{
         display: "flex",
@@ -27,7 +29,8 @@ export default function MobileActionRow({
         border: `1px solid ${danger ? "color-mix(in srgb, var(--sp-rose) 18%, transparent)" : accentActive ? `color-mix(in srgb, ${accent} 18%, transparent)` : active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
         background,
         color: tint,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
         fontFamily: "inherit",
         textAlign: "left",
       }}

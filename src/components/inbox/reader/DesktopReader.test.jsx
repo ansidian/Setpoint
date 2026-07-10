@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DesktopReader from "./DesktopReader.jsx";
+import { shouldSuspendInboxHotkeys } from "../inboxHotkeys.js";
 
 const billBadgeMock = vi.hoisted(() => vi.fn());
 
@@ -44,11 +45,9 @@ function renderReader(overrides = {}) {
       billOpen={overrides.billOpen || false}
       billMounted={overrides.billMounted || false}
       setBillOpen={() => {}}
-      trashHoldProgress={0}
-      snoozeHoldProgress={0}
       snoozeBtnRef={{ current: null }}
-      snoozeOpen={false}
-      setSnoozeOpen={() => {}}
+      snoozeOpen={overrides.snoozeOpen ?? false}
+      setSnoozeOpen={overrides.setSnoozeOpen || (() => {})}
       bodyState={overrides.bodyState || { loading: false, error: null, body: "" }}
       drafting={overrides.drafting || false}
       setDrafting={setDrafting}
@@ -144,6 +143,15 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.getByRole("button", { name: /snooze email/i }).textContent).toContain("S");
     expect(screen.getByRole("button", { name: /trash email/i }).textContent).toContain("E");
     expect(screen.getByRole("button", { name: /pin email/i }).textContent).toContain("P");
+  });
+
+  it("suspends inbox hotkeys while the desktop snooze menu is open without moving focus", () => {
+    renderReader({ snoozeOpen: true });
+    const snoozeButton = screen.getByRole("button", { name: /snooze email/i });
+    snoozeButton.focus();
+
+    expect(document.activeElement).toBe(snoozeButton);
+    expect(shouldSuspendInboxHotkeys(snoozeButton)).toBe(true);
   });
 
 	  it("dispatches snapshot lane and lifecycle actions", () => {

@@ -35,4 +35,17 @@ describe("TodoistCard", () => {
     render(<TodoistCard settings={{}} />);
     expect(screen.getByRole("button", { name: "Save" }).disabled).toBe(true);
   });
+
+  it("shows a warning pill and Reconnect action when todoist_needs_reauth is true", () => {
+    render(<TodoistCard settings={{ todoist_configured: true, todoist_needs_reauth: true }} />);
+    expect(screen.getByText(/reconnect needed/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /reconnect/i })).toBeTruthy();
+    expect(screen.queryByText("Connected")).toBeNull();
+  });
+
+  it("does not show the warning pill when todoist_needs_reauth is false", () => {
+    render(<TodoistCard settings={{ todoist_configured: true, todoist_needs_reauth: false }} />);
+    expect(screen.getByText("Connected")).toBeTruthy();
+    expect(screen.queryByText(/reconnect needed/i)).toBeNull();
+  });
 });

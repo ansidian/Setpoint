@@ -295,6 +295,48 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("backs active refresh polling off from 2s to a 16s maximum step", async () => {
+    vi.useFakeTimers();
+    const activePayload = {
+      ...currentPayload,
+      providerHealth: {
+        ...currentPayload.providerHealth,
+        currentData: {
+          state: "current",
+          sources: [{ key: "bills_current", state: "refreshing", severity: "info" }],
+        },
+      },
+      refresh: {
+        mode: "manual",
+        scheduled: [{ key: "bills_current", reason: "manual_bills_sync" }],
+        skipped: [],
+      },
+    };
+    requestCurrentDashboardRefresh.mockResolvedValueOnce(activePayload);
+    const pollTimes = [];
+    let startedAt;
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockImplementation(async () => {
+        pollTimes.push(Date.now() - startedAt);
+        return activePayload;
+      });
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    startedAt = Date.now();
+    act(() => {
+      result.current.activeSnapshot.sync();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(pollTimes).toEqual([2_000, 6_000, 14_000, 30_000]);
+    unmount();
+  });
+
   it("keeps manual sync polling long enough for Bills force refresh to settle", async () => {
     vi.useFakeTimers();
     requestCurrentDashboardRefresh.mockResolvedValueOnce({
@@ -320,7 +362,7 @@ describe("useCurrentDashboard", () => {
         return currentPayload;
       }
       pollCount += 1;
-      if (pollCount < 16) {
+      if (pollCount < 5) {
         return {
           ...currentPayload,
           providerHealth: {

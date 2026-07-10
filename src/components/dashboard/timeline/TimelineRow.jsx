@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   Calendar,
   Bell,
@@ -16,20 +17,13 @@ import {
   isGoogleSpecialDateEvent,
 } from "../../calendar/googleSpecialDateModel.js";
 import {
-  eventState,
   formatEventDuration,
   formatEventTime,
   getEventSelectionId,
-  overdueLabel,
   urgencyForDays,
 } from "../../../lib/shell-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
-import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
-import {
-  PRIORITY_COLOR,
-  percentElapsed,
-  formatNowMarkerLabel,
-} from "./timeline-helpers";
+import { PRIORITY_COLOR } from "./timeline-helpers";
 import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors.js";
 
 function PriorityFlag({ level, size = 11 }) {
@@ -56,7 +50,17 @@ function PriorityFlag({ level, size = 11 }) {
   );
 }
 
-export default function TimelineRow({ accent, isMobile = false, item, now, onJump }) {
+function TimelineRow({
+  accent,
+  isMobile = false,
+  isLive = false,
+  isPast = false,
+  item,
+  liveMarker = null,
+  onJump,
+  overdueText = null,
+  reminderSummary = null,
+}) {
   let Icon;
   let iconColor;
   let title;
@@ -65,19 +69,13 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
   let leftLabel;
   let urgency;
   let jumpPayload;
-  let isPast = false;
-  let isLive = false;
   let priorityLevel = null;
-  let overdueText = null;
   let railDotColor = null;
 
   if (item.kind === "event") {
     const event = item.data;
     const specialDate = isGoogleSpecialDateEvent(event);
     const isAllDayEvent = !!event.allDay;
-    const state = isAllDayEvent ? "future" : eventState(event, now);
-    isPast = state === "past";
-    isLive = state === "live";
     Icon = specialDate ? null
       : /zoom|video/i.test(event.location || "") || event.hangoutLink ? Video
       : /flight|airport|plane/i.test(event.title || "") ? Plane
@@ -98,7 +96,6 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     const deadline = item.data;
     const days = daysUntil(deadline.due_date);
     urgency = urgencyForDays(days, accent).key;
-    isPast = deadline.status === "complete";
     Icon = deadline.status === "complete" ? CheckCircle2
       : deadline.status === "in_progress" ? CircleDashed
       : Circle;
@@ -112,9 +109,6 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     if (PRIORITY_COLOR[deadline.priority]) {
       priorityLevel = deadline.priority;
     }
-    if (deadline.status !== "complete") {
-      overdueText = overdueLabel(item.dueAtMs, now);
-    }
     railDotColor = priorityLevel
       ? PRIORITY_COLOR[priorityLevel]
       : deadline.color || deadline.sourceColor || TODOIST_DEADLINE_COLOR || accent;
@@ -127,7 +121,6 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
   const urgencyColors = { high: "#f38ba8", medium: "#f9e2af", low: accent };
   const dotColor = urgencyColors[urgency] || accent;
   const effectiveRailDotColor = railDotColor || dotColor;
-  const reminderSummary = formatReminderSummary(item.data, { now });
   const isSpecialDateEvent = item.kind === "event" && isGoogleSpecialDateEvent(item.data);
   const opacity = isPast ? 0.38 : 1;
   const railBorderColor = railDotColor
@@ -371,15 +364,14 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
           {meta}
         </div>
       )}
-      {isLive && !isMobile && item.kind === "event" && item.startMs != null && item.endMs != null && (() => {
-        const pct = percentElapsed(item.startMs, item.endMs, now);
-        const pctStr = `${pct * 100}%`;
+      {liveMarker && (() => {
+        const pctStr = `${liveMarker.pct * 100}%`;
         return (
           <div data-testid="timeline-now-marker" style={{ gridColumn: "1 / -1", position: "relative", height: 22, marginTop: 8, borderTop: `1px solid ${accent}2e`, pointerEvents: "none" }}>
             <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pctStr, background: `linear-gradient(90deg, ${accent}29, ${accent}0d)` }} />
             <div style={{ position: "absolute", left: pctStr, top: 0, bottom: 0, width: 1.5, background: accent, boxShadow: `0 0 8px ${accent}` }} />
             <div style={{ position: "absolute", left: pctStr, top: "50%", transform: "translate(8px, -50%)", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700, color: accent, whiteSpace: "nowrap" }}>
-              {formatNowMarkerLabel(now, pct)}
+              {liveMarker.label}
             </div>
           </div>
         );
@@ -387,3 +379,5 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     </div>
   );
 }
+
+export default memo(TimelineRow);

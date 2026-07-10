@@ -134,6 +134,12 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
             onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
             onKeyDown={onInputKey}
             placeholder="Jump to anything…"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
+            aria-controls="command-palette-listbox"
+            aria-activedescendant={filtered.length ? `command-palette-option-${filtered[safeCursor].id}` : undefined}
+            aria-label="Command palette"
             style={{
               flex: 1, background: "transparent", border: "none",
               color: "var(--sp-text)", fontSize: 14, outline: "none",
@@ -141,18 +147,18 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
             }}
           />
         </div>
-        <div style={{ padding: 6, maxHeight: 400, overflow: "auto" }}>
+        <div role="listbox" id="command-palette-listbox" style={{ padding: 6, maxHeight: 400, overflow: "auto" }}>
           {filtered.map((item, i) => {
             const Icon = item.icon;
             const active = i === safeCursor;
             return (
               <div
                 key={item.id}
-                role="button"
-                tabIndex={0}
+                id={`command-palette-option-${item.id}`}
+                role="option"
+                aria-selected={i === safeCursor}
                 onMouseEnter={() => setCursor(i)}
                 onClick={() => run(item)}
-                onKeyDown={(e) => { if (e.key === "Enter") run(item); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 12px", borderRadius: 7, cursor: "pointer",
@@ -194,7 +200,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
             );
           })}
           {filtered.length === 0 && (
-            <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--color-text-faint)" }}>
+            <div role="status" style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--color-text-faint)" }}>
               No matches.
             </div>
           )}

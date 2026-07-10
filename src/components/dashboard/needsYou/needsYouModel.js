@@ -98,6 +98,34 @@ function buildInbox(rows, opened, handled) {
   return { inboxRows, inboxChip };
 }
 
+// Pure: returns the Set of every card id the current server data could
+// produce, computed BEFORE the `handled` filters run — so an id the `handled`
+// array would otherwise permanently suppress is still recognized here. This is
+// the candidate universe the band's stale-id pruning effect (ARCH-06) compares
+// `opened`/`handled` against: an id no longer in this set means the server no
+// longer has the item, so it's safe to drop from those arrays; an id still
+// present means either it's a legitimately still-active item, or it's in
+// flight (optimistically hidden, server not yet refetched) — either way, not
+// pruned yet.
+export function collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines, liveBills } = {}) {
+  const rows = laneRows(snapshotLanes);
+  const ids = new Set();
+
+  rows.filter(isUrgentEmail).forEach((r) => ids.add(`email:${r.id ?? r.uid ?? r.email_id}`));
+
+  (liveDeadlines?.upcoming || []).forEach((d) => {
+    if (d.status === "complete") return;
+    ids.add(`deadline:${d.id}`);
+  });
+
+  (liveBills || []).forEach((b) => {
+    if (b.paid) return;
+    ids.add(`bill:${b.id}`);
+  });
+
+  return ids;
+}
+
 export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, handled = [], opened = [], maxCards = 5 } = {}) {
   const rows = laneRows(snapshotLanes);
   const emailCards = rows.filter(isUrgentEmail)

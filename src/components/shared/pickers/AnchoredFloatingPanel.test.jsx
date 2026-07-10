@@ -5,6 +5,23 @@ import useIsMobile from "@/hooks/useIsMobile";
 
 vi.mock("@/hooks/useIsMobile", () => ({ default: vi.fn(() => false) }));
 
+// jsdom/happy-dom's CSS grammar doesn't recognize the `min()` math function, so
+// setting element.style.height to it silently no-ops (verified against both
+// engines) — a test-environment gap, not a real-browser one. Wrap (not
+// replace) BottomSheet so every other test here still exercises the real
+// primitive, while the height-forwarding test below can inspect the actual
+// prop value instead of reading it back off a DOM CSSOM that can't represent it.
+const { recordedBottomSheetProps } = vi.hoisted(() => ({ recordedBottomSheetProps: [] }));
+vi.mock("@/components/ui/BottomSheet", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    default: (props) => {
+      recordedBottomSheetProps.push(props);
+      return actual.default(props);
+    },
+  };
+});
+
 function rect({ top, left, width, height }) {
   return {
     top,
@@ -256,6 +273,43 @@ describe("AnchoredFloatingPanel", () => {
     // Removing the X did not strand the sheet: Escape still dismisses it.
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards a numeric height to the mobile sheet, clamped so a tall desktop hint can't force a full-screen sheet (UX-L10)", () => {
+    recordedBottomSheetProps.length = 0;
+    useIsMobile.mockReturnValue(true);
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        role="dialog"
+        ariaLabel="Snooze options"
+        height={400}
+        onClose={() => {}}
+      >
+        <div>Content</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    expect(recordedBottomSheetProps.at(-1).height).toBe("min(400px, 70vh)");
+  });
+
+  it("does not crash and leaks no style when a desktop-only style/width prop reaches the mobile sheet (UX-L10)", () => {
+    useIsMobile.mockReturnValue(true);
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        role="dialog"
+        ariaLabel="Snooze options"
+        width={300}
+        style={{ padding: 999 }}
+        onClose={() => {}}
+      >
+        <div>Content</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Snooze options" });
+    expect(dialog.style.padding).toBe("");
   });
 
   it("stays anchored on mobile when disableMobileSheet is set", async () => {

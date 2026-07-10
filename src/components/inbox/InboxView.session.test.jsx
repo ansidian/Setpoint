@@ -1082,7 +1082,10 @@ describe("InboxView session state", () => {
   });
 
 	  it("moves handled active snapshot rows to the Handled lane and suppresses duplicate clicks while pending", async () => {
-    markSnapshotItemHandled.mockImplementationOnce(() => new Promise(() => {}));
+    let resolveMutation;
+    markSnapshotItemHandled.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveMutation = resolve;
+    }));
     const activeSnapshot = {
       snapshot: makeActiveSnapshot(),
       loading: false,
@@ -1135,9 +1138,18 @@ describe("InboxView session state", () => {
 	    await waitFor(() => {
 	      expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
 	    });
+	    fireEvent.click(screen.getByText("Handled"));
+	    const pendingRow = document.querySelector('[aria-busy="true"]');
+	    expect(pendingRow).toBeTruthy();
+	    expect(screen.getByRole("button", { name: /reopen/i }).hasAttribute("disabled")).toBe(true);
 	    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
-	    expect(screen.getByText("Snapshot action")).toBeTruthy();
 	    expect(reopenSnapshotItem).not.toHaveBeenCalled();
+
+	    resolveMutation();
+	    await waitFor(() => {
+	      expect(pendingRow?.getAttribute("aria-busy")).toBeNull();
+	      expect(screen.getByRole("button", { name: /reopen/i }).hasAttribute("disabled")).toBe(false);
+	    });
 	  });
 
   it("undoes marking an FYI snapshot row handled back into FYI", async () => {
@@ -1399,7 +1411,7 @@ describe("InboxView session state", () => {
     });
   });
 
-  it("suspends desktop action hotkeys while typing or while a floating inbox menu is open", async () => {
+  it("suspends desktop action hotkeys while typing or while a floating inbox menu has focus", async () => {
     const activeSnapshot = {
       snapshot: makeActiveSnapshot({
         lanes: {
@@ -1471,7 +1483,10 @@ describe("InboxView session state", () => {
 
     searchInput.blur();
     fireEvent.click(screen.getByRole("button", { name: /snooze email/i }));
-    expect(await screen.findByRole("menu")).toBeTruthy();
+    const menu = await screen.findByRole("menu");
+    const menuButton = menu.querySelector("button");
+    expect(menuButton).toBeTruthy();
+    menuButton.focus();
 
     fireEvent.keyDown(window, { key: "e" });
     expect(trashEmail).not.toHaveBeenCalled();

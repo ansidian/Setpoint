@@ -22,6 +22,7 @@ function ViewToggle({ label, count, on, onClick, accent }) {
       type="button"
       onClick={onClick}
       aria-pressed={on}
+      className="sp-focus-ring"
       style={{
         fontSize: 11, padding: "3px 10px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
         display: "inline-flex", alignItems: "center", gap: 5,
@@ -277,6 +278,7 @@ export default function NotesTab({ accent, isMobile = false }) {
             tags={tags}
             placeholder="Jot something down…"
             submitOnEnter
+            ariaLabel="New note"
           />
         </div>
         <div style={{ position: "relative", marginBottom: 12 }}>
@@ -287,6 +289,7 @@ export default function NotesTab({ accent, isMobile = false }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search all notes…"
+            aria-label="Search all notes"
             style={{ ...inputStyle, paddingLeft: 32 }}
           />
         </div>
@@ -299,6 +302,7 @@ export default function NotesTab({ accent, isMobile = false }) {
                   key={tag}
                   type="button"
                   onClick={() => setActiveTag(on ? null : tag)}
+                  className="sp-focus-ring"
                   style={{
                     fontSize: 11, padding: "3px 9px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
                     color: on ? (accent || "var(--sp-accent)") : "var(--sp-subtext)",

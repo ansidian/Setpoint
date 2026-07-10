@@ -117,7 +117,7 @@ describe("ShellHeader system status", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open more actions/i }));
 
-    const snapshotsItem = screen.getByRole("button", { name: /snapshots/i });
+    const snapshotsItem = screen.getByRole("menuitem", { name: /snapshots/i });
     expect(within(snapshotsItem).getByText("Y")).toBeTruthy();
     expect(within(snapshotsItem).queryByText("H")).toBeNull();
   });
@@ -141,6 +141,23 @@ describe("ShellHeader system status", () => {
     expect(labels.indexOf("Open analytics")).toBeLessThan(labels.indexOf("Open command palette"));
     expect(labels.indexOf("Open command palette")).toBeLessThan(labels.indexOf("Sync now"));
     expect(labels.indexOf("Sync now")).toBeLessThan(labels.indexOf("System status: current"));
+  });
+
+  it("marks the sync button idle for assistive tech when not refreshing", () => {
+    renderHeader({ refreshing: false });
+
+    const button = screen.getByRole("button", { name: /sync now/i });
+    expect(button.getAttribute("aria-busy")).toBe("false");
+  });
+
+  it("announces sync progress to assistive tech via aria-busy and a live status region", () => {
+    renderHeader({ refreshing: true });
+
+    const button = screen.getByRole("button", { name: /syncing/i });
+    expect(button.getAttribute("aria-busy")).toBe("true");
+
+    const status = within(button).getByRole("status");
+    expect(status.textContent).toBe("Syncing…");
   });
 
   it("shows a quiet demo data marker in demo mode", () => {
@@ -173,7 +190,7 @@ describe("ShellHeader system status", () => {
     expect(within(syncButton).getByText("Sync now")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /open more actions/i }));
-    fireEvent.click(screen.getByRole("button", { name: /analytics/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /analytics/i }));
 
     expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
   });

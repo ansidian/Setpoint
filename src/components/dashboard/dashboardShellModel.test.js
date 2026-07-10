@@ -147,6 +147,11 @@ describe("dashboard shell model", () => {
     expect(buildDashboardEventsData({ cacheStamp: 7 }).cacheStamp).toBe(7);
   });
 
+  it("forwards markStale so failed mutations can re-converge the month cache", () => {
+    const markStale = () => {};
+    expect(buildDashboardEventsData({ markStale }).markStale).toBe(markStale);
+  });
+
   describe("blocking-overlay gating (P3-26 / P3-27)", () => {
     it("suppresses single-key shell commands behind a blocking overlay that isn't their target (e.g. Customize)", () => {
       // analyticsOpen/historyOpen are false here, modelling a Customize panel open:

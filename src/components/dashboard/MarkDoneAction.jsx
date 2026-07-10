@@ -16,6 +16,7 @@ export default function MarkDoneAction({ onComplete, revealed = false, itemTitle
   return (
     <button
       type="button"
+      className="sp-focus-ring"
       aria-label={itemTitle ? `Mark ${itemTitle} done` : "Mark done"}
       onClick={(e) => { e.stopPropagation(); onComplete?.(); }}
       onMouseEnter={() => setActive(true)}
@@ -28,7 +29,7 @@ export default function MarkDoneAction({ onComplete, revealed = false, itemTitle
         border: "none", margin: 0,
         color: active ? "var(--sp-green)" : "rgba(205,214,244,0.5)",
         fontFamily: "inherit", whiteSpace: "nowrap",
-        cursor: "pointer", outline: "none",
+        cursor: "pointer",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
         transition: "opacity 130ms ease, color 130ms ease, background 130ms ease",

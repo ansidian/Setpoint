@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   collectActiveSnapshotEmails,
+  buildSnoozePresets,
   defaultSnoozeTs,
   pendingSecurityGraceLabel,
 } from "./helpers.js";
@@ -17,6 +18,16 @@ function wallClock(epochMs, timeZone) {
 }
 
 describe("inbox helpers", () => {
+  it("builds the fixed-duration snooze presets in increasing order", () => {
+    expect(buildSnoozePresets(0)).toEqual([
+      { key: "1h", label: "1 hour", at: 3_600_000 },
+      { key: "6h", label: "6 hours", at: 21_600_000 },
+      { key: "24h", label: "24 hours", at: 86_400_000 },
+      { key: "3d", label: "3 days", at: 259_200_000 },
+      { key: "1w", label: "1 week", at: 604_800_000 },
+    ]);
+  });
+
   it("treats resurfaced snapshot rows as untriaged snoozed rows sorted by wake metadata", () => {
     const activeSnapshot = makeActiveSnapshot({
       lanes: {

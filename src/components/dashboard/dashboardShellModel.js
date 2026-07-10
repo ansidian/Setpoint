@@ -189,6 +189,7 @@ export function buildDashboardEventsData(calendarRange = {}) {
     refreshRangeInPlace: calendarRange.refreshRangeInPlace,
     upsertEvents: calendarRange.upsertEvents,
     removeEvent: calendarRange.removeEvent,
+    markStale: calendarRange.markStale,
     getEvents: calendarRange.getEvents,
     hasMonth: calendarRange.hasMonth,
     isMonthLoading: calendarRange.isMonthLoading,
