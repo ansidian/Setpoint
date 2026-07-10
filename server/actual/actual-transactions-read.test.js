@@ -167,4 +167,27 @@ describe("readTransactionsRange", () => {
     expect(transactions[0].amount).toBe(5000.00);
     expect(transactions[0].payee).toBe("Employer");
   });
+
+  it("returns income and expenses together with explicit directions when direction:'all'", async () => {
+    await fixture();
+    const { transactions } = await readTransactionsRange(
+      "u1", { start: "2026-05-01", end: "2026-05-31", direction: "all" }, opts(),
+    );
+
+    expect(transactions.map((transaction) => transaction.id)).toEqual([
+      "t-grocery2",
+      "t-income",
+      "t-grocery1",
+      "t-rent",
+    ]);
+    expect(transactions.find((transaction) => transaction.id === "t-income")).toMatchObject({
+      amount: 5000,
+      direction: "income",
+    });
+    expect(transactions.find((transaction) => transaction.id === "t-rent")).toMatchObject({
+      amount: 2500,
+      direction: "expense",
+    });
+    expect(transactions.some((transaction) => transaction.id === "t-transfer")).toBe(false);
+  });
 });

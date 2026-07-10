@@ -1,7 +1,6 @@
 import { Calendar as CalendarIcon } from "lucide-react";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
-import { renderEventsFooter } from "./events/EventsFooter.jsx";
 import { addDaysYmd, pacificYMD, parseYmd, ymdFromParts } from "../calendarDateUtils.js";
 import { isPinnedCalendarEvent, visualEventDateRange } from "../modal/calendarEventSpanLayout.js";
 import {
@@ -109,7 +108,6 @@ const eventsView = {
   renderCellContents: renderEventsCellContents,
   renderDetail: renderEventsDetail,
   renderFloatingDetail: renderEventsFloatingDetail,
-  renderFooter: renderEventsFooter,
   HeaderExtras: EventsHeaderExtras,
   icon: CalendarIcon,
   getDefaultSelectedItemId,

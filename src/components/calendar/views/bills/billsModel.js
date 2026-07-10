@@ -68,25 +68,45 @@ function scheduleToBill(schedule, payeeMap) {
   };
 }
 
-function orderBills(items = []) {
-  return [...items].sort((a, b) => {
+function isTransaction(item) {
+  return item?.type === "transaction";
+}
+
+function orderFinanceItems(items = []) {
+  const bills = items.filter((item) => !isTransaction(item)).sort((a, b) => {
     if (a.paid !== b.paid) return a.paid ? 1 : -1;
     const aName = (a.name || a.payee || "").toLowerCase();
     const bName = (b.name || b.payee || "").toLowerCase();
     return aName.localeCompare(bName);
   });
+  const byAmountThenName = (a, b) => (
+    (Number(b.amount) || 0) - (Number(a.amount) || 0)
+    || String(a.name || a.payee || "").localeCompare(String(b.name || b.payee || ""))
+  );
+  const income = items.filter((item) => isTransaction(item) && item.direction === "income").sort(byAmountThenName);
+  const expenses = items.filter((item) => isTransaction(item) && item.direction !== "income").sort(byAmountThenName);
+  return [...bills, ...income, ...expenses];
 }
 
-function groupBills(items = []) {
-  const ordered = orderBills(items);
-  const activeItems = ordered.filter((item) => !item.paid);
-  const completedItems = ordered.filter((item) => item.paid);
+function groupFinanceItems(items = []) {
+  const ordered = orderFinanceItems(items);
+  const billItems = ordered.filter((item) => !isTransaction(item));
+  const transactionItems = ordered.filter(isTransaction);
+  const activeItems = billItems.filter((item) => !item.paid);
+  const completedItems = billItems.filter((item) => item.paid);
+  const incomeItems = transactionItems.filter((item) => item.direction === "income");
+  const expenseItems = transactionItems.filter((item) => item.direction !== "income");
   return {
     items: ordered,
+    billItems,
+    transactionItems,
     activeItems,
     completedItems,
+    incomeItems,
+    expenseItems,
     activeCount: activeItems.length,
     completedCount: completedItems.length,
+    transactionCount: transactionItems.length,
     totalCount: ordered.length,
   };
 }
@@ -110,17 +130,17 @@ const billDayStateCache = new WeakMap();
 
 export function getDayState(rawItems) {
   if (rawItems?.activeItems) return rawItems;
-  if (!Array.isArray(rawItems)) return groupBills([]);
+  if (!Array.isArray(rawItems)) return groupFinanceItems([]);
   const cached = billDayStateCache.get(rawItems);
   if (cached) return cached;
-  const state = groupBills(rawItems);
+  const state = groupFinanceItems(rawItems);
   billDayStateCache.set(rawItems, state);
   return state;
 }
 
 export function getDefaultSelectedItemId(items = []) {
   const state = getDayState(items);
-  const fallback = state.activeItems[0] || state.completedItems[0];
+  const fallback = state.items[0];
   return String(fallback?.id || "");
 }
 
@@ -132,6 +152,7 @@ export function billMatchesItemId(bill, itemId) {
 
 export function compute({ data, viewYear, viewMonth }) {
   const schedules = data?.schedules || [];
+  const transactions = data?.transactions || [];
   const payeeMap = data?.payeeMap || {};
 
   const itemsByDay = {};
@@ -151,16 +172,34 @@ export function compute({ data, viewYear, viewMonth }) {
     }
   }
 
+  for (const transaction of transactions) {
+    if (!transaction?.date) continue;
+    const date = new Date(`${transaction.date}T00:00:00`);
+    const item = {
+      ...transaction,
+      type: "transaction",
+      name: transaction.payee || "Unknown",
+    };
+    if (!itemsByDate[transaction.date]) itemsByDate[transaction.date] = [];
+    itemsByDate[transaction.date].push(item);
+    if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
+    const day = date.getDate();
+    if (!itemsByDay[day]) itemsByDay[day] = [];
+    itemsByDay[day].push(item);
+  }
+
   let monthTotal = 0;
-  for (const bills of Object.values(itemsByDay)) {
-    for (const bill of bills) monthTotal += bill.amount;
+  for (const items of Object.values(itemsByDay)) {
+    for (const item of items) {
+      if (!isTransaction(item)) monthTotal += item.amount;
+    }
   }
 
   for (const day of Object.keys(itemsByDay)) {
-    itemsByDay[day] = groupBills(itemsByDay[day]);
+    itemsByDay[day] = groupFinanceItems(itemsByDay[day]);
   }
   for (const dateKey of Object.keys(itemsByDate)) {
-    itemsByDate[dateKey] = groupBills(itemsByDate[dateKey]);
+    itemsByDate[dateKey] = groupFinanceItems(itemsByDate[dateKey]);
   }
 
   return { itemsByDay, itemsByDate, monthTotal };

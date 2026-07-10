@@ -123,6 +123,36 @@ describe("BillsAgendaRail", () => {
     expect(mayFive.getAttribute("data-hover-preview-color")).toBe("#89b4fa");
   });
 
+  it("renders signed transaction rows and transaction mini-calendar markers", () => {
+    const onBillAction = vi.fn();
+    renderRail({
+      data: {
+        schedules: [],
+        transactions: [
+          { id: "income-1", date: "2026-05-05", payee: "Employer", category: "Income", account: "Checking", amount: 5000, direction: "income" },
+        ],
+      },
+      onBillAction,
+    });
+
+    const row = screen.getByTestId("calendar-agenda-transaction-row");
+    expect(row.getAttribute("data-item-kind")).toBe("transaction");
+    expect(within(row).getByText("Employer")).toBeTruthy();
+    expect(within(row).getByText("+$5,000.00")).toBeTruthy();
+    expect(within(row).getByText("Inflow")).toBeTruthy();
+    fireEvent.click(row);
+    expect(onBillAction).toHaveBeenCalledWith(expect.objectContaining({
+      item: expect.objectContaining({ id: "income-1" }),
+      detailKind: "transaction",
+    }));
+
+    const mayFive = within(screen.getByTestId("calendar-mini-calendar"))
+      .getByRole("button", { name: /Tuesday, May 5, selected/i });
+    const marker = within(mayFive).getByTestId("calendar-mini-calendar-marker");
+    expect(marker.getAttribute("data-marker-source-kind")).toBe("transaction");
+    expect(marker.getAttribute("data-marker-color")).toBe("#89dceb");
+  });
+
   it("shows bill markers for trailing Mini Calendar dates while viewing the current month", () => {
     renderRail({
       selectedDateKey: "2026-05-05",

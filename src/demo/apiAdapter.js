@@ -1,8 +1,10 @@
 import { createDemoApiError } from "./config.js";
 import { createCopyOnWriteView } from "./copyOnWriteView.js";
+import { demoDateRange } from "./dateRange.js";
+import { buildDemoCalendarBillsRange } from "./financeData.js";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.js";
 import { allSnapshotRows, findSnapshotRow, mutateSnapshotRows } from "./snapshotRows.js";
-import { demoDateRange, forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.js";
+import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.js";
 
 const clone = (value) => value == null ? value : structuredClone(value);
 
@@ -687,14 +689,7 @@ export async function handleDemoApiRequest(path, options = {}) {
   }
 
   if (pathname === "/api/calendar/bills/range") {
-    const schedules = demoDateRange(seed.bills, url.searchParams.get("start"), url.searchParams.get("end"), (item) => item.next_date);
-    return {
-      schedules,
-      recentTransactions: [],
-      payeeMap: clone(seed.currentDashboard.payeeMap),
-      actualBudgetUrl: seed.currentDashboard.actualBudgetUrl,
-      syncHealth: clone(seed.currentDashboard.billsSyncHealth),
-    };
+    return buildDemoCalendarBillsRange(seed, url);
   }
 
   if (pathname === "/api/ea/accounts") return clone(seed.accounts);

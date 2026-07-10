@@ -68,6 +68,9 @@
   --sp-green: #a6e3a1;
   --sp-cyan: #89dceb;
   --sp-blue: #89b4fa;
+  --sp-income: var(--sp-cyan);
+  --sp-outflow: #b4befe;
+  --sp-transfer: var(--sp-blue);
   --sp-accent: var(--ea-accent);
   /* ── Catppuccin Mocha extension (Color Scope B) ──
      App-wide de-drift: one source of truth for the remaining inline hex/oklch
@@ -84,7 +87,7 @@
   --sp-peach: #fab387;    /* Peach — 1-day bills, expense category, medium-low urgency */
   --sp-orange: #f97316;   /* Warning Orange — snooze / notification / suspended (DESIGN.json accent-secondary) */
   --sp-mauve: #cba6f7;    /* True Catppuccin Mauve — Alfred next-event standout (distinct from brand accent) */
-  --sp-lavender: #b4befe; /* Lavender — card / transfer badge label */
+  --sp-lavender: #b4befe; /* Lavender — card label / outflow source color */
   --sp-overlay: #6c7086;  /* Overlay2 — low-urgency / disabled muted (DESIGN.json text-subtle) */
   --sp-teal: #94e2d5;     /* Teal — Alfred unread dot; Todoist label accent */
   /* ── Mobile foundation tokens (Phase 0) ── */

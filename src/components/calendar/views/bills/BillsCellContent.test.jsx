@@ -9,7 +9,7 @@ vi.mock("../../../../lib/bill-utils", async (importOriginal) => {
 });
 
 import { daysUntil, urgencyColor } from "../../../../lib/bill-utils";
-import { resolveBillChipMetrics, toBillDescriptor } from "./BillsCellContent.jsx";
+import { resolveBillChipMetrics, toBillDescriptor, toTransactionDescriptor } from "./BillsCellContent.jsx";
 
 function makeBill(overrides) {
   return {
@@ -53,9 +53,9 @@ describe("toBillDescriptor amount color by urgency", () => {
     expect(toBillDescriptor(makeBill({ paid: true })).leadingColor).toBe("#a6e3a1");
   });
 
-  it("keeps transfers lavender", () => {
+  it("keeps transfers informational blue", () => {
     vi.mocked(daysUntil).mockReturnValue(30);
-    expect(toBillDescriptor(makeBill({ type: "transfer" })).leadingColor).toBe("#b4befe");
+    expect(toBillDescriptor(makeBill({ type: "transfer" })).leadingColor).toBe("#89b4fa");
   });
 });
 
@@ -84,5 +84,36 @@ describe("resolveBillChipMetrics identity cache (PERF-01)", () => {
 
   it("does not throw for a missing layout", () => {
     expect(() => resolveBillChipMetrics(undefined)).not.toThrow();
+  });
+});
+
+describe("toTransactionDescriptor", () => {
+  it("uses signed, non-color direction cues for inflows and outflows", () => {
+    expect(toTransactionDescriptor({
+      id: "income-1",
+      payee: "Employer",
+      amount: 5000,
+      direction: "income",
+      type: "transaction",
+    })).toMatchObject({
+      title: "Employer",
+      leadingLabel: "+$5,000.00",
+      detail: "Inflow",
+      detailKind: "transaction",
+      accent: "#89dceb",
+    });
+    expect(toTransactionDescriptor({
+      id: "expense-1",
+      payee: "Market",
+      amount: 42.1,
+      direction: "expense",
+      type: "transaction",
+    })).toMatchObject({
+      title: "Market",
+      leadingLabel: "−$42.10",
+      detail: "Outflow",
+      detailKind: "transaction",
+      accent: "#b4befe",
+    });
   });
 });

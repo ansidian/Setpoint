@@ -54,6 +54,12 @@ describe("demo mode read adapter", () => {
     });
     expect(deadlines.upcoming.some((task) => task.title === "Send portfolio demo link")).toBe(true);
     expect(bills.schedules.some((bill) => bill.payee === "Demo Electric")).toBe(true);
+    expect(bills.transactions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ direction: "income", payee: "Northstar Payroll" }),
+      expect.objectContaining({ direction: "expense", payee: "Corner Market" }),
+    ]));
+    expect(bills.transactionsTruncated).toBe(false);
+    expect(bills.recentTransactions).toBeUndefined();
     expect(settings).toMatchObject({ email_triage_mode: "auto", demo: true });
     expect(accounts.accounts).toHaveLength(2);
     expect(actual.accounts[0]).toMatchObject({ name: "Demo Checking" });

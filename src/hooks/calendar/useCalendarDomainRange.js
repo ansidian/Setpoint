@@ -86,6 +86,9 @@ function filterDataForMonth(data, key) {
   // windows arrive as several month-group fetches that get split here).
   if (Array.isArray(next.schedules)) {
     next.schedules = next.schedules.filter((occurrence) => monthKeyFromDate(occurrence?.next_date) === key);
+    if (Array.isArray(next.transactions)) {
+      next.transactions = next.transactions.filter((transaction) => monthKeyFromDate(transaction?.date) === key);
+    }
     return next;
   }
   return next;
@@ -125,6 +128,8 @@ function combineBillsDataForRange(entries, start, end, emptyData) {
     || clone(emptyData) || { schedules: [] };
   const seen = new Set();
   const schedules = [];
+  const seenTransactions = new Set();
+  const transactions = [];
   for (const entry of entries) {
     for (const occurrence of entry?.data?.schedules || []) {
       const date = occurrence?.next_date;
@@ -137,8 +142,16 @@ function combineBillsDataForRange(entries, start, end, emptyData) {
       // enough to sever aliasing with the cache should that ever change.
       schedules.push({ ...occurrence });
     }
+    for (const transaction of entry?.data?.transactions || []) {
+      const date = transaction?.date;
+      if (!date || date < start || date > end) continue;
+      const identity = transaction?.id ?? `${date}:${transaction?.direction ?? ""}:${transaction?.payee ?? ""}:${transaction?.amount ?? ""}`;
+      if (seenTransactions.has(identity)) continue;
+      seenTransactions.add(identity);
+      transactions.push({ ...transaction });
+    }
   }
-  return { ...base, schedules };
+  return { ...base, schedules, transactions };
 }
 
 function combineDataForRange(cache, keys, start, end, emptyData) {
@@ -158,6 +171,14 @@ function monthKeysFromData(data) {
   const keys = new Set();
   for (const item of data?.upcoming || []) {
     const key = monthKeyFromDate(dueDateOf(item));
+    if (key) keys.add(key);
+  }
+  for (const occurrence of data?.schedules || []) {
+    const key = monthKeyFromDate(occurrence?.next_date);
+    if (key) keys.add(key);
+  }
+  for (const transaction of data?.transactions || []) {
+    const key = monthKeyFromDate(transaction?.date);
     if (key) keys.add(key);
   }
   return [...keys];

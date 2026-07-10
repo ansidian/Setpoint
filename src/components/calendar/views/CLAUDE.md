@@ -24,7 +24,6 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `events/EventsCellContent.jsx` — event chips in grid cells, multi-day span handling
 - `events/EventsDetailRail.jsx` — event detail panel: duration, location, reminders, attendees
 - `events/EventSelectedCard.jsx` — selected-event hero card (title/time/meta chips); shared by the detail rail and the dashboard glance sheet
-- `events/EventsFooter.jsx` — month statistics (count, busy hours)
 - `events/eventsAgendaModel.js` — event → agenda conversion, date range clamping
 - `events/eventsPlanningModel.js` — deadline overlay merging and planning item ordering
 - `events/eventsAgendaColor.js` — hex → rgba and contrast text selection
@@ -35,11 +34,12 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `bills/BillsCellContent.jsx` — compact bill chips for grid cells
 - `bills/BillsDetailRail.jsx` — bill detail panel with schedule link and actions
 - `bills/BillSelectedCard.jsx` — selected-bill hero card (name/payee/amount/due/status); shared by the detail rail and the dashboard glance sheet
-- `bills/BillsFooter.jsx` — month bill total badge
+- `bills/TransactionSelectedCard.jsx` — read-only transaction hero card (direction/amount/date/category/account/notes)
 - `bills/UtilityStatusButton.jsx` — tracked utility status pill
 - `bills/billsAgendaModel.js` — bill → agenda conversion, due labels, urgency coloring
 - `bills/billsModel.js` — day state computation, payment tracking, urgency colors
 - `bills/utilityStatusModel.js` — tracked-utility status: best-match selection, paid/stale/honored flags, date labels
+- `bills/financeSourceColors.js` — canonical income/outflow/transfer source colors for every Bills-view surface
 
 ### deadlines
 - `deadlines/DeadlinesAgendaRail.jsx` — task timeline grouped by due date with status
@@ -64,6 +64,7 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - Model files export pure transforms from domain data to display descriptors; components stay thin.
 - Cell content components measure layout tiers and delegate overflow to `CalendarCellItemStack` in `../modal/`.
 - Color precedence: deadline color > source color > default.
+- Bills-view day ledgers order unpaid bills, paid bills, inflows, then outflows; transactions stay read-only.
 
 ## Related
 

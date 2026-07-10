@@ -2,6 +2,7 @@ import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-util
 import { addDaysYmd, pacificYMD, ymdFromParts } from "../../calendarDateUtils.js";
 import { buildDisplayedMonthGroups, sparseVisibleGroups } from "../agenda/agendaDateModel.js";
 import { compute, getDayState } from "./billsModel.js";
+import { FINANCE_SOURCE_COLORS, transactionDirectionColor } from "./financeSourceColors.js";
 
 function billDueLabel(bill) {
   if (bill.paid) return "Paid";
@@ -21,11 +22,30 @@ function billStatusLabel(bill) {
 
 function billDotColor(bill) {
   if (bill.paid) return "#a6e3a1";
-  if (bill.type === "transfer") return "#89b4fa";
+  if (bill.type === "transfer") return FINANCE_SOURCE_COLORS.transfer;
   return urgencyColor(daysUntil(bill.next_date)).accent;
 }
 
 function toAgendaBill(bill, dateKey) {
+  if (bill.type === "transaction") {
+    const income = bill.direction === "income";
+    const dotColor = transactionDirectionColor(bill.direction);
+    return {
+      ...bill,
+      agendaDateKey: dateKey,
+      agendaItemId: String(bill.id),
+      agendaItemKind: "transaction",
+      agendaKey: `transaction-${bill.id}-${dateKey}`,
+      agendaTitle: bill.payee || bill.name || "Unknown",
+      agendaSubtitle: bill.category || "Uncategorized",
+      agendaMeta: income ? "Inflow" : "Outflow",
+      agendaStatus: bill.account || "Transaction",
+      agendaAmount: `${income ? "+" : "−"}${formatAmount(bill.amount)}`,
+      agendaDotColor: dotColor,
+      agendaSelectedColor: dotColor,
+      agendaComplete: false,
+    };
+  }
   const dotColor = billDotColor(bill);
   return {
     ...bill,
@@ -156,7 +176,7 @@ export function buildBillsMiniCalendarActivityItems({
     .flatMap(([dateKey, rawItems]) => (
       getDayState(rawItems).items.map((item) => ({
         ...toAgendaBill(item, dateKey),
-        kind: "bill",
+        kind: item.type === "transaction" ? "transaction" : "bill",
         dateKey,
       }))
     ));

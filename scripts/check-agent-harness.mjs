@@ -88,12 +88,19 @@ async function checkHistoricalDocsCleanup() {
 
 async function checkAreaMaps() {
   const { checkMaps, uncoveredThresholdViolations } = await import("./lib/map-coverage.mjs")
-  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
+  const listedFiles = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
     cwd: root,
     encoding: "utf8",
   })
     .split("\n")
     .filter(Boolean)
+  // `git ls-files --cached` includes tracked paths deleted in the working tree.
+  // Exclude them so removing a mapped source file does not require retaining a
+  // stale CLAUDE.md entry until the deletion happens to be staged.
+  const files = []
+  for (const file of listedFiles) {
+    if (await exists(file)) files.push(file)
+  }
   const mapDirs = files
     .filter((f) => f.endsWith("/CLAUDE.md") && (f.startsWith("src/") || f.startsWith("server/")))
     .map((f) => f.slice(0, -"/CLAUDE.md".length))

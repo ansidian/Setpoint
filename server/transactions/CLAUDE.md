@@ -15,6 +15,7 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 ## Local patterns
 
 - direction "expense" (default) = outflows (amount < 0); direction "income" = inflows (amount > 0). Transfers are excluded in both directions.
+- Internal calendar reads may use direction "all" to return both flows in one query; rows carry explicit `direction` and positive amount magnitudes.
 - Reads go through `server/actual/actual-transactions-read.js` → on-disk `db.sqlite`
   via `@libsql/client`. No SDK, no budget-in-heap (Render 512MB firewall).
 - `sync_state` freshness is best-effort, sourced from `getBillsMirrorState`.
@@ -23,4 +24,5 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 
 - `server/actual/actual-transactions-read.js` — the low-level reader.
 - `server/alfred/alfred-tools.js` — `search_transactions` / `summarize_transactions`.
+- `server/routes/calendar.js` — combined transaction rows in the Bills calendar range response.
 - `docs/adr/0006-alfred-trust-architecture.md` — read-only trust posture.

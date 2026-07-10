@@ -41,6 +41,45 @@ describe("billsModel range data", () => {
     expect(result.itemsByDate).toEqual({});
     expect(result.itemsByDay).toEqual({});
   });
+
+  it("groups transactions with bills in finance-priority order", () => {
+    const result = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        schedules: [
+          { id: "paid", name: "Paid bill", amount: 20, next_date: "2026-05-10", paid: true, type: "bill" },
+          { id: "open", name: "Open bill", amount: 10, next_date: "2026-05-10", paid: false, type: "bill" },
+        ],
+        transactions: [
+          { id: "expense-small", date: "2026-05-10", amount: 5, direction: "expense", payee: "Coffee" },
+          { id: "income-small", date: "2026-05-10", amount: 100, direction: "income", payee: "Refund" },
+          { id: "expense-large", date: "2026-05-10", amount: 50, direction: "expense", payee: "Market" },
+          { id: "income-large", date: "2026-05-10", amount: 5000, direction: "income", payee: "Employer" },
+        ],
+      },
+    });
+
+    const state = result.itemsByDate["2026-05-10"];
+    expect(state.items.map((item) => item.id)).toEqual([
+      "open",
+      "paid",
+      "income-large",
+      "income-small",
+      "expense-large",
+      "expense-small",
+    ]);
+    expect(state.incomeItems).toHaveLength(2);
+    expect(state.expenseItems).toHaveLength(2);
+    expect(state.totalCount).toBe(6);
+    expect(state.items[2]).toMatchObject({
+      type: "transaction",
+      date: "2026-05-10",
+      name: "Employer",
+      direction: "income",
+    });
+    expect(result.monthTotal).toBe(30);
+  });
 });
 
 describe("getDayState identity (PERF-01 follow-up)", () => {

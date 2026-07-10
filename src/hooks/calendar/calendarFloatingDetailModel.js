@@ -57,6 +57,7 @@ export function preservedReanchorSide(current, nextDetail, nextView, nextDateKey
 
 export function floatingDetailTypeLabel(view, detailKind = null) {
   if (detailKind === "deadline") return "Deadline";
+  if (detailKind === "transaction") return "Transaction";
   if (view === "events") return "Event";
   if (view === "bills") return "Bill";
   return "Item";

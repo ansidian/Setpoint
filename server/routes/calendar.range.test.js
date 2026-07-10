@@ -56,6 +56,9 @@ vi.mock("../bills/bills-service.js", () => ({
     return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
   },
 }));
+vi.mock("../transactions/transactions-service.js", () => ({
+  queryTransactions: vi.fn(),
+}));
 vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
@@ -90,6 +93,7 @@ const { loadUserConfig } = await import("../platform/config-service.js");
 const { fetchCalendar } = await import("../calendar/calendar.js");
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.js");
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.js");
+const { queryTransactions } = await import("../transactions/transactions-service.js");
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js");
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.js");
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.js");
@@ -372,6 +376,14 @@ describe("GET /api/calendar/bills/range", () => {
     scheduleBillsMirrorRefresh.mockResolvedValue({ pendingRefreshAt: "2026-05-03T19:00:00.000Z" });
     isBillsMirrorMaintenanceDue.mockReturnValue(false);
     requestBillsCurrentMaintenanceRefresh.mockResolvedValue({ scheduled: false, due: false });
+    queryTransactions.mockResolvedValue({
+      total: 2,
+      transactions: [
+        { id: "income-1", date: "2026-05-09", amount: 5000, direction: "income", payee: "Employer" },
+        { id: "expense-1", date: "2026-05-08", amount: 42.1, direction: "expense", payee: "Trader Joes" },
+      ],
+      truncated: false,
+    });
   });
 
   afterEach(() => {
@@ -387,13 +399,56 @@ describe("GET /api/calendar/bills/range", () => {
     expect(res.status).toBe(200);
     expect(readBillsMirrorRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
     expect(res.body.schedules).toHaveLength(1);
-    expect(res.body.recentTransactions).toEqual([]);
+    expect(queryTransactions).toHaveBeenCalledWith(process.env.EA_USER_ID, {
+      start: "2026-04-26",
+      end: "2026-06-06",
+      direction: "all",
+      limit: 5000,
+    });
+    expect(res.body.transactions).toEqual([
+      expect.objectContaining({ id: "income-1", direction: "income" }),
+      expect.objectContaining({ id: "expense-1", direction: "expense" }),
+    ]);
+    expect(res.body.transactionsTruncated).toBe(false);
     expect(res.body.syncHealth).toEqual({ state: "current", configured: true });
     expect(res.body.minDate).toBe("2025-05-03");
     expect(res.body.errors).toEqual([]);
     expect(res.body.fetchedAt).toBe("2026-05-03T19:00:00.000Z");
     expect(scheduleBillsMirrorRefresh).not.toHaveBeenCalled();
     expect(requestBillsCurrentMaintenanceRefresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps scheduled bills available when transactions are unavailable", async () => {
+    queryTransactions.mockResolvedValueOnce({ error: "transactions unavailable — budget not synced" });
+
+    const res = await request(makeApp()).get(
+      "/api/calendar/bills/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.schedules).toHaveLength(1);
+    expect(res.body.transactions).toEqual([]);
+    expect(res.body.transactionsTruncated).toBe(false);
+    expect(res.body.errors).toEqual([{
+      source: "transactions",
+      message: "transactions unavailable — budget not synced",
+    }]);
+  });
+
+  it("reports when the calendar transaction range is truncated", async () => {
+    queryTransactions.mockResolvedValueOnce({
+      total: 5000,
+      transactions: [{ id: "expense-1", date: "2026-05-08", amount: 42, direction: "expense" }],
+      truncated: true,
+    });
+
+    const res = await request(makeApp()).get(
+      "/api/calendar/bills/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.transactions).toHaveLength(1);
+    expect(res.body.transactionsTruncated).toBe(true);
   });
 
   it("returns existing bills range and requests quiet maintenance when mirror success is old", async () => {
@@ -438,7 +493,8 @@ describe("GET /api/calendar/bills/range", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.schedules).toEqual([]);
-    expect(res.body.recentTransactions).toEqual([]);
+    expect(res.body.recentTransactions).toBeUndefined();
+    expect(res.body.transactions).toHaveLength(2);
     expect(res.body.syncHealth).toEqual({ state: "needs_sync", configured: null });
     expect(res.body.errors).toEqual([]);
     expect(scheduleBillsMirrorRefresh).toHaveBeenCalledWith(process.env.EA_USER_ID);
