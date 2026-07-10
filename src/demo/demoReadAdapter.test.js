@@ -10,6 +10,7 @@ async function importDemoApi(now = "2026-05-12T15:30:00.000Z") {
 
 describe("demo mode read adapter", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -120,5 +121,33 @@ describe("demo mode read adapter", () => {
     expect(today.deadlines.upcoming.some((task) => task.due_date === "2026-05-12")).toBe(true);
     expect(tomorrow.deadlines.upcoming.some((task) => task.due_date === "2026-05-13")).toBe(true);
     expect(today.calendar[0].startMs).not.toBe(tomorrow.calendar[0].startMs);
+  });
+
+  it("isolates dashboard readers without cloning the envelope on unchanged reads", async () => {
+    const api = await importDemoApi();
+    const cloneSpy = vi.spyOn(globalThis, "structuredClone");
+    const stringifySpy = vi.spyOn(JSON, "stringify");
+
+    const first = await api.getCurrentDashboard();
+    const second = await api.getCurrentDashboard();
+
+    expect(second).toEqual(first);
+    expect(cloneSpy).not.toHaveBeenCalled();
+    expect(stringifySpy).not.toHaveBeenCalled();
+
+    first.activeSnapshot.lanes.needs_attention[0].subject = "Caller-only edit";
+    expect((await api.getCurrentDashboard()).activeSnapshot.lanes.needs_attention[0].subject)
+      .not.toBe("Caller-only edit");
+  });
+
+  it("keeps prior dashboard views stable when a later request mutates the seed", async () => {
+    const api = await importDemoApi();
+    const before = await api.getCurrentDashboard();
+
+    await api.markEmailAsRead("demo-email-budget");
+    const after = await api.getCurrentDashboard();
+
+    expect(before.activeSnapshot.lanes.needs_attention[0].read).toBe(false);
+    expect(after.activeSnapshot.lanes.needs_attention[0].read).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ dist-demo
 server/db/*.db
 morning-briefing.jsx
 .claude/
+.codex/
 .grepai/
 .planning/
 .worktrees/

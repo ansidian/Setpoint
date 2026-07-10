@@ -18,9 +18,6 @@ function manualChunks(id) {
     || normalized.includes("/node_modules/framer-motion/")) {
     return "motion";
   }
-  if (normalized.includes("/node_modules/@base-ui/")) {
-    return "base-ui";
-  }
   if (normalized.includes("/node_modules/react/")
     || normalized.includes("/node_modules/react-dom/")
     || normalized.includes("/node_modules/react-router/")

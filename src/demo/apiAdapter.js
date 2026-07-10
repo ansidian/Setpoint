@@ -1,9 +1,10 @@
 import { createDemoApiError } from "./config.js";
-import { demoDateRange, getDemoSeed, pacificYMD, readDemoSeed } from "./store.js";
+import { createCopyOnWriteView } from "./copyOnWriteView.js";
+import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.js";
+import { allSnapshotRows, findSnapshotRow, mutateSnapshotRows } from "./snapshotRows.js";
+import { demoDateRange, forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.js";
 
-function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
-}
+const clone = (value) => value == null ? value : structuredClone(value);
 
 function route(path) {
   return new URL(path, "http://setpoint-demo.local");
@@ -18,13 +19,6 @@ function notFound(path) {
   error.code = "DEMO_NOT_FOUND";
   error.status = 404;
   throw error;
-}
-
-function allSnapshotRows(snapshot) {
-  return [
-    ...(snapshot.carryover || []),
-    ...Object.values(snapshot.lanes || {}).flat(),
-  ];
 }
 
 function parseBody(options = {}) {
@@ -50,16 +44,6 @@ function refreshLaneCounts(snapshot) {
     noise: snapshot.lanes.noise?.length || 0,
     carryover: snapshot.carryover?.length || 0,
   };
-}
-
-function mutateSnapshotRows(snapshot, uid, updater) {
-  for (const row of allSnapshotRows(snapshot)) {
-    if (String(row.uid || row.email_id) === String(uid)) updater(row);
-  }
-}
-
-function findSnapshotRow(snapshot, uid) {
-  return allSnapshotRows(snapshot).find((row) => String(row.uid || row.email_id) === String(uid)) || null;
 }
 
 function findSnapshotRowLane(snapshot, uid) {
@@ -275,11 +259,21 @@ function searchCalendar({ scope, q, limit }) {
 }
 
 export async function handleDemoApiRequest(path, options = {}) {
-  const seed = getDemoSeed();
   const url = route(path);
   const pathname = url.pathname;
   const method = String(options.method || "GET").toUpperCase();
+  const readOnlyPost = pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync";
+  const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
   const body = parseBody(options);
+
+  const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
+  if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
+  if (pathname === "/api/briefing/email/mark-all-read" && method === "POST") {
+    for (const uid of Array.isArray(body.uids) ? body.uids : []) {
+      mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = true; });
+    }
+    return { ok: true };
+  }
 
   if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/mark-read$/) && method === "POST") {
     const uid = decodeURIComponent(pathname.split("/").at(-2));
@@ -290,6 +284,12 @@ export async function handleDemoApiRequest(path, options = {}) {
   if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/mark-unread$/) && method === "POST") {
     const uid = decodeURIComponent(pathname.split("/").at(-2));
     mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = false; });
+    return { ok: true };
+  }
+
+  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/pin$/) && (method === "POST" || method === "DELETE")) {
+    const uid = decodeURIComponent(pathname.split("/").at(-2));
+    mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.pinned = method === "POST"; });
     return { ok: true };
   }
 
@@ -577,7 +577,7 @@ export async function handleDemoApiRequest(path, options = {}) {
     || pathname === "/api/dashboard/current/refresh"
     || pathname === "/api/dashboard/current/sync"
     || pathname === "/api/dashboard/health") {
-    return clone(pathname === "/api/dashboard/health" ? seed.currentDashboard.providerHealth : seed.currentDashboard);
+    return pathname === "/api/dashboard/health" ? clone(seed.currentDashboard.providerHealth) : createCopyOnWriteView(seed.currentDashboard);
   }
 
   if (pathname === "/api/briefing/snapshot/active" || pathname === "/api/briefing/snapshot/sync") {
