@@ -160,11 +160,11 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
     const upcoming = [
       ...(liveDeadlines?.upcoming || [])
         .filter((d) => d.status !== "complete")
-        .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || d.project_name || "Deadline"}`, foot: "Deadline", completable: true, jumpId: d.id, data: d, chipTooltip: formatChipDateTime(d.due_date, d.due_time, false) }))
+        .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || d.project_name || "Deadline"}`, foot: "Deadline", completable: true, jumpKind: "deadline", jumpId: d.id, date: d.due_date, data: d, chipTooltip: formatChipDateTime(d.due_date, d.due_time, false) }))
         .filter((x) => x.when != null && x.when > 0),
       ...(liveBills || [])
         .filter((b) => !b.paid)
-        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill", completable: false, chipTooltip: formatChipDateTime(b.next_date, null, false) }))
+        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill", completable: false, jumpKind: "bill", jumpId: b.id, date: b.next_date, data: b, chipTooltip: formatChipDateTime(b.next_date, null, false) }))
         .filter((x) => x.when != null && x.when > 0),
     ]
       .filter((u) => !handled.includes(u.id))
@@ -172,9 +172,9 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
     const backfillCards = upcoming.map((u) => ({
       id: u.id, kind: "backfill", source: "Coming up", sourceIcon: "Clock",
       title: u.title, meta: u.meta, foot: u.foot, chipTooltip: u.chipTooltip,
-      // Deadlines are completable from the band too (bills aren't Todoist items);
-      // jumpId/data feed the same canonical completer the urgent cards use.
-      completable: !!u.completable, jumpId: u.jumpId ?? null, data: u.data ?? null,
+      // Upcoming deadlines and bills open through the same detail route as due
+      // items; deadlines also keep the canonical completion payload.
+      completable: !!u.completable, jumpKind: u.jumpKind ?? null, jumpId: u.jumpId ?? null, date: u.date ?? null, data: u.data ?? null,
       pill: { label: u.when === 1 ? "Tomorrow" : `In ${u.when} days`, tone: TONE.cream },
     }));
 

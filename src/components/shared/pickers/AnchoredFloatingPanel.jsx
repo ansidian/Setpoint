@@ -35,11 +35,10 @@ export default function AnchoredFloatingPanel({ open = true, disableMobileSheet 
     );
   }
   // hideTitle is mobile-only (the desktop panel has no header), so it is
-  // intentionally not forwarded to AnchoredPanelDesktop. Same for `open`: the
-  // desktop anchored panel stays mounted regardless (e.g. while a sibling
-  // editor is open) — only the mobile sheet needs an open gate to avoid
-  // stacking two BottomSheets.
-  return <AnchoredPanelDesktop {...props} />;
+  // intentionally not forwarded to AnchoredPanelDesktop. The desktop panel
+  // stays mounted when `open` is false (e.g. behind a sibling editor), but its
+  // outside-click/Escape listener pauses so the sibling owns dismissal.
+  return <AnchoredPanelDesktop {...props} dismissActive={open} />;
 }
 
 function AnchoredPanelDesktop({
@@ -54,6 +53,7 @@ function AnchoredPanelDesktop({
   role = "dialog",
   ariaLabel,
   style,
+  dismissActive = true,
   children,
 }) {
   const internalPanelRef = useRef(null);
@@ -163,7 +163,7 @@ function AnchoredPanelDesktop({
   // click in a sibling calendar popover avoid dismissing this one. Escape closes
   // the panel (capture phase) — the panel previously had no Escape handling.
   useDismissablePortal({
-    active: true,
+    active: dismissActive,
     refs: [resolvedPanelRef, anchorRef],
     ignoreSelector: "[data-calendar-popover-panel='true']",
     onDismiss: onClose,

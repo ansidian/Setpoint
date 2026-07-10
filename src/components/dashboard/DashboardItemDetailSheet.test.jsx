@@ -113,4 +113,29 @@ describe("DashboardItemDetailSheet", () => {
 
     anchor.remove();
   });
+
+  it("does not dismiss the dashboard detail when interacting with its deadline editor", async () => {
+    useIsMobile.mockReturnValue(false);
+    const onClose = vi.fn();
+    const anchor = document.createElement("button");
+    document.body.appendChild(anchor);
+    render(
+      <DashboardItemDetailSheet
+        kind="deadline"
+        item={deadline}
+        anchorRef={{ current: anchor }}
+        onClose={onClose}
+        onOpenInCalendar={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const taskTitle = await screen.findByRole("textbox", { name: "Task title" });
+    fireEvent.pointerDown(taskTitle);
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Edit deadline" })).toBeTruthy();
+
+    anchor.remove();
+  });
 });

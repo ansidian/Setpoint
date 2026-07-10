@@ -45,17 +45,16 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   const [hover, setHover] = useState(false);
   const SourceIcon = SOURCE_ICONS[card.sourceIcon] || Circle;
   const tone = variant === "backfill" ? "rgba(205,214,244,0.5)" : card.tone;
-  // Every urgent card opens on a body click: emails route to the reader (no
-  // separate Open button — the hover lift is the affordance), deadlines/bills
-  // jump to their detail. Backfill cards don't jump.
-  const bodyClickable = variant === "urgent" && (card.email || card.jumpKind != null);
+  // Every card with a destination opens on a body click: emails route to the
+  // reader, while deadline/bill cards jump to their existing detail treatment.
+  const bodyClickable = card.email || card.jumpKind != null;
   const activate = (e) => {
     if (!bodyClickable) return;
     if (card.email) onOpen?.(card);
     else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, e?.currentTarget);
   };
   const style = variant === "backfill"
-    ? { ...baseCardStyle, background: "color-mix(in srgb, var(--sp-surface) 50%, transparent)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.94 }
+    ? { ...baseCardStyle, background: "color-mix(in srgb, var(--sp-surface) 50%, transparent)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.94, cursor: bodyClickable ? "pointer" : "default" }
     : { ...baseCardStyle,
         background: `color-mix(in srgb, ${card.tone} 7%, color-mix(in srgb, var(--sp-surface) 50%, transparent))`,
         border: `1px solid color-mix(in srgb, ${card.tone} 26%, transparent)`,
@@ -92,6 +91,7 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
 
   return (
     <div
+      className={bodyClickable ? "sp-focus-ring" : undefined}
       style={
         !hover
           ? style
@@ -100,12 +100,16 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
             : { ...style, transform: "translateY(-1px)", boxShadow: "0 6px 16px rgba(0,0,0,0.25)", opacity: 1 }
       }
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)} onBlur={() => setHover(false)}
       {...(bodyClickable
         ? {
             role: "button",
             tabIndex: 0,
             onClick: activate,
-            onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); } },
+            onKeyDown: (e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); }
+            },
           }
         : {})}
     >

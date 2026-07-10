@@ -41,7 +41,7 @@ export function NeedsYouCarousel({ urgentCards, backfillCards, moreCount, moreLa
         ))}
         {backfillCards.map((card) => (
           <div key={card.id} style={SLIDE}>
-            <PriorityCard card={card} variant="backfill" isMobile onComplete={onComplete} />
+            <PriorityCard card={card} variant="backfill" isMobile onComplete={onComplete} onJump={onJump} />
           </div>
         ))}
         {moreCount > 0 && (
