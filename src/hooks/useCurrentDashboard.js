@@ -6,6 +6,7 @@ import {
 } from "../api";
 import { isDemoMode } from "../demo/config.js";
 import { invalidateActualMetadata } from "../lib/actualMetadata.js";
+import { logTiming } from "../../shared/timing.js";
 import {
   currentToBriefing,
   currentToLiveDataBulk,
@@ -24,6 +25,23 @@ function sleep(ms) {
   });
 }
 
+function logEventRefetchTiming(eventContext, status) {
+  if (!eventContext) return;
+  try {
+    logTiming({
+      event: "dashboard-event-refetch",
+      scope: eventContext.scope || "current",
+      source: eventContext.source || "unknown",
+      reason: eventContext.reason || "unknown",
+      eventKey: eventContext.eventKey,
+      ms: performance.now() - eventContext.startedAt,
+      status,
+    });
+  } catch {
+    // Diagnostics must never interfere with applying dashboard state.
+  }
+}
+
 export default function useCurrentDashboard({ disabled = false, onDashboardEvent = null } = {}) {
   const [current, setCurrent] = useState(null);
   const [selectedBriefing, setSelectedBriefing] = useState(null);
@@ -37,16 +55,16 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
   // request is allowed to commit its response (older slow responses are dropped).
   const requestSeqRef = useRef(0);
   const inFlightOwnerRef = useRef(0);
-  const queuedEventRefetchRef = useRef(false);
+  const queuedEventRefetchRef = useRef(null);
   const hiddenEventRefetchRef = useRef(false);
   const runEventRefetchRef = useRef(null);
   const onDashboardEventRef = useRef(onDashboardEvent);
 
   const applyCurrent = useCallback((data, seq) => {
-    if (!mountedRef.current) return data;
+    if (!mountedRef.current) return false;
     // Ignore a response whose request has been superseded by a newer one, so a
     // slow older fetch can't clobber fresher data (last-issued request wins).
-    if (seq != null && seq !== requestSeqRef.current) return data;
+    if (seq != null && seq !== requestSeqRef.current) return false;
     // Dedup identical poll payloads on the server content key so a poll that
     // returns the same snapshot doesn't re-derive liveData / re-render the tree.
     // Same end state, fewer redundant dispatches (P3-27). contentKey is a content
@@ -63,7 +81,7 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     setSelectedBriefing((prev) => (prev === null ? prev : null));
     setError((prev) => (prev === null ? prev : null));
     setLoaded((prev) => (prev === true ? prev : true));
-    return data;
+    return true;
   }, []);
 
   const pollWhileRefreshActive = useCallback(async (initialData, seq) => {
@@ -93,19 +111,20 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     if (seq != null && inFlightOwnerRef.current !== seq) return;
     currentRequestInFlightRef.current = false;
     if (queuedEventRefetchRef.current && !document.hidden) {
-      queuedEventRefetchRef.current = false;
-      runEventRefetchRef.current?.();
+      const queuedOptions = queuedEventRefetchRef.current;
+      queuedEventRefetchRef.current = null;
+      runEventRefetchRef.current?.(queuedOptions);
     }
   }, []);
 
-  const runEventRefetch = useCallback(async ({ allowHidden = false } = {}) => {
+  const runEventRefetch = useCallback(async ({ allowHidden = false, eventContext = null } = {}) => {
     if (disabled) return null;
     if (document.hidden && !allowHidden) {
       hiddenEventRefetchRef.current = true;
       return null;
     }
     if (currentRequestInFlightRef.current) {
-      queuedEventRefetchRef.current = true;
+      queuedEventRefetchRef.current = { allowHidden, eventContext };
       if (document.hidden) hiddenEventRefetchRef.current = true;
       return null;
     }
@@ -114,12 +133,14 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     inFlightOwnerRef.current = seq;
     try {
       let data = await getCurrentDashboard();
-      applyCurrent(data, seq);
+      const applied = applyCurrent(data, seq);
+      if (applied) logEventRefetchTiming(eventContext, "ok");
       if (!document.hidden) {
         data = await pollWhileRefreshActive(data, seq);
       }
       return data;
     } catch {
+      logEventRefetchTiming(eventContext, "error");
       if (document.hidden) hiddenEventRefetchRef.current = true;
       return null;
     } finally {
@@ -211,7 +232,16 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       if (typeof onDashboardEventRef.current === "function") {
         onDashboardEventRef.current(payload);
       }
-      runEventRefetch({ allowHidden: true });
+      runEventRefetch({
+        allowHidden: true,
+        eventContext: {
+          scope: "current",
+          source: payload?.source,
+          reason: payload?.reason,
+          eventKey: payload?.details?.eventKey,
+          startedAt: performance.now(),
+        },
+      });
     };
     // Route an expired-session SSE failure to /login instead of letting the browser
     // reconnect-loop forever.

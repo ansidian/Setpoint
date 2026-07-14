@@ -597,6 +597,63 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     expect(indexed.rows[0].count).toBe(0);
   });
 
+  it("logs aggregate arrival timing after a history job completes", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, idempotency_key,
+               priority, payload_json, status, created_at)
+            VALUES (?, ?, NULL, 'gmail_history_sync', ?, 1, ?, 'queued', ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "gmail_history_sync:user-1:gmail-work:timing",
+        JSON.stringify({
+          historyId: "200",
+          publishTime: "2026-05-03T12:00:00.000Z",
+          subject: "must not be logged",
+        }),
+        "2026-05-03 12:00:01",
+      ],
+    });
+    const logTimingFn = vi.fn();
+    const syncFn = vi.fn(async () => ({
+      indexed: 2,
+      queued: 2,
+      snapshot_queued_at: "2026-05-03T12:00:02.000Z",
+    }));
+
+    await gmailSync.processNextGmailHistorySyncJob({
+      dbClient: testState.db.current,
+      now: new Date("2026-05-03T12:00:01.250Z"),
+      timingNow: () => new Date("2026-05-03T12:00:02.500Z"),
+      logTimingFn,
+      syncFn,
+    });
+
+    expect(logTimingFn).toHaveBeenCalledWith(expect.objectContaining({
+      event: "email-arrival",
+      status: "ok",
+      accountId: "gmail-work",
+      historyId: "200",
+      indexed: 2,
+      queued: 2,
+      providerDeliveryMs: 1000,
+      historyQueueWaitMs: 250,
+      historySyncMs: 1250,
+      providerToQueuedMs: 2000,
+      snapshotAttachmentMs: 500,
+    }));
+    expect(JSON.stringify(logTimingFn.mock.calls)).not.toContain("must not be logged");
+    expect(JSON.stringify(logTimingFn.mock.calls)).not.toContain("work@example.com");
+  });
+
   it("syncs Gmail history into indexed mail and idempotent message triage jobs", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
@@ -1410,9 +1467,16 @@ describe("processNextGmailHistorySyncJob bounded retry (CORR-L08)", () => {
     const syncFn = vi.fn(async () => {
       throw new Error("Gmail API 503: temporarily unavailable");
     });
+    const logTimingFn = vi.fn();
 
     await expect(
-      gmailSync.processNextGmailHistorySyncJob({ dbClient: testState.db.current, now, syncFn }),
+      gmailSync.processNextGmailHistorySyncJob({
+        dbClient: testState.db.current,
+        now,
+        syncFn,
+        timingNow: () => new Date("2026-05-03T17:00:00.500Z"),
+        logTimingFn,
+      }),
     ).rejects.toThrow("Gmail API 503");
 
     const row = await loadJobRow();
@@ -1422,6 +1486,13 @@ describe("processNextGmailHistorySyncJob bounded retry (CORR-L08)", () => {
     expect(row.attempts).toBe(1);
     expect(row.last_error).toBe("Gmail API 503: temporarily unavailable");
     expect(new Date(row.scheduled_for).getTime()).toBeGreaterThan(now.getTime());
+    expect(logTimingFn).toHaveBeenCalledWith(expect.objectContaining({
+      event: "email-arrival",
+      status: "retrying",
+      attempts: 1,
+      errorKind: "sync_error",
+    }));
+    expect(JSON.stringify(logTimingFn.mock.calls)).not.toContain("temporarily unavailable");
   });
 
   it("is not claimable before scheduled_for but is claimable once scheduled_for has passed", async () => {
