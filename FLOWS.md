@@ -35,7 +35,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 ## 2. Email sync → inbox triage
 
-**Trigger:** Gmail Pub/Sub push (POST `/api/gmail/push` → `server/routes/gmail-push.js`) enqueues a history sync via `server/email/gmail-sync.js:enqueueHistorySyncFromPubSub`; the per-minute cron `server/scheduler.js:runGmailHistorySyncWorker` is the poll fallback that drains the queue.
+**Trigger:** Gmail Pub/Sub push (POST `/api/gmail/push` → `server/routes/gmail-push.js`) durably enqueues a history sync via `server/email/gmail-sync.js:enqueueHistorySyncFromPubSub`, acknowledges the webhook, then requests an immediate coalesced drain via `server/scheduler.js:requestGmailHistorySyncDrain`; the per-minute cron remains the reliability fallback.
 
 1. `server/email/gmail-sync.js:processNextGmailHistorySyncJob` — claims a queued job, loads the account
 2. `server/email/gmail-sync.js:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state

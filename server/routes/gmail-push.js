@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Router } from "express";
 import { enqueueHistorySyncFromPubSub } from "../email/gmail-sync.js";
+import { requestGmailHistorySyncDrain } from "../scheduler.js";
 
 const router = Router();
 
@@ -37,6 +38,7 @@ router.post("/push", async (req, res) => {
   try {
     const queued = await enqueueHistorySyncFromPubSub(req.body);
     res.json({ ok: true, ...queued });
+    requestGmailHistorySyncDrain();
   } catch (err) {
     console.error("[Gmail Push] Failed to queue history sync:", err.message);
     res.status(400).json({ message: "Invalid Gmail Pub/Sub notification" });

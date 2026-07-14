@@ -37,6 +37,7 @@ vi.mock("./reminders/reminder-scheduler.js", () => reminderSchedulerApi);
 
 const {
   initScheduler,
+  requestGmailHistorySyncDrain,
   runEmailSearchEmbeddingWorker,
   runEmailTriageWorker,
   runReminderSchedulerWorker,
@@ -76,6 +77,32 @@ describe("initScheduler concurrency (P2-28)", () => {
     // so there are no duplicate cron tasks firing the boundary multiple times.
     const liveJobs = created.filter((job) => job.stop.mock.calls.length === 0);
     expect(liveJobs).toHaveLength(1);
+  });
+});
+
+describe("Gmail history sync drain requests", () => {
+  it("runs a follow-up drain when another push arrives during an active drain", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    let resolveFirstClaim;
+    gmailSyncApi.processNextGmailHistorySyncJob
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFirstClaim = resolve;
+      }))
+      .mockResolvedValueOnce({ processed: false });
+
+    requestGmailHistorySyncDrain();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(gmailSyncApi.processNextGmailHistorySyncJob).toHaveBeenCalledTimes(1);
+
+    requestGmailHistorySyncDrain();
+    await new Promise((resolve) => setImmediate(resolve));
+    resolveFirstClaim({ processed: false });
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    expect(gmailSyncApi.processNextGmailHistorySyncJob).toHaveBeenCalledTimes(2);
+    logSpy.mockRestore();
   });
 });
 
