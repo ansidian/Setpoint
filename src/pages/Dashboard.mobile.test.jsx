@@ -11,6 +11,10 @@ vi.mock("../hooks/useIsMobile", () => ({
   default: () => mockIsMobile,
 }));
 
+vi.mock("../hooks/useUtilityPayLinks", () => ({
+  useUtilityPayLinks: () => ({}),
+}));
+
 vi.mock("../components/calendar/CalendarModal", () => ({
   default: function CalendarModalMock({
     open,
