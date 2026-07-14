@@ -6,11 +6,30 @@ import {
   currentToLiveData,
   deadlineContentSignature,
   hasActiveRefreshWork,
+  mergeActiveSnapshotIntoCurrent,
   stabilizeCalendar,
   stabilizeDeadlines,
 } from "./currentDashboardModel.js";
 
 describe("current dashboard model", () => {
+  it("replaces only the active snapshot and invalidates the envelope content fingerprint", () => {
+    const current = {
+      weather: { temp: 72 },
+      bills: [{ id: "bill-1" }],
+      activeSnapshot: { snapshot: { id: 1 } },
+      contentKey: "stale-content-key",
+      fetchedAt: "2026-07-14T12:00:00.000Z",
+    };
+    const activeSnapshot = { snapshot: { id: 2 }, lanes: { queued: [] } };
+
+    expect(mergeActiveSnapshotIntoCurrent(current, activeSnapshot)).toEqual({
+      ...current,
+      activeSnapshot,
+      contentKey: null,
+    });
+    expect(mergeActiveSnapshotIntoCurrent(null, activeSnapshot)).toBeNull();
+  });
+
   it("projects the current dashboard envelope into domain-shaped briefing data", () => {
     expect(currentToBriefing({
       weather: { temp: 72 },
