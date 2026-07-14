@@ -17,26 +17,24 @@ import {
 } from "./triage/triage-worker.js";
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.js";
 import { processDueReminderBatch } from "./reminders/reminder-scheduler.js";
+import { createSchedulerWorkRegistry } from "./scheduler-work-registry.js";
 
 const activeJobs = [];
+const schedulerWork = createSchedulerWorkRegistry();
+const schedulerTimeouts = new Set();
+const schedulerImmediates = new Set();
 // Background indexer state lives outside activeJobs so initScheduler's re-runs
 // (triggered on account changes) don't tear down the passive email sweep.
 let indexerJob = null;
-let sweepInFlight = false;
 let gmailWatchRenewalJob = null;
 let gmailHistorySyncJob = null;
-let gmailHistorySyncInFlight = false;
 let gmailHistorySyncRerun = false;
 let emailTriageJob = null;
-let emailTriageInFlight = false;
 let emailSearchEmbeddingJob = null;
-let emailSearchEmbeddingInFlight = false;
 let triageJobPruneJob = null;
 let reminderSchedulerTimer = null;
-// Tracked as a PROMISE (not a boolean) so the shutdown handler can await an
-// in-flight reminder batch and let the last tick drain before exit. null when
-// idle; non-null acts as the single-flight guard.
-let reminderSchedulerInFlight = null;
+let schedulerStopping = false;
+let stopSchedulerInFlight = null;
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
 const INDEXER_LOOKBACK_HOURS = 2;
@@ -60,6 +58,26 @@ const EMAIL_TRIAGE_BATCH_SIZE = 10;
 // minute without ever spinning forever; the cron tick resumes the drain anyway.
 const EMAIL_TRIAGE_MAX_SELF_RESCHEDULES = 50;
 let emailTriageSelfRescheduleCount = 0;
+
+function scheduleSchedulerTimeout(task, delayMs) {
+  if (schedulerStopping) return null;
+  const handle = setTimeout(() => {
+    schedulerTimeouts.delete(handle);
+    if (!schedulerStopping) task();
+  }, delayMs);
+  schedulerTimeouts.add(handle);
+  return handle;
+}
+
+function scheduleSchedulerImmediate(task) {
+  if (schedulerStopping) return null;
+  const handle = setImmediate(() => {
+    schedulerImmediates.delete(handle);
+    if (!schedulerStopping) task();
+  });
+  schedulerImmediates.add(handle);
+  return handle;
+}
 
 function isMissingTableError(err) {
   // libsql surfaces a missing table as "no such table: ..." in the message;
@@ -92,6 +110,8 @@ async function runInitScheduler() {
     return;
   }
 
+  if (schedulerStopping) return;
+
   for (const row of result.rows) {
     let schedules;
     try {
@@ -117,42 +137,48 @@ async function runInitScheduler() {
 
         const job = cron.schedule(
           cronExpr,
-          async () => {
-            // Check if this schedule is skipped (re-read from DB for freshness)
-            try {
-              const fresh = await db.execute({
-                sql: "SELECT schedules_json FROM ea_settings WHERE user_id = ?",
-                args: [row.user_id],
-              });
-              const freshSchedules = JSON.parse(fresh.rows[0]?.schedules_json || "[]");
-              const match = freshSchedules.find(s => s.time === schedule.time && s.label === schedule.label);
-              if (match?.skipped_until && new Date(match.skipped_until) > new Date()) {
-                console.log(
-                  `[EA Scheduler] Skipping ${schedule.label} snapshot boundary — skipped until ${match.skipped_until}`,
-                );
-                return;
-              }
-            } catch (err) {
-              console.error("[EA Scheduler] Error checking skip status:", err.message);
-            }
+          () => {
+            if (schedulerStopping) return Promise.resolve();
+            return schedulerWork.run(
+              `snapshot-boundary:${row.user_id}:${schedule.label}:${schedule.time}`,
+              async () => {
+                // Check if this schedule is skipped (re-read from DB for freshness)
+                try {
+                  const fresh = await db.execute({
+                    sql: "SELECT schedules_json FROM ea_settings WHERE user_id = ?",
+                    args: [row.user_id],
+                  });
+                  const freshSchedules = JSON.parse(fresh.rows[0]?.schedules_json || "[]");
+                  const match = freshSchedules.find(s => s.time === schedule.time && s.label === schedule.label);
+                  if (match?.skipped_until && new Date(match.skipped_until) > new Date()) {
+                    console.log(
+                      `[EA Scheduler] Skipping ${schedule.label} snapshot boundary — skipped until ${match.skipped_until}`,
+                    );
+                    return;
+                  }
+                } catch (err) {
+                  console.error("[EA Scheduler] Error checking skip status:", err.message);
+                }
 
-            console.log(
-              `[EA Scheduler] Advancing ${schedule.label} snapshot boundary for user ${row.user_id}`,
+                console.log(
+                  `[EA Scheduler] Advancing ${schedule.label} snapshot boundary for user ${row.user_id}`,
+                );
+                try {
+                  await advanceSnapshotBoundary(row.user_id, {
+                    timeZone: schedule.tz || "America/Los_Angeles",
+                    scheduleLabel: schedule.label,
+                  });
+                  console.log(
+                    `[EA Scheduler] ${schedule.label} snapshot boundary ready`,
+                  );
+                } catch (err) {
+                  console.error(
+                    `[EA Scheduler] ${schedule.label} snapshot boundary failed:`,
+                    err.message,
+                  );
+                }
+              },
             );
-            try {
-              await advanceSnapshotBoundary(row.user_id, {
-                timeZone: schedule.tz || "America/Los_Angeles",
-                scheduleLabel: schedule.label,
-              });
-              console.log(
-                `[EA Scheduler] ${schedule.label} snapshot boundary ready`,
-              );
-            } catch (err) {
-              console.error(
-                `[EA Scheduler] ${schedule.label} snapshot boundary failed:`,
-                err.message,
-              );
-            }
           },
           { timezone: schedule.tz || "America/Los_Angeles" },
         );
@@ -177,100 +203,95 @@ async function runInitScheduler() {
   }
 }
 
-let initSchedulerInFlight = null;
 let initSchedulerRerun = false;
 
 // Serialize concurrent init calls (startup + un-awaited settings-PUT re-inits).
 // Coalescing into one in-flight run prevents the clear-then-await-then-push window
 // from double-registering every cron job; the rerun flag guarantees a caller that
 // arrived mid-run still gets a fresh re-init afterward (so no schedule change is missed).
-export async function initScheduler() {
-  if (initSchedulerInFlight) {
-    initSchedulerRerun = true;
-    return initSchedulerInFlight;
-  }
-  initSchedulerInFlight = (async () => {
+export function initScheduler() {
+  if (schedulerStopping) return Promise.resolve();
+  initSchedulerRerun = true;
+  return schedulerWork.run("scheduler-init", async () => {
     do {
       initSchedulerRerun = false;
       await runInitScheduler();
-    } while (initSchedulerRerun);
-  })().finally(() => { initSchedulerInFlight = null; });
-  return initSchedulerInFlight;
+    } while (initSchedulerRerun && !schedulerStopping);
+  }, { singleFlight: true });
 }
 
 // Passive email indexer: sweeps every account's inbox every 10 minutes and
 // upserts recent messages into the FTS index so search finds mail that
 // arrived between briefing runs. No email AI, no briefing — cheap enough to
 // run continuously.
-async function sweepIndex() {
-  if (sweepInFlight) return;
-  sweepInFlight = true;
-  try {
-    const result = await db.execute(
-      "SELECT DISTINCT user_id FROM ea_accounts",
-    );
-    for (const row of result.rows) {
-      try {
-        const { accounts } = await loadUserConfig(row.user_id);
-        const hasEmail = accounts.some(
-          (a) => a.type === "gmail" || a.type === "icloud",
-        );
-        if (!hasEmail) continue;
-        const emails = await fetchAllEmails(
-          accounts,
-          INDEXER_LOOKBACK_HOURS,
-        );
-        if (emails.length) {
-          await indexEmails(row.user_id, emails);
-          await enqueueEmailTriageForEmails(row.user_id, emails);
+function sweepIndex() {
+  if (schedulerStopping) return Promise.resolve();
+  return schedulerWork.run("email-index-sweep", async () => {
+    try {
+      const result = await db.execute(
+        "SELECT DISTINCT user_id FROM ea_accounts",
+      );
+      for (const row of result.rows) {
+        try {
+          const { accounts } = await loadUserConfig(row.user_id);
+          const hasEmail = accounts.some(
+            (a) => a.type === "gmail" || a.type === "icloud",
+          );
+          if (!hasEmail) continue;
+          const emails = await fetchAllEmails(
+            accounts,
+            INDEXER_LOOKBACK_HOURS,
+          );
+          if (emails.length) {
+            await indexEmails(row.user_id, emails);
+            await enqueueEmailTriageForEmails(row.user_id, emails);
+          }
+        } catch (err) {
+          console.error(
+            `[EA Indexer] Sweep failed for user ${row.user_id}:`,
+            err.message,
+          );
         }
-      } catch (err) {
-        console.error(
-          `[EA Indexer] Sweep failed for user ${row.user_id}:`,
-          err.message,
-        );
       }
+    } catch (err) {
+      console.error("[EA Indexer] Sweep iteration failed:", err.message);
     }
-  } catch (err) {
-    console.error("[EA Indexer] Sweep iteration failed:", err.message);
-  } finally {
-    sweepInFlight = false;
-  }
+  }, { singleFlight: true });
 }
 
-async function runGmailWatchRenewal() {
-  try {
-    await renewDueGmailWatches();
-  } catch (err) {
-    console.error("[Gmail Watch] Renewal sweep failed:", err.message);
-  }
+function runGmailWatchRenewal() {
+  if (schedulerStopping) return Promise.resolve();
+  return schedulerWork.run("gmail-watch-renewal", async () => {
+    try {
+      await renewDueGmailWatches();
+    } catch (err) {
+      console.error("[Gmail Watch] Renewal sweep failed:", err.message);
+    }
+  });
 }
 
-async function runGmailHistorySyncWorker() {
-  if (gmailHistorySyncInFlight) {
-    gmailHistorySyncRerun = true;
-    return;
-  }
-  gmailHistorySyncInFlight = true;
-  try {
-    // P2-7: stale triage-job recovery is owned solely by runEmailTriageWorker
-    // (both ran it every minute against the same table, racing on the same rows
-    // for a 15-minute stale window). One owner is sufficient.
-    let processed = 0;
-    do {
-      gmailHistorySyncRerun = false;
-      for (let i = 0; i < 10; i++) {
-        const result = await processNextGmailHistorySyncJob();
-        if (!result.processed) break;
-        processed++;
-      }
-    } while (gmailHistorySyncRerun);
-    if (processed) console.log(`[Gmail Sync] Processed ${processed} history sync job(s)`);
-  } catch (err) {
-    console.error("[Gmail Sync] Worker failed:", err.message);
-  } finally {
-    gmailHistorySyncInFlight = false;
-  }
+function runGmailHistorySyncWorker() {
+  if (schedulerStopping) return Promise.resolve();
+  gmailHistorySyncRerun = true;
+  return schedulerWork.run("gmail-history-sync", async () => {
+    try {
+      // P2-7: stale triage-job recovery is owned solely by runEmailTriageWorker
+      // (both ran it every minute against the same table, racing on the same rows
+      // for a 15-minute stale window). One owner is sufficient.
+      let processed = 0;
+      do {
+        gmailHistorySyncRerun = false;
+        for (let i = 0; i < 10; i++) {
+          const result = await processNextGmailHistorySyncJob();
+          if (!result.processed) break;
+          processed++;
+        }
+      } while (gmailHistorySyncRerun && !schedulerStopping);
+      if (processed) console.log(`[Gmail Sync] Processed ${processed} history sync job(s)`);
+    } catch (err) {
+      console.error("[Gmail Sync] Worker failed:", err.message);
+    }
+  }, { singleFlight: true });
 }
 
 // Wake the durable history-sync queue promptly after Gmail Pub/Sub persists a
@@ -278,77 +299,78 @@ async function runGmailHistorySyncWorker() {
 // exits before the scheduled turn runs. The worker's single-flight guard
 // coalesces push bursts without making the webhook wait on Gmail API work.
 export function requestGmailHistorySyncDrain() {
-  setImmediate(() => {
+  scheduleSchedulerImmediate(() => {
     void runGmailHistorySyncWorker();
   });
 }
 
-export async function runEmailTriageWorker({ selfRescheduled = false } = {}) {
-  if (emailTriageInFlight) return;
-  emailTriageInFlight = true;
-  let processed = 0;
-  try {
-    // Stale-job recovery is the per-minute responsibility; an immediate
-    // self-reschedule within the same drain skips it (it already ran this tick).
-    if (!selfRescheduled) await recoverStaleRunningTriageJobs();
-    // P1-7: one batch context resolves mode/rules/interests/model-client once per
-    // user for the whole drain instead of re-reading them on every job.
-    const batch = createTriageBatchContext();
-    for (let i = 0; i < EMAIL_TRIAGE_BATCH_SIZE; i++) {
-      const result = await processNextEmailTriageJob({ batch });
-      if (result.paused) break;
-      if (!result.processed) break;
-      processed++;
+export function runEmailTriageWorker({ selfRescheduled = false } = {}) {
+  if (schedulerStopping) return Promise.resolve();
+  return schedulerWork.run("email-triage", async () => {
+    let processed = 0;
+    try {
+      // Stale-job recovery is the per-minute responsibility; an immediate
+      // self-reschedule within the same drain skips it (it already ran this tick).
+      if (!selfRescheduled) await recoverStaleRunningTriageJobs();
+      // P1-7: one batch context resolves mode/rules/interests/model-client once per
+      // user for the whole drain instead of re-reading them on every job.
+      const batch = createTriageBatchContext();
+      for (let i = 0; i < EMAIL_TRIAGE_BATCH_SIZE; i++) {
+        const result = await processNextEmailTriageJob({ batch });
+        if (result.paused) break;
+        if (!result.processed) break;
+        processed++;
+      }
+      if (processed) console.log(`[Email Triage] Processed ${processed} email triage job(s)`);
+    } catch (err) {
+      console.error("[Email Triage] Worker failed:", err.message);
+      emailTriageSelfRescheduleCount = 0;
+      return;
     }
-    if (processed) console.log(`[Email Triage] Processed ${processed} email triage job(s)`);
-  } catch (err) {
-    console.error("[Email Triage] Worker failed:", err.message);
-    emailTriageSelfRescheduleCount = 0;
-    return;
-  } finally {
-    emailTriageInFlight = false;
-  }
-  // P2-4: a full batch means the queue is still deep — re-arm immediately via
-  // setImmediate instead of idling until the next cron minute. The in-flight
-  // guard above prevents overlap; the self-reschedule cap bounds the chain.
-  if (processed === EMAIL_TRIAGE_BATCH_SIZE
-      && emailTriageSelfRescheduleCount < EMAIL_TRIAGE_MAX_SELF_RESCHEDULES) {
-    emailTriageSelfRescheduleCount += 1;
-    setImmediate(() => {
-      runEmailTriageWorker({ selfRescheduled: true }).catch((err) =>
-        console.error("[Email Triage] Self-rescheduled worker failed:", err.message),
-      );
-    });
-  } else {
-    emailTriageSelfRescheduleCount = 0;
-  }
+    // P2-4: a full batch means the queue is still deep — re-arm immediately via
+    // setImmediate instead of idling until the next cron minute. The in-flight
+    // guard above prevents overlap; the self-reschedule cap bounds the chain.
+    if (processed === EMAIL_TRIAGE_BATCH_SIZE
+        && emailTriageSelfRescheduleCount < EMAIL_TRIAGE_MAX_SELF_RESCHEDULES) {
+      emailTriageSelfRescheduleCount += 1;
+      scheduleSchedulerImmediate(() => {
+        runEmailTriageWorker({ selfRescheduled: true }).catch((err) =>
+          console.error("[Email Triage] Self-rescheduled worker failed:", err.message),
+        );
+      });
+    } else {
+      emailTriageSelfRescheduleCount = 0;
+    }
+  }, { singleFlight: true });
 }
 
-export async function runEmailSearchEmbeddingWorker() {
-  if (EMAIL_SEARCH_EMBEDDINGS_DISABLED) return;
-  if (emailSearchEmbeddingInFlight) return;
-  emailSearchEmbeddingInFlight = true;
-  try {
-    const result = await processEmailSearchEmbeddingBatchesForAllUsers();
-    const embedded = result.users.reduce((sum, user) => sum + Number(user.embedded || 0), 0);
-    if (embedded) console.log(`[Email Search Embeddings] Embedded ${embedded} indexed email(s)`);
-  } catch (err) {
-    console.error("[Email Search Embeddings] Worker failed:", err.message);
-  } finally {
-    emailSearchEmbeddingInFlight = false;
-  }
+export function runEmailSearchEmbeddingWorker() {
+  if (EMAIL_SEARCH_EMBEDDINGS_DISABLED || schedulerStopping) return Promise.resolve();
+  return schedulerWork.run("email-search-embeddings", async () => {
+    try {
+      const result = await processEmailSearchEmbeddingBatchesForAllUsers();
+      const embedded = result.users.reduce((sum, user) => sum + Number(user.embedded || 0), 0);
+      if (embedded) console.log(`[Email Search Embeddings] Embedded ${embedded} indexed email(s)`);
+    } catch (err) {
+      console.error("[Email Search Embeddings] Worker failed:", err.message);
+    }
+  }, { singleFlight: true });
 }
 
-async function runTriageJobPruneWorker() {
-  try {
-    const pruned = await pruneCompletedTriageJobs();
-    if (pruned) console.log(`[Email Triage] Pruned ${pruned} completed triage job(s)`);
-  } catch (err) {
-    console.error("[Email Triage] Completed-job prune failed:", err.message);
-  }
+function runTriageJobPruneWorker() {
+  if (schedulerStopping) return Promise.resolve();
+  return schedulerWork.run("triage-job-prune", async () => {
+    try {
+      const pruned = await pruneCompletedTriageJobs();
+      if (pruned) console.log(`[Email Triage] Pruned ${pruned} completed triage job(s)`);
+    } catch (err) {
+      console.error("[Email Triage] Completed-job prune failed:", err.message);
+    }
+  });
 }
 
 export function startBackgroundIndexer() {
+  if (schedulerStopping) return;
   if (indexerJob) {
     indexerJob.stop();
     indexerJob = null;
@@ -359,7 +381,7 @@ export function startBackgroundIndexer() {
   );
   // Run once shortly after startup so a freshly booted server catches up
   // without waiting for the first cron tick.
-  setTimeout(() => {
+  scheduleSchedulerTimeout(() => {
     sweepIndex().catch((err) =>
       console.error("[EA Indexer] Initial sweep failed:", err.message),
     );
@@ -371,7 +393,7 @@ export function startBackgroundIndexer() {
   }
   gmailWatchRenewalJob = cron.schedule(GMAIL_WATCH_RENEWAL_CRON, runGmailWatchRenewal);
   console.log(`[Gmail Watch] Renewal scheduled (${GMAIL_WATCH_RENEWAL_CRON})`);
-  setTimeout(() => {
+  scheduleSchedulerTimeout(() => {
     runGmailWatchRenewal().catch((err) =>
       console.error("[Gmail Watch] Initial renewal failed:", err.message),
     );
@@ -383,7 +405,7 @@ export function startBackgroundIndexer() {
   }
   gmailHistorySyncJob = cron.schedule(GMAIL_HISTORY_SYNC_CRON, runGmailHistorySyncWorker);
   console.log(`[Gmail Sync] History worker scheduled (${GMAIL_HISTORY_SYNC_CRON})`);
-  setTimeout(() => {
+  scheduleSchedulerTimeout(() => {
     runGmailHistorySyncWorker().catch((err) =>
       console.error("[Gmail Sync] Initial worker failed:", err.message),
     );
@@ -395,7 +417,7 @@ export function startBackgroundIndexer() {
   }
   emailTriageJob = cron.schedule(EMAIL_TRIAGE_CRON, runEmailTriageWorker);
   console.log(`[Email Triage] Worker scheduled (${EMAIL_TRIAGE_CRON})`);
-  setTimeout(() => {
+  scheduleSchedulerTimeout(() => {
     runEmailTriageWorker().catch((err) =>
       console.error("[Email Triage] Initial worker failed:", err.message),
     );
@@ -418,7 +440,7 @@ export function startBackgroundIndexer() {
   }
   emailSearchEmbeddingJob = cron.schedule(EMAIL_SEARCH_EMBEDDING_CRON, runEmailSearchEmbeddingWorker);
   console.log(`[Email Search Embeddings] Worker scheduled (${EMAIL_SEARCH_EMBEDDING_CRON})`);
-  setTimeout(() => {
+  scheduleSchedulerTimeout(() => {
     runEmailSearchEmbeddingWorker().catch((err) =>
       console.error("[Email Search Embeddings] Initial worker failed:", err.message),
     );
@@ -439,17 +461,16 @@ async function runReminderSchedulerBatch() {
 }
 
 export function runReminderSchedulerWorker() {
-  // Single-flight: while a batch is running, reminderSchedulerInFlight holds its
-  // promise so concurrent ticks no-op and the shutdown handler can await it.
-  if (reminderSchedulerInFlight) return reminderSchedulerInFlight;
-  const run = runReminderSchedulerBatch().finally(() => {
-    reminderSchedulerInFlight = null;
-  });
-  reminderSchedulerInFlight = run;
-  return run;
+  if (schedulerStopping) return Promise.resolve();
+  return schedulerWork.run(
+    "reminder-batch",
+    runReminderSchedulerBatch,
+    { singleFlight: true },
+  );
 }
 
 export function startReminderSchedulerWorker() {
+  if (schedulerStopping) return;
   if (reminderSchedulerTimer) {
     clearInterval(reminderSchedulerTimer);
     reminderSchedulerTimer = null;
@@ -457,19 +478,23 @@ export function startReminderSchedulerWorker() {
   reminderSchedulerTimer = setInterval(runReminderSchedulerWorker, REMINDER_SCHEDULER_INTERVAL_MS);
   reminderSchedulerTimer.unref?.();
   console.log(`[Reminder Scheduler] Worker scheduled (${REMINDER_SCHEDULER_INTERVAL_MS}ms interval)`);
-  setTimeout(() => {
+  scheduleSchedulerTimeout(() => {
     runReminderSchedulerWorker().catch((err) =>
       console.error("[Reminder Scheduler] Initial worker failed:", err.message),
     );
   }, 2000);
 }
 
-// P3-58: graceful drain on shutdown. The reminder worker ran on an unref'd
-// setInterval, so on SIGTERM/SIGINT the last tick could be lost mid-send with
-// no chance to finish. This stops every cron job and the reminder interval so
-// no new work starts, then awaits any in-flight reminder batch so the current
-// send completes before the process exits. Idempotent — safe to call twice.
-export async function stopScheduler() {
+// Graceful scheduler drain: close every admission source first, then await the
+// scheduler-owned registry. The process-level 15-second force-exit in
+// shutdown.js remains the outer bound. Idempotent — safe to call twice.
+export function stopScheduler() {
+  if (stopSchedulerInFlight) return stopSchedulerInFlight;
+  schedulerStopping = true;
+  initSchedulerRerun = false;
+  gmailHistorySyncRerun = false;
+  emailTriageSelfRescheduleCount = 0;
+
   for (const job of activeJobs) job.stop?.();
   activeJobs.length = 0;
   for (const job of [
@@ -494,12 +519,15 @@ export async function stopScheduler() {
     reminderSchedulerTimer = null;
   }
 
-  // Await the tracked in-flight reminder promise so the last batch drains.
-  if (reminderSchedulerInFlight) {
-    try {
-      await reminderSchedulerInFlight;
-    } catch {
-      // runReminderSchedulerBatch already logs failures; never block exit on it.
-    }
+  for (const handle of schedulerTimeouts) {
+    clearTimeout(handle);
   }
+  schedulerTimeouts.clear();
+  for (const handle of schedulerImmediates) {
+    clearImmediate(handle);
+  }
+  schedulerImmediates.clear();
+
+  stopSchedulerInFlight = schedulerWork.drain();
+  return stopSchedulerInFlight;
 }

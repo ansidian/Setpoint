@@ -149,6 +149,31 @@ describe("createGracefulShutdown", () => {
     void pending;
   });
 
+  it("force-exits when a scheduler drain remains pending after the server closes", async () => {
+    const { server } = makeServer({ closeBehavior: "immediate" });
+    const stopFns = [vi.fn(() => new Promise(() => {}))];
+    const exit = vi.fn();
+    const log = vi.fn();
+    const forceExitMs = 15_000;
+
+    const pending = createGracefulShutdown({
+      server,
+      stopFns,
+      forceExitMs,
+      exit,
+      log,
+    }).shutdown("SIGTERM");
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stopFns[0]).toHaveBeenCalledTimes(1);
+    expect(exit).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(forceExitMs);
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Force-exit"));
+    void pending;
+  });
+
   it("calls closeAllConnections after min(8000, forceExitMs/2) ms if the server exposes it", async () => {
     const { server, closeAllConnections } = makeServer({ closeBehavior: "never" });
     const stopFns = [];

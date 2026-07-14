@@ -16,6 +16,7 @@ const triageWorkerApi = vi.hoisted(() => ({
   processNextEmailTriageJob: vi.fn(),
   recoverStaleRunningTriageJobs: vi.fn(),
   createTriageBatchContext: vi.fn(() => ({})),
+  pruneCompletedTriageJobs: vi.fn(),
 }));
 const embeddingWorkerApi = vi.hoisted(() => ({
   processEmailSearchEmbeddingBatchesForAllUsers: vi.fn(),
@@ -267,43 +268,6 @@ describe("initScheduler", () => {
   });
 });
 
-describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
-  it("awaits the in-flight reminder batch before resolving", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    let resolveBatch;
-    let drained = false;
-    reminderSchedulerApi.processDueReminderBatch.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveBatch = () => {
-          drained = true;
-          resolve({ processed: 0, sent: 0, missed: 0, failed: 0 });
-        };
-      }),
-    );
-
-    // Start a batch (single-flight promise is now tracked) without awaiting it.
-    const inFlight = runReminderSchedulerWorker();
-
-    const stopPromise = stopScheduler();
-    let stopResolved = false;
-    stopPromise.then(() => {
-      stopResolved = true;
-    });
-
-    // stopScheduler must not resolve while the reminder batch is still running.
-    await Promise.resolve();
-    expect(stopResolved).toBe(false);
-    expect(drained).toBe(false);
-
-    resolveBatch();
-    await stopPromise;
-    await inFlight;
-
-    expect(drained).toBe(true);
-    logSpy.mockRestore();
-  });
-});
-
 describe("email search embedding scheduler worker", () => {
   it("logs only aggregate embedding counts", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -365,5 +329,84 @@ describe("email triage scheduler worker", () => {
     expect(triageWorkerApi.recoverStaleRunningTriageJobs).toHaveBeenCalledTimes(1);
     expect(errorSpy).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+});
+
+describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
+  it("awaits active Gmail, triage, snapshot, and reminder work before resolving", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    let resolveClaim;
+    let resolveBatch;
+    let resolveSnapshot;
+    let resolveTriage;
+    let triageCalls = 0;
+    gmailSyncApi.processNextGmailHistorySyncJob.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveClaim = resolve;
+      }),
+    );
+    reminderSchedulerApi.processDueReminderBatch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveBatch = resolve;
+      }),
+    );
+    triageWorkerApi.processNextEmailTriageJob.mockImplementation(() => {
+      triageCalls += 1;
+      if (triageCalls <= 10) return Promise.resolve({ processed: true });
+      return new Promise((resolve) => {
+        resolveTriage = resolve;
+      });
+    });
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [{
+        user_id: "user-1",
+        schedules_json: JSON.stringify([
+          { label: "Morning", time: "08:30", tz: "America/Los_Angeles", enabled: true },
+        ]),
+      }],
+    });
+    await initScheduler();
+    const snapshotCallback = cronApi.schedule.mock.calls.at(-1)[1];
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [{
+        schedules_json: JSON.stringify([
+          { label: "Morning", time: "08:30", tz: "America/Los_Angeles", enabled: true },
+        ]),
+      }],
+    });
+    snapshotApi.advanceSnapshotBoundary.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      }),
+    );
+    const snapshotRun = snapshotCallback();
+
+    requestGmailHistorySyncDrain();
+    await new Promise((resolve) => setImmediate(resolve));
+    await runEmailTriageWorker();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(triageCalls).toBe(11);
+    const reminderRun = runReminderSchedulerWorker();
+
+    const stopPromise = stopScheduler();
+    expect(stopScheduler()).toBe(stopPromise);
+    let stopResolved = false;
+    stopPromise.then(() => {
+      stopResolved = true;
+    });
+
+    await Promise.resolve();
+    expect(stopResolved).toBe(false);
+
+    resolveClaim({ processed: false });
+    resolveSnapshot({ snapshot: { id: 42, status: "active" } });
+    resolveTriage({ processed: false });
+    await Promise.resolve();
+    expect(stopResolved).toBe(false);
+
+    resolveBatch({ processed: 0, sent: 0, missed: 0, failed: 0 });
+    await Promise.all([stopPromise, reminderRun, snapshotRun]);
+    expect(stopResolved).toBe(true);
+    logSpy.mockRestore();
   });
 });
