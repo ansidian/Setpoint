@@ -26,6 +26,7 @@ let sweepInFlight = false;
 let gmailWatchRenewalJob = null;
 let gmailHistorySyncJob = null;
 let gmailHistorySyncInFlight = false;
+let gmailHistorySyncRerun = false;
 let emailTriageJob = null;
 let emailTriageInFlight = false;
 let emailSearchEmbeddingJob = null;
@@ -246,24 +247,40 @@ async function runGmailWatchRenewal() {
 }
 
 async function runGmailHistorySyncWorker() {
-  if (gmailHistorySyncInFlight) return;
+  if (gmailHistorySyncInFlight) {
+    gmailHistorySyncRerun = true;
+    return;
+  }
   gmailHistorySyncInFlight = true;
   try {
     // P2-7: stale triage-job recovery is owned solely by runEmailTriageWorker
     // (both ran it every minute against the same table, racing on the same rows
     // for a 15-minute stale window). One owner is sufficient.
     let processed = 0;
-    for (let i = 0; i < 10; i++) {
-      const result = await processNextGmailHistorySyncJob();
-      if (!result.processed) break;
-      processed++;
-    }
+    do {
+      gmailHistorySyncRerun = false;
+      for (let i = 0; i < 10; i++) {
+        const result = await processNextGmailHistorySyncJob();
+        if (!result.processed) break;
+        processed++;
+      }
+    } while (gmailHistorySyncRerun);
     if (processed) console.log(`[Gmail Sync] Processed ${processed} history sync job(s)`);
   } catch (err) {
     console.error("[Gmail Sync] Worker failed:", err.message);
   } finally {
     gmailHistorySyncInFlight = false;
   }
+}
+
+// Wake the durable history-sync queue promptly after Gmail Pub/Sub persists a
+// job. The per-minute cron remains the reliability fallback if this process
+// exits before the scheduled turn runs. The worker's single-flight guard
+// coalesces push bursts without making the webhook wait on Gmail API work.
+export function requestGmailHistorySyncDrain() {
+  setImmediate(() => {
+    void runGmailHistorySyncWorker();
+  });
 }
 
 export async function runEmailTriageWorker({ selfRescheduled = false } = {}) {

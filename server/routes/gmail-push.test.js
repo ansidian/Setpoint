@@ -9,10 +9,14 @@ const gmailSyncApi = vi.hoisted(() => ({
     history_id: "987",
   })),
 }));
+const schedulerApi = vi.hoisted(() => ({
+  requestGmailHistorySyncDrain: vi.fn(),
+}));
 
 vi.mock("../email/gmail-sync.js", () => ({
   enqueueHistorySyncFromPubSub: gmailSyncApi.enqueueHistorySyncFromPubSub,
 }));
+vi.mock("../scheduler.js", () => schedulerApi);
 
 process.env.GMAIL_PUBSUB_PUSH_TOKEN = "push-secret";
 
@@ -30,7 +34,7 @@ describe("Gmail Pub/Sub push route", () => {
     vi.clearAllMocks();
   });
 
-  it("acks a verified Pub/Sub push after queuing account history sync", async () => {
+  it("acks a verified Pub/Sub push and requests an immediate background history drain", async () => {
     const body = { message: { data: "abc", messageId: "pubsub-1" } };
 
     const res = await request(makeApp())
@@ -46,6 +50,7 @@ describe("Gmail Pub/Sub push route", () => {
       history_id: "987",
     });
     expect(gmailSyncApi.enqueueHistorySyncFromPubSub).toHaveBeenCalledWith(body);
+    expect(schedulerApi.requestGmailHistorySyncDrain).toHaveBeenCalledTimes(1);
   });
 
   it("accepts the query token even when Pub/Sub OIDC auth sets its own bearer header", async () => {
