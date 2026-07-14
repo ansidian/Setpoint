@@ -36,6 +36,7 @@ vi.mock("../../api", async () => {
     snoozeEmail: vi.fn().mockResolvedValue({}),
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
     dismissEmail: vi.fn().mockResolvedValue({}),
+    settleArrivalGrace: vi.fn().mockResolvedValue({}),
     searchEmails: vi.fn().mockResolvedValue({ accounts: [] }),
   };
 });
