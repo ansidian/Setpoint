@@ -143,6 +143,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
 
     const events = [];
     const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
+    const requestEmailTriageDrainAtFn = vi.fn();
 
     const result = await gmailSync.enqueueEmailTriageForEmails(
       "user-1",
@@ -161,10 +162,12 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       {
         dbClient: testState.db.current,
         now: new Date("2026-05-03T12:00:00.000Z"),
+        requestEmailTriageDrainAtFn,
       },
     );
 
     expect(result).toEqual({ queued: 1 });
+    expect(requestEmailTriageDrainAtFn).toHaveBeenCalledWith("2026-05-03T12:00:30.000Z");
     const rows = await testState.db.current.execute({
       sql: `SELECT t.triage_status,
                    t.triage_source,
@@ -212,6 +215,23 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       }),
     ]);
     unsubscribe();
+  });
+
+  it("does not request a deadline wake-up when the arrival-grace batch fails", async () => {
+    const requestEmailTriageDrainAtFn = vi.fn();
+    const dbClient = { batch: vi.fn().mockRejectedValue(new Error("write failed")) };
+
+    await expect(gmailSync.enqueueEmailTriageForEmails(
+      "user-1",
+      [{ uid: "msg-failed", account_id: "gmail-work" }],
+      {
+        dbClient,
+        now: new Date("2026-05-03T12:00:00.000Z"),
+        requestEmailTriageDrainAtFn,
+      },
+    )).rejects.toThrow("write failed");
+
+    expect(requestEmailTriageDrainAtFn).not.toHaveBeenCalled();
   });
 
   it("registers an INBOX watch and persists Gmail history cursor state", async () => {
@@ -456,6 +476,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     const fetchEmailsByIdsFn = vi.fn()
       .mockResolvedValueOnce([emailFor("msg-1", "One")])
       .mockResolvedValueOnce([emailFor("msg-1", "One"), emailFor("msg-2", "Two")]);
+    const requestEmailTriageDrainAtFn = vi.fn();
 
     const result = await gmailSync.syncGmailHistoryForAccount({
       id: "gmail-work", user_id: "user-1", email: "work@example.com",
@@ -465,10 +486,12 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       fetchEmailsByIdsFn,
       targetHistoryId: "105",
       now: new Date("2026-05-03T12:15:00.000Z"),
+      requestEmailTriageDrainAtFn,
     });
 
     expect(fetchEmailsByIdsFn).toHaveBeenCalledTimes(2); // dropped msg-2 retried, not skipped
     expect(result.indexed).toBe(2);
+    expect(requestEmailTriageDrainAtFn).toHaveBeenCalledWith("2026-05-03T12:15:30.000Z");
   });
 
   it("does not persist the stale cursor on 404 recovery; falls back to the profile historyId when no target is given", async () => {

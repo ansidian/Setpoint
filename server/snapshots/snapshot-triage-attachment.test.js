@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   attachArrivalGraceEmailToActiveSnapshot,
+  requeueArrivalGraceTriageForEmail,
   restorePendingTriageEligibilityForEmail,
 } from "./snapshot-triage-attachment.js";
 import {
@@ -10,6 +11,36 @@ import {
 import { createMigratedDb } from "./snapshot-test-fixtures.js";
 
 describe("snapshot triage attachment", () => {
+  it("requests a triage drain only after the arrival-grace job is durable", async () => {
+    const dbClient = await createMigratedDb();
+    const requestEmailTriageDrainAtFn = vi.fn();
+    await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES (?, ?, ?, 'complete', 'model')`,
+      args: ["user-1", "gmail-work", "msg-requeue"],
+    });
+
+    const scheduledFor = await requeueArrivalGraceTriageForEmail(
+      "user-1",
+      "gmail-work",
+      "msg-requeue",
+      {
+        dbClient,
+        now: new Date("2026-05-03T16:00:00.000Z"),
+        requestEmailTriageDrainAtFn,
+      },
+    );
+
+    expect(scheduledFor).toBe("2026-05-03T16:00:30.000Z");
+    expect(requestEmailTriageDrainAtFn).toHaveBeenCalledWith(scheduledFor);
+    const row = await dbClient.execute({
+      sql: "SELECT status, scheduled_for FROM ea_triage_jobs WHERE email_id = ?",
+      args: ["msg-requeue"],
+    });
+    expect(row.rows).toEqual([{ status: "queued", scheduled_for: scheduledFor }]);
+  });
+
   it("does not let arrival-grace attach overwrite a read settle that wins the race", async () => {
     const dbClient = await createMigratedDb();
     const now = new Date("2026-05-03T16:00:00.000Z");
