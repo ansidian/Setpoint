@@ -8,12 +8,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Conservative vendor splitting: route a few heavy, stable libraries into their
 // own chunks for better deploy cache granularity. Everything else (including the
-// app entry) returns undefined and falls back to Rollup's default chunking.
+// app entry) returns undefined and falls back to Rolldown's default chunking.
 // Matching is on node_modules path segments to avoid substring false positives
 // (e.g. "react" must not catch "@base-ui/react" or "react-router-dom").
-function manualChunks(id) {
+const CODEMIRROR_PACKAGE_PATHS = [
+  "/node_modules/@codemirror/",
+  "/node_modules/@lezer/",
+  "/node_modules/@marijn/find-cluster-break/",
+  "/node_modules/crelt/",
+  "/node_modules/style-mod/",
+  "/node_modules/w3c-keyname/",
+];
+
+export function manualChunks(id) {
   const normalized = id.split(path.sep).join("/");
   if (!normalized.includes("/node_modules/")) return undefined;
+  if (CODEMIRROR_PACKAGE_PATHS.some((packagePath) => normalized.includes(packagePath))) {
+    return "codemirror-vendor";
+  }
   if (normalized.includes("/node_modules/motion/")
     || normalized.includes("/node_modules/framer-motion/")) {
     return "motion";
@@ -36,9 +48,17 @@ export default defineConfig(({ mode }) => {
     base: demoBase || "/",
     plugins: [tailwindcss(), react()],
     build: {
-      rollupOptions: {
+      rolldownOptions: {
         output: {
-          manualChunks,
+          codeSplitting: {
+            groups: [{
+              name: manualChunks,
+              // Rolldown measures this before minification. This keeps the
+              // CodeMirror group below Vite's 500 kB emitted-chunk warning
+              // without fragmenting the smaller React and Motion groups.
+              maxSize: 1_300 * 1024,
+            }],
+          },
         },
       },
     },
