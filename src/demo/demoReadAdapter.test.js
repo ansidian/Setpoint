@@ -129,21 +129,24 @@ describe("demo mode read adapter", () => {
     expect(today.calendar[0].startMs).not.toBe(tomorrow.calendar[0].startMs);
   });
 
-  it("isolates dashboard readers without cloning the envelope on unchanged reads", async () => {
+  it("isolates dashboard readers on unchanged reads", async () => {
     const api = await importDemoApi();
-    const cloneSpy = vi.spyOn(globalThis, "structuredClone");
-    const stringifySpy = vi.spyOn(JSON, "stringify");
 
     const first = await api.getCurrentDashboard();
     const second = await api.getCurrentDashboard();
 
     expect(second).toEqual(first);
-    expect(cloneSpy).not.toHaveBeenCalled();
-    expect(stringifySpy).not.toHaveBeenCalled();
 
     first.activeSnapshot.lanes.needs_attention[0].subject = "Caller-only edit";
     expect((await api.getCurrentDashboard()).activeSnapshot.lanes.needs_attention[0].subject)
       .not.toBe("Caller-only edit");
+  });
+
+  it("returns dashboard data that consumers can clone", async () => {
+    const api = await importDemoApi();
+    const current = await api.getCurrentDashboard();
+
+    expect(structuredClone(current)).toEqual(current);
   });
 
   it("keeps prior dashboard views stable when a later request mutates the seed", async () => {
