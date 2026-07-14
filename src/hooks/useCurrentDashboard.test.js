@@ -2,12 +2,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 vi.mock("../api", () => ({
+  getActiveSnapshot: vi.fn(),
   getCurrentDashboard: vi.fn(),
   requestCurrentDashboardRefresh: vi.fn(),
   syncCurrentDashboard: vi.fn(),
 }));
 
-const { getCurrentDashboard, requestCurrentDashboardRefresh, syncCurrentDashboard } = await import("../api");
+const {
+  getActiveSnapshot,
+  getCurrentDashboard,
+  requestCurrentDashboardRefresh,
+  syncCurrentDashboard,
+} = await import("../api");
 const { default: useCurrentDashboard } = await import("./useCurrentDashboard");
 
 class FakeEventSource {
@@ -110,6 +116,7 @@ describe("useCurrentDashboard", () => {
   beforeEach(() => {
     setDocumentHidden(false);
     FakeEventSource.instances = [];
+    getActiveSnapshot.mockReset().mockResolvedValue(currentPayload.activeSnapshot);
     getCurrentDashboard.mockReset().mockResolvedValue(currentPayload);
     requestCurrentDashboardRefresh.mockReset().mockResolvedValue({
       ...currentPayload,
@@ -462,12 +469,7 @@ describe("useCurrentDashboard", () => {
   it("passes dashboard-current SSE payloads to event consumers while refetching", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const onDashboardEvent = vi.fn();
-    getCurrentDashboard
-      .mockResolvedValueOnce(currentPayload)
-      .mockResolvedValueOnce({
-        ...currentPayload,
-        fetchedAt: "2026-05-05T00:21:00.000Z",
-      });
+    getCurrentDashboard.mockResolvedValueOnce(currentPayload);
 
     const { unmount } = renderHook(() => useCurrentDashboard({ onDashboardEvent }));
     await act(async () => {});
@@ -486,19 +488,19 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(onDashboardEvent).toHaveBeenCalledWith(payload);
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
     unmount();
   });
 
   it("logs SSE receipt-to-state-application timing for the accepted response", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    getCurrentDashboard
-      .mockResolvedValueOnce(currentPayload)
-      .mockResolvedValueOnce({
-        ...currentPayload,
-        fetchedAt: "2026-05-05T00:21:30.000Z",
-      });
+    getCurrentDashboard.mockResolvedValueOnce(currentPayload);
+    getActiveSnapshot.mockResolvedValueOnce({
+      ...currentPayload.activeSnapshot,
+      snapshot: { id: 77 },
+    });
 
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
@@ -514,14 +516,14 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:21:30.000Z");
+    expect(result.current.current.activeSnapshot.snapshot.id).toBe(77);
     const timingLine = logSpy.mock.calls
       .map(([line]) => line)
       .find((line) => String(line).startsWith("[EA Timing] "));
     expect(timingLine).toBeTruthy();
     expect(JSON.parse(timingLine.slice("[EA Timing] ".length))).toMatchObject({
       event: "dashboard-event-refetch",
-      scope: "current",
+      scope: "active_snapshot",
       source: "email_triage",
       reason: "email_triage_finalized",
       eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
@@ -547,13 +549,8 @@ describe("useCurrentDashboard", () => {
         }],
       },
     };
-    getCurrentDashboard
-      .mockResolvedValueOnce(currentPayload)
-      .mockResolvedValueOnce({
-        ...currentPayload,
-        activeSnapshot: queuedSnapshot,
-        fetchedAt: "2026-05-05T00:22:00.000Z",
-      });
+    getCurrentDashboard.mockResolvedValueOnce(currentPayload);
+    getActiveSnapshot.mockResolvedValueOnce(queuedSnapshot);
 
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
@@ -571,7 +568,8 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
     expect(result.current.activeSnapshot.snapshot.lanes.queued).toEqual(queuedSnapshot.lanes.queued);
     unmount();
   });
@@ -686,12 +684,11 @@ describe("useCurrentDashboard", () => {
 
   it("applies SSE-triggered refetches while hidden so background tabs stay current", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
-    getCurrentDashboard
-      .mockResolvedValueOnce(currentPayload)
-      .mockResolvedValueOnce({
-        ...currentPayload,
-        fetchedAt: "2026-05-05T00:25:00.000Z",
-      });
+    getCurrentDashboard.mockResolvedValueOnce(currentPayload);
+    getActiveSnapshot.mockResolvedValueOnce({
+      ...currentPayload.activeSnapshot,
+      snapshot: { id: 88 },
+    });
 
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
@@ -706,8 +703,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
-    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:25:00.000Z");
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(result.current.current.activeSnapshot.snapshot.id).toBe(88);
 
     setDocumentHidden(false);
     await act(async () => {
@@ -715,7 +713,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
     unmount();
   });
 
@@ -759,6 +757,74 @@ describe("useCurrentDashboard", () => {
 
     expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
     expect(result.current.current.fetchedAt).toBe("2026-05-05T00:30:00.000Z");
+    unmount();
+  });
+
+  it("keeps a queued full-current scope when a later email event arrives", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    let resolveSnapshot;
+    getActiveSnapshot.mockReturnValueOnce(new Promise((resolve) => {
+      resolveSnapshot = resolve;
+    }));
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        weather: { temp: 81, icon: "Sun" },
+        fetchedAt: "2026-05-05T00:31:00.000Z",
+      });
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", { source: "email_triage" });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", { source: "todoist" });
+      FakeEventSource.instances[0].emit("dashboard-current-changed", { source: "email_triage" });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resolveSnapshot(currentPayload.activeSnapshot);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(result.current.current.weather.temp).toBe(81);
+    unmount();
+  });
+
+  it("falls back exactly once to the full current envelope when snapshot refresh fails", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    getActiveSnapshot.mockRejectedValueOnce(new Error("snapshot unavailable"));
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        activeSnapshot: {
+          ...currentPayload.activeSnapshot,
+          snapshot: { id: 101 },
+        },
+        fetchedAt: "2026-05-05T00:32:00.000Z",
+      });
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", { source: "email_triage" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(result.current.current.activeSnapshot.snapshot.id).toBe(101);
     unmount();
   });
 

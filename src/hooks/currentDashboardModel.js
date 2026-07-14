@@ -3,6 +3,15 @@ export const EMPTY_DEADLINES = {
   stats: null,
 };
 
+export function mergeActiveSnapshotIntoCurrent(current, activeSnapshot) {
+  if (!current || typeof current !== "object") return null;
+  return {
+    ...current,
+    activeSnapshot,
+    contentKey: null,
+  };
+}
+
 // Content signature for a calendar event list. getCurrentDashboard() returns a
 // freshly JSON-parsed `calendar` array on every poll/refetch, so its identity
 // churns even when nothing changed. This signature lets a caller reuse the prior

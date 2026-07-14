@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  getActiveSnapshot,
   getCurrentDashboard,
   requestCurrentDashboardRefresh,
   syncCurrentDashboard,
@@ -11,8 +12,15 @@ import {
   currentToBriefing,
   currentToLiveDataBulk,
   hasActiveRefreshWork,
+  mergeActiveSnapshotIntoCurrent,
   stabilizeCalendar,
 } from "./currentDashboardModel.js";
+import {
+  ACTIVE_SNAPSHOT_REFRESH_SCOPE,
+  CURRENT_REFRESH_SCOPE,
+  mergeRefreshScopes,
+  refreshScopeForDashboardEvent,
+} from "./dashboardEventRefreshModel.js";
 
 const POST_CLICK_POLL_MS = 2_000;
 const POST_CLICK_POLL_MAX_STEP_MS = 16_000;
@@ -49,6 +57,8 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const currentRef = useRef(current);
+  currentRef.current = current;
   const mountedRef = useRef(true);
   const currentRequestInFlightRef = useRef(false);
   // Monotonic request id: every fetch captures one, and only the latest-issued
@@ -74,8 +84,8 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     // Fall back to fetchedAt when contentKey is absent (e.g. demo mode), and only
     // dedup when both sides carry a truthy key that matches — never skip a real change.
     setCurrent((prev) => {
-      const prevKey = prev?.contentKey ?? prev?.fetchedAt;
-      const nextKey = data?.contentKey ?? data?.fetchedAt;
+      const prevKey = prev && Object.hasOwn(prev, "contentKey") ? prev.contentKey : prev?.fetchedAt;
+      const nextKey = data && Object.hasOwn(data, "contentKey") ? data.contentKey : data?.fetchedAt;
       return prev && prevKey && nextKey && prevKey === nextKey ? prev : data;
     });
     setSelectedBriefing((prev) => (prev === null ? prev : null));
@@ -117,30 +127,60 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     }
   }, []);
 
-  const runEventRefetch = useCallback(async ({ allowHidden = false, eventContext = null } = {}) => {
+  const runEventRefetch = useCallback(async ({
+    allowHidden = false,
+    eventContext = null,
+    scope = CURRENT_REFRESH_SCOPE,
+  } = {}) => {
     if (disabled) return null;
     if (document.hidden && !allowHidden) {
       hiddenEventRefetchRef.current = true;
       return null;
     }
     if (currentRequestInFlightRef.current) {
-      queuedEventRefetchRef.current = { allowHidden, eventContext };
+      const queued = queuedEventRefetchRef.current;
+      const mergedScope = mergeRefreshScopes(queued?.scope, scope) || CURRENT_REFRESH_SCOPE;
+      const keepQueuedContext = queued?.scope === mergedScope && scope !== mergedScope;
+      queuedEventRefetchRef.current = {
+        allowHidden: allowHidden || !!queued?.allowHidden,
+        eventContext: keepQueuedContext ? queued.eventContext : eventContext,
+        scope: mergedScope,
+      };
       if (document.hidden) hiddenEventRefetchRef.current = true;
       return null;
     }
     currentRequestInFlightRef.current = true;
     const seq = ++requestSeqRef.current;
     inFlightOwnerRef.current = seq;
+    let selectedScope = scope;
     try {
-      let data = await getCurrentDashboard();
+      let data;
+      if (scope === ACTIVE_SNAPSHOT_REFRESH_SCOPE) {
+        try {
+          const activeSnapshot = await getActiveSnapshot();
+          data = mergeActiveSnapshotIntoCurrent(currentRef.current, activeSnapshot);
+          if (!data) throw new Error("Current dashboard envelope is unavailable");
+        } catch {
+          selectedScope = CURRENT_REFRESH_SCOPE;
+          data = await getCurrentDashboard();
+        }
+      } else {
+        data = await getCurrentDashboard();
+      }
       const applied = applyCurrent(data, seq);
-      if (applied) logEventRefetchTiming(eventContext, "ok");
-      if (!document.hidden) {
+      const selectedEventContext = eventContext
+        ? { ...eventContext, scope: selectedScope }
+        : null;
+      if (applied) logEventRefetchTiming(selectedEventContext, "ok");
+      if (selectedScope === CURRENT_REFRESH_SCOPE && !document.hidden) {
         data = await pollWhileRefreshActive(data, seq);
       }
       return data;
     } catch {
-      logEventRefetchTiming(eventContext, "error");
+      logEventRefetchTiming(
+        eventContext ? { ...eventContext, scope: selectedScope } : null,
+        "error",
+      );
       if (document.hidden) hiddenEventRefetchRef.current = true;
       return null;
     } finally {
@@ -232,10 +272,12 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       if (typeof onDashboardEventRef.current === "function") {
         onDashboardEventRef.current(payload);
       }
+      const scope = refreshScopeForDashboardEvent(payload);
       runEventRefetch({
         allowHidden: true,
+        scope,
         eventContext: {
-          scope: "current",
+          scope,
           source: payload?.source,
           reason: payload?.reason,
           eventKey: payload?.details?.eventKey,
