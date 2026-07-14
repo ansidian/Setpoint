@@ -5,7 +5,7 @@ import {
   attachArrivalGraceEmailToActiveSnapshot,
   getOrCreateActiveSnapshot,
 } from "../snapshots/snapshot-service.js";
-import { triageStatementsForEmail } from "./gmailTriageStatements.js";
+import { arrivalGraceDeadline, triageStatementsForEmail } from "./gmailTriageStatements.js";
 import { decodeGmailPubSubNotification } from "./gmailPubSubNotification.js";
 export { decodeGmailPubSubNotification } from "./gmailPubSubNotification.js";
 import {
@@ -41,8 +41,7 @@ import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provide
 import { logTiming } from "../timing.js";
 import { projectEmailArrivalTiming } from "./email-arrival-timing.js";
 import { triageRetryBackoffIso } from "../triage/triage-worker.js";
-import { requestEmailTriageDrainAt } from "../triage/email-triage-drain-request.js";
-import { arrivalGraceDeadline } from "../snapshots/arrival-grace.js";
+import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;

@@ -192,7 +192,7 @@ graph LR
     Context --> Sections
 ```
 
-**`useCurrentDashboard`** — Normal dashboard boot/runtime hook. Fetches `/api/dashboard/current`, listens to `/api/dashboard/current/events`, and exposes stable `briefingData`, `liveData`, and `activeSnapshot` adapters for the existing dashboard component tree.
+**`useCurrentDashboard`** — Normal dashboard boot/runtime hook. Fetches `/api/dashboard/current`, listens to `/api/dashboard/current/events`, and exposes stable `briefingData`, `liveData`, and `activeSnapshot` adapters for the existing dashboard component tree. Event refetch scope is typed: `email_triage` reads only `/api/briefing/snapshot/active`, while every other or unknown source keeps the full-current path. Concurrent bursts coalesce to the strongest pending scope (`current` dominates), and a failed snapshot-only read falls back once to the full envelope.
 
 **`DashboardContext`** — Shared across all dashboard sections. Derives `emailAccounts`, `billEmails`, `totalBills`, `totalNoiseCount` via `useMemo`. Provides action handlers that update both API and local state.
 
@@ -411,9 +411,11 @@ Model selection is user-configurable through `/api/ea/models`, defaults to Anthr
 
 ### Key Optimizations
 
-**Durable Triage Queue** — Provider sync creates pending triage rows and deduped jobs. Workers can resume from durable rows after process restarts.
+**Durable Triage Queue** — Provider sync creates pending triage rows and deduped jobs. Workers can resume from durable rows after process restarts. Arrival-grace jobs retain their 30-second durable `scheduled_for`; successful writes also arm one process-local earliest-deadline wake-up so healthy processes do not add cron-boundary jitter. The unchanged 30-second cron remains the restart and missed-timer fallback.
 
-**Email Indexing & Push Ingestion** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. Gmail accounts can register an INBOX Pub/Sub watch through `GMAIL_PUBSUB_TOPIC`; `/api/gmail/push` decodes the Pub/Sub envelope, queues an account-level `gmail_history_sync` job, and returns quickly. The history-sync worker uses the stored Gmail `last_history_id` cursor to fetch new INBOX messages, index them, create pending durable triage rows, and enqueue message-level `email_triage` jobs. The 2-hour background indexer remains a reconciliation path for missed push events, downtime, watch expiry, and iCloud polling. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
+**Email Indexing & Push Ingestion** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. Gmail accounts can register an INBOX Pub/Sub watch through `GMAIL_PUBSUB_TOPIC`; `/api/gmail/push` decodes the Pub/Sub envelope, queues an account-level `gmail_history_sync` job, acknowledges promptly, and requests an immediate coalesced history drain. The per-minute history cron remains durable recovery. The history-sync worker uses the stored Gmail `last_history_id` cursor to fetch new INBOX messages, index them, create pending durable triage rows, and enqueue message-level `email_triage` jobs. The 2-hour background indexer remains a reconciliation path for missed push events, downtime, watch expiry, and iCloud polling. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
+
+**Scheduler Lifecycle & Timing Evidence** — Scheduler-owned cron callbacks, timers, immediates, and worker drains enter a shared work registry. Shutdown closes admission sources first and then awaits all admitted work; the process shutdown timeout remains the outer bound. Gmail history completion emits content-free `[EA Timing]` stages for provider delivery, durable queue wait, sync/index work, and snapshot attachment. Dashboard event refetches emit receipt-to-accepted-state duration with the selected `active_snapshot` or `current` scope. Invalid timestamps omit dependent durations, and no timing path changes queue completion or state-application behavior.
 
 **Current Data Cache** — Non-email boot-critical data is cached by user and cache key, with health metadata exposed in the current dashboard envelope.
 

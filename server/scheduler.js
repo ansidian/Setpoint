@@ -18,7 +18,12 @@ import {
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.js";
 import { processDueReminderBatch } from "./reminders/reminder-scheduler.js";
 import { createSchedulerWorkRegistry } from "./scheduler-work-registry.js";
-import { registerEmailTriageDrainRequester } from "./triage/email-triage-drain-request.js";
+import {
+  createEmailTriageDeadlineController,
+  registerEmailTriageDrainRequester,
+  requestEmailTriageDrainAt,
+} from "./scheduler-email-triage-drain.js";
+export { requestEmailTriageDrainAt } from "./scheduler-email-triage-drain.js";
 
 const activeJobs = [];
 const schedulerWork = createSchedulerWorkRegistry();
@@ -32,8 +37,6 @@ let gmailHistorySyncJob = null;
 let gmailHistorySyncRerun = false;
 let emailTriageJob = null;
 let emailTriageRunInFlight = null;
-let emailTriageDeadlineTimer = null;
-let emailTriageDeadlineAt = null;
 let emailTriageDeadlineFollowupRequested = false;
 let emailSearchEmbeddingJob = null;
 let triageJobPruneJob = null;
@@ -62,7 +65,6 @@ const EMAIL_TRIAGE_BATCH_SIZE = 10;
 // P2-4: cap consecutive self-reschedules so a deep queue drains promptly within a
 // minute without ever spinning forever; the cron tick resumes the drain anyway.
 const EMAIL_TRIAGE_MAX_SELF_RESCHEDULES = 50;
-const MAX_TIMEOUT_MS = 2_147_483_647;
 let emailTriageSelfRescheduleCount = 0;
 
 function scheduleSchedulerTimeout(task, delayMs) {
@@ -84,6 +86,20 @@ function scheduleSchedulerImmediate(task) {
   schedulerImmediates.add(handle);
   return handle;
 }
+
+const emailTriageDeadlineController = createEmailTriageDeadlineController({
+  scheduleTimeout: scheduleSchedulerTimeout,
+  cancelTimeout: (handle) => {
+    clearTimeout(handle);
+    schedulerTimeouts.delete(handle);
+  },
+  onDeadline: () => {
+    runEmailTriageWorker({ selfRescheduled: true, deadlineWake: true }).catch((err) =>
+      console.error("[Email Triage] Deadline worker failed:", err.message),
+    );
+  },
+});
+registerEmailTriageDrainRequester(emailTriageDeadlineController.request);
 
 function isMissingTableError(err) {
   // libsql surfaces a missing table as "no such table: ..." in the message;
@@ -310,42 +326,6 @@ export function requestGmailHistorySyncDrain() {
   });
 }
 
-function clearEmailTriageDeadlineTimer() {
-  if (!emailTriageDeadlineTimer) return;
-  clearTimeout(emailTriageDeadlineTimer);
-  schedulerTimeouts.delete(emailTriageDeadlineTimer);
-  emailTriageDeadlineTimer = null;
-  emailTriageDeadlineAt = null;
-}
-
-export function requestEmailTriageDrainAt(scheduledFor) {
-  if (schedulerStopping) return false;
-  const deadlineAt = scheduledFor instanceof Date
-    ? scheduledFor.getTime()
-    : Date.parse(String(scheduledFor || ""));
-  if (!Number.isFinite(deadlineAt)) return false;
-  if (emailTriageDeadlineAt !== null && emailTriageDeadlineAt <= deadlineAt) return false;
-
-  clearEmailTriageDeadlineTimer();
-  emailTriageDeadlineAt = deadlineAt;
-  const delayMs = Math.min(Math.max(0, deadlineAt - Date.now()), MAX_TIMEOUT_MS);
-  emailTriageDeadlineTimer = scheduleSchedulerTimeout(() => {
-    const requestedDeadline = emailTriageDeadlineAt;
-    emailTriageDeadlineTimer = null;
-    emailTriageDeadlineAt = null;
-    if (requestedDeadline !== null && requestedDeadline > Date.now()) {
-      requestEmailTriageDrainAt(requestedDeadline);
-      return;
-    }
-    runEmailTriageWorker({ selfRescheduled: true, deadlineWake: true }).catch((err) =>
-      console.error("[Email Triage] Deadline worker failed:", err.message),
-    );
-  }, delayMs);
-  return emailTriageDeadlineTimer !== null;
-}
-
-registerEmailTriageDrainRequester(requestEmailTriageDrainAt);
-
 export function runEmailTriageWorker({ selfRescheduled = false, deadlineWake = false } = {}) {
   if (schedulerStopping) return Promise.resolve();
   if (emailTriageRunInFlight) {
@@ -563,7 +543,7 @@ export function stopScheduler() {
   gmailHistorySyncRerun = false;
   emailTriageSelfRescheduleCount = 0;
   emailTriageDeadlineFollowupRequested = false;
-  clearEmailTriageDeadlineTimer();
+  emailTriageDeadlineController.stop();
 
   for (const job of activeJobs) job.stop?.();
   activeJobs.length = 0;

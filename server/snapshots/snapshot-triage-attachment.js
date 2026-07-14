@@ -16,7 +16,7 @@ import {
 } from "./arrival-grace.js";
 import { DEFAULT_TIMEZONE, snapshotString } from "./snapshot-lifecycle.js";
 import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
-import { requestEmailTriageDrainAt } from "../triage/email-triage-drain-request.js";
+import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.js";
 
 function snapshotSenderFromEmail(email = {}) {
   const parsed = parseFrom(email);
