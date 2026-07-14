@@ -7,6 +7,8 @@ Composition root and cross-cutting server concerns that don't belong to a single
 ### Root
 - `index.js` — Express app assembly; wires middleware, routes, and background workers; owns the HTTP server instance
 - `scheduler.js` — cron composition root; starts/stops all background workers across domains
+- `scheduler-work-registry.js` — shared admission/single-flight registry that lets scheduler shutdown await every admitted task
+- `scheduler-email-triage-drain.js` — scheduler-owned earliest-deadline controller and request seam for durable email-triage jobs
 - `shutdown.js` — generic, injectable graceful-shutdown sequencer (`createGracefulShutdown`); pure sequencing logic over an injected `server` + `stopFns` array, no knowledge of which workers it's draining
 - `env.js` — required-env-var validation (dev vs. production)
 - `security.js` — trust-proxy setting, Content-Security-Policy, security middleware

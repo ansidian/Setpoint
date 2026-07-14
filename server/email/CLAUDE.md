@@ -20,6 +20,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `gmailSyncClient.js` — raw Gmail HTTP: history.list paging, message metadata, profile historyId, watch-registration POST
 - `gmailWatchStore.js` — `ea_gmail_watch_state` persistence: watch-state upsert, stored-cursor read, watch-error write, cursor statement builders (seed/advance/touch)
 - `gmailReconciliation.js` — Gmail row reconciliation: resolve mailbox account ids, find existing rows, reconcile read-state + provider-removal against the index/snapshots
+- `email-arrival-timing.js` — pure projection of provider, durable queue, sync, and snapshot-attachment timing stages
 - `icloud.js` — iCloud Mail (IMAP) client
 - `html-to-text.js` — HTML → text conversion for email bodies
 - `mime-artifacts.js` — heuristic detector for raw-MIME body_text rows (reindex targeting)
