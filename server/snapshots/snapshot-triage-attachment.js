@@ -16,6 +16,7 @@ import {
 } from "./arrival-grace.js";
 import { DEFAULT_TIMEZONE, snapshotString } from "./snapshot-lifecycle.js";
 import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+import { requestEmailTriageDrainAt } from "../triage/email-triage-drain-request.js";
 
 function snapshotSenderFromEmail(email = {}) {
   const parsed = parseFrom(email);
@@ -49,6 +50,7 @@ export async function requeueEmailTriageForEmail(userId, accountId, emailId, {
 export async function requeueArrivalGraceTriageForEmail(userId, accountId, emailId, {
   dbClient = db,
   now = new Date(),
+  requestEmailTriageDrainAtFn = requestEmailTriageDrainAt,
 } = {}) {
   const scheduledFor = arrivalGraceDeadline(now);
   const idempotencyKey = `email_triage:${userId}:${accountId}:${emailId}`;
@@ -92,6 +94,7 @@ export async function requeueArrivalGraceTriageForEmail(userId, accountId, email
       scheduledFor,
     ],
   });
+  requestEmailTriageDrainAtFn(scheduledFor);
   return scheduledFor;
 }
 

@@ -41,6 +41,8 @@ import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provide
 import { logTiming } from "../timing.js";
 import { projectEmailArrivalTiming } from "./email-arrival-timing.js";
 import { triageRetryBackoffIso } from "../triage/triage-worker.js";
+import { requestEmailTriageDrainAt } from "../triage/email-triage-drain-request.js";
+import { arrivalGraceDeadline } from "../snapshots/arrival-grace.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
@@ -165,6 +167,7 @@ export async function syncGmailHistoryForAccount(account, {
   targetHistoryId = null,
   now = new Date(),
   timingNow = () => new Date(),
+  requestEmailTriageDrainAtFn = requestEmailTriageDrainAt,
 } = {}) {
   const startHistoryId = await getStoredHistoryId(account, dbClient);
   if (!startHistoryId) {
@@ -288,6 +291,7 @@ export async function syncGmailHistoryForAccount(account, {
   );
   statements.push(advanceCursorStatement({ historyId: lastHistoryId, account, now }));
   await dbClient.batch(statements);
+  if (emails.length) requestEmailTriageDrainAtFn(arrivalGraceDeadline(now));
   const snapshotQueuedAt = emails.length ? timingNow() : null;
   if (emails.length) {
     // P2-23: resolve the active snapshot once for the whole batch instead of
@@ -321,11 +325,15 @@ export async function enqueueEmailTriageForEmails(userId, emails, {
   dbClient = db,
   now = new Date(),
   arrivalGrace = true,
+  requestEmailTriageDrainAtFn = requestEmailTriageDrainAt,
 } = {}) {
   const statements = emails.flatMap((email) =>
     triageStatementsForEmail(userId, email.account_id, email, { arrivalGrace, now }),
   );
   if (statements.length) await dbClient.batch(statements);
+  if (arrivalGrace && emails.length) {
+    requestEmailTriageDrainAtFn(arrivalGraceDeadline(now));
+  }
   if (arrivalGrace && emails.length) {
     // P2-23: hoist active-snapshot resolution out of the per-email loop.
     const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now });

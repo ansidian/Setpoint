@@ -18,6 +18,7 @@ import {
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.js";
 import { processDueReminderBatch } from "./reminders/reminder-scheduler.js";
 import { createSchedulerWorkRegistry } from "./scheduler-work-registry.js";
+import { registerEmailTriageDrainRequester } from "./triage/email-triage-drain-request.js";
 
 const activeJobs = [];
 const schedulerWork = createSchedulerWorkRegistry();
@@ -30,6 +31,10 @@ let gmailWatchRenewalJob = null;
 let gmailHistorySyncJob = null;
 let gmailHistorySyncRerun = false;
 let emailTriageJob = null;
+let emailTriageRunInFlight = null;
+let emailTriageDeadlineTimer = null;
+let emailTriageDeadlineAt = null;
+let emailTriageDeadlineFollowupRequested = false;
 let emailSearchEmbeddingJob = null;
 let triageJobPruneJob = null;
 let reminderSchedulerTimer = null;
@@ -57,6 +62,7 @@ const EMAIL_TRIAGE_BATCH_SIZE = 10;
 // P2-4: cap consecutive self-reschedules so a deep queue drains promptly within a
 // minute without ever spinning forever; the cron tick resumes the drain anyway.
 const EMAIL_TRIAGE_MAX_SELF_RESCHEDULES = 50;
+const MAX_TIMEOUT_MS = 2_147_483_647;
 let emailTriageSelfRescheduleCount = 0;
 
 function scheduleSchedulerTimeout(task, delayMs) {
@@ -304,10 +310,52 @@ export function requestGmailHistorySyncDrain() {
   });
 }
 
-export function runEmailTriageWorker({ selfRescheduled = false } = {}) {
+function clearEmailTriageDeadlineTimer() {
+  if (!emailTriageDeadlineTimer) return;
+  clearTimeout(emailTriageDeadlineTimer);
+  schedulerTimeouts.delete(emailTriageDeadlineTimer);
+  emailTriageDeadlineTimer = null;
+  emailTriageDeadlineAt = null;
+}
+
+export function requestEmailTriageDrainAt(scheduledFor) {
+  if (schedulerStopping) return false;
+  const deadlineAt = scheduledFor instanceof Date
+    ? scheduledFor.getTime()
+    : Date.parse(String(scheduledFor || ""));
+  if (!Number.isFinite(deadlineAt)) return false;
+  if (emailTriageDeadlineAt !== null && emailTriageDeadlineAt <= deadlineAt) return false;
+
+  clearEmailTriageDeadlineTimer();
+  emailTriageDeadlineAt = deadlineAt;
+  const delayMs = Math.min(Math.max(0, deadlineAt - Date.now()), MAX_TIMEOUT_MS);
+  emailTriageDeadlineTimer = scheduleSchedulerTimeout(() => {
+    const requestedDeadline = emailTriageDeadlineAt;
+    emailTriageDeadlineTimer = null;
+    emailTriageDeadlineAt = null;
+    if (requestedDeadline !== null && requestedDeadline > Date.now()) {
+      requestEmailTriageDrainAt(requestedDeadline);
+      return;
+    }
+    runEmailTriageWorker({ selfRescheduled: true, deadlineWake: true }).catch((err) =>
+      console.error("[Email Triage] Deadline worker failed:", err.message),
+    );
+  }, delayMs);
+  return emailTriageDeadlineTimer !== null;
+}
+
+registerEmailTriageDrainRequester(requestEmailTriageDrainAt);
+
+export function runEmailTriageWorker({ selfRescheduled = false, deadlineWake = false } = {}) {
   if (schedulerStopping) return Promise.resolve();
-  return schedulerWork.run("email-triage", async () => {
+  if (emailTriageRunInFlight) {
+    if (deadlineWake) emailTriageDeadlineFollowupRequested = true;
+    return emailTriageRunInFlight;
+  }
+
+  const runPromise = schedulerWork.run("email-triage", async () => {
     let processed = 0;
+    let workerFailed = false;
     try {
       // Stale-job recovery is the per-minute responsibility; an immediate
       // self-reschedule within the same drain skips it (it already ran this tick).
@@ -317,6 +365,7 @@ export function runEmailTriageWorker({ selfRescheduled = false } = {}) {
       const batch = createTriageBatchContext();
       for (let i = 0; i < EMAIL_TRIAGE_BATCH_SIZE; i++) {
         const result = await processNextEmailTriageJob({ batch });
+        if (result.scheduled_for) requestEmailTriageDrainAt(result.scheduled_for);
         if (result.paused) break;
         if (!result.processed) break;
         processed++;
@@ -325,12 +374,14 @@ export function runEmailTriageWorker({ selfRescheduled = false } = {}) {
     } catch (err) {
       console.error("[Email Triage] Worker failed:", err.message);
       emailTriageSelfRescheduleCount = 0;
-      return;
+      workerFailed = true;
     }
     // P2-4: a full batch means the queue is still deep — re-arm immediately via
     // setImmediate instead of idling until the next cron minute. The in-flight
     // guard above prevents overlap; the self-reschedule cap bounds the chain.
-    if (processed === EMAIL_TRIAGE_BATCH_SIZE
+    const deadlineFollowupRequested = emailTriageDeadlineFollowupRequested;
+    emailTriageDeadlineFollowupRequested = false;
+    if (!workerFailed && processed === EMAIL_TRIAGE_BATCH_SIZE
         && emailTriageSelfRescheduleCount < EMAIL_TRIAGE_MAX_SELF_RESCHEDULES) {
       emailTriageSelfRescheduleCount += 1;
       scheduleSchedulerImmediate(() => {
@@ -338,10 +389,27 @@ export function runEmailTriageWorker({ selfRescheduled = false } = {}) {
           console.error("[Email Triage] Self-rescheduled worker failed:", err.message),
         );
       });
+    } else if (deadlineFollowupRequested) {
+      emailTriageSelfRescheduleCount = 0;
+      scheduleSchedulerImmediate(() => {
+        runEmailTriageWorker({ selfRescheduled: true }).catch((err) =>
+          console.error("[Email Triage] Deadline follow-up worker failed:", err.message),
+        );
+      });
     } else {
       emailTriageSelfRescheduleCount = 0;
     }
   }, { singleFlight: true });
+  emailTriageRunInFlight = runPromise;
+  void runPromise.then(
+    () => {
+      if (emailTriageRunInFlight === runPromise) emailTriageRunInFlight = null;
+    },
+    () => {
+      if (emailTriageRunInFlight === runPromise) emailTriageRunInFlight = null;
+    },
+  );
+  return runPromise;
 }
 
 export function runEmailSearchEmbeddingWorker() {
@@ -494,6 +562,8 @@ export function stopScheduler() {
   initSchedulerRerun = false;
   gmailHistorySyncRerun = false;
   emailTriageSelfRescheduleCount = 0;
+  emailTriageDeadlineFollowupRequested = false;
+  clearEmailTriageDeadlineTimer();
 
   for (const job of activeJobs) job.stop?.();
   activeJobs.length = 0;

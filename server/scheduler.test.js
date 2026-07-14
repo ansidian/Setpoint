@@ -38,6 +38,7 @@ vi.mock("./reminders/reminder-scheduler.js", () => reminderSchedulerApi);
 
 const {
   initScheduler,
+  requestEmailTriageDrainAt,
   requestGmailHistorySyncDrain,
   runEmailSearchEmbeddingWorker,
   runEmailTriageWorker,
@@ -291,6 +292,82 @@ describe("email search embedding scheduler worker", () => {
 });
 
 describe("email triage scheduler worker", () => {
+  it("runs at the requested deadline and never before it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
+    triageWorkerApi.processNextEmailTriageJob.mockResolvedValue({ processed: false });
+
+    requestEmailTriageDrainAt("2026-07-14T12:00:30.000Z");
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(triageWorkerApi.processNextEmailTriageJob).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it("keeps the earliest requested deadline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
+    triageWorkerApi.processNextEmailTriageJob.mockResolvedValue({ processed: false });
+
+    requestEmailTriageDrainAt("2026-07-14T12:00:30.000Z");
+    requestEmailTriageDrainAt("2026-07-14T12:00:45.000Z");
+    requestEmailTriageDrainAt("2026-07-14T12:00:10.000Z");
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(triageWorkerApi.processNextEmailTriageJob).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it("runs a follow-up due-job check when a deadline fires during an active drain", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
+    let resolveFirstClaim;
+    triageWorkerApi.processNextEmailTriageJob
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFirstClaim = resolve;
+      }))
+      .mockResolvedValueOnce({ processed: false });
+
+    const activeDrain = runEmailTriageWorker();
+    requestEmailTriageDrainAt("2026-07-14T12:00:00.000Z");
+    await vi.advanceTimersByTimeAsync(0);
+    resolveFirstClaim({ processed: false });
+    await activeDrain;
+    await vi.runAllTimersAsync();
+
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("re-arms for a deadline returned by a deferred triage job", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
+    triageWorkerApi.processNextEmailTriageJob
+      .mockResolvedValueOnce({
+        processed: true,
+        deferred: true,
+        scheduled_for: "2026-07-14T12:00:30.000Z",
+      })
+      .mockResolvedValue({ processed: false });
+
+    await runEmailTriageWorker();
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(3);
+
+    vi.useRealTimers();
+  });
+
   it("stops the batch loop cleanly when triage mode is paused", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     triageWorkerApi.processNextEmailTriageJob.mockResolvedValueOnce({
@@ -387,6 +464,7 @@ describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(triageCalls).toBe(11);
     const reminderRun = runReminderSchedulerWorker();
+    requestEmailTriageDrainAt(new Date(Date.now() + 20));
 
     const stopPromise = stopScheduler();
     expect(stopScheduler()).toBe(stopPromise);
@@ -407,6 +485,8 @@ describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
     resolveBatch({ processed: 0, sent: 0, missed: 0, failed: 0 });
     await Promise.all([stopPromise, reminderRun, snapshotRun]);
     expect(stopResolved).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(triageCalls).toBe(11);
     logSpy.mockRestore();
   });
 });
