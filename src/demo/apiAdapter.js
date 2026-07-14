@@ -1,5 +1,4 @@
 import { createDemoApiError } from "./config.js";
-import { createCopyOnWriteView } from "./copyOnWriteView.js";
 import { demoDateRange } from "./dateRange.js";
 import { buildDemoCalendarBillsRange } from "./financeData.js";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.js";
@@ -579,7 +578,7 @@ export async function handleDemoApiRequest(path, options = {}) {
     || pathname === "/api/dashboard/current/refresh"
     || pathname === "/api/dashboard/current/sync"
     || pathname === "/api/dashboard/health") {
-    return pathname === "/api/dashboard/health" ? clone(seed.currentDashboard.providerHealth) : createCopyOnWriteView(seed.currentDashboard);
+    return pathname === "/api/dashboard/health" ? clone(seed.currentDashboard.providerHealth) : clone(seed.currentDashboard);
   }
 
   if (pathname === "/api/briefing/snapshot/active" || pathname === "/api/briefing/snapshot/sync") {
