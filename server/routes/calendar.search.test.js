@@ -8,21 +8,28 @@ vi.mock("../middleware/auth.js", () => ({
 vi.mock("../platform/config-service.js", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../calendar/calendar.js", () => ({
-  fetchCalendar: vi.fn(),
-  pacificDayBoundaries: vi.fn((date) => ({
-    dayStart: new Date(`${date.toISOString().slice(0, 10)}T08:00:00.000Z`),
-    dayEnd: new Date(`${date.toISOString().slice(0, 10)}T07:59:59.999Z`),
-  })),
-  getCalendarSourceGroups: vi.fn(),
-  createCalendarEvent: vi.fn(),
-  updateCalendarEvent: vi.fn(),
-  deleteCalendarEvent: vi.fn(),
-  formatCalendarRouteError: vi.fn((err) => ({
-    status: err.status || 500,
-    body: { code: err.code || "unknown", message: err.message || "unknown" },
-  })),
-}));
+vi.mock("../calendar/calendar.js", async () => {
+  const rangeModel = await import("../calendar/calendar-range-model.js");
+  const searchService = await import("../calendar/calendar-search-service.js");
+  return {
+    fetchCalendar: vi.fn(),
+    pacificDayBoundaries: vi.fn((date) => ({
+      dayStart: new Date(`${date.toISOString().slice(0, 10)}T08:00:00.000Z`),
+      dayEnd: new Date(`${date.toISOString().slice(0, 10)}T07:59:59.999Z`),
+    })),
+    getCalendarSourceGroups: vi.fn(),
+    createCalendarEvent: vi.fn(),
+    updateCalendarEvent: vi.fn(),
+    deleteCalendarEvent: vi.fn(),
+    formatCalendarRouteError: vi.fn((err) => ({
+      status: err.status || 500,
+      body: { code: err.code || "unknown", message: err.message || "unknown" },
+    })),
+    validateCalendarRange: rangeModel.validateCalendarRange,
+    isCalendarSearchInputError: searchService.isCalendarSearchInputError,
+    searchCalendar: searchService.searchCalendar,
+  };
+});
 vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers calendarSearchRange in the route);
   // only the DB-touching functions are stubbed below.

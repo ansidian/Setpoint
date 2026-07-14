@@ -23,6 +23,9 @@ vi.mock("../calendar/calendar.js", () => ({
     status: err.status || 500,
     body: { code: err.code || "unknown", message: err.message || "unknown" },
   })),
+  validateCalendarRange: vi.fn(),
+  isCalendarSearchInputError: vi.fn(() => false),
+  searchCalendar: vi.fn(),
 }));
 vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers the route's range helpers);

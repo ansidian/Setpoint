@@ -13,12 +13,6 @@ import {
   parseYmd,
   ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.js";
-import {
-  dateToMonthIndex,
-  deriveScrollDirection,
-  monthIndexToDate,
-  NAVIGABLE_MONTH_RADIUS,
-} from "./calendarScrollModel.js";
 import useCalendarEventSelectionSet from "./useCalendarEventSelectionSet.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
 import useDashboardDetailFocus from "./useDashboardDetailFocus.js";
@@ -30,6 +24,7 @@ import useCalendarModalHotkeys from "./useCalendarModalHotkeys.js";
 import useCalendarSearchActivation from "./useCalendarSearchActivation.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
+import useCalendarMonthNavigation from "./useCalendarMonthNavigation.js";
 import useCalendarScrollSync from "./useCalendarScrollSync.js";
 import useViewportWidth from "./useViewportWidth.js";
 import { normalizeCalendarWorkspaceView, nextCalendarView } from "./calendarModalInteractionModel.js";
@@ -40,10 +35,10 @@ import {
   findItemLocation,
   isCompleteItem,
   itemMatchesViewId,
-  SCROLL_IDLE_THRESHOLD_MS,
   VIEWS,
 } from "./calendarControllerHelpers.js";
 import { computeCalendarEntryReadiness } from "./calendarEntryReadinessModel.js";
+import { computeCalendarBillsViewData } from "./calendarBillsViewDataModel.js";
 
 // The scroll grid mounts the active month ± 2 (see mountedWindow). Ensure bills
 // for that whole grid window so every mounted month's cells (and their spill
@@ -129,18 +124,8 @@ export default function useCalendarModalController({
   const agendaRailRef = useRef(null);
   const contextRailRef = useRef(null);
   const handledInitialDeadlineCreateRef = useRef(null);
-  const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const agendaSelectionAnchorRef = useRef(null);
-  const scrollDirectionRef = useRef("idle");
-  const prevMonthIndexRef = useRef(null);
-  const scrollDrivenRef = useRef(false);
-  // Mirror of the fetch anchor so settle handling can tell a real anchor
-  // move from an echo that lands on the already-anchored month.
-  const fetchAnchorRef = useRef(fetchAnchor);
-  useEffect(() => {
-    fetchAnchorRef.current = fetchAnchor;
-  }, [fetchAnchor]);
   const fetchAbortRef = useRef(null);
   const {
     floatingDetail,
@@ -312,6 +297,28 @@ export default function useCalendarModalController({
   const closeEventEditor = eventEditor.closeEditor;
   const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
 
+  const monthNavigation = useCalendarMonthNavigation({
+    currentYear,
+    currentMonth,
+    viewYear,
+    viewMonth,
+    fetchAnchor,
+    setViewDate,
+    setFetchAnchor,
+    setLabelMonth,
+    setManualMonthBrowseKey,
+    setSelectedDay,
+    setSelectedDateKey,
+    setSelectedItemId,
+    floatingDetailRef,
+    eventEditorRef,
+    deadlineEditor,
+    closeEventEditor,
+    setDeadlineEditor,
+    setDeadlineDraftPreview,
+    sync,
+  });
+
   // Planning-readiness state machine + deadline-overlay derivation/stabilization
   // and the per-settle committed-overlay record (extracted to keep the
   // controller under the maintainability guardrail; behavior-identical).
@@ -329,8 +336,8 @@ export default function useCalendarModalController({
     viewMonth,
     currentYear,
     currentMonth,
-    scrollDrivenRef,
-    scrollDirectionRef,
+    scrollDrivenRef: monthNavigation.scrollDrivenRef,
+    scrollDirectionRef: monthNavigation.scrollDirectionRef,
     fetchAbortRef,
     eventsEnsureRange,
     eventsRevision,
@@ -389,23 +396,7 @@ export default function useCalendarModalController({
         revision: eventsRevision,
       };
     }
-    const rangeData = billsRangeData?.data;
-    const activeBillsData = rangeData || billsData;
-    const visibleBillsCount = (activeBillsData?.schedules || activeBillsData?.allSchedules || []).length;
-    const broadSchedules = billsData?.schedules
-      || billsData?.allSchedules
-      || activeBillsData?.schedules
-      || [];
-    return {
-      ...activeBillsData,
-      allSchedules: broadSchedules,
-      payLinksByScheduleId: billsData?.payLinksByScheduleId,
-      isLoading: !!billsRangeData?.loading || billsData?.isLoading,
-      pendingUpdate: !!visibleBillsCount && (!!billsRangeData?.loading || !!billsData?.pendingUpdate || !!rangeData?.pendingUpdate),
-      rangeError: billsRangeData?.error || null,
-      ensureRange: billsRangeData?.ensureRange,
-      revision: billsRangeData?.revision,
-    };
+    return computeCalendarBillsViewData({ billsData, billsRangeData });
   }, [
     view,
     eventsEnsureRange,
@@ -426,11 +417,7 @@ export default function useCalendarModalController({
     visibleCalendarEvents,
     deadlineOverlay,
     billsData,
-    billsRangeData?.data,
-    billsRangeData?.loading,
-    billsRangeData?.error,
-    billsRangeData?.ensureRange,
-    billsRangeData?.revision,
+    billsRangeData,
   ]);
 
   useLayoutEffect(() => {
@@ -533,106 +520,6 @@ export default function useCalendarModalController({
     const next = nextCalendarView({ current: view, views: availableCalendarViews, reverse });
     if (next !== view) handleViewChange(next);
   }, [view, availableCalendarViews, handleViewChange]);
-
-  function navigateMonth(dir, _options = {}) {
-    const currentFloating = floatingDetailRef.current;
-    const anyEditorOpen = (currentFloating?.open && (currentFloating.mode === "edit" || currentFloating.mode === "create"))
-      || eventEditorRef.current?.isEditorOpen
-      || deadlineEditor?.mode;
-
-    if (!anyEditorOpen) {
-      setDeadlineDraftPreview(null);
-    }
-    if (!anyEditorOpen && !currentFloating?.open) {
-      closeEventEditor();
-      setSelectedDay(null);
-      setSelectedDateKey(null);
-      setSelectedItemId(null);
-      setDeadlineEditor(null);
-    }
-    setManualMonthBrowseKey((key) => key + 1);
-
-    const next = clampToNavigableMonth(viewYear * 12 + viewMonth + dir);
-    setViewDate(next);
-    setFetchAnchor(next);
-    setLabelMonth(next);
-    sync.syncAgendaToMonth(next.year, next.month);
-  }
-  function clampToNavigableMonth(totalMonths) {
-    const index = totalMonths - (currentYear * 12 + currentMonth);
-    const clamped = Math.max(-NAVIGABLE_MONTH_RADIUS, Math.min(NAVIGABLE_MONTH_RADIUS, index));
-    return monthIndexToDate(clamped, currentYear, currentMonth);
-  }
-  function jumpToMonth(year, month) {
-    const currentFloating = floatingDetailRef.current;
-    const anyEditorOpen = (currentFloating?.open && (currentFloating.mode === "edit" || currentFloating.mode === "create"))
-      || eventEditorRef.current?.isEditorOpen
-      || deadlineEditor?.mode;
-
-    setDeadlineDraftPreview(null);
-    if (!anyEditorOpen && !currentFloating?.open) {
-      closeEventEditor();
-      setSelectedDay(null);
-      setSelectedDateKey(null);
-      setSelectedItemId(null);
-      setDeadlineEditor(null);
-    }
-    const target = clampToNavigableMonth(year * 12 + month);
-    setViewDate(target);
-    setFetchAnchor(target);
-    setLabelMonth(target);
-    sync.syncAgendaToMonth(target.year, target.month);
-  }
-
-  useEffect(() => {
-    navigateMonthRef.current = navigateMonth;
-  });
-
-  const scrollIdleTimerRef = useRef(null);
-  const handleScrollDisplayMonth = useCallback(({ year, month }) => {
-    const currentIndex = dateToMonthIndex(year, month, currentYear, currentMonth);
-    scrollDirectionRef.current = deriveScrollDirection(prevMonthIndexRef.current, currentIndex);
-    prevMonthIndexRef.current = currentIndex;
-    if (scrollIdleTimerRef.current != null) clearTimeout(scrollIdleTimerRef.current);
-    scrollIdleTimerRef.current = setTimeout(() => {
-      scrollDirectionRef.current = "idle";
-      scrollIdleTimerRef.current = null;
-    }, SCROLL_IDLE_THRESHOLD_MS);
-    if (sync.isAgendaDriven()) return;
-    const fd = floatingDetailRef.current;
-    if (fd?.open && (fd.mode === "edit" || fd.mode === "create")) return;
-    setViewDate({ year, month });
-    sync.onGridScrollCrossing({ year, month });
-  }, [currentYear, currentMonth, setViewDate, sync, floatingDetailRef]);
-  const handleScrollLabelMonth = useCallback(({ year, month }) => {
-    if (sync.isAgendaDriven()) return;
-    setLabelMonth((current) => (
-      current.year === year && current.month === month ? current : { year, month }
-    ));
-  }, [sync]);
-  const handleScrollFetchSettle = useCallback(({ year, month, scrollDriven = true }) => {
-    const anchor = fetchAnchorRef.current;
-    if (anchor.year !== year || anchor.month !== month) {
-      // Only an anchor change re-runs the planning pass that consumes this
-      // flag; setting it on an already-anchored echo settle would leave it
-      // stale for the next jump or overlay toggle. Respect the settle's own
-      // scrollDriven verdict — a programmatic echo that does move the anchor
-      // must still reset planning state normally.
-      scrollDrivenRef.current = scrollDriven;
-    }
-    setFetchAnchor({ year, month });
-    // The agenda-driven gate only skips rail re-targeting: while the rail
-    // drives navigation, grid follow-scroll settles must still move the
-    // fetch anchor or the settled month's planning data never resolves.
-    if (sync.isAgendaDriven()) return;
-    // Programmatic-navigation echoes must not re-target the rail: the
-    // navigation already issued its own agenda command (often more specific
-    // than first-of-month, e.g. the today command).
-    if (!scrollDriven) return;
-    const fd = floatingDetailRef.current;
-    if (fd?.open && (fd.mode === "edit" || fd.mode === "create")) return;
-    sync.onGridScrollSettle({ year, month });
-  }, [setFetchAnchor, sync, floatingDetailRef]);
 
   function focusDeadlineTask(task) {
     focusDateKey(task?.due_date);
@@ -1031,7 +918,7 @@ export default function useCalendarModalController({
     toggleDeadlineOverlay,
     toggleCompletedDeadlineOverlay,
     setDeadlineOverlayVisible: setDeadlineOverlayVisiblePersisted,
-    navigateMonthRef,
+    navigateMonthRef: monthNavigation.navigateMonthRef,
     onCopySelectedEvent: copySelectedCalendarEvent,
     onPasteCopiedEvent: pasteCopiedCalendarEvent,
     onDeleteSelectedEvents: requestSelectedCalendarEventDelete,
@@ -1147,7 +1034,19 @@ export default function useCalendarModalController({
       cancelFloatingEditor, setFloatingEditorDirty, setFloatingEditorSaveRequest, shakeFloatingEditor,
       handleFloatingDeadlineSaved, handleFloatingDeadlineDeleted,
     },
-    handlers: { navigateMonth, jumpToMonth, handleViewChange, closeEventEditor, focusDeadlineTask, onDisplayMonthChange: handleScrollDisplayMonth, onLabelMonthChange: handleScrollLabelMonth, onFetchSettle: handleScrollFetchSettle, navigateToDate: sync.navigateToDate, navigateToMonth: sync.navigateToMonth, navigateToToday: sync.navigateToToday },
+    handlers: {
+      navigateMonth: monthNavigation.navigateMonth,
+      jumpToMonth: monthNavigation.jumpToMonth,
+      handleViewChange,
+      closeEventEditor,
+      focusDeadlineTask,
+      onDisplayMonthChange: monthNavigation.onDisplayMonthChange,
+      onLabelMonthChange: monthNavigation.onLabelMonthChange,
+      onFetchSettle: monthNavigation.onFetchSettle,
+      navigateToDate: sync.navigateToDate,
+      navigateToMonth: sync.navigateToMonth,
+      navigateToToday: sync.navigateToToday,
+    },
     search: calendarSearchShell,
     availableCalendarViews,
   });

@@ -16,18 +16,24 @@ vi.mock("../tasks/deadline-helpers.js", () => ({
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
-vi.mock("../calendar/calendar.js", () => ({
-  fetchCalendar: vi.fn(),
-  pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
-  getCalendarSourceGroups: vi.fn(),
-  createCalendarEvent: vi.fn(),
-  updateCalendarEvent: vi.fn(),
-  deleteCalendarEvent: vi.fn(),
-  formatCalendarRouteError: vi.fn((err) => ({
-    status: err.status || 500,
-    body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
-  })),
-}));
+vi.mock("../calendar/calendar.js", async () => {
+  const { validateCalendarRange } = await import("../calendar/calendar-range-model.js");
+  return {
+    fetchCalendar: vi.fn(),
+    pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
+    getCalendarSourceGroups: vi.fn(),
+    createCalendarEvent: vi.fn(),
+    updateCalendarEvent: vi.fn(),
+    deleteCalendarEvent: vi.fn(),
+    formatCalendarRouteError: vi.fn((err) => ({
+      status: err.status || 500,
+      body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
+    })),
+    validateCalendarRange,
+    isCalendarSearchInputError: vi.fn(() => false),
+    searchCalendar: vi.fn(),
+  };
+});
 vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers validateCalendarRange in the route);
   // only the DB-touching functions are stubbed below.

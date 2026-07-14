@@ -19,6 +19,23 @@ export function dateToMonthIndex(year, month, referenceYear, referenceMonth) {
   return (year - referenceYear) * 12 + (month - referenceMonth);
 }
 
+export function clampCalendarMonthTarget({
+  targetYear,
+  targetMonth,
+  currentYear,
+  currentMonth,
+  radius = NAVIGABLE_MONTH_RADIUS,
+}) {
+  const index = dateToMonthIndex(
+    targetYear,
+    targetMonth,
+    currentYear,
+    currentMonth,
+  );
+  const clampedIndex = Math.max(-radius, Math.min(radius, index));
+  return monthIndexToDate(clampedIndex, currentYear, currentMonth);
+}
+
 export function visibleMonthIndices({ scrollOffset, containerHeight, getMonthHeight }) {
   const viewportEnd = scrollOffset + containerHeight;
   let first, last;

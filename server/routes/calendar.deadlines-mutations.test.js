@@ -19,6 +19,9 @@ vi.mock("../calendar/calendar.js", () => ({
     status: err.status || 500,
     body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
   })),
+  validateCalendarRange: vi.fn(),
+  isCalendarSearchInputError: vi.fn(() => false),
+  searchCalendar: vi.fn(),
 }));
 vi.mock("../platform/google-places.js", () => ({
   getGooglePlaceDetails: vi.fn(),

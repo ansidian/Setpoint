@@ -12,8 +12,7 @@ import {
   addMonthsIso,
 } from "./calendarSearchMirrorSync.js";
 
-// Re-export the sync-engine surface so the public module path is unchanged
-// (server/routes/calendar.js imports addMonthsIso from here).
+// Re-export the sync-engine surface so the public module path stays unchanged.
 export { syncCalendarSearchMirror, calendarSearchMirrorWindow, addMonthsIso };
 
 const DEFAULT_SYNC_DEBOUNCE_MS = 1000;

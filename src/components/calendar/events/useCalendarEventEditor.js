@@ -5,21 +5,15 @@ import {
   formatCalendarEditorError,
   saveCalendarEventAction,
 } from "./calendarEventEditorActions";
-import {
-  ensureChrono,
-  isChronoReady,
-  parseCalendarTitle,
-  subscribeChronoReady,
-} from "./parseCalendarTitle";
 import useCalendarLocationSuggestions from "./useCalendarLocationSuggestions";
 import useCalendarSources from "./useCalendarSources";
 import useEventReminderDrafts from "./useEventReminderDrafts";
 import useEventRecurrenceDraft from "./useEventRecurrenceDraft";
+import useCalendarEventTitleComposer from "./useCalendarEventTitleComposer.js";
 import {
   eventReminderSourceFromEvent,
 } from "./calendarEventReminderModel";
 import {
-  coerceEditingTitleAssist,
   createManualOverrides,
   defaultDraft,
   draftFromEvent,
@@ -28,11 +22,15 @@ import {
   normalizeBatchDrafts,
   normalizeDraftForDirty,
   normalizeRecurrenceDraft,
-  validateBatchDrafts,
-  validateRecurrenceDraft,
-  validateSingleDraft,
   ymdFromView,
 } from "./calendarEventEditorModel";
+import {
+  applyCalendarTitleAssistToDraft,
+  projectCalendarEventEditorValidation,
+  removeCalendarEventBatchDraft,
+  seedCalendarEventDraftFromSources,
+  updateCalendarEventBatchDraft,
+} from "./calendarEventEditorSessionModel.js";
 
 export default function useCalendarEventEditor({
   open,
@@ -71,9 +69,6 @@ export default function useCalendarEventEditor({
   const [batchDrafts, setBatchDrafts] = useState([]);
   const [recurringEditScope, setRecurringEditScope] = useState(null);
   const [createSeedDraft, setCreateSeedDraft] = useState(() => defaultDraft(null));
-  const [titleInput, setTitleInput] = useState("");
-  const titleInputRef = useRef("");
-  const titleDebounceRef = useRef(null);
   const pendingSaveRef = useRef(false);
   // Synchronous in-flight guard (P1-1). `saving` state updates asynchronously
   // and the Cmd/Ctrl+Enter hotkey bypasses the Save button's disabled state, so
@@ -81,15 +76,6 @@ export default function useCalendarEventEditor({
   // the first one's await resolves. Distinct from pendingSaveRef (debounce-flush
   // re-fire), which is not a concurrency guard.
   const savingRef = useRef(false);
-  const [titleInputPending, setTitleInputPending] = useState(false);
-  const [titleInputKey, setTitleInputKey] = useState(0);
-  const [titleParseNow, setTitleParseNow] = useState(() => Date.now());
-  // chrono-node is lazily imported (parseCalendarTitle keeps it out of the
-  // calendar-open payload). Warm it on the first non-empty title keystroke and
-  // bump this tick when it lands so the title-assist memo re-parses with the
-  // full natural-language result. Until then the parse degrades gracefully to
-  // the synchronous regex paths.
-  const [chronoReadyTick, setChronoReadyTick] = useState(() => (isChronoReady() ? 1 : 0));
   const [manualOverrides, setManualOverrides] = useState(() => createManualOverrides());
   const [editingEvent, setEditingEvent] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -169,65 +155,58 @@ export default function useCalendarEventEditor({
   );
   const isEditing = !!editingEvent;
   const isEditingRecurring = !!(editingEvent?.isRecurring);
-  useEffect(() => {
-    if (!titleInput || isChronoReady()) return undefined;
-    ensureChrono();
-    const unsubscribe = subscribeChronoReady(() => setChronoReadyTick((tick) => tick + 1));
-    return unsubscribe;
-  }, [titleInput]);
-  const parsedTitleAssist = useMemo(() => parseCalendarTitle(titleInput, {
-    now: titleParseNow,
-    baseDate: createSeedDraft.startDate,
-    defaultStartTime: createSeedDraft.startTime,
-    defaultEndTime: createSeedDraft.endTime,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-parse once chrono lands
-  }), [createSeedDraft.endTime, createSeedDraft.startDate, createSeedDraft.startTime, titleInput, titleParseNow, chronoReadyTick]);
-  const titleAssist = useMemo(() => (
-    isEditing
-      ? coerceEditingTitleAssist(parsedTitleAssist, {
-          active: !!touchedFields.title,
-          fallbackTitle: draft.title,
-          isEditingRecurring,
-          recurringEditScope,
-        })
-      : parsedTitleAssist
-  ), [draft.title, isEditing, isEditingRecurring, parsedTitleAssist, recurringEditScope, touchedFields.title]);
-  const intentState = useMemo(() => ({
-    mode: titleAssist.mode || "single",
-    singleDraft: titleAssist.singleDraft || null,
-    batchDrafts: titleAssist.batchDrafts || [],
-    recurrenceDraft: titleAssist.recurrenceDraft || null,
-  }), [titleAssist.batchDrafts, titleAssist.mode, titleAssist.recurrenceDraft, titleAssist.singleDraft]);
-  const effectiveTitle = useMemo(
-    () => String(titleAssist.cleanTitle || "").trim(),
-    [titleAssist.cleanTitle],
-  );
+  const commitTitleInput = useCallback((value) => {
+    setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
+    if (!isEditing) return;
+    setDraft((current) => {
+      if (current.title === value) return current;
+      return { ...current, title: value };
+    });
+  }, [isEditing]);
+  const {
+    titleInput,
+    titleInputRef,
+    titleInputKey,
+    titleInputPending,
+    titleAssist,
+    intentState,
+    effectiveTitle,
+    handleTitleInputChange,
+    seedTitleInput,
+    clearTitleInput,
+    flushPendingTitle,
+  } = useCalendarEventTitleComposer({
+    createSeedDraft,
+    draftTitle: draft.title,
+    isEditing,
+    isEditingRecurring,
+    recurringEditScope,
+    touchedTitle: !!touchedFields.title,
+    onInputStart: clearFieldError,
+    onCommitTitle: commitTitleInput,
+  });
 
   // Pass recurrenceDraft into the batch validator so a recurrence-then-batch
   // sequence blocks the save instead of silently dropping recurrence.
-  const validationMessage = useMemo(() => {
-    if (isEditingRecurring && !recurringEditScope) {
-      return "Choose whether to edit all events, upcoming only, or just this one.";
-    }
-    if (!isEditing && intentState.mode === "batch") {
-      return validateBatchDrafts({ draft, batchDrafts, effectiveTitle, recurrenceDraft });
-    }
-    const baseValidation = validateSingleDraft({ draft, effectiveTitle });
-    if (baseValidation) return baseValidation;
-    const hasActiveRecurrence = !!recurrenceDraft && (!isEditingRecurring || recurringEditScope !== "one");
-    if ((intentState.mode === "recurring" || hasActiveRecurrence) && (!isEditingRecurring || recurringEditScope !== "one")) {
-      return validateRecurrenceDraft({ recurrenceDraft, draft });
-    }
-    return null;
-  }, [batchDrafts, draft, effectiveTitle, intentState.mode, isEditing, isEditingRecurring, recurrenceDraft, recurringEditScope]);
-  const visibleValidationMessage = useMemo(() => {
-    if (!validationMessage) return null;
-    if (validationMessage === "Title is required." && !touchedFields.title && !saveAttempted) {
-      return null;
-    }
-    return validationMessage;
-  }, [saveAttempted, touchedFields.title, validationMessage]);
-  const canSave = editable && !saving && !deleting && !validationMessage;
+  const {
+    validationMessage,
+    visibleValidationMessage,
+    canSave,
+  } = useMemo(() => projectCalendarEventEditorValidation({
+    draft,
+    effectiveTitle,
+    intentMode: intentState.mode,
+    batchDrafts,
+    recurrenceDraft,
+    isEditing,
+    isEditingRecurring,
+    recurringEditScope,
+    touchedTitle: !!touchedFields.title,
+    saveAttempted,
+    editable,
+    saving,
+    deleting,
+  }), [batchDrafts, deleting, draft, editable, effectiveTitle, intentState.mode, isEditing, isEditingRecurring, recurrenceDraft, recurringEditScope, saveAttempted, saving, touchedFields.title]);
   const dirtyBaselineRef = useRef(null);
 
   useLayoutEffect(() => {
@@ -244,52 +223,32 @@ export default function useCalendarEventEditor({
       setRecurrenceDraft(null);
       setManualRecurrenceOverride(false);
       setRecurringEditScope(null);
-      setTitleInput("");
-      titleInputRef.current = "";
-      if (titleDebounceRef.current) {
-        clearTimeout(titleDebounceRef.current);
-        titleDebounceRef.current = null;
-      }
+      clearTitleInput();
       setEventReminders([]);
       setRemovedReminderIds([]);
       setReminderError(null);
       setCustomReminder({ date: "", time: "" });
       resetLocationSuggestions();
     }
-  }, [open, resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, view]);
+  }, [clearTitleInput, open, resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, view]);
 
   useEffect(() => {
     if (mode !== "editor") return;
     if (isEditing && !touchedFields.title) return;
     if (!titleAssist.locationQuery) lastCommittedLocationQueryRef.current = "";
-    setDraft((current) => {
-      const next = {
-        ...current,
-        title: titleAssist.cleanTitle,
-      };
-
-      const parsed = titleAssist.parsedDateTime;
-      const derivedDraft = titleAssist.singleDraft;
-      if (!manualOverrides.startDate) next.startDate = derivedDraft?.startDate || parsed?.startDate || createSeedDraft.startDate;
-      if (!manualOverrides.endDate) next.endDate = derivedDraft?.endDate || parsed?.endDate || createSeedDraft.endDate;
-      if (!manualOverrides.startTime) next.startTime = derivedDraft?.startTime || parsed?.startTime || createSeedDraft.startTime;
-      if (!manualOverrides.endTime) next.endTime = derivedDraft?.endTime || parsed?.endTime || createSeedDraft.endTime;
-      if (titleAssist.locationQuery && titleAssist.locationQuery !== lastCommittedLocationQueryRef.current) next.location = titleAssist.locationQuery;
-      else if (!manualOverrides.location) next.location = createSeedDraft.location;
-
-      if (
-        next.title === current.title
-        && next.startDate === current.startDate
-        && next.endDate === current.endDate
-        && next.startTime === current.startTime
-        && next.endTime === current.endTime
-        && next.location === current.location
-      ) {
-        return current;
-      }
-
-      return next;
-    });
+    setDraft((current) => applyCalendarTitleAssistToDraft({
+      draft: current,
+      titleAssist,
+      manualOverrides: {
+        startDate: manualOverrides.startDate,
+        endDate: manualOverrides.endDate,
+        startTime: manualOverrides.startTime,
+        endTime: manualOverrides.endTime,
+        location: manualOverrides.location,
+      },
+      createSeedDraft,
+      lastCommittedLocationQuery: lastCommittedLocationQueryRef.current,
+    }));
   }, [createSeedDraft, isEditing, manualOverrides.endDate, manualOverrides.endTime, manualOverrides.location, manualOverrides.startDate, manualOverrides.startTime, mode, titleAssist, touchedFields.title]);
 
   useEffect(() => {
@@ -338,49 +297,23 @@ export default function useCalendarEventEditor({
     setRecurrenceDraft(null);
     setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
-    titleInputRef.current = "";
-    if (titleDebounceRef.current) {
-      clearTimeout(titleDebounceRef.current);
-      titleDebounceRef.current = null;
-    }
+    clearTitleInput();
     setEventReminders([]);
     setRemovedReminderIds([]);
     setReminderError(null);
     setCustomReminder({ date: "", time: "" });
     resetLocationSuggestions();
-  }, [resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
-
-  const seedDefaultCalendar = useCallback((nextDraft, groups) => {
-    if (nextDraft.accountId && nextDraft.calendarId) return nextDraft;
-    const writable = flattenWritableCalendars(groups);
-    const preferred = writable.find((entry) => entry.primary) || writable[0];
-    if (!preferred) return nextDraft;
-    return {
-      ...nextDraft,
-      accountId: preferred.accountId,
-      calendarId: preferred.calendarId,
-      colorId: nextDraft.colorId || preferred.defaultEventColorId || null,
-      sourceColor: preferred.color || null,
-      sourceColorId: preferred.defaultEventColorId || null,
-    };
-  }, []);
+  }, [clearTitleInput, resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
 
   const openCreate = useCallback(async () => {
     if (!editable) return;
     const requestId = editorRequestIdRef.current + 1;
     editorRequestIdRef.current = requestId;
     const initialGroups = sourceGroupsRef.current;
-    const nextDraft = seedDefaultCalendar(defaultDraft(selectedDate), initialGroups);
+    const nextDraft = seedCalendarEventDraftFromSources(defaultDraft(selectedDate), initialGroups);
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
-    setTitleInput("");
-    titleInputRef.current = "";
-    if (titleDebounceRef.current) {
-      clearTimeout(titleDebounceRef.current);
-      titleDebounceRef.current = null;
-    }
-    setTitleInputKey((k) => k + 1);
-    setTitleParseNow(Date.now());
+    seedTitleInput("");
     setManualOverrides(createManualOverrides());
     setRecurrenceDraft(null);
     setManualRecurrenceOverride(false);
@@ -411,7 +344,7 @@ export default function useCalendarEventEditor({
     if (editorRequestIdRef.current !== requestId) return;
 
     setDraft((current) => {
-      const seeded = seedDefaultCalendar(current, groups);
+      const seeded = seedCalendarEventDraftFromSources(current, groups);
       dirtyBaselineRef.current = normalizeDraftForDirty({
         draft: seeded,
         effectiveTitle: "",
@@ -423,7 +356,7 @@ export default function useCalendarEventEditor({
       });
       return seeded;
     });
-    setCreateSeedDraft((current) => seedDefaultCalendar(current, groups));
+    setCreateSeedDraft((current) => seedCalendarEventDraftFromSources(current, groups));
     if (!flattenWritableCalendars(groups).length) {
       const reason = inferNoWritableReason(groups);
       setError(reason === "calendar_reauth_required"
@@ -434,22 +367,15 @@ export default function useCalendarEventEditor({
     }
     setError(null);
     setErrorCode(null);
-  }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar, selectedDate, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, sourceGroupsRef]);
+  }, [editable, ensureSources, resetLocationSuggestions, seedTitleInput, selectedDate, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, sourceGroupsRef]);
 
   const openEdit = useCallback(async (event) => {
     if (!editable || !event?.writable) return;
     const groups = await ensureSources();
-    const nextDraft = seedDefaultCalendar(draftFromEvent(event), groups);
+    const nextDraft = seedCalendarEventDraftFromSources(draftFromEvent(event), groups);
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
-    setTitleInput(nextDraft.title);
-    titleInputRef.current = nextDraft.title;
-    if (titleDebounceRef.current) {
-      clearTimeout(titleDebounceRef.current);
-      titleDebounceRef.current = null;
-    }
-    setTitleInputKey((k) => k + 1);
-    setTitleParseNow(Date.now());
+    seedTitleInput(nextDraft.title);
     setManualOverrides(createManualOverrides());
     setBatchDrafts([]);
     setRecurrenceDraft(event?.isRecurring && event?.recurrence ? normalizeRecurrenceDraft(event.recurrence, nextDraft) : null);
@@ -487,7 +413,7 @@ export default function useCalendarEventEditor({
       recurrenceDraft: event?.isRecurring && event?.recurrence ? normalizeRecurrenceDraft(event.recurrence, nextDraft) : null,
       recurringEditScope: null,
     });
-  }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
+  }, [editable, ensureSources, resetLocationSuggestions, seedTitleInput, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
 
   const closeEditor = useCallback(() => {
     clearEditorState();
@@ -539,20 +465,13 @@ export default function useCalendarEventEditor({
   }, [updateField]);
 
   const updateBatchDraft = useCallback((draftId, field, value) => {
-    setBatchDrafts((current) => current.map((item) => {
-      if (item.id !== draftId) return item;
-      const next = { ...item, [field]: value };
-      if (field === "startDate" && next.endDate && next.endDate < value) {
-        next.endDate = value;
-      }
-      return next;
-    }));
+    setBatchDrafts((current) => updateCalendarEventBatchDraft(current, draftId, field, value));
     setError(null);
     setErrorCode(null);
   }, []);
 
   const removeBatchDraft = useCallback((draftId) => {
-    setBatchDrafts((current) => current.filter((item) => item.id !== draftId));
+    setBatchDrafts((current) => removeCalendarEventBatchDraft(current, draftId));
     setError(null);
     setErrorCode(null);
   }, []);
@@ -561,14 +480,7 @@ export default function useCalendarEventEditor({
     if (intentState.mode !== "batch") return;
     const singleDraft = titleAssist.singleDraft || batchDrafts[0] || null;
     const nextTitle = titleAssist.cleanTitle || singleDraft?.title || effectiveTitle || titleInput;
-    titleInputRef.current = nextTitle;
-    if (titleDebounceRef.current) {
-      clearTimeout(titleDebounceRef.current);
-      titleDebounceRef.current = null;
-    }
-    setTitleInput(nextTitle);
-    setTitleInputKey((k) => k + 1);
-    setTitleParseNow(Date.now());
+    seedTitleInput(nextTitle);
     setDraft((current) => ({
       ...current,
       ...(singleDraft ? {
@@ -592,50 +504,11 @@ export default function useCalendarEventEditor({
     setBatchDrafts([]);
     setError(null);
     setErrorCode(null);
-  }, [batchDrafts, effectiveTitle, intentState.mode, titleAssist.cleanTitle, titleAssist.singleDraft, titleInput]);
-
-  const TITLE_DEBOUNCE_MS = 120;
-
-  const handleTitleInputChange = useCallback((value) => {
-    titleInputRef.current = value;
-    setError(null);
-    setErrorCode(null);
-    setTitleInputPending(true);
-
-    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-    titleDebounceRef.current = setTimeout(() => {
-      titleDebounceRef.current = null;
-      setTitleInputPending(false);
-      setTitleInput(value);
-      setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
-      if (isEditing) {
-        setDraft((current) => {
-          if (current.title === value) return current;
-          return { ...current, title: value };
-        });
-      }
-    }, TITLE_DEBOUNCE_MS);
-  }, [isEditing]);
-
-  // Cancel the pending title-input debounce on unmount so the timer cannot
-  // fire into an unmounted hook.
-  useEffect(() => () => {
-    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-  }, []);
+  }, [batchDrafts, effectiveTitle, intentState.mode, seedTitleInput, titleAssist.cleanTitle, titleAssist.singleDraft, titleInput]);
 
   const save = useCallback(async () => {
     if (!editable) return;
-    if (titleDebounceRef.current) {
-      clearTimeout(titleDebounceRef.current);
-      titleDebounceRef.current = null;
-      setTitleInput(titleInputRef.current);
-      setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
-      if (isEditing) {
-        setDraft((current) => {
-          if (current.title === titleInputRef.current) return current;
-          return { ...current, title: titleInputRef.current };
-        });
-      }
+    if (flushPendingTitle()) {
       pendingSaveRef.current = true;
       setSaveAttempted(true);
       return;
@@ -730,7 +603,7 @@ export default function useCalendarEventEditor({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, setEventReminders, setRemovedReminderIds, titleAssist.locationQuery, upsertEvents, validationMessage]);
+  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, flushPendingTitle, intentState.mode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, setEventReminders, setRemovedReminderIds, titleAssist.locationQuery, upsertEvents, validationMessage]);
 
   useEffect(() => {
     if (!pendingSaveRef.current) return;
