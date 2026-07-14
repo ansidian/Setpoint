@@ -128,9 +128,21 @@ Selection path:
 8. `src/components/calendar/events/calendarEventSelectionModel.js:toggleCalendarEventSelection` — immutable toggle keyed by `calendarEventSelectionIdentity` (account::calendar::series::occurrence)
 9. `src/hooks/calendar/useCalendarModalHotkeys.js:handleKey` — bare Meta/Control with a detail-mode panel open calls the begin-selection callback, falling through to dismissal for ineligible items
 10. `src/hooks/calendar/useCalendarEventSelectionSet.js:addSelectedCalendarEventToSelectionSet` — returns false for identity-less events so the hotkey dismisses the panel instead
+
 11. `src/components/calendar/modal/CalendarCellOverflowPopover.jsx` — the overflow popover's own pointerdown handler carves out grid cells, rails, and floating-detail targets so it stays open during multi-select (the calendar is a shell tab now; there is no surface-level outside-dismiss)
 12. `src/components/calendar/modal/CalendarGrid.jsx:handleSelectDay` — plain clicks clear the selection set unless the anchor preserves it (`handleSelectItem` likewise)
 13. `src/hooks/calendar/useCalendarEventSelectionSet.js:requestSelectedCalendarEventDelete` — Delete/Backspace batch-deletes the set; cmd+C copies via `copySelectedCalendarEvent`
+
+## 6. Process shutdown → scheduler drain
+
+**Trigger:** SIGTERM/SIGINT enters `server/shutdown.js:createGracefulShutdown` through `server/index.js`.
+
+1. `server/shutdown.js:createGracefulShutdown` — starts the 15-second force-exit deadline, stops accepting HTTP work, then runs background stop functions in order
+2. `server/scheduler.js:stopScheduler` — synchronously closes cron, interval, startup-timeout, and queued-immediate admission sources; repeated calls share one promise
+3. `server/scheduler-work-registry.js:createSchedulerWorkRegistry` — awaits every scheduler-owned task already running, including scheduler initialization, index sweep, Gmail watch/history work, triage/prune work, embeddings, reminders, and snapshot-boundary callbacks
+4. `server/shutdown.js:createGracefulShutdown` — exits cleanly after all stop functions settle; a stuck task remains bounded by the existing force-exit timer
+
+**Durability:** shutdown does not rewrite queue state. Forced exits continue to recover through the existing stale-lock and durable cron fallback paths.
 
 **State:** the multi-selection set lives in `src/hooks/calendar/useCalendarEventSelectionSet.js` (React state + ref mirror, hosted by the controller), shaped by `src/components/calendar/events/calendarEventSelectionModel.js`; client-only, never persisted. The single day/item focus is separate, owned by `src/hooks/calendar/useCalendarModalSelection.js` + `src/hooks/calendar/calendarModalSelectionModel.js`.
 
