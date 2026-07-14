@@ -9,7 +9,7 @@ const DashboardItemDetailSheet = lazy(() => import("./DashboardItemDetailSheet")
 export default function DashboardShellOverlays({
   isMobile,
   itemSheet,
-  setItemSheet,
+  closeItemSheet,
   onOpenItemInCalendar,
   billCtx,
   accent,
@@ -39,7 +39,7 @@ export default function DashboardShellOverlays({
             anchorRef={itemSheet.anchorRef}
             accent={accent}
             ctx={itemSheet.kind === "bill" ? billCtx : undefined}
-            onClose={() => setItemSheet(null)}
+            onClose={closeItemSheet}
             onOpenInCalendar={() => onOpenItemInCalendar(itemSheet)}
           />
         </Suspense>

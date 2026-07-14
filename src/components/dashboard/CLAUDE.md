@@ -11,9 +11,11 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `InboxMountFallback.jsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
 - `KeepAliveTab.jsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
 - `DashboardCalendarModalMount.jsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data
-- `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution, glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)
+- `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution, and the pure glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)
 - `useDashboardShellHotkeys.js` — global shortcuts: command palette, g+d/e chords
 - `useCalendarWorkspaceState.js` — calendar workspace state slice: view/focus/overlay deep-link state, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
+- `useDashboardItemSheet.js` — dashboard glance-sheet selection/toggle state, tab-leave cleanup, direct item routing, and kind-aware "Open in calendar" handoff
+- `useMobileDashboardScrollRestoration.js` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
 - `useAlfredPanelState.js` — Alfred panel mount/open/new-chat/handoff state and its stable actions
 - `useLiveReadOverrides.js` — live read-override map + derived inbox unread-signal count; prunes overrides whose emails left the active snapshot
 - `scrollToSection.js` — smooth-scroll to a dashboard `data-sect` target after a tab switch

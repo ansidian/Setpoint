@@ -29,6 +29,11 @@ export {
   updateCalendarEvent,
   deleteCalendarEvent,
 } from "./calendar-mutations.js";
+export { validateCalendarRange } from "./calendar-range-model.js";
+export {
+  isCalendarSearchInputError,
+  searchCalendar,
+} from "./calendar-search-service.js";
 
 /**
  * Returns midnight (start) and 23:59:59.999 (end) for the Pacific-time date

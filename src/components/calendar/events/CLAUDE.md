@@ -8,6 +8,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `useCalendarEventEditor.js` — orchestrates editor state, validation, persistence, lifecycle
 - `useCalendarEditorPickers.js` — floating panel visibility and field anchor refs
 - `calendarEventEditorModel.js` — draft normalization, validation, recurrence serialization, batch ops
+- `calendarEventEditorSessionModel.js` — pure editor-session projections and transitions (validation visibility, title-assist draft sync, source seeding, batch edits)
 - `calendarEventEditorActions.js` — CRUD/reminder API calls and error formatting
 - `calendarEditorUtils.js` — date/time formatting, style constants, field helpers
 
@@ -24,6 +25,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarEventTitleAssistPanel.jsx` — parsed location/calendar queries from the title
 - `parseCalendarTitle.js` — natural-language date/time extraction (Chrono, weekday patterns)
 - `calendarTitleIntent.js` — classifies title intent: batch, recurring, single
+- `useCalendarEventTitleComposer.js` — title input debounce/flush, Chrono readiness, parse projection, and uncontrolled-input synchronization
 
 ### Schedule + recurrence
 - `CalendarEventCompactSchedulePicker.jsx` — compact month + time picker

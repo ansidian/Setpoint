@@ -207,6 +207,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useBillBadgeForm` | `src/components/bills/useBillBadgeForm.js` |
 | `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.js` |
 | `useCalendarEventEditor` | `src/components/calendar/events/useCalendarEventEditor.js` |
+| `useCalendarEventTitleComposer` | `src/components/calendar/events/useCalendarEventTitleComposer.js` |
 | `useCalendarLocationSuggestions` | `src/components/calendar/events/useCalendarLocationSuggestions.js` |
 | `useCalendarQuickActions` | `src/components/calendar/events/useCalendarQuickActions.js` |
 | `useCalendarSources` | `src/components/calendar/events/useCalendarSources.js` |
@@ -220,8 +221,10 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useDeadlineQuickActions` | `src/components/calendar/views/deadlines/useDeadlineQuickActions.js` |
 | `useAlfredPanelState` | `src/components/dashboard/useAlfredPanelState.js` |
 | `useCalendarWorkspaceState` | `src/components/dashboard/useCalendarWorkspaceState.js` |
+| `useDashboardItemSheet` | `src/components/dashboard/useDashboardItemSheet.js` |
 | `useDashboardShellHotkeys` | `src/components/dashboard/useDashboardShellHotkeys.js` |
 | `useLiveReadOverrides` | `src/components/dashboard/useLiveReadOverrides.js` |
+| `useMobileDashboardScrollRestoration` | `src/components/dashboard/useMobileDashboardScrollRestoration.js` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.js` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.js` |
 | `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.js` |
@@ -243,6 +246,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useCalendarModalSearch` | `src/hooks/calendar/useCalendarModalSearch.js` |
 | `useCalendarModalSelection` | `src/hooks/calendar/useCalendarModalSelection.js` |
 | `useCalendarModalViewModel` | `src/hooks/calendar/useCalendarModalViewModel.js` |
+| `useCalendarMonthNavigation` | `src/hooks/calendar/useCalendarMonthNavigation.js` |
 | `useCalendarRange` | `src/hooks/calendar/useCalendarRange.js` |
 | `useCalendarScrollSync` | `src/hooks/calendar/useCalendarScrollSync.js` |
 | `useCalendarScrollViewport` | `src/hooks/calendar/useCalendarScrollViewport.js` |

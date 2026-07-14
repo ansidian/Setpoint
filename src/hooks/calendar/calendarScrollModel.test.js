@@ -11,12 +11,38 @@ import {
   prefetchRange,
   mountedWindow,
   deriveScrollDirection,
+  clampCalendarMonthTarget,
   OVERFLOW_INTERACTION_IGNORE_MS,
   markOverflowScrollIgnoreWindow,
   shouldDispatchOverflowCloseOnScroll,
 } from "./calendarScrollModel.js";
 
 describe("calendarScrollModel", () => {
+  describe("clampCalendarMonthTarget", () => {
+    it("normalizes month overflow and clamps targets to the navigable radius", () => {
+      expect(clampCalendarMonthTarget({
+        targetYear: 2026,
+        targetMonth: 12,
+        currentYear: 2026,
+        currentMonth: 5,
+      })).toEqual({ year: 2027, month: 0 });
+
+      expect(clampCalendarMonthTarget({
+        targetYear: 2030,
+        targetMonth: 0,
+        currentYear: 2026,
+        currentMonth: 5,
+      })).toEqual({ year: 2028, month: 5 });
+
+      expect(clampCalendarMonthTarget({
+        targetYear: 2020,
+        targetMonth: 0,
+        currentYear: 2026,
+        currentMonth: 5,
+      })).toEqual({ year: 2024, month: 5 });
+    });
+  });
+
   describe("monthBlockHeight", () => {
     it("uses renderedRows (4) for Feb 2026 — no trailing boundary", () => {
       // Feb 2026: starts Sunday, 28 days, renderedRows = 4 (no boundary to give away)

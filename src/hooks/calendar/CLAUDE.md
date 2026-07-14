@@ -6,7 +6,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Models (pure)
 - `calendarRangeModel.js` — month key arithmetic, range expansion, fetch grouping
-- `calendarScrollModel.js` — month index math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
+- `calendarScrollModel.js` — month index/target-clamp math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
 - `calendarSettleModel.js` — pure scroll-settle decision tree (defer-on-mismatch, settledAway, scroll-driven/align gating, display/label/fetch outputs) extracted from `CalendarScrollContainer`'s settle timer
 - `calendarScrollSyncModel.js` — pure decisions for grid↔agenda scroll sync
 - `calendarGridRowModel.js` — fixed week-row heights and per-month row layout math
@@ -19,12 +19,14 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarModalSelectionModel.js` — focus date parsing, grid visibility, view sync snapshots
 - `calendarControllerHelpers.js` — pure controller helpers (month math, event dedupe, range/overlay matching, item-location/focus resolution, search-result mapping) extracted from `useCalendarModalController.jsx`
 - `calendarEntryReadinessModel.js` — entry-readiness projection (events-range loading + agenda-entry-ready gate over committed/seeded/current deadline overlay data) extracted from the `viewData` memo in `useCalendarModalController.jsx`
+- `calendarBillsViewDataModel.js` — pure bills view-data precedence/status projection: visible range data, broad schedules, pay links, loading/pending/error metadata
 
 ### Controller + view model
 - `calendarShellLoaders.jsx` — production lazy boundaries for the desktop shell and mobile agenda; Vitest resolves the same module paths eagerly to preserve synchronous behavior-test contracts
 - `useCalendarModalController.jsx` — main orchestrator wiring sub-hooks and editors
 - `useCalendarModalViewModel.js` — visible month data and shell prop building
 - `useCalendarModalSelection.js` — view date, selected day, focus tracking per open request
+- `useCalendarMonthNavigation.js` — grouped month commands and grid scroll coordination: clamp targets, editor-aware cleanup, direction/idle tracking, label crossing, and fetch settle
 
 ### Calendar behavior
 - `useCalendarEventSelectionSet.js` — event multi-select + clipboard submachine (selection set, copy/paste, seeded-toggle rules) hosting the event quick-actions bundle so its batch-delete callback prunes the selection; extracted from `useCalendarModalController.jsx`

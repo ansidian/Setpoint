@@ -13,6 +13,9 @@ import {
   tombstoneRecurringFamilyStatement,
   tombstoneUnlistedCalendarStatements,
 } from "./calendarSearchMirrorStatements.js";
+import { addMonthsIso } from "./calendar-range-model.js";
+
+export { addMonthsIso };
 
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 const MIRROR_HISTORY_MONTHS = 12;
@@ -21,20 +24,6 @@ const MIRROR_FUTURE_MONTHS = 18;
 // purged early, the next sync that re-delivers the cancellation simply
 // recreates it, so a short retention is safe and keeps the table bounded.
 const TOMBSTONE_RETENTION_DAYS = 30;
-
-// Clamps day-of-month to the target month's last day so 29th-31st no longer
-// overflow into the next month (which would shift the mirror/search window by up
-// to 3 days). Exported as the single source of truth shared with
-// server/routes/calendar.js.
-export function addMonthsIso(isoDate, months) {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const targetYear = year;
-  const targetMonth = month - 1 + months;
-  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-  const clampedDay = Math.min(day, lastDayOfTargetMonth);
-  const date = new Date(Date.UTC(targetYear, targetMonth, clampedDay));
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
-}
 
 function pacificDate(now) {
   return new Intl.DateTimeFormat("en-CA", {

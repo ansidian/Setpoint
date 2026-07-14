@@ -1,16 +1,6 @@
 import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.js";
-import {
-  billMirrorRefreshRange,
-  isBillsMirrorMaintenanceDue,
-  readBillsMirrorRange,
-  scheduleBillsMirrorRefresh,
-  shouldScheduleImmediateBillsRefresh,
-} from "../bills/bills-service.js";
-import {
-  applyDeadlineCurrentStatus,
-  requestBillsCurrentMaintenanceRefresh,
-} from "../dashboard/current-service.js";
+import { applyDeadlineCurrentStatus } from "../dashboard/current-service.js";
 import {
   readCalendarDeadlines,
   readCalendarDeadlineRange,
@@ -25,6 +15,9 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
   formatCalendarRouteError,
+  isCalendarSearchInputError,
+  searchCalendar,
+  validateCalendarRange as validateCalendarRangeQuery,
 } from "../calendar/calendar.js";
 import {
   getGooglePlaceDetails,
@@ -40,19 +33,8 @@ import {
   hydrateCalendarEventsWithReminderState,
 } from "../reminders/reminder-hydration.js";
 import {
-  deadlineSearchCandidates,
-  normalizeBillSearchCandidate,
-  normalizeEventSearchCandidate,
-  normalizeLimit,
-  rankCalendarSearchCandidates,
-} from "../calendar/calendar-search.js";
-import {
-  addMonthsIso,
   deleteCalendarSearchMirrorOccurrence,
-  getCalendarSearchMirrorHealth,
-  listCalendarSearchMirrorOccurrences,
   markCalendarSearchMirrorDirty,
-  requestCalendarSearchMirrorSync,
   upsertCalendarSearchMirrorOccurrence,
 } from "../calendar/calendar-search-mirror.js";
 import { readCalendarBillsRange } from "./calendar-bills-range.js";
@@ -156,237 +138,24 @@ router.post("/deadlines/:deadlineId/completed-occurrences/:date", async (req, re
 });
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_SPAN_DAYS = 62;
-const SEARCH_MIN_QUERY_LENGTH = 2;
-const SEARCH_HISTORY_MONTHS = 12;
-const SEARCH_FUTURE_MONTHS = 18;
-const SEARCH_MIRROR_CANDIDATE_LIMIT = 1000;
-
-function todayPacific() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
-}
-
-// P3-40: month math (addMonthsIso) shared from calendar-search-mirror.js, which clamps
-// day-of-month to the target month's last day so the 29th-31st no longer overflow and shift
-// the search window by up to 3 days. The previous local copy here had the same overflow bug.
-function calendarSearchRange({ now = new Date() } = {}) {
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
-  return {
-    start: addMonthsIso(today, -SEARCH_HISTORY_MONTHS),
-    end: addMonthsIso(today, SEARCH_FUTURE_MONTHS),
-  };
-}
-
-function calendarSearchResponse({
-  query,
-  scope,
-  limit,
-  candidates,
-  coverageSources,
-}) {
-  const ranked = rankCalendarSearchCandidates(candidates, { query, limit });
-  return {
-    query,
-    scope,
-    limit,
-    results: ranked.results,
-    resultCount: ranked.results.length,
-    totalMatches: ranked.totalMatches,
-    truncated: ranked.truncated,
-    coverage: {
-      scope,
-      sources: coverageSources,
-    },
-    fetchedAt: new Date().toISOString(),
-  };
-}
-
-function shouldRequestCalendarSearchMirrorRepair(syncHealth) {
-  return ["initializing", "stale", "degraded", "dirty", "unavailable", "needs_sync"].includes(syncHealth?.state);
-}
-
-function calendarSearchMirrorSearched(syncHealth, events) {
-  if (events?.length) return true;
-  return !["initializing", "unavailable"].includes(syncHealth?.state);
-}
-
-function requestCalendarSearchMirrorRepair(userId, syncHealth) {
-  if (!shouldRequestCalendarSearchMirrorRepair(syncHealth)) return;
-  const hasSuccessfulSource = (syncHealth?.sources || []).some((source) => source.lastSuccessAt);
-  requestCalendarSearchMirrorSync(userId, {
-    reason: `calendar-search-${syncHealth.state}`,
-    forceFull: !hasSuccessfulSource,
-  });
-}
-
-function cheapEmptyCalendarSearchResponse({ query, scope, limit, reason = "query_too_short" }) {
-  return {
-    query,
-    scope,
-    limit,
-    results: [],
-    resultCount: 0,
-    totalMatches: 0,
-    truncated: false,
-    coverage: {
-      scope,
-      reason,
-      sources: [],
-    },
-    fetchedAt: new Date().toISOString(),
-  };
-}
 
 router.get("/search", async (req, res) => {
-  const query = String(req.query.q || "").trim();
-  const scope = String(req.query.scope || "events").trim();
-  const limit = normalizeLimit(req.query.limit);
-
-  if (scope !== "events" && scope !== "bills") {
-    return res.status(400).json({
-      code: "calendar_search_scope_invalid",
-      message: "scope must be events or bills",
-    });
-  }
-  if (limit === null) {
-    return res.status(400).json({
-      code: "calendar_search_limit_invalid",
-      message: "limit must be a positive integer",
-    });
-  }
-  if (query.length < SEARCH_MIN_QUERY_LENGTH) {
-    return res.json(cheapEmptyCalendarSearchResponse({ query, scope, limit }));
-  }
-
   try {
-    const userId = process.env.EA_USER_ID;
-    if (scope === "events") {
-      const range = calendarSearchRange();
-      const candidateLimit = Math.max(limit, SEARCH_MIRROR_CANDIDATE_LIMIT);
-      const [events, syncHealth, deadlineResult] = await Promise.all([
-        listCalendarSearchMirrorOccurrences(userId, {
-          start: range.start,
-          end: range.end,
-          query,
-          limit: candidateLimit,
-          centerDate: todayPacific(),
-        }),
-        getCalendarSearchMirrorHealth(userId),
-        readCalendarDeadlineRange(userId, range),
-      ]);
-      requestCalendarSearchMirrorRepair(userId, syncHealth);
-      const candidates = [
-        ...events.map((event) => normalizeEventSearchCandidate(event)),
-        ...deadlineSearchCandidates(deadlineResult.payload),
-      ];
-      return res.json(calendarSearchResponse({
-        query,
-        scope,
-        limit,
-        candidates,
-        coverageSources: [
-          {
-            key: "google_calendar",
-            label: "Google Calendar",
-            searched: calendarSearchMirrorSearched(syncHealth, events),
-            start: range.start,
-            end: range.end,
-            strategy: "local_mirror",
-            syncHealth,
-          },
-          {
-            key: "deadlines",
-            label: "Deadline overlays",
-            searched: true,
-            start: range.start,
-            end: range.end,
-            errors: deadlineResult.errors || [],
-          },
-        ],
-      }));
-    }
-
-    const range = billMirrorRefreshRange({ now: new Date() });
-    const data = await readBillsMirrorRange(userId, range);
-    if (data.syncHealth?.state === "needs_sync") {
-      // Skip the reschedule when a future settle window is already armed, or the
-      // 2s poll collapses the 60s post-write settle to now (P1-5).
-      if (shouldScheduleImmediateBillsRefresh(data.syncHealth)) {
-        scheduleBillsMirrorRefresh(userId).catch((err) => {
-          console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
-        });
-      }
-    } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
-      requestBillsCurrentMaintenanceRefresh(userId, { now: new Date() }).catch((err) => {
-        console.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err.message);
-      });
-    }
-
-    return res.json(calendarSearchResponse({
-      query,
-      scope,
-      limit,
-      candidates: (data.schedules || []).map(normalizeBillSearchCandidate),
-      coverageSources: [
-        {
-          key: "bills_mirror",
-          label: "Bills mirror",
-          searched: true,
-          start: range.start,
-          end: range.end,
-          syncHealth: data.syncHealth || null,
-          actualBudgetUrl: data.actualBudgetUrl || null,
-          strategy: "local_mirror",
-        },
-      ],
-    }));
+    return res.json(await searchCalendar(process.env.EA_USER_ID, req.query));
   } catch (err) {
+    if (isCalendarSearchInputError(err)) {
+      return res.status(err.status).json({ code: err.code, message: err.message });
+    }
     console.error("[Calendar] search failed:", err);
     return res.status(500).json({ code: "calendar_search_error", message: "Failed to search calendar" });
   }
 });
 
 function validateCalendarRange(req, res, { enforceHistoryWindow = false } = {}) {
-  const { start, end } = req.query;
-
-  if (!start) {
-    res.status(400).json({ message: "start param required (YYYY-MM-DD)" });
-    return null;
-  }
-  if (!end) {
-    res.status(400).json({ message: "end param required (YYYY-MM-DD)" });
-    return null;
-  }
-  if (!ISO_DATE_RE.test(start) || !ISO_DATE_RE.test(end)) {
-    res.status(400).json({ message: "start/end must be YYYY-MM-DD" });
-    return null;
-  }
-
-  const startDate = new Date(`${start}T12:00:00Z`);
-  const endDate = new Date(`${end}T12:00:00Z`);
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    res.status(400).json({ message: "invalid date value" });
-    return null;
-  }
-  if (endDate < startDate) {
-    res.status(400).json({ message: "end must be >= start" });
-    return null;
-  }
-  const spanDays = Math.round((endDate - startDate) / 86400000);
-  if (spanDays > MAX_SPAN_DAYS) {
-    res.status(400).json({ message: `span must be <= ${MAX_SPAN_DAYS} days` });
-    return null;
-  }
-  if (enforceHistoryWindow) {
-    const minDate = addMonthsIso(todayPacific(), -12);
-    if (end < minDate) {
-      res.status(400).json({ message: "range must overlap the rolling 12-month calendar window" });
-      return null;
-    }
-    return { start, end, startDate, endDate, minDate };
-  }
-
-  return { start, end, startDate, endDate };
+  const result = validateCalendarRangeQuery(req.query, { enforceHistoryWindow });
+  if (result.ok) return result.value;
+  res.status(400).json({ message: result.message });
+  return null;
 }
 
 function eventOccurrenceIdentity({ event, originalStartTime, scope }) {
