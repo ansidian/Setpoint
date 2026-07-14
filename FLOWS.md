@@ -59,6 +59,8 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **UI:** inbox lanes (`src/components/inbox/InboxView.jsx` → `src/components/inbox/InboxDesktopPane.jsx` / `src/components/inbox/mobile/MobileInboxView.jsx`): email appears in Queued during arrival grace, moves to its decided lane after classification; lane counts in `src/components/inbox/DigestStrip.jsx`; one gated notification sound per eventKey.
 
+**Timing:** `server/email/email-arrival-timing.js:projectEmailArrivalTiming` emits non-sensitive `[EA Timing]` evidence when a history job settles. `providerDeliveryMs` is Pub/Sub `publishTime` → durable history-job `created_at`; `historyQueueWaitMs` is durable enqueue → worker claim; `historySyncMs` is claim → completed Gmail fetch/index/snapshot attachment; `providerToQueuedMs` is Pub/Sub publish → durable triage rows ready for snapshot attachment; `snapshotAttachmentMs` is that durable milestone → history-job completion. Missing/malformed timestamps omit dependent durations, and clock-skewed stages clamp to zero with validity metadata. `src/hooks/useCurrentDashboard.js` separately measures `dashboard-event-refetch` from SSE receipt to accepted state dispatch with `performance.now()` and does not log stale superseded responses as completed.
+
 ## 3. Snapshot / briefing lifecycle
 
 **Trigger:** cron boundary advance — `server/scheduler.js:initScheduler` (per-user schedule) calls `server/snapshots/snapshot-service.js:advanceSnapshotBoundary`; snapshots are also created lazily on any read via `server/snapshots/snapshot-service.js:getOrCreateActiveSnapshot`.

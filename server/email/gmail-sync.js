@@ -38,6 +38,8 @@ import {
 } from "./gmailWatchStore.js";
 export { persistGmailWatchState } from "./gmailWatchStore.js";
 import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.js";
+import { logTiming } from "../timing.js";
+import { projectEmailArrivalTiming } from "./email-arrival-timing.js";
 import { triageRetryBackoffIso } from "../triage/triage-worker.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
@@ -49,6 +51,7 @@ const GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS = 14 * 24;
 // sharing this same ea_triage_jobs table (triage-job-store.js's own 5-attempt
 // ceiling) instead of inventing a second backoff formula.
 const MAX_GMAIL_HISTORY_SYNC_ATTEMPTS = 5;
+const historySyncTimingByResult = new WeakMap();
 
 async function findGmailAccountByEmail(emailAddress, dbClient) {
   const result = await dbClient.execute({
@@ -161,6 +164,7 @@ export async function syncGmailHistoryForAccount(account, {
   indexEmailsFn = indexEmails,
   targetHistoryId = null,
   now = new Date(),
+  timingNow = () => new Date(),
 } = {}) {
   const startHistoryId = await getStoredHistoryId(account, dbClient);
   if (!startHistoryId) {
@@ -284,6 +288,7 @@ export async function syncGmailHistoryForAccount(account, {
   );
   statements.push(advanceCursorStatement({ historyId: lastHistoryId, account, now }));
   await dbClient.batch(statements);
+  const snapshotQueuedAt = emails.length ? timingNow() : null;
   if (emails.length) {
     // P2-23: resolve the active snapshot once for the whole batch instead of
     // re-resolving it (3 queries) inside attach for every new email.
@@ -297,7 +302,7 @@ export async function syncGmailHistoryForAccount(account, {
     }
   }
 
-  return {
+  const result = {
     account_id: account.id,
     start_history_id: startHistoryId,
     last_history_id: lastHistoryId,
@@ -306,6 +311,10 @@ export async function syncGmailHistoryForAccount(account, {
     read_state_reconciled: readStateReconciled,
     provider_removed: providerRemoved,
   };
+  if (snapshotQueuedAt) {
+    historySyncTimingByResult.set(result, { snapshotQueuedAt });
+  }
+  return result;
 }
 
 export async function enqueueEmailTriageForEmails(userId, emails, {
@@ -416,18 +425,55 @@ export async function processNextGmailHistorySyncJob({
   dbClient = db,
   now = new Date(),
   syncFn = syncGmailHistoryForAccount,
+  timingNow = () => new Date(),
+  logTimingFn = logTiming,
 } = {}) {
   const job = await claimNextHistorySyncJob(dbClient, now);
   if (!job) return { processed: false };
+  const payload = parsePayloadJson(job.payload_json);
+  const targetHistoryId = payload.historyId ? String(payload.historyId).trim() : "";
+
+  const emitTiming = ({ status, completedAt, result = null, error = null, attempts = null }) => {
+    const providerStatus = Number(error?.status);
+    const errorKind = error
+      ? isInvalidGrantError(error.message)
+        ? "invalid_grant"
+        : Number.isFinite(providerStatus)
+          ? "provider_http_error"
+          : "sync_error"
+      : undefined;
+    try {
+      logTimingFn({
+        event: "email-arrival",
+        jobId: Number(job.id),
+        accountId: job.account_id,
+        historyId: targetHistoryId || undefined,
+        status,
+        indexed: Number(result?.indexed || 0),
+        queued: Number(result?.queued || 0),
+        attempts,
+        errorKind,
+        providerStatus: Number.isFinite(providerStatus) ? providerStatus : undefined,
+        ...projectEmailArrivalTiming({
+          providerPublishedAt: payload.publishTime,
+          historyQueuedAt: job.created_at,
+          historyClaimedAt: now,
+          snapshotQueuedAt: result?.snapshot_queued_at
+            || historySyncTimingByResult.get(result)?.snapshotQueuedAt,
+          completedAt,
+        }),
+      });
+    } catch {
+      // Timing evidence must never change queue completion or retry behavior.
+    }
+  };
 
   try {
     const account = await loadGmailAccount(job.user_id, job.account_id, dbClient);
     if (!account) throw new Error(`Missing Gmail account ${job.account_id}`);
-    const payload = parsePayloadJson(job.payload_json);
     // Defense in depth — a gmail_history_sync job whose payload lacks a historyId
     // can't advance the cursor and would force a 404-recovery backfill; skip it
     // instead of running.
-    const targetHistoryId = payload.historyId ? String(payload.historyId).trim() : "";
     if (!targetHistoryId) {
       // Mirror triage-worker no-op convention: terminal 'complete' status so the claim
       // query never re-picks it, with skipped:true surfaced in the return value.
@@ -440,13 +486,16 @@ export async function processNextGmailHistorySyncJob({
               WHERE id = ?`,
         args: [now.toISOString(), job.id],
       });
+      emitTiming({ status: "skipped", completedAt: timingNow() });
       return { processed: true, job_id: Number(job.id), skipped: true };
     }
     const result = await syncFn(account, {
       dbClient,
       targetHistoryId,
       now,
+      timingNow,
     });
+    const completedAt = timingNow();
     await dbClient.execute({
       sql: `UPDATE ea_triage_jobs
             SET status = 'complete',
@@ -456,6 +505,7 @@ export async function processNextGmailHistorySyncJob({
             WHERE id = ?`,
       args: [now.toISOString(), job.id],
     });
+    emitTiming({ status: "ok", completedAt, result });
     return { processed: true, job_id: Number(job.id), result };
   } catch (err) {
     // CORR-L08: claimNextHistorySyncJob's UPDATE already bumped `attempts` in the
@@ -466,6 +516,7 @@ export async function processNextGmailHistorySyncJob({
     // attempts ourselves (that's already been done by the claim), just use
     // job.attempts + 1 to decide terminal-vs-requeue and to compute backoff.
     const currentAttempts = Number(job.attempts || 0) + 1;
+    let status;
     if (isInvalidGrantError(err.message)) {
       // Revoked/expired OAuth grant: retrying is pointless until the user
       // reconnects the account, so fail immediately instead of burning through
@@ -483,6 +534,7 @@ export async function processNextGmailHistorySyncJob({
       } catch (markErr) {
         console.error("[GmailSync] Failed to mark account needs_reauth:", markErr.message);
       }
+      status = "failed";
     } else if (currentAttempts >= MAX_GMAIL_HISTORY_SYNC_ATTEMPTS) {
       await dbClient.execute({
         sql: `UPDATE ea_triage_jobs
@@ -492,6 +544,7 @@ export async function processNextGmailHistorySyncJob({
               WHERE id = ?`,
         args: [err.message, job.id],
       });
+      status = "failed";
     } else {
       const scheduledFor = triageRetryBackoffIso(now, currentAttempts);
       await dbClient.execute({
@@ -503,7 +556,14 @@ export async function processNextGmailHistorySyncJob({
               WHERE id = ?`,
         args: [scheduledFor, err.message, job.id],
       });
+      status = "retrying";
     }
+    emitTiming({
+      status,
+      completedAt: timingNow(),
+      error: err,
+      attempts: currentAttempts,
+    });
     throw err;
   }
 }

@@ -490,6 +490,48 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("logs SSE receipt-to-state-application timing for the accepted response", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        fetchedAt: "2026-05-05T00:21:30.000Z",
+      });
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", {
+        source: "email_triage",
+        reason: "email_triage_finalized",
+        details: {
+          eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:21:30.000Z");
+    const timingLine = logSpy.mock.calls
+      .map(([line]) => line)
+      .find((line) => String(line).startsWith("[EA Timing] "));
+    expect(timingLine).toBeTruthy();
+    expect(JSON.parse(timingLine.slice("[EA Timing] ".length))).toMatchObject({
+      event: "dashboard-event-refetch",
+      scope: "current",
+      source: "email_triage",
+      reason: "email_triage_finalized",
+      eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+      status: "ok",
+      ms: expect.any(Number),
+    });
+    logSpy.mockRestore();
+    unmount();
+  });
+
   it("refreshes active snapshot data after queued email dashboard-current events", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const queuedSnapshot = {
@@ -722,6 +764,7 @@ describe("useCurrentDashboard", () => {
 
   it("ignores a slower older request so it cannot clobber a newer one (request sequencing)", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     let resolveOlder;
     let resolveNewer;
     const olderFetch = new Promise((resolve) => { resolveOlder = resolve; });
@@ -763,7 +806,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
     expect(result.current.liveData.liveWeather).toEqual({ temp: 80, icon: "Sun" });
+    expect(logSpy.mock.calls.filter(([line]) => String(line).includes("dashboard-event-refetch"))).toHaveLength(0);
 
+    logSpy.mockRestore();
     unmount();
   });
 
