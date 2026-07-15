@@ -95,6 +95,19 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     expect(m.backfillCards.map((c) => c.title)).toEqual(["Walkthrough notes", "Demo Electric"]);
   });
 
+  it("shows every urgent card without pulling future backfill into an unbounded expansion", () => {
+    const m = buildNeedsYouModel({
+      snapshotLanes: lanes(),
+      liveDeadlines: deadlines,
+      liveBills: bills,
+      maxCards: Infinity,
+    });
+
+    expect(m.urgentCards).toHaveLength(5);
+    expect(m.backfillCards).toEqual([]);
+    expect(m.moreCount).toBe(0);
+  });
+
   it("emits moreCount/+N and suppresses backfill when urgent items overflow maxCards", () => {
     const manyEmails = { needs_attention: Array.from({ length: 6 }, (_, i) => ({ id: 100 + i, snapshot_item_id: 100 + i, uid: `e${i}`, lane: "needs_attention", from: `S${i}`, subject: `Email ${i}`, read: false, urgency: "high" })), fyi: [], carryover: [] };
     const m = buildNeedsYouModel({ snapshotLanes: manyEmails, liveDeadlines: { upcoming: [deadlines.upcoming[2]] }, liveBills: [], maxCards: 5 });
