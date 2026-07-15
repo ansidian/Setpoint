@@ -10,6 +10,11 @@ export function StatusChip({ label, tone, glyph = null, compact = false }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
+        minWidth: 0,
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        flexShrink: 1,
+        overflow: "hidden",
         gap: glyph ? 4 : 0,
         fontSize: compact ? 9.5 : 10,
         fontWeight: 600,
@@ -23,7 +28,7 @@ export function StatusChip({ label, tone, glyph = null, compact = false }) {
       }}
     >
       {glyph}
-      <span>{label}</span>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
     </span>
   );
 }

@@ -33,6 +33,21 @@ describe("StatusChip", () => {
     expect(screen.getByTestId("status-chip").style.fontSize).toBe("9.5px");
   });
 
+  it("shrinks and truncates a long status instead of overflowing a narrow parent", () => {
+    render(<StatusChip label="Due today, 4:00 PM" tone="#f38ba8" />);
+    const chip = screen.getByTestId("status-chip");
+    const label = chip.lastElementChild;
+
+    expect(chip.style.minWidth).toBe("0");
+    expect(chip.style.maxWidth).toBe("100%");
+    expect(chip.style.boxSizing).toBe("border-box");
+    expect(chip.style.flexShrink).toBe("1");
+    expect(chip.style.overflow).toBe("hidden");
+    expect(label.style.minWidth).toBe("0");
+    expect(label.style.overflow).toBe("hidden");
+    expect(label.style.textOverflow).toBe("ellipsis");
+  });
+
   it("renders an optional glyph before the label", () => {
     render(<StatusChip label="Demo Electric" tone="#89b4fa" glyph={<svg data-testid="chip-glyph" />} />);
     const chip = screen.getByTestId("status-chip");
