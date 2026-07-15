@@ -156,7 +156,9 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
     const moreCount = Math.max(0, all.length - maxCards);
     const moreLabel = moreCount === 1 ? "more item needs you" : "more need you";
 
-    const slotsLeft = moreCount > 0 ? 0 : Math.max(0, maxCards - urgentVisible.length);
+    const slotsLeft = Number.isFinite(maxCards) && moreCount === 0
+      ? Math.max(0, maxCards - urgentVisible.length)
+      : 0;
     const upcoming = [
       ...(liveDeadlines?.upcoming || [])
         .filter((d) => d.status !== "complete")
