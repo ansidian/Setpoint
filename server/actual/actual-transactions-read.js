@@ -36,6 +36,7 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
   const minAmount = filters.minAmount ?? filters.min_amount;
   const maxAmount = filters.maxAmount ?? filters.max_amount;
   const notes = filters.notes;
+  const includeTransfers = filters.include_transfers === true || filters.includeTransfers === true;
   const direction = filters.direction === "income"
     ? "income"
     : filters.direction === "all"
@@ -51,6 +52,9 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
     ]);
     const accountName = nameMap(accountsR.rows);
     const payeeName = nameMap(payeesR.rows);
+    const payeeTransferAccount = Object.fromEntries(
+      (payeesR.rows || []).map((payee) => [payee.id, payee.transfer_acct || null]),
+    );
     const categoryName = nameMap(categoriesR.rows);
 
     const checks = [
@@ -67,8 +71,10 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
       "COALESCE(t.tombstone,0)=0",
       "t.date >= ?",
       "t.date <= ?",
-      "t.payee NOT IN (SELECT id FROM payees WHERE transfer_acct IS NOT NULL AND COALESCE(tombstone,0)=0)",
     ];
+    if (!includeTransfers) {
+      clauses.push("t.payee NOT IN (SELECT id FROM payees WHERE transfer_acct IS NOT NULL AND COALESCE(tombstone,0)=0)");
+    }
     if (direction === "income") clauses.push("t.amount > 0");
     else if (direction === "expense") clauses.push("t.amount < 0");
     else clauses.push("t.amount != 0");
@@ -100,8 +106,11 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
         amount: Math.abs(rawAmount) / 100,
         direction: rawAmount > 0 ? "income" : "expense",
         payee: payeeName[r.payee] || "Unknown",
+        payeeId: r.payee || null,
         category: categoryName[r.category] || "Uncategorized",
         account: accountName[r.account] || "",
+        accountId: r.account || null,
+        transferAccountId: payeeTransferAccount[r.payee] || null,
         notes: r.notes || "",
       };
     });

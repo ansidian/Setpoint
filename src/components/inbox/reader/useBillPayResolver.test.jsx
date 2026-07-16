@@ -22,10 +22,11 @@ const email = {
 };
 
 describe("useBillPayResolver", () => {
-  it("calls the resolver once per selected email while Bill Pay stays cached", async () => {
+  it("resolves a bill candidate on selection before Bill Pay is opened", async () => {
     resolveBillPaySeed.mockResolvedValueOnce({
       bill: { payee: "Power", amount: 42 },
       mapping: { status: "matched" },
+      actualStatus: { status: "already_scheduled" },
     });
 
     const { result, rerender } = renderHook(
@@ -37,13 +38,10 @@ describe("useBillPayResolver", () => {
       { initialProps: { billOpen: false } },
     );
 
-    expect(resolveBillPaySeed).not.toHaveBeenCalled();
-
-    rerender({ billOpen: true });
-
     await waitFor(() => {
       expect(result.current.resolvedBill).toEqual({ payee: "Power", amount: 42 });
     });
+    expect(result.current.actualStatus).toEqual({ status: "already_scheduled" });
     expect(resolveBillPaySeed).toHaveBeenCalledTimes(1);
     expect(resolveBillPaySeed).toHaveBeenCalledWith({
       emailId: "msg-1",
@@ -56,8 +54,8 @@ describe("useBillPayResolver", () => {
       source: "triage",
     });
 
-    rerender({ billOpen: false });
     rerender({ billOpen: true });
+    rerender({ billOpen: false });
     expect(resolveBillPaySeed).toHaveBeenCalledTimes(1);
   });
 

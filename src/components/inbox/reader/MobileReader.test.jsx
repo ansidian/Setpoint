@@ -49,6 +49,7 @@ function renderMobileReader(overrides = {}) {
         error: null,
         body: "<html><body>Full mobile provider bill with amount $88.20.</body></html>",
       }}
+      billResolution={overrides.billResolution}
       drafting={overrides.drafting || false}
       setDrafting={setDrafting}
     />,
@@ -102,6 +103,24 @@ describe("MobileReader bill extraction", () => {
     expect(within(actionsMenu).queryByText("Move to Noise")).toBeNull();
     expect(within(actionsMenu).queryByText("Snooze")).toBeNull();
     expect(within(actionsMenu).queryByText("Trash")).toBeNull();
+  });
+
+  it("shows an actioned Actual match and keeps bill details available for review", () => {
+    renderMobileReader({
+      billOpen: false,
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_recorded",
+          evidence: { amount: 88.2, dueDate: "2026-07-16" },
+        },
+      },
+    });
+
+    expect(screen.getByText("Already recorded in Actual")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+    expect(screen.getByText("View bill details")).toBeTruthy();
+    expect(screen.queryByText("Open bill pay")).toBeNull();
   });
 
   it("hides mobile bill pay for triaged non-bill emails", () => {

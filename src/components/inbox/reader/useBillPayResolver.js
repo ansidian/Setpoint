@@ -17,9 +17,19 @@ function snippetForEmail(email) {
 export default function useBillPayResolver({ email, billOpen, bodyState }) {
   const key = emailKey(email);
   const cacheRef = useRef({ key: null, value: null, promise: null });
-  const [state, setState] = useState({ key: null, status: "idle", resolvedBill: null, mapping: null, error: null });
+  const [state, setState] = useState({
+    key: null,
+    status: "idle",
+    resolvedBill: null,
+    mapping: null,
+    actualStatus: null,
+    error: null,
+  });
   const [settingsVersion, setSettingsVersion] = useState(0);
   const extractionBody = resolveBillExtractionBody(bodyState);
+  const shouldResolve = !!(
+    billOpen || email?.hasBill || email?.bill_candidate || email?.extractedBill
+  );
 
   useEffect(() => {
     cacheRef.current = { key, value: null, promise: null };
@@ -28,22 +38,31 @@ export default function useBillPayResolver({ email, billOpen, bodyState }) {
   useEffect(() => {
     const reset = () => {
       cacheRef.current = { key: cacheRef.current.key, value: null, promise: null };
-      setState({ key: cacheRef.current.key, status: "idle", resolvedBill: null, mapping: null, error: null });
+      setState({
+        key: cacheRef.current.key,
+        status: "idle",
+        resolvedBill: null,
+        mapping: null,
+        actualStatus: null,
+        error: null,
+      });
       setSettingsVersion((value) => value + 1);
     };
     const handleStorage = (event) => {
       if (event.key === "ea_settings_changed") reset();
     };
     window.addEventListener("ea-settings-changed", reset);
+    window.addEventListener("ea-actual-metadata-invalidated", reset);
     window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener("ea-settings-changed", reset);
+      window.removeEventListener("ea-actual-metadata-invalidated", reset);
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
   useEffect(() => {
-    if (!billOpen || !email || !key || extractionBody.loading) return;
+    if (!shouldResolve || !email || !key || extractionBody.loading) return;
     if (cacheRef.current.key !== key) {
       cacheRef.current = { key, value: null, promise: null };
     }
@@ -76,6 +95,7 @@ export default function useBillPayResolver({ email, billOpen, bodyState }) {
         const value = {
           resolvedBill: result?.bill || null,
           mapping: result?.mapping || null,
+          actualStatus: result?.actualStatus || null,
         };
         if (cacheRef.current.key === key) {
           cacheRef.current.value = value;
@@ -87,13 +107,27 @@ export default function useBillPayResolver({ email, billOpen, bodyState }) {
       .catch((error) => {
         if (cacheRef.current.key === key) {
           cacheRef.current.promise = null;
-          setState({ key, status: "error", resolvedBill: null, mapping: null, error });
+          setState({
+            key,
+            status: "error",
+            resolvedBill: null,
+            mapping: null,
+            actualStatus: null,
+            error,
+          });
         }
       });
     cacheRef.current = { key, value: null, promise };
-  }, [billOpen, email, extractionBody.body, extractionBody.loading, extractionBody.source, key, settingsVersion]);
+  }, [email, extractionBody.body, extractionBody.loading, extractionBody.source, key, settingsVersion, shouldResolve]);
 
   return state.key === key
     ? state
-    : { key, status: "idle", resolvedBill: null, mapping: null, error: null };
+    : {
+        key,
+        status: "idle",
+        resolvedBill: null,
+        mapping: null,
+        actualStatus: null,
+        error: null,
+      };
 }

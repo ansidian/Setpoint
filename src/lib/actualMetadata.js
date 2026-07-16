@@ -14,6 +14,9 @@ export function invalidateActualMetadata() {
   // Bump the generation so an in-flight fetch that started before the
   // invalidation cannot repopulate the cache with stale data.
   _generation += 1;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ea-actual-metadata-invalidated"));
+  }
 }
 
 // Reset the fetch bookkeeping before invoking callbacks so a load triggered

@@ -1,7 +1,11 @@
 import db from "../db/connection.js";
 import { getMetadata as actualGetMetadata } from "../actual/actual.js";
+import { getMetadata as projectedGetMetadata } from "../actual/actual-metadata-projection.js";
+import { readBillsMirrorRange } from "./bills-mirror-sync.js";
+import { queryTransactions } from "../transactions/transactions-service.js";
 import { parseBillPayMappingsJson } from "./bill-pay-mappings.js";
 import { resolveBillPayMapping } from "./bill-pay-resolver.js";
+import { resolveStatementActualStatus } from "./statementActualStatusModel.js";
 
 async function loadBillPayMappings(userId, { dbClient = db } = {}) {
   try {
@@ -68,21 +72,49 @@ async function loadBillPayMetadata(userId) {
   }
 }
 
-export async function resolveBillPaySeed(userId, {
-  emailId = null,
-  accountId = null,
-  email = {},
-  subject,
-  from,
-  body,
-  snippet,
-  candidate = null,
-  source = "triage",
-  dbClient = db,
-} = {}) {
-  const [mappings, serverContext] = await Promise.all([
+function todayYmd(now = new Date()) {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+}
+
+function unavailableMetadata(error = null) {
+  return {
+    accounts: [],
+    payees: [],
+    payeeMap: {},
+    categories: [],
+    schedules: [],
+    recentTransactions: [],
+    syncHealth: {
+      state: "unavailable",
+      lastSuccessAt: null,
+      lastError: error?.message || null,
+    },
+  };
+}
+
+export async function resolveBillPaySeed(userId, payload = {}, options = {}) {
+  const {
+    emailId = null,
+    accountId = null,
+    email = {},
+    subject,
+    from,
+    body,
+    snippet,
+    candidate = null,
+    source = "triage",
+    dbClient = db,
+  } = payload;
+  const {
+    metadataReader = projectedGetMetadata,
+    occurrenceReader = readBillsMirrorRange,
+    transactionReader = queryTransactions,
+    now = new Date(),
+  } = options;
+  const [mappings, serverContext, metadata] = await Promise.all([
     loadBillPayMappings(userId, { dbClient }),
     loadServerBillCandidate(userId, { emailId, accountId }, { dbClient }),
+    metadataReader(userId).catch((error) => unavailableMetadata(error)),
   ]);
   const requestEmail = {
     ...email,
@@ -91,8 +123,10 @@ export async function resolveBillPaySeed(userId, {
     ...(body !== undefined ? { body } : {}),
     ...(snippet !== undefined ? { snippet } : {}),
   };
-  return resolveBillPayMapping({
+  const mappingMetadata = metadata.syncHealth?.state === "current" ? metadata : {};
+  const resolved = resolveBillPayMapping({
     mappings,
+    metadata: mappingMetadata,
     source,
     email: {
       ...(serverContext?.email || {}),
@@ -100,6 +134,56 @@ export async function resolveBillPaySeed(userId, {
     },
     candidate: serverContext?.candidate || candidate,
   });
+  const dueDate = resolved.bill?.due_date || null;
+  let occurrenceData = {
+    schedules: [],
+    syncHealth: metadata.syncHealth,
+  };
+  if (dueDate) {
+    occurrenceData = await occurrenceReader(
+      userId,
+      { start: dueDate, end: dueDate },
+      { dbClient },
+    ).catch((error) => ({
+      schedules: [],
+      syncHealth: {
+        state: "unavailable",
+        lastSuccessAt: metadata.syncHealth?.lastSuccessAt || null,
+        lastError: error?.message || null,
+      },
+    }));
+  }
+
+  const today = todayYmd(now);
+  let transactionData = { transactions: [] };
+  if (dueDate && dueDate <= today) {
+    transactionData = await transactionReader(userId, {
+      start: dueDate,
+      end: dueDate,
+      direction: "all",
+      include_transfers: true,
+      limit: 100,
+    });
+  }
+  const reconciliationHealth = transactionData.error || transactionData.sync_state
+    ? {
+        state: transactionData.sync_state || "unavailable",
+        lastSuccessAt: occurrenceData.syncHealth?.lastSuccessAt || metadata.syncHealth?.lastSuccessAt || null,
+        lastError: transactionData.error || null,
+      }
+    : occurrenceData.syncHealth || metadata.syncHealth;
+
+  return {
+    ...resolved,
+    actualStatus: resolveStatementActualStatus({
+      bill: resolved.bill,
+      metadata,
+      occurrences: occurrenceData.schedules || [],
+      transactions: transactionData.transactions || [],
+      syncHealth: reconciliationHealth,
+      today,
+    }),
+  };
 }
 
 export async function resolveBillPaySample(userId, {
