@@ -181,6 +181,7 @@ export default function MobileInboxView({
   setMobileFiltersOpen,
   billOpen,
   setBillOpen,
+  onOpenRecordedBill,
   rowAccountsById,
   indexedSearchActive,
   indexedSearchLoading,
@@ -241,6 +242,7 @@ export default function MobileInboxView({
           showDraft={showDraft}
           billOpen={billOpen}
           setBillOpen={setBillOpen}
+          onOpenRecordedBill={onOpenRecordedBill}
           isMobile
           readOnly={readOnly}
         />

@@ -29,6 +29,7 @@ function InboxDesktopPane({
   closeSelectedEmail,
   billOpen,
   setBillOpen,
+  onOpenRecordedBill,
   rowAccountsById,
   indexedSearchActive,
   indexedSearchLoading,
@@ -175,6 +176,7 @@ function InboxDesktopPane({
               showDraft={showDraft}
               billOpen={billOpen}
               setBillOpen={setBillOpen}
+              onOpenRecordedBill={onOpenRecordedBill}
               isMobile={false}
               readOnly={readOnly}
             />

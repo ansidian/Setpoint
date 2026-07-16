@@ -19,6 +19,8 @@ afterEach(() => {
 
 function renderMobileReader(overrides = {}) {
   const onAction = vi.fn();
+  const onOpenRecordedBill = overrides.onOpenRecordedBill || vi.fn();
+  const setBillOpen = overrides.setBillOpen || vi.fn();
   const setDrafting = overrides.setDrafting || vi.fn();
   render(
     <MobileReader
@@ -41,7 +43,8 @@ function renderMobileReader(overrides = {}) {
       onClose={() => {}}
       showTriage={false}
       billOpen={overrides.billOpen ?? true}
-      setBillOpen={() => {}}
+      setBillOpen={setBillOpen}
+      onOpenRecordedBill={onOpenRecordedBill}
       snoozeOpen={false}
       setSnoozeOpen={() => {}}
       bodyState={overrides.bodyState || {
@@ -54,7 +57,7 @@ function renderMobileReader(overrides = {}) {
       setDrafting={setDrafting}
     />,
   );
-  return { onAction, setDrafting };
+  return { onAction, onOpenRecordedBill, setBillOpen, setDrafting };
 }
 
 describe("MobileReader bill extraction", () => {
@@ -121,6 +124,32 @@ describe("MobileReader bill extraction", () => {
     fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
     expect(screen.getByText("View bill details")).toBeTruthy();
     expect(screen.queryByText("Open bill pay")).toBeNull();
+  });
+
+  it("opens an already-recorded transaction in the calendar from the actions menu", () => {
+    const { onOpenRecordedBill, setBillOpen } = renderMobileReader({
+      billOpen: true,
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_recorded",
+          evidence: {
+            kind: "transaction",
+            transactionId: "transaction-42",
+            dueDate: "2026-07-16",
+          },
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+    fireEvent.click(screen.getByText("View bill details"));
+
+    expect(onOpenRecordedBill).toHaveBeenCalledWith({
+      date: "2026-07-16",
+      itemId: "transaction-42",
+    });
+    expect(setBillOpen).not.toHaveBeenCalled();
   });
 
   it("hides mobile bill pay for triaged non-bill emails", () => {

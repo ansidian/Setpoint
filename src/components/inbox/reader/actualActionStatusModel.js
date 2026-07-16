@@ -48,6 +48,14 @@ export function isActualActioned(actualStatus) {
   return ACTIONED_STATUSES.has(actualStatus?.status);
 }
 
+export function resolveRecordedActualCalendarTarget(actualStatus) {
+  if (actualStatus?.status !== "already_recorded") return null;
+  const date = actualStatus.evidence?.dueDate;
+  const itemId = actualStatus.evidence?.transactionId;
+  if (!date || !itemId) return null;
+  return { date, itemId };
+}
+
 export function resolveActualActionStatusView(resolution) {
   if (!resolution || resolution.status === "idle") return null;
   if (resolution.status === "loading") {

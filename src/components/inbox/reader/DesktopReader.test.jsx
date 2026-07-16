@@ -20,6 +20,8 @@ afterEach(() => {
 
 function renderReader(overrides = {}) {
   const onAction = vi.fn();
+  const onOpenRecordedBill = overrides.onOpenRecordedBill || vi.fn();
+  const setBillOpen = overrides.setBillOpen || vi.fn();
   const setDrafting = overrides.setDrafting || vi.fn();
   render(
     <DesktopReader
@@ -44,7 +46,8 @@ function renderReader(overrides = {}) {
       showDraft={overrides.showDraft || false}
       billOpen={overrides.billOpen || false}
       billMounted={overrides.billMounted || false}
-      setBillOpen={() => {}}
+      setBillOpen={setBillOpen}
+      onOpenRecordedBill={onOpenRecordedBill}
       snoozeBtnRef={{ current: null }}
       snoozeOpen={overrides.snoozeOpen ?? false}
       setSnoozeOpen={overrides.setSnoozeOpen || (() => {})}
@@ -55,7 +58,7 @@ function renderReader(overrides = {}) {
       readOnly={overrides.readOnly || false}
     />,
   );
-  return { onAction, setDrafting };
+  return { onAction, onOpenRecordedBill, setBillOpen, setDrafting };
 }
 
 describe("DesktopReader snapshot actions", () => {
@@ -91,6 +94,36 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.getByText("Already scheduled in Actual")).toBeTruthy();
     expect(screen.getByRole("button", { name: /view bill/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /pay bill/i })).toBeNull();
+  });
+
+  it("opens an already-recorded transaction in the calendar instead of the inline bill drawer", () => {
+    const { onOpenRecordedBill, setBillOpen } = renderReader({
+      billOpen: true,
+      email: {
+        subject: "Utility payment due",
+        category: "finance",
+        hasBill: true,
+      },
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_recorded",
+          evidence: {
+            kind: "transaction",
+            transactionId: "transaction-42",
+            dueDate: "2026-07-16",
+          },
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /view bill/i }));
+
+    expect(onOpenRecordedBill).toHaveBeenCalledWith({
+      date: "2026-07-16",
+      itemId: "transaction-42",
+    });
+    expect(setBillOpen).not.toHaveBeenCalled();
   });
 
   it("hides the bill-pay affordance for triaged non-bill emails", () => {
