@@ -12,7 +12,8 @@ Bill domain logic: AI extraction from emails, user bill-matching rules, and the 
 - `bill-extractors/openai.js` — OpenAI structured-JSON extraction call
 - `bill-pay-mappings.js` — schema for user bill-matching rules (profiles, behaviors, targets)
 - `bill-pay-resolver.js` — applies mappings to extracted/pasted bills: amounts, dates
-- `bill-pay-service.js` — loads mappings + metadata, resolves bills against user rules
+- `bill-pay-service.js` — loads mappings + Actual projections, resolves bills against user rules, and attaches canonical reconciliation status
+- `statementActualStatusModel.js` — strict pure matcher for statement candidates against Actual schedules, occurrences, and exact transactions
 - `bills-mirror-sync.js` — syncs bill occurrences into `ea_bills_mirror_*`, schedules maintenance; thin IO + scheduler + refresh-orchestration over billsMirrorModel.js
 - `billsMirrorModel.js` — pure derivation: date/range math, mirror row<->object projections, upsert arg builders, and the maintenance-due predicate
 - `bills-mirror-refresh-policy.js` — pure guard: should a reader kick an immediate mirror refresh, or is a settle window already armed

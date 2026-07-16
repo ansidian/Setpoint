@@ -3,6 +3,7 @@ import {
   BellOff,
   CalendarX,
   Check,
+  CheckCircle2,
   Clock,
   CreditCard,
   ExternalLink,
@@ -24,9 +25,11 @@ import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
+import ActualActionStatus from "./ActualActionStatus.jsx";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActions } from "./readerActionsModel.js";
 import { resolveBillSeed } from "./billSeedModel.js";
+import { isActualActioned } from "./actualActionStatusModel.js";
 
 function LiveEmailNotice({ email }) {
   const pendingGrace = !!email?._pendingSecurityGrace;
@@ -248,6 +251,7 @@ export default function DesktopReader({
   const showReadAction = showMutableActions;
   const showBillToggle = billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
+  const actualActioned = isActualActioned(billResolution?.actualStatus);
 
   return (
     <div
@@ -274,10 +278,14 @@ export default function DesktopReader({
         <span style={{ flex: 1 }} />
         {showDestructiveActions && showBillToggle && (
           <QuickAction
-            icon={CreditCard}
-            label={billOpen ? "Hide bill" : "Pay bill"}
-            tooltip={billOpen ? "Hide bill panel" : "Open bill panel"}
-            primary={!billOpen}
+            icon={actualActioned ? CheckCircle2 : CreditCard}
+            label={actualActioned
+              ? (billOpen ? "Hide details" : "View bill")
+              : (billOpen ? "Hide bill" : "Pay bill")}
+            tooltip={actualActioned
+              ? (billOpen ? "Hide bill details" : "Review matched bill details")
+              : (billOpen ? "Hide bill panel" : "Open bill panel")}
+            primary={!billOpen && !actualActioned}
             onClick={() => setBillOpen((value) => !value)}
             accent="#a6e3a1"
           />
@@ -495,6 +503,11 @@ export default function DesktopReader({
         )}
 
         {email._untriaged && <LiveEmailNotice email={email} />}
+
+        <ActualActionStatus
+          resolution={billResolution}
+          style={{ margin: "8px 20px 0" }}
+        />
 
         <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>

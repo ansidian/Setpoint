@@ -190,4 +190,25 @@ describe("readTransactionsRange", () => {
     });
     expect(transactions.some((transaction) => transaction.id === "t-transfer")).toBe(false);
   });
+
+  it("can include transfer identity fields for statement reconciliation", async () => {
+    await fixture();
+    const { transactions } = await readTransactionsRange(
+      "u1",
+      {
+        start: "2026-05-10",
+        end: "2026-05-10",
+        direction: "all",
+        include_transfers: true,
+      },
+      opts(),
+    );
+
+    expect(transactions).toEqual([expect.objectContaining({
+      id: "t-transfer",
+      payeeId: "p-xfer",
+      accountId: "acct-1",
+      transferAccountId: "acct-2",
+    })]);
+  });
 });

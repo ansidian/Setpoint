@@ -48,6 +48,8 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `reader/ReaderShared.jsx` — section accordion and empty-state primitives
 - `reader/useEmailBody.js` — fetches and caches body HTML, preview fallback
 - `reader/useBillPayResolver.js` — resolves bill extraction for the open email
+- `reader/ActualActionStatus.jsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
+- `reader/actualActionStatusModel.js` — pure copy/tone/actioned-state projection for Actual reconciliation status
 - `reader/billExtractionBody.js` — body state for the bill-pay workflow
 - `reader/billSeedModel.js` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
 - `reader/MobileReader.jsx` — mobile detail pane with action row

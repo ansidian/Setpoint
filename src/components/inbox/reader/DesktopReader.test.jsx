@@ -49,6 +49,7 @@ function renderReader(overrides = {}) {
       snoozeOpen={overrides.snoozeOpen ?? false}
       setSnoozeOpen={overrides.setSnoozeOpen || (() => {})}
       bodyState={overrides.bodyState || { loading: false, error: null, body: "" }}
+      billResolution={overrides.billResolution}
       drafting={overrides.drafting || false}
       setDrafting={setDrafting}
       readOnly={overrides.readOnly || false}
@@ -69,6 +70,27 @@ describe("DesktopReader snapshot actions", () => {
     });
 
     expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
+  });
+
+  it("shows an actioned Actual match and turns bill pay into a review affordance", () => {
+    renderReader({
+      email: {
+        subject: "Utility payment due",
+        category: "finance",
+        hasBill: true,
+      },
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_scheduled",
+          evidence: { amount: 142.31, dueDate: "2026-08-12" },
+        },
+      },
+    });
+
+    expect(screen.getByText("Already scheduled in Actual")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /view bill/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /pay bill/i })).toBeNull();
   });
 
   it("hides the bill-pay affordance for triaged non-bill emails", () => {
