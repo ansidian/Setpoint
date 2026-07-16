@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isActualActioned,
   resolveActualActionStatusView,
+  resolveRecordedActualCalendarTarget,
 } from "./actualActionStatusModel.js";
 
 describe("resolveActualActionStatusView", () => {
@@ -81,5 +82,21 @@ describe("isActualActioned", () => {
     expect(isActualActioned({ status: "already_recorded" })).toBe(true);
     expect(isActualActioned({ status: "needs_review" })).toBe(false);
     expect(isActualActioned({ status: "not_scheduled" })).toBe(false);
+  });
+});
+
+describe("resolveRecordedActualCalendarTarget", () => {
+  it("targets the matched transaction on its recorded date", () => {
+    expect(resolveRecordedActualCalendarTarget({
+      status: "already_recorded",
+      evidence: {
+        kind: "transaction",
+        transactionId: "transaction-42",
+        dueDate: "2026-07-16",
+      },
+    })).toEqual({
+      date: "2026-07-16",
+      itemId: "transaction-42",
+    });
   });
 });

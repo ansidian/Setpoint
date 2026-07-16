@@ -15,6 +15,7 @@ export default function Reader({
   showDraft,
   billOpen,
   setBillOpen,
+  onOpenRecordedBill,
   isMobile = false,
   readOnly = false,
 }) {
@@ -42,6 +43,7 @@ export default function Reader({
     showDraft,
     billOpen,
     setBillOpen,
+    onOpenRecordedBill,
     snoozeBtnRef,
     snoozeOpen,
     setSnoozeOpen,

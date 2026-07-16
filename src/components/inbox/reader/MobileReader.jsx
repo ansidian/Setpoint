@@ -24,7 +24,10 @@ import MobileBillDrawer from "./MobileBillDrawer";
 import MobileReaderHeader from "./MobileReaderHeader";
 import MobileTriageBar from "./MobileTriageBar";
 import ActualActionStatus from "./ActualActionStatus.jsx";
-import { isActualActioned } from "./actualActionStatusModel.js";
+import {
+  isActualActioned,
+  resolveRecordedActualCalendarTarget,
+} from "./actualActionStatusModel.js";
 
 export default function MobileReader({
   email,
@@ -35,6 +38,7 @@ export default function MobileReader({
   showTriage,
   billOpen,
   setBillOpen,
+  onOpenRecordedBill,
   snoozeOpen,
   setSnoozeOpen,
   bodyState,
@@ -61,6 +65,7 @@ export default function MobileReader({
   const showBillToggle = showDestructiveActions && billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
   const actualActioned = isActualActioned(billResolution?.actualStatus);
+  const recordedCalendarTarget = resolveRecordedActualCalendarTarget(billResolution?.actualStatus);
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
@@ -245,12 +250,18 @@ export default function MobileReader({
             {showBillToggle && (
               <MobileActionRow
                 icon={actualActioned ? CheckCircle2 : CreditCard}
-                label={actualActioned
+                label={recordedCalendarTarget
+                  ? "View bill details"
+                  : actualActioned
                   ? (billOpen ? "Hide bill details" : "View bill details")
                   : (billOpen ? "Hide bill pay" : "Open bill pay")}
                 active={billOpen}
                 onClick={() => {
                   setActionsOpen(false);
+                  if (recordedCalendarTarget && onOpenRecordedBill) {
+                    onOpenRecordedBill(recordedCalendarTarget);
+                    return;
+                  }
                   setBillOpen((value) => !value);
                 }}
               />

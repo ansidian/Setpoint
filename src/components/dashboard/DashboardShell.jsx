@@ -296,6 +296,9 @@ export function DashboardShell({
     openEvent: openDashboardEvent,
     openInCalendar: openItemSheetInCalendar,
   } = useDashboardItemSheet({ tab, openCalendar });
+  const handleInboxOpenRecordedBill = useCallback(({ date, itemId }) => {
+    openDashboardBill(date, itemId);
+  }, [openDashboardBill]);
   const billPayLinksByScheduleId = useUtilityPayLinks();
 
   const {
@@ -481,6 +484,7 @@ export function DashboardShell({
                 snoozedEntries={liveData.snoozedEntries}
                 resurfacedEntries={liveData.resurfacedEntries}
                 onOpenDashboard={() => setShellTab("dashboard")}
+                onOpenRecordedBill={handleInboxOpenRecordedBill}
                 onRefresh={onQuickRefresh}
                 commitPendingUndoSignal={calendarOpenRequestId}
                 isMobile={isMobile}

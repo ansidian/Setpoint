@@ -29,7 +29,10 @@ import ActualActionStatus from "./ActualActionStatus.jsx";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActions } from "./readerActionsModel.js";
 import { resolveBillSeed } from "./billSeedModel.js";
-import { isActualActioned } from "./actualActionStatusModel.js";
+import {
+  isActualActioned,
+  resolveRecordedActualCalendarTarget,
+} from "./actualActionStatusModel.js";
 
 function LiveEmailNotice({ email }) {
   const pendingGrace = !!email?._pendingSecurityGrace;
@@ -224,6 +227,7 @@ export default function DesktopReader({
   billOpen,
   billMounted,
   setBillOpen,
+  onOpenRecordedBill,
   snoozeBtnRef,
   snoozeOpen,
   setSnoozeOpen,
@@ -252,6 +256,7 @@ export default function DesktopReader({
   const showBillToggle = billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
   const actualActioned = isActualActioned(billResolution?.actualStatus);
+  const recordedCalendarTarget = resolveRecordedActualCalendarTarget(billResolution?.actualStatus);
 
   return (
     <div
@@ -279,14 +284,24 @@ export default function DesktopReader({
         {showDestructiveActions && showBillToggle && (
           <QuickAction
             icon={actualActioned ? CheckCircle2 : CreditCard}
-            label={actualActioned
+            label={recordedCalendarTarget
+              ? "View bill"
+              : actualActioned
               ? (billOpen ? "Hide details" : "View bill")
               : (billOpen ? "Hide bill" : "Pay bill")}
             tooltip={actualActioned
-              ? (billOpen ? "Hide bill details" : "Review matched bill details")
+              ? (recordedCalendarTarget
+                  ? "Open matched Actual transaction in calendar"
+                  : (billOpen ? "Hide bill details" : "Review matched bill details"))
               : (billOpen ? "Hide bill panel" : "Open bill panel")}
             primary={!billOpen && !actualActioned}
-            onClick={() => setBillOpen((value) => !value)}
+            onClick={() => {
+              if (recordedCalendarTarget && onOpenRecordedBill) {
+                onOpenRecordedBill(recordedCalendarTarget);
+                return;
+              }
+              setBillOpen((value) => !value);
+            }}
             accent="#a6e3a1"
           />
         )}
