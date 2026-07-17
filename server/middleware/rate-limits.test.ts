@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import express from "express";
+import { createServer } from "node:http";
 import request from "supertest";
 import type { RequestHandler } from "express";
 import type { Response as SuperTestResponse } from "supertest";
@@ -17,56 +18,60 @@ function buildApp(limiter: RequestHandler) {
   return app;
 }
 
+async function exhaustLimiter(limiter: RequestHandler, requestCount: number) {
+  const server = createServer(buildApp(limiter));
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  try {
+    const client = request(server);
+    let lastRes: SuperTestResponse | undefined;
+    for (let i = 0; i < requestCount; i += 1) {
+      lastRes = await client.get("/probe");
+    }
+    return lastRes!;
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
+}
+
 describe("rate-limits", () => {
   it("billExtractLimiter allows up to max (20) requests then 429s with the JSON message and standard headers", async () => {
-    const app = buildApp(makeBillExtractLimiter());
+    const lastRes = await exhaustLimiter(makeBillExtractLimiter(), 21);
 
-    let lastRes: SuperTestResponse | undefined;
-    for (let i = 0; i < 21; i += 1) {
-      lastRes = await request(app).get("/probe");
-    }
-
-    expect(lastRes!.status).toBe(429);
-    expect(lastRes!.body).toEqual({ message: "Too many bill-extract requests, try again later" });
-    expect(lastRes!.headers).toHaveProperty("ratelimit-limit");
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body).toEqual({ message: "Too many bill-extract requests, try again later" });
+    expect(lastRes.headers).toHaveProperty("ratelimit-limit");
   });
 
   it("alfredRunLimiter allows up to max (30) requests then 429s", async () => {
-    const app = buildApp(makeAlfredRunLimiter());
+    const lastRes = await exhaustLimiter(makeAlfredRunLimiter(), 31);
 
-    let lastRes: SuperTestResponse | undefined;
-    for (let i = 0; i < 31; i += 1) {
-      lastRes = await request(app).get("/probe");
-    }
-
-    expect(lastRes!.status).toBe(429);
-    expect(lastRes!.body).toEqual({ message: "Too many Alfred run requests, try again later" });
-    expect(lastRes!.headers).toHaveProperty("ratelimit-limit");
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body).toEqual({ message: "Too many Alfred run requests, try again later" });
+    expect(lastRes.headers).toHaveProperty("ratelimit-limit");
   });
 
   it("emailSearchLimiter allows up to max (120) requests then 429s", async () => {
-    const app = buildApp(makeEmailSearchLimiter());
+    const lastRes = await exhaustLimiter(makeEmailSearchLimiter(), 121);
 
-    let lastRes: SuperTestResponse | undefined;
-    for (let i = 0; i < 121; i += 1) {
-      lastRes = await request(app).get("/probe");
-    }
-
-    expect(lastRes!.status).toBe(429);
-    expect(lastRes!.body).toEqual({ message: "Too many email search requests, try again later" });
-    expect(lastRes!.headers).toHaveProperty("ratelimit-limit");
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body).toEqual({ message: "Too many email search requests, try again later" });
+    expect(lastRes.headers).toHaveProperty("ratelimit-limit");
   });
 
   it("placesLimiter allows up to max (120) requests then 429s", async () => {
-    const app = buildApp(makePlacesLimiter());
+    const lastRes = await exhaustLimiter(makePlacesLimiter(), 121);
 
-    let lastRes: SuperTestResponse | undefined;
-    for (let i = 0; i < 121; i += 1) {
-      lastRes = await request(app).get("/probe");
-    }
-
-    expect(lastRes!.status).toBe(429);
-    expect(lastRes!.body).toEqual({ message: "Too many places requests, try again later" });
-    expect(lastRes!.headers).toHaveProperty("ratelimit-limit");
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body).toEqual({ message: "Too many places requests, try again later" });
+    expect(lastRes.headers).toHaveProperty("ratelimit-limit");
   });
 });
