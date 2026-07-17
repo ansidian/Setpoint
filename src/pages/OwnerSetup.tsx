@@ -20,6 +20,7 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -33,8 +34,10 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
     setSubmitting(true);
     setError(null);
     try {
-      await claimOwner(password);
-      onClaimed();
+      const result = await claimOwner(password);
+      setPassword("");
+      setConfirmation("");
+      setRecoveryCodes(result.recoveryCodes);
     } catch (error) {
       setPassword("");
       setConfirmation("");
@@ -68,16 +71,45 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
                 </span>
                 <div className="min-w-0">
                   <CardTitle className="text-balance text-[18px] leading-snug">
-                    Claim your private workspace
+                    {recoveryCodes ? "Save your recovery codes" : "Claim your private workspace"}
                   </CardTitle>
                   <CardDescription className="mt-1 max-w-[52ch] text-pretty text-[12px] leading-relaxed">
-                    Create the owner password for this Setpoint instance. The first successful claim closes public setup permanently.
+                    {recoveryCodes
+                      ? "Store these offline. Each code works once, and Setpoint will not show this set again."
+                      : "Create the owner password for this Setpoint instance. The first successful claim closes public setup permanently."}
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
 
             <CardContent className="space-y-4 pt-5">
+              {recoveryCodes ? (
+                <>
+                  <div className="rounded-lg border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/5 p-3">
+                    <ul aria-label="Recovery codes" className="grid gap-2 sm:grid-cols-2">
+                      {recoveryCodes.map((code) => (
+                        <li key={code}>
+                          <code className="block select-all break-all rounded-md bg-black/20 px-2 py-1.5 text-[11px] text-foreground">
+                            {code}
+                          </code>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="text-pretty text-[12px] leading-relaxed text-muted-foreground">
+                    Keep these somewhere separate from this device. Regenerating recovery codes later invalidates this set.
+                  </p>
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="w-full motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
+                    onClick={onClaimed}
+                  >
+                    I saved these codes
+                  </Button>
+                </>
+              ) : (
+                <>
               <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3 text-[12px] leading-relaxed text-muted-foreground">
                 <span className="inline-flex items-center gap-2 font-medium text-foreground">
                   <KeyRound aria-hidden="true" size={14} className="text-[var(--sp-accent)]" />
@@ -137,11 +169,13 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
               <Button
                 type="submit"
                 size="lg"
-                className="w-full motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
+                className="w-full motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
                 disabled={!password || !confirmation || submitting}
               >
                 {submitting ? "Claiming Setpoint…" : "Claim Setpoint"}
               </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </form>

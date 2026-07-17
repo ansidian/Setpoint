@@ -19,6 +19,8 @@ Composition root and cross-cutting server concerns that don't belong to a single
 
 ### `auth/` — passkey/WebAuthn and session support
 - `auth/passkey-store.ts` — CRUD for stored passkey credentials
+- `auth/auth-mode.ts` — explicit password-or-passkey vs. strict password-plus-passkey resolution
+- `auth/recovery-code-store.ts` — high-entropy recovery-code generation, hashing, replacement, status, and atomic consumption
 - `auth/pending-auth-store.ts` — short-lived pending-auth token issuance/lookup (WebAuthn ceremony handoff)
 - `auth/session-rotation.ts` — bulk session revocation (e.g. on passkey changes), clears the auth validation cache
 - `auth/owner-store.ts` — singleton owner persistence and atomic claim invariant

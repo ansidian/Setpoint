@@ -12,8 +12,21 @@ describe("owner store", () => {
 
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
-    const sql = readFileSync(join(__dirname, "../db/migrations/030_owner_bootstrap.sql"), "utf8");
-    await db.executeMultiple(sql);
+    for (const migration of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "031_auth_recovery.sql"]) {
+      await db.executeMultiple(readFileSync(join(__dirname, `../db/migrations/${migration}`), "utf8"));
+    }
+  });
+
+  it("defaults to password-or-passkey and updates security fields explicitly", async () => {
+    const store = createOwnerStore(db);
+    await store.claimOwner({ userId: "owner-a", passwordHash: "hash-a", claimedAt: 100 });
+
+    await expect(store.setAuthMode("owner-a", "password_plus_passkey")).resolves.toBe(true);
+    await expect(store.updatePasswordHash("owner-a", "hash-b")).resolves.toBe(true);
+    await expect(store.getOwner()).resolves.toMatchObject({
+      authMode: "password_plus_passkey",
+      passwordHash: "hash-b",
+    });
   });
 
   afterEach(() => db.close());
@@ -37,6 +50,19 @@ describe("owner store", () => {
     const owner = await store.getOwner();
     expect(owner).toMatchObject({ singletonId: 1, claimedAt: expect.any(Number) });
     expect(["owner-a", "owner-b"]).toContain(owner?.userId);
+  });
+
+  it("persists initial recovery hashes in the same winning claim transaction", async () => {
+    const store = createOwnerStore(db);
+    await expect(store.claimOwner({
+      userId: "owner-a",
+      passwordHash: "hash-a",
+      claimedAt: 100,
+      recoveryCodeHashes: ["sha256:first", "sha256:second"],
+    })).resolves.toEqual({ claimed: true });
+
+    const rows = await db.execute("SELECT code_hash FROM ea_owner_recovery_codes ORDER BY code_hash");
+    expect(rows.rows.map((row) => row.code_hash)).toEqual(["sha256:first", "sha256:second"]);
   });
 
   it("never mutates the owner after the singleton is claimed", async () => {

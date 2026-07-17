@@ -33,6 +33,7 @@ describe("claimed-instance API gate", () => {
       singletonId: 1,
       userId: "owner-1",
       passwordHash: "not-exposed",
+      authMode: "password_or_passkey",
       claimedAt: 1,
     });
 

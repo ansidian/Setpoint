@@ -12,6 +12,7 @@ const migrationFiles = [
   "012_passkey_auth.sql",
   "028_provider_needs_reauth.sql",
   "030_owner_bootstrap.sql",
+  "031_auth_recovery.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>
@@ -49,10 +50,11 @@ export async function seedSession(
   db: Client,
   token = "cookie-session",
   expiresAt = Date.now() + 60_000,
+  authenticatedAt = 0,
 ) {
   await db.execute({
-    sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-    args: [hashSessionToken(token), expiresAt],
+    sql: "INSERT INTO ea_sessions (token, expires_at, authenticated_at) VALUES (?, ?, ?)",
+    args: [hashSessionToken(token), expiresAt, authenticatedAt],
   });
 }
 

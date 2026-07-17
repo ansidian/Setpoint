@@ -39,7 +39,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration
 - `cards/BriefingSchedulesCard.tsx` — snapshot window boundaries with FLIP reorder animation
 - `cards/ApiTokensCard.tsx` — API token list/create/revoke with scopes and expiry
-- `cards/PasskeysCard.tsx` — passkey registration/deletion, enforcement mode
+- `cards/PasskeysCard.tsx` — passkey registration/deletion, explicit auth mode, password step-up/change, and recovery-code regeneration
 
 ### Shared
 - `shared/ProviderModelSelect.tsx` — dual select for LLM provider + model

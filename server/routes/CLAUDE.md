@@ -5,7 +5,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 ## Files
 
 ### Auth + accounts
-- `auth.ts` — login, passkey registration, WebAuthn, session management
+- `auth.ts` — owner claim, password/passkey login, recent-auth step-up, offline recovery, passkey/session management
 - `accounts.ts` — Gmail OAuth callback and account binding; mounts settings/reminders routers
 
 ### Briefing

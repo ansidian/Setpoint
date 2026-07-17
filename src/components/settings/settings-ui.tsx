@@ -63,9 +63,9 @@ export function SaveStatus({ status }: { status: SettingsSaveStatus }) {
   return <StatusPill tone="neutral">Auto-save on</StatusPill>;
 }
 
-export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
+export function SectionLabel({ children, className, htmlFor }: { children: ReactNode; className?: string; htmlFor?: string }) {
   return (
-    <label className={cn(FIELD_LABEL_CLASS, className)}>
+    <label className={cn(FIELD_LABEL_CLASS, className)} htmlFor={htmlFor}>
       {children}
     </label>
   );
