@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import type { ReactElement } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { checkAuth, prefetchCurrentDashboard } from "./api";
-import { isDemoMode } from "./demo/config.js";
+import { isDemoMode } from "./demo/config.ts";
 import { resolveRouterBasename } from "./routerBase";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";

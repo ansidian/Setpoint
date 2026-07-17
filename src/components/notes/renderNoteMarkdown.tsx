@@ -1,4 +1,4 @@
-import { isDemoMode } from "../../demo/config.js";
+import { isDemoMode } from "../../demo/config.ts";
 import type { ReactNode } from "react";
 
 // inline tokens, first match wins per scan position; global flag is required by matchAll.

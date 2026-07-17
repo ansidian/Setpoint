@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import useDismissablePortal from "../../hooks/useDismissablePortal.js";
+import useDismissablePortal from "../../hooks/useDismissablePortal";
 import {
   createNewsTopic, deleteNewsSource, deleteNewsTopic, renameNewsTopic,
   reorderNewsTopics, updateNewsSource, updateNewsTopicMutedTerms,

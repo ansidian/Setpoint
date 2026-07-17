@@ -78,7 +78,7 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
   that depend on client-side visit state (the divider).
 - `useDismissablePortal` here uses a single panel ref plus `onActivate` and
   `onTabKey` for modal focus entry/containment; there is no anchor because the
-  manager is a slide-over (see `src/hooks/useDismissablePortal.js`).
+  manager is a slide-over (see `src/hooks/useDismissablePortal.ts`).
 - News never generates Needs-You items and has no per-item read state — the
   seen-marker divider is the only "have I looked at this" signal (see the
   design spec's non-goals). The "New only" toggle doesn't change this: it's

@@ -1,4 +1,4 @@
-import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.js";
+import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.ts";
 
 // Persistence for the inbox sidebar compact toggle. Default is compact-on.
 // Stored as "1" (compact) / "0" (expanded). Any non-"0" value (missing,

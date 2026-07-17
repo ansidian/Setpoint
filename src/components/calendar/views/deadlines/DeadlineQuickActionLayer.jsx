@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import useDismissablePortal from "../../../../hooks/useDismissablePortal.js";
+import useDismissablePortal from "../../../../hooks/useDismissablePortal";
 import { clampMenuPosition } from "../../events/quickActionMenuLayout.js";
 
 function stop(event) {

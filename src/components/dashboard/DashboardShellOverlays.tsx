@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { AnalyticsModalMount } from "../shell/AnalyticsModalMount";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
-import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
+import type { SnapshotView } from "../../../shared/types/snapshots";
 import type { DashboardActiveSnapshotController } from "./useLiveReadOverrides";
 import type { DashboardGlanceSheet } from "./dashboardShellModel";
 import type { GlanceActionContext } from "./glanceActionsModel";
@@ -25,10 +25,10 @@ interface DashboardShellOverlaysProps {
   analyticsOpen: boolean;
   closeAnalytics: () => void;
   historyOpen: boolean;
-  historicalSnapshotView: ActiveSnapshotView | null;
+  historicalSnapshotView: SnapshotView | null;
   activeSnapshot: DashboardActiveSnapshotController;
   historyTriggerRef: RefObject<HTMLElement | null>;
-  handleSelectSnapshot: (snapshot: ActiveSnapshotView, meta?: { readOnly?: boolean }) => void;
+  handleSelectSnapshot: (snapshot: SnapshotView | null, meta?: { readOnly?: boolean }) => void;
   setHistoryOpen: Dispatch<SetStateAction<boolean>>;
 }
 

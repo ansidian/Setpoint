@@ -17,17 +17,17 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useAutoRefresh.ts` — 5-minute interval and tab-focus refresh gates
 
 ### Browser interactions
-- `useBrowserBackDismiss.js` — dismissal callback on browser back navigation
+- `useBrowserBackDismiss.ts` — dismissal callback on browser back navigation
 - `email/useInboxSelectionHistory.js` — browser history state for inbox selection
-- `useIsMobile.js` — mobile viewport detection
-- `useMediaQuery.js` — reactive media query matching
-- `useKeyHold.js` — key hold duration/progress with completion callback
-- `useWarmImport.js` — warms a lazy dynamic import on idle after first paint
-- `useDismissablePortal.js` — outside-pointerdown (sparing one `ref` or many `refs`, plus an optional `ignoreSelector` escape hatch) + capture-phase Escape dismissal for body-portal menus/popovers/anchored panels, with optional Tab containment and on-open autofocus. Consumed by `CalendarQuickActionLayer`, `DeadlineQuickActionLayer`, and `shared/pickers/AnchoredFloatingPanel`
+- `useIsMobile.ts` — mobile viewport detection
+- `useMediaQuery.ts` — reactive media query matching
+- `useKeyHold.ts` — key hold duration/progress with completion callback
+- `useWarmImport.ts` — warms a lazy dynamic import on idle after first paint
+- `useDismissablePortal.ts` — outside-pointerdown (sparing one `ref` or many `refs`, plus an optional `ignoreSelector` escape hatch) + capture-phase Escape dismissal for body-portal menus/popovers/anchored panels, with optional Tab containment and on-open autofocus. Consumed by `CalendarQuickActionLayer`, `DeadlineQuickActionLayer`, and `shared/pickers/AnchoredFloatingPanel`
 
 ### Preferences + notifications
-- `useNotifications.js` — browser notifications for events, bills, important senders
-- `useTriageNotificationSounds.js` — schedules and gates triage notification sounds
+- `useNotifications.ts` — browser notifications for events, bills, important senders
+- `useTriageNotificationSounds.ts` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
 
@@ -35,5 +35,5 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 
 ## Related
 
-- `src/lib/triageSoundGate.ts` — dedup gate consumed by `useTriageNotificationSounds.js`
+- `src/lib/triageSoundGate.ts` — dedup gate consumed by `useTriageNotificationSounds.ts`
 - `server/routes/dashboard.ts` — SSE stream consumed by `useCurrentDashboard.ts`

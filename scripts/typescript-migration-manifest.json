@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 552,
+  "remainingLegacyFiles": 480,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -173,6 +173,24 @@
     "server/alfred",
     "server/routes/alfred.ts",
     "server/routes/alfred.test.ts",
-    "src/components/alfred"
+    "src/components/alfred",
+    "src/demo",
+    "src/components/briefing",
+    "src/components/layout",
+    "src/components/shell",
+    "src/hooks/useBrowserBackDismiss.ts",
+    "src/hooks/useBrowserBackDismiss.test.ts",
+    "src/hooks/useDismissablePortal.ts",
+    "src/hooks/useDismissablePortal.test.ts",
+    "src/hooks/useIsMobile.ts",
+    "src/hooks/useKeyHold.ts",
+    "src/hooks/useKeyHold.test.ts",
+    "src/hooks/useMediaQuery.ts",
+    "src/hooks/useNotifications.ts",
+    "src/hooks/useNotifications.test.ts",
+    "src/hooks/useTriageNotificationSounds.ts",
+    "src/hooks/useTriageNotificationSounds.test.tsx",
+    "src/hooks/useWarmImport.ts",
+    "src/hooks/useWarmImport.test.ts"
   ]
 }

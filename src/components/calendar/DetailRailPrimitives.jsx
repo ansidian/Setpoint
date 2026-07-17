@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isDemoMode } from "../../demo/config.js";
+import { isDemoMode } from "../../demo/config.ts";
 
 export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, actions, children }) {
   const pad = compact ? 12 : 14;
