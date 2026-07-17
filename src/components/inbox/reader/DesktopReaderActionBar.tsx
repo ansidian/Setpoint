@@ -56,7 +56,7 @@ type ToolbarButtonProps = {
   icon: LucideIcon;
   label?: string;
   ariaLabel?: string;
-  tooltip: string;
+  tooltip?: string;
   onClick: () => void;
   buttonRef?: RefObject<HTMLButtonElement | null>;
   adaptive?: boolean;

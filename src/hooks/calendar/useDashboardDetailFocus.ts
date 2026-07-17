@@ -13,7 +13,7 @@ import {
 } from "./calendarControllerHelpers";
 import type { FloatingEditorDetail } from "./useFloatingEditorRouting";
 
-export interface PendingDashboardDetailFocus extends Omit<DashboardDetailFocusRequest, "detailKind"> {
+export interface PendingDashboardDetailFocus extends Omit<DashboardDetailFocusRequest, "detailKind" | "anchorKind"> {
   detailKind?: "deadline" | null;
   anchorKind?: string;
   anchorElement?: Element | null;

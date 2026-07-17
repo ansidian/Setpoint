@@ -134,7 +134,7 @@ describe("DesktopReader snapshot actions", () => {
     const items = within(menu).getAllByRole("menuitem");
 
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
-    fireEvent.keyDown(items[0], { key: "ArrowDown" });
+    fireEvent.keyDown(items[0]!, { key: "ArrowDown" });
     expect(document.activeElement).toBe(items[1]);
     fireEvent.keyDown(document, { key: "Escape" });
 
