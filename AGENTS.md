@@ -97,7 +97,7 @@ For dropdowns, popovers, and panels, follow the repo pattern in `src/components/
 ## Context Outside The Repo
 
 - Prod DB is Turso; dev DB is `server/db/ea.db`, and can be probed through Turso CLI.
-- Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/actual/actual.js`, not the CLI.
+- Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/actual/actual.ts`, not the CLI.
 
 ## Demo Mode Contract
 

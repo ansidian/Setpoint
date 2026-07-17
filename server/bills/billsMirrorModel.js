@@ -2,8 +2,8 @@
 // the mirror upsert arg builders, the maintenance-due predicate, and the current/range
 // payload shaping. DB-free — the residual (bills-mirror-sync.js) owns all IO, the
 // scheduler singletons, and the refresh orchestration.
-import { buildBillOccurrencesFromSchedules } from "../actual/actual-bill-occurrences.js";
-import { metadataWithPayeeMap } from "../actual/actual-metadata-projection.js";
+import { buildBillOccurrencesFromSchedules } from "../actual/actual-bill-occurrences.ts";
+import { metadataWithPayeeMap } from "../actual/actual-metadata-projection.ts";
 
 const BILL_MIRROR_LOOKBACK_DAYS = 30;
 const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;

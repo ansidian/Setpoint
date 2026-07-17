@@ -1,6 +1,6 @@
 import db from "../db/connection.ts";
-import { getMetadata as actualGetMetadata } from "../actual/actual.js";
-import { getMetadata as projectedGetMetadata } from "../actual/actual-metadata-projection.js";
+import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
+import { getMetadata as projectedGetMetadata } from "../actual/actual-metadata-projection.ts";
 import { readBillsMirrorRange } from "./bills-mirror-sync.js";
 import { queryTransactions } from "../transactions/transactions-service.js";
 import { parseBillPayMappingsJson } from "./bill-pay-mappings.js";

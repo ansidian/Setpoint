@@ -8,7 +8,7 @@ import {
   isAllowedBillExtractModel,
 } from "./bill-extractors/catalog.js";
 import { resolveExtractedBillPay } from "./bill-pay-service.js";
-import { EMPTY_ACTUAL_METADATA, getMetadata } from "../actual/actual-metadata-projection.js";
+import { EMPTY_ACTUAL_METADATA, getMetadata } from "../actual/actual-metadata-projection.ts";
 
 const PROVIDERS = {
   [ANTHROPIC_PROVIDER.id]: ANTHROPIC_PROVIDER,

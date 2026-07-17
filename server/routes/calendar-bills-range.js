@@ -5,7 +5,7 @@ import {
   shouldScheduleImmediateBillsRefresh,
 } from "../bills/bills-service.js";
 import { requestBillsCurrentMaintenanceRefresh } from "../dashboard/current-service.js";
-import { queryTransactions } from "../transactions/transactions-service.js";
+import { queryTransactions } from "../transactions/transactions-service.ts";
 
 const CALENDAR_TRANSACTION_LIMIT = 5000;
 

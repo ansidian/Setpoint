@@ -265,7 +265,7 @@ export function spendingBreakdownRows(buckets = []) {
   return buckets.map((b) => {
     const amount = Number(b.amount) || 0;
     const pct = max > 0 ? (Math.abs(amount) / max) * 100 : 0;
-    // "Other" is the rollup label hardcoded in server/transactions/transactions-service.js;
+    // "Other" is the rollup label hardcoded in server/transactions/transactions-service.ts;
     // matching it greys that bar. Keep in sync if the service's rollup label ever changes.
     return {
       label: b.label,

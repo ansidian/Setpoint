@@ -16,7 +16,7 @@ import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.js";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.js";
 import { readBillsMirrorRange } from "../bills/bills-service.js";
-import { queryTransactions, summarizeTransactions } from "../transactions/transactions-service.js";
+import { queryTransactions, summarizeTransactions } from "../transactions/transactions-service.ts";
 
 const ALFRED_DEPS = {
   retrieve: retrieveInboxAiSearch,

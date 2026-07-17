@@ -4,7 +4,7 @@ import {
   loadActualMetadataForProjection,
   metadataWithPayeeMap,
   upsertMetadataProjectionQuery,
-} from "../actual/actual-metadata-projection.js";
+} from "../actual/actual-metadata-projection.ts";
 import {
   BILLS_CURRENT_LOOKAHEAD_DAYS,
   BILLS_CURRENT_LOOKBACK_DAYS,

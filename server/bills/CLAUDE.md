@@ -22,7 +22,7 @@ Bill domain logic: AI extraction from emails, user bill-matching rules, and the 
 
 ## Local patterns
 
-- Bills write through `server/actual/actual.js`; this domain decides *what* to write, the actual domain decides *how*.
+- Bills write through `server/actual/actual.ts`; this domain decides *what* to write, the actual domain decides *how*.
 - Extraction providers are registered in `bill-extractors/catalog.js`; add new providers there, not inline.
 
 ## Related
