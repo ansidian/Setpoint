@@ -34,7 +34,7 @@ vi.mock("./email/email-index.js", () => ({ indexEmails: vi.fn() }));
 vi.mock("./email/gmail-sync.js", () => gmailSyncApi);
 vi.mock("./triage/triage-worker.js", () => triageWorkerApi);
 vi.mock("./email/search/email-search-embedding-worker.js", () => embeddingWorkerApi);
-vi.mock("./reminders/reminder-scheduler.js", () => reminderSchedulerApi);
+vi.mock("./reminders/reminder-scheduler.ts", () => reminderSchedulerApi);
 
 const {
   initScheduler,

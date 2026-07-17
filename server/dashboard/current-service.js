@@ -11,7 +11,7 @@ import { getTodoistSyncHealth } from "../tasks/todoist.js";
 import {
   hydrateCalendarEventsWithReminderState,
   hydrateTodoistTasksWithReminderState,
-} from "../reminders/reminder-hydration.js";
+} from "../reminders/reminder-hydration.ts";
 import {
   CURRENT_CACHE_KEYS,
   currentResponseContentKey,

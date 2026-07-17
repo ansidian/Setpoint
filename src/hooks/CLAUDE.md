@@ -9,7 +9,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 ## Files
 
 ### Dashboard data
-- `useNews.js` — News tab data fetching: initial load, tab-visibility background refetch, manual refresh (server sweep + reload)
+- `useNews.ts` — News tab data fetching: initial load, tab-visibility background refetch, manual refresh (server sweep + reload)
 - `useCurrentDashboard.js` — dashboard state: fetching, polling, SSE streaming, briefing selection
 - `currentDashboardModel.js` — briefing/live data transforms, active-refresh detection
 - `dashboardEventRefreshModel.js` — pure SSE source-to-refresh-scope routing and strongest-scope merge rules

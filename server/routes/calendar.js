@@ -27,11 +27,11 @@ import { placesLimiter } from "../middleware/rate-limits.ts";
 import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,
-} from "../reminders/reminder-service.js";
+} from "../reminders/reminder-service.ts";
 import {
   calendarEventAnchorAt,
   hydrateCalendarEventsWithReminderState,
-} from "../reminders/reminder-hydration.js";
+} from "../reminders/reminder-hydration.ts";
 import {
   deleteCalendarSearchMirrorOccurrence,
   markCalendarSearchMirrorDirty,

@@ -11,7 +11,7 @@ import {
 import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,
-} from "../reminders/reminder-service.js";
+} from "../reminders/reminder-service.ts";
 import { todoistReminderAnchorFromTask } from "./todoist-reminder-source.js";
 import { buildSnapshot } from "./tombstones.js";
 
