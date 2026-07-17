@@ -344,7 +344,7 @@ describe("CalendarModal bills behavior", () => {
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
   });
 
-  it("opens agenda-anchored floating bill detail from dashboard item focus", async () => {
+  it("opens chip-anchored floating bill detail from dashboard item focus", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -379,12 +379,12 @@ describe("CalendarModal bills behavior", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("chip");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
   });
 
-  it("opens agenda-anchored floating bill detail when dashboard focus uses schedule id and range uses instance id", async () => {
+  it("opens chip-anchored floating bill detail when dashboard focus uses schedule id and range uses instance id", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -422,7 +422,7 @@ describe("CalendarModal bills behavior", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("chip");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
   });
@@ -515,7 +515,7 @@ describe("CalendarModal bills behavior", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("chip");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
   });
