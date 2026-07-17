@@ -86,7 +86,7 @@ vi.mock("../components/shell/CommandPalette", () => ({
 // does not reliably intercept the lazy `import("./AiAnalyticsModal")` that lives
 // inside the loader, so mocking the loader is what makes the lazy surface
 // deterministic here.
-vi.mock("../components/shell/aiAnalyticsModalLoader.js", () => ({
+vi.mock("../components/shell/aiAnalyticsModalLoader", () => ({
   loadAiAnalyticsModal: () => Promise.resolve({
     default: function AiAnalyticsModalMock({ open }: { open: boolean }) {
       return open ? <div data-testid="ai-analytics-modal" /> : null;

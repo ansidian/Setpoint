@@ -1,6 +1,6 @@
 import { parseDueDate, toPacificDate, todayPacific } from "../../../../lib/dashboard-helpers";
 import { dueDateToMs } from "../../../../lib/shell-helpers";
-import { isDemoMode } from "../../../../demo/config.js";
+import { isDemoMode } from "../../../../demo/config.ts";
 import { parseYmd } from "../../calendarDateUtils.js";
 import { TODOIST_DEADLINE_COLOR } from "../../../../../shared/deadline-source-colors";
 

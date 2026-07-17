@@ -1,0 +1,382 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, RefObject } from "react";
+import { createPortal } from "react-dom";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  CircleDashed,
+  Info,
+  LoaderCircle,
+} from "lucide-react";
+import type { LucideProps } from "lucide-react";
+
+type NormalizedStatusState = keyof typeof STATE_COPY;
+
+export interface SystemStatusSourceView {
+  key?: string;
+  label?: string;
+  state?: string;
+  message?: string;
+  lastSuccessAt?: string | null;
+}
+
+export interface SystemStatusView {
+  state?: string;
+  sources?: SystemStatusSourceView[];
+}
+
+const FALLBACK_STATUS: SystemStatusView = {
+  state: "current",
+  sources: [],
+};
+
+const STATE_COPY = {
+  current: "Current",
+  refreshing: "Refreshing",
+  syncing: "Syncing",
+  needs_sync: "Needs sync",
+  degraded: "Degraded",
+  unavailable: "Unavailable",
+  unconfigured: "Unconfigured",
+};
+
+const STATE_COLOR = {
+  current: "#a6e3a1",
+  refreshing: "#89b4fa",
+  syncing: "#89b4fa",
+  needs_sync: "#f9e2af",
+  degraded: "#f9e2af",
+  unavailable: "#f38ba8",
+  unconfigured: "#a6adc8",
+};
+
+function normalizeState(state: string | null | undefined): NormalizedStatusState {
+  if (state === "stale") return "needs_sync";
+  return typeof state === "string" && state in STATE_COPY
+    ? state as NormalizedStatusState
+    : "unavailable";
+}
+
+function isAttentionState(state: NormalizedStatusState): boolean {
+  return state === "needs_sync" || state === "degraded" || state === "unavailable";
+}
+
+function isBusyState(state: NormalizedStatusState): boolean {
+  return state === "refreshing" || state === "syncing";
+}
+
+function StatusIcon({ state, ...props }: LucideProps & { state: NormalizedStatusState }) {
+  if (state === "current") return <CheckCircle2 {...props} />;
+  if (state === "refreshing" || state === "syncing") return <LoaderCircle {...props} />;
+  if (state === "needs_sync" || state === "degraded" || state === "unavailable") return <AlertTriangle {...props} />;
+  if (state === "unconfigured") return <CircleDashed {...props} />;
+  return <Info {...props} />;
+}
+
+function HealthGlyph({ busy, color, isMobile }: { busy: boolean; color: string; isMobile: boolean }) {
+  // lucide Activity (heartbeat / pulse line) per the design handoff. The glyph
+  // color IS the status (Source Color Rule). Busy states (refreshing/syncing)
+  // get a soft drop-shadow pulse, gated behind prefers-reduced-motion in CSS.
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="system-status-signal"
+      className={busy ? "system-status-signal--busy" : undefined}
+      style={{
+        "--system-status-signal-color": color,
+        display: "inline-grid",
+        placeItems: "center",
+      } as CSSProperties}
+    >
+      <Activity size={isMobile ? 15 : 13} strokeWidth={2} color={color} />
+    </span>
+  );
+}
+
+function formatTimestamp(value: string | null | undefined): string {
+  if (!value) return "No recent success";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No recent success";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+interface PanelPosition {
+  top: number;
+  left: number;
+}
+
+function usePanelPosition(open: boolean, triggerRef: RefObject<HTMLButtonElement | null>): PanelPosition {
+  const [position, setPosition] = useState<PanelPosition>({ top: 52, left: 12 });
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+
+    function update() {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = 300;
+      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+      setPosition({
+        top: rect.bottom + 8,
+        left,
+      });
+    }
+
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, triggerRef]);
+
+  return position;
+}
+
+function StatusPanel({ status, onClose, panelRef, position }: {
+  status: SystemStatusView;
+  onClose: () => void;
+  panelRef: RefObject<HTMLDivElement | null>;
+  position: PanelPosition;
+}) {
+  const [closeHover, setCloseHover] = useState(false);
+  const [closeFocus, setCloseFocus] = useState(false);
+  const [closePressed, setClosePressed] = useState(false);
+  const sources = status.sources?.length
+    ? status.sources
+    : [{ key: "system", label: "System", state: status.state, message: "System status is current." }];
+  const closeActive = (closeHover || closeFocus) && !closePressed;
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="System status"
+      style={{
+        position: "fixed",
+        top: position.top,
+        left: position.left,
+        width: 300,
+        maxWidth: "calc(100vw - 16px)",
+        maxHeight: "min(420px, calc(100vh - 72px))",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        isolation: "isolate",
+        padding: 10,
+        borderRadius: 12,
+        background: "var(--sp-panel)",
+        border: "1px solid rgba(255,255,255,0.09)",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+        color: "var(--sp-text)",
+        zIndex: 80,
+      }}
+      onWheel={(event) => {
+        const target = event.currentTarget;
+        const atTop = target.scrollTop <= 0;
+        const atBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 1;
+        if ((atTop && event.deltaY < 0) || (atBottom && event.deltaY > 0)) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding: "2px 2px 8px",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" }}>
+          System status
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          onMouseEnter={() => setCloseHover(true)}
+          onMouseLeave={() => {
+            setCloseHover(false);
+            setClosePressed(false);
+          }}
+          onFocus={() => setCloseFocus(true)}
+          onBlur={() => {
+            setCloseFocus(false);
+            setClosePressed(false);
+          }}
+          onPointerDown={() => setClosePressed(true)}
+          onPointerUp={() => setClosePressed(false)}
+          aria-label="Close system status"
+          style={{
+            border: "1px solid rgba(255,255,255,0.08)",
+            background: closeActive ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
+            color: closeActive ? "var(--sp-text)" : "rgba(205,214,244,0.74)",
+            borderRadius: 7,
+            cursor: "pointer",
+            fontSize: 11,
+            padding: "3px 7px",
+            transform: closeActive ? "translateY(-1px)" : "translateY(0)",
+            boxShadow: closeFocus ? "0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
+            transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms, box-shadow 150ms",
+          }}
+        >
+          Close
+        </button>
+      </div>
+      <div style={{ display: "grid", gap: 6, paddingTop: 8 }}>
+        {sources.map((source) => {
+          const state = normalizeState(source.state);
+          const color = STATE_COLOR[state];
+          return (
+            <div
+              key={source.key || source.label}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "16px minmax(0, 1fr)",
+                gap: 9,
+                padding: "8px 6px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.06)",
+                background: isAttentionState(state) ? `${color}10` : "rgba(255,255,255,0.025)",
+              }}
+            >
+              <StatusIcon
+                state={state}
+                size={14}
+                color={color}
+                style={{ marginTop: 1, animation: isBusyState(state) ? "spin 0.8s linear infinite" : "none" }}
+              />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 650, color: "var(--sp-text)" }}>
+                    {source.label || source.key}
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                    {STATE_COPY[state]}
+                  </div>
+                </div>
+                <div style={{ marginTop: 3, fontSize: 11, lineHeight: 1.35, color: "rgba(205,214,244,0.72)" }}>
+                  {source.message || "Status details are unavailable."}
+                </div>
+                <div style={{ marginTop: 5, fontSize: 10.5, color: "rgba(166,173,200,0.75)" }}>
+                  Last success: {formatTimestamp(source.lastSuccessAt)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = false }: {
+  systemStatus?: SystemStatusView | null;
+  isMobile?: boolean;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const status = systemStatus || FALLBACK_STATUS;
+  const state = normalizeState(status.state);
+  const color = STATE_COLOR[state];
+  const position = usePanelPosition(open, triggerRef);
+  const active = hover || open || focused;
+  const attention = isAttentionState(state);
+  const busy = isBusyState(state);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function onPointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && triggerRef.current?.contains(event.target)) return;
+      if (event.target instanceof Node && panelRef.current?.contains(event.target)) return;
+      setOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`System status: ${state}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((value) => !value)}
+        onPointerDown={() => setPressed(true)}
+        onPointerUp={() => setPressed(false)}
+        onPointerLeave={() => {
+          setPressed(false);
+          setHover(false);
+        }}
+        onMouseEnter={() => setHover(true)}
+        // Only light the focus ring for keyboard focus, not a mouse click:
+        // :focus-visible is the browser's own keyboard-vs-pointer heuristic.
+        onFocus={(event) => setFocused(event.currentTarget.matches(":focus-visible"))}
+        onBlur={() => setFocused(false)}
+        style={{
+          width: isMobile ? 40 : 28,
+          height: isMobile ? 40 : 28,
+          flexShrink: 0,
+          borderRadius: 8,
+          // Match the sibling "More" tool button so the cluster reads as one
+          // group. At rest the glyph color carries the signal; attention states
+          // also tint the border + fill so urgency wins the foreground.
+          border: `1px solid ${
+            attention
+              ? `${color}59`
+              : active
+                ? "rgba(255,255,255,0.16)"
+                : "rgba(255,255,255,0.08)"
+          }`,
+          background: attention
+            ? `${color}14`
+            : active
+              ? "rgba(255,255,255,0.06)"
+              : "rgba(255,255,255,0.03)",
+          boxShadow: focused ? "0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
+          cursor: "pointer",
+          display: "inline-grid",
+          placeItems: "center",
+          transform: hover && !pressed ? "translateY(-1px)" : "translateY(0)",
+          transition:
+            "transform 150ms, background 150ms, border-color 150ms, box-shadow 150ms",
+        }}
+      >
+        <HealthGlyph busy={busy} color={color} isMobile={isMobile} />
+      </button>
+      {open && (
+        <StatusPanel
+          status={status}
+          onClose={() => setOpen(false)}
+          panelRef={panelRef}
+          position={position}
+        />
+      )}
+    </>
+  );
+}

@@ -1,4 +1,4 @@
-import { isDemoMode } from "../../demo/config.js";
+import { isDemoMode } from "../../demo/config.ts";
 import type { ReactNode } from "react";
 
 const URL_RE = /(https?:\/\/[^\s]+)/g;

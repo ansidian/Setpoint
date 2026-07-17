@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { findScrollableParent, shouldDismissOnDragEnd, shouldEngageDrag } from "./bottomSheetModel";
 import { acquireScrollLock } from "@/lib/scrollLock";
-import useBrowserBackDismiss from "@/hooks/useBrowserBackDismiss.js";
+import useBrowserBackDismiss from "@/hooks/useBrowserBackDismiss";
 
 export type BottomSheetProps = {
   open: boolean;

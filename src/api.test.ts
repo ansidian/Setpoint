@@ -4,7 +4,7 @@ import type { Mock } from "vitest";
 type TestFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 // Fresh module per test so api.ts's module-level prefetch prime starts clean.
-// Mirrors src/demo/demoMode.test.js's importApiWithDemoMode helper.
+// Mirrors src/demo/demoMode.test.ts's importApiWithDemoMode helper.
 async function importApi() {
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", "");

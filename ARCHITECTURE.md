@@ -249,14 +249,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useStaleDomainCache` | `src/hooks/calendar/useStaleDomainCache.js` |
 | `useViewportWidth` | `src/hooks/calendar/useViewportWidth.js` |
 | `useInboxSelectionHistory` | `src/hooks/email/useInboxSelectionHistory.js` |
-| `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.js` |
-| `useDismissablePortal` | `src/hooks/useDismissablePortal.js` |
-| `useIsMobile` | `src/hooks/useIsMobile.js` |
-| `useKeyHold` | `src/hooks/useKeyHold.js` |
-| `useMediaQuery` | `src/hooks/useMediaQuery.js` |
-| `useNotifications` | `src/hooks/useNotifications.js` |
-| `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.js` |
-| `useWarmImport` | `src/hooks/useWarmImport.js` |
 <!-- END:hooks -->
 
 ### Calendar Code Map
@@ -664,7 +656,7 @@ All dropdowns, popovers, and panels use:
 4. `isolation: isolate` + opaque background (`#16161e`)
 5. Click-outside via `pointerdown` on `document`
 
-Reference implementations: `BriefingHistoryPanel.jsx`, `src/components/shared/pickers/AnchoredFloatingPanel.tsx`.
+Reference implementations: `BriefingHistoryPanel.tsx`, `src/components/shared/pickers/AnchoredFloatingPanel.tsx`.
 
 ### Scheduler
 

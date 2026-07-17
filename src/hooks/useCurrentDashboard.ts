@@ -6,7 +6,7 @@ import {
   requestCurrentDashboardRefresh,
   syncCurrentDashboard,
 } from "../api";
-import { isDemoMode } from "../demo/config.js";
+import { isDemoMode } from "../demo/config.ts";
 import { invalidateActualMetadata } from "../lib/actualMetadata";
 import { logTiming } from "../../shared/timing";
 import type {

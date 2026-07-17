@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { deleteAlfredConversation, runAlfredStream } from "../../api";
-import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.js";
+import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage.ts";
 import type { AlfredModelKey } from "../../../shared/types/alfred";
 import {
   alfredModelByKey,

@@ -1,4 +1,4 @@
-import { isDemoMode } from "./demo/config.js";
+import { isDemoMode } from "./demo/config.ts";
 import { readSseStream } from "./lib/sseStream";
 import type {
   AuthenticationResponseJSON,
@@ -168,7 +168,7 @@ function errorCode(value: unknown): unknown {
 async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   // Keep this literal env check: Vite must eliminate the adapter import from production builds.
   if (import.meta.env.VITE_EA_DEMO === "1") {
-    const demoModule = await import("./demo/apiAdapter.js");
+    const demoModule = await import("./demo/apiAdapter.ts");
     const handleDemoApiRequest = demoModule.handleDemoApiRequest as DemoApiRequestHandler;
     return handleDemoApiRequest(path, options) as Promise<T>;
   }

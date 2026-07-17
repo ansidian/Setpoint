@@ -27,7 +27,7 @@ import { getInboxSession, resetInboxSession, setInboxSession, useInboxSelectedId
 import type { CurrentDashboardHookResult } from "../../hooks/useCurrentDashboard";
 import type useCalendarRange from "../../hooks/calendar/useCalendarRange";
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
-import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
+import type { ActiveSnapshotView, SnapshotView } from "../../../shared/types/snapshots";
 import type { DashboardCalendarBillsData } from "./calendarBillsData";
 import type { DashboardCalendarModalMountProps } from "./DashboardCalendarModalMount";
 import type { CalendarOpenRequest, DashboardTab } from "./dashboardShellModel";
@@ -98,7 +98,7 @@ const SHELL_PREFS = Object.freeze({
 });
 
 // ShellTabs (the tablist owning id="shell-tab-{key}") only renders on desktop
-// (see ShellHeader.jsx's `{!isMobile && <ShellTabs ... />}`), so on mobile the
+// (see ShellHeader's `{!isMobile && <ShellTabs ... />}`), so on mobile the
 // id a tabpanel's aria-labelledby would point at doesn't exist — a dangling
 // IDREF. Fall back to a plain aria-label built from the same TAB_LABELS the
 // desktop tabs already use, rather than introducing a second label table.
@@ -219,7 +219,7 @@ export function DashboardShell({
   }, [isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [historicalSnapshotView, setHistoricalSnapshotView] = useState<ActiveSnapshotView | null>(null);
+  const [historicalSnapshotView, setHistoricalSnapshotView] = useState<SnapshotView | null>(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
@@ -342,7 +342,7 @@ export function DashboardShell({
   const inboxActiveSnapshot = useMemo(() => {
     if (!historicalSnapshotView) return activeSnapshot;
     return {
-      snapshot: historicalSnapshotView,
+      snapshot: historicalSnapshotView as ActiveSnapshotView,
       loading: false,
       error: null,
       refresh: async () => {},
@@ -350,7 +350,7 @@ export function DashboardShell({
     };
   }, [activeSnapshot, historicalSnapshotView]);
 
-  const handleSelectSnapshot = useCallback((snapshotView: ActiveSnapshotView, meta?: { readOnly?: boolean }) => {
+  const handleSelectSnapshot = useCallback((snapshotView: SnapshotView | null, meta?: { readOnly?: boolean }) => {
     if (meta?.readOnly) {
       setHistoricalSnapshotView(snapshotView);
     } else {
