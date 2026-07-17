@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 593,
+  "remainingLegacyFiles": 552,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -169,6 +169,10 @@
     "src/hooks/settings",
     "src/pages/Settings.tsx",
     "src/pages/Settings.test.tsx",
-    "src/pages/Settings.demo.test.tsx"
+    "src/pages/Settings.demo.test.tsx",
+    "server/alfred",
+    "server/routes/alfred.ts",
+    "server/routes/alfred.test.ts",
+    "src/components/alfred"
   ]
 }

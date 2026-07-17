@@ -202,7 +202,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 <!-- BEGIN:hooks -->
 | Export | File |
 |--------|------|
-| `useAlfredChat` | `src/components/alfred/useAlfredChat.js` |
 | `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.js` |
 | `useCalendarEventEditor` | `src/components/calendar/events/useCalendarEventEditor.js` |
 | `useCalendarEventTitleComposer` | `src/components/calendar/events/useCalendarEventTitleComposer.js` |
@@ -686,11 +685,7 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 The structural route table below is regenerated from `server/index.js` and `server/routes/**/*.js`. It enumerates every `router.METHOD(path, …)` declaration with its mount prefix from `app.use(…)`. The per-domain prose tables that follow add operational context (purpose, auth posture) but may drift; the structural list above is canonical for "does this route exist".
 
 <!-- BEGIN:routes -->
-| Method | Path | File |
-|--------|------|------|
-| DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.js` |
-| POST | `/api/alfred/run` | `server/routes/alfred.js` |
-| GET | `/api/alfred/usage` | `server/routes/alfred.js` |
+_No routes detected._
 <!-- END:routes -->
 
 ### Auth

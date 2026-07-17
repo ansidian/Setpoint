@@ -107,6 +107,12 @@ import type {
   EmailSearchResponse,
   PinnedEmailSnapshot,
 } from "../shared/types/email.ts";
+import type {
+  AlfredConversationDeleteResponse,
+  AlfredRunEvent,
+  AlfredStreamOptions,
+  AlfredUsageStats,
+} from "../shared/types/alfred.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -145,14 +151,6 @@ type CalendarSearchOptions = {
 };
 
 type SignalOptions = { signal?: AbortSignal };
-
-type AlfredStreamOptions = {
-  message: string;
-  conversationId?: string;
-  model?: string;
-  signal?: AbortSignal;
-  onEvent: (event: unknown) => void;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -345,7 +343,7 @@ export const requestCurrentDashboardRefresh = (): Promise<CurrentDashboardRespon
 export const syncCurrentDashboard = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
 export const getTriageCacheStats = (): Promise<TriageCacheStatsResponse> => apiFetch("/api/ea/triage/cache-stats");
 
-export const getAlfredUsageStats = (): Promise<unknown> => apiFetch("/api/alfred/usage");
+export const getAlfredUsageStats = (): Promise<AlfredUsageStats> => apiFetch("/api/alfred/usage");
 
 export const getEmailSearchStats = (): Promise<EmailSearchCostStats> => apiFetch("/api/ea/email-search/usage");
 // 5-minute in-memory TTL cache for email bodies. Bodies don't mutate
@@ -583,10 +581,10 @@ export async function runAlfredStream({ message, conversationId, model, signal, 
     const body: unknown = await res.json().catch(() => null);
     throw new Error(errorMessage(body) || `API error: ${res.status}`);
   }
-  await readSseStream(res.body as ReadableStream<Uint8Array>, onEvent);
+  await readSseStream(res.body as ReadableStream<Uint8Array>, (payload) => onEvent(payload as AlfredRunEvent));
 }
 
-export const deleteAlfredConversation = (id: ApiId): Promise<unknown> => (
+export const deleteAlfredConversation = (id: ApiId): Promise<AlfredConversationDeleteResponse> => (
   apiFetch(`/api/alfred/conversations/${encodeURIComponent(id)}`, { method: "DELETE" })
 );
 
