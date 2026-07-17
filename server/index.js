@@ -8,7 +8,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import authRoutes from "./routes/auth.js";
+import authRoutes from "./routes/auth.ts";
 import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -19,24 +19,24 @@ import notesRoutes from "./routes/notes.js";
 import newsRoutes from "./routes/news.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
 import todoistWebhookRoutes from "./routes/todoist-webhook.js";
-import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.js";
+import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.js";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.js";
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.js";
 import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.js";
-import { createGracefulShutdown } from "./shutdown.js";
+import { createGracefulShutdown } from "./shutdown.ts";
 import { migrate } from "./db/migrate.ts";
 import { migrateCbcEncryption } from "./db/migrate-encryption.ts";
-import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
-import { getMissingRequiredEnv } from "./env.js";
-import { resolveWebAuthnConfig } from "./auth/webauthn-config.js";
-import { buildStartupWorkerDelays } from "./startup-delays.js";
-import { logTiming, timeAsync } from "./timing.js";
-import { installProductionFrontend } from "./static-assets.js";
-import { responseCompression } from "./middleware/compression.js";
-import { errorHandler } from "./middleware/async-handler.js";
+import { applySecurityMiddleware, getTrustProxySetting } from "./security.ts";
+import { getMissingRequiredEnv } from "./env.ts";
+import { resolveWebAuthnConfig } from "./auth/webauthn-config.ts";
+import { buildStartupWorkerDelays } from "./startup-delays.ts";
+import { logTiming, timeAsync } from "./timing.ts";
+import { installProductionFrontend } from "./static-assets.ts";
+import { responseCompression } from "./middleware/compression.ts";
+import { errorHandler } from "./middleware/async-handler.ts";
 
 
 // fail fast if critical env vars are missing
@@ -108,7 +108,7 @@ if (process.env.NODE_ENV === "production") {
 
 // Terminal error middleware (P1-12). MUST stay last, after every route mount and
 // the static block above. Async route rejections are forwarded here by each
-// router's wrapRouterAsync (see server/middleware/async-handler.js); without
+// router's wrapRouterAsync (see server/middleware/async-handler.ts); without
 // this, even forwarded errors would fall through to Express's default HTML
 // handler.
 app.use(errorHandler);
@@ -160,7 +160,7 @@ timeAsync("migrations", () => migrate())
     const { shutdown } = createGracefulShutdown({
       server,
       stopFns: [
-        stopScheduler,                        // cron jobs + reminder worker (scheduler.js:455)
+        stopScheduler,                        // cron jobs + reminder worker (scheduler.ts)
         stopEmailBackfillWorker,              // Task 1
         stopSnoozeWaker,                      // Task 1
         stopTodoistMirrorSyncWorker,          // tasks/todoist-webhook.js:248

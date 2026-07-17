@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("../db/connection.ts", () => ({ default: {} }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: () => "mocked" }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: () => "mocked" }));
 vi.mock("../email/gmail.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("../email/icloud.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("../calendar/calendar.js", () => ({ fetchCalendar: async () => [] }));
-vi.mock("../platform/weather.js", () => ({ fetchWeather: async () => ({}) }));
+vi.mock("../platform/weather.ts", () => ({ fetchWeather: async () => ({}) }));
 vi.mock("../actual/actual.js", () => ({ getCategories: async () => [] }));
 
 const { carryForwardCompletedTodoist, computeDeadlineStats } = await import("./deadline-helpers.js");

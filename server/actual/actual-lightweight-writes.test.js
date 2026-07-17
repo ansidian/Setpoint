@@ -16,7 +16,7 @@ import {
 } from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../platform/encryption.js", () => ({ decrypt: (value) => value }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: (value) => value }));
 
 const { sendBillLightweight, __testing__ } = await import("./actual-lightweight-writes.js");
 

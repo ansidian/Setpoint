@@ -22,7 +22,7 @@ import {
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.ts";
-import { decrypt } from "../platform/encryption.js";
+import { decrypt } from "../platform/encryption.ts";
 
 // Facade re-exports: pure date helpers (actualMetadataModel.js) and filesystem
 // cache ops (actualMetadataCacheStore.js) now live in their own modules but stay

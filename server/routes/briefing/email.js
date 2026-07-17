@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as emailService from "../../email/email-service.js";
-import { emailSearchLimiter } from "../../middleware/rate-limits.js";
+import { emailSearchLimiter } from "../../middleware/rate-limits.ts";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;

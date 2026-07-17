@@ -1,10 +1,10 @@
 import db from "./connection.ts";
-import { encrypt, decrypt } from "../platform/encryption.js";
+import { encrypt, decrypt } from "../platform/encryption.ts";
 import type { Row } from "@libsql/client";
 
 // One-shot rewrite of CBC-encrypted column values into GCM format.
 // `decrypt()` now REJECTS (throws on) non-GCM ciphertext (see
-// ../platform/encryption.js) rather than decrypting it — so this migration can
+// ../platform/encryption.ts) rather than decrypting it — so this migration can
 // only succeed on rows that already round-trip through GCM. Any lingering CBC
 // straggler makes rewriteColumn() throw for that row; the per-target
 // try/catch below logs it and moves on without retrying. In practice this

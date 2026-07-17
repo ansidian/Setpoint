@@ -3,7 +3,7 @@ import { createClient } from "@libsql/client";
 import express from "express";
 import request from "supertest";
 
-import { geocodeLocation } from "../platform/weather.js";
+import { geocodeLocation } from "../platform/weather.ts";
 
 const testState = vi.hoisted(() => ({
   db: { current: null },
@@ -15,14 +15,14 @@ vi.mock("../db/connection.ts", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
-vi.mock("../platform/weather.js", () => ({
+vi.mock("../platform/weather.ts", () => ({
   geocodeLocation: vi.fn(async () => []),
 }));
-vi.mock("../scheduler.js", () => ({
+vi.mock("../scheduler.ts", () => ({
   initScheduler: vi.fn(async () => {}),
 }));
 vi.mock("../bills/bill-extractors/catalog.js", () => ({
@@ -35,7 +35,7 @@ vi.mock("../bills/bill-extractors/catalog.js", () => ({
 process.env.EA_USER_ID = "user-1";
 
 const settingsRoutes = (await import("./settings.js")).default;
-const { initScheduler } = await import("../scheduler.js");
+const { initScheduler } = await import("../scheduler.ts");
 
 function makeApp() {
   const app = express();

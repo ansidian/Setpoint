@@ -4,12 +4,12 @@ Cross-cutting Express request-pipeline middleware composed in `server/index.js`:
 
 ## Files
 
-- `async-handler.js` — `asyncHandler` / `wrapRouterAsync` forward async route rejections to the terminal `errorHandler` (also here, a 4-arg error middleware honoring `err.status` and the `headersSent` guard). Express 4 does not catch async rejections, so an unwrapped rejecting handler hangs the request (P1-12).
-- `auth.js` — session + API-token authentication: `validateSession` / `createSession` / `deleteSession` (hashed cookie tokens, 30-day TTL, 30s positive-validation cache), `validateBearer` (scoped `ea_api_tokens`), and the route guards `requireCookieSession`, `requireApiTokenScope`, `requireCookieSessionOrApiTokenScope`.
-- `compression.js` — `responseCompression`, a streaming-safe gzip built on Node `zlib` (no dependency). Decides buffer-vs-passthrough on the first write/end by Content-Type, and deliberately never buffers `text/event-stream` (Alfred + dashboard SSE).
-- `rate-limits.js` — per-route spend guards for LLM/paid-API routes (bills/extract, alfred run, email-search, places); each limiter is exported as both a `makeXLimiter()` factory (fresh, test-isolated instance) and a singleton built from it (used by real route wiring), since `express-rate-limit` tracks counts per-instance.
+- `async-handler.ts` — `asyncHandler` / `wrapRouterAsync` forward async route rejections to the terminal `errorHandler` (also here, a 4-arg error middleware honoring `err.status` and the `headersSent` guard). Express 4 does not catch async rejections, so an unwrapped rejecting handler hangs the request (P1-12).
+- `auth.ts` — session + API-token authentication: `validateSession` / `createSession` / `deleteSession` (hashed cookie tokens, 30-day TTL, 30s positive-validation cache), `validateBearer` (scoped `ea_api_tokens`), and the route guards `requireCookieSession`, `requireApiTokenScope`, `requireCookieSessionOrApiTokenScope`.
+- `compression.ts` — `responseCompression`, a streaming-safe gzip built on Node `zlib` (no dependency). Decides buffer-vs-passthrough on the first write/end by Content-Type, and deliberately never buffers `text/event-stream` (Alfred + dashboard SSE).
+- `rate-limits.ts` — per-route spend guards for LLM/paid-API routes (bills/extract, alfred run, email-search, places); each limiter is exported as both a `makeXLimiter()` factory (fresh, test-isolated instance) and a singleton built from it (used by real route wiring), since `express-rate-limit` tracks counts per-instance.
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 
@@ -20,4 +20,4 @@ Cross-cutting Express request-pipeline middleware composed in `server/index.js`:
 ## Related
 
 - `server/index.js` — composition root that mounts these (compression, auth guards, terminal `errorHandler`).
-- `server/db/connection.ts` — Turso/SQLite client used by `auth.js` for session/token validation.
+- `server/db/connection.ts` — Turso/SQLite client used by `auth.ts` for session/token validation.

@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 
-vi.mock("../middleware/auth.js", () => ({
+vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../platform/config-service.js", () => ({
+vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
 vi.mock("../calendar/calendar.js", () => ({
@@ -23,7 +23,7 @@ vi.mock("../calendar/calendar.js", () => ({
   isCalendarSearchInputError: vi.fn(() => false),
   searchCalendar: vi.fn(),
 }));
-vi.mock("../platform/google-places.js", () => ({
+vi.mock("../platform/google-places.ts", () => ({
   getGooglePlaceDetails: vi.fn(),
   suggestGooglePlaces: vi.fn(),
 }));

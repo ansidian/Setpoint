@@ -16,7 +16,7 @@ const schedulerApi = vi.hoisted(() => ({
 vi.mock("../email/gmail-sync.js", () => ({
   enqueueHistorySyncFromPubSub: gmailSyncApi.enqueueHistorySyncFromPubSub,
 }));
-vi.mock("../scheduler.js", () => schedulerApi);
+vi.mock("../scheduler.ts", () => schedulerApi);
 
 process.env.GMAIL_PUBSUB_PUSH_TOKEN = "push-secret";
 

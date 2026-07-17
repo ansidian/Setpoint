@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { decrypt } from "../platform/encryption.js";
+import { decrypt } from "../platform/encryption.ts";
 import {
   batchMarkAsRead as gmailBatchMarkAsRead,
   snoozeAtGmail,
@@ -15,8 +15,8 @@ import {
   restorePendingTriageEligibilityForEmail,
   settleReadArrivalGraceRows,
 } from "../snapshots/snapshot-service.js";
-import { loadUserConfig } from "../platform/config-service.js";
-import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.js";
+import { loadUserConfig } from "../platform/config-service.ts";
+import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import {
   fetchEmailBodyForUid,
   findAccountByUid,

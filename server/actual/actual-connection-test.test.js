@@ -4,7 +4,7 @@ const mockDb = vi.hoisted(() => ({ execute: vi.fn() }));
 const mockDecrypt = vi.hoisted(() => vi.fn((value) => `decrypted:${value}`));
 
 vi.mock("../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: mockDecrypt }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: mockDecrypt }));
 
 const originalFetch = global.fetch;
 const originalTimeout = process.env.EA_ACTUAL_TEST_TIMEOUT_MS;

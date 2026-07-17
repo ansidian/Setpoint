@@ -26,5 +26,5 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 ## Related
 
 - `server/routes/briefing/snapshot.js` — HTTP surface
-- `server/scheduler.js` — cron boundary advance (`advanceSnapshotBoundary`)
+- `server/scheduler.ts` — cron boundary advance (`advanceSnapshotBoundary`)
 - `FLOWS.md` — snapshot lifecycle and snooze flows, hop by hop

@@ -29,4 +29,4 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 
 - `server/routes/briefing/tasks.js` and `server/routes/todoist-webhook.js` — HTTP surfaces
 - `server/reminders/` — consumes `todoist-reminder-source.js`
-- `server/scheduler.js` — cron entry for mirror maintenance
+- `server/scheduler.ts` — cron entry for mirror maintenance

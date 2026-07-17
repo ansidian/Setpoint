@@ -9,7 +9,7 @@ const testState = vi.hoisted(() => ({
   batchSpy: vi.fn(),
 }));
 
-vi.mock("../middleware/auth.js", () => ({
+vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
 

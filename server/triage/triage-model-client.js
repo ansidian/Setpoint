@@ -5,7 +5,7 @@ import {
   DEFAULT_BILL_EXTRACT_MODEL,
   isAllowedBillExtractModel,
 } from "../bills/bill-extractors/catalog.js";
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";

@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 
 const TODOIST_SYNC_URL = "https://api.todoist.com/api/v1/sync";
 const SYNC_API_TIMEOUT_MS = 30_000;

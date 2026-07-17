@@ -31,19 +31,19 @@ vi.mock("../email/gmail.js", () => ({
   testConnection: vi.fn(),
 }));
 vi.mock("../email/icloud.js", () => ({ testConnection: vi.fn() }));
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => value),
   decrypt: vi.fn((value) => value),
 }));
-vi.mock("../platform/weather.js", () => ({ geocodeLocation: vi.fn(async () => []) }));
-vi.mock("../scheduler.js", () => ({ initScheduler: vi.fn() }));
+vi.mock("../platform/weather.ts", () => ({ geocodeLocation: vi.fn(async () => []) }));
+vi.mock("../scheduler.ts", () => ({ initScheduler: vi.fn() }));
 vi.mock("../email/email-index.js", () => ({
   queueEmailIndexBackfill: emailIndexApi.queueEmailIndexBackfill,
 }));
 vi.mock("../email/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: emailBackfillApi.wakeEmailBackfillWorker,
 }));
-vi.mock("../platform/account-canonical.js", () => ({
+vi.mock("../platform/account-canonical.ts", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
 }));
 vi.mock("../bills/bill-extractors/catalog.js", () => ({

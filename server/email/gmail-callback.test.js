@@ -13,7 +13,7 @@ vi.mock("../db/connection.ts", () => ({
     execute: (...args) => testState.db.current.execute(...args),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   decrypt: (value) => value,
   encrypt: (value) => value,
 }));

@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import {
   iso,
   normalizeText,

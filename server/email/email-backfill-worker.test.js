@@ -18,7 +18,7 @@ vi.mock("../db/connection.ts", () => ({
 }));
 vi.mock("./gmail.js", () => ({ fetchEmailsInRange: gmailApi.fetchEmailsInRange }));
 vi.mock("./icloud.js", () => ({ fetchEmailsInRange: icloudApi.fetchEmailsInRange }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: vi.fn(() => "icloud-password") }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn(() => "icloud-password") }));
 
 const worker = await import("./email-backfill-worker.js");
 

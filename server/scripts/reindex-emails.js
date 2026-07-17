@@ -4,7 +4,7 @@
 // Usage: node server/scripts/reindex-emails.js [hoursBack]
 // Default hoursBack = 720 (30 days).
 import "dotenv/config";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import { fetchAllEmails } from "../email/email-fetch.js";
 import { indexEmails } from "../email/email-index.js";
 

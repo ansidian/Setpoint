@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { requireCookieSession } from "../middleware/auth.js";
-import { alfredRunLimiter } from "../middleware/rate-limits.js";
+import { requireCookieSession } from "../middleware/auth.ts";
+import { alfredRunLimiter } from "../middleware/rate-limits.ts";
 import { resolveAlfredModel } from "../alfred/alfred-models.js";
 import {
   createAlfredConversation,
@@ -13,7 +13,7 @@ import { getEmailBody } from "../email/email-service.js";
 import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
 import { htmlToPlainText } from "../email/html-to-text.js";
 import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.js";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.js";
 import { readBillsMirrorRange } from "../bills/bills-service.js";
 import { queryTransactions, summarizeTransactions } from "../transactions/transactions-service.js";

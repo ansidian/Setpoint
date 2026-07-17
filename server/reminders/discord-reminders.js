@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 
 const FALLBACK_COLOR = 0xcba6da;
 const DISCORD_WEBHOOK_TIMEOUT_MS = 10_000;

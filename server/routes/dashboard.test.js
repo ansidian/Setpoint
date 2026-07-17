@@ -33,7 +33,7 @@ process.env.EA_USER_ID = "u1";
 
 const { default: router } = await import("./dashboard.js");
 const { __resetCurrentDashboardEventsForTests } = await import("../dashboard/current-events.js");
-const { __clearSessionValidationCache } = await import("../middleware/auth.js");
+const { __clearSessionValidationCache } = await import("../middleware/auth.ts");
 
 function makeApp() {
   const app = express();

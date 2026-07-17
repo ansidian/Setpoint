@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // mock encryption before module load so getValidToken doesn't need real credentials
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify({
     access_token: "tok",
     refresh_token: "rtok",

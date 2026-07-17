@@ -1,7 +1,7 @@
 import db from "../db/connection.ts";
-import { decrypt, encrypt } from "../platform/encryption.js";
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
-import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.js";
+import { decrypt, encrypt } from "../platform/encryption.ts";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
+import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.ts";
 
 export const CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 export const CALENDAR_FULL_SCOPE = "https://www.googleapis.com/auth/calendar";

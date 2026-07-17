@@ -1,10 +1,10 @@
 import db from "../db/connection.ts";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import { fetchAllEmails } from "../email/email-fetch.js";
 import { indexEmails } from "../email/email-index.js";
 import { enqueueEmailTriageForEmails } from "../email/gmail-sync.js";
 import { loadPinnedEntries } from "../email/pinned-emails.js";
-import { getElapsedMs, logTiming } from "../timing.js";
+import { getElapsedMs, logTiming } from "../timing.ts";
 import {
   DEFAULT_TIMEZONE,
   activeSnapshotWindow,

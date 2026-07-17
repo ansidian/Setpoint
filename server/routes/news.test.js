@@ -7,7 +7,7 @@ import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.js";
 
 const testState = vi.hoisted(() => ({ db: { current: null } }));
 
-vi.mock("../middleware/auth.js", () => ({
+vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
 

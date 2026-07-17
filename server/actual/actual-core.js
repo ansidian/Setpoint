@@ -1,5 +1,5 @@
 import actualApi from "@actual-app/api";
-import { decrypt } from "../platform/encryption.js";
+import { decrypt } from "../platform/encryption.ts";
 import { filterBillSchedulesForRange } from "./actual-bill-occurrences.js";
 import {
   actualDataDir,

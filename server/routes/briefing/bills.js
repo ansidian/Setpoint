@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.js";
+import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.ts";
 import * as billsService from "../../bills/bills-service.js";
-import { validateActualBudgetUrl } from "../../platform/settings-schemas.js";
-import { billExtractLimiter } from "../../middleware/rate-limits.js";
+import { validateActualBudgetUrl } from "../../platform/settings-schemas.ts";
+import { billExtractLimiter } from "../../middleware/rate-limits.ts";
 
 const router = Router();
 const quickTxnRouter = Router();

@@ -1,6 +1,6 @@
 # Server Email Map
 
-Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.js`; `email-backfill-worker.js` and `gmail-sync.js` expose the workers consumed by `server/index.js` and `server/scheduler.js`. The AI search pipeline lives in `search/` (see its map).
+Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.js`; `email-backfill-worker.js` and `gmail-sync.js` expose the workers consumed by `server/index.js` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
 
 ## Files
 

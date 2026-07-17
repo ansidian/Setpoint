@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { requireCookieSession } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.ts";
 import { applyDeadlineCurrentStatus } from "../dashboard/current-service.js";
 import {
   readCalendarDeadlines,
   readCalendarDeadlineRange,
 } from "../tasks/deadlines-read.js";
 import * as tasksService from "../tasks/tasks-service.js";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import {
   fetchCalendar,
   pacificDayBoundaries,
@@ -22,8 +22,8 @@ import {
 import {
   getGooglePlaceDetails,
   suggestGooglePlaces,
-} from "../platform/google-places.js";
-import { placesLimiter } from "../middleware/rate-limits.js";
+} from "../platform/google-places.ts";
+import { placesLimiter } from "../middleware/rate-limits.ts";
 import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,

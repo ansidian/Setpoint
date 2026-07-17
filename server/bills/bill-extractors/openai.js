@@ -2,7 +2,7 @@
 // Returns the same normalized field shape as the Anthropic extractor so the
 // caller does not branch on provider.
 
-import { fetchWithTimeout } from "../../platform/fetch-with-timeout.js";
+import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
 
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.

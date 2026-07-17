@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireCookieSession } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.ts";
 import {
   formatCurrentDashboardSse,
   subscribeCurrentDashboardEvents,
@@ -10,7 +10,7 @@ import {
   requestCurrentDashboardRefresh,
   syncCurrentDashboard,
 } from "../dashboard/current-service.js";
-import { timeRoute } from "../timing.js";
+import { timeRoute } from "../timing.ts";
 
 const router = Router();
 

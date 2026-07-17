@@ -103,7 +103,7 @@ vi.mock("../db/connection.ts", () => ({
   },
 }));
 
-vi.mock("../platform/encryption.js", () => ({ decrypt: vi.fn((v) => v) }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn((v) => v) }));
 
 describe("actual-core mutex (withLock)", () => {
   beforeEach(() => {

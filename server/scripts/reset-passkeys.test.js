@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAuthTestDb, seedSession } from "../test-utils/auth-db.ts";
-import { createPasskeyStore } from "../auth/passkey-store.js";
-import { createPendingAuthStore } from "../auth/pending-auth-store.js";
-import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.js";
+import { createPasskeyStore } from "../auth/passkey-store.ts";
+import { createPendingAuthStore } from "../auth/pending-auth-store.ts";
+import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.ts";
 import { parseArgs, runPasskeyReset } from "./reset-passkeys.js";
 
 describe("reset passkeys script", () => {

@@ -1,4 +1,4 @@
-import { decrypt } from "../platform/encryption.js";
+import { decrypt } from "../platform/encryption.ts";
 import { fetchEmails as fetchGmailEmails } from "./gmail.js";
 import { fetchEmails as fetchIcloudEmails } from "./icloud.js";
 

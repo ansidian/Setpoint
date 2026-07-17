@@ -37,11 +37,11 @@ import {
   touchCursorStatement,
 } from "./gmailWatchStore.js";
 export { persistGmailWatchState } from "./gmailWatchStore.js";
-import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.js";
-import { logTiming } from "../timing.js";
+import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.ts";
+import { logTiming } from "../timing.ts";
 import { projectEmailArrivalTiming } from "./email-arrival-timing.js";
 import { triageRetryBackoffIso } from "../triage/triage-worker.js";
-import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.js";
+import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.ts";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
