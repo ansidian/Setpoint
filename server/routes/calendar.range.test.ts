@@ -69,7 +69,7 @@ vi.mock("../bills/bills-service.ts", () => ({
 vi.mock("../transactions/transactions-service.ts", () => ({
   queryTransactions: vi.fn(),
 }));
-vi.mock("../dashboard/current-service.js", () => ({
+vi.mock("../dashboard/current-service.ts", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
@@ -104,7 +104,7 @@ const { fetchCalendar } = await import("../calendar/calendar.ts") as unknown as 
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.ts") as unknown as Record<"fetchTodoistDueTaskIdSet" | "fetchTodoistTasksAll" | "fetchTodoistTasksRange" | "getTodoistSyncHealth", MockFunction>;
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts") as unknown as Record<"isBillsMirrorMaintenanceDue" | "readBillsMirrorRange" | "scheduleBillsMirrorRefresh", MockFunction>;
 const { queryTransactions } = await import("../transactions/transactions-service.ts") as unknown as { queryTransactions: MockFunction };
-const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js") as unknown as { requestBillsCurrentMaintenanceRefresh: MockFunction };
+const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.ts") as unknown as { requestBillsCurrentMaintenanceRefresh: MockFunction };
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.ts") as unknown as { hydrateRecurringTombstones: MockFunction };
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.ts") as unknown as { listUpcomingReminderStatesForSources: MockFunction };
 const db = (await import("../db/connection.ts")).default as unknown as { execute: MockFunction };

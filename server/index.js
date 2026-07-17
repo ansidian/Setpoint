@@ -11,7 +11,7 @@ import { dirname, join } from "path";
 import authRoutes from "./routes/auth.ts";
 import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.ts";
-import dashboardRoutes from "./routes/dashboard.js";
+import dashboardRoutes from "./routes/dashboard.ts";
 import calendarRoutes from "./routes/calendar.ts";
 import alfredRoutes from "./routes/alfred.js";
 import { startAlfredConversationSweeper, stopAlfredConversationSweeper } from "./alfred/alfred-conversations.js";

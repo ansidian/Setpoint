@@ -5,7 +5,7 @@ import { createReminder } from "./reminder-service.ts";
 import {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
-} from "../dashboard/current-events.js";
+} from "../dashboard/current-events.ts";
 import { processDueReminderBatch } from "./reminder-scheduler.ts";
 
 describe("reminder scheduler", () => {

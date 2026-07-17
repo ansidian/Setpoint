@@ -1,7 +1,7 @@
 import { getOrCreateActiveSnapshot } from "../snapshots/snapshot-service.ts";
 import { preflightDecisionMetadata } from "./triage-preflight.ts";
 import { maybeBillCandidate, emailTriageEventDetails } from "./triage-projections-model.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { nowIso } from "./triage-job-store.ts";
 import type { SnapshotWriteDb } from "../snapshots/snapshot-types.ts";
 import type {

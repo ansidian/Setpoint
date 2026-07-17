@@ -1,6 +1,6 @@
 import db from "../db/connection.ts";
 import type { Client } from "@libsql/client";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { decrypt } from "../platform/encryption.ts";
 import { formatDiscordReminderPayload, sendDiscordWebhook } from "./discord-reminders.ts";
 import type { DiscordWebhookPayload } from "./discord-reminders.ts";

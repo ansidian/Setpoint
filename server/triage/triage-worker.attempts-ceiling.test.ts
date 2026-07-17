@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
-} from "../dashboard/current-events.js";
+} from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import {
   processNextEmailTriageJob,

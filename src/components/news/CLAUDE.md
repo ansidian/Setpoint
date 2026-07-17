@@ -90,6 +90,6 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
 - `server/routes/news.ts` — HTTP surface
 - `src/hooks/useNews.ts` — data hook (initial load, tab-visibility background
   refetch, manual refresh)
-- `src/components/dashboard/DashboardShell.jsx` — mounts `NewsTab` as a
+- `src/components/dashboard/DashboardShell.tsx` — mounts `NewsTab` as a
   `KeepAliveTab` (key `5`)
 - `docs/exec-plans/completed/2026-07-04-news-tab-design.md` — design spec

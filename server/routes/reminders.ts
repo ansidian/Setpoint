@@ -11,7 +11,7 @@ import {
   deleteReminder,
   listRemindersForSource,
 } from "../reminders/reminder-service.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import type {
   CreateReminderInput,
   ReminderAnchorKind,

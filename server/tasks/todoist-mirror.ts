@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import {
   fetchTodoistSyncResources,
   TODOIST_MIRROR_RESOURCE_TYPES,

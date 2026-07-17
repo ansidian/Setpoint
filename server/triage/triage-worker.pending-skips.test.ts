@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 
-vi.mock("../dashboard/current-events.js", async (importOriginal) => {
+vi.mock("../dashboard/current-events.ts", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, publishCurrentDashboardEvent: vi.fn() };
 });

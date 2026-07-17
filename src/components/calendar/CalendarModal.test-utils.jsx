@@ -1,6 +1,6 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { vi } from "vitest";
-import { DashboardProvider } from "../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../context/DashboardContext";
 
 export function wrapWithDashboard(node) {
   return (

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import eventsView from "./eventsView.jsx";
 import billsView from "./billsView.jsx";
-import { DashboardProvider } from "../../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../../context/DashboardContext";
 import { renderDeadlinesCellContents } from "./deadlines/DeadlinesCellContent.jsx";
 import { renderDeadlinesDetail, renderDeadlinesFloatingDetail } from "./deadlines/DeadlinesDetailRail.jsx";
 import { getDayState as getDeadlineDayState } from "./deadlines/deadlinesModel.js";

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Client, InStatement, TransactionMode } from "@libsql/client";
-import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.js";
+import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 import {
   createEmailIndexTestDb,
   seedEmailAccount,

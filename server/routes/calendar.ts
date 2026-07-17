@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Row } from "@libsql/client";
 import { requireCookieSession } from "../middleware/auth.ts";
-import { applyDeadlineCurrentStatus } from "../dashboard/current-service.js";
+import { applyDeadlineCurrentStatus } from "../dashboard/current-service.ts";
 import {
   readCalendarDeadlines,
   readCalendarDeadlineRange,

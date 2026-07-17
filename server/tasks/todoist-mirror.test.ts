@@ -39,7 +39,7 @@ const {
 const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
-} = await import("../dashboard/current-events.js");
+} = await import("../dashboard/current-events.ts");
 
 async function createTodoistMirrorTestDb() {
   const db = createClient({ url: "file::memory:" });

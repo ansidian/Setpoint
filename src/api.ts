@@ -45,6 +45,10 @@ import type {
   NoteMutationResponse,
 } from "../shared/types/notes.ts";
 import type {
+  CurrentDashboardHealthResponse,
+  CurrentDashboardResponse,
+} from "../shared/types/dashboard.ts";
+import type {
   CreateReminderRequest,
   CreateReminderResponse,
   DiscordReminderTestResponse,
@@ -119,7 +123,7 @@ export type AuthResponse = {
 };
 
 type CurrentDashboardPrime = {
-  promise: Promise<unknown>;
+  promise: Promise<CurrentDashboardResponse>;
   expiresAt: number;
 };
 
@@ -316,7 +320,7 @@ let currentDashboardPrime: CurrentDashboardPrime | null = null;
 export const prefetchCurrentDashboard = (): void => {
   const now = Date.now();
   if (currentDashboardPrime && currentDashboardPrime.expiresAt > now) return;
-  const promise = apiFetch("/api/dashboard/current");
+  const promise = apiFetch<CurrentDashboardResponse>("/api/dashboard/current");
   const entry = { promise, expiresAt: now + CURRENT_DASHBOARD_PRIME_TTL_MS };
   // Swallow the rejection on this handle so an unconsumed prefetch never becomes
   // an unhandledrejection, and drop the prime on failure so the real load fetches
@@ -326,15 +330,15 @@ export const prefetchCurrentDashboard = (): void => {
   });
   currentDashboardPrime = entry;
 };
-export const getCurrentDashboard = (): Promise<unknown> => {
+export const getCurrentDashboard = (): Promise<CurrentDashboardResponse> => {
   const prime = currentDashboardPrime;
   currentDashboardPrime = null; // single-use: consume or discard on first read
   if (prime && prime.expiresAt > Date.now()) return prime.promise;
   return apiFetch("/api/dashboard/current");
 };
-export const getDashboardHealth = (): Promise<unknown> => apiFetch("/api/dashboard/health");
-export const requestCurrentDashboardRefresh = (): Promise<unknown> => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
-export const syncCurrentDashboard = (): Promise<unknown> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
+export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> => apiFetch("/api/dashboard/health");
+export const requestCurrentDashboardRefresh = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
+export const syncCurrentDashboard = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
 export const getTriageCacheStats = (): Promise<TriageCacheStatsResponse> => apiFetch("/api/ea/triage/cache-stats");
 
 export const getAlfredUsageStats = (): Promise<unknown> => apiFetch("/api/alfred/usage");

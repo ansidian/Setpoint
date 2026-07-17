@@ -1,6 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DashboardProvider } from "../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../context/DashboardContext";
 
 // Spy the scroll-sync reset the jump-to-today chain ultimately calls, and control
 // the mobile gate. This proves the middle link the plan promised: a bumped

@@ -7,9 +7,9 @@ import {
   ShellBrand,
   ShellTabs,
 } from "./ShellHeaderChrome";
-import { SystemStatusButton } from "./SystemStatusButton.jsx";
-import { isDemoMode } from "../../demo/config.js";
-import { resolveShellTabHotkey } from "../dashboard/dashboardShellModel.js";
+import { SystemStatusButton } from "./SystemStatusButton";
+import { isDemoMode } from "../../demo/config";
+import { resolveShellTabHotkey } from "../dashboard/dashboardShellModel";
 
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.

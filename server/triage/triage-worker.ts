@@ -17,7 +17,7 @@ import {
 } from "./triage-projections-model.ts";
 import { heuristicNoModelDecision } from "./triage-heuristic-scorer.ts";
 import { createTriageModelClient, loadTriageModelConfig } from "./triage-model-client.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { cheapEscalationReason } from "./triage-escalation-policy.ts";
 import {
   claimNextEmailTriageJob,

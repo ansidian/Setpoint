@@ -7,8 +7,8 @@
 import {
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
-} from "../dashboard/dashboardShellModel.js";
-import { pacificYMD } from "../calendar/calendarDateUtils.js";
+} from "../dashboard/dashboardShellModel";
+import { pacificYMD } from "../calendar/calendarDateUtils";
 
 export function resolveAlfredChipAction(kind, item) {
   if (!item) return null;

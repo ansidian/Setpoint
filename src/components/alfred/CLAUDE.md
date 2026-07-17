@@ -29,5 +29,5 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 ## Related
 
 - `server/alfred/` — the run loop and SSE contract
-- `src/components/dashboard/DashboardShell.jsx` — mount + hotkey wiring
+- `src/components/dashboard/DashboardShell.tsx` — mount + hotkey wiring
 - `src/components/inbox/` — ⌘Enter / Sparkles handoff source
