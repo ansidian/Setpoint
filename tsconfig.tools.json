@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "target": "ES2024",
+    "tsBuildInfoFile": "./node_modules/.cache/typescript/tools.tsbuildinfo",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "scripts/**/*",
+    "e2e/**/*",
+    "eslint.config.js",
+    "playwright.config.js",
+    "vite.config.js",
+    "vitest.config.js"
+  ]
+}

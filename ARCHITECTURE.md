@@ -113,8 +113,7 @@ src/
 │   ├── email/
 │   └── settings/
 ├── lib/
-├── pages/
-└── test/
+└── pages/
 
 server/
 ├── actual/
