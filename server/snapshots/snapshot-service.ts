@@ -1,10 +1,10 @@
 import db from "../db/connection.ts";
 import type { Client } from "@libsql/client";
 import { loadUserConfig, type UserConfig } from "../platform/config-service.ts";
-import { fetchAllEmails } from "../email/email-fetch.js";
-import { indexEmails } from "../email/email-index.js";
-import { enqueueEmailTriageForEmails } from "../email/gmail-sync.js";
-import { loadPinnedEntries } from "../email/pinned-emails.js";
+import { fetchAllEmails } from "../email/email-fetch.ts";
+import { indexEmails } from "../email/email-index.ts";
+import { enqueueEmailTriageForEmails } from "../email/gmail-sync.ts";
+import { loadPinnedEntries } from "../email/pinned-emails.ts";
 import { getElapsedMs, logTiming } from "../timing.ts";
 import {
   DEFAULT_TIMEZONE,
@@ -169,7 +169,7 @@ export async function advanceSnapshotBoundary(userId: string, {
 }
 
 async function defaultProcessNextEmailTriageJob(options: Record<string, unknown>): Promise<TriageLoopResult | null | undefined> {
-  const { processNextEmailTriageJob } = await import("../triage/triage-worker.js");
+  const { processNextEmailTriageJob } = await import("../triage/triage-worker.ts");
   return processNextEmailTriageJob(options);
 }
 
@@ -316,7 +316,7 @@ async function runActiveSnapshotSync(userId: string, {
     // doubles ignore `batch` and must not trigger the triage-worker import.
     let batch = null;
     if (processNextEmailTriageJobFn === defaultProcessNextEmailTriageJob) {
-      const { createTriageBatchContext } = await import("../triage/triage-worker.js");
+      const { createTriageBatchContext } = await import("../triage/triage-worker.ts");
       batch = createTriageBatchContext({ dbClient: dbClient as Client });
     }
     let processed = 0;

@@ -66,7 +66,7 @@ export function searchEmailResultRow(candidate) {
   const meta = candidate.metadata || {};
   const account = candidate.account?.email || candidate.account?.label || "";
   const excerpt = String(candidate.body_excerpt || "").slice(0, EXCERPT_CHAR_LIMIT);
-  // Same "resolved" rule as email-search-ranking.js: lane/urgency mean "act on this
+  // Same "resolved" rule as email-search-ranking.ts: lane/urgency mean "act on this
   // now"; once the item is handled or its deadline has passed they are frozen history
   // (the anchor incident: a PAID statement still advertised needs_attention/high while
   // its newer sibling read fyi/medium — every label the model saw pointed at the

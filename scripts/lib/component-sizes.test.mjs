@@ -20,7 +20,7 @@ describe("isSizeCheckedSource", () => {
   test("governs non-test source under server/, not just src/", () => {
     // The server tree was the blind spot that let 11 modules grow to 686-918 lines
     // with no size enforcement; the predicate is path-agnostic so it already governs them.
-    expect(isSizeCheckedSource("server/email/gmail-sync.js")).toBe(true)
+    expect(isSizeCheckedSource("server/email/gmail-sync.ts")).toBe(true)
     expect(isSizeCheckedSource("server/triage/triage-worker.test.js")).toBe(false)
   })
 })

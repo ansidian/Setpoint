@@ -24,6 +24,7 @@ import type {
   SettingsMutationResponse,
   SettingsPatchRequest,
   SettingsResponse,
+  TriageCacheStatsResponse,
 } from "../shared/types/settings.ts";
 import type {
   CreateNewsSourceRequest,
@@ -89,6 +90,15 @@ import type {
   CalendarSearchResponse,
   CalendarSourcesResponse,
 } from "../shared/types/calendar.ts";
+import type {
+  EmailArrivalGraceResponse,
+  EmailBatchReadResponse,
+  EmailBody,
+  EmailMutationResponse,
+  EmailSearchCostStats,
+  EmailSearchResponse,
+  PinnedEmailSnapshot,
+} from "../shared/types/email.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -114,9 +124,9 @@ type CurrentDashboardPrime = {
 };
 
 type EmailBodyCacheEntry = {
-  promise: Promise<unknown>;
+  promise: Promise<EmailBody>;
   expiresAt: number;
-  value: unknown | null;
+  value: EmailBody | null;
 };
 
 type CalendarSearchOptions = {
@@ -325,11 +335,11 @@ export const getCurrentDashboard = (): Promise<unknown> => {
 export const getDashboardHealth = (): Promise<unknown> => apiFetch("/api/dashboard/health");
 export const requestCurrentDashboardRefresh = (): Promise<unknown> => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = (): Promise<unknown> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
-export const getTriageCacheStats = (): Promise<unknown> => apiFetch("/api/ea/triage/cache-stats");
+export const getTriageCacheStats = (): Promise<TriageCacheStatsResponse> => apiFetch("/api/ea/triage/cache-stats");
 
 export const getAlfredUsageStats = (): Promise<unknown> => apiFetch("/api/alfred/usage");
 
-export const getEmailSearchStats = (): Promise<unknown> => apiFetch("/api/ea/email-search/usage");
+export const getEmailSearchStats = (): Promise<EmailSearchCostStats> => apiFetch("/api/ea/email-search/usage");
 // 5-minute in-memory TTL cache for email bodies. Bodies don't mutate
 // server-side once delivered; the cache eliminates the loading flicker on
 // re-selection and dedupes concurrent fetches for the same uid.
@@ -352,11 +362,11 @@ function pruneEmailBodyCache(now: number): void {
     emailBodyCache.delete(oldest);
   }
 }
-export const getEmailBody = (uid: string): Promise<unknown> => {
+export const getEmailBody = (uid: string): Promise<EmailBody> => {
   const now = Date.now();
   const hit = emailBodyCache.get(uid);
   if (hit && hit.expiresAt > now) return hit.value ? Promise.resolve(hit.value) : hit.promise;
-  const promise = apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}`)
+  const promise = apiFetch<EmailBody>(`/api/briefing/email/${encodeURIComponent(uid)}`)
     .then((value) => {
       emailBodyCache.set(uid, { promise, value, expiresAt: Date.now() + EMAIL_BODY_TTL_MS });
       pruneEmailBodyCache(Date.now());
@@ -371,31 +381,31 @@ export const getEmailBody = (uid: string): Promise<unknown> => {
   pruneEmailBodyCache(now);
   return promise;
 };
-export const peekEmailBody = (uid: string): unknown | null => {
+export const peekEmailBody = (uid: string): EmailBody | null => {
   const hit = emailBodyCache.get(uid);
   return hit && hit.value && hit.expiresAt > Date.now() ? hit.value : null;
 };
-export const dismissEmail = (emailId: ApiId): Promise<unknown> => apiFetch(`/api/briefing/dismiss/${encodeURIComponent(emailId)}`, { method: "POST" });
-export const snoozeEmail = (uid: string, untilTs: number, snapshot: unknown = null): Promise<unknown> =>
+export const dismissEmail = (emailId: ApiId): Promise<EmailMutationResponse> => apiFetch(`/api/briefing/dismiss/${encodeURIComponent(emailId)}`, { method: "POST" });
+export const snoozeEmail = (uid: string, untilTs: number, snapshot: PinnedEmailSnapshot | null = null): Promise<EmailMutationResponse> =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/snooze`, {
     method: "POST",
     body: JSON.stringify({ until_ts: untilTs, snapshot }),
   });
-export const unsnoozeEmail = (uid: string): Promise<unknown> =>
+export const unsnoozeEmail = (uid: string): Promise<EmailMutationResponse> =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/snooze`, { method: "DELETE" });
-export const pinEmail = (uid: string, snapshot: unknown = null): Promise<unknown> =>
+export const pinEmail = (uid: string, snapshot: PinnedEmailSnapshot | null = null): Promise<EmailMutationResponse> =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/pin`, {
     method: "POST",
     body: JSON.stringify({ snapshot }),
   });
-export const unpinEmail = (uid: string): Promise<unknown> =>
+export const unpinEmail = (uid: string): Promise<EmailMutationResponse> =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/pin`, { method: "DELETE" });
 export const completeTask = (taskId: ApiId): Promise<unknown> => apiFetch(`/api/briefing/complete-task/${encodeURIComponent(taskId)}`, { method: "POST" });
 export const dismissTombstone = (todoistId: ApiId): Promise<unknown> =>
   apiFetch(`/api/briefing/tombstone/${encodeURIComponent(todoistId)}`, { method: "DELETE" });
-export const markEmailAsRead = (uid: string): Promise<unknown> => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-read`, { method: "POST" });
-export const markEmailAsUnread = (uid: string): Promise<unknown> => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-unread`, { method: "POST" });
-export const trashEmail = (uid: string): Promise<unknown> => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/trash`, { method: "POST" });
+export const markEmailAsRead = (uid: string): Promise<EmailMutationResponse> => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-read`, { method: "POST" });
+export const markEmailAsUnread = (uid: string): Promise<EmailMutationResponse> => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-unread`, { method: "POST" });
+export const trashEmail = (uid: string): Promise<EmailMutationResponse> => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/trash`, { method: "POST" });
 export const trashEmailOnExit = (uid: string): void => {
   if (isDemoMode()) return;
 
@@ -414,8 +424,8 @@ export const trashEmailOnExit = (uid: string): void => {
     body: "{}",
   }).catch(() => {});
 };
-export const markAllEmailsAsRead = (uids: string[]): Promise<unknown> => apiFetch("/api/briefing/email/mark-all-read", { method: "POST", body: JSON.stringify({ uids }) });
-export const settleArrivalGrace = (): Promise<unknown> => apiFetch("/api/briefing/email/arrival-grace/settle", { method: "POST" });
+export const markAllEmailsAsRead = (uids: string[]): Promise<EmailBatchReadResponse> => apiFetch("/api/briefing/email/mark-all-read", { method: "POST", body: JSON.stringify({ uids }) });
+export const settleArrivalGrace = (): Promise<EmailArrivalGraceResponse> => apiFetch("/api/briefing/email/arrival-grace/settle", { method: "POST" });
 export const settleArrivalGraceOnExit = (): void => {
   if (isDemoMode()) return;
 
@@ -532,7 +542,7 @@ export const skipSchedule = (index: number, skip = true): Promise<ScheduleSkipRe
 export const getModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/models");
 export const getBillExtractModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/bill-extract-models");
 
-export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<unknown> => {
+export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<EmailSearchResponse> => {
   const params = new URLSearchParams({ q: query });
   if (limit) params.set("limit", String(limit));
   return apiFetch(`/api/briefing/email-search?${params}`, { signal });

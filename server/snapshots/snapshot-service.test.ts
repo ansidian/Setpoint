@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { pin } from "../email/pinned-emails.js";
+import { pin } from "../email/pinned-emails.ts";
 import {
   advanceSnapshotBoundary,
   CARRYOVER_MAX_DEPTH,

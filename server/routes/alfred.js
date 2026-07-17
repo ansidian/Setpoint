@@ -9,9 +9,9 @@ import {
 } from "../alfred/alfred-conversations.js";
 import { runAlfred } from "../alfred/alfred-run.js";
 import { getAlfredUsageStats } from "../alfred/alfred-usage-stats.js";
-import { getEmailBody } from "../email/email-service.js";
-import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
-import { htmlToPlainText } from "../email/html-to-text.js";
+import { getEmailBody } from "../email/email-service.ts";
+import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.ts";
+import { htmlToPlainText } from "../email/html-to-text.ts";
 import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.ts";

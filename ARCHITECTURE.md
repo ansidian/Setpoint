@@ -401,7 +401,7 @@ flowchart TD
 
 ### Durable Email AI
 
-Incoming email classification is handled by `server/triage/triage-worker.js` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.js` can resolve no-model, trusted-sender, weak-security, pending-security, and obvious-noise cases before provider calls. Provider-backed calls use the selected email AI provider/model from `email-ai-models.js`; bill extraction uses `bill-extract.ts` and the bill extraction provider/model settings.
+Incoming email classification is handled by `server/triage/triage-worker.ts` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.ts` can resolve no-model, trusted-sender, weak-security, pending-security, and obvious-noise cases before provider calls. Provider-backed calls use the selected email AI provider/model from `email-ai-models.js`; bill extraction uses `bill-extract.ts` and the bill extraction provider/model settings.
 
 Email interests from settings influence classification. Scheduled payments from Actual Budget are cross-referenced during bill extraction to suppress duplicate bill detections.
 
@@ -431,7 +431,7 @@ The fifth shell tab: RSS/Atom headlines only, no AI classification or summarizat
 | Weather | `server/platform/weather.js` | Pirate Weather | API key | Cached data or placeholder |
 | Todoist | `server/tasks/todoist.ts` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/actual/actual.ts` + `server/bills/bills-service.ts` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
-| Email triage AI | `server/triage/triage-worker.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
+| Email triage AI | `server/triage/triage-worker.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
 | Bill extraction AI | `server/bills/bill-extract.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
 All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage and bill extraction failures are isolated to durable jobs or the specific bill-signal request.
 
@@ -701,27 +701,11 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.js` |
 | POST | `/api/alfred/run` | `server/routes/alfred.js` |
 | GET | `/api/alfred/usage` | `server/routes/alfred.js` |
-| POST | `/api/briefing/dev-reindex-emails` | `server/routes/briefing/dev.js` |
-| POST | `/api/briefing/dismiss/:emailId` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email-index/backfill` | `server/routes/briefing/email-index.js` |
-| GET | `/api/briefing/email-index/health` | `server/routes/briefing/email-index.js` |
-| GET | `/api/briefing/email-search` | `server/routes/briefing/email.js` |
-| GET | `/api/briefing/email/:uid` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/:uid/mark-read` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/:uid/mark-unread` | `server/routes/briefing/email.js` |
-| DELETE | `/api/briefing/email/:uid/pin` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/:uid/pin` | `server/routes/briefing/email.js` |
-| DELETE | `/api/briefing/email/:uid/snooze` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/:uid/snooze` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/:uid/trash` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/arrival-grace/settle` | `server/routes/briefing/email.js` |
-| POST | `/api/briefing/email/mark-all-read` | `server/routes/briefing/email.js` |
 | GET | `/api/dashboard/current` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.js` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.js` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.js` |
-| POST | `/api/gmail/push` | `server/routes/gmail-push.js` |
 <!-- END:routes -->
 
 ### Auth
@@ -805,7 +789,7 @@ Health responses intentionally avoid email bodies. Use `indexed_count`, `oldest_
 | POST | `/api/briefing/email/:uid/snooze` | Snooze email until `until_ts` |
 | DELETE | `/api/briefing/email/:uid/snooze` | Cancel snooze and resurface |
 
-Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `email.js`, `email-index.js`, `snapshot.js`, `tasks.js`, `bills.ts`, and `dev.js`, all composed by `index.js`). Route handlers stay thin; business logic and DB access live in the per-domain `server/<domain>/` service modules and current worker modules.
+Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `email.js`, `email-index.ts`, `snapshot.js`, `tasks.js`, `bills.ts`, and `dev.js`, all composed by `index.js`). Route handlers stay thin; business logic and DB access live in the per-domain `server/<domain>/` service modules and current worker modules.
 
 ### Tasks
 

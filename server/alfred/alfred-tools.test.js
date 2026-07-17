@@ -9,7 +9,7 @@ import {
   _clearAlfredConversationsForTest,
   createAlfredConversation,
 } from "./alfred-conversations.js";
-import { htmlToPlainText } from "../email/html-to-text.js";
+import { htmlToPlainText } from "../email/html-to-text.ts";
 
 function ctxWith(deps, overrides = {}) {
   return {

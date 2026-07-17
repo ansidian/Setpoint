@@ -2,7 +2,7 @@ import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import db from "../db/connection.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
-import { wakeAtGmail } from "../email/gmail.js";
+import { wakeAtGmail } from "../email/gmail.ts";
 import {
   attachArrivalGraceEmailToActiveSnapshot,
   attachResurfacedSnoozeToActiveSnapshot,
@@ -104,7 +104,7 @@ const RESURFACED_TTL_MS = 48 * 60 * 60 * 1000;
 
 // Module-level re-entrancy guard so overlapping cron ticks can't double-process
 // the same due snoozes (double Gmail wake-modify + racing snapshot inserts).
-// Mirrors email-backfill-worker.js's workerRunning latch.
+// Mirrors email-backfill-worker.ts's workerRunning latch.
 let wakeInFlight = false;
 
 export async function wakeDueSnoozes({
@@ -112,7 +112,7 @@ export async function wakeDueSnoozes({
   dbClient = db,
   now = new Date(),
   loadUserConfigFn = loadUserConfig,
-  wakeAtGmailFn = wakeAtGmail,
+  wakeAtGmailFn = wakeAtGmail as NonNullable<WakeDependencies["wakeAtGmailFn"]>,
   attachResurfacedSnoozeToActiveSnapshotFn = attachResurfacedSnoozeToActiveSnapshot,
   attachArrivalGraceEmailToActiveSnapshotFn = attachArrivalGraceEmailToActiveSnapshot,
   requeueArrivalGraceTriageForEmailFn = requeueArrivalGraceTriageForEmail,

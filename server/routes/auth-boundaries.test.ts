@@ -42,7 +42,7 @@ vi.mock("../bills/bills-service.ts", () => ({
   createQuickTxn: vi.fn(async () => ({ success: true, account: "Checking" })),
   extractBill: vi.fn(async () => ({ payee: "Power", amount: 42 })),
 }));
-vi.mock("../email/email-service.js", () => ({
+vi.mock("../email/email-service.ts", () => ({
   getEmailBody: vi.fn(),
   dismiss: vi.fn(),
   snooze: vi.fn(),
@@ -64,24 +64,24 @@ vi.mock("../tasks/tasks-service.ts", () => ({
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
 }));
-vi.mock("../email/dev-service.js", () => ({
+vi.mock("../email/dev-service.ts", () => ({
   reindexEmails: vi.fn(),
 }));
-vi.mock("../email/email-index.js", () => ({
+vi.mock("../email/email-index.ts", () => ({
   getEmailIndexHealth: vi.fn(async () => ({ accounts: [] })),
   queueEmailIndexBackfill: vi.fn(async () => ({ queued: true, accounts: [] })),
 }));
-vi.mock("../email/email-backfill-worker.js", () => ({
+vi.mock("../email/email-backfill-worker.ts", () => ({
   wakeEmailBackfillWorker: vi.fn(),
 }));
-vi.mock("../email/gmail.js", () => ({
+vi.mock("../email/gmail.ts", () => ({
   fetchEmails: vi.fn(async () => []),
   isMessageRead: vi.fn(async () => null),
   getAuthUrl: vi.fn(),
   handleCallback: vi.fn(),
   testConnection: vi.fn(),
 }));
-vi.mock("../email/icloud.js", () => ({
+vi.mock("../email/icloud.ts", () => ({
   fetchEmails: vi.fn(async () => []),
   isMessageRead: vi.fn(async () => null),
   testConnection: vi.fn(),
@@ -132,7 +132,7 @@ vi.mock("../dashboard/current-service.js", () => ({
 process.env.EA_USER_ID = "user-1";
 
 const { createQuickTxn, sendBill } = await import("../bills/bills-service.ts");
-const emailService = await import("../email/email-service.js");
+const emailService = await import("../email/email-service.ts");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
 const accountsRoutes = (await import("./accounts.ts")).default;
@@ -142,7 +142,7 @@ const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
 } = await import("../dashboard/current-events.js");
-const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../triage/triage-sound-settings.js");
+const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../triage/triage-sound-settings.ts");
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
@@ -401,7 +401,7 @@ describe("auth boundaries", () => {
   it("serves triage cache stats over the authed diagnostic route", async () => {
     // Thin wiring check: the route reaches getTriageCacheStats and returns its
     // summary shape. The pricing/window/rounding math lives in
-    // server/triage/triage-cache-stats.test.js.
+    // server/triage/triage-cache-stats.test.ts.
     await seedSession();
     await currentDb().execute({
       sql: `INSERT INTO ea_email_triage
@@ -474,7 +474,7 @@ describe("auth boundaries", () => {
   it("rejects invalid triage sound settings without touching the stored row", async () => {
     // Wiring check: validateTriageSoundSettings gates the write (400) and the
     // durable row is left unwritten. The per-branch validation messages are
-    // owned by server/triage/triage-sound-settings.test.js.
+    // owned by server/triage/triage-sound-settings.test.ts.
     await seedSession();
     const res = await request(server)
       .put("/api/ea/settings")

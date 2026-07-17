@@ -1,41 +1,45 @@
 # Server Email Map
 
-Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.js`; `email-backfill-worker.js` and `gmail-sync.js` expose the workers consumed by `server/index.js` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
+Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.ts`; `email-backfill-worker.ts` and `gmail-sync.ts` expose the workers consumed by `server/index.js` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
 
 ## Files
 
-- `email-service.js` — public email API: search, fetch, read/trash mutations, backfill
-- `pinned-emails.js` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)
-- `email-fetch.js` — cross-account email fetching for Gmail and iCloud
-- `email-provider-adapters.js` — per-account adapters: fetch, mark-read, trash
-- `email-index.js` — parses headers, truncates bodies, writes `ea_email_index`
-- `email-backfill-worker.js` — paginated backward-in-time index backfill worker
-- `email-date.js` — email date header → ISO UTC
-- `email-ai-models.js` — email AI model catalog with defaults and provider inference
-- `gmail.js` — Gmail API client: list, fetch, search, mutate
-- `gmail-sync.js` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.js` too)
-- `gmailPubSubNotification.js` — pure Pub/Sub notification decode: base64url JSON → emailAddress/historyId payload
-- `gmailHistoryProjection.js` — pure history-record projections: inbox/unread id-sets, provider-removal events, provider state from metadata
-- `gmailTriageStatements.js` — pure triage statement builder: (user, account, email) → triage-row + triage-job INSERT pair (owns the arrival-grace branch)
-- `gmailSyncClient.js` — raw Gmail HTTP: history.list paging, message metadata, profile historyId, watch-registration POST
-- `gmailWatchStore.js` — `ea_gmail_watch_state` persistence: watch-state upsert, stored-cursor read, watch-error write, cursor statement builders (seed/advance/touch)
-- `gmailReconciliation.js` — Gmail row reconciliation: resolve mailbox account ids, find existing rows, reconcile read-state + provider-removal against the index/snapshots
-- `email-arrival-timing.js` — pure projection of provider, durable queue, sync, and snapshot-attachment timing stages
-- `icloud.js` — iCloud Mail (IMAP) client
-- `html-to-text.js` — HTML → text conversion for email bodies
-- `mime-artifacts.js` — heuristic detector for raw-MIME body_text rows (reindex targeting)
-- `dev-service.js` — dev/test helper: re-index recent emails
-- `test-utils/email-index-db.js` — in-memory email index DB for tests
+- `email-service.ts` — public email API: search, fetch, read/trash mutations, backfill
+- `pinned-emails.ts` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)
+- `email-fetch.ts` — cross-account email fetching for Gmail and iCloud
+- `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash
+- `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
+- `email-index.ts` — parses headers, truncates bodies, writes `ea_email_index`
+- `email-persistence-types.ts` — local index/pin database client and raw-row contracts
+- `email-backfill-worker.ts` — paginated backward-in-time index backfill worker
+- `email-date.ts` — email date header → ISO UTC
+- `email-ai-models.ts` — email AI model catalog with defaults and provider inference
+- `gmail.ts` — Gmail API client: list, fetch, search, mutate
+- `gmail-sync.ts` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.js` too)
+- `email-sync-types.ts` — local history, Pub/Sub, watch, provider-state, and sync error contracts
+- `gmailPubSubNotification.ts` — pure Pub/Sub notification decode: base64url JSON → emailAddress/historyId payload
+- `gmailHistoryProjection.ts` — pure history-record projections: inbox/unread id-sets, provider-removal events, provider state from metadata
+- `gmailTriageStatements.ts` — pure triage statement builder: (user, account, email) → triage-row + triage-job INSERT pair (owns the arrival-grace branch)
+- `gmailSyncClient.ts` — raw Gmail HTTP: history.list paging, message metadata, profile historyId, watch-registration POST
+- `gmailWatchStore.ts` — `ea_gmail_watch_state` persistence: watch-state upsert, stored-cursor read, watch-error write, cursor statement builders (seed/advance/touch)
+- `gmailReconciliation.ts` — Gmail row reconciliation: resolve mailbox account ids, find existing rows, reconcile read-state + provider-removal against the index/snapshots
+- `email-arrival-timing.ts` — pure projection of provider, durable queue, sync, and snapshot-attachment timing stages
+- `icloud.ts` — iCloud Mail (IMAP) client
+- `html-to-text.ts` — HTML → text conversion for email bodies
+- `mime-artifacts.ts` — heuristic detector for raw-MIME body_text rows (reindex targeting)
+- `mailparser.d.ts` — owned declaration shim for the untyped `mailparser` package boundary
+- `dev-service.ts` — dev/test helper: re-index recent emails
+- `test-utils/email-index-db.ts` — in-memory email index DB for tests
 
 (Other tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
 ## Local patterns
 
-- All index writes go through `email-index.js`; provider clients never write `ea_email_index` directly.
-- Provider differences are absorbed in `email-provider-adapters.js`; consumers see one account-shaped interface.
+- All index writes go through `email-index.ts`; provider clients never write `ea_email_index` directly.
+- Provider differences are absorbed in `email-provider-adapters.ts`; consumers see one account-shaped interface.
 
 ## Related
 
 - `server/email/search/` — AI search pipeline over the index (see its map)
-- `server/routes/briefing/email.js`, `server/routes/accounts.ts`, `server/routes/gmail-push.js` — HTTP surfaces
+- `server/routes/briefing/email.ts`, `server/routes/accounts.ts`, `server/routes/gmail-push.ts` — HTTP surfaces
 - `FLOWS.md` — Gmail push → sync → triage flow, hop by hop

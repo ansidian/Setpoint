@@ -9,7 +9,7 @@ import {
   type SnapshotItemRow,
 } from "./snapshot-lifecycle.ts";
 import { SNAPSHOT_DISPLAY_LANES } from "./snapshot-state-machine.ts";
-import { getEmailTriageModeForUser } from "../triage/triage-mode.js";
+import { getEmailTriageModeForUser } from "../triage/triage-mode.ts";
 import type {
   SnapshotItem,
   SnapshotJobType,

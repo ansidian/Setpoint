@@ -57,5 +57,5 @@ Composition root and cross-cutting server concerns that don't belong to a single
 
 ## Related
 
-- Domain background-worker modules such as `server/email/email-backfill-worker.js` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.js` passes into `shutdown.ts`'s `stopFns`
+- Domain background-worker modules such as `server/email/email-backfill-worker.ts` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.js` passes into `shutdown.ts`'s `stopFns`
 - `server/db/migrations/` — SQL files run by `db/migrate.ts`

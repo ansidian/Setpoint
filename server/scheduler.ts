@@ -2,21 +2,21 @@ import cron from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import db from "./db/connection.ts";
 import { loadUserConfig } from "./platform/config-service.ts";
-import { fetchAllEmails } from "./email/email-fetch.js";
-import { indexEmails } from "./email/email-index.js";
+import { fetchAllEmails } from "./email/email-fetch.ts";
+import { indexEmails } from "./email/email-index.ts";
 import { advanceSnapshotBoundary } from "./snapshots/snapshot-service.ts";
 import {
   enqueueEmailTriageForEmails,
   processNextGmailHistorySyncJob,
   renewDueGmailWatches,
-} from "./email/gmail-sync.js";
+} from "./email/gmail-sync.ts";
 import {
   processNextEmailTriageJob,
   recoverStaleRunningTriageJobs,
   createTriageBatchContext,
   pruneCompletedTriageJobs,
-} from "./triage/triage-worker.js";
-import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.js";
+} from "./triage/triage-worker.ts";
+import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.ts";
 import { processDueReminderBatch } from "./reminders/reminder-scheduler.ts";
 import { createSchedulerWorkRegistry } from "./scheduler-work-registry.ts";
 import {

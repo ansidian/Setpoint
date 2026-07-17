@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { requireCookieSession } from "../../middleware/auth.ts";
-import dev from "./dev.js";
+import dev from "./dev.ts";
 import bills, { quickTxnRouter } from "./bills.ts";
-import email from "./email.js";
-import emailIndex from "./email-index.js";
+import email from "./email.ts";
+import emailIndex from "./email-index.ts";
 import tasks from "./tasks.ts";
 import snapshot from "./snapshot.ts";
 

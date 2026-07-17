@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmailIndexTestDb,
   seedEmailAccount,
-} from "./test-utils/email-index-db.js";
+} from "./test-utils/email-index-db.ts";
 
 const testState = vi.hoisted(() => ({
   db: { current: null },
@@ -20,7 +20,7 @@ vi.mock("../platform/encryption.ts", () => ({
 
 vi.stubGlobal("fetch", vi.fn());
 
-const { handleCallback } = await import("./gmail.js");
+const { handleCallback } = await import("./gmail.ts");
 
 describe("gmail callback canonicalization", () => {
   beforeEach(async () => {

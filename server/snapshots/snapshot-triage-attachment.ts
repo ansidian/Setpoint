@@ -8,7 +8,7 @@
 
 import db from "../db/connection.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
-import { parseFrom } from "../email/email-index.js";
+import { parseFrom } from "../email/email-index.ts";
 import {
   ARRIVAL_GRACE_QUEUED_LANE,
   ARRIVAL_GRACE_SOURCE,

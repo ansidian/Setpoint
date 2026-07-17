@@ -16,6 +16,6 @@
   "include": [
     "src/**/*",
     "shared/**/*",
-    "server/triage/triage-sound-settings.js"
+    "server/triage/triage-sound-settings.ts"
   ]
 }
