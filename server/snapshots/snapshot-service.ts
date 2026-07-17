@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
-import { loadUserConfig } from "../platform/config-service.ts";
+import type { Client } from "@libsql/client";
+import { loadUserConfig, type UserConfig } from "../platform/config-service.ts";
 import { fetchAllEmails } from "../email/email-fetch.js";
 import { indexEmails } from "../email/email-index.js";
 import { enqueueEmailTriageForEmails } from "../email/gmail-sync.js";
@@ -8,11 +9,11 @@ import { getElapsedMs, logTiming } from "../timing.ts";
 import {
   DEFAULT_TIMEZONE,
   activeSnapshotWindow,
-} from "./snapshot-lifecycle.js";
-import { PROVIDER_REMOVED_STATES } from "./snapshot-state-machine.js";
-import { completeEmailTriageJobsForEmail } from "./snapshot-triage-attachment.js";
-import { insertFeedback, makeHttpError } from "./snapshot-item-mutations.js";
-import { buildSnapshotView, emptyProcessingState } from "./snapshotViewModel.js";
+} from "./snapshot-lifecycle.ts";
+import { PROVIDER_REMOVED_STATES } from "./snapshot-state-machine.ts";
+import { completeEmailTriageJobsForEmail } from "./snapshot-triage-attachment.ts";
+import { insertFeedback, makeHttpError } from "./snapshot-item-mutations.ts";
+import { buildSnapshotView, emptyProcessingState } from "./snapshotViewModel.ts";
 import {
   copyCarryoverItems,
   findActiveSnapshot,
@@ -29,22 +30,31 @@ import {
   loadSnapshotHistoryCounts,
   loadSnapshotHistoryRows,
   loadSnapshotItems,
-} from "./snapshotStore.js";
+} from "./snapshotStore.ts";
+import type {
+  ActiveSnapshotView,
+  SnapshotBoundaryResult,
+  SnapshotHistoryResponse,
+  SnapshotRecord,
+  SnapshotView,
+} from "../../shared/types/snapshots.ts";
+import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
+import { errorMessage } from "./snapshot-types.ts";
 
-export { activeSnapshotWindow } from "./snapshot-lifecycle.js";
-export { CARRYOVER_MAX_DEPTH } from "./snapshotStore.js";
+export { activeSnapshotWindow } from "./snapshot-lifecycle.ts";
+export { CARRYOVER_MAX_DEPTH } from "./snapshotStore.ts";
 export {
   attachArrivalGraceEmailToActiveSnapshot,
   completeEmailTriageJobsForEmail,
   requeueArrivalGraceTriageForEmail,
   requeueEmailTriageForEmail,
   restorePendingTriageEligibilityForEmail,
-} from "./snapshot-triage-attachment.js";
+} from "./snapshot-triage-attachment.ts";
 export {
   attachResurfacedSnoozeToActiveSnapshot,
   deferPendingTriageForSnooze,
   settleReadArrivalGraceRows,
-} from "./snapshot-snooze-lifecycle.js";
+} from "./snapshot-snooze-lifecycle.ts";
 export {
   dismissSnapshotItemForToday,
   markPendingTriageDismissed,
@@ -53,15 +63,38 @@ export {
   moveSnapshotItemLane,
   reopenSnapshotItem,
   restoreSnapshotItemForToday,
-} from "./snapshot-item-mutations.js";
+} from "./snapshot-item-mutations.ts";
 
-const ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT = new Map();
+interface SnapshotServiceOptions {
+  dbClient?: SnapshotWriteDb;
+  now?: Date;
+  timeZone?: string;
+}
 
-export async function getOrCreateActiveSnapshot(userId, {
+interface AdvanceSnapshotOptions extends SnapshotServiceOptions {
+  scheduleLabel?: string | null;
+}
+
+interface TriageLoopResult {
+  processed?: boolean;
+  paused?: boolean;
+}
+
+interface ActiveSnapshotSyncOptions extends SnapshotServiceOptions {
+  loadUserConfigFn?: (userId: string) => Promise<UserConfig>;
+  fetchAllEmailsFn?: (accounts: UserConfig["accounts"], hoursBack: number) => Promise<SnapshotEmailSource[]>;
+  indexEmailsFn?: (userId: string, emails: SnapshotEmailSource[], options: { dbClient: SnapshotWriteDb }) => Promise<unknown>;
+  enqueueEmailTriageForEmailsFn?: (userId: string, emails: SnapshotEmailSource[], options: { dbClient: SnapshotWriteDb }) => Promise<unknown>;
+  processNextEmailTriageJobFn?: (options: Record<string, unknown>) => Promise<TriageLoopResult | null | undefined>;
+}
+
+const ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT = new Map<string, Promise<ActiveSnapshotView>>();
+
+export async function getOrCreateActiveSnapshot(userId: string, {
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
-} = {}) {
+}: SnapshotServiceOptions = {}): Promise<SnapshotRecord> {
   const window = activeSnapshotWindow({ now, timeZone });
   await freezeExpiredActiveSnapshots(dbClient, userId, window, now);
 
@@ -80,15 +113,15 @@ export async function getOrCreateActiveSnapshot(userId, {
 
   const created = await findActiveSnapshot(dbClient, userId, window);
   if (created) await copyCarryoverItems(dbClient, userId, created, window);
-  return created;
+  return created!;
 }
 
-export async function advanceSnapshotBoundary(userId, {
+export async function advanceSnapshotBoundary(userId: string, {
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
   scheduleLabel = null,
-} = {}) {
+}: AdvanceSnapshotOptions = {}): Promise<SnapshotBoundaryResult> {
   const nowIso = now.toISOString();
   const dailyWindow = activeSnapshotWindow({ now, timeZone });
   const window = {
@@ -135,12 +168,16 @@ export async function advanceSnapshotBoundary(userId, {
   };
 }
 
-async function defaultProcessNextEmailTriageJob(options) {
+async function defaultProcessNextEmailTriageJob(options: Record<string, unknown>): Promise<TriageLoopResult | null | undefined> {
   const { processNextEmailTriageJob } = await import("../triage/triage-worker.js");
   return processNextEmailTriageJob(options);
 }
 
-async function timeSnapshotSyncSource(source, work, extra = {}) {
+async function timeSnapshotSyncSource<T>(
+  source: string,
+  work: () => Promise<T>,
+  extra: Record<string, unknown> | ((result: T | null, error?: unknown) => Record<string, unknown>) = {},
+): Promise<T> {
   const startedAt = performance.now();
   try {
     const result = await work();
@@ -158,18 +195,18 @@ async function timeSnapshotSyncSource(source, work, extra = {}) {
       source,
       ms: getElapsedMs(startedAt),
       status: "error",
-      error: err?.message || String(err),
+      error: errorMessage(err),
       ...(typeof extra === "function" ? extra(null, err) : extra),
     }, console.error);
     throw err;
   }
 }
 
-export async function getSnapshotHistory(userId, {
+export async function getSnapshotHistory(userId: string, {
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
-} = {}) {
+}: SnapshotServiceOptions = {}): Promise<SnapshotHistoryResponse> {
   await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   const snapshots = await loadSnapshotHistoryRows(dbClient, userId);
   const countsBySnapshot = await loadSnapshotHistoryCounts(dbClient, snapshots.map((snapshot) => snapshot.id));
@@ -195,9 +232,9 @@ export async function getSnapshotHistory(userId, {
   };
 }
 
-export async function getSnapshotViewById(userId, snapshotId, {
+export async function getSnapshotViewById(userId: string, snapshotId: number, {
   dbClient = db,
-} = {}) {
+}: { dbClient?: SnapshotWriteDb } = {}): Promise<SnapshotView> {
   const snapshot = await loadSnapshotById(dbClient, userId, snapshotId);
   if (!snapshot) {
     throw makeHttpError("Snapshot not found", 404);
@@ -209,11 +246,11 @@ export async function getSnapshotViewById(userId, snapshotId, {
   return buildSnapshotView(snapshot, items, processing);
 }
 
-export async function getActiveSnapshotView(userId, {
+export async function getActiveSnapshotView(userId: string, {
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
-} = {}) {
+}: SnapshotServiceOptions = {}): Promise<ActiveSnapshotView> {
   // getOrCreateActiveSnapshot must stay first — it may INSERT the snapshot and
   // copy carryover items, and the readers below consume its id. Once it
   // resolves, the six reads are mutually independent pure SELECTs, so run them
@@ -232,21 +269,24 @@ export async function getActiveSnapshotView(userId, {
     loadAccountFilterOrder(dbClient, userId),
     loadProcessingState(dbClient, userId),
     snapshot ? loadCarryoverAgedOutCount(dbClient, userId, snapshot, { previousFrozen }) : 0,
-    loadPinnedEntries(userId, { dbClient }),
+    loadPinnedEntries(userId, { dbClient: dbClient as Client }),
   ]);
-  return { ...buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut), pinned };
+  return {
+    ...buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut),
+    pinned: pinned as unknown[],
+  };
 }
 
-async function runActiveSnapshotSync(userId, {
+async function runActiveSnapshotSync(userId: string, {
   dbClient = db,
   loadUserConfigFn = loadUserConfig,
   fetchAllEmailsFn = fetchAllEmails,
-  indexEmailsFn = indexEmails,
-  enqueueEmailTriageForEmailsFn = enqueueEmailTriageForEmails,
+  indexEmailsFn = indexEmails as NonNullable<ActiveSnapshotSyncOptions["indexEmailsFn"]>,
+  enqueueEmailTriageForEmailsFn = enqueueEmailTriageForEmails as NonNullable<ActiveSnapshotSyncOptions["enqueueEmailTriageForEmailsFn"]>,
   processNextEmailTriageJobFn = defaultProcessNextEmailTriageJob,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
-} = {}) {
+}: ActiveSnapshotSyncOptions = {}): Promise<ActiveSnapshotView> {
   const { accounts, settings } = await timeSnapshotSyncSource("config", () => loadUserConfigFn(userId), (result) => ({
     accounts: result?.accounts?.length || 0,
   }));
@@ -277,7 +317,7 @@ async function runActiveSnapshotSync(userId, {
     let batch = null;
     if (processNextEmailTriageJobFn === defaultProcessNextEmailTriageJob) {
       const { createTriageBatchContext } = await import("../triage/triage-worker.js");
-      batch = createTriageBatchContext({ dbClient });
+      batch = createTriageBatchContext({ dbClient: dbClient as Client });
     }
     let processed = 0;
     let paused = false;
@@ -303,7 +343,7 @@ async function runActiveSnapshotSync(userId, {
   }));
 }
 
-export async function syncActiveSnapshot(userId, options = {}) {
+export async function syncActiveSnapshot(userId: string, options: ActiveSnapshotSyncOptions = {}): Promise<ActiveSnapshotView> {
   const key = String(userId || "");
   const existing = ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT.get(key);
   if (existing) {
@@ -326,15 +366,15 @@ export async function syncActiveSnapshot(userId, options = {}) {
 }
 
 export async function markProviderRemovedFromActiveSnapshots(
-  userId,
-  accountId,
-  emailId,
-  providerState,
+  userId: string,
+  accountId: string,
+  emailId: string,
+  providerState: string,
   {
     dbClient = db,
     now = new Date(),
-  } = {},
-) {
+  }: SnapshotServiceOptions = {},
+): Promise<{ updated: number }> {
   if (!PROVIDER_REMOVED_STATES.has(providerState)) {
     throw makeHttpError("Invalid provider removal state", 400);
   }
@@ -377,9 +417,9 @@ export async function markProviderRemovedFromActiveSnapshots(
     for (const item of items) {
       await insertFeedback(
         dbClient,
-        item,
+        item as unknown as Parameters<typeof insertFeedback>[1],
         "provider_removed",
-        item.provider_state || "available",
+        String(item.provider_state || "available"),
         providerState,
       );
     }

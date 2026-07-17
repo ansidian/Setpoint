@@ -6,7 +6,7 @@ import db from "../db/connection.ts";
 import { getBillsMirrorState } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "./current-events.js";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.ts";
-import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.js";
+import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.ts";
 import { getTodoistSyncHealth } from "../tasks/todoist.ts";
 import {
   hydrateCalendarEventsWithReminderState,

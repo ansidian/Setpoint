@@ -13,7 +13,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/bills.ts` — sends bills to Actual Budget, quick transactions
 - `briefing/email.js` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.js` — email index health checks, backfill queuing
-- `briefing/snapshot.js` — snapshot fetch/sync, kanban lane reorder
+- `briefing/snapshot.ts` — snapshot fetch/sync, kanban lane reorder
 - `briefing/tasks.ts` — Todoist projects and labels listing
 - `briefing/dev.js` — dev-only email re-indexing endpoint
 

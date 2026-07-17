@@ -3,12 +3,12 @@ import {
   attachResurfacedSnoozeToActiveSnapshot,
   deferPendingTriageForSnooze,
   settleReadArrivalGraceRows,
-} from "./snapshot-snooze-lifecycle.js";
+} from "./snapshot-snooze-lifecycle.ts";
 import {
   getActiveSnapshotView,
   getOrCreateActiveSnapshot,
-} from "./snapshot-service.js";
-import { createMigratedDb } from "./snapshot-test-fixtures.js";
+} from "./snapshot-service.ts";
+import { createMigratedDb } from "./snapshot-test-fixtures.ts";
 
 describe("snapshot snooze lifecycle", () => {
   it("defers pending triage and hides the active snapshot item while snoozed", async () => {
@@ -23,7 +23,7 @@ describe("snapshot snooze lifecycle", () => {
             RETURNING id`,
       args: [],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -64,10 +64,10 @@ describe("snapshot snooze lifecycle", () => {
       args: [],
     });
     expect(rows.rows).toHaveLength(1);
-    const row = rows.rows[0];
+    const row = rows.rows[0]!;
     expect(row.triage_status).toBe("pending");
     expect(row.triage_source).toBe("user_snoozed_pending");
-    expect(JSON.parse(row.decision_metadata_json).snoozedPending).toEqual({
+    expect((JSON.parse(String(row.decision_metadata_json)) as { snoozedPending: unknown }).snoozedPending).toEqual({
       previousTriageSource: "arrival_grace",
       snoozedAt: now.toISOString(),
     });
@@ -169,7 +169,7 @@ describe("snapshot snooze lifecycle", () => {
             RETURNING id`,
       args: ["msg-arrival-read"],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,

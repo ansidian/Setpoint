@@ -716,15 +716,6 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/briefing/email/:uid/trash` | `server/routes/briefing/email.js` |
 | POST | `/api/briefing/email/arrival-grace/settle` | `server/routes/briefing/email.js` |
 | POST | `/api/briefing/email/mark-all-read` | `server/routes/briefing/email.js` |
-| GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.js` |
-| GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.js` |
-| GET | `/api/briefing/snapshot/history` | `server/routes/briefing/snapshot.js` |
-| POST | `/api/briefing/snapshot/items/:itemId/dismiss` | `server/routes/briefing/snapshot.js` |
-| POST | `/api/briefing/snapshot/items/:itemId/handled` | `server/routes/briefing/snapshot.js` |
-| PATCH | `/api/briefing/snapshot/items/:itemId/lane` | `server/routes/briefing/snapshot.js` |
-| POST | `/api/briefing/snapshot/items/:itemId/reopen` | `server/routes/briefing/snapshot.js` |
-| POST | `/api/briefing/snapshot/items/:itemId/restore` | `server/routes/briefing/snapshot.js` |
-| POST | `/api/briefing/snapshot/sync` | `server/routes/briefing/snapshot.js` |
 | GET | `/api/dashboard/current` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.js` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.js` |

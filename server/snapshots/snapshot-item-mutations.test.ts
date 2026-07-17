@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
+import type { InStatement } from "@libsql/client";
+import type { SnapshotDbResult, SnapshotWriteDb } from "./snapshot-types.ts";
 import {
   dismissSnapshotItemForToday,
   markSnapshotItemHandled,
   moveSnapshotItemLane,
   reopenSnapshotItem,
   restoreSnapshotItemForToday,
-} from "./snapshot-item-mutations.js";
+} from "./snapshot-item-mutations.ts";
 import {
   getActiveSnapshotView,
   getOrCreateActiveSnapshot,
-} from "./snapshot-service.js";
-import { createMigratedDb, seedSnapshotItem } from "./snapshot-test-fixtures.js";
+} from "./snapshot-service.ts";
+import { createMigratedDb, seedSnapshotItem } from "./snapshot-test-fixtures.ts";
 
 describe("snapshot item mutations", () => {
   it("moves an active snapshot item between lanes and records feedback", async () => {
@@ -113,7 +115,7 @@ describe("snapshot item mutations", () => {
             RETURNING id`,
       args: ["user-1", "gmail-work", "msg-pending-grace"],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     const itemResult = await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -126,7 +128,7 @@ describe("snapshot item mutations", () => {
             RETURNING id`,
       args: [snapshot.id, triageId, "user-1", "gmail-work", "msg-pending-grace"],
     });
-    const itemId = Number(itemResult.rows[0].id);
+    const itemId = Number(itemResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_triage_jobs
               (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
@@ -277,13 +279,12 @@ describe("snapshot item mutations", () => {
       lane: "needs_attention",
     });
 
-    const batchCalls = [];
-    const spyClient = {
-      ...dbClient,
-      execute: (...args) => dbClient.execute(...args),
-      batch: (statements, ...rest) => {
+    const batchCalls: InStatement[][] = [];
+    const spyClient: SnapshotWriteDb = {
+      execute: (statement) => dbClient.execute(statement) as unknown as Promise<SnapshotDbResult>,
+      batch: async (statements, mode) => {
         batchCalls.push(statements);
-        return dbClient.batch(statements, ...rest);
+        return dbClient.batch(statements, mode) as unknown as Promise<SnapshotDbResult[]>;
       },
     };
 
@@ -292,7 +293,7 @@ describe("snapshot item mutations", () => {
     // The snapshot-item update, the triage update, and the feedback insert all
     // ride one batch so they commit (or roll back) together (P3-44).
     expect(batchCalls).toHaveLength(1);
-    expect(batchCalls[0]).toHaveLength(3);
+    expect(batchCalls[0]!).toHaveLength(3);
 
     const rows = await dbClient.execute({
       sql: `SELECT i.lane_at_snapshot, t.lane, f.feedback_type
@@ -319,9 +320,8 @@ describe("snapshot item mutations", () => {
     // statements may land. Under the old per-statement execute() path the
     // snapshot-item lane update would have committed before the error,
     // diverging lane state — this test pins the atomic behavior.
-    const failingClient = {
-      ...dbClient,
-      execute: (...args) => dbClient.execute(...args),
+    const failingClient: SnapshotWriteDb = {
+      execute: (statement) => dbClient.execute(statement) as unknown as Promise<SnapshotDbResult>,
       batch: () => Promise.reject(new Error("simulated mid-write failure")),
     };
 

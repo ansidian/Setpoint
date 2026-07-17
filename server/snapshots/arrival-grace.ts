@@ -8,10 +8,10 @@ export const ARRIVAL_GRACE_READ_SOURCE = "arrival_grace_read";
 export const ARRIVAL_GRACE_QUEUED_LANE = "queued";
 export const ARRIVAL_GRACE_UNTRIAGED_READ_LANE = "untriaged_read";
 
-export function arrivalGraceDeadline(now = new Date()) {
+export function arrivalGraceDeadline(now: Date = new Date()): string {
   return new Date(now.getTime() + ARRIVAL_GRACE_MS).toISOString();
 }
 
-export function isArrivalGraceSource(value) {
+export function isArrivalGraceSource(value: unknown): boolean {
   return value === ARRIVAL_GRACE_SOURCE;
 }

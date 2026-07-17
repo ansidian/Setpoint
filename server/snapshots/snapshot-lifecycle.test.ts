@@ -3,7 +3,7 @@ import {
   activeSnapshotWindow,
   normalizeSnapshot,
   normalizeSnapshotItem,
-} from "./snapshot-lifecycle.js";
+} from "./snapshot-lifecycle.ts";
 
 describe("snapshot lifecycle model", () => {
   it("computes the owner-local active snapshot window", () => {

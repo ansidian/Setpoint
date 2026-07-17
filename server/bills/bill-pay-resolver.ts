@@ -3,7 +3,7 @@ import {
   BILL_PAY_PROFILE_IDENTITY_FIELDS,
   normalizeBillPayMappings,
 } from "./bill-pay-mappings.ts";
-import { normalizeBillCandidate } from "../snapshots/snapshot-lifecycle.js";
+import { normalizeBillCandidate } from "../snapshots/snapshot-lifecycle.ts";
 import type {
   BillCandidate,
   BillEmailContext,

@@ -1,6 +1,6 @@
 import { chunkArray } from "./gmail.js";
 import { providerStateFromMetadata } from "./gmailHistoryProjection.js";
-import { markProviderRemovedFromActiveSnapshots } from "../snapshots/snapshot-service.js";
+import { markProviderRemovedFromActiveSnapshots } from "../snapshots/snapshot-service.ts";
 
 // Gmail row reconciliation lifted from gmail-sync.js: resolve the mailbox's
 // indexed account_ids, find existing rows for a set of message ids, then

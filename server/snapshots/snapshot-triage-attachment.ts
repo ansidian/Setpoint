@@ -1,7 +1,7 @@
 /**
  * Plumbing between the triage worker and the snapshot row state machine:
  * arrival-grace queueing/attachment, triage-job completion, and restoration
- * of pending-triage eligibility on undo. Extracted from snapshot-service.js
+ * of pending-triage eligibility on undo. Extracted from snapshot-service.ts
  * (EAD-323); snapshot-service re-exports every public symbol here, so
  * external callers are unchanged.
  */
@@ -13,12 +13,34 @@ import {
   ARRIVAL_GRACE_QUEUED_LANE,
   ARRIVAL_GRACE_SOURCE,
   arrivalGraceDeadline,
-} from "./arrival-grace.js";
-import { DEFAULT_TIMEZONE, snapshotString } from "./snapshot-lifecycle.js";
-import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+} from "./arrival-grace.ts";
+import { DEFAULT_TIMEZONE, snapshotString } from "./snapshot-lifecycle.ts";
+import { getOrCreateActiveSnapshot } from "./snapshot-service.ts";
 import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.ts";
+import type { SnapshotRecord } from "../../shared/types/snapshots.ts";
+import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
 
-function snapshotSenderFromEmail(email = {}) {
+interface TriageMetadata extends Record<string, unknown> {
+  snoozedPending?: {
+    previousTriageSource?: string;
+    snoozedAt?: string;
+  };
+}
+
+interface AttachmentOptions {
+  dbClient?: SnapshotWriteDb;
+  now?: Date;
+  timeZone?: string;
+  snapshot?: SnapshotRecord | null;
+}
+
+interface RequeueArrivalGraceOptions {
+  dbClient?: SnapshotWriteDb;
+  now?: Date;
+  requestEmailTriageDrainAtFn?: (scheduledFor: string) => unknown;
+}
+
+function snapshotSenderFromEmail(email: SnapshotEmailSource = {}) {
   const parsed = parseFrom(email);
   return {
     fromName: snapshotString(email.from_name, parsed.fromName),
@@ -26,9 +48,9 @@ function snapshotSenderFromEmail(email = {}) {
   };
 }
 
-export async function requeueEmailTriageForEmail(userId, accountId, emailId, {
+export async function requeueEmailTriageForEmail(userId: string, accountId: string, emailId: string, {
   dbClient = db,
-} = {}) {
+}: { dbClient?: SnapshotWriteDb } = {}): Promise<void> {
   const idempotencyKey = `email_triage:${userId}:${accountId}:${emailId}`;
   await dbClient.execute({
     sql: `INSERT INTO ea_triage_jobs
@@ -47,11 +69,11 @@ export async function requeueEmailTriageForEmail(userId, accountId, emailId, {
   });
 }
 
-export async function requeueArrivalGraceTriageForEmail(userId, accountId, emailId, {
+export async function requeueArrivalGraceTriageForEmail(userId: string, accountId: string, emailId: string, {
   dbClient = db,
   now = new Date(),
   requestEmailTriageDrainAtFn = requestEmailTriageDrainAt,
-} = {}) {
+}: RequeueArrivalGraceOptions = {}): Promise<string> {
   const scheduledFor = arrivalGraceDeadline(now);
   const idempotencyKey = `email_triage:${userId}:${accountId}:${emailId}`;
   await dbClient.execute({
@@ -98,7 +120,7 @@ export async function requeueArrivalGraceTriageForEmail(userId, accountId, email
   return scheduledFor;
 }
 
-export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId, email, {
+export async function attachArrivalGraceEmailToActiveSnapshot(userId: string, accountId: string, email: SnapshotEmailSource, {
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
@@ -106,7 +128,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
   // snapshot once and pass it here, so each email skips the 3-query
   // getOrCreateActiveSnapshot. The active snapshot is invariant across a batch.
   snapshot: providedSnapshot = null,
-} = {}) {
+}: AttachmentOptions = {}): Promise<{ snapshotId: number; triageId: number; scheduledFor: string } | null> {
   const emailId = email?.uid || email?.email_id || email?.id;
   if (!userId || !accountId || !emailId) return null;
   const sender = snapshotSenderFromEmail(email);
@@ -132,7 +154,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
   const triageRow = triage.rows[0];
   if (!triageRow?.id) return null;
 
-  const scheduledFor = triageRow.scheduled_for || arrivalGraceDeadline(now);
+  const scheduledFor = triageRow.scheduled_for as string | null || arrivalGraceDeadline(now);
   const snapshot = providedSnapshot || await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   const write = await dbClient.execute({
     sql: `INSERT INTO ea_briefing_snapshot_items
@@ -196,7 +218,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
               AND j.status IN ('queued', 'running')
           )`,
     args: [
-      snapshot.id,
+      snapshot!.id,
       Number(triageRow.id),
       userId,
       accountId,
@@ -231,14 +253,14 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
       reason: "email_triage_queued",
     },
   });
-  return { snapshotId: snapshot.id, triageId: Number(triageRow.id), scheduledFor };
+  return { snapshotId: snapshot!.id, triageId: Number(triageRow.id), scheduledFor };
 }
 
-export async function completeEmailTriageJobsForEmail(userId, accountId, emailId, {
+export async function completeEmailTriageJobsForEmail(userId: string, accountId: string, emailId: string, {
   dbClient = db,
   now = new Date(),
   lastError = "",
-} = {}) {
+}: { dbClient?: SnapshotWriteDb; now?: Date; lastError?: string } = {}): Promise<{ updated: number }> {
   const result = await dbClient.execute({
     sql: `UPDATE ea_triage_jobs
           SET status = 'complete',
@@ -257,10 +279,10 @@ export async function completeEmailTriageJobsForEmail(userId, accountId, emailId
   return { updated: Number(result.rowsAffected || 0) };
 }
 
-export async function restorePendingTriageEligibilityForEmail(userId, accountId, emailId, {
+export async function restorePendingTriageEligibilityForEmail(userId: string, accountId: string, emailId: string, {
   dbClient = db,
   now = new Date(),
-} = {}) {
+}: { dbClient?: SnapshotWriteDb; now?: Date } = {}): Promise<{ updated: number; itemsRestored: number }> {
   const current = await dbClient.execute({
     sql: `SELECT triage_source, decision_metadata_json
           FROM ea_email_triage
@@ -270,10 +292,10 @@ export async function restorePendingTriageEligibilityForEmail(userId, accountId,
           LIMIT 1`,
     args: [userId, accountId, emailId],
   });
-  let metadata = {};
+  let metadata: TriageMetadata = {};
   try {
     metadata = current.rows[0]?.decision_metadata_json
-      ? JSON.parse(current.rows[0].decision_metadata_json)
+      ? JSON.parse(String(current.rows[0].decision_metadata_json)) as TriageMetadata
       : {};
   } catch {
     metadata = {};

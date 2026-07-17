@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import type { ScheduledTask } from "node-cron";
 import db from "../db/connection.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { wakeAtGmail } from "../email/gmail.js";
@@ -7,8 +8,53 @@ import {
   attachResurfacedSnoozeToActiveSnapshot,
   requeueArrivalGraceTriageForEmail,
   requeueEmailTriageForEmail,
-} from "./snapshot-service.js";
-import { ARRIVAL_GRACE_SOURCE } from "./arrival-grace.js";
+} from "./snapshot-service.ts";
+import { ARRIVAL_GRACE_SOURCE } from "./arrival-grace.ts";
+import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
+import { errorMessage } from "./snapshot-types.ts";
+
+interface SnoozeAccount extends Record<string, unknown> {
+  id?: string;
+  email?: string;
+  type?: string;
+}
+
+interface DueSnoozeItem {
+  uid: string;
+  snap: SnapshotEmailSource | null;
+  accountId: string | null;
+  acc: SnoozeAccount | undefined;
+}
+
+interface TriageRow extends Record<string, unknown> {
+  account_id: string;
+  email_id: string;
+  triage_status?: string | null;
+  triage_source?: string | null;
+  last_triaged_at?: string | null;
+  decision_metadata_json?: string | null;
+}
+
+interface WakeSummary {
+  woke: number;
+  skipped?: "in_flight";
+}
+
+interface WakeDependencies {
+  userId?: string;
+  dbClient?: SnapshotWriteDb;
+  now?: Date;
+  loadUserConfigFn?: (userId: string) => Promise<{ accounts: SnoozeAccount[] }>;
+  wakeAtGmailFn?: (account: SnoozeAccount, emailId: string) => Promise<unknown>;
+  attachResurfacedSnoozeToActiveSnapshotFn?: typeof attachResurfacedSnoozeToActiveSnapshot;
+  attachArrivalGraceEmailToActiveSnapshotFn?: typeof attachArrivalGraceEmailToActiveSnapshot;
+  requeueArrivalGraceTriageForEmailFn?: typeof requeueArrivalGraceTriageForEmail;
+  requeueEmailTriageForEmailFn?: typeof requeueEmailTriageForEmail;
+}
+
+interface SnoozedPendingMetadata extends Record<string, unknown> {
+  snoozedPending?: { previousTriageSource?: string };
+}
 
 const CRON_EXPR = "*/5 * * * *"; // every 5 minutes
 // P2-20: bound how many Gmail wake-modify round-trips run at once when a cluster
@@ -16,13 +62,17 @@ const CRON_EXPR = "*/5 * * * *"; // every 5 minutes
 const SNOOZE_WAKE_CONCURRENCY = 5;
 const SNOOZE_TRIAGE_LOOKUP_CHUNK_SIZE = 500;
 
-function snoozeTriageKey(accountId, emailId) {
+function snoozeTriageKey(accountId: string, emailId: string): string {
   return `${accountId}:${emailId}`;
 }
 
 // P2-20: load every due snooze's triage row in one (chunked) query keyed by
 // (account_id, email_id), replacing the per-row SELECT inside the wake loop.
-async function loadTriageRowsForDueSnoozes(dbClient, userId, items) {
+async function loadTriageRowsForDueSnoozes(
+  dbClient: SnapshotWriteDb,
+  userId: string,
+  items: DueSnoozeItem[],
+): Promise<Map<string, TriageRow>> {
   const uids = [...new Set(items.filter((item) => item.accountId).map((item) => item.uid))];
   const byKey = new Map();
   for (let i = 0; i < uids.length; i += SNOOZE_TRIAGE_LOOKUP_CHUNK_SIZE) {
@@ -35,13 +85,14 @@ async function loadTriageRowsForDueSnoozes(dbClient, userId, items) {
       args: [userId, ...chunk],
     });
     for (const row of res.rows) {
-      byKey.set(snoozeTriageKey(row.account_id, row.email_id), row);
+      const triageRow = row as unknown as TriageRow;
+      byKey.set(snoozeTriageKey(triageRow.account_id, triageRow.email_id), triageRow);
     }
   }
   return byKey;
 }
 
-async function runWithBoundedConcurrency(items, limit, worker) {
+async function runWithBoundedConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
   for (let i = 0; i < items.length; i += limit) {
     await Promise.all(items.slice(i, i + limit).map(worker));
   }
@@ -66,7 +117,7 @@ export async function wakeDueSnoozes({
   attachArrivalGraceEmailToActiveSnapshotFn = attachArrivalGraceEmailToActiveSnapshot,
   requeueArrivalGraceTriageForEmailFn = requeueArrivalGraceTriageForEmail,
   requeueEmailTriageForEmailFn = requeueEmailTriageForEmail,
-} = {}) {
+}: WakeDependencies = {}): Promise<WakeSummary | void> {
   if (!userId) return;
 
   // P3-59: a previous tick is still resurfacing; bail so we don't fire a second
@@ -100,7 +151,7 @@ async function runWakeDueSnoozes({
   attachArrivalGraceEmailToActiveSnapshotFn,
   requeueArrivalGraceTriageForEmailFn,
   requeueEmailTriageForEmailFn,
-}) {
+}: Required<Omit<WakeDependencies, "userId">> & { userId: string }): Promise<WakeSummary> {
   const resurfacedAt = now.getTime();
   const result = await dbClient.execute({
     sql: "SELECT email_id, email_snapshot FROM ea_snoozed_emails WHERE user_id = ? AND status = 'snoozed' AND until_ts <= ?",
@@ -113,13 +164,15 @@ async function runWakeDueSnoozes({
   const { accounts } = await loadUserConfigFn(userId);
 
   // Parse each due row once and resolve its account up front.
-  const items = result.rows.map((row) => {
-    const uid = row.email_id;
-    let snap = null;
+  const items: DueSnoozeItem[] = result.rows.map((row) => {
+    const uid = String(row.email_id);
+    let snap: SnapshotEmailSource | null = null;
     if (row.email_snapshot) {
-      try { snap = JSON.parse(row.email_snapshot); } catch { /* ignore */ }
+      try { snap = JSON.parse(String(row.email_snapshot)) as SnapshotEmailSource; } catch { /* ignore */ }
     }
-    const accountId = snap ? (snap.account_id || snap.accountId || snap._accountKey) : null;
+    const accountId = snap
+      ? String(snap.account_id || snap.accountId || snap._accountKey || "") || null
+      : null;
     const acc = accounts.find((a) => a.id === snap?.account_id || a.email === snap?.account_email);
     return { uid, snap, accountId, acc };
   });
@@ -135,10 +188,11 @@ async function runWakeDueSnoozes({
     items.filter((item) => item.acc?.type === "gmail"),
     SNOOZE_WAKE_CONCURRENCY,
     async (item) => {
+      if (!item.acc) return;
       try {
         await wakeAtGmailFn(item.acc, item.uid);
       } catch (err) {
-        console.error(`[EA Snooze] Gmail wake-modify failed for uid=${item.uid}:`, err.message);
+        console.error(`[EA Snooze] Gmail wake-modify failed for uid=${item.uid}:`, errorMessage(err));
       }
     },
   );
@@ -158,10 +212,10 @@ async function runWakeDueSnoozes({
         const pendingTriage = triageRow?.triage_status === "pending";
         const completedTriage = triageRow?.triage_status === "complete"
           && Boolean(triageRow?.last_triaged_at);
-        let metadata = {};
+        let metadata: SnoozedPendingMetadata = {};
         try {
           metadata = triageRow?.decision_metadata_json
-            ? JSON.parse(triageRow.decision_metadata_json)
+            ? JSON.parse(triageRow.decision_metadata_json) as SnoozedPendingMetadata
             : {};
         } catch {
           metadata = {};
@@ -204,7 +258,7 @@ async function runWakeDueSnoozes({
         args: [resurfacedAt, userId, uid],
       });
     } catch (err) {
-      console.error(`[EA Snooze] Status update failed for uid=${uid}:`, err.message);
+      console.error(`[EA Snooze] Status update failed for uid=${uid}:`, errorMessage(err));
     }
   }
 
@@ -217,7 +271,12 @@ async function runWakeDueSnoozes({
 // field, so a 'fyi'/'noise' item resurfaces in its real lane. Returns true when an
 // existing live item was restored; false (no row) means none exists and the caller
 // should fall back to attachResurfacedSnoozeToActiveSnapshot.
-async function unhideCompletedSnoozeItem(dbClient, userId, accountId, emailId) {
+async function unhideCompletedSnoozeItem(
+  dbClient: SnapshotWriteDb,
+  userId: string,
+  accountId: string,
+  emailId: string,
+): Promise<boolean> {
   const itemResult = await dbClient.execute({
     sql: `UPDATE ea_briefing_snapshot_items
           SET dismissed_from_today_at = NULL,
@@ -238,7 +297,7 @@ async function unhideCompletedSnoozeItem(dbClient, userId, accountId, emailId) {
 async function cleanupResurfaced({
   userId = process.env.EA_USER_ID,
   dbClient = db,
-} = {}) {
+}: { userId?: string; dbClient?: SnapshotWriteDb } = {}): Promise<void> {
   if (!userId) return;
   const cutoff = Date.now() - RESURFACED_TTL_MS;
   try {
@@ -246,15 +305,15 @@ async function cleanupResurfaced({
       sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND status = 'resurfaced' AND resurfaced_at < ?",
       args: [userId, cutoff],
     });
-    if (result.rowsAffected > 0) {
+    if (Number(result.rowsAffected || 0) > 0) {
       console.log(`[EA Snooze] Cleaned up ${result.rowsAffected} resurfaced row(s)`);
     }
   } catch (err) {
-    console.error("[EA Snooze] Resurfaced cleanup failed:", err.message);
+    console.error("[EA Snooze] Resurfaced cleanup failed:", errorMessage(err));
   }
 }
 
-let snoozeWakerJob = null;
+let snoozeWakerJob: ScheduledTask | null = null;
 
 export function startSnoozeWaker() {
   if (snoozeWakerJob) {
@@ -263,7 +322,7 @@ export function startSnoozeWaker() {
   }
   snoozeWakerJob = cron.schedule(CRON_EXPR, () => {
     wakeDueSnoozes()
-      .catch((err) => console.error("[EA Snooze] Worker tick failed:", err.message))
+      .catch((err: unknown) => console.error("[EA Snooze] Worker tick failed:", errorMessage(err)))
       .finally(() => { cleanupResurfaced(); });
   });
   console.log("[EA Snooze] Waker started (every 5 minutes)");

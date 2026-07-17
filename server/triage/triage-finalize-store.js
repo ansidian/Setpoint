@@ -1,4 +1,4 @@
-import { getOrCreateActiveSnapshot } from "../snapshots/snapshot-service.js";
+import { getOrCreateActiveSnapshot } from "../snapshots/snapshot-service.ts";
 import { preflightDecisionMetadata } from "./triage-preflight.js";
 import { maybeBillCandidate, emailTriageEventDetails } from "./triage-projections-model.js";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";

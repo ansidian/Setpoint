@@ -30,5 +30,5 @@ AI email classification: the batch worker, model client, preflight rules, escala
 ## Related
 
 - `server/scheduler.ts` — cron entry (`processNextEmailTriageJob`)
-- `server/snapshots/snapshot-triage-attachment.js` — where decisions land on snapshot items
+- `server/snapshots/snapshot-triage-attachment.ts` — where decisions land on snapshot items
 - `npm run triage:preflight` / `npm run triage:eval` — CLI harnesses in `server/scripts/`

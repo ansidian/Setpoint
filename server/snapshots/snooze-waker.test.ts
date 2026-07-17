@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getActiveSnapshotView } from "./snapshot-service.js";
-import { createMigratedDb, seedSnapshotItem } from "./snapshot-test-fixtures.js";
-import { startSnoozeWaker, stopSnoozeWaker, wakeDueSnoozes } from "./snooze-waker.js";
+import { getActiveSnapshotView } from "./snapshot-service.ts";
+import { createMigratedDb, seedSnapshotItem } from "./snapshot-test-fixtures.ts";
+import { startSnoozeWaker, stopSnoozeWaker, wakeDueSnoozes } from "./snooze-waker.ts";
 
 const cronApi = vi.hoisted(() => ({ schedule: vi.fn() }));
 vi.mock("node-cron", () => ({ default: cronApi }));
@@ -298,7 +298,7 @@ describe("snooze waker", () => {
 
     expect(secondTick).toEqual({ woke: 0, skipped: "in_flight" });
 
-    releaseFirst();
+    releaseFirst!();
     const firstResult = await firstTick;
     expect(firstResult).toEqual({ woke: 1 });
 
@@ -447,7 +447,7 @@ describe("snooze waker", () => {
     );
     // Reattach threw, so the row must stay 'snoozed' for the next tick to retry,
     // not flip to 'resurfaced' (which would drop the email from the briefing).
-    expect(row.rows[0].status).toBe("snoozed");
+    expect(row.rows[0]!.status).toBe("snoozed");
   });
 });
 

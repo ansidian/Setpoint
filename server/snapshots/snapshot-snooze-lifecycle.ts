@@ -1,9 +1,9 @@
 /**
  * Snooze defer/resurface plumbing plus read-state settlement for the active
  * snapshot: hiding a pending-triage row while it is snoozed, re-attaching a
- * woken snooze (coordination with snooze-waker.js), and settling
+ * woken snooze (coordination with snooze-waker.ts), and settling
  * arrival-grace rows that the owner read before triage ran. Extracted from
- * snapshot-service.js (EAD-324); snapshot-service re-exports every public
+ * snapshot-service.ts (EAD-324); snapshot-service re-exports every public
  * symbol here, so external callers are unchanged.
  */
 
@@ -12,20 +12,44 @@ import {
   ARRIVAL_GRACE_READ_SOURCE,
   ARRIVAL_GRACE_SOURCE,
   ARRIVAL_GRACE_UNTRIAGED_READ_LANE,
-} from "./arrival-grace.js";
+} from "./arrival-grace.ts";
 import {
   DEFAULT_TIMEZONE,
   normalizeSnapshotItem,
   snapshotDate,
   snapshotString,
-} from "./snapshot-lifecycle.js";
-import { resurfacedTriageLane } from "./snapshot-state-machine.js";
-import { completeEmailTriageJobsForEmail } from "./snapshot-triage-attachment.js";
-import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+  type SnapshotItemRow,
+} from "./snapshot-lifecycle.ts";
+import { resurfacedTriageLane } from "./snapshot-state-machine.ts";
+import { completeEmailTriageJobsForEmail } from "./snapshot-triage-attachment.ts";
+import { getOrCreateActiveSnapshot } from "./snapshot-service.ts";
+import type { SnapshotItem, SnapshotTriageLane } from "../../shared/types/snapshots.ts";
+import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
 
-async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso, {
+interface SnoozedPendingMetadata extends Record<string, unknown> {
+  snoozedPending?: {
+    previousTriageSource?: string;
+    snoozedAt?: string;
+  };
+}
+
+interface ResurfaceOptions {
+  dbClient?: SnapshotWriteDb;
+  now?: Date;
+  timeZone?: string;
+  resurfacedAt?: number;
+  pendingTriage?: boolean;
+}
+
+async function upsertResurfacedTriage(
+  dbClient: SnapshotWriteDb,
+  userId: string,
+  snapshot: SnapshotEmailSource,
+  nowIso: string,
+  {
   pendingTriage = false,
-} = {}) {
+  }: { pendingTriage?: boolean } = {},
+): Promise<{ triageId: number; accountId: string; emailId: string; lane: SnapshotTriageLane } | null> {
   const accountId = snapshotString(snapshot?.account_id, snapshot?.accountId, snapshot?._accountKey);
   const emailId = snapshotString(snapshot?.uid, snapshot?.email_id, snapshot?.id);
   if (!accountId || !emailId) return null;
@@ -89,13 +113,13 @@ async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso, {
   };
 }
 
-export async function attachResurfacedSnoozeToActiveSnapshot(userId, snapshot, {
+export async function attachResurfacedSnoozeToActiveSnapshot(userId: string, snapshot: SnapshotEmailSource, {
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
   resurfacedAt = now.getTime(),
   pendingTriage = false,
-} = {}) {
+}: ResurfaceOptions = {}): Promise<SnapshotItem | null> {
   const nowIso = now.toISOString();
   const triage = await upsertResurfacedTriage(dbClient, userId, snapshot, nowIso, {
     pendingTriage,
@@ -139,7 +163,7 @@ export async function attachResurfacedSnoozeToActiveSnapshot(userId, snapshot, {
             resurfaced_at = excluded.resurfaced_at,
             updated_at = datetime('now')`,
     args: [
-      activeSnapshot.id,
+      activeSnapshot!.id,
       triage.triageId,
       userId,
       triage.accountId,
@@ -178,15 +202,23 @@ export async function attachResurfacedSnoozeToActiveSnapshot(userId, snapshot, {
           WHERE i.snapshot_id = ?
             AND i.triage_id = ?
           LIMIT 1`,
-    args: [activeSnapshot.id, triage.triageId],
+    args: [activeSnapshot!.id, triage.triageId],
   });
-  return result.rows[0] ? normalizeSnapshotItem(result.rows[0]) : null;
+  return result.rows[0]
+    ? normalizeSnapshotItem(result.rows[0] as unknown as SnapshotItemRow)
+    : null;
 }
 
-export async function deferPendingTriageForSnooze(userId, accountId, emailId, untilTs, {
+export async function deferPendingTriageForSnooze(
+  userId: string,
+  accountId: string,
+  emailId: string,
+  untilTs: string | number | Date,
+  {
   dbClient = db,
   now = new Date(),
-} = {}) {
+  }: { dbClient?: SnapshotWriteDb; now?: Date } = {},
+): Promise<{ updated: number; jobsUpdated: number; itemsHidden: number }> {
   const scheduledFor = new Date(untilTs).toISOString();
   const hiddenAt = now.toISOString();
   const current = await dbClient.execute({
@@ -199,11 +231,13 @@ export async function deferPendingTriageForSnooze(userId, accountId, emailId, un
           LIMIT 1`,
     args: [userId, accountId, emailId],
   });
-  const previousSource = current.rows[0]?.triage_source || null;
-  let metadata = {};
+  const previousSource = current.rows[0]?.triage_source == null
+    ? null
+    : String(current.rows[0].triage_source);
+  let metadata: SnoozedPendingMetadata = {};
   try {
     metadata = current.rows[0]?.decision_metadata_json
-      ? JSON.parse(current.rows[0].decision_metadata_json)
+      ? JSON.parse(String(current.rows[0].decision_metadata_json)) as SnoozedPendingMetadata
       : {};
   } catch {
     metadata = {};
@@ -267,11 +301,11 @@ export async function deferPendingTriageForSnooze(userId, accountId, emailId, un
   };
 }
 
-export async function settleReadArrivalGraceRows(userId, {
+export async function settleReadArrivalGraceRows(userId: string, {
   dbClient = db,
   now = new Date(),
   emailIds = null,
-} = {}) {
+}: { dbClient?: SnapshotWriteDb; now?: Date; emailIds?: string[] | null } = {}): Promise<{ settled: number; emailIds: string[] }> {
   const ids = Array.isArray(emailIds) ? [...new Set(emailIds.filter(Boolean))] : null;
   const emailFilter = ids?.length
     ? `AND t.email_id IN (${ids.map(() => "?").join(", ")})`
@@ -316,7 +350,7 @@ export async function settleReadArrivalGraceRows(userId, {
                 last_triaged_at = ?,
                 updated_at = datetime('now')
             WHERE id = ?`,
-      args: [ARRIVAL_GRACE_READ_SOURCE, settledAt, row.id],
+      args: [ARRIVAL_GRACE_READ_SOURCE, settledAt, Number(row.id)],
     });
     await dbClient.execute({
       sql: `UPDATE ea_briefing_snapshot_items
@@ -344,12 +378,12 @@ export async function settleReadArrivalGraceRows(userId, {
         ARRIVAL_GRACE_READ_SOURCE,
         settledAt,
         userId,
-        row.account_id,
-        row.email_id,
+        String(row.account_id),
+        String(row.email_id),
         userId,
       ],
     });
-    await completeEmailTriageJobsForEmail(userId, row.account_id, row.email_id, {
+    await completeEmailTriageJobsForEmail(userId, String(row.account_id), String(row.email_id), {
       dbClient,
       now,
       lastError: "Skipped arrival-grace triage; message was read",
@@ -358,6 +392,6 @@ export async function settleReadArrivalGraceRows(userId, {
 
   return {
     settled: rows.length,
-    emailIds: rows.map((row) => row.email_id),
+    emailIds: rows.map((row) => String(row.email_id)),
   };
 }

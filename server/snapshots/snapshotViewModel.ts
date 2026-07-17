@@ -1,8 +1,31 @@
 // Pure view projection for the briefing snapshot: sorts/aggregates loaded snapshot
 // items into the lane/filter/laneCount shape the briefing UI consumes. No DB — the
-// store (snapshotStore.js) loads rows, the service orchestrates, this shapes the view.
+// store (snapshotStore.ts) loads rows, the service orchestrates, this shapes the view.
+import type {
+  SnapshotAccountFilter,
+  SnapshotCategoryFilter,
+  SnapshotItem,
+  SnapshotLaneCounts,
+  SnapshotLaneItems,
+  SnapshotProcessingState,
+  SnapshotRecord,
+  SnapshotView,
+} from "../../shared/types/snapshots.ts";
 
-export function compareAccountFilters(accountOrder, a, b) {
+export interface SnapshotAccountOrderEntry {
+  index: number;
+  sort_order: number;
+  created_at: number;
+}
+
+export type SnapshotAccountOrder = Map<string, SnapshotAccountOrderEntry>;
+type ComparableAccountFilter = Pick<SnapshotAccountFilter, "account_id"> & Partial<Omit<SnapshotAccountFilter, "account_id">>;
+
+export function compareAccountFilters(
+  accountOrder: SnapshotAccountOrder,
+  a: ComparableAccountFilter,
+  b: ComparableAccountFilter,
+): number {
   const aOrder = accountOrder.get(a.account_id);
   const bOrder = accountOrder.get(b.account_id);
   if (aOrder && bOrder) {
@@ -13,12 +36,15 @@ export function compareAccountFilters(accountOrder, a, b) {
   if (aOrder) return -1;
   if (bOrder) return 1;
 
-  return a.label.localeCompare(b.label) || a.account_id.localeCompare(b.account_id);
+  return a.label!.localeCompare(b.label!) || a.account_id.localeCompare(b.account_id);
 }
 
-export function buildFilters(items, accountOrder = null) {
-  const accountMap = new Map();
-  const categoryMap = new Map();
+export function buildFilters(items: SnapshotItem[], accountOrder: SnapshotAccountOrder | null = null): {
+  accounts: SnapshotAccountFilter[];
+  categories: SnapshotCategoryFilter[];
+} {
+  const accountMap = new Map<string, SnapshotAccountFilter>();
+  const categoryMap = new Map<string, number>();
 
   for (const item of items) {
     const existingAccount = accountMap.get(item.account_id);
@@ -51,8 +77,8 @@ export function buildFilters(items, accountOrder = null) {
   };
 }
 
-export function buildLanes(items) {
-  const lanes = {
+export function buildLanes(items: SnapshotItem[]): { lanes: SnapshotLaneItems; carryover: SnapshotItem[] } {
+  const lanes: SnapshotLaneItems = {
     queued: [],
     needs_attention: [],
     fyi: [],
@@ -60,7 +86,7 @@ export function buildLanes(items) {
     untriaged_read: [],
     noise: [],
   };
-  const carryover = [];
+  const carryover: SnapshotItem[] = [];
 
   for (const item of items) {
     if (item.handled_at) {
@@ -76,13 +102,15 @@ export function buildLanes(items) {
       lanes.catch_up.push(item);
       continue;
     }
-    if (lanes[item.lane]) lanes[item.lane].push(item);
+    if (item.lane in lanes) {
+      lanes[item.lane as keyof SnapshotLaneItems]?.push(item);
+    }
   }
 
   return { lanes, carryover };
 }
 
-export function emptyProcessingState() {
+export function emptyProcessingState(): SnapshotProcessingState {
   return {
     queued: 0,
     running: 0,
@@ -107,9 +135,15 @@ export function emptyProcessingState() {
   };
 }
 
-export function buildSnapshotView(snapshot, items, processing = emptyProcessingState(), accountOrder = null, carryoverAgedOut = 0) {
+export function buildSnapshotView(
+  snapshot: SnapshotRecord | null,
+  items: SnapshotItem[],
+  processing: SnapshotProcessingState = emptyProcessingState(),
+  accountOrder: SnapshotAccountOrder | null = null,
+  carryoverAgedOut = 0,
+): SnapshotView {
   const { lanes, carryover } = buildLanes(items);
-  const laneCounts = {
+  const laneCounts: SnapshotLaneCounts = {
     queued: lanes.queued.length,
     needs_attention: lanes.needs_attention.length,
     fyi: lanes.fyi.length,
@@ -118,7 +152,8 @@ export function buildSnapshotView(snapshot, items, processing = emptyProcessingS
     noise: lanes.noise.length,
     carryover: carryover.length,
   };
-  if (lanes.catch_up?.length > 0) laneCounts.catch_up = lanes.catch_up.length;
+  const catchUp = lanes.catch_up;
+  if (catchUp && catchUp.length > 0) laneCounts.catch_up = catchUp.length;
   return {
     snapshot,
     readOnly: snapshot?.status !== "active",
