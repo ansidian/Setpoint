@@ -1,87 +1,90 @@
 # Inbox Map
 
-The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.jsx` (orchestrator) and `useInboxController.js` (central state machine); `reader/Reader.jsx` routes the detail pane. AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface).
+The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface).
 
 ## Files
 
 ### Views + orchestration
-- `InboxView.jsx` — composes live/snapshot modes, session state, undo coordination
-- `InboxDesktopPane.jsx` — desktop layout: digest, sidebar, list, reader, undo toast
-- `useInboxController.js` — central state machine: selection, filters, search, undo, Alfred handoff
-- `inboxReadRoutingModel.js` — read-scope routing (`resolveReadScope`) + `planMarkAllVisibleRead`; one home for the live/snapshot/indexed decision shared by mark-all and auto-mark-read
-- `useInboxActionDispatch.js` — action handlers: trash, snooze, lane move, mark read, draft reply
-- `useInboxSessionState.js` — external session store surviving unmount/tab switches
-- `useSnapshotOptimisticOverlay.js` — reconciles optimistic overlays against snapshot refreshes
-- `useInboxUndoSlot.js` — undo slot lifecycle: timer, pending, commit/settle
+- `InboxView.tsx` — composes live/snapshot modes, session state, undo coordination
+- `InboxDesktopPane.tsx` — desktop layout: digest, sidebar, list, reader, undo toast
+- `inboxViewTypes.ts` — shared top-level desktop/mobile pane composition contract
+- `useInboxController.ts` — central state machine: selection, filters, search, undo, Alfred handoff
+- `inboxReadRoutingModel.ts` — read-scope routing (`resolveReadScope`) + `planMarkAllVisibleRead`; one home for the live/snapshot/indexed decision shared by mark-all and auto-mark-read
+- `useInboxActionDispatch.ts` — action handlers: trash, snooze, lane move, mark read, draft reply
+- `useInboxSessionState.ts` — external session store surviving unmount/tab switches
+- `useSnapshotOptimisticOverlay.ts` — reconciles optimistic overlays against snapshot refreshes
+- `useInboxUndoSlot.ts` — undo slot lifecycle: timer, pending, commit/settle
 
 ### List + rows
-- `InboxList.jsx` — list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
-- `LaneSection.jsx` — memoized swimlane lane section: sticky header + collapsible row body
-- `EmailRow.jsx` — single email row: avatar, preview, urgency/lane bar
-- `DigestStrip.jsx` — header strip: live/snapshot status, lane counts, processing activity
-- `Sidebar.jsx` — account and lane navigation
-- `sidebarCompactStore.js` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
-- `inboxRow.js` — canonical row normalization: field fallbacks, read-override merge
-- `inboxWorkItems.js` — work item pipelines: active-snapshot, live, resurfaced-snooze
-- `inboxVisibleEmailsModel.js` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/category/lane filter + untriaged/lane/recency sort)
-- `inboxCountsModel.js` — scoped unread counts under account/category filters, plus lane/live/mobile-chip/unread count projections
-- `inboxNowTick.js` — schedules the `nowTick` timeout to the soonest snooze boundary or grace-label transition
-- `inboxProcessingModel.js` — triage activity counts from processing state
-- `snapshotSummary.js` — lane breakdown text for the digest header
-- `activeSnapshotWorkflowModel.js` — lane routing, mutable/dismissible rules, reopen logic
-- `inboxCommandModel.js` — builds trash/lane-move commands per email scope
+- `InboxList.tsx` — list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
+- `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
+- `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
+- `DigestStrip.tsx` — header strip: live/snapshot status, lane counts, processing activity
+- `Sidebar.tsx` — account and lane navigation
+- `sidebarCompactStore.ts` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
+- `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
+- `inboxWorkItems.ts` — work item pipelines: active-snapshot, live, resurfaced-snooze
+- `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/category/lane filter + untriaged/lane/recency sort)
+- `inboxCountsModel.ts` — scoped unread counts under account/category filters, plus lane/live/mobile-chip/unread count projections
+- `inboxNowTick.ts` — schedules the `nowTick` timeout to the soonest snooze boundary or grace-label transition
+- `inboxProcessingModel.ts` — triage activity counts from processing state
+- `snapshotSummary.ts` — lane breakdown text for the digest header
+- `activeSnapshotWorkflowModel.ts` — lane routing, mutable/dismissible rules, reopen logic
+- `inboxCommandModel.ts` — builds trash/lane-move commands per email scope
+- `inboxTypes.ts` — canonical Inbox account, identity, row/work-item, filter, overlay, and selection contracts
 
 ### Filters + search
-- `InboxCategoryFilterChips.jsx` — category chip menu with overflow dropdown
-- `InboxCategoryFilterChipsModel.js` — category ordering: critical > commitment > passive
-- `InboxSearchFlagChips.jsx` — is:unread toggle chip
-- `InboxSearchFlagChipsModel.js` — parses/toggles is:read|is:unread flags in queries
-- `indexedSearchModel.js` — normalizes indexed search results, merges read state
-- `useIndexedSearch.js` — debounced indexed-search hook: query effect, stale-response guard, local read-override reconciliation (`updateIndexedSearchRead`/`markIndexedSearchReadBulk`)
+- `InboxCategoryFilterChips.tsx` — category chip menu with overflow dropdown
+- `InboxCategoryFilterChipsModel.ts` — category ordering: critical > commitment > passive
+- `InboxSearchFlagChips.tsx` — is:unread toggle chip
+- `InboxSearchFlagChipsModel.ts` — parses/toggles is:read|is:unread flags in queries
+- `indexedSearchModel.ts` — normalizes indexed search results, merges read state
+- `useIndexedSearch.ts` — debounced indexed-search hook: query effect, stale-response guard, local read-override reconciliation (`updateIndexedSearchRead`/`markIndexedSearchReadBulk`)
 
 ### Reader
-- `reader/Reader.jsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
-- `reader/DesktopReader.jsx` — desktop detail layout with triage panel
-- `reader/EmailBodyPane.jsx` — iframe HTML/plain-text body renderer
-- `reader/TriagePanel.jsx` — AI summary, bullets, urgency, lane tag display
-- `reader/DraftReply.jsx` — AI-drafted reply with send/discard
-- `reader/ReaderShared.jsx` — section accordion and empty-state primitives
-- `reader/useEmailBody.js` — fetches and caches body HTML, preview fallback
-- `reader/useBillPayResolver.js` — resolves bill extraction for the open email
-- `reader/ActualActionStatus.jsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
-- `reader/actualActionStatusModel.js` — pure copy/tone/actioned-state projection for Actual reconciliation status
-- `reader/billExtractionBody.js` — body state for the bill-pay workflow
-- `reader/billSeedModel.js` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
-- `reader/MobileReader.jsx` — mobile detail pane with action row
-- `reader/MobileBillDrawer.jsx` — mobile slide-up bill-pay sheet (expand/collapse affordance) extracted from MobileReader
-- `reader/MobileReaderHeader.jsx` — mobile reader subject/sender/status-pills/briefing-triage header block extracted from MobileReader
-- `reader/MobileActionRow.jsx` — single-row mobile action buttons
-- `reader/MobileTriageBar.jsx` — always-visible mobile reader bar for primary one-tap triage verbs
-- `reader/MobileReaderControls.jsx` — pill badges and inline mobile controls
-- `reader/readerActionsModel.js` — shared action visibility for both reader panes; delegates snapshot lifecycle gating to `activeSnapshotWorkflowModel` so buttons match the hotkeys/dispatch (incl. the `snapshot_item_id` guard)
+- `reader/Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
+- `reader/DesktopReader.tsx` — desktop detail layout with triage panel
+- `reader/EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
+- `reader/TriagePanel.tsx` — AI summary, bullets, urgency, lane tag display
+- `reader/DraftReply.tsx` — AI-drafted reply with send/discard
+- `reader/ReaderShared.tsx` — section accordion and empty-state primitives
+- `reader/readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
+- `reader/useEmailBody.ts` — fetches and caches body HTML, preview fallback
+- `reader/useBillPayResolver.ts` — resolves bill extraction for the open email
+- `reader/ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
+- `reader/actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
+- `reader/billExtractionBody.ts` — body state for the bill-pay workflow
+- `reader/billSeedModel.ts` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
+- `reader/MobileReader.tsx` — mobile detail pane with action row
+- `reader/MobileBillDrawer.tsx` — mobile slide-up bill-pay sheet (expand/collapse affordance) extracted from MobileReader
+- `reader/MobileReaderHeader.tsx` — mobile reader subject/sender/status-pills/briefing-triage header block extracted from MobileReader
+- `reader/MobileActionRow.tsx` — single-row mobile action buttons
+- `reader/MobileTriageBar.tsx` — always-visible mobile reader bar for primary one-tap triage verbs
+- `reader/MobileReaderControls.tsx` — pill badges and inline mobile controls
+- `reader/readerActionsModel.ts` — shared action visibility for both reader panes; delegates snapshot lifecycle gating to `activeSnapshotWorkflowModel` so buttons match the hotkeys/dispatch (incl. the `snapshot_item_id` guard)
 
 ### Mobile
-- `mobile/MobileInboxView.jsx` — mobile layout: chip filter bar, compact rows, reader
-- `mobile/MobileFilterSheet.jsx` — dismissible account/lane filter sheet
+- `mobile/MobileInboxView.tsx` — mobile layout: chip filter bar, compact rows, reader
+- `mobile/MobileFilterSheet.tsx` — dismissible account/lane filter sheet
 
 ### Snooze, undo, hotkeys
-- `SnoozePicker.jsx` — floating date/time picker anchored to the snooze button
-- `InboxUndoToast.jsx` — bottom-center undo toast
-- `inboxHotkeys.js` — key → action resolution per workflow (snapshot vs live)
-- `useInboxKeyboardCommands.js` — window hotkeys: undo, search focus, j/k nav, actions
+- `SnoozePicker.tsx` — floating date/time picker anchored to the snooze button
+- `InboxUndoToast.tsx` — bottom-center undo toast
+- `inboxHotkeys.ts` — key → action resolution per workflow (snapshot vs live)
+- `useInboxKeyboardCommands.ts` — window hotkeys: undo, search focus, j/k nav, actions
 
 ### Shared
-- `helpers.js` — time formatters and snooze preset builder
-- `primitives.jsx` — Kbd, Avatar, Eyebrow, StickyHeader, LaneIcon, QuickAction
-- `test-utils/inboxFixtures.js` — email/account test factories
+- `helpers.ts` — time formatters and snooze preset builder
+- `primitives.tsx` — Kbd, Avatar, Eyebrow, StickyHeader, LaneIcon, QuickAction
+- `test-utils/inboxFixtures.ts` — email/account test factories
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention. `test-utils/*` ARE listed — shared infra.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention. `test-utils/*` ARE listed — shared infra.)
 
 ## Local patterns
 
 - Optimistic UI: snapshot mutations apply overlays immediately and reconcile on refresh.
 - Session state lives outside React (external store) so tab switches don't reset triage position.
-- Lane-based classification drives both filtering and hotkey behavior; lane rules live in `activeSnapshotWorkflowModel.js`.
+- Lane-based classification drives both filtering and hotkey behavior; lane rules live in `activeSnapshotWorkflowModel.ts`.
 
 ## Related
 

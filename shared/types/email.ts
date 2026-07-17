@@ -116,6 +116,13 @@ export interface EmailSearchResponse {
   query: string;
 }
 
+// Older indexed-search responses grouped results under each account. The
+// Inbox client still accepts that shape at its API boundary, while server
+// search implementations retain the stricter EmailSearchResponse contract.
+export type EmailSearchClientResponse =
+  | EmailSearchResponse
+  | Omit<EmailSearchResponse, "results">;
+
 export interface EmailDevReindexResponse {
   indexed: number;
   hoursBack: number;

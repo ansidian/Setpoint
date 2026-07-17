@@ -103,8 +103,8 @@ import type {
   EmailBatchReadResponse,
   EmailBody,
   EmailMutationResponse,
+  EmailSearchClientResponse,
   EmailSearchCostStats,
-  EmailSearchResponse,
   PinnedEmailSnapshot,
 } from "../shared/types/email.ts";
 import type {
@@ -548,7 +548,7 @@ export const skipSchedule = (index: number, skip = true): Promise<ScheduleSkipRe
 export const getModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/models");
 export const getBillExtractModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/bill-extract-models");
 
-export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<EmailSearchResponse> => {
+export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<EmailSearchClientResponse> => {
   const params = new URLSearchParams({ q: query });
   if (limit) params.set("limit", String(limit));
   return apiFetch(`/api/briefing/email-search?${params}`, { signal });

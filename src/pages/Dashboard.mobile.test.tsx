@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../context/DashboardContext";
 import { BrowserRouter } from "react-router-dom";
-import { resetInboxSession } from "../components/inbox/useInboxSessionState.js";
+import { resetInboxSession } from "../components/inbox/useInboxSessionState";
 import type { DashboardShellProps } from "../components/dashboard/DashboardShell";
 
 interface InboxMockProps {

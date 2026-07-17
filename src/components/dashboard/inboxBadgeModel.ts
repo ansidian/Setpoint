@@ -1,14 +1,16 @@
 import { collectActiveSnapshotEmails, mergeReadState } from "../inbox/helpers";
 import type { ActiveSnapshotView, SnapshotItem } from "../../../shared/types/snapshots";
+import type { InboxEmailLike } from "../inbox/inboxTypes";
 
 type ReadOverrideMap = Record<string, boolean>;
-export type DashboardEmail = Omit<Partial<SnapshotItem>, "id" | "email_id" | "uid"> & {
+export type DashboardEmail = InboxEmailLike & {
   id?: string | number;
   email_id?: string | null;
   uid?: string | null;
   read?: boolean;
+  lane?: string | null;
   _untriaged?: boolean;
-  _lane?: string;
+  _lane?: string | null;
 };
 type ResurfacedEmail = DashboardEmail & { snapshot?: DashboardEmail };
 type ActiveSnapshotLike = {

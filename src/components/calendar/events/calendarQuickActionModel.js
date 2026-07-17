@@ -11,7 +11,7 @@ import {
   pacificYMD,
   parseYmd,
 } from "../calendarDateUtils.js";
-import { epochFromLa } from "../../inbox/helpers.js";
+import { epochFromLa } from "../../inbox/helpers";
 
 const DAY_MS = 86400000;
 let optimisticCloneCounter = 0;

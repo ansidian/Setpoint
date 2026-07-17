@@ -7,7 +7,7 @@ import {
   buildOptimisticClipboardPasteEvent,
   buildReschedulePayload,
 } from "./calendarQuickActionModel.js";
-import { epochFromLa } from "../../inbox/helpers.js";
+import { epochFromLa } from "../../inbox/helpers";
 
 describe("calendarQuickActionModel builders", () => {
   it("builds drag-drop reschedule payloads from the source date plus deltaDays and original time", () => {

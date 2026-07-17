@@ -6,8 +6,8 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import EmailBodyPane from "../inbox/reader/EmailBodyPane.jsx";
-import useEmailBody from "../inbox/reader/useEmailBody.js";
+import EmailBodyPane from "../inbox/reader/EmailBodyPane";
+import useEmailBody from "../inbox/reader/useEmailBody";
 import { formatAlfredAbsolute, formatAlfredAgo } from "./alfredPanelModel";
 import type { AlfredEmailItem } from "../../../shared/types/alfred";
 
