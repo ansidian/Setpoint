@@ -1,0 +1,29 @@
+{
+  "_comment": "Ratcheting size guardrail for check:harness. Files above the threshold are grandfathered at their recorded allowance and may not grow beyond it.",
+  "threshold": 600,
+  "files": {
+    "src/hooks/calendar/useCalendarModalController.tsx": 1134,
+    "src/components/calendar/modal/CalendarModalShell.tsx": 666,
+    "src/components/calendar/modal/CalendarCellItemChip.tsx": 662,
+    "src/components/calendar/modal/CalendarGrid.tsx": 627,
+    "src/components/calendar/modal/CalendarCellOverflowPopover.tsx": 604,
+    "src/components/calendar/views/events/EventsAgendaRail.tsx": 666,
+    "src/hooks/calendar/useCalendarDomainRange.ts": 605,
+    "src/components/calendar/events/useCalendarEventEditor.ts": 1024,
+    "src/demo/store.ts": 867,
+    "src/demo/apiAdapter.ts": 816,
+    "src/components/calendar/events/useCalendarQuickActions.ts": 805,
+    "src/components/calendar/events/calendarTitleIntent.ts": 671,
+    "server/email/email-service.ts": 658,
+    "server/email/gmail.ts": 663,
+    "server/email/gmail-sync.ts": 653,
+    "server/actual/actual-core.ts": 673,
+    "server/scheduler.ts": 655,
+    "server/tasks/todoist.ts": 629,
+    "src/api.ts": 631,
+    "server/email/search/email-search-retrieval.ts": 686,
+    "server/routes/calendar.ts": 606,
+    "src/components/todoist/add-task-panel/useAddTaskPanelController.ts": 616,
+    "src/components/dashboard/DashboardShell.tsx": 654
+  }
+}
