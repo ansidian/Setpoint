@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
 import { ARRIVAL_GRACE_SOURCE } from "../snapshots/arrival-grace.js";
 import {

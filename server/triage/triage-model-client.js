@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "../email/email-ai-models.js";
 import {
   DEFAULT_BILL_EXTRACT_PROVIDER,

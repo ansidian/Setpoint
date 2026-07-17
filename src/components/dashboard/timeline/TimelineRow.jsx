@@ -24,7 +24,7 @@ import {
 } from "../../../lib/shell-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
 import { PRIORITY_COLOR } from "./timeline-helpers";
-import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors.js";
+import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors";
 
 function PriorityFlag({ level, size = 11 }) {
   const color = PRIORITY_COLOR[level];

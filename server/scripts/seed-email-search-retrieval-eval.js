@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 const outputPath = process.argv[2] || "server/email/search/evals/local/email-search-retrieval.suggestions.json";
 const userId = process.argv[3] || process.env.EA_USER_ID;

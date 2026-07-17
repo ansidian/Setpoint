@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { createSession, __clearSessionValidationCache } from "../middleware/auth.js";
 
 export function createSessionRotation(database = db, createSessionToken = createSession) {

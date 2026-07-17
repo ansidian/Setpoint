@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readdir, writeFile, utimes } from "fs/promises";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
-import { removeTempDir } from "../test-utils/temp-dir.js";
+import { removeTempDir } from "../test-utils/temp-dir.ts";
 import {
   actualDataDir,
   describeLocalActualBudget,

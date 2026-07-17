@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { readFile } from "fs/promises";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { searchEmails } from "../email/email-service.js";
 import {
   createSyntheticEvalRetriever,

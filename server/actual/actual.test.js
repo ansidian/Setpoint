@@ -95,7 +95,7 @@ vi.mock("@actual-app/api", () => {
 
 vi.mock("./actual-local-metadata.js", () => actualLocalMock);
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: vi.fn().mockResolvedValue({
       rows: [{ actual_budget_url: "http://localhost", actual_budget_password_encrypted: null, actual_budget_sync_id: "sync-123" }],

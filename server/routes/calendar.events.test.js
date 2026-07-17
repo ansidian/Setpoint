@@ -86,7 +86,7 @@ vi.mock("../reminders/reminder-service.js", () => ({
   listUpcomingReminderStatesForSources: vi.fn().mockResolvedValue(new Map()),
   reminderSourceKey: ({ sourceType, sourceItemId, sourceOccurrenceId = null }) => `${sourceType}:${sourceItemId}:${sourceOccurrenceId || ""}`,
 }));
-vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
+vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 
 const { loadUserConfig } = await import("../platform/config-service.js");
 const {

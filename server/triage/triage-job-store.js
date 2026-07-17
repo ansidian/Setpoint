@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 
 // ea_triage_jobs queue persistence lifted from triage-worker.js: claim, requeue,

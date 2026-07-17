@@ -1,9 +1,9 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import useBillPayResolver from "./useBillPayResolver.js";
-import { resolveBillPaySeed } from "../../../api.js";
+import { resolveBillPaySeed } from "../../../api";
 
-vi.mock("../../../api.js", () => ({
+vi.mock("../../../api", () => ({
   resolveBillPaySeed: vi.fn(),
 }));
 

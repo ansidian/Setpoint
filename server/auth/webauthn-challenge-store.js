@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 export const WEBAUTHN_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const CHALLENGE_HASH_PREFIX = "sha256:";

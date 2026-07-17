@@ -43,7 +43,7 @@ vi.mock("@/api", () => ({
   deleteTodoistTask: vi.fn(),
 }));
 
-vi.mock("../../api.js", () => ({
+vi.mock("../../api", () => ({
   getCalendarSearch: vi.fn(),
   getCalendarSources: vi.fn().mockResolvedValue({ accounts: [] }),
   getCalendarPlaceSuggestions: vi.fn(),

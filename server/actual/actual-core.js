@@ -18,7 +18,7 @@ import {
   mapRecentTransactions,
   mapUpcomingBills,
 } from "./actualCoreModel.js";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 export { isSchedulePaid } from "./actual-bill-occurrences.js";
 

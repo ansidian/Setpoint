@@ -2,7 +2,7 @@
 // Poll worker for news feeds: conditional GET, normalize, upsert, prune.
 // All IO is injectable (dbClient, fetchImpl) so tests never touch the network.
 import Parser from "rss-parser";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import {
   canonicalizeNewsUrl, excerptFromHtml, resolveSourceFeedUrl, shouldPollSource,
 } from "./news-model.js";

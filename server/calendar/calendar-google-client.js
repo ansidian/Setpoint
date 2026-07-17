@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { decrypt, encrypt } from "../platform/encryption.js";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
 import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.js";

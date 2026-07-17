@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { ChevronDown } from "lucide-react";
-import { Icon } from "../../../lib/icons.jsx";
+import { Icon } from "../../../lib/Icon";
 import { buildForecastHours, buildForecastDays, currentCondition } from "./weatherCardModel.js";
 
 // Icons resolve through the canonical ICON_BY_NAME registry (the same names the

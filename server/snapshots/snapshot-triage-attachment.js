@@ -6,7 +6,7 @@
  * external callers are unchanged.
  */
 
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import { parseFrom } from "../email/email-index.js";
 import {

@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { getMetadata as actualGetMetadata } from "../actual/actual.js";
 import { getMetadata as projectedGetMetadata } from "../actual/actual-metadata-projection.js";
 import { readBillsMirrorRange } from "./bills-mirror-sync.js";

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { normalizeEmailDateUtc } from "../email/email-date.js";
 
 const BATCH_SIZE = 250;

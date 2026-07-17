@@ -1,6 +1,6 @@
 import { epochFromLa, laComponents } from "../inbox/helpers.js";
 import { addDaysYmd, daysBetweenYmd, parseYmd } from "./calendarDateUtils.js";
-import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors.js";
+import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors";
 
 const TIME_12_RE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
 

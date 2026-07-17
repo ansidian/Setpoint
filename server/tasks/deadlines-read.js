@@ -9,7 +9,7 @@ import {
   TODOIST_DEADLINE_COLOR,
   TODOIST_DEADLINE_SOURCE,
   TODOIST_DEADLINE_SOURCE_LABEL,
-} from "../../shared/deadline-source-colors.js";
+} from "../../shared/deadline-source-colors.ts";
 import { computeDeadlineStats } from "./deadline-helpers.js";
 import { hydrateTodoistTasksWithReminderState } from "../reminders/reminder-hydration.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";

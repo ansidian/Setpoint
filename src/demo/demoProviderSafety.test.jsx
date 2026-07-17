@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RailAction } from "../components/calendar/DetailRailPrimitives.jsx";
 import { openInNewTab } from "../components/calendar/views/deadlines/deadlinesModel.js";
 import { linkifyText } from "../components/notes/notesUtils.jsx";
-import { getGmailUrl } from "../lib/email-links.js";
+import { getGmailUrl } from "../lib/email-links";
 import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "./demoSafeLocalStorage.js";
 
 describe("demo mode provider and external navigation safety", () => {

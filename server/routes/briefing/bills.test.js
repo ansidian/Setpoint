@@ -22,7 +22,7 @@ const mockBillsService = vi.hoisted(() => ({
   getActualCacheStatus: vi.fn(),
 }));
 
-vi.mock("../../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
 vi.mock("../../bills/bills-service.js", () => mockBillsService);
 
 process.env.EA_USER_ID = "user-1";

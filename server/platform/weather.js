@@ -5,7 +5,7 @@ const PIRATE_WEATHER_TIMEOUT_MS = 10_000;
 const NOMINATIM_TIMEOUT_MS = 10_000;
 
 // Pirate Weather (Dark Sky-compatible) condition → lucide icon name.
-// Frontend resolves the name to a component via src/lib/icons.jsx.
+// Frontend resolves the name to a component via src/lib/Icon.tsx.
 const ICON_MAP = {
   "clear-day": "Sun",
   "clear-night": "Moon",

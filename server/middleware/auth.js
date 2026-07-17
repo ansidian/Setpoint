@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SESSION_TOKEN_PREFIX = "sha256:";

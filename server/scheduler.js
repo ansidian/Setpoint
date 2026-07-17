@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import db from "./db/connection.js";
+import db from "./db/connection.ts";
 import { loadUserConfig } from "./platform/config-service.js";
 import { fetchAllEmails } from "./email/email-fetch.js";
 import { indexEmails } from "./email/email-index.js";

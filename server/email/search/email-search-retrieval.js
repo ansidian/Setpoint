@@ -1,4 +1,4 @@
-import db from "../../db/connection.js";
+import db from "../../db/connection.ts";
 import { createEmailSearchEmbeddingClient } from "./email-search-embedding-client.js";
 import { resolveEmailSearchDateWindow } from "./email-search-date-window.js";
 import {

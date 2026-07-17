@@ -3,7 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import request from "supertest";
 import bcrypt from "bcrypt";
-import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.js";
+import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.ts";
 import { createPasskeyStore } from "../auth/passkey-store.js";
 import { createPendingAuthStore, hashPendingAuthToken } from "../auth/pending-auth-store.js";
 import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.js";
@@ -38,7 +38,7 @@ const webAuthnMocks = vi.hoisted(() => ({
   verifyRegistrationResponse: vi.fn(),
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
     batch: (...args) => testState.db.current.batch(...args),

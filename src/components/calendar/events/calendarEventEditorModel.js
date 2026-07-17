@@ -1,4 +1,4 @@
-import { googleEventColorIdForSourceHex } from "../../../../shared/calendar-event-colors.js";
+import { googleEventColorIdForSourceHex } from "../../../../shared/calendar-event-colors";
 
 export function pacificYMD(ms) {
   return new Intl.DateTimeFormat("en-CA", {

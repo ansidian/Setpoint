@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, writeFile } from "fs/promises";
-import { removeTempDir } from "../test-utils/temp-dir.js";
+import { removeTempDir } from "../test-utils/temp-dir.ts";
 import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";

@@ -89,7 +89,7 @@ vi.mock("../reminders/reminder-service.js", () => ({
   recomputeUnsentRemindersForSource: vi.fn(),
   reminderSourceKey: ({ sourceType, sourceItemId, sourceOccurrenceId = null }) => `${sourceType}:${sourceItemId}:${sourceOccurrenceId || ""}`,
 }));
-vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
+vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 
 const {
   computeDeadlineStats,
@@ -103,7 +103,7 @@ const { queryTransactions } = await import("../transactions/transactions-service
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js");
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.js");
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.js");
-const db = (await import("../db/connection.js")).default;
+const db = (await import("../db/connection.ts")).default;
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {

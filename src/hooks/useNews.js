@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getNews, refreshNews } from "../api.js";
+import { getNews, refreshNews } from "../api";
 
 export default function useNews({ active = true } = {}) {
   const [news, setNews] = useState(null);

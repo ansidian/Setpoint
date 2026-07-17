@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
+vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 vi.mock("../platform/encryption.js", () => ({
   decrypt: () => JSON.stringify({
     access_token: "token-1",

@@ -1,4 +1,4 @@
-import * as api from "../../../api.js";
+import * as api from "../../../api";
 
 const TODOIST_REFERENCE_TTL_MS = 5 * 60 * 1000;
 

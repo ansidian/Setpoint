@@ -1,5 +1,5 @@
 import { Bell, Video } from "lucide-react";
-import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links.js";
+import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import GoogleSpecialDateBadge from "../../GoogleSpecialDateBadge.jsx";
 import {
   googleSpecialDateAccent,

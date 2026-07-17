@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { getMetadata as actualGetMetadata } from "./actual.js";
 import { readLocalActualMetadata } from "./actual-local-metadata.js";
 

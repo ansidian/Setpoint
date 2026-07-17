@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import useNews from "../../hooks/useNews.js";
-import { markNewsSeen } from "../../api.js";
+import { markNewsSeen } from "../../api";
 import { resolveDividerMarker } from "./newsPageModel.js";
 import NewsView from "./NewsView.jsx";
 import NewsManagePanel from "./NewsManagePanel.jsx";

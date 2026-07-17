@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { resolveBillPaySeed } from "../../../api.js";
+import { resolveBillPaySeed } from "../../../api";
 import { resolveBillExtractionBody } from "./billExtractionBody.js";
 
 const BILL_RESOLUTION_TTL_MS = 5 * 60 * 1000;

@@ -86,5 +86,5 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 ## Related
 
 - `server/routes/briefing/` — email/snapshot endpoints this UI calls
-- `src/lib/triageSoundGate.js` — sound dedup gate for triage events
+- `src/lib/triageSoundGate.ts` — sound dedup gate for triage events
 - `src/components/alfred/` — Alfred Panel; receives the inbox ⌘Enter / Sparkles handoff

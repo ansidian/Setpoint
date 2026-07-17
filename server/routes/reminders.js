@@ -1,5 +1,5 @@
 import { Router } from "express";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.js";
 import {
   formatGenericDiscordTestPayload,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { acquireScrollLock } from "@/lib/scrollLock.js";
+import { acquireScrollLock } from "@/lib/scrollLock";
 
 // All the floating-panel DOM/portal mechanics for the add-task panel: anchored
 // positioning, mobile virtual-keyboard offset, ResizeObserver reflow, the

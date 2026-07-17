@@ -17,8 +17,13 @@ function TooltipProvider({
   )
 }
 
-function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+export type TooltipProps = TooltipPrimitive.Root.Props & {
+  delay?: number
+}
+
+function Tooltip({ delay, ...props }: TooltipProps) {
+  const rootProps = { ...props, delay } as TooltipPrimitive.Root.Props
+  return <TooltipPrimitive.Root data-slot="tooltip" {...rootProps} />
 }
 
 function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {

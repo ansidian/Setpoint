@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent, updateCalendarEvent } from "@/api";
-import { googleEventColorForId } from "../../../../shared/calendar-event-colors.js";
+import { googleEventColorForId } from "../../../../shared/calendar-event-colors";
 import { daysBetweenYmd, pacificYMD } from "../calendarDateUtils.js";
 import { planCalendarEventClipboardPaste } from "./calendarEventSelectionModel.js";
 import {

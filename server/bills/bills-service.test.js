@@ -20,7 +20,7 @@ const mockDb = { execute: vi.fn(), batch: vi.fn() };
 vi.mock("../actual/actual.js", () => mockActual);
 vi.mock("../actual/actual-local-metadata.js", () => mockActualLocal);
 vi.mock("./bill-extract.js", () => ({ trimBillBody: ({ body }) => body.slice(0, 100) }));
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 
 const originalFetch = global.fetch;
 const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;

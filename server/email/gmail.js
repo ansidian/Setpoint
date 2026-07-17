@@ -1,5 +1,5 @@
 import { simpleParser } from "mailparser";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { encrypt, decrypt } from "../platform/encryption.js";
 import { htmlToPlainText } from "./html-to-text.js";
 import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.js";

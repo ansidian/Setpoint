@@ -3,8 +3,8 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Calendar, GripVertical } from "lucide-react";
-import { Icon } from "@/lib/icons.jsx";
-import { ACCOUNT_ICON_OPTIONS } from "@/lib/icons.js";
+import { Icon } from "@/lib/Icon";
+import { ACCOUNT_ICON_OPTIONS } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

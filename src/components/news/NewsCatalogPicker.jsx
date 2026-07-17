@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getNewsCatalog, importNewsStarterTopics } from "../../api.js";
+import { getNewsCatalog, importNewsStarterTopics } from "../../api";
 import { ManageButton } from "./manageUi.jsx";
 
 export default function NewsCatalogPicker({ onImported }) {

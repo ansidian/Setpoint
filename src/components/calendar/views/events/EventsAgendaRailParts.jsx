@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { CalendarX2 } from "lucide-react";
-import { resolveIcon } from "../../../../lib/icons.js";
+import { resolveIcon } from "../../../../lib/icons";
 
 export function EmptyEventDay({ contentRef, fallback, mobileAgenda, monthName }) {
   const enriched = mobileAgenda && fallback;

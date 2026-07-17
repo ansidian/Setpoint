@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 // All ea_gmail_watch_state persistence lifted from gmail-sync.js: watch-state
 // upsert, stored-cursor read, watch-error write, and the cursor statement builders
