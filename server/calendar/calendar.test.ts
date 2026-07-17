@@ -15,6 +15,7 @@ vi.mock("./calendar-google-client", async (importOriginal) => ({
 
 import {
   buildGoogleRecurrenceRules,
+  DASHBOARD_CALENDAR_TZ,
   extractStructuredRecurrence,
   fetchCalendar,
   getNextWeekRange,
@@ -22,6 +23,17 @@ import {
   normalizeGoogleCalendarLink,
   normalizeGoogleEvent,
 } from "./calendar.ts";
+
+function pacificDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: DASHBOARD_CALENDAR_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
 
 describe("markCalendarConflicts", () => {
   type ConflictEvent = {
@@ -170,10 +182,8 @@ describe("getNextWeekRange", () => {
     // Thu Apr 3 2026, 10:00 AM Pacific (UTC-7)
     vi.setSystemTime(new Date("2026-04-03T17:00:00Z"));
     const { startDate, endDate } = getNextWeekRange();
-    expect(startDate.getDay()).toBe(0); // Sunday
-    expect(startDate.getDate()).toBe(5); // Apr 5
-    expect(endDate.getDay()).toBe(6); // Saturday
-    expect(endDate.getDate()).toBe(11); // Apr 11
+    expect(pacificDateKey(startDate)).toBe("2026-04-05");
+    expect(pacificDateKey(endDate)).toBe("2026-04-11");
   });
 
   it("returns next Sun–Sat when today is Saturday Apr 4 2026", () => {
@@ -181,10 +191,8 @@ describe("getNextWeekRange", () => {
     // Sat Apr 4 2026, 10:00 AM Pacific
     vi.setSystemTime(new Date("2026-04-04T17:00:00Z"));
     const { startDate, endDate } = getNextWeekRange();
-    expect(startDate.getDay()).toBe(0); // Sunday
-    expect(startDate.getDate()).toBe(5); // Apr 5 (tomorrow)
-    expect(endDate.getDay()).toBe(6); // Saturday
-    expect(endDate.getDate()).toBe(11); // Apr 11
+    expect(pacificDateKey(startDate)).toBe("2026-04-05");
+    expect(pacificDateKey(endDate)).toBe("2026-04-11");
   });
 
   it("returns next Sun–Sat when today is Sunday Apr 5 2026", () => {
@@ -193,8 +201,8 @@ describe("getNextWeekRange", () => {
     vi.setSystemTime(new Date("2026-04-05T17:00:00Z"));
     const { startDate, endDate } = getNextWeekRange();
     // Next week starts Apr 12 (next Sunday)
-    expect(startDate.getDate()).toBe(12);
-    expect(endDate.getDate()).toBe(18);
+    expect(pacificDateKey(startDate)).toBe("2026-04-12");
+    expect(pacificDateKey(endDate)).toBe("2026-04-18");
   });
 
   it("startDate and endDate are correct Pacific midnight boundaries regardless of server timezone", () => {
