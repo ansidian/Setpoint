@@ -51,8 +51,6 @@
     "server/bills/bills-service.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/billsMirrorModel.ts -> server/actual/actual-bill-occurrences.ts",
     "server/bills/billsMirrorModel.ts -> server/actual/actual-metadata-projection.ts",
-    "server/bills/statementActualStatusModel.ts -> server/actual/scheduleMatchModel.ts",
-    "server/routes/alfred.js -> server/email/html-to-text.ts",
-    "server/routes/alfred.js -> server/email/search/email-search-retrieval.ts"
+    "server/bills/statementActualStatusModel.ts -> server/actual/scheduleMatchModel.ts"
   ]
 }

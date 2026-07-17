@@ -1,6 +1,6 @@
 # Server Email Search Map
 
-AI search pipeline over the email index: hybrid retrieval (FTS + embeddings) and ranking. Primary consumer is Alfred's `search_email` tool (`server/alfred/alfred-tools.js`) via `retrieveInboxAiSearch`; the indexed-search route also reads it. `email-search-embedding-worker.ts` exposes the background re-embedding hook consumed by `server/scheduler.ts`. Depends one-way on `server/email/` (reads the index; never fetches providers directly). The standalone LLM query planner and answer compiler were retired with the inbox ask-ai surface — the Alfred model calling `search_email` is the planner now.
+AI search pipeline over the email index: hybrid retrieval (FTS + embeddings) and ranking. Primary consumer is Alfred's `search_email` tool (`server/alfred/alfred-tools.ts`) via `retrieveInboxAiSearch`; the indexed-search route also reads it. `email-search-embedding-worker.ts` exposes the background re-embedding hook consumed by `server/scheduler.ts`. Depends one-way on `server/email/` (reads the index; never fetches providers directly). The standalone LLM query planner and answer compiler were retired with the inbox ask-ai surface — the Alfred model calling `search_email` is the planner now.
 
 ## Files
 
