@@ -8,6 +8,9 @@ import {
   validateSession,
   deleteSession,
   requireCookieSession,
+  requireRecentAuth,
+  hasRecentAuth,
+  markSessionRecentlyAuthenticated,
 } from "../middleware/auth.ts";
 import db from "../db/connection.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
@@ -19,11 +22,13 @@ import {
   readPendingAuth,
   consumePendingAuth,
   deletePendingAuth,
+  clearPendingAuth,
 } from "../auth/pending-auth-store.ts";
 import {
   createChallenge,
   consumeChallenge,
   deleteChallengesForPendingAuth,
+  clearChallenges,
 } from "../auth/webauthn-challenge-store.ts";
 import {
   countPasskeys,
@@ -42,9 +47,17 @@ import {
   verifyAuthenticationCredential,
 } from "../auth/webauthn-service.ts";
 import { resolveWebAuthnConfig } from "../auth/webauthn-config.ts";
-import { rotateSessionsForCurrentBrowser } from "../auth/session-rotation.ts";
-import { getOwner } from "../auth/owner-store.ts";
+import { revokeAllSessions, rotateSessionsForCurrentBrowser } from "../auth/session-rotation.ts";
+import { getOwner, setOwnerAuthMode, updateOwnerPasswordHash } from "../auth/owner-store.ts";
 import { claimInitialOwner } from "../auth/owner-claim-service.ts";
+import { resolvePasswordLogin, isOwnerAuthMode } from "../auth/auth-mode.ts";
+import {
+  consumeRecoveryCode,
+  generateRecoveryCodes,
+  getRecoveryCodeStatus,
+  hashRecoveryCode,
+  replaceRecoveryCodes,
+} from "../auth/recovery-code-store.ts";
 
 const router = Router();
 // P1-12: forward async-handler rejections to the terminal errorHandler so a
@@ -86,6 +99,14 @@ const ownerClaimLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { message: "Too many setup attempts, try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const recoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: "Too many recovery attempts, try again later" },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -135,12 +156,24 @@ async function clearPendingAuthState(req: Request, res: Response) {
   clearPendingAuthCookie(res);
 }
 
+function validPassword(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 1024;
+}
+
+async function rotateAllAuthState() {
+  await Promise.all([clearPendingAuth(), clearChallenges()]);
+  return rotateSessionsForCurrentBrowser();
+}
+
 router.get("/setup/status", async (_req, res) => {
   res.json({ claimed: Boolean(await getOwner()) });
 });
 
 router.post("/setup/claim", ownerClaimLimiter, async (req, res) => {
-  const result = await claimInitialOwner(req.body?.password);
+  const recoveryCodes = generateRecoveryCodes();
+  const result = await claimInitialOwner(req.body?.password, {
+    recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
+  });
   if (result.status === "invalid") {
     return res.status(400).json({ message: "Password is required" });
   }
@@ -151,7 +184,7 @@ router.post("/setup/claim", ownerClaimLimiter, async (req, res) => {
   const token = await createSession();
   setSessionCookie(res, token);
   clearPendingAuthCookie(res);
-  return res.json({ authenticated: true, claimed: true });
+  return res.json({ authenticated: true, claimed: true, recoveryCodes });
 });
 
 router.post("/login", timeRoute("/api/auth/login"), loginLimiter, async (req, res) => {
@@ -168,7 +201,11 @@ router.post("/login", timeRoute("/api/auth/login"), loginLimiter, async (req, re
   }
 
   const registeredPasskeyCount = await countPasskeys(owner.userId);
-  if (registeredPasskeyCount > 0) {
+  const resolution = resolvePasswordLogin(owner.authMode, registeredPasskeyCount);
+  if (resolution.configurationError) {
+    return res.status(409).json({ message: "Strict authentication requires a registered passkey" });
+  }
+  if (resolution.passkeyRequired) {
     const pending = await createPendingAuth({ userId: owner.userId });
     setPendingAuthCookie(res, pending.token);
     clearSessionCookie(res);
@@ -184,15 +221,25 @@ router.post("/login", timeRoute("/api/auth/login"), loginLimiter, async (req, re
   res.json({
     authenticated: true,
     passkeyRequired: false,
-    passkeySetupRecommended: true,
+    passkeySetupRecommended: registeredPasskeyCount === 0,
   });
 });
 
 router.post("/passkey/authentication/options", passkeyAuthLimiter, async (req, res) => {
-  const pending = await readPendingAuth(req.cookies?.[PENDING_AUTH_COOKIE_NAME]);
+  let pending = await readPendingAuth(req.cookies?.[PENDING_AUTH_COOKIE_NAME]);
   if (!pending) {
-    clearPendingAuthCookie(res);
-    return res.status(401).json({ message: "Pending authentication required" });
+    const owner = await getOwner();
+    if (!owner) return res.status(401).json({ message: "Passkey authentication unavailable" });
+    if (owner.authMode === "password_plus_passkey") {
+      clearPendingAuthCookie(res);
+      return res.status(409).json({ message: "Enter your password before using a passkey" });
+    }
+    if (await countPasskeys(owner.userId) === 0) {
+      return res.status(409).json({ message: "No registered passkeys" });
+    }
+    const created = await createPendingAuth({ userId: owner.userId });
+    setPendingAuthCookie(res, created.token);
+    pending = created;
   }
 
   const passkeys = await listPasskeys(pending.userId);
@@ -271,13 +318,17 @@ router.post("/passkey/authentication/cancel", passkeyAuthLimiter, async (req, re
 router.get("/passkeys", requireCookieSession, async (_req, res) => {
   const owner = await getOwner();
   const passkeys = owner ? await listPasskeyMetadata(owner.userId) : [];
+  const recovery = owner ? await getRecoveryCodeStatus(owner.userId) : { remaining: 0, generatedAt: null };
   res.json({
-    enforcementActive: passkeys.length > 0,
+    enforcementActive: owner?.authMode === "password_plus_passkey",
+    authMode: owner?.authMode || "password_or_passkey",
+    recentAuth: await hasRecentAuth(_req.cookies?.ea_session),
+    recovery,
     passkeys,
   });
 });
 
-router.post("/passkeys/registration/options", requireCookieSession, async (req, res) => {
+router.post("/passkeys/registration/options", requireRecentAuth, async (req, res) => {
   const label = typeof req.body?.label === "string" ? req.body.label.trim() : "";
   if (!label) {
     return res.status(400).json({ message: "label is required" });
@@ -299,7 +350,7 @@ router.post("/passkeys/registration/options", requireCookieSession, async (req, 
   res.json(options);
 });
 
-router.post("/passkeys/registration/verify", requireCookieSession, async (req, res) => {
+router.post("/passkeys/registration/verify", requireRecentAuth, async (req, res) => {
   const label = typeof req.body?.label === "string" ? req.body.label.trim() : "";
   if (!label) {
     return res.status(400).json({ message: "label is required" });
@@ -309,7 +360,6 @@ router.post("/passkeys/registration/verify", requireCookieSession, async (req, r
   try {
     const owner = await getOwner();
     if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
-    const existingCount = await countPasskeys(owner.userId);
     const verification = await verifyRegistrationCredential({
       response: req.body,
       config: webAuthnConfigForRequest(req),
@@ -339,14 +389,10 @@ router.post("/passkeys/registration/verify", requireCookieSession, async (req, r
       credentialDeviceType: registrationInfo.credentialDeviceType,
     });
 
-    if (existingCount === 0) {
-      const token = await rotateSessionsForCurrentBrowser();
-      setSessionCookie(res, token);
-    }
-
     return res.json({
       passkey: toPasskeyMetadata(passkey),
-      enforcementActive: true,
+      enforcementActive: owner.authMode === "password_plus_passkey",
+      authMode: owner.authMode,
     });
   } catch (error) {
     logDevPasskeyFailure("Passkey registration failed", error);
@@ -354,7 +400,7 @@ router.post("/passkeys/registration/verify", requireCookieSession, async (req, r
   }
 });
 
-router.delete("/passkeys/:credentialId", requireCookieSession, async (req, res) => {
+router.delete("/passkeys/:credentialId", requireRecentAuth, async (req, res) => {
   const credentialId = req.params.credentialId!;
   const owner = await getOwner();
   if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
@@ -363,14 +409,97 @@ router.delete("/passkeys/:credentialId", requireCookieSession, async (req, res) 
     return res.status(404).json({ message: "Passkey not found" });
   }
 
-  const token = await rotateSessionsForCurrentBrowser();
+  const remainingCount = await countPasskeys(owner.userId);
+  const finalAuthMode = owner.authMode === "password_plus_passkey" && remainingCount === 0
+    ? "password_or_passkey"
+    : owner.authMode;
+  if (finalAuthMode !== owner.authMode) {
+    await setOwnerAuthMode(owner.userId, "password_or_passkey");
+  }
+  const token = await rotateAllAuthState();
   setSessionCookie(res, token);
   const passkeys = await listPasskeyMetadata(owner.userId);
   res.json({
     success: true,
-    enforcementActive: passkeys.length > 0,
+    enforcementActive: finalAuthMode === "password_plus_passkey",
+    authMode: finalAuthMode,
+    recentAuth: true,
+    recovery: await getRecoveryCodeStatus(owner.userId),
     passkeys,
   });
+});
+
+router.post("/security/step-up/password", requireCookieSession, async (req, res) => {
+  const owner = await getOwner();
+  if (!owner || !validPassword(req.body?.password)
+    || !await bcrypt.compare(req.body.password, owner.passwordHash)) {
+    return res.status(401).json({ message: "Password confirmation failed" });
+  }
+  await markSessionRecentlyAuthenticated(req.cookies?.ea_session);
+  return res.json({ recentAuth: true });
+});
+
+router.patch("/security/auth-mode", requireRecentAuth, async (req, res) => {
+  const authMode = req.body?.authMode;
+  if (!isOwnerAuthMode(authMode)) {
+    return res.status(400).json({ message: "Unsupported authentication mode" });
+  }
+  const owner = await getOwner();
+  if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
+  if (authMode === "password_plus_passkey" && await countPasskeys(owner.userId) === 0) {
+    return res.status(409).json({ message: "Register a passkey before enabling strict mode" });
+  }
+  await setOwnerAuthMode(owner.userId, authMode);
+  const token = await rotateAllAuthState();
+  setSessionCookie(res, token);
+  return res.json({ authMode, recentAuth: true });
+});
+
+router.post("/security/password", requireRecentAuth, async (req, res) => {
+  if (!validPassword(req.body?.newPassword)) {
+    return res.status(400).json({ message: "New password is required" });
+  }
+  const owner = await getOwner();
+  if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
+  await updateOwnerPasswordHash(owner.userId, await bcrypt.hash(req.body.newPassword, 12));
+  const token = await rotateAllAuthState();
+  setSessionCookie(res, token);
+  return res.json({ success: true, recentAuth: true });
+});
+
+router.post("/recovery-codes/regenerate", requireRecentAuth, async (_req, res) => {
+  const owner = await getOwner();
+  if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
+  const recoveryCodes = generateRecoveryCodes();
+  await replaceRecoveryCodes(owner.userId, recoveryCodes);
+  return res.json({ recoveryCodes });
+});
+
+router.post("/recovery", recoveryLimiter, async (req, res) => {
+  if (!validPassword(req.body?.newPassword) || typeof req.body?.recoveryCode !== "string") {
+    return res.status(400).json({ message: "Recovery code and new password are required" });
+  }
+  const owner = await getOwner();
+  if (!owner) return res.status(401).json({ message: "Recovery failed" });
+  const newPasswordHash = await bcrypt.hash(req.body.newPassword, 12);
+  if (!await consumeRecoveryCode(owner.userId, req.body.recoveryCode)) {
+    return res.status(401).json({ message: "Recovery failed" });
+  }
+
+  await updateOwnerPasswordHash(owner.userId, newPasswordHash);
+  await setOwnerAuthMode(owner.userId, "password_or_passkey");
+  await db.batch([
+    { sql: "DELETE FROM ea_passkey_credentials WHERE user_id = ?", args: [owner.userId] },
+    { sql: "DELETE FROM ea_pending_auth WHERE user_id = ?", args: [owner.userId] },
+    { sql: "DELETE FROM ea_webauthn_challenges WHERE user_id = ?", args: [owner.userId] },
+  ], "write");
+  await revokeAllSessions();
+  const recoveryCodes = generateRecoveryCodes();
+  await replaceRecoveryCodes(owner.userId, recoveryCodes);
+  const token = await createSession();
+  setSessionCookie(res, token);
+  clearPendingAuthCookie(res);
+  return res.json({ authenticated: true, recoveryCodes });
 });
 
 router.get("/check", timeRoute("/api/auth/check"), async (req, res) => {
@@ -413,7 +542,7 @@ router.get("/api-tokens", requireCookieSession, async (req, res) => {
 
 // Run requireCookieSession BEFORE tokenMintLimiter so an unauthenticated caller from the owner's
 // egress IP can't burn the 5/15min mint budget and lock the real user out.
-router.post("/api-tokens", requireCookieSession, tokenMintLimiter, async (req, res) => {
+router.post("/api-tokens", requireRecentAuth, tokenMintLimiter, async (req, res) => {
   const { label, scopes } = req.body || {};
   if (!label || typeof label !== "string" || !label.trim()) {
     return res.status(400).json({ message: "label is required" });

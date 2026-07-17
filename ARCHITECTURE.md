@@ -57,7 +57,7 @@ graph TB
 | Weather | Pirate Weather | Forecast data |
 | Tasks | Todoist API | Deadline items + personal tasks |
 | Finance | @actual-app/api behind provider worker + EA mirrors | Budget tracking, bill management |
-| Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password plus passkey login, session tokens |
+| Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password-or-passkey default, optional strict mode, offline recovery |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
 | Scheduling | node-cron | Snapshot boundary checks and background workers |
 
@@ -336,7 +336,7 @@ graph LR
 
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
-| Auth | `/api/auth` | 15 | First-run owner claim, password/passkey login, passkey management, session check/logout, scoped API tokens |
+| Auth | `/api/auth` | 20 | First-run owner claim, password/passkey login, recovery and step-up, passkey management, session check/logout, scoped API tokens |
 | Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 15 | Account CRUD, Gmail OAuth, settings, schedules, geocode, important senders |
@@ -362,10 +362,10 @@ sequenceDiagram
     B->>S: POST /api/auth/login {password}
     S->>DB: SELECT password_hash FROM ea_owner singleton
     S->>S: bcrypt.compare(password, stored password_hash)
-    alt No registered passkeys
+    alt Default password-or-passkey mode
         S->>DB: INSERT ea_sessions (token, expires_at)
         S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
-    else Registered passkeys exist
+    else Explicit password-plus-passkey mode
         S->>DB: INSERT ea_pending_auth (10-min pending password auth)
         S->>B: Set-Cookie: ea_pending_auth (httpOnly, secure, sameSite=strict)
         B->>S: POST /api/auth/passkey/authentication/options
@@ -383,13 +383,14 @@ sequenceDiagram
     S->>B: 200 current dashboard envelope (or 401 if expired)
 ```
 
-The browser auth model has five distinct states:
+The browser auth model has six distinct states:
 
 1. **Unclaimed Instance** - no `ea_owner` singleton row. Only static/setup auth routes and `GET /healthz` are available; provider APIs and all background workers are gated.
 2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
-3. **Pending Password Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created only after a correct password when at least one passkey is registered. It can request and verify WebAuthn authentication options, but it cannot access dashboard routes or passkey registration endpoints.
+3. **Pending Passkey Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created after a correct password in explicit strict mode, or when default-mode passwordless passkey login begins. It can request and verify WebAuthn options but cannot access dashboard routes.
 4. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
-5. **Passkey Reset** - local operator recovery via `npm run auth:reset-passkeys -- --confirm`. It clears registered passkeys, pending auth, WebAuthn challenges, and browser sessions so the next password login returns to setup mode.
+5. **Recent Authentication** - the authenticated session's `authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, and powerful API-token changes.
+6. **Recovery or Operator Reset** - one offline recovery code can replace credentials in-app; the local `npm run auth:reset-passkeys -- --confirm` path remains the last-resort operator reset.
 
 Ownership is database-backed in the singleton `ea_owner` row. Fresh claims rely on
 the singleton primary-key invariant so exactly one concurrent insert succeeds.
@@ -399,7 +400,7 @@ fails closed for partial or conflicting state.
 
 Two credential paths exist, but they no longer feed a single shared "any auth works" guard:
 
-1. **Cookie session** - normal dashboard access after password-only setup login or password plus passkey login.
+1. **Cookie session** - normal dashboard access after password, passwordless passkey, strict password-plus-passkey, or successful recovery.
 2. **Scoped API token** - `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check because they carry their own unforgeable secret.
 
 Production WebAuthn configuration is explicit and fail-fast: `EA_WEBAUTHN_RP_NAME`, `EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are required when `NODE_ENV=production`. Development defaults are `Setpoint`, `localhost`, and `http://localhost:5173`.
@@ -652,12 +653,13 @@ erDiagram
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
-| `ea_owner` | `030_owner_bootstrap.sql` |
+| `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql` |
+| `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql` |
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
-| `ea_sessions` | `001_ea_tables.sql` |
+| `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql` |
 | `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
@@ -740,6 +742,11 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | DELETE | `/api/auth/passkeys/:credentialId` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/options` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/verify` | `server/routes/auth.ts` |
+| POST | `/api/auth/recovery` | `server/routes/auth.ts` |
+| POST | `/api/auth/recovery-codes/regenerate` | `server/routes/auth.ts` |
+| PATCH | `/api/auth/security/auth-mode` | `server/routes/auth.ts` |
+| POST | `/api/auth/security/password` | `server/routes/auth.ts` |
+| POST | `/api/auth/security/step-up/password` | `server/routes/auth.ts` |
 | POST | `/api/auth/setup/claim` | `server/routes/auth.ts` |
 | GET | `/api/auth/setup/status` | `server/routes/auth.ts` |
 | GET | `/api/briefing/actual/accounts` | `server/routes/briefing/bills.ts` |
@@ -828,14 +835,19 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| POST | `/api/auth/login` | No | Password login. Creates `ea_session` only when no passkeys exist; otherwise creates pending password auth |
-| POST | `/api/auth/passkey/authentication/options` | Pending password auth | Create passkey authentication challenge |
-| POST | `/api/auth/passkey/authentication/verify` | Pending password auth | Verify passkey assertion and issue `ea_session` |
+| POST | `/api/auth/login` | No | Password login; issues a session in default mode or pending auth in strict mode |
+| POST | `/api/auth/passkey/authentication/options` | No or pending password auth | Start default-mode passwordless passkey or continue strict login |
+| POST | `/api/auth/passkey/authentication/verify` | Pending passkey auth | Verify passkey assertion and issue `ea_session` |
 | POST | `/api/auth/passkey/authentication/cancel` | Pending password auth | Cancel pending password auth and clear challenges |
 | GET | `/api/auth/passkeys` | Cookie | List registered passkey metadata |
-| POST | `/api/auth/passkeys/registration/options` | Cookie | Create passkey registration challenge |
-| POST | `/api/auth/passkeys/registration/verify` | Cookie | Verify and store registered passkey |
-| DELETE | `/api/auth/passkeys/:credentialId` | Cookie | Delete one registered passkey and rotate browser sessions |
+| POST | `/api/auth/passkeys/registration/options` | Recent cookie | Create passkey registration challenge |
+| POST | `/api/auth/passkeys/registration/verify` | Recent cookie | Verify and store registered passkey |
+| DELETE | `/api/auth/passkeys/:credentialId` | Recent cookie | Delete one registered passkey and rotate browser sessions |
+| POST | `/api/auth/security/step-up/password` | Cookie | Refresh recent-auth state after password confirmation |
+| PATCH | `/api/auth/security/auth-mode` | Recent cookie | Explicitly change password-or-passkey vs. strict mode |
+| POST | `/api/auth/security/password` | Recent cookie | Replace the owner password and rotate sessions |
+| POST | `/api/auth/recovery-codes/regenerate` | Recent cookie | Replace and reveal offline recovery codes once |
+| POST | `/api/auth/recovery` | No | Consume one recovery code and establish replacement credentials |
 | GET | `/api/auth/check` | Cookie | Session validation |
 | POST | `/api/auth/logout` | Cookie | Destroy session |
 

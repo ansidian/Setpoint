@@ -127,20 +127,24 @@ Existing installations may keep `EA_USER_ID` and `EA_PASSWORD_HASH`; startup
 imports that exact legacy identity once. Partial or conflicting legacy auth
 configuration fails closed instead of reopening public setup.
 
-The private app uses a dashboard password plus WebAuthn passkeys. If no
-registered passkey exists, a valid password creates an authenticated browser
-session and Settings -> System shows setup mode. After the first passkey is
-registered, future password login creates a short-lived pending password
-authentication and the browser must complete passkey authentication before the
-server issues the `ea_session` cookie.
+The private app accepts either the owner password or a registered WebAuthn
+passkey by default. Registering a passkey does not disable password login.
+Settings -> System can explicitly enable strict password-plus-passkey login;
+identity and access changes require a password confirmation from the last ten
+minutes.
+
+Fresh owner claim displays eight one-time offline recovery codes. Setpoint
+stores only their hashes and never returns them through normal Settings reads.
+Using one code replaces the owner password, clears passkeys and pending auth,
+revokes prior sessions, and displays a replacement recovery-code set once.
 
 Production startup fails fast unless `EA_WEBAUTHN_RP_NAME`,
 `EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are set. `EA_WEBAUTHN_RP_ID` is
 the hostname only, not a URL. `EA_WEBAUTHN_ORIGIN` must be the HTTPS origin
 served to the browser and must match the RP ID hostname.
 
-If all passkeys are lost, use the local operator reset script against the
-intended database:
+If both normal sign-in and offline recovery are unavailable, use the local
+operator reset script against the intended database:
 
 ```bash
 npm run auth:reset-passkeys -- --dry-run
@@ -148,8 +152,8 @@ npm run auth:reset-passkeys -- --confirm
 ```
 
 The reset clears registered passkeys, pending password-auth attempts, WebAuthn
-challenges, and browser sessions. The next successful password login returns
-the dashboard to passkey setup mode. Scoped API tokens are separate automation
+challenges, and browser sessions. The next successful password login uses the
+default password-or-passkey mode. Scoped API tokens are separate automation
 credentials and do not grant dashboard login.
 
 ### Opt-in Turso semantic search verification

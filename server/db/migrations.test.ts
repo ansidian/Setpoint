@@ -238,6 +238,30 @@ describe("database migrations", () => {
     expect(pendingIndex.rows.map((row) => row.name)).toEqual(["user_id", "expires_at"]);
   });
 
+  it("adds explicit auth mode, recent-auth state, and hashed recovery storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "030_owner_bootstrap.sql",
+      "031_auth_recovery.sql",
+    ]);
+
+    const ownerColumns = await db.execute("PRAGMA table_info('ea_owner')");
+    const ownerByName = new Map(ownerColumns.rows.map((row) => [row.name, row]));
+    expect(ownerByName.get("auth_mode")!.notnull).toBe(1);
+    expect(ownerByName.get("auth_mode")!.dflt_value).toBe("'password_or_passkey'");
+
+    const sessionColumns = await db.execute("PRAGMA table_info('ea_sessions')");
+    const sessionByName = new Map(sessionColumns.rows.map((row) => [row.name, row]));
+    expect(sessionByName.get("authenticated_at")!.notnull).toBe(1);
+    expect(sessionByName.get("authenticated_at")!.dflt_value).toBe("0");
+
+    const recoveryColumns = await db.execute("PRAGMA table_info('ea_owner_recovery_codes')");
+    const recoveryByName = new Map(recoveryColumns.rows.map((row) => [row.name, row]));
+    expect(recoveryByName.get("code_hash")!.notnull).toBe(1);
+    expect(recoveryByName.get("used_at")!.type).toBe("INTEGER");
+  });
+
   it("adds normalized email date storage for temporal search filters", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, [

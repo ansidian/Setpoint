@@ -9,6 +9,7 @@ interface OwnerClaimStore {
     userId: string;
     passwordHash: string;
     claimedAt: number;
+    recoveryCodeHashes?: string[];
   }): Promise<{ claimed: boolean }>;
 }
 
@@ -18,6 +19,7 @@ interface ClaimOwnerOptions {
   createUserId?: () => string;
   hashPassword?: (password: string) => Promise<string>;
   onClaimed?: (owner: OwnerRecord) => void;
+  recoveryCodeHashes?: string[];
 }
 
 export type InitialOwnerClaimResult =
@@ -33,6 +35,7 @@ export async function claimInitialOwner(
     createUserId = crypto.randomUUID,
     hashPassword = (value) => bcrypt.hash(value, 12),
     onClaimed = activateOwner,
+    recoveryCodeHashes = [],
   }: ClaimOwnerOptions = {},
 ): Promise<InitialOwnerClaimResult> {
   if (typeof password !== "string" || password.length === 0 || password.length > 1024) {
@@ -44,6 +47,7 @@ export async function claimInitialOwner(
     userId: createUserId(),
     passwordHash: await hashPassword(password),
     claimedAt: now(),
+    recoveryCodeHashes,
   };
   const result = await store.claimOwner(input);
   if (!result.claimed) return { status: "conflict" };

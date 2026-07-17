@@ -159,10 +159,19 @@ Selection path:
 1. `src/pages/OwnerSetup.tsx` — confirms the password locally and sends only the write-only password to `POST /api/auth/setup/claim`.
 2. `server/auth/owner-claim-service.ts:claimInitialOwner` — rate-limited route work generates a stable UUID and bcrypt hash.
 3. `server/auth/owner-store.ts:claimOwner` — `INSERT OR IGNORE` against singleton key `1`; the uniqueness invariant admits one concurrent claimant and all others receive the fixed conflict.
-4. `server/middleware/auth.ts:createSession` — persists only the hashed session token; the successful browser receives the raw token in an HttpOnly cookie.
-5. `server/auth/owner-context.ts:activateOwner` — exposes the claimed ID to remaining single-owner runtime modules and notifies startup gating.
-6. `server/auth/owner-runtime.ts:createOwnerRuntimeGate` — starts schedulers and provider workers once, only after a stored or newly claimed owner exists.
+4. `server/auth/recovery-code-store.ts:replaceRecoveryCodes` — generates eight high-entropy offline recovery codes, persists only SHA-256 hashes, and returns plaintext only in the successful claim response.
+5. `server/middleware/auth.ts:createSession` — persists only the hashed session token plus its recent-auth timestamp; the successful browser receives the raw token in an HttpOnly cookie.
+6. `server/auth/owner-context.ts:activateOwner` — exposes the claimed ID to remaining single-owner runtime modules and notifies startup gating.
+7. `server/auth/owner-runtime.ts:createOwnerRuntimeGate` — starts schedulers and provider workers once, only after a stored or newly claimed owner exists.
 
 **Compatibility:** `server/auth/owner-bootstrap.ts:resolveOwnerBootstrap` runs after migrations and before listen. It imports an exact legacy `EA_USER_ID`/`EA_PASSWORD_HASH` pair into `ea_owner`, preserves the bcrypt hash and ID, and fails closed for partial or conflicting state.
 
 **Pre-claim boundary:** `server/middleware/owner-gate.ts` returns a fixed setup-required response for non-setup APIs. `GET /healthz` remains successful and reports only readiness plus the non-secret claimed boolean. Demo mode resolves setup as already claimed and rejects claim mutations locally without a network call.
+
+## 8. Owner sign-in, step-up, and offline recovery
+
+**Normal mode:** `ea_owner.auth_mode = password_or_passkey`. A valid password issues a session directly. Passkey options may instead create a short-lived `ea_pending_auth` binding, and successful WebAuthn verification consumes its challenge before issuing the same session type. Registering a passkey does not change this mode.
+
+**Strict mode:** the owner explicitly changes `auth_mode` to `password_plus_passkey` through a recent-auth-protected Security action. Password login then creates pending auth and WebAuthn completes the session. Mode, password, passkey, recovery-code, and powerful API-token mutations require `ea_sessions.authenticated_at` to be within ten minutes.
+
+**Recovery:** `POST /api/auth/recovery` rate-limits and atomically consumes one unused recovery-code hash. Success replaces the password, returns mode to password-or-passkey, clears passkeys, pending auth, WebAuthn challenges, and prior sessions, issues a fresh session, and returns a newly generated recovery-code set exactly once.

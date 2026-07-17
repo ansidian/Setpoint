@@ -23,6 +23,8 @@ const {
   validateSession,
   deleteSession,
   validateBearer,
+  hasRecentAuth,
+  markSessionRecentlyAuthenticated,
   __clearSessionValidationCache,
 } = await import("./auth.ts");
 
@@ -69,6 +71,16 @@ describe("auth middleware session storage", () => {
     expect(result.rows[0]!.token).toBe(expectedStored);
     expect(result.rows[0]!.token).not.toBe(rawToken);
     expect(result.rows[0]!.expires_at).toBeGreaterThan(before + 29 * 24 * 60 * 60 * 1000);
+  });
+
+  it("tracks recent authentication on the hashed session without exposing the token", async () => {
+    const token = await createSession({ authenticatedAt: 1_000 });
+
+    await expect(hasRecentAuth(token, { now: 1_000 + 9 * 60_000 })).resolves.toBe(true);
+    await expect(hasRecentAuth(token, { now: 1_000 + 11 * 60_000 })).resolves.toBe(false);
+
+    await markSessionRecentlyAuthenticated(token, 20_000);
+    await expect(hasRecentAuth(token, { now: 20_001 })).resolves.toBe(true);
   });
 
   it("validates hashed session rows", async () => {

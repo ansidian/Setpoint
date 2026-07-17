@@ -24,16 +24,23 @@ describe("OwnerSetup", () => {
     expect(claimOwner).not.toHaveBeenCalled();
   });
 
-  it("claims the instance and hands off the authenticated session", async () => {
+  it("shows recovery codes once and requires acknowledgement before handoff", async () => {
     const onClaimed = vi.fn();
-    claimOwner.mockResolvedValue({ claimed: true, authenticated: true });
+    claimOwner.mockResolvedValue({
+      claimed: true,
+      authenticated: true,
+      recoveryCodes: ["SP-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-1111-2222"],
+    });
     render(<OwnerSetup onClaimed={onClaimed} />);
 
     fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "new-owner-password" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "new-owner-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Claim Setpoint" }));
 
-    await waitFor(() => expect(onClaimed).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("SP-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-1111-2222")).toBeTruthy();
+    expect(onClaimed).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "I saved these codes" }));
+    expect(onClaimed).toHaveBeenCalledTimes(1);
     expect(claimOwner).toHaveBeenCalledWith("new-owner-password");
   });
 

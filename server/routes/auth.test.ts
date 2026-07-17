@@ -13,6 +13,7 @@ import { createAuthTestDb, hashApiToken, hashSessionToken, seedOwner, seedSessio
 import { createPasskeyStore } from "../auth/passkey-store.ts";
 import { createPendingAuthStore, hashPendingAuthToken } from "../auth/pending-auth-store.ts";
 import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.ts";
+import { createRecoveryCodeStore } from "../auth/recovery-code-store.ts";
 import { errorHandler } from "../middleware/async-handler.ts";
 
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
@@ -130,7 +131,12 @@ describe("auth routes", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ authenticated: true, claimed: true });
+    expect(res.body).toMatchObject({
+      authenticated: true,
+      claimed: true,
+      recoveryCodes: expect.arrayContaining([expect.stringMatching(/^SP-/)]),
+    });
+    expect(res.body.recoveryCodes).toHaveLength(8);
     expect(setCookieHeader(res)).toContain("ea_session=");
     expect(ownerResult.rows).toHaveLength(1);
     expect(ownerResult.rows[0]!.user_id).toMatch(/^[0-9a-f-]{36}$/);
@@ -172,7 +178,7 @@ describe("auth routes", () => {
   });
 
   it("mints API tokens with a default expiry", async () => {
-    await seedSession(currentDb(), "cookie-session");
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     const before = Date.now();
 
     const res = await request(makeApp())
@@ -201,7 +207,7 @@ describe("auth routes", () => {
   });
 
   it("does not let unauthenticated token-mint attempts consume the rate-limit budget", async () => {
-    await seedSession(currentDb(), "cookie-session");
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     const app = makeApp();
 
     // Fire more unauthenticated mint attempts than the 5/15min budget. With auth ahead of the
@@ -276,8 +282,9 @@ describe("auth routes", () => {
     expect(res.status).toBe(500);
   }, 3000);
 
-  it("creates only pending auth when passkeys exist", async () => {
+  it("creates only pending auth when strict mode is explicitly enabled", async () => {
     await seedPasskey();
+    await currentDb().execute("UPDATE ea_owner SET auth_mode = 'password_plus_passkey'");
 
     const res = await request(makeApp())
       .post("/api/auth/login")
@@ -296,6 +303,18 @@ describe("auth routes", () => {
     expect(pending.rows[0]!.user_id).toBe("user-1");
     expect(setCookieHeader(res)).toContain("ea_pending_auth=");
     expect(setCookieHeader(res)).toContain("ea_session=;");
+  });
+
+  it("starts passwordless passkey authentication in the default mode", async () => {
+    await seedPasskey();
+
+    const res = await request(makeApp())
+      .post("/api/auth/passkey/authentication/options");
+
+    expect(res.status).toBe(200);
+    expect(setCookieHeader(res)).toContain("ea_pending_auth=");
+    const pending = await currentDb().execute("SELECT user_id FROM ea_pending_auth");
+    expect(pending.rows).toEqual([{ user_id: "user-1" }]);
   });
 
   it("returns passkey authentication options from pending auth", async () => {
@@ -492,7 +511,7 @@ describe("auth routes", () => {
   });
 
   it("lists registered passkeys with safe metadata only", async () => {
-    await seedSession(currentDb(), "cookie-session");
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     await seedPasskey();
 
     const res = await request(makeApp())
@@ -501,7 +520,8 @@ describe("auth routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
-      enforcementActive: true,
+      enforcementActive: false,
+      authMode: "password_or_passkey",
       passkeys: [
         {
           credentialId: "credential-1",
@@ -531,7 +551,7 @@ describe("auth routes", () => {
   });
 
   it("returns passkey registration options for an authenticated session", async () => {
-    await seedSession(currentDb(), "cookie-session");
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     await seedPasskey();
 
     const res = await request(makeApp())
@@ -562,7 +582,7 @@ describe("auth routes", () => {
   });
 
   it("uses the local request origin for development passkey registration options", async () => {
-    await seedSession(currentDb(), "cookie-session");
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
 
     const res = await request(makeApp())
       .post("/api/auth/passkeys/registration/options")
@@ -577,8 +597,8 @@ describe("auth routes", () => {
     expect(res.body.rp).toMatchObject({ id: "127.0.0.1" });
   });
 
-  it("verifies first passkey registration and rotates old password-only sessions", async () => {
-    await seedSession(currentDb(), "cookie-session");
+  it("verifies first passkey registration without silently enabling strict mode", async () => {
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     await createWebAuthnChallengeStore(currentDb()).createChallenge({
       userId: "user-1",
       challengeType: "registration",
@@ -624,13 +644,16 @@ describe("auth routes", () => {
     });
     expect(res.body.passkey).not.toHaveProperty("publicKey");
     expect(passkey!.publicKey).toBe(Buffer.from([1, 2, 3]).toString("base64url"));
+    expect(res.body).toMatchObject({
+      enforcementActive: false,
+      authMode: "password_or_passkey",
+    });
     expect(sessions.rows).toHaveLength(1);
-    expect(oldSession.rows).toHaveLength(0);
-    expect(setCookieHeader(res)).toContain("ea_session=");
+    expect(oldSession.rows).toHaveLength(1);
   });
 
   it("deletes individual passkeys with session rotation and allows final deletion", async () => {
-    await seedSession(currentDb(), "cookie-session");
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     await seedPasskey();
 
     const deleteRes = await request(makeApp())
@@ -651,6 +674,9 @@ describe("auth routes", () => {
     expect(deleteRes.body).toEqual({
       success: true,
       enforcementActive: false,
+      authMode: "password_or_passkey",
+      recentAuth: true,
+      recovery: { remaining: 0, generatedAt: null },
       passkeys: [],
     });
     expect(remaining).toHaveLength(0);
@@ -662,6 +688,89 @@ describe("auth routes", () => {
       passkeyRequired: false,
       passkeySetupRecommended: true,
     });
+  });
+
+  it("requires recent authentication before enabling explicit strict mode", async () => {
+    await seedSession(currentDb(), "cookie-session");
+    await seedPasskey();
+
+    const blocked = await request(makeApp())
+      .patch("/api/auth/security/auth-mode")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ authMode: "password_plus_passkey" });
+    expect(blocked.status).toBe(403);
+    expect(blocked.body).toMatchObject({ code: "STEP_UP_REQUIRED" });
+
+    const stepUp = await request(makeApp())
+      .post("/api/auth/security/step-up/password")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ password: "correct-password" });
+    expect(stepUp.status).toBe(200);
+
+    const enabled = await request(makeApp())
+      .patch("/api/auth/security/auth-mode")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ authMode: "password_plus_passkey" });
+    expect(enabled.status).toBe(200);
+    expect(enabled.body).toMatchObject({ authMode: "password_plus_passkey" });
+    const owner = await currentDb().execute("SELECT auth_mode FROM ea_owner");
+    expect(owner.rows[0]!.auth_mode).toBe("password_plus_passkey");
+  });
+
+  it("changes the owner password only with recent auth and rotates prior sessions", async () => {
+    await seedSession(currentDb(), "current-session", Date.now() + 60_000, Date.now());
+    await seedSession(currentDb(), "other-session", Date.now() + 60_000, Date.now());
+
+    const changed = await request(makeApp())
+      .post("/api/auth/security/password")
+      .set("Cookie", ["ea_session=current-session"])
+      .send({ newPassword: "replacement-password" });
+
+    expect(changed.status).toBe(200);
+    expect(setCookieHeader(changed)).toContain("ea_session=");
+    expect((await currentDb().execute({
+      sql: "SELECT * FROM ea_sessions WHERE token = ?",
+      args: [hashSessionToken("other-session")],
+    })).rows).toEqual([]);
+    const login = await request(makeApp())
+      .post("/api/auth/login")
+      .send({ password: "replacement-password" });
+    expect(login.status).toBe(200);
+    expect(login.body.authenticated).toBe(true);
+  });
+
+  it("consumes a recovery code once, resets credentials, and revokes prior auth state", async () => {
+    const recoveryCode = "SP-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-1111-2222";
+    await createRecoveryCodeStore(currentDb()).replaceRecoveryCodes("user-1", [recoveryCode], 100);
+    await seedSession(currentDb(), "old-session", Date.now() + 60_000, Date.now());
+    await seedPasskey();
+    await currentDb().execute("UPDATE ea_owner SET auth_mode = 'password_plus_passkey'");
+    await createPendingAuthStore(currentDb()).createPendingAuth({ userId: "user-1", token: "pending-token" });
+
+    const recovered = await request(makeApp())
+      .post("/api/auth/recovery")
+      .send({ recoveryCode, newPassword: "replacement-password" });
+
+    expect(recovered.status).toBe(200);
+    expect(recovered.body).toMatchObject({
+      authenticated: true,
+      recoveryCodes: expect.arrayContaining([expect.stringMatching(/^SP-/)]),
+    });
+    expect(recovered.body.recoveryCodes).toHaveLength(8);
+    const owner = await currentDb().execute("SELECT password_hash, auth_mode FROM ea_owner");
+    expect(await bcrypt.compare("replacement-password", String(owner.rows[0]!.password_hash))).toBe(true);
+    expect(owner.rows[0]!.auth_mode).toBe("password_or_passkey");
+    await expect(createPasskeyStore(currentDb()).listPasskeys("user-1")).resolves.toEqual([]);
+    expect((await currentDb().execute("SELECT * FROM ea_pending_auth")).rows).toEqual([]);
+    expect((await currentDb().execute({
+      sql: "SELECT * FROM ea_sessions WHERE token = ?",
+      args: [hashSessionToken("old-session")],
+    })).rows).toEqual([]);
+
+    const replay = await request(makeApp())
+      .post("/api/auth/recovery")
+      .send({ recoveryCode, newPassword: "attacker-password" });
+    expect(replay.status).toBe(401);
   });
 });
 

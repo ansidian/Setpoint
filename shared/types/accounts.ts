@@ -77,16 +77,35 @@ export interface PasskeyMetadata {
   lastUsedAt: number | null;
 }
 
+export type OwnerAuthMode = "password_or_passkey" | "password_plus_passkey";
+
+export interface RecoveryCodeStatus {
+  remaining: number;
+  generatedAt: number | null;
+}
+
 export interface PasskeyListResponse {
   enforcementActive: boolean;
+  authMode: OwnerAuthMode;
+  recentAuth: boolean;
+  recovery: RecoveryCodeStatus;
   passkeys: PasskeyMetadata[];
 }
 
 export interface PasskeyRegistrationResponse {
   enforcementActive: boolean;
+  authMode: OwnerAuthMode;
   passkey: PasskeyMetadata;
 }
 
 export interface PasskeyDeleteResponse extends PasskeyListResponse {
   success: true;
+}
+
+export interface RecoveryCodesResponse {
+  recoveryCodes: string[];
+}
+
+export interface OwnerRecoveryResponse extends RecoveryCodesResponse {
+  authenticated: true;
 }

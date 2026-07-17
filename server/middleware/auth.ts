@@ -3,6 +3,7 @@ import db from "../db/connection.ts";
 import type { Request, RequestHandler } from "express";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const RECENT_AUTH_MAX_AGE_MS = 10 * 60 * 1000;
 const SESSION_TOKEN_PREFIX = "sha256:";
 
 // P2-27: every authenticated /api request validates the session token, which in
@@ -81,7 +82,7 @@ export async function deleteSession(token: string) {
   sessionValidationCache.delete(hashSessionToken(token));
 }
 
-export async function createSession() {
+export async function createSession({ authenticatedAt = Date.now() }: { authenticatedAt?: number } = {}) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + SESSION_MAX_AGE_MS;
   // P3-18: expired sessions are otherwise never reclaimed (the lazy delete only
@@ -93,10 +94,42 @@ export async function createSession() {
     args: [Date.now()],
   });
   await db.execute({
-    sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-    args: [hashSessionToken(token), expiresAt],
+    sql: "INSERT INTO ea_sessions (token, expires_at, authenticated_at) VALUES (?, ?, ?)",
+    args: [hashSessionToken(token), expiresAt, authenticatedAt],
   });
   return token;
+}
+
+export async function hasRecentAuth(
+  token: string | null | undefined,
+  { now = Date.now(), maxAgeMs = RECENT_AUTH_MAX_AGE_MS }: { now?: number; maxAgeMs?: number } = {},
+): Promise<boolean> {
+  if (!token) return false;
+  const result = await db.execute({
+    sql: "SELECT expires_at, authenticated_at FROM ea_sessions WHERE token IN (?, ?)",
+    args: [hashSessionToken(token), token],
+  });
+  const row = result.rows[0];
+  if (!row) return false;
+  const expiresAt = numberValue(row.expires_at);
+  const authenticatedAt = numberValue(row.authenticated_at);
+  return Boolean(
+    expiresAt && expiresAt >= now
+    && authenticatedAt && authenticatedAt <= now
+    && now - authenticatedAt <= maxAgeMs,
+  );
+}
+
+export async function markSessionRecentlyAuthenticated(
+  token: string | null | undefined,
+  authenticatedAt = Date.now(),
+): Promise<boolean> {
+  if (!token) return false;
+  const result = await db.execute({
+    sql: "UPDATE ea_sessions SET authenticated_at = ? WHERE token IN (?, ?)",
+    args: [authenticatedAt, hashSessionToken(token), token],
+  });
+  return result.rowsAffected > 0;
 }
 
 export async function validateSession(token: string | null | undefined): Promise<boolean> {
@@ -168,6 +201,24 @@ export const requireCookieSession: RequestHandler = async (req, res, next) => {
     // transient failure must forward to the terminal errorHandler (a 500) rather
     // than reject and hang the request. wrapRouterAsync only wraps the FINAL
     // handler, so async middleware must guard itself (P1-12).
+    return next(err);
+  }
+};
+
+export const requireRecentAuth: RequestHandler = async (req, res, next) => {
+  try {
+    const token = req.cookies?.ea_session;
+    if (!await validateSession(token)) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (!await hasRecentAuth(token)) {
+      return res.status(403).json({
+        code: "STEP_UP_REQUIRED",
+        message: "Confirm your password or passkey to continue",
+      });
+    }
+    return next();
+  } catch (err) {
     return next(err);
   }
 };
