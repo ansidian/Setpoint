@@ -5,18 +5,65 @@ import {
   buildSnapshotView,
   compareAccountFilters,
   emptyProcessingState,
-} from "./snapshotViewModel.js";
+} from "./snapshotViewModel.ts";
+import type { SnapshotItem, SnapshotRecord } from "../../shared/types/snapshots.ts";
 
-function item(overrides = {}) {
+function item(overrides: Record<string, unknown> = {}): SnapshotItem {
   return {
+    id: 1,
+    snapshot_id: 1,
+    triage_id: 1,
+    user_id: "user-1",
     account_id: "acct-1",
+    email_id: "email-1",
+    uid: "email-1",
     account_label: "Personal",
     account_email: "me@example.com",
     account_color: "#fff",
     account_icon: "mail",
     category: "bills",
     lane: "needs_attention",
+    lane_at_snapshot: "needs_attention",
+    summary: "",
+    preview: "",
+    action: "",
+    urgency: "normal",
+    deadline_at: null,
+    escalation_badge: null,
+    subject: "",
+    from: "",
+    from_name: "",
+    from_address: "",
+    date: null,
+    email_date: null,
+    sort_order: 0,
+    is_carryover: false,
+    source: null,
+    source_at: null,
+    resurfaced_at: null,
+    _resurfaced: false,
+    _resurfacedAt: null,
+    dismissed_from_today_at: null,
+    handled_at: null,
+    provider_removed_at: null,
+    read: false,
+    hasBill: false,
+    bill_candidate: null,
+    extractedBill: null,
+    _catchUp: false,
+    previous_snapshot_item_id: null,
     ...overrides,
+  } as SnapshotItem;
+}
+
+function snapshot(status: SnapshotRecord["status"]): SnapshotRecord {
+  return {
+    id: 1,
+    snapshot_item_id: 1,
+    start_at: "2026-05-20T00:00:00.000Z",
+    end_at: "2026-05-21T00:00:00.000Z",
+    timezone: "America/Los_Angeles",
+    status,
   };
 }
 
@@ -55,7 +102,7 @@ describe("buildFilters", () => {
       item({ account_id: "c", account_label: "Gamma", category: null }),
     ]);
     expect(filters.accounts.map((a) => a.account_id)).toEqual(["b", "a", "c"]); // b has 2, then a/c by label
-    expect(filters.accounts[0].count).toBe(2);
+    expect(filters.accounts[0]!.count).toBe(2);
     expect(filters.categories).toEqual([
       { category: "bills", count: 2 },
       { category: "news", count: 1 },
@@ -95,7 +142,7 @@ describe("compareAccountFilters", () => {
 describe("buildSnapshotView", () => {
   it("assembles snapshot/lanes/laneCounts/filters and marks non-active as readOnly", () => {
     const view = buildSnapshotView(
-      { id: 1, status: "frozen" },
+      snapshot("frozen"),
       [item({ lane: "needs_attention" }), item({ is_carryover: 1, lane: "needs_attention" })],
       undefined,
       null,
@@ -109,10 +156,10 @@ describe("buildSnapshotView", () => {
   });
 
   it("only adds a catch_up laneCount when catch_up items exist; active snapshot is editable", () => {
-    const without = buildSnapshotView({ id: 1, status: "active" }, [item()]);
+    const without = buildSnapshotView(snapshot("active"), [item()]);
     expect(without.readOnly).toBe(false);
     expect(without.laneCounts.catch_up).toBeUndefined();
-    const withCatch = buildSnapshotView({ id: 1, status: "active" }, [item({ lane: "catch_up" })]);
+    const withCatch = buildSnapshotView(snapshot("active"), [item({ lane: "catch_up" })]);
     expect(withCatch.laneCounts.catch_up).toBe(1);
   });
 });

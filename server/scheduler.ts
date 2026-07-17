@@ -4,7 +4,7 @@ import db from "./db/connection.ts";
 import { loadUserConfig } from "./platform/config-service.ts";
 import { fetchAllEmails } from "./email/email-fetch.js";
 import { indexEmails } from "./email/email-index.js";
-import { advanceSnapshotBoundary } from "./snapshots/snapshot-service.js";
+import { advanceSnapshotBoundary } from "./snapshots/snapshot-service.ts";
 import {
   enqueueEmailTriageForEmails,
   processNextGmailHistorySyncJob,
@@ -166,7 +166,7 @@ registerEmailTriageDrainRequester(emailTriageDeadlineController.request);
 
 function isMissingTableError(err: unknown): boolean {
   // libsql surfaces a missing table as "no such table: ..." in the message;
-  // mirror the repo pattern used in migrate-encryption.ts / snapshot-service.js.
+  // mirror the repo pattern used in migrate-encryption.ts / snapshot-service.ts.
   return /no such table/i.test(errorMessage(err));
 }
 

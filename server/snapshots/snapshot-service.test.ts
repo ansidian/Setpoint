@@ -9,8 +9,21 @@ import {
   markProviderRemovedFromActiveSnapshots,
   markSnapshotItemHandled,
   syncActiveSnapshot,
-} from "./snapshot-service.js";
-import { createMigratedDb, migrationSql, seedSnapshotItem } from "./snapshot-test-fixtures.js";
+} from "./snapshot-service.ts";
+import { createMigratedDb, migrationSql, seedSnapshotItem } from "./snapshot-test-fixtures.ts";
+import type { UserConfig } from "../platform/config-service.ts";
+
+const pinWithSnapshot = pin as unknown as (
+  userId: string,
+  emailId: string,
+  snapshot: Record<string, unknown>,
+  options: { dbClient: Awaited<ReturnType<typeof createMigratedDb>> },
+) => Promise<unknown>;
+
+const syncUserConfig = (): UserConfig => ({
+  accounts: [],
+  settings: { email_lookback_hours: 16 } as unknown as UserConfig["settings"],
+});
 
 describe("active briefing snapshots", () => {
   it("opens one deterministic PT daily snapshot per user", async () => {
@@ -105,7 +118,7 @@ describe("active briefing snapshots", () => {
         frozen_at: "2026-05-03T15:30:00.000Z",
       }),
       expect.objectContaining({
-        id: result.snapshot.id,
+        id: result.snapshot!.id,
         status: "active",
         start_at: "2026-05-03T15:30:00.000Z",
         end_at: "2026-05-04T07:00:00.000Z",
@@ -116,7 +129,7 @@ describe("active briefing snapshots", () => {
       dbClient,
       now: new Date("2026-05-03T16:00:00.000Z"),
     });
-    expect(current.id).toBe(result.snapshot.id);
+    expect(current.id).toBe(result.snapshot!.id);
   });
 
   it("freezes an already-expired active snapshot when advancing past its window (P1-11)", async () => {
@@ -141,8 +154,8 @@ describe("active briefing snapshots", () => {
       sql: "SELECT COUNT(*) AS n FROM ea_briefing_snapshots WHERE user_id = ? AND status = 'active'",
       args: ["user-1"],
     });
-    expect(Number(active.rows[0].n)).toBe(1);
-    expect(result.snapshot.status).toBe("active");
+    expect(Number(active.rows[0]!.n)).toBe(1);
+    expect(result.snapshot!.status).toBe("active");
 
     // The expired row must be frozen with its REAL end_at preserved (not
     // rewritten to now) — this is why freezeExpiredActiveSnapshots is used
@@ -151,8 +164,8 @@ describe("active briefing snapshots", () => {
       sql: "SELECT status, end_at FROM ea_briefing_snapshots WHERE id = ?",
       args: [initial.id],
     });
-    expect(prior.rows[0].status).toBe("frozen");
-    expect(prior.rows[0].end_at).toBe("2026-05-04T07:00:00.000Z");
+    expect(prior.rows[0]!.status).toBe("frozen");
+    expect(prior.rows[0]!.end_at).toBe("2026-05-04T07:00:00.000Z");
   });
 
   it("persists schedule labels and lists active before frozen snapshot history", async () => {
@@ -177,7 +190,7 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-03T16:00:00.000Z"),
     });
 
-    const { getSnapshotHistory } = await import("./snapshot-service.js");
+    const { getSnapshotHistory } = await import("./snapshot-service.ts");
     const history = await getSnapshotHistory("user-1", {
       dbClient,
       now: new Date("2026-05-03T16:00:00.000Z"),
@@ -204,7 +217,7 @@ describe("active briefing snapshots", () => {
       sql: "SELECT schedule_label FROM ea_briefing_snapshots WHERE id = ?",
       args: [current.id],
     });
-    expect(rows.rows[0].schedule_label).toBe("Morning");
+    expect(rows.rows[0]!.schedule_label).toBe("Morning");
   });
 
   it("loads active and frozen snapshot detail with read-only status", async () => {
@@ -232,7 +245,7 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-03T16:00:00.000Z"),
     });
 
-    const { getSnapshotViewById } = await import("./snapshot-service.js");
+    const { getSnapshotViewById } = await import("./snapshot-service.ts");
     const frozenView = await getSnapshotViewById("user-1", initial.id, { dbClient });
     const activeView = await getSnapshotViewById("user-1", active.id, { dbClient });
 
@@ -320,13 +333,13 @@ describe("active briefing snapshots", () => {
               ('icloud-home', 'user-1', 'icloud', 'home@example.test', 'Home iCloud', '#cba6da', 'Mail', 10, '2026-05-02T10:00:00.000Z')`,
     });
 
-    for (const [emailId, lane, category, accountId, sortOrder, isCarryover] of [
+    for (const [emailId, lane, category, accountId, sortOrder, isCarryover] of ([
       ["msg-action", "needs_attention", "finance", "gmail-work", 10, 0],
       ["msg-fyi", "fyi", "school", "icloud-home", 20, 0],
       ["msg-noise", "noise", "marketing", "gmail-work", 30, 0],
       ["msg-carry", "needs_attention", "legal", "gmail-work", 5, 1],
       ["msg-unknown", "fyi", "travel", "unknown-account", 40, 0],
-    ]) {
+    ] as const)) {
       await dbClient.execute({
         sql: `INSERT INTO ea_email_triage
                 (user_id, account_id, email_id, lane, category, triage_status)
@@ -389,7 +402,7 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-03T15:00:00.000Z"),
     });
 
-    expect(view.snapshot.id).toBe(snapshot.id);
+    expect(view.snapshot!.id).toBe(snapshot.id);
     expect(view.processing).toEqual({
       queued: 1,
       running: 1,
@@ -446,11 +459,11 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-03T15:00:00.000Z"),
     });
 
-    for (const [emailId, lane, read] of [
+    for (const [emailId, lane, read] of ([
       ["late-fyi-unread", "fyi", 0],
       ["late-fyi-read", "fyi", 1],
       ["late-noise-unread", "noise", 0],
-    ]) {
+    ] as const)) {
       await dbClient.execute({
         sql: `INSERT INTO ea_email_index
                 (uid, user_id, account_id, account_label, account_email,
@@ -495,8 +508,8 @@ describe("active briefing snapshots", () => {
     });
     const historicalView = await getSnapshotViewById("user-1", previous.id, { dbClient });
 
-    expect(view.lanes.catch_up.map((item) => item.email_id)).toEqual(["late-fyi-unread"]);
-    expect(view.lanes.catch_up[0]).toMatchObject({
+    expect(view.lanes.catch_up!.map((item) => item.email_id)).toEqual(["late-fyi-unread"]);
+    expect(view.lanes.catch_up![0]).toMatchObject({
       lane: "catch_up",
       lane_at_snapshot: "fyi",
       read: false,
@@ -540,7 +553,7 @@ describe("active briefing snapshots", () => {
             RETURNING id`,
       args: ["msg-arrival-read"],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -649,7 +662,7 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-04T15:00:00.000Z"),
     });
 
-    expect(nextView.snapshot.start_at).toBe("2026-05-04T07:00:00.000Z");
+    expect(nextView.snapshot!.start_at).toBe("2026-05-04T07:00:00.000Z");
     expect(nextView.carryover.map((item) => ({
       email_id: item.email_id,
       triage_id: item.triage_id,
@@ -688,7 +701,7 @@ describe("active briefing snapshots", () => {
             RETURNING id`,
       args: [],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -734,7 +747,7 @@ describe("active briefing snapshots", () => {
       sql: "SELECT scheduled_for FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-queued-carry"],
     });
-    expect(job.rows[0].scheduled_for).toBe("2026-05-03T18:03:00.000Z");
+    expect(job.rows[0]!.scheduled_for).toBe("2026-05-03T18:03:00.000Z");
   });
 
   it("hides provider-archived or trashed messages from active lanes while preserving rows", async () => {
@@ -790,7 +803,7 @@ describe("active briefing snapshots", () => {
       sql: "SELECT COUNT(*) AS count FROM ea_briefing_snapshot_items WHERE id = ?",
       args: [itemId],
     });
-    expect(Number(preserved.rows[0].count)).toBe(1);
+    expect(Number(preserved.rows[0]!.count)).toBe(1);
   });
 
   it("completes pending triage jobs when provider removal hides active rows", async () => {
@@ -856,12 +869,12 @@ describe("active briefing snapshots", () => {
   it("logs source timings while syncing the active snapshot", async () => {
     const dbClient = await createMigratedDb();
     const logger = vi.spyOn(console, "log").mockImplementation(() => {});
-    let messages = [];
+    let messages: unknown[] = [];
 
     try {
       await syncActiveSnapshot("user-1", {
         dbClient,
-        loadUserConfigFn: vi.fn(async () => ({ accounts: [], settings: { email_lookback_hours: 16 } })),
+        loadUserConfigFn: vi.fn(async () => syncUserConfig()),
         fetchAllEmailsFn: vi.fn(async () => []),
         indexEmailsFn: vi.fn(),
         enqueueEmailTriageForEmailsFn: vi.fn(),
@@ -883,9 +896,9 @@ describe("active briefing snapshots", () => {
 
   it("shares one active snapshot sync when concurrent requests target the same user", async () => {
     const dbClient = await createMigratedDb();
-    let releaseConfig;
-    const loadUserConfigFn = vi.fn(() => new Promise((resolve) => {
-      releaseConfig = () => resolve({ accounts: [], settings: { email_lookback_hours: 16 } });
+    let releaseConfig: (() => void) | undefined;
+    const loadUserConfigFn = vi.fn(() => new Promise<UserConfig>((resolve) => {
+      releaseConfig = () => resolve(syncUserConfig());
     }));
     const fetchAllEmailsFn = vi.fn(async () => []);
     const indexEmailsFn = vi.fn();
@@ -906,7 +919,7 @@ describe("active briefing snapshots", () => {
     const second = syncActiveSnapshot("user-1", options);
     expect(loadUserConfigFn).toHaveBeenCalledTimes(1);
 
-    releaseConfig();
+    releaseConfig!();
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
     expect(firstResult).toBe(secondResult);
@@ -923,7 +936,7 @@ describe("active briefing snapshots", () => {
       now: seedNow,
     });
 
-    const carryoverCountFor = async (emailId) => {
+    const carryoverCountFor = async (emailId: string) => {
       const rows = await dbClient.execute({
         sql: `SELECT carryover_count
               FROM ea_briefing_snapshot_items i
@@ -931,7 +944,7 @@ describe("active briefing snapshots", () => {
               WHERE i.email_id = ?`,
         args: [emailId],
       });
-      return rows.rows.length ? Number(rows.rows[0].carryover_count) : null;
+      return rows.rows.length ? Number(rows.rows[0]!.carryover_count) : null;
     };
 
     for (let carry = 1; carry <= CARRYOVER_MAX_DEPTH + 2; carry++) {
@@ -992,7 +1005,7 @@ describe("active briefing snapshots", () => {
             RETURNING id`,
       args: [],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -1029,11 +1042,11 @@ describe("active briefing snapshots", () => {
     // msg-aged: at the bound -> excluded ONLY by the bound (counts)
     // msg-live: below the bound -> still carries (does not count)
     // msg-handled: at the bound BUT handled -> excluded for another reason (does not count)
-    for (const [emailId, carryoverCount, handledAt] of [
+    for (const [emailId, carryoverCount, handledAt] of ([
       ["msg-aged", CARRYOVER_MAX_DEPTH, null],
       ["msg-live", CARRYOVER_MAX_DEPTH - 1, null],
       ["msg-handled", CARRYOVER_MAX_DEPTH, "2026-05-03T18:00:00.000Z"],
-    ]) {
+    ] as const)) {
       const triageResult = await dbClient.execute({
         sql: `INSERT INTO ea_email_triage
                 (user_id, account_id, email_id, lane, triage_status, handled_at)
@@ -1046,7 +1059,7 @@ describe("active briefing snapshots", () => {
                 (snapshot_id, triage_id, user_id, account_id, email_id,
                  lane_at_snapshot, carryover_count, handled_at)
               VALUES (?, ?, 'user-1', 'gmail-work', ?, 'needs_attention', ?, ?)`,
-        args: [previous.id, Number(triageResult.rows[0].id), emailId, carryoverCount, handledAt],
+        args: [previous.id, Number(triageResult.rows[0]!.id), emailId, carryoverCount, handledAt],
       });
     }
 
@@ -1091,7 +1104,7 @@ describe("active briefing snapshots", () => {
       dbClient,
       now: new Date("2026-05-03T15:00:00.000Z"),
     });
-    await pin("user-1", "msg-not-in-snapshot", { subject: "Pinned elsewhere" }, { dbClient });
+    await pinWithSnapshot("user-1", "msg-not-in-snapshot", { subject: "Pinned elsewhere" }, { dbClient });
 
     const view = await getActiveSnapshotView("user-1", {
       dbClient,
@@ -1111,10 +1124,10 @@ describe("active briefing snapshots", () => {
       dbClient,
       now: new Date("2026-05-03T15:00:00.000Z"),
     });
-    await pin("user-1", "msg-not-in-snapshot", { subject: "Pinned elsewhere" }, { dbClient });
+    await pinWithSnapshot("user-1", "msg-not-in-snapshot", { subject: "Pinned elsewhere" }, { dbClient });
 
     const view = await getSnapshotViewById("user-1", snapshot.id, { dbClient });
 
-    expect(view.pinned).toBeUndefined();
+    expect((view as unknown as Record<string, unknown>).pinned).toBeUndefined();
   });
 });

@@ -1,5 +1,8 @@
-import { ARRIVAL_GRACE_SOURCE, arrivalGraceDeadline } from "../snapshots/arrival-grace.js";
-export { arrivalGraceDeadline } from "../snapshots/arrival-grace.js";
+import {
+  ARRIVAL_GRACE_SOURCE,
+  arrivalGraceDeadline as snapshotArrivalGraceDeadline,
+} from "../snapshots/arrival-grace.ts";
+export const arrivalGraceDeadline = snapshotArrivalGraceDeadline;
 
 // Pure triage statement builder lifted from gmail-sync.js: (userId, accountId,
 // email, opts) -> [triage-row INSERT OR IGNORE, triage-job INSERT] statement pair.

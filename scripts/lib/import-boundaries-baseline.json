@@ -30,8 +30,8 @@
       "reminder-scheduler.ts"
     ],
     "snapshots": [
-      "snapshot-service.js",
-      "snooze-waker.js"
+      "snapshot-service.ts",
+      "snooze-waker.ts"
     ],
     "tasks": [
       "tasks-service.ts",
@@ -55,19 +55,13 @@
     "server/dashboard/current-service.js -> server/reminders/reminder-hydration.ts",
     "server/dashboard/current-service.js -> server/tasks/deadline-helpers.ts",
     "server/dashboard/current-service.js -> server/tasks/todoist.ts",
-    "server/email/email-service.js -> server/snapshots/snapshot-lifecycle.js",
-    "server/email/gmailTriageStatements.js -> server/snapshots/arrival-grace.js",
+    "server/email/email-service.js -> server/snapshots/snapshot-lifecycle.ts",
+    "server/email/gmailTriageStatements.js -> server/snapshots/arrival-grace.ts",
     "server/routes/alfred.js -> server/email/html-to-text.js",
     "server/routes/alfred.js -> server/email/search/email-search-retrieval.js",
     "server/routes/briefing/email-index.js -> server/email/email-index.js",
-    "server/snapshots/snapshot-service.js -> server/email/email-fetch.js",
-    "server/snapshots/snapshot-service.js -> server/email/email-index.js",
-    "server/snapshots/snapshot-service.js -> server/email/pinned-emails.js",
-    "server/snapshots/snapshot-triage-attachment.js -> server/email/email-index.js",
-    "server/snapshots/snapshotStore.js -> server/triage/triage-mode.js",
-    "server/snapshots/snooze-waker.js -> server/email/gmail.js",
     "server/triage/triage-model-client.js -> server/bills/bill-extractors/catalog.ts",
     "server/triage/triage-model-client.js -> server/email/email-ai-models.js",
-    "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js"
+    "server/triage/triage-worker.js -> server/snapshots/arrival-grace.ts"
   ]
 }

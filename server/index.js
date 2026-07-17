@@ -20,7 +20,7 @@ import newsRoutes from "./routes/news.ts";
 import gmailPushRoutes from "./routes/gmail-push.js";
 import todoistWebhookRoutes from "./routes/todoist-webhook.ts";
 import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
-import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.js";
+import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.ts";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.ts";
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";

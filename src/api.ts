@@ -77,6 +77,7 @@ import type {
   TodoistProject,
   TodoistTask,
 } from "../shared/types/tasks.ts";
+import type { ActiveSnapshotView, SnapshotHistoryResponse, SnapshotItem, SnapshotTriageLane, SnapshotView } from "../shared/types/snapshots.ts";
 import type {
   CalendarBatchMutationResponse,
   CalendarDeleteResponse,
@@ -270,24 +271,23 @@ export const deletePasskeyCredential = (credentialId: ApiId): Promise<unknown> =
 export const listApiTokens = (): Promise<ApiTokenMetadata[]> => apiFetch("/api/auth/api-tokens");
 export const createApiToken = (label: string, scopes: string[]): Promise<CreateApiTokenResponse> => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
 export const revokeApiToken = (id: ApiId): Promise<AccountMutationResponse> => apiFetch(`/api/auth/api-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
-
 // Current snapshot and operational dashboard data
-export const getActiveSnapshot = (): Promise<unknown> => apiFetch("/api/briefing/snapshot/active");
-export const syncActiveSnapshot = (): Promise<unknown> => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
-export const getSnapshotHistory = (): Promise<unknown> => apiFetch("/api/briefing/snapshot/history");
-export const getSnapshotById = (id: ApiId): Promise<unknown> => apiFetch(`/api/briefing/snapshot/${encodeURIComponent(id)}`);
-export const moveSnapshotItemLane = (itemId: ApiId, lane: string): Promise<unknown> =>
+export const getActiveSnapshot = (): Promise<ActiveSnapshotView> => apiFetch("/api/briefing/snapshot/active");
+export const syncActiveSnapshot = (): Promise<ActiveSnapshotView> => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
+export const getSnapshotHistory = (): Promise<SnapshotHistoryResponse> => apiFetch("/api/briefing/snapshot/history");
+export const getSnapshotById = (id: ApiId): Promise<SnapshotView> => apiFetch(`/api/briefing/snapshot/${encodeURIComponent(id)}`);
+export const moveSnapshotItemLane = (itemId: ApiId, lane: SnapshotTriageLane): Promise<SnapshotItem> =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/lane`, {
     method: "PATCH",
     body: JSON.stringify({ lane }),
   });
-export const dismissSnapshotItemForToday = (itemId: ApiId): Promise<unknown> =>
+export const dismissSnapshotItemForToday = (itemId: ApiId): Promise<SnapshotItem> =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/dismiss`, { method: "POST" });
-export const restoreSnapshotItemForToday = (itemId: ApiId): Promise<unknown> =>
+export const restoreSnapshotItemForToday = (itemId: ApiId): Promise<SnapshotItem> =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/restore`, { method: "POST" });
-export const markSnapshotItemHandled = (itemId: ApiId): Promise<unknown> =>
+export const markSnapshotItemHandled = (itemId: ApiId): Promise<SnapshotItem> =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/handled`, { method: "POST" });
-export const reopenSnapshotItem = (itemId: ApiId): Promise<unknown> =>
+export const reopenSnapshotItem = (itemId: ApiId): Promise<SnapshotItem> =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/reopen`, { method: "POST" });
 
 // Current Dashboard

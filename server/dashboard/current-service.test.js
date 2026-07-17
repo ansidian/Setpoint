@@ -81,7 +81,7 @@ vi.mock("../bills/bills-service.ts", () => ({
     return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
   },
 }));
-vi.mock("../snapshots/snapshot-service.js", () => ({
+vi.mock("../snapshots/snapshot-service.ts", () => ({
   getActiveSnapshotView: (...args) => testState.getActiveSnapshotView(...args),
   syncActiveSnapshot: (...args) => testState.syncActiveSnapshot(...args),
 }));

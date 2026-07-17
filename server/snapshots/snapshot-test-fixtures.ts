@@ -2,11 +2,12 @@
 // (snapshot-service, snapshot-item-mutations, snapshot-triage-attachment,
 // snapshot-snooze-lifecycle). Not a test file itself.
 
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 import { readdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+import { getOrCreateActiveSnapshot } from "./snapshot-service.ts";
+import type { SnapshotRecord, SnapshotStoredLane } from "../../shared/types/snapshots.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../db/migrations");
@@ -24,7 +25,7 @@ const allMigrationSql = readdirSync(migrationsDir)
   .sort()
   .map((file) => readFileSync(join(migrationsDir, file), "utf8"));
 
-export async function createMigratedDb() {
+export async function createMigratedDb(): Promise<Client> {
   const db = createClient({ url: "file::memory:" });
   for (const sql of allMigrationSql) {
     await db.executeMultiple(sql);
@@ -32,14 +33,23 @@ export async function createMigratedDb() {
   return db;
 }
 
-export async function seedSnapshotItem(dbClient, {
+interface SeedSnapshotItemOptions {
+  userId?: string;
+  accountId?: string;
+  emailId?: string;
+  lane?: SnapshotStoredLane;
+  category?: string;
+  now?: Date;
+}
+
+export async function seedSnapshotItem(dbClient: Client, {
   userId = "user-1",
   accountId = "gmail-work",
   emailId = "msg-1",
   lane = "needs_attention",
   category = "school",
   now = new Date("2026-05-03T15:00:00.000Z"),
-} = {}) {
+}: SeedSnapshotItemOptions = {}): Promise<{ snapshot: SnapshotRecord; triageId: number; itemId: number }> {
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now });
   const triageResult = await dbClient.execute({
     sql: `INSERT INTO ea_email_triage
@@ -48,7 +58,7 @@ export async function seedSnapshotItem(dbClient, {
           RETURNING id`,
     args: [userId, accountId, emailId, lane, category],
   });
-  const triageId = Number(triageResult.rows[0].id);
+  const triageId = Number(triageResult.rows[0]!.id);
   const itemResult = await dbClient.execute({
     sql: `INSERT INTO ea_briefing_snapshot_items
             (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -56,11 +66,11 @@ export async function seedSnapshotItem(dbClient, {
              urgency_at_snapshot, category_at_snapshot, subject_at_snapshot)
           VALUES (?, ?, ?, ?, ?, ?, 'Summary', 'Review', 'normal', ?, 'Subject')
           RETURNING id`,
-    args: [snapshot.id, triageId, userId, accountId, emailId, lane, category],
+    args: [snapshot!.id, triageId, userId, accountId, emailId, lane, category],
   });
   return {
-    snapshot,
+    snapshot: snapshot!,
     triageId,
-    itemId: Number(itemResult.rows[0].id),
+    itemId: Number(itemResult.rows[0]!.id),
   };
 }

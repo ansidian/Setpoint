@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 872,
+  "remainingLegacyFiles": 850,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -87,6 +87,10 @@
     "server/routes/calendar.ts",
     "server/routes/calendar.deadlines-mutations.test.ts",
     "server/routes/calendar.events.test.ts",
-    "server/routes/calendar.search.test.ts"
+    "server/routes/calendar.search.test.ts",
+    "shared/types/snapshots.ts",
+    "server/snapshots",
+    "server/routes/briefing/snapshot.ts",
+    "server/routes/briefing/snapshot.test.ts"
   ]
 }

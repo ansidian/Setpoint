@@ -14,7 +14,7 @@ import {
   markProviderRemovedFromActiveSnapshots,
   restorePendingTriageEligibilityForEmail,
   settleReadArrivalGraceRows,
-} from "../snapshots/snapshot-service.js";
+} from "../snapshots/snapshot-service.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import {
@@ -26,7 +26,7 @@ import {
 } from "./email-provider-adapters.js";
 import { EMAIL_SEARCH_BM25_RANK_SQL, parseEmailSearchQuery, sanitizeFtsQuery } from "./search/email-search-query.js";
 import { rankEmailSearchRows } from "./search/email-search-ranking.js";
-import { normalizeBillCandidate } from "../snapshots/snapshot-lifecycle.js";
+import { normalizeBillCandidate } from "../snapshots/snapshot-lifecycle.ts";
 
 // --- Private helpers ---
 

@@ -7,7 +7,7 @@ import {
   getSnapshotReopenLane,
   isPendingSnapshotTriage,
   resurfacedTriageLane,
-} from "./snapshot-state-machine.js";
+} from "./snapshot-state-machine.ts";
 
 describe("snapshot lane state machine", () => {
   it("declares the 8 inbox lanes", () => {

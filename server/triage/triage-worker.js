@@ -1,6 +1,6 @@
 import db from "../db/connection.ts";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
-import { ARRIVAL_GRACE_SOURCE } from "../snapshots/arrival-grace.js";
+import { ARRIVAL_GRACE_SOURCE } from "../snapshots/arrival-grace.ts";
 import {
   evaluateTriagePreflight,
   preflightDecisionMetadata,
@@ -79,7 +79,7 @@ async function classifyWithModel(getModelClient, tier, email, reason) {
 //
 // Lifetime contract (REL-09): this context is created fresh per worker tick
 // (scheduler.ts runEmailTriageWorker) and per snapshot sync
-// (snapshot-service.js runActiveSnapshotSync) and must stay that way.
+// (snapshot-service.ts runActiveSnapshotSync) and must stay that way.
 // Do NOT hoist it to module scope or any longer-lived owner: the Maps have
 // no eviction, and modelClients retains constructed LLM clients. If this
 // ever becomes long-lived or multi-user, add a size bound / TTL eviction.

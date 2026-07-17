@@ -4,11 +4,12 @@ import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import request from "supertest";
 import { errorHandler } from "../../middleware/async-handler.ts";
+import type { HttpError } from "../../snapshots/snapshot-types.ts";
 
 const mockDb = { execute: vi.fn() };
 
 vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../../snapshots/snapshot-service.js", () => ({
+vi.mock("../../snapshots/snapshot-service.ts", () => ({
   getSnapshotHistory: vi.fn(async () => ({
     snapshots: [{ id: 1, status: "active", readOnly: false }],
   })),
@@ -30,7 +31,7 @@ vi.mock("../../snapshots/snapshot-service.js", () => ({
   })),
   moveSnapshotItemLane: vi.fn(async (_userId, itemId, lane) => {
     if (lane !== "fyi") {
-      const error = new Error("Invalid snapshot lane");
+      const error = new Error("Invalid snapshot lane") as HttpError;
       error.status = 400;
       throw error;
     }
@@ -54,7 +55,7 @@ vi.mock("../../snapshots/snapshot-service.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const snapshotService = await import("../../snapshots/snapshot-service.js");
+const snapshotService = await import("../../snapshots/snapshot-service.ts");
 const briefingRoutes = (await import("./index.js")).default;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
@@ -136,9 +137,9 @@ describe("snapshot routes", () => {
   });
 
   it("maps snapshot detail service errors to HTTP responses", async () => {
-    const error = new Error("Snapshot not found");
+    const error = new Error("Snapshot not found") as HttpError;
     error.status = 404;
-    snapshotService.getSnapshotViewById.mockRejectedValueOnce(error);
+    vi.mocked(snapshotService.getSnapshotViewById).mockRejectedValueOnce(error);
 
     const res = await request(makeApp())
       .get("/api/briefing/snapshot/404")

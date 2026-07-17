@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.js";
+import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
 import { loadPinnedEntries, pin, unpin } from "./pinned-emails.js";
 
 const USER = "user-1";

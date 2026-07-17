@@ -3,12 +3,13 @@ import {
   attachArrivalGraceEmailToActiveSnapshot,
   requeueArrivalGraceTriageForEmail,
   restorePendingTriageEligibilityForEmail,
-} from "./snapshot-triage-attachment.js";
+} from "./snapshot-triage-attachment.ts";
 import {
   getOrCreateActiveSnapshot,
   settleReadArrivalGraceRows,
-} from "./snapshot-service.js";
-import { createMigratedDb } from "./snapshot-test-fixtures.js";
+} from "./snapshot-service.ts";
+import { createMigratedDb } from "./snapshot-test-fixtures.ts";
+import type { SnapshotDbResult, SnapshotWriteDb } from "./snapshot-types.ts";
 
 describe("snapshot triage attachment", () => {
   it("requests a triage drain only after the arrival-grace job is durable", async () => {
@@ -61,7 +62,7 @@ describe("snapshot triage attachment", () => {
             RETURNING id`,
       args: ["msg-arrival-read"],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,
@@ -83,17 +84,17 @@ describe("snapshot triage attachment", () => {
     });
 
     let settledDuringAttach = false;
-    const racingDbClient = {
+    const racingDbClient: SnapshotWriteDb = {
       async execute(statement) {
         const sql = typeof statement === "string" ? statement : statement.sql;
         if (!settledDuringAttach && sql.includes("INSERT INTO ea_briefing_snapshot_items")) {
           settledDuringAttach = true;
           await settleReadArrivalGraceRows("user-1", { dbClient, now });
         }
-        return dbClient.execute(statement);
+        return dbClient.execute(statement) as unknown as Promise<SnapshotDbResult>;
       },
       async batch(statements) {
-        return dbClient.batch(statements);
+        return dbClient.batch(statements) as unknown as Promise<SnapshotDbResult[]>;
       },
     };
 
@@ -143,7 +144,7 @@ describe("snapshot triage attachment", () => {
             RETURNING id`,
       args: ["user-1", "gmail-work", "msg-undo-pending", "2026-05-03T16:05:00.000Z"],
     });
-    const triageId = Number(triageResult.rows[0].id);
+    const triageId = Number(triageResult.rows[0]!.id);
     await dbClient.execute({
       sql: `INSERT INTO ea_briefing_snapshot_items
               (snapshot_id, triage_id, user_id, account_id, email_id,

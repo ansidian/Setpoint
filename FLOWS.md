@@ -41,8 +41,8 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 2. `server/email/gmail-sync.js:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state
 3. `server/email/email-index.js:indexEmails` — parses and writes emails into `ea_email_index`
 4. `server/email/gmailTriageStatements.js:triageStatementsForEmail` — inserts a pending `ea_email_triage` row and an arrival-grace-scheduled triage job
-5. `server/snapshots/snapshot-triage-attachment.js:attachArrivalGraceEmailToActiveSnapshot` — upserts a queued-lane snapshot item, publishes `email_triage_queued`
-6. `server/scheduler.ts:requestEmailTriageDrainAt` / `runEmailTriageWorker` — successful arrival-grace writes arm one process-local timer for the earliest durable `scheduled_for`; a timer firing during an active drain queues one follow-up check, while the unchanged 30-second cron remains restart/missed-timer recovery (jobs are also drained inline by `server/snapshots/snapshot-service.js:syncActiveSnapshot`)
+5. `server/snapshots/snapshot-triage-attachment.ts:attachArrivalGraceEmailToActiveSnapshot` — upserts a queued-lane snapshot item, publishes `email_triage_queued`
+6. `server/scheduler.ts:requestEmailTriageDrainAt` / `runEmailTriageWorker` — successful arrival-grace writes arm one process-local timer for the earliest durable `scheduled_for`; a timer firing during an active drain queues one follow-up check, while the unchanged 30-second cron remains restart/missed-timer recovery (jobs are also drained inline by `server/snapshots/snapshot-service.ts:syncActiveSnapshot`)
 7. `server/triage/triage-worker.js:processNextEmailTriageJob` — claims the job, handles skip/defer/grace branches
 8. `server/triage/triage-worker.js:routeEmailForTriage` — preflight rules, then cheap-model classification with strong-model escalation
 9. `server/triage/triage-worker.js:updateTriageRow` — persists the decision (lane, summary, bill candidate) to `ea_email_triage`
@@ -63,24 +63,24 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 ## 3. Snapshot / briefing lifecycle
 
-**Trigger:** cron boundary advance — `server/scheduler.ts:initScheduler` (per-user schedule) calls `server/snapshots/snapshot-service.js:advanceSnapshotBoundary`; snapshots are also created lazily on any read via `server/snapshots/snapshot-service.js:getOrCreateActiveSnapshot`.
+**Trigger:** cron boundary advance — `server/scheduler.ts:initScheduler` (per-user schedule) calls `server/snapshots/snapshot-service.ts:advanceSnapshotBoundary`; snapshots are also created lazily on any read via `server/snapshots/snapshot-service.ts:getOrCreateActiveSnapshot`.
 
-1. `server/snapshots/snapshot-service.js:advanceSnapshotBoundary` — freezes active snapshots at the boundary (active → frozen), inserts the new active row
-2. `server/snapshots/snapshot-service.js:copyCarryoverItems` — copies unresolved needs_attention/queued items into the new snapshot
-3. `server/snapshots/snapshot-triage-attachment.js:attachArrivalGraceEmailToActiveSnapshot` — new email lands in the queued lane (see flow 2)
+1. `server/snapshots/snapshot-service.ts:advanceSnapshotBoundary` — freezes active snapshots at the boundary (active → frozen), inserts the new active row
+2. `server/snapshots/snapshot-service.ts:copyCarryoverItems` — copies unresolved needs_attention/queued items into the new snapshot
+3. `server/snapshots/snapshot-triage-attachment.ts:attachArrivalGraceEmailToActiveSnapshot` — new email lands in the queued lane (see flow 2)
 4. `server/triage/triage-worker.js:attachToActiveSnapshot` — triage decisions land in their lanes (see flow 2)
-5. `server/snapshots/snapshot-snooze-lifecycle.js:deferPendingTriageForSnooze` — snoozing hides the item and reschedules its triage job to wake time
-6. `server/snapshots/snooze-waker.js:wakeDueSnoozes` — 5-min cron flips snoozed → resurfaced, re-attaches to the active snapshot
-7. `server/snapshots/snapshot-snooze-lifecycle.js:attachResurfacedSnoozeToActiveSnapshot` — upserts the resurfaced item, lane normalized by `server/snapshots/snapshot-state-machine.js:resurfacedTriageLane`
-8. `server/snapshots/snapshot-item-mutations.js:moveSnapshotItemLane` — user lane transitions (plus handled/reopen mutations) via the snapshot item routes
-9. `server/snapshots/snapshot-service.js:getActiveSnapshotView` — loads items, derives lanes and read-only state (frozen snapshots are read-only)
-10. `server/snapshots/snapshot-lifecycle.js:normalizeSnapshotItem` — normalizes DB rows: lane, catch-up id, resurfaced flags, bill candidate
+5. `server/snapshots/snapshot-snooze-lifecycle.ts:deferPendingTriageForSnooze` — snoozing hides the item and reschedules its triage job to wake time
+6. `server/snapshots/snooze-waker.ts:wakeDueSnoozes` — 5-min cron flips snoozed → resurfaced, re-attaches to the active snapshot
+7. `server/snapshots/snapshot-snooze-lifecycle.ts:attachResurfacedSnoozeToActiveSnapshot` — upserts the resurfaced item, lane normalized by `server/snapshots/snapshot-state-machine.ts:resurfacedTriageLane`
+8. `server/snapshots/snapshot-item-mutations.ts:moveSnapshotItemLane` — user lane transitions (plus handled/reopen mutations) via the snapshot item routes
+9. `server/snapshots/snapshot-service.ts:getActiveSnapshotView` — loads items, derives lanes and read-only state (frozen snapshots are read-only)
+10. `server/snapshots/snapshot-lifecycle.ts:normalizeSnapshotItem` — normalizes DB rows: lane, catch-up id, resurfaced flags, bill candidate
 11. `server/dashboard/current-events.js:publishCurrentDashboardEvent` — lifecycle changes publish dashboard events
 12. `src/hooks/useCurrentDashboard.js:handleChanged` — SSE-triggered refetch embeds the fresh snapshot view in the dashboard payload
 13. `src/hooks/useActiveSnapshot.js:useActiveSnapshot` — standalone fallback fetch; 15s poll while processing is active
 14. `src/components/inbox/InboxView.jsx:InboxView` — renders snapshot lanes; read-only when frozen
 
-**Caches:** single-flight sync map in `server/snapshots/snapshot-service.js` (dedupes concurrent active-snapshot syncs); `ea_current_data_cache` rows in `server/dashboard/current-service.js` (other providers; the active snapshot itself is fetched fresh); frontend snapshot state in `src/hooks/useActiveSnapshot.js` and `src/hooks/useCurrentDashboard.js`, overwritten on each refetch.
+**Caches:** single-flight sync map in `server/snapshots/snapshot-service.ts` (dedupes concurrent active-snapshot syncs); `ea_current_data_cache` rows in `server/dashboard/current-service.js` (other providers; the active snapshot itself is fetched fresh); frontend snapshot state in `src/hooks/useActiveSnapshot.js` and `src/hooks/useCurrentDashboard.js`, overwritten on each refetch.
 
 **SSE:** `dashboard-current-changed` (reasons incl. `email_triage_queued`, `email_triage_finalized`, `snoozed_pending_deferred`) — same emitter/stream/consumer chain as flow 2. Supplemented by polling: `src/hooks/useActiveSnapshot.js` every 15s while processing, `src/hooks/useCurrentDashboard.js` short post-refresh polling.
 

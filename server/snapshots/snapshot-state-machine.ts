@@ -59,24 +59,20 @@
 import {
   ARRIVAL_GRACE_QUEUED_LANE,
   ARRIVAL_GRACE_UNTRIAGED_READ_LANE,
-} from "./arrival-grace.js";
+} from "./arrival-grace.ts";
+import {
+  SNAPSHOT_LANES as SHARED_SNAPSHOT_LANES,
+  type SnapshotProviderRemovedState,
+  type SnapshotTriageLane,
+} from "../../shared/types/snapshots.ts";
 
-export const SNAPSHOT_LANES = Object.freeze([
-  "queued",
-  "needs_attention",
-  "catch_up",
-  "fyi",
-  "handled",
-  "untriaged_read",
-  "noise",
-  "carryover",
-]);
+export const SNAPSHOT_LANES = SHARED_SNAPSHOT_LANES;
 
 // Lanes a triage decision or user lane-move may assign.
-export const TRIAGE_LANES = new Set(["needs_attention", "fyi", "noise"]);
+export const TRIAGE_LANES: ReadonlySet<string> = new Set<SnapshotTriageLane>(["needs_attention", "fyi", "noise"]);
 
 // Stored lane_at_snapshot values counted in the snapshot history view.
-export const SNAPSHOT_DISPLAY_LANES = new Set([
+export const SNAPSHOT_DISPLAY_LANES: ReadonlySet<string> = new Set([
   ARRIVAL_GRACE_QUEUED_LANE,
   "needs_attention",
   "fyi",
@@ -86,25 +82,25 @@ export const SNAPSHOT_DISPLAY_LANES = new Set([
 ]);
 
 // Provider states that tombstone an item out of active snapshots.
-export const PROVIDER_REMOVED_STATES = new Set(["archived", "trashed"]);
+export const PROVIDER_REMOVED_STATES: ReadonlySet<string> = new Set<SnapshotProviderRemovedState>(["archived", "trashed"]);
 
 // Reopening a handled item restores its pre-handled lane when that lane is
 // user-assignable; anything else (queued, untriaged_read, legacy values)
 // lands in needs_attention so the owner sees it again.
-export function getSnapshotReopenLane(laneAtSnapshot) {
-  return TRIAGE_LANES.has(laneAtSnapshot) ? laneAtSnapshot : "needs_attention";
+export function getSnapshotReopenLane(laneAtSnapshot: unknown): SnapshotTriageLane {
+  return TRIAGE_LANES.has(String(laneAtSnapshot)) ? laneAtSnapshot as SnapshotTriageLane : "needs_attention";
 }
 
 // A snoozed email resurfaces into its remembered lane only if that lane is
 // user-assignable; unknown or non-triage lanes fall back to needs_attention.
-export function resurfacedTriageLane(snapshot) {
+export function resurfacedTriageLane(snapshot: Record<string, unknown> | null | undefined): SnapshotTriageLane {
   const lane = snapshot?._lane || snapshot?.lane || "needs_attention";
-  return TRIAGE_LANES.has(lane) ? lane : "needs_attention";
+  return TRIAGE_LANES.has(String(lane)) ? lane as SnapshotTriageLane : "needs_attention";
 }
 
 // Items whose triage has not settled yet; dismissing one must also skip the
 // pending triage so the worker does not resurrect the row.
-export function isPendingSnapshotTriage(item) {
+export function isPendingSnapshotTriage(item: Record<string, unknown> | null | undefined): boolean {
   return item?.triage_status === "pending"
     || item?.triage_source === "weak_security_grace"
     || item?.source === "pending_security_grace";

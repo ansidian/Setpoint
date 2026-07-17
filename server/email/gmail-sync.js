@@ -4,7 +4,7 @@ import { indexEmails } from "./email-index.js";
 import {
   attachArrivalGraceEmailToActiveSnapshot,
   getOrCreateActiveSnapshot,
-} from "../snapshots/snapshot-service.js";
+} from "../snapshots/snapshot-service.ts";
 import { arrivalGraceDeadline, triageStatementsForEmail } from "./gmailTriageStatements.js";
 import { decodeGmailPubSubNotification } from "./gmailPubSubNotification.js";
 export { decodeGmailPubSubNotification } from "./gmailPubSubNotification.js";

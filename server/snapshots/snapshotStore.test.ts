@@ -1,11 +1,29 @@
 import { describe, expect, it } from "vitest";
+import type { InStatement } from "@libsql/client";
+import type { SnapshotRecord, SnapshotWindow } from "../../shared/types/snapshots.ts";
+import type { SnapshotReadDb } from "./snapshot-types.ts";
 import {
   CARRYOVER_MAX_DEPTH,
   copyCarryoverItems,
   findActiveSnapshot,
   loadAccountFilterOrder,
   loadSnapshotHistoryCounts,
-} from "./snapshotStore.js";
+} from "./snapshotStore.ts";
+
+type StatementObject = Exclude<InStatement, string>;
+
+const windowFixture = (start_at = "s", end_at = "e"): SnapshotWindow => ({
+  start_at,
+  end_at,
+  timezone: "America/Los_Angeles",
+});
+
+const snapshotFixture = (id: number): SnapshotRecord => ({
+  id,
+  snapshot_item_id: id,
+  ...windowFixture(),
+  status: "active",
+});
 
 describe("CARRYOVER_MAX_DEPTH", () => {
   it("is the documented depth bound (6)", () => {
@@ -15,17 +33,17 @@ describe("CARRYOVER_MAX_DEPTH", () => {
 
 describe("findActiveSnapshot", () => {
   it("queries the active window and returns the normalized row", async () => {
-    let captured;
-    const dbClient = {
+    let captured: StatementObject | undefined;
+    const dbClient: SnapshotReadDb = {
       execute: async (query) => {
-        captured = query;
+        captured = query as StatementObject;
         return { rows: [{ id: 7, status: "active", start_at: "s", end_at: "e" }] };
       },
     };
-    const snapshot = await findActiveSnapshot(dbClient, "u1", { start_at: "s", end_at: "e" });
+    const snapshot = await findActiveSnapshot(dbClient, "u1", windowFixture());
     expect(snapshot).toMatchObject({ id: 7, status: "active" });
-    expect(captured.sql).toMatch(/status = 'active'/);
-    expect(captured.args).toEqual(["u1", "s", "e"]);
+    expect(captured!.sql).toMatch(/status = 'active'/);
+    expect(captured!.args).toEqual(["u1", "s", "e"]);
   });
 });
 
@@ -62,7 +80,7 @@ describe("loadAccountFilterOrder", () => {
     };
     const order = await loadAccountFilterOrder(dbClient, "u1");
     expect(order.get("a")).toMatchObject({ index: 0, sort_order: 2 });
-    expect(order.get("b").index).toBe(1);
+    expect(order.get("b")!.index).toBe(1);
   });
 
   it("tolerates a missing ea_accounts table by returning an empty map", async () => {
@@ -78,30 +96,31 @@ describe("loadAccountFilterOrder", () => {
 
 describe("copyCarryoverItems", () => {
   it("issues the carryover INSERT bounded by CARRYOVER_MAX_DEPTH when a previous frozen snapshot exists", async () => {
-    const calls = [];
-    const dbClient = {
+    const calls: StatementObject[] = [];
+    const dbClient: SnapshotReadDb = {
       execute: async (query) => {
-        calls.push(query);
-        if (query.sql.includes("status = 'frozen'")) return { rows: [{ id: 99, status: "frozen" }] };
+        const statement = query as StatementObject;
+        calls.push(statement);
+        if (statement.sql.includes("status = 'frozen'")) return { rows: [{ id: 99, status: "frozen" }] };
         return { rows: [] };
       },
     };
-    await copyCarryoverItems(dbClient, "u1", { id: 5 }, { start_at: "x" });
+    await copyCarryoverItems(dbClient, "u1", snapshotFixture(5), windowFixture("x"));
     const insert = calls.find((c) => c.sql.includes("INSERT OR IGNORE INTO ea_briefing_snapshot_items"));
     expect(insert).toBeTruthy();
     // snapshot.id, previous.id, userId, depth bound
-    expect(insert.args).toEqual([5, 99, "u1", CARRYOVER_MAX_DEPTH]);
+    expect(insert!.args).toEqual([5, 99, "u1", CARRYOVER_MAX_DEPTH]);
   });
 
   it("does nothing when there is no previous frozen snapshot", async () => {
-    const calls = [];
-    const dbClient = {
+    const calls: StatementObject[] = [];
+    const dbClient: SnapshotReadDb = {
       execute: async (query) => {
-        calls.push(query);
+        calls.push(query as StatementObject);
         return { rows: [] };
       },
     };
-    await copyCarryoverItems(dbClient, "u1", { id: 5 }, { start_at: "x" });
+    await copyCarryoverItems(dbClient, "u1", snapshotFixture(5), windowFixture("x"));
     expect(calls.some((c) => c.sql.includes("INSERT OR IGNORE"))).toBe(false);
   });
 });

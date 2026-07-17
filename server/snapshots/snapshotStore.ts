@@ -1,14 +1,27 @@
 // Persistence layer for the briefing snapshot: all ea_briefing_snapshots /
 // ea_briefing_snapshot_items reads + lifecycle writes (find/freeze/carryover),
 // item loads for the view, processing-state counts, and history rows/counts.
-// The service (snapshot-service.js) orchestrates these; the view model shapes them.
+// The service (snapshot-service.ts) orchestrates these; the view model shapes them.
 import {
   normalizeCount,
   normalizeSnapshot,
   normalizeSnapshotItem,
-} from "./snapshot-lifecycle.js";
-import { SNAPSHOT_DISPLAY_LANES } from "./snapshot-state-machine.js";
+  type SnapshotItemRow,
+} from "./snapshot-lifecycle.ts";
+import { SNAPSHOT_DISPLAY_LANES } from "./snapshot-state-machine.ts";
 import { getEmailTriageModeForUser } from "../triage/triage-mode.js";
+import type {
+  SnapshotItem,
+  SnapshotJobType,
+  SnapshotLaneCounts,
+  SnapshotProcessingState,
+  SnapshotRecord,
+  SnapshotWindow,
+} from "../../shared/types/snapshots.ts";
+import type { Client } from "@libsql/client";
+import type { SnapshotReadDb } from "./snapshot-types.ts";
+import { errorMessage } from "./snapshot-types.ts";
+import type { SnapshotAccountOrder } from "./snapshotViewModel.ts";
 
 // Max times an unhandled needs_attention/queued item re-copies into a new active
 // snapshot before it ages out of carryover (per-item age expiry, NOT a capacity
@@ -16,7 +29,7 @@ import { getEmailTriageModeForUser } from "../triage/triage-mode.js";
 // days of re-surfacing.
 export const CARRYOVER_MAX_DEPTH = 6;
 
-export async function findActiveSnapshot(dbClient, userId, window) {
+export async function findActiveSnapshot(dbClient: SnapshotReadDb, userId: string, window: SnapshotWindow): Promise<SnapshotRecord | null> {
   const result = await dbClient.execute({
     sql: `SELECT *
           FROM ea_briefing_snapshots
@@ -30,7 +43,7 @@ export async function findActiveSnapshot(dbClient, userId, window) {
   return normalizeSnapshot(result.rows[0]);
 }
 
-export async function findContainingActiveSnapshot(dbClient, userId, now) {
+export async function findContainingActiveSnapshot(dbClient: SnapshotReadDb, userId: string, now: Date): Promise<SnapshotRecord | null> {
   const nowIso = now.toISOString();
   const result = await dbClient.execute({
     sql: `SELECT *
@@ -46,7 +59,12 @@ export async function findContainingActiveSnapshot(dbClient, userId, now) {
   return normalizeSnapshot(result.rows[0]);
 }
 
-export async function freezeExpiredActiveSnapshots(dbClient, userId, window, now) {
+export async function freezeExpiredActiveSnapshots(
+  dbClient: SnapshotReadDb,
+  userId: string,
+  window: Pick<SnapshotWindow, "start_at">,
+  now: Date,
+): Promise<void> {
   await dbClient.execute({
     sql: `UPDATE ea_briefing_snapshots
           SET status = 'frozen',
@@ -59,7 +77,7 @@ export async function freezeExpiredActiveSnapshots(dbClient, userId, window, now
   });
 }
 
-export async function freezeActiveSnapshotsAtBoundary(dbClient, userId, now) {
+export async function freezeActiveSnapshotsAtBoundary(dbClient: SnapshotReadDb, userId: string, now: Date): Promise<void> {
   const nowIso = now.toISOString();
   await dbClient.execute({
     sql: `UPDATE ea_briefing_snapshots
@@ -75,7 +93,11 @@ export async function freezeActiveSnapshotsAtBoundary(dbClient, userId, now) {
   });
 }
 
-export async function loadPreviousFrozenSnapshot(dbClient, userId, window) {
+export async function loadPreviousFrozenSnapshot(
+  dbClient: SnapshotReadDb,
+  userId: string,
+  window: Pick<SnapshotWindow, "start_at">,
+): Promise<SnapshotRecord | null> {
   const result = await dbClient.execute({
     sql: `SELECT *
           FROM ea_briefing_snapshots
@@ -89,7 +111,12 @@ export async function loadPreviousFrozenSnapshot(dbClient, userId, window) {
   return normalizeSnapshot(result.rows[0]);
 }
 
-export async function copyCarryoverItems(dbClient, userId, snapshot, window) {
+export async function copyCarryoverItems(
+  dbClient: SnapshotReadDb,
+  userId: string,
+  snapshot: SnapshotRecord,
+  window: SnapshotWindow,
+): Promise<void> {
   const previous = await loadPreviousFrozenSnapshot(dbClient, userId, window);
   if (!previous) return;
 
@@ -136,7 +163,7 @@ export async function copyCarryoverItems(dbClient, userId, snapshot, window) {
   });
 }
 
-export async function loadSnapshotItems(dbClient, snapshotId) {
+export async function loadSnapshotItems(dbClient: SnapshotReadDb, snapshotId: number): Promise<SnapshotItem[]> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
@@ -161,10 +188,15 @@ export async function loadSnapshotItems(dbClient, snapshotId) {
                    i.id ASC`,
     args: [snapshotId],
   });
-  return result.rows.map(normalizeSnapshotItem);
+  return result.rows.map((row) => normalizeSnapshotItem(row as unknown as SnapshotItemRow));
 }
 
-export async function loadActiveCatchUpItems(dbClient, userId, snapshot, { previousFrozen } = {}) {
+export async function loadActiveCatchUpItems(
+  dbClient: SnapshotReadDb,
+  userId: string,
+  snapshot: SnapshotRecord,
+  { previousFrozen }: { previousFrozen?: Promise<SnapshotRecord | null> } = {},
+): Promise<SnapshotItem[]> {
   if (!snapshot?.id || !snapshot.start_at) return [];
   const previous = previousFrozen !== undefined
     ? await previousFrozen
@@ -208,10 +240,15 @@ export async function loadActiveCatchUpItems(dbClient, userId, snapshot, { previ
                    i.id ASC`,
     args: [previous.id, userId, snapshot.id],
   });
-  return result.rows.map(normalizeSnapshotItem);
+  return result.rows.map((row) => normalizeSnapshotItem(row as unknown as SnapshotItemRow));
 }
 
-export async function loadCarryoverAgedOutCount(dbClient, userId, snapshot, { previousFrozen } = {}) {
+export async function loadCarryoverAgedOutCount(
+  dbClient: SnapshotReadDb,
+  userId: string,
+  snapshot: SnapshotRecord,
+  { previousFrozen }: { previousFrozen?: Promise<SnapshotRecord | null> } = {},
+): Promise<number> {
   if (!snapshot?.id || !snapshot.start_at) return 0;
   const previous = previousFrozen !== undefined
     ? await previousFrozen
@@ -247,7 +284,12 @@ export async function loadCarryoverAgedOutCount(dbClient, userId, snapshot, { pr
   return Number(result.rows[0]?.count || 0);
 }
 
-export async function loadActiveSnapshotItemsForEmail(dbClient, userId, accountId, emailId) {
+export async function loadActiveSnapshotItemsForEmail(
+  dbClient: SnapshotReadDb,
+  userId: string,
+  accountId: string,
+  emailId: string,
+) {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  t.provider_state,
@@ -268,7 +310,7 @@ export async function loadActiveSnapshotItemsForEmail(dbClient, userId, accountI
   return result.rows;
 }
 
-export async function loadProcessingState(dbClient, userId) {
+export async function loadProcessingState(dbClient: SnapshotReadDb, userId: string): Promise<SnapshotProcessingState> {
   // The job-count GROUP BY (ea_triage_jobs) and the triage-mode read (ea_settings)
   // hit disjoint tables with no ordering dependency, so resolve them concurrently
   // instead of as two serial Turso round-trips on the every-/current snapshot-view
@@ -283,14 +325,16 @@ export async function loadProcessingState(dbClient, userId) {
             GROUP BY job_type, status`,
       args: [userId],
     }),
-    getEmailTriageModeForUser(userId, { dbClient }),
+    getEmailTriageModeForUser(userId, { dbClient: dbClient as Client }),
   ]);
-  const countsByType = {
+  const countsByType: Record<SnapshotJobType, SnapshotProcessingState[SnapshotJobType]> = {
     email_triage: { pending: 0, queued: 0, running: 0, total: 0, active: false },
     gmail_history_sync: { pending: 0, queued: 0, running: 0, total: 0, active: false },
   };
   for (const row of result.rows) {
-    const type = countsByType[row.job_type];
+    const jobType = String(row.job_type);
+    if (jobType !== "email_triage" && jobType !== "gmail_history_sync") continue;
+    const type = countsByType[jobType];
     if (!type) continue;
     if (row.status === "queued") {
       type.pending = normalizeCount(row.count);
@@ -308,23 +352,23 @@ export async function loadProcessingState(dbClient, userId) {
     running: emailTriage.running,
     total: emailTriage.total,
     active: emailTriage.active || countsByType.gmail_history_sync.active,
-    ...mode,
+    ...(mode as Pick<SnapshotProcessingState, "email_triage_mode" | "effective_email_triage_mode">),
     email_triage: countsByType.email_triage,
     gmail_history_sync: countsByType.gmail_history_sync,
   };
 }
 
-function parseSortOrder(value) {
+function parseSortOrder(value: unknown): number {
   const sortOrder = Number(value);
   return Number.isFinite(sortOrder) ? sortOrder : Number.MAX_SAFE_INTEGER;
 }
 
-function parseCreatedAt(value) {
-  const createdAt = Date.parse(value || "");
+function parseCreatedAt(value: unknown): number {
+  const createdAt = Date.parse(String(value || ""));
   return Number.isFinite(createdAt) ? createdAt : Number.MAX_SAFE_INTEGER;
 }
 
-export async function loadAccountFilterOrder(dbClient, userId) {
+export async function loadAccountFilterOrder(dbClient: SnapshotReadDb, userId: string): Promise<SnapshotAccountOrder> {
   let result;
   try {
     result = await dbClient.execute({
@@ -335,20 +379,20 @@ export async function loadAccountFilterOrder(dbClient, userId) {
       args: [userId],
     });
   } catch (err) {
-    if (String(err?.message || "").includes("no such table: ea_accounts")) {
+    if (errorMessage(err).includes("no such table: ea_accounts")) {
       return new Map();
     }
     throw err;
   }
 
-  return new Map(result.rows.map((row, index) => [row.id, {
+  return new Map(result.rows.map((row, index) => [String(row.id), {
     index,
     sort_order: parseSortOrder(row.sort_order),
     created_at: parseCreatedAt(row.created_at),
   }]));
 }
 
-export async function loadSnapshotById(dbClient, userId, snapshotId) {
+export async function loadSnapshotById(dbClient: SnapshotReadDb, userId: string, snapshotId: number): Promise<SnapshotRecord | null> {
   const result = await dbClient.execute({
     sql: `SELECT *
           FROM ea_briefing_snapshots
@@ -360,7 +404,7 @@ export async function loadSnapshotById(dbClient, userId, snapshotId) {
   return normalizeSnapshot(result.rows[0]);
 }
 
-export async function loadSnapshotHistoryRows(dbClient, userId) {
+export async function loadSnapshotHistoryRows(dbClient: SnapshotReadDb, userId: string): Promise<SnapshotRecord[]> {
   const result = await dbClient.execute({
     sql: `SELECT *
           FROM ea_briefing_snapshots
@@ -370,10 +414,13 @@ export async function loadSnapshotHistoryRows(dbClient, userId) {
                    id DESC`,
     args: [userId],
   });
-  return result.rows.map(normalizeSnapshot);
+  return result.rows.map(normalizeSnapshot).filter((row): row is SnapshotRecord => row !== null);
 }
 
-export async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
+export async function loadSnapshotHistoryCounts(
+  dbClient: SnapshotReadDb,
+  snapshotIds: number[],
+): Promise<Map<number, SnapshotLaneCounts>> {
   if (!snapshotIds.length) return new Map();
   const placeholders = snapshotIds.map(() => "?").join(", ");
   const result = await dbClient.execute({
@@ -390,7 +437,7 @@ export async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
     args: snapshotIds,
   });
 
-  const counts = new Map();
+  const counts = new Map<number, SnapshotLaneCounts>();
   for (const id of snapshotIds) {
     counts.set(Number(id), {
       queued: 0,
@@ -413,8 +460,9 @@ export async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
       snapshotCounts.carryover += normalizeCount(row.count);
       continue;
     }
-    if (SNAPSHOT_DISPLAY_LANES.has(row.lane_at_snapshot)) {
-      snapshotCounts[row.lane_at_snapshot] += normalizeCount(row.count);
+    const lane = String(row.lane_at_snapshot);
+    if (SNAPSHOT_DISPLAY_LANES.has(lane)) {
+      snapshotCounts[lane as keyof Omit<SnapshotLaneCounts, "catch_up" | "carryover">] += normalizeCount(row.count);
     }
   }
   return counts;

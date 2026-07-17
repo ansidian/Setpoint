@@ -3,24 +3,45 @@
  * restore, mark-handled, and reopen, plus the pending-triage dismissal
  * plumbing the dismiss path settles through. Every mutation records a
  * feedback row so triage can learn from owner corrections. Extracted from
- * snapshot-service.js (EAD-325); snapshot-service re-exports every public
+ * snapshot-service.ts (EAD-325); snapshot-service re-exports every public
  * symbol here, so external callers are unchanged.
  */
 
 import db from "../db/connection.ts";
-import { normalizeSnapshotItem } from "./snapshot-lifecycle.js";
+import type { InStatement } from "@libsql/client";
+import type { SnapshotItem, SnapshotTriageLane } from "../../shared/types/snapshots.ts";
+import { normalizeSnapshotItem, type SnapshotItemRow } from "./snapshot-lifecycle.ts";
 import {
   TRIAGE_LANES,
   getSnapshotReopenLane,
   isPendingSnapshotTriage,
-} from "./snapshot-state-machine.js";
+} from "./snapshot-state-machine.ts";
 import {
   completeEmailTriageJobsForEmail,
   restorePendingTriageEligibilityForEmail,
-} from "./snapshot-triage-attachment.js";
+} from "./snapshot-triage-attachment.ts";
+import type { HttpError, SnapshotWriteDb } from "./snapshot-types.ts";
 
-export function makeHttpError(message, status) {
-  const err = new Error(message);
+interface MutationItemRow extends SnapshotItemRow {
+  id: string | number | bigint;
+  triage_id: string | number | bigint;
+  user_id: string;
+  account_id: string;
+  email_id: string;
+  lane_at_snapshot: SnapshotItem["lane_at_snapshot"];
+  triage_status?: string | null;
+  triage_source?: string | null;
+  last_triaged_at?: string | null;
+  provider_state?: string | null;
+}
+
+interface MutationOptions {
+  dbClient?: SnapshotWriteDb;
+  now?: Date;
+}
+
+export function makeHttpError(message: string, status: number): HttpError {
+  const err = new Error(message) as HttpError;
   err.status = status;
   return err;
 }
@@ -28,7 +49,12 @@ export function makeHttpError(message, status) {
 // Builds the feedback INSERT as a libsql {sql, args} statement so it can be
 // either executed standalone or grouped into a db.batch([...]) with the paired
 // snapshot-item / triage writes (see moveSnapshotItemLane et al. below).
-function feedbackInsertQuery(item, feedbackType, fromValue, toValue) {
+function feedbackInsertQuery(
+  item: MutationItemRow,
+  feedbackType: string,
+  fromValue: string | number | null,
+  toValue: string | number | null,
+): InStatement {
   return {
     sql: `INSERT INTO ea_triage_feedback
             (user_id, triage_id, snapshot_item_id, account_id, email_id,
@@ -47,11 +73,17 @@ function feedbackInsertQuery(item, feedbackType, fromValue, toValue) {
   };
 }
 
-export async function insertFeedback(dbClient, item, feedbackType, fromValue, toValue) {
+export async function insertFeedback(
+  dbClient: SnapshotWriteDb,
+  item: MutationItemRow,
+  feedbackType: string,
+  fromValue: string | number | null,
+  toValue: string | number | null,
+): Promise<void> {
   await dbClient.execute(feedbackInsertQuery(item, feedbackType, fromValue, toValue));
 }
 
-async function loadActiveSnapshotItem(dbClient, userId, itemId) {
+async function loadActiveSnapshotItem(dbClient: SnapshotWriteDb, userId: string, itemId: number): Promise<MutationItemRow | null> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
@@ -76,10 +108,10 @@ async function loadActiveSnapshotItem(dbClient, userId, itemId) {
           LIMIT 1`,
     args: [itemId, userId],
   });
-  return result.rows[0] || null;
+  return result.rows[0] as unknown as MutationItemRow | undefined || null;
 }
 
-async function loadActiveHandledSnapshotItem(dbClient, userId, itemId) {
+async function loadActiveHandledSnapshotItem(dbClient: SnapshotWriteDb, userId: string, itemId: number): Promise<MutationItemRow | null> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
@@ -102,10 +134,10 @@ async function loadActiveHandledSnapshotItem(dbClient, userId, itemId) {
           LIMIT 1`,
     args: [itemId, userId],
   });
-  return result.rows[0] || null;
+  return result.rows[0] as unknown as MutationItemRow | undefined || null;
 }
 
-async function loadSnapshotItemById(dbClient, userId, itemId) {
+async function loadSnapshotItemById(dbClient: SnapshotWriteDb, userId: string, itemId: number): Promise<MutationItemRow | null> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
@@ -122,13 +154,13 @@ async function loadSnapshotItemById(dbClient, userId, itemId) {
           LIMIT 1`,
     args: [itemId, userId],
   });
-  return result.rows[0] || null;
+  return result.rows[0] as unknown as MutationItemRow | undefined || null;
 }
 
-export async function markPendingTriageDismissedForEmail(userId, accountId, emailId, {
+export async function markPendingTriageDismissedForEmail(userId: string, accountId: string, emailId: string, {
   dbClient = db,
   now = new Date(),
-} = {}) {
+}: MutationOptions = {}): Promise<{ updated: number; jobsUpdated: number }> {
   const dismissedAt = now.toISOString();
   const result = await dbClient.execute({
     sql: `UPDATE ea_email_triage
@@ -155,10 +187,10 @@ export async function markPendingTriageDismissedForEmail(userId, accountId, emai
   };
 }
 
-export async function markPendingTriageDismissed(userId, emailId, {
+export async function markPendingTriageDismissed(userId: string, emailId: string, {
   dbClient = db,
   now = new Date(),
-} = {}) {
+}: MutationOptions = {}): Promise<{ updated: number; jobsUpdated: number }> {
   const rows = await dbClient.execute({
     sql: `SELECT account_id
           FROM ea_email_triage
@@ -171,7 +203,7 @@ export async function markPendingTriageDismissed(userId, emailId, {
   let updated = 0;
   let jobsUpdated = 0;
   for (const row of rows.rows) {
-    const result = await markPendingTriageDismissedForEmail(userId, row.account_id, emailId, {
+    const result = await markPendingTriageDismissedForEmail(userId, String(row.account_id), emailId, {
       dbClient,
       now,
     });
@@ -181,9 +213,9 @@ export async function markPendingTriageDismissed(userId, emailId, {
   return { updated, jobsUpdated };
 }
 
-export async function moveSnapshotItemLane(userId, itemId, lane, {
+export async function moveSnapshotItemLane(userId: string, itemId: number, lane: string, {
   dbClient = db,
-} = {}) {
+}: MutationOptions = {}): Promise<SnapshotItem> {
   if (!TRIAGE_LANES.has(lane)) {
     throw makeHttpError("Invalid snapshot lane", 400);
   }
@@ -218,13 +250,13 @@ export async function moveSnapshotItemLane(userId, itemId, lane, {
   ]);
 
   const updated = await loadActiveSnapshotItem(dbClient, userId, itemId);
-  return normalizeSnapshotItem(updated);
+  return normalizeSnapshotItem(updated as MutationItemRow);
 }
 
-export async function dismissSnapshotItemForToday(userId, itemId, {
+export async function dismissSnapshotItemForToday(userId: string, itemId: number, {
   dbClient = db,
   now = new Date(),
-} = {}) {
+}: MutationOptions = {}): Promise<SnapshotItem> {
   const item = await loadActiveSnapshotItem(dbClient, userId, itemId);
   if (!item) {
     throw makeHttpError("Active snapshot item not found", 404);
@@ -247,12 +279,12 @@ export async function dismissSnapshotItemForToday(userId, itemId, {
   await insertFeedback(dbClient, item, "dismiss_today", "visible", "dismissed");
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
-  return normalizeSnapshotItem(updated);
+  return normalizeSnapshotItem(updated as MutationItemRow);
 }
 
-export async function restoreSnapshotItemForToday(userId, itemId, {
+export async function restoreSnapshotItemForToday(userId: string, itemId: number, {
   dbClient = db,
-} = {}) {
+}: MutationOptions = {}): Promise<SnapshotItem> {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  t.triage_status,
@@ -269,7 +301,7 @@ export async function restoreSnapshotItemForToday(userId, itemId, {
           LIMIT 1`,
     args: [itemId, userId],
   });
-  const item = result.rows[0];
+  const item = result.rows[0] as unknown as MutationItemRow | undefined;
   if (!item) {
     throw makeHttpError("Active snapshot item not found", 404);
   }
@@ -287,13 +319,13 @@ export async function restoreSnapshotItemForToday(userId, itemId, {
   }
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
-  return normalizeSnapshotItem(updated);
+  return normalizeSnapshotItem(updated as MutationItemRow);
 }
 
-export async function markSnapshotItemHandled(userId, itemId, {
+export async function markSnapshotItemHandled(userId: string, itemId: number, {
   dbClient = db,
   now = new Date(),
-} = {}) {
+}: MutationOptions = {}): Promise<SnapshotItem> {
   const item = await loadActiveSnapshotItem(dbClient, userId, itemId);
   if (!item) {
     throw makeHttpError("Active snapshot item not found", 404);
@@ -321,12 +353,12 @@ export async function markSnapshotItemHandled(userId, itemId, {
   ]);
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
-  return normalizeSnapshotItem(updated);
+  return normalizeSnapshotItem(updated as MutationItemRow);
 }
 
-export async function reopenSnapshotItem(userId, itemId, {
+export async function reopenSnapshotItem(userId: string, itemId: number, {
   dbClient = db,
-} = {}) {
+}: MutationOptions = {}): Promise<SnapshotItem> {
   const item = await loadActiveHandledSnapshotItem(dbClient, userId, itemId);
   if (!item) {
     throw makeHttpError("Active handled snapshot item not found", 404);
@@ -357,5 +389,5 @@ export async function reopenSnapshotItem(userId, itemId, {
   ]);
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
-  return normalizeSnapshotItem(updated);
+  return normalizeSnapshotItem(updated as MutationItemRow);
 }

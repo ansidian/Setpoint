@@ -5,7 +5,7 @@ import express from "express";
 import type { Express, NextFunction, Request, Response } from "express";
 import request from "supertest";
 import type { Client } from "@libsql/client";
-import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.js";
+import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
 
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({ db: { current: null } }));
 const currentDb = (): Client => testState.db.current!;
