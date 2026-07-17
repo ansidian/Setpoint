@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { decrypt } from "../platform/encryption.js";
+import { decrypt } from "../platform/encryption.ts";
 import {
   fetchEmailBody as fetchGmailBody,
   markAsRead as gmailMarkAsRead,
@@ -12,7 +12,7 @@ import {
   markAsUnread as icloudMarkAsUnread,
   trashMessage as icloudTrash,
 } from "./icloud.js";
-import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.js";
+import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.ts";
 
 export async function findAccountByUid(userId, uid) {
   if (uid.startsWith("icloud-")) {

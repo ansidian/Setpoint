@@ -15,7 +15,7 @@ vi.mock("./connection.ts", () => ({
     execute: (statement: InStatement) => currentDb().execute(statement),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `gcm:${value}`),
   decrypt: vi.fn((value) => value.replace(/^aabb:/, "")),
 }));

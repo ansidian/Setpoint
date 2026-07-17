@@ -271,7 +271,7 @@ export async function listDueReminders({
 // P3-45: atomic delivery claim. The `AND status = 'pending'` guard is the durable
 // (DB-level) protection against the same reminder being marked sent twice — e.g. a
 // stale/duplicate processor re-marking an already-sent row. The in-process
-// single-flight flag in server/scheduler.js (reminderSchedulerInFlight) only guards
+// single-flight flag in server/scheduler.ts (reminderSchedulerInFlight) only guards
 // one process; this conditional UPDATE is the real guard. Mirrors the
 // claim-on-condition + gate-on-rowsAffected pattern from claimNextEmailTriageJob.
 // Returns true iff this call won the claim (1 row updated).

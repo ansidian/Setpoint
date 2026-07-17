@@ -1,14 +1,14 @@
 import { Router } from "express";
 import crypto from "crypto";
 import db from "../db/connection.ts";
-import { hashToken, requireCookieSession } from "../middleware/auth.js";
-import { wrapRouterAsync } from "../middleware/async-handler.js";
-import { encrypt, decrypt } from "../platform/encryption.js";
+import { hashToken, requireCookieSession } from "../middleware/auth.ts";
+import { wrapRouterAsync } from "../middleware/async-handler.ts";
+import { encrypt, decrypt } from "../platform/encryption.ts";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../email/gmail.js";
 import { testConnection as testIcloud } from "../email/icloud.js";
 import { queueEmailIndexBackfill } from "../email/email-index.js";
 import { wakeEmailBackfillWorker } from "../email/email-backfill-worker.js";
-import { canonicalizeConfiguredAccounts } from "../platform/account-canonical.js";
+import { canonicalizeConfiguredAccounts } from "../platform/account-canonical.ts";
 import settingsRoutes from "./settings.js";
 import remindersRoutes from "./reminders.js";
 

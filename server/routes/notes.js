@@ -1,6 +1,6 @@
 import { Router } from "express";
 import db from "../db/connection.ts";
-import { requireCookieSession } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.ts";
 
 const router = Router();
 router.use(requireCookieSession);

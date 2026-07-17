@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
-vi.mock("../middleware/auth.js", () => ({
+vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../platform/config-service.js", () => ({
+vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
 vi.mock("../calendar/calendar.js", async () => {
@@ -66,7 +66,7 @@ vi.mock("../tasks/tasks-service.js", () => ({
   deleteDeadline: vi.fn(),
   updateDeadline: vi.fn(),
 }));
-vi.mock("../platform/google-places.js", () => ({
+vi.mock("../platform/google-places.ts", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
 }));
@@ -79,7 +79,7 @@ vi.mock("../reminders/reminder-hydration.js", () => ({
   hydrateCalendarEventsWithReminderState: vi.fn(async (_userId, events) => events),
 }));
 
-const { loadUserConfig } = await import("../platform/config-service.js");
+const { loadUserConfig } = await import("../platform/config-service.ts");
 const { fetchCalendar } = await import("../calendar/calendar.js");
 const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js");
 const { readCalendarDeadlineRange } = await import("../tasks/deadlines-read.js");

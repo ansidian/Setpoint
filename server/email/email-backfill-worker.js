@@ -1,9 +1,9 @@
 import db from "../db/connection.ts";
-import { decrypt } from "../platform/encryption.js";
+import { decrypt } from "../platform/encryption.ts";
 import { fetchEmailsInRange as fetchGmailEmailsInRange } from "./gmail.js";
 import { fetchEmailsInRange as fetchIcloudEmailsInRange } from "./icloud.js";
 import { indexEmails, queueEmailIndexBackfill } from "./email-index.js";
-import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.js";
+import { isInvalidGrantError, markAccountNeedsReauth } from "../platform/provider-reauth.ts";
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_TARGET_DAYS = 365;

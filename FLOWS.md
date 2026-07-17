@@ -35,14 +35,14 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 ## 2. Email sync → inbox triage
 
-**Trigger:** Gmail Pub/Sub push (POST `/api/gmail/push` → `server/routes/gmail-push.js`) durably enqueues a history sync via `server/email/gmail-sync.js:enqueueHistorySyncFromPubSub`, acknowledges the webhook, then requests an immediate coalesced drain via `server/scheduler.js:requestGmailHistorySyncDrain`; the per-minute cron remains the reliability fallback.
+**Trigger:** Gmail Pub/Sub push (POST `/api/gmail/push` → `server/routes/gmail-push.js`) durably enqueues a history sync via `server/email/gmail-sync.js:enqueueHistorySyncFromPubSub`, acknowledges the webhook, then requests an immediate coalesced drain via `server/scheduler.ts:requestGmailHistorySyncDrain`; the per-minute cron remains the reliability fallback.
 
 1. `server/email/gmail-sync.js:processNextGmailHistorySyncJob` — claims a queued job, loads the account
 2. `server/email/gmail-sync.js:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state
 3. `server/email/email-index.js:indexEmails` — parses and writes emails into `ea_email_index`
 4. `server/email/gmailTriageStatements.js:triageStatementsForEmail` — inserts a pending `ea_email_triage` row and an arrival-grace-scheduled triage job
 5. `server/snapshots/snapshot-triage-attachment.js:attachArrivalGraceEmailToActiveSnapshot` — upserts a queued-lane snapshot item, publishes `email_triage_queued`
-6. `server/scheduler.js:requestEmailTriageDrainAt` / `runEmailTriageWorker` — successful arrival-grace writes arm one process-local timer for the earliest durable `scheduled_for`; a timer firing during an active drain queues one follow-up check, while the unchanged 30-second cron remains restart/missed-timer recovery (jobs are also drained inline by `server/snapshots/snapshot-service.js:syncActiveSnapshot`)
+6. `server/scheduler.ts:requestEmailTriageDrainAt` / `runEmailTriageWorker` — successful arrival-grace writes arm one process-local timer for the earliest durable `scheduled_for`; a timer firing during an active drain queues one follow-up check, while the unchanged 30-second cron remains restart/missed-timer recovery (jobs are also drained inline by `server/snapshots/snapshot-service.js:syncActiveSnapshot`)
 7. `server/triage/triage-worker.js:processNextEmailTriageJob` — claims the job, handles skip/defer/grace branches
 8. `server/triage/triage-worker.js:routeEmailForTriage` — preflight rules, then cheap-model classification with strong-model escalation
 9. `server/triage/triage-worker.js:updateTriageRow` — persists the decision (lane, summary, bill candidate) to `ea_email_triage`
@@ -63,7 +63,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 ## 3. Snapshot / briefing lifecycle
 
-**Trigger:** cron boundary advance — `server/scheduler.js:initScheduler` (per-user schedule) calls `server/snapshots/snapshot-service.js:advanceSnapshotBoundary`; snapshots are also created lazily on any read via `server/snapshots/snapshot-service.js:getOrCreateActiveSnapshot`.
+**Trigger:** cron boundary advance — `server/scheduler.ts:initScheduler` (per-user schedule) calls `server/snapshots/snapshot-service.js:advanceSnapshotBoundary`; snapshots are also created lazily on any read via `server/snapshots/snapshot-service.js:getOrCreateActiveSnapshot`.
 
 1. `server/snapshots/snapshot-service.js:advanceSnapshotBoundary` — freezes active snapshots at the boundary (active → frozen), inserts the new active row
 2. `server/snapshots/snapshot-service.js:copyCarryoverItems` — copies unresolved needs_attention/queued items into the new snapshot
@@ -137,12 +137,12 @@ Selection path:
 
 ## 6. Process shutdown → scheduler drain
 
-**Trigger:** SIGTERM/SIGINT enters `server/shutdown.js:createGracefulShutdown` through `server/index.js`.
+**Trigger:** SIGTERM/SIGINT enters `server/shutdown.ts:createGracefulShutdown` through `server/index.js`.
 
-1. `server/shutdown.js:createGracefulShutdown` — starts the 15-second force-exit deadline, stops accepting HTTP work, then runs background stop functions in order
-2. `server/scheduler.js:stopScheduler` — synchronously closes cron, interval, startup-timeout, and queued-immediate admission sources; repeated calls share one promise
-3. `server/scheduler-work-registry.js:createSchedulerWorkRegistry` — awaits every scheduler-owned task already running, including scheduler initialization, index sweep, Gmail watch/history work, triage/prune work, embeddings, reminders, and snapshot-boundary callbacks
-4. `server/shutdown.js:createGracefulShutdown` — exits cleanly after all stop functions settle; a stuck task remains bounded by the existing force-exit timer
+1. `server/shutdown.ts:createGracefulShutdown` — starts the 15-second force-exit deadline, stops accepting HTTP work, then runs background stop functions in order
+2. `server/scheduler.ts:stopScheduler` — synchronously closes cron, interval, startup-timeout, and queued-immediate admission sources; repeated calls share one promise
+3. `server/scheduler-work-registry.ts:createSchedulerWorkRegistry` — awaits every scheduler-owned task already running, including scheduler initialization, index sweep, Gmail watch/history work, triage/prune work, embeddings, reminders, and snapshot-boundary callbacks
+4. `server/shutdown.ts:createGracefulShutdown` — exits cleanly after all stop functions settle; a stuck task remains bounded by the existing force-exit timer
 
 **Durability:** shutdown does not rewrite queue state. Forced exits continue to recover through the existing stale-lock and durable cron fallback paths.
 

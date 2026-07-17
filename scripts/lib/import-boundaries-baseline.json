@@ -73,8 +73,6 @@
     "server/routes/settings.js -> server/triage/triage-cache-stats.js",
     "server/routes/settings.js -> server/triage/triage-mode.js",
     "server/routes/settings.js -> server/triage/triage-sound-settings.js",
-    "server/scheduler.js -> server/email/email-fetch.js",
-    "server/scheduler.js -> server/email/email-index.js",
     "server/snapshots/snapshot-service.js -> server/email/email-fetch.js",
     "server/snapshots/snapshot-service.js -> server/email/email-index.js",
     "server/snapshots/snapshot-service.js -> server/email/pinned-emails.js",

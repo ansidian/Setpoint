@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as snapshotService from "../../snapshots/snapshot-service.js";
-import { timeRoute } from "../../timing.js";
+import { timeRoute } from "../../timing.ts";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;

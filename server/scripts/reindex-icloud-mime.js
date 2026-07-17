@@ -7,7 +7,7 @@
 import "dotenv/config";
 import db from "../db/connection.ts";
 import { looksLikeRawMime } from "../email/mime-artifacts.js";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import { fetchAllEmails } from "../email/email-fetch.js";
 import { indexEmails } from "../email/email-index.js";
 

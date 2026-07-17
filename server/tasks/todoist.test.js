@@ -24,7 +24,7 @@ vi.mock("../db/connection.ts", () => ({
     execute: (...args) => testState.dbExecute(...args),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: (value) => value }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: (value) => value }));
 vi.mock("./todoist-mirror.js", () => testState.mirror);
 vi.mock("./todoist-webhook.js", () => ({
   requestTodoistMirrorSync: testState.requestTodoistMirrorSync,

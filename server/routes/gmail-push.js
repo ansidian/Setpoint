@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { Router } from "express";
 import { enqueueHistorySyncFromPubSub } from "../email/gmail-sync.js";
-import { requestGmailHistorySyncDrain } from "../scheduler.js";
+import { requestGmailHistorySyncDrain } from "../scheduler.ts";
 
 const router = Router();
 

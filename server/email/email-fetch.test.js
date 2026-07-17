@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../platform/encryption.js", () => ({ decrypt: vi.fn() }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn() }));
 vi.mock("./gmail.js", () => ({ fetchEmails: vi.fn() }));
 vi.mock("./icloud.js", () => ({ fetchEmails: vi.fn() }));
 
-const { decrypt } = await import("../platform/encryption.js");
+const { decrypt } = await import("../platform/encryption.ts");
 const { fetchEmails: fetchGmailEmails } = await import("./gmail.js");
 const { fetchEmails: fetchIcloudEmails } = await import("./icloud.js");
 const { fetchAllEmails } = await import("./email-fetch.js");

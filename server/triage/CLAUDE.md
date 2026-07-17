@@ -1,6 +1,6 @@
 # Server Triage Map
 
-AI email classification: the batch worker, model client, preflight rules, escalation policy, and eval harness. Entry point is `triage-worker.js`, driven by `server/scheduler.js`; it orchestrates across the email, snapshots, and bills domains.
+AI email classification: the batch worker, model client, preflight rules, escalation policy, and eval harness. Entry point is `triage-worker.js`, driven by `server/scheduler.ts`; it orchestrates across the email, snapshots, and bills domains.
 
 ## Files
 
@@ -29,6 +29,6 @@ AI email classification: the batch worker, model client, preflight rules, escala
 
 ## Related
 
-- `server/scheduler.js` — cron entry (`processNextEmailTriageJob`)
+- `server/scheduler.ts` — cron entry (`processNextEmailTriageJob`)
 - `server/snapshots/snapshot-triage-attachment.js` — where decisions land on snapshot items
 - `npm run triage:preflight` / `npm run triage:eval` — CLI harnesses in `server/scripts/`

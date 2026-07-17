@@ -1,7 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { htmlToPlainText } from "./html-to-text.js";
-import { withTimeout } from "../platform/fetch-with-timeout.js";
+import { withTimeout } from "../platform/fetch-with-timeout.ts";
 
 const ICLOUD_HOST = "imap.mail.me.com";
 const ICLOUD_PORT = 993;

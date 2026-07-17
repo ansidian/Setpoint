@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ credentials: null }));
 
 vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify(mocks.credentials),
   encrypt: (value) => value,
 }));

@@ -78,7 +78,7 @@ async function classifyWithModel(getModelClient, tier, email, reason) {
 // caches the in-flight promise, so the value is loaded at most once per user.
 //
 // Lifetime contract (REL-09): this context is created fresh per worker tick
-// (scheduler.js runEmailTriageWorker) and per snapshot sync
+// (scheduler.ts runEmailTriageWorker) and per snapshot sync
 // (snapshot-service.js runActiveSnapshotSync) and must stay that way.
 // Do NOT hoist it to module scope or any longer-lived owner: the Maps have
 // no eviction, and modelClients retains constructed LLM clients. If this

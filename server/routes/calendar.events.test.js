@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
-vi.mock("../middleware/auth.js", () => ({
+vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../platform/config-service.js", () => ({
+vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
 vi.mock("../tasks/deadline-helpers.js", () => ({
@@ -65,7 +65,7 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../platform/google-places.js", () => ({
+vi.mock("../platform/google-places.ts", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
 }));
@@ -88,7 +88,7 @@ vi.mock("../reminders/reminder-service.js", () => ({
 }));
 vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 
-const { loadUserConfig } = await import("../platform/config-service.js");
+const { loadUserConfig } = await import("../platform/config-service.ts");
 const {
   getCalendarSourceGroups,
   createCalendarEvent,
@@ -99,7 +99,7 @@ const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js
 const {
   suggestGooglePlaces,
   getGooglePlaceDetails,
-} = await import("../platform/google-places.js");
+} = await import("../platform/google-places.ts");
 const reminderService = await import("../reminders/reminder-service.js");
 const calendarRoutes = (await import("./calendar.js")).default;
 

@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 1152,
+  "remainingLegacyFiles": 1098,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -23,6 +23,29 @@
     "src/pages/SettingsRoute.tsx",
     "src/lib",
     "server/db",
-    "server/test-utils"
+    "server/test-utils",
+    "server/platform",
+    "server/middleware",
+    "server/auth",
+    "server/env.ts",
+    "server/env.test.ts",
+    "server/security.ts",
+    "server/security.test.ts",
+    "server/static-assets.ts",
+    "server/static-assets.test.ts",
+    "server/routes/auth.ts",
+    "server/routes/auth.test.ts",
+    "server/routes/auth-boundaries.test.ts",
+    "server/scheduler.ts",
+    "server/scheduler.test.ts",
+    "server/scheduler-email-triage-drain.ts",
+    "server/scheduler-work-registry.ts",
+    "server/scheduler-work-registry.test.ts",
+    "server/shutdown.ts",
+    "server/shutdown.test.ts",
+    "server/startup-delays.ts",
+    "server/startup-delays.test.ts",
+    "server/timing.ts",
+    "server/timing.test.ts"
   ]
 }

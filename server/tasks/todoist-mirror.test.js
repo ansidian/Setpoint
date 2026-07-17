@@ -11,7 +11,7 @@ vi.mock("../db/connection.ts", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: (value) => value }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: (value) => value }));
 vi.mock("../reminders/reminder-service.js", () => ({
   deleteSourceReminders: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),

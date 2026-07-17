@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { loadUserConfig } from "../platform/config-service.js";
+import { loadUserConfig } from "../platform/config-service.ts";
 import { providerFor } from "./current-providers/index.js";
 import { CURRENT_CACHE_KEYS, expiresAtFor, parsePayload } from "./current-sources.js";
 import { saveCacheRow, markCacheRowRefreshFailed } from "./currentCacheStore.js";

@@ -3,7 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import request from "supertest";
-import { errorHandler } from "../../middleware/async-handler.js";
+import { errorHandler } from "../../middleware/async-handler.ts";
 
 const mockDb = { execute: vi.fn() };
 

@@ -3,10 +3,10 @@ import express from "express";
 import request from "supertest";
 
 // Mock deps before importing the route
-vi.mock("../middleware/auth.js", () => ({
+vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../platform/config-service.js", () => ({
+vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
 vi.mock("../tasks/deadline-helpers.js", () => ({
@@ -75,7 +75,7 @@ vi.mock("../tasks/tasks-service.js", () => ({
   deleteDeadline: vi.fn(),
   updateDeadline: vi.fn(),
 }));
-vi.mock("../platform/google-places.js", () => ({
+vi.mock("../platform/google-places.ts", () => ({
   getGooglePlaceDetails: vi.fn(),
   suggestGooglePlaces: vi.fn(),
 }));
@@ -95,7 +95,7 @@ const {
   computeDeadlineStats,
   loadCompletedTaskIds,
 } = await import("../tasks/deadline-helpers.js");
-const { loadUserConfig } = await import("../platform/config-service.js");
+const { loadUserConfig } = await import("../platform/config-service.ts");
 const { fetchCalendar } = await import("../calendar/calendar.js");
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.js");
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.js");

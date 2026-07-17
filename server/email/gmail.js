@@ -1,10 +1,10 @@
 import { simpleParser } from "mailparser";
 import db from "../db/connection.ts";
-import { encrypt, decrypt } from "../platform/encryption.js";
+import { encrypt, decrypt } from "../platform/encryption.ts";
 import { htmlToPlainText } from "./html-to-text.js";
-import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.js";
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
-import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.js";
+import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.ts";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
+import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.ts";
 
 const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
 const PROFILE_FETCH_TIMEOUT_MS = 30_000;

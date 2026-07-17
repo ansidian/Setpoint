@@ -1,7 +1,7 @@
 import db from "../db/connection.ts";
-import { decrypt, encrypt } from "../platform/encryption.js";
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.js";
-import { isInvalidGrantError, markTodoistNeedsReauth, clearTodoistNeedsReauth } from "../platform/provider-reauth.js";
+import { decrypt, encrypt } from "../platform/encryption.ts";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
+import { isInvalidGrantError, markTodoistNeedsReauth, clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 
 const TODOIST_OAUTH_TOKEN_URL = "https://api.todoist.com/oauth/access_token";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;

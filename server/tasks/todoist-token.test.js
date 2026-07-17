@@ -10,7 +10,7 @@ vi.mock("../db/connection.ts", () => ({
     execute: (...args) => testState.db.current.execute(...args),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({
+vi.mock("../platform/encryption.ts", () => ({
   encrypt: (value) => `enc:${value}`,
   decrypt: (value) => String(value).replace(/^enc:/, ""),
 }));

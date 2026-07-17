@@ -1,6 +1,6 @@
 # Server Reminders Map
 
-Reminder domain: CRUD, schedule persistence, trigger firing, and notification formatting. Entry point for routes is `reminder-service.js`; `reminder-scheduler.js` exposes the background batch hook consumed by `server/scheduler.js`.
+Reminder domain: CRUD, schedule persistence, trigger firing, and notification formatting. Entry point for routes is `reminder-service.js`; `reminder-scheduler.js` exposes the background batch hook consumed by `server/scheduler.ts`.
 
 ## Files
 
@@ -20,4 +20,4 @@ Reminder domain: CRUD, schedule persistence, trigger firing, and notification fo
 ## Related
 
 - `server/routes/reminders.js` — HTTP surface
-- `server/scheduler.js` — fires `processDueReminderBatch` on cron
+- `server/scheduler.ts` — fires `processDueReminderBatch` on cron

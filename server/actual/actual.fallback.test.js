@@ -26,7 +26,7 @@ vi.mock("@actual-app/api", () => ({ default: {} }));
 vi.mock("../db/connection.ts", () => ({
   default: { execute: vi.fn(async () => ({ rows: [] })), batch: vi.fn(async () => []) },
 }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: vi.fn((value) => value) }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn((value) => value) }));
 
 const { sendBillLightweight } = await import("./actual-lightweight-writes.js");
 const { runActualWorkerOperation } = await import("./actual-worker.js");

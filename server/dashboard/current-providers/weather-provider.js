@@ -1,4 +1,4 @@
-import { fetchWeather } from "../../platform/weather.js";
+import { fetchWeather } from "../../platform/weather.ts";
 
 const weatherProvider = {
   key: "weather_current",

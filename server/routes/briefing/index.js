@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireCookieSession } from "../../middleware/auth.js";
+import { requireCookieSession } from "../../middleware/auth.ts";
 import dev from "./dev.js";
 import bills, { quickTxnRouter } from "./bills.js";
 import email from "./email.js";

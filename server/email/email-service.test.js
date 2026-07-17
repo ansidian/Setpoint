@@ -14,7 +14,7 @@ vi.mock("../db/connection.ts", () => ({
     execute: (...args) => mockDb.execute(...args),
   },
 }));
-vi.mock("../platform/encryption.js", () => ({ decrypt: () => "decrypted" }));
+vi.mock("../platform/encryption.ts", () => ({ decrypt: () => "decrypted" }));
 vi.mock("./gmail.js", () => ({
   fetchEmailBody: vi.fn(),
   markAsRead: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock("./icloud.js", () => ({
   trashMessage: vi.fn(),
   batchMarkAsRead: vi.fn(),
 }));
-vi.mock("../platform/config-service.js", () => ({ loadUserConfig: vi.fn() }));
+vi.mock("../platform/config-service.ts", () => ({ loadUserConfig: vi.fn() }));
 // Partial mock: keep every real adapter export (findAccountByUid is re-exported
 // through __testing__ and exercised below) and override only trashEmailWithProvider
 // so the trash() tests can drive provider success/failure deterministically.
@@ -42,7 +42,7 @@ vi.mock("./email-provider-adapters.js", async (importActual) => {
 
 const gmail = await import("./gmail.js");
 const icloud = await import("./icloud.js");
-const configService = await import("../platform/config-service.js");
+const configService = await import("../platform/config-service.ts");
 const providerAdapters = await import("./email-provider-adapters.js");
 const emailService = await import("./email-service.js");
 const { __testing__ } = emailService;

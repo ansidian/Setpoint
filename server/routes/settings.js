@@ -1,8 +1,8 @@
 import { Router } from "express";
 import db from "../db/connection.ts";
-import { encrypt } from "../platform/encryption.js";
-import { geocodeLocation } from "../platform/weather.js";
-import { initScheduler } from "../scheduler.js";
+import { encrypt } from "../platform/encryption.ts";
+import { geocodeLocation } from "../platform/weather.ts";
+import { initScheduler } from "../scheduler.ts";
 import {
   billExtractAvailability,
   isAllowedBillExtractModel,
@@ -31,7 +31,7 @@ import {
 import { getTriageCacheStats } from "../triage/triage-cache-stats.js";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.js";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.js";
-import { clearTodoistNeedsReauth } from "../platform/provider-reauth.js";
+import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import {
   validateActualBudgetUrl,
   validateDiscordWebhookUrl,
@@ -39,7 +39,7 @@ import {
   validateImportantSenders,
   validateSchedules,
   validateUtilityPayLinks,
-} from "../platform/settings-schemas.js";
+} from "../platform/settings-schemas.ts";
 
 // Bare router: mounted behind requireCookieSession in routes/accounts.js.
 const router = Router();

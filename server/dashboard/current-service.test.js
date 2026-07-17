@@ -27,7 +27,7 @@ vi.mock("../db/connection.ts", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../platform/config-service.js", () => ({
+vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(async () => ({
     accounts: [
       { id: "gmail-a", type: "gmail", calendar_enabled: true, label: "Work" },
@@ -45,7 +45,7 @@ vi.mock("../tasks/deadline-helpers.js", () => ({
   filterCompletedTodoistTasks: (...args) => testState.filterCompletedTodoistTasks(...args),
   computeDeadlineStats: vi.fn((items) => ({ total: items.length })),
 }));
-vi.mock("../platform/weather.js", () => ({
+vi.mock("../platform/weather.ts", () => ({
   fetchWeather: (...args) => testState.fetchWeather(...args),
 }));
 vi.mock("../calendar/calendar.js", () => ({
