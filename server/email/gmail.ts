@@ -8,6 +8,7 @@ import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } 
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
 import { emailErrorMessage } from "./email-provider-types.ts";
+import { canonicalUrlService } from "../platform/canonical-url.ts";
 
 interface GmailCredentials {
   access_token: string;
@@ -77,9 +78,6 @@ const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.NODE_ENV === "production"
-  ? process.env.GOOGLE_REDIRECT_URI
-  : `http://localhost:${process.env.EA_SERVER_PORT || 3001}/api/ea/accounts/gmail/callback`;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -104,10 +102,11 @@ function computeExpiresAt(expiresIn: unknown, now = Date.now()): number {
 
 // --- OAuth flow ---
 
-export function getAuthUrl(state: string): string {
+export async function getAuthUrl(state: string): Promise<string> {
+  const redirectUri = await canonicalUrlService.resolveProviderCallbackUrl("googleOAuth");
   const params = new URLSearchParams({
     client_id: String(GOOGLE_CLIENT_ID),
-    redirect_uri: String(GOOGLE_REDIRECT_URI),
+    redirect_uri: redirectUri,
     response_type: "code",
     scope: SCOPES.join(" "),
     access_type: "offline",
@@ -118,6 +117,7 @@ export function getAuthUrl(state: string): string {
 }
 
 export async function handleCallback(code: string, _accountId: string | null | undefined, userId: string): Promise<{ email: string; accountId: string }> {
+  const redirectUri = await canonicalUrlService.resolveProviderCallbackUrl("googleOAuth");
   const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -125,7 +125,7 @@ export async function handleCallback(code: string, _accountId: string | null | u
       code,
       client_id: String(GOOGLE_CLIENT_ID),
       client_secret: String(GOOGLE_CLIENT_SECRET),
-      redirect_uri: String(GOOGLE_REDIRECT_URI),
+      redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   }, { timeoutMs: TOKEN_EXCHANGE_TIMEOUT_MS });

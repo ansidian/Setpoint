@@ -21,18 +21,21 @@ describe("owner setup API", () => {
     vi.resetModules();
   });
 
-  it("posts the write-only password to the claim endpoint", async () => {
+  it("posts the write-only password and confirmed browser origin to the claim endpoint", async () => {
     const fetch = vi.fn().mockResolvedValue(jsonResponse({ claimed: true, authenticated: true }));
     vi.stubGlobal("fetch", fetch);
     const api = await importSetupApi();
 
-    await api.claimOwner("new-owner-password");
+    await api.claimOwner("new-owner-password", "https://setpoint.example.com");
 
     expect(fetch).toHaveBeenCalledWith(
       "/api/auth/setup/claim",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ password: "new-owner-password" }),
+        body: JSON.stringify({
+          password: "new-owner-password",
+          canonicalOrigin: "https://setpoint.example.com",
+        }),
       }),
     );
   });
@@ -43,7 +46,7 @@ describe("owner setup API", () => {
     const api = await importSetupApi(true);
 
     await expect(api.getSetupStatus()).resolves.toEqual({ claimed: true });
-    await expect(api.claimOwner("must-not-leave-browser")).rejects.toThrow("DEMO_API_UNHANDLED");
+    await expect(api.claimOwner("must-not-leave-browser", "https://demo.example.com")).rejects.toThrow("DEMO_API_UNHANDLED");
     expect(fetch).not.toHaveBeenCalled();
   });
 });

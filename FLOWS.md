@@ -156,15 +156,17 @@ Selection path:
 
 **Trigger:** the SPA reads `GET /api/auth/setup/status` before normal session auth. A missing `ea_owner` singleton routes the browser to `/setup`.
 
-1. `src/pages/OwnerSetup.tsx` — confirms the password locally and sends only the write-only password to `POST /api/auth/setup/claim`.
+1. `src/pages/OwnerSetup.tsx` — prefills the visible browser origin, requires explicit canonical-URL confirmation, confirms the password locally, and sends both to `POST /api/auth/setup/claim`.
 2. `server/auth/owner-claim-service.ts:claimInitialOwner` — rate-limited route work generates a stable UUID and bcrypt hash.
-3. `server/auth/owner-store.ts:claimOwner` — `INSERT OR IGNORE` against singleton key `1`; the uniqueness invariant admits one concurrent claimant and all others receive the fixed conflict.
+3. `server/auth/owner-store.ts:claimOwner` — one write transaction uses `INSERT OR IGNORE` against singleton key `1` and persists the confirmed origin in separate `ea_instance_metadata`; the uniqueness invariant admits one concurrent claimant and all others receive the fixed conflict.
 4. `server/auth/recovery-code-store.ts:replaceRecoveryCodes` — generates eight high-entropy offline recovery codes, persists only SHA-256 hashes, and returns plaintext only in the successful claim response.
 5. `server/middleware/auth.ts:createSession` — persists only the hashed session token plus its recent-auth timestamp; the successful browser receives the raw token in an HttpOnly cookie.
 6. `server/auth/owner-context.ts:activateOwner` — exposes the claimed ID to remaining single-owner runtime modules and notifies startup gating.
 7. `server/auth/owner-runtime.ts:createOwnerRuntimeGate` — starts schedulers and provider workers once, only after a stored or newly claimed owner exists.
 
 **Compatibility:** `server/auth/owner-bootstrap.ts:resolveOwnerBootstrap` runs after migrations and before listen. It imports an exact legacy `EA_USER_ID`/`EA_PASSWORD_HASH` pair into `ea_owner`, preserves the bcrypt hash and ID, and fails closed for partial or conflicting state.
+
+**Canonical origin:** `server/platform/canonical-url.ts` imports compatible legacy WebAuthn/Google callback values only when they identify one origin. Persisted state then drives WebAuthn RP values and Google, Todoist, Gmail Pub/Sub, and webhook callback projections. Security Settings previews affected passkeys and callback registrations before a recent-auth-gated change; request headers never write canonical state.
 
 **Pre-claim boundary:** `server/middleware/owner-gate.ts` returns a fixed setup-required response for non-setup APIs. `GET /healthz` remains successful and reports only readiness plus the non-secret claimed boolean. Demo mode resolves setup as already claimed and rejects claim mutations locally without a network call.
 

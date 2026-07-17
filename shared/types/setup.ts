@@ -4,6 +4,7 @@ export interface SetupStatusResponse {
 
 export interface OwnerClaimRequest {
   password: string;
+  canonicalOrigin: string;
 }
 
 export interface OwnerClaimResponse {

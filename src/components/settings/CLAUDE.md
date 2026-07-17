@@ -40,6 +40,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `cards/BriefingSchedulesCard.tsx` — snapshot window boundaries with FLIP reorder animation
 - `cards/ApiTokensCard.tsx` — API token list/create/revoke with scopes and expiry
 - `cards/PasskeysCard.tsx` — passkey registration/deletion, explicit auth mode, password step-up/change, and recovery-code regeneration
+- `cards/CanonicalDomainCard.tsx` — recent-auth-gated canonical URL preview/change flow with passkey and provider callback impact
 
 ### Shared
 - `shared/ProviderModelSelect.tsx` — dual select for LLM provider + model

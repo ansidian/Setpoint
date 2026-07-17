@@ -12,6 +12,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `weather.ts` — Pirate Weather fetch and condition → lucide icon mapping
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist
+- `canonical-url.ts` — canonical-origin normalization, legacy import, persistence, WebAuthn derivation, and provider callback URL projection
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 

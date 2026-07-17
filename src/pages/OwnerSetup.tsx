@@ -18,6 +18,8 @@ function errorMessage(error: unknown): string {
 export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [canonicalOrigin, setCanonicalOrigin] = useState(() => window.location.origin);
+  const [originConfirmed, setOriginConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
@@ -25,7 +27,7 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!password || submitting) return;
+    if (!password || !canonicalOrigin || !originConfirmed || submitting) return;
     if (password !== confirmation) {
       setError("Passwords do not match");
       return;
@@ -34,7 +36,7 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
     setSubmitting(true);
     setError(null);
     try {
-      const result = await claimOwner(password);
+      const result = await claimOwner(password, canonicalOrigin);
       setPassword("");
       setConfirmation("");
       setRecoveryCodes(result.recoveryCodes);
@@ -122,6 +124,36 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
 
               <div className="space-y-3">
                 <div>
+                  <label htmlFor="canonical-setpoint-url" className="mb-1.5 block text-[12px] font-medium text-foreground">
+                    Canonical Setpoint URL
+                  </label>
+                  <Input
+                    id="canonical-setpoint-url"
+                    type="url"
+                    autoComplete="url"
+                    value={canonicalOrigin}
+                    disabled={submitting}
+                    onChange={(event) => {
+                      setCanonicalOrigin(event.target.value);
+                      setOriginConfirmed(false);
+                      if (error) setError(null);
+                    }}
+                  />
+                  <p className="mt-1.5 text-pretty text-[11px] leading-relaxed text-muted-foreground">
+                    Passkeys and provider callbacks will use this origin. Change it later only after updating external provider consoles.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2.5 text-[12px] leading-relaxed text-foreground transition-colors hover:border-white/[0.14] hover:bg-white/[0.04] focus-within:border-primary/30 focus-within:ring-2 focus-within:ring-primary/20 motion-reduce:transition-none">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 shrink-0 accent-[var(--sp-accent)]"
+                    checked={originConfirmed}
+                    disabled={submitting}
+                    onChange={(event) => setOriginConfirmed(event.target.checked)}
+                  />
+                  <span>Confirm this is the canonical URL visible in your browser.</span>
+                </label>
+                <div>
                   <label htmlFor="owner-password" className="mb-1.5 block text-[12px] font-medium text-foreground">
                     Create password
                   </label>
@@ -170,7 +202,7 @@ export default function OwnerSetup({ onClaimed }: OwnerSetupProps): ReactElement
                 type="submit"
                 size="lg"
                 className="w-full motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0"
-                disabled={!password || !confirmation || submitting}
+                disabled={!password || !confirmation || !canonicalOrigin || !originConfirmed || submitting}
               >
                 {submitting ? "Claiming Setpoint…" : "Claim Setpoint"}
               </Button>

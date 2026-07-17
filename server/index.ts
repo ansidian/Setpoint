@@ -31,7 +31,6 @@ import { migrate } from "./db/migrate.ts";
 import { migrateCbcEncryption } from "./db/migrate-encryption.ts";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.ts";
 import { getMissingRequiredEnv } from "./env.ts";
-import { resolveWebAuthnConfig } from "./auth/webauthn-config.ts";
 import { buildStartupWorkerDelays } from "./startup-delays.ts";
 import { logTiming, timeAsync } from "./timing.ts";
 import { installProductionFrontend } from "./static-assets.ts";
@@ -42,18 +41,13 @@ import { resolveOwnerBootstrap } from "./auth/owner-bootstrap.ts";
 import { ownerStore } from "./auth/owner-store.ts";
 import { activateOwner, getActiveOwner, onOwnerActivated } from "./auth/owner-context.ts";
 import { createOwnerRuntimeGate } from "./auth/owner-runtime.ts";
+import { canonicalUrlService } from "./platform/canonical-url.ts";
 
 
 // fail fast if critical env vars are missing
 const missing = getMissingRequiredEnv();
 if (missing.length) {
   console.error(`[EA] Missing required env vars: ${missing.join(", ")}`);
-  process.exit(1);
-}
-try {
-  resolveWebAuthnConfig();
-} catch (err: unknown) {
-  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 }
 
@@ -168,6 +162,12 @@ timeAsync("migrations", () => migrate())
     store: ownerStore,
     env: process.env,
   })))
+  .then(async (bootstrap) => {
+    if (bootstrap.claimed) {
+      await timeAsync("canonical-url-bootstrap", () => canonicalUrlService.resolveCanonicalOrigin(process.env));
+    }
+    return bootstrap;
+  })
   .then((bootstrap) => {
     if (bootstrap.claimed) activateOwner(bootstrap.owner);
     const server = app.listen(PORT, () => {

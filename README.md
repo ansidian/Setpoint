@@ -66,11 +66,11 @@ This project requires your own API keys and credentials.
 # EA_PASSWORD_HASH=$2b$12$...
 # EA_USER_ID=your-user-id
 
-# WebAuthn passkeys. Production requires all three and must use your HTTPS app origin.
-# Local dev defaults to Setpoint / localhost / http://localhost:5173 when unset.
-EA_WEBAUTHN_RP_NAME=Setpoint
-EA_WEBAUTHN_RP_ID=your-app-domain.com
-EA_WEBAUTHN_ORIGIN=https://your-app-domain.com
+# Optional legacy WebAuthn compatibility for existing installations.
+# New installations confirm their canonical HTTPS origin in the browser.
+# EA_WEBAUTHN_RP_NAME=Setpoint
+# EA_WEBAUTHN_RP_ID=your-app-domain.com
+# EA_WEBAUTHN_ORIGIN=https://your-app-domain.com
 
 # Database (Turso)
 TURSO_DATABASE_URL=libsql://your-ea-db.turso.io
@@ -88,7 +88,8 @@ OPENAI_API_KEY=
 # Google OAuth (Gmail + Calendar)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=https://your-app.onrender.com/api/ea/accounts/gmail/callback
+# Optional legacy callback compatibility; normally derived from the canonical URL.
+# GOOGLE_REDIRECT_URI=https://your-app.onrender.com/api/ea/accounts/gmail/callback
 GMAIL_PUBSUB_TOPIC=projects/your-project/topics/gmail-push
 GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
 
@@ -117,11 +118,12 @@ new broad backfill automatically.
 
 ### Dashboard auth and passkey recovery
 
-On a fresh database, open Setpoint after startup and create the owner password
-in the browser. The first successful claim atomically creates the stable owner
-ID, stores only the bcrypt password hash, signs that browser in, and permanently
-closes public setup. Provider APIs and background workers remain disabled until
-the claim succeeds. `GET /healthz` remains available for deployment readiness.
+On a fresh database, open Setpoint after startup, confirm the visible canonical
+URL, and create the owner password in the browser. The first successful claim
+atomically creates the stable owner ID, stores only the bcrypt password hash,
+persists the confirmed origin, signs that browser in, and permanently closes
+public setup. Provider APIs and background workers remain disabled until the
+claim succeeds. `GET /healthz` remains available for deployment readiness.
 
 Existing installations may keep `EA_USER_ID` and `EA_PASSWORD_HASH`; startup
 imports that exact legacy identity once. Partial or conflicting legacy auth
@@ -138,10 +140,12 @@ stores only their hashes and never returns them through normal Settings reads.
 Using one code replaces the owner password, clears passkeys and pending auth,
 revokes prior sessions, and displays a replacement recovery-code set once.
 
-Production startup fails fast unless `EA_WEBAUTHN_RP_NAME`,
-`EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are set. `EA_WEBAUTHN_RP_ID` is
-the hostname only, not a URL. `EA_WEBAUTHN_ORIGIN` must be the HTTPS origin
-served to the browser and must match the RP ID hostname.
+The confirmed canonical URL derives the WebAuthn RP ID/origin and provider
+callback URLs. Existing compatible `EA_WEBAUTHN_*` and `GOOGLE_REDIRECT_URI`
+values are imported once when they identify the same origin; ambiguous legacy
+values remain active compatibility fallbacks and are never silently rewritten.
+Changing the domain in Settings requires recent password confirmation and shows
+the affected passkeys and external callback registrations first.
 
 If both normal sign-in and offline recovery are unavailable, use the local
 operator reset script against the intended database:

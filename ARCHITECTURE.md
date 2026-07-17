@@ -336,7 +336,7 @@ graph LR
 
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
-| Auth | `/api/auth` | 20 | First-run owner claim, password/passkey login, recovery and step-up, passkey management, session check/logout, scoped API tokens |
+| Auth | `/api/auth` | 23 | First-run owner claim, canonical-domain management, password/passkey login, recovery and step-up, passkey management, session check/logout, scoped API tokens |
 | Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 15 | Account CRUD, Gmail OAuth, settings, schedules, geocode, important senders |
@@ -352,9 +352,9 @@ sequenceDiagram
 
     B->>S: GET /api/auth/setup/status
     alt Instance is unclaimed
-        B->>S: POST /api/auth/setup/claim {password}
+        B->>S: POST /api/auth/setup/claim {password, canonicalOrigin}
         S->>S: Generate stable owner UUID and bcrypt hash
-        S->>DB: INSERT OR IGNORE ea_owner singleton
+        S->>DB: Atomically INSERT OR IGNORE ea_owner + confirmed ea_instance_metadata
         S->>DB: INSERT ea_sessions (hashed token, expires_at)
         S->>B: Set-Cookie: ea_session; close public setup
     end
@@ -389,7 +389,7 @@ The browser auth model has six distinct states:
 2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
 3. **Pending Passkey Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created after a correct password in explicit strict mode, or when default-mode passwordless passkey login begins. It can request and verify WebAuthn options but cannot access dashboard routes.
 4. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
-5. **Recent Authentication** - the authenticated session's `authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, and powerful API-token changes.
+5. **Recent Authentication** - the authenticated session's `authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, canonical-domain, and powerful API-token changes.
 6. **Recovery or Operator Reset** - one offline recovery code can replace credentials in-app; the local `npm run auth:reset-passkeys -- --confirm` path remains the last-resort operator reset.
 
 Ownership is database-backed in the singleton `ea_owner` row. Fresh claims rely on
@@ -403,7 +403,7 @@ Two credential paths exist, but they no longer feed a single shared "any auth wo
 1. **Cookie session** - normal dashboard access after password, passwordless passkey, strict password-plus-passkey, or successful recovery.
 2. **Scoped API token** - `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check because they carry their own unforgeable secret.
 
-Production WebAuthn configuration is explicit and fail-fast: `EA_WEBAUTHN_RP_NAME`, `EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are required when `NODE_ENV=production`. Development defaults are `Setpoint`, `localhost`, and `http://localhost:5173`.
+Production WebAuthn configuration prefers the persisted canonical HTTPS origin, deriving RP name `Setpoint`, RP ID from its hostname, and the exact expected origin. Compatible legacy `EA_WEBAUTHN_*` and `GOOGLE_REDIRECT_URI` values import only when they resolve to one origin; otherwise the explicit values remain compatibility fallbacks. Development defaults remain `Setpoint`, `localhost`, and `http://localhost:5173`.
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
 
@@ -649,6 +649,7 @@ erDiagram
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
+| `ea_instance_metadata` | `032_canonical_url.sql` |
 | `ea_news_items` | `026_news.sql` |
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
@@ -726,6 +727,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 <!-- BEGIN:routes -->
 | Method | Path | File |
 |--------|------|------|
+| GET | `/` | `server/routes/auth-canonical-origin.ts` |
+| PATCH | `/` | `server/routes/auth-canonical-origin.ts` |
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.ts` |
 | POST | `/api/alfred/run` | `server/routes/alfred.ts` |
 | GET | `/api/alfred/usage` | `server/routes/alfred.ts` |
@@ -824,6 +827,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/news/topics/reorder` | `server/routes/news.ts` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.ts` |
 | GET | `/email-search/usage` | `server/routes/settings.ts` |
+| POST | `/preview` | `server/routes/auth-canonical-origin.ts` |
 | GET | `/reminders` | `server/routes/reminders.ts` |
 | POST | `/reminders` | `server/routes/reminders.ts` |
 | DELETE | `/reminders/:id` | `server/routes/reminders.ts` |
@@ -845,6 +849,9 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | DELETE | `/api/auth/passkeys/:credentialId` | Recent cookie | Delete one registered passkey and rotate browser sessions |
 | POST | `/api/auth/security/step-up/password` | Cookie | Refresh recent-auth state after password confirmation |
 | PATCH | `/api/auth/security/auth-mode` | Recent cookie | Explicitly change password-or-passkey vs. strict mode |
+| GET | `/api/auth/security/canonical-origin` | Cookie | Read the confirmed origin and derived callback metadata |
+| POST | `/api/auth/security/canonical-origin/preview` | Cookie | Preview passkey and external callback impact without mutation |
+| PATCH | `/api/auth/security/canonical-origin` | Recent cookie | Confirm a canonical-domain change after impact review |
 | POST | `/api/auth/security/password` | Recent cookie | Replace the owner password and rotate sessions |
 | POST | `/api/auth/recovery-codes/regenerate` | Recent cookie | Replace and reveal offline recovery codes once |
 | POST | `/api/auth/recovery` | No | Consume one recovery code and establish replacement credentials |

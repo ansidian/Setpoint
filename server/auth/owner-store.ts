@@ -17,6 +17,7 @@ export interface OwnerClaimInput {
   passwordHash: string;
   claimedAt: number;
   recoveryCodeHashes?: string[];
+  canonicalOrigin?: string;
 }
 
 type OwnerStoreDb = Pick<Client, "execute" | "batch">;
@@ -49,7 +50,7 @@ export function createOwnerStore(dbClient: OwnerStoreDb = db) {
   }
 
   async function claimOwner(input: OwnerClaimInput): Promise<{ claimed: boolean }> {
-    if (input.recoveryCodeHashes?.length) {
+    if (input.recoveryCodeHashes?.length || input.canonicalOrigin) {
       const results = await dbClient.batch([
         {
           sql: `INSERT OR IGNORE INTO ea_owner
@@ -57,7 +58,19 @@ export function createOwnerStore(dbClient: OwnerStoreDb = db) {
                 VALUES (?, ?, ?, ?)`,
           args: [OWNER_SINGLETON_ID, input.userId, input.passwordHash, input.claimedAt],
         },
-        ...input.recoveryCodeHashes.map((codeHash) => ({
+        ...(input.canonicalOrigin ? [{
+          sql: `INSERT INTO ea_instance_metadata
+                  (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+                SELECT 1, ?, 'owner_confirmed', ?, ?
+                 WHERE EXISTS (SELECT 1 FROM ea_owner WHERE singleton_id = ? AND user_id = ?)
+                ON CONFLICT(singleton_id) DO UPDATE SET
+                  canonical_origin = excluded.canonical_origin,
+                  source = excluded.source,
+                  confirmed_at = excluded.confirmed_at,
+                  updated_at = excluded.updated_at`,
+          args: [input.canonicalOrigin, input.claimedAt, input.claimedAt, OWNER_SINGLETON_ID, input.userId],
+        }] : []),
+        ...(input.recoveryCodeHashes || []).map((codeHash) => ({
           sql: `INSERT INTO ea_owner_recovery_codes (user_id, code_hash, generated_at)
                 SELECT ?, ?, ?
                  WHERE EXISTS (SELECT 1 FROM ea_owner WHERE singleton_id = ? AND user_id = ?)`,

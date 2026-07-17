@@ -183,7 +183,7 @@ router.get<Record<string, never>, GmailAuthUrlResponse, never, { label?: string 
   });
 
   res.cookie(GMAIL_OAUTH_BIND_COOKIE, oauthBind, gmailOauthBindCookieOptions());
-  res.json({ url: getAuthUrl(csrfToken) });
+  res.json({ url: await getAuthUrl(csrfToken) });
 });
 
 router.post<Record<string, never>, ICloudAccountResponse | ErrorResponse, ICloudAccountRequest>("/accounts/icloud", async (req, res) => {

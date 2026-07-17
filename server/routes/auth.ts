@@ -24,12 +24,7 @@ import {
   deletePendingAuth,
   clearPendingAuth,
 } from "../auth/pending-auth-store.ts";
-import {
-  createChallenge,
-  consumeChallenge,
-  deleteChallengesForPendingAuth,
-  clearChallenges,
-} from "../auth/webauthn-challenge-store.ts";
+import { createChallenge, consumeChallenge, deleteChallengesForPendingAuth, clearChallenges } from "../auth/webauthn-challenge-store.ts";
 import {
   countPasskeys,
   listPasskeys,
@@ -51,13 +46,9 @@ import { revokeAllSessions, rotateSessionsForCurrentBrowser } from "../auth/sess
 import { getOwner, setOwnerAuthMode, updateOwnerPasswordHash } from "../auth/owner-store.ts";
 import { claimInitialOwner } from "../auth/owner-claim-service.ts";
 import { resolvePasswordLogin, isOwnerAuthMode } from "../auth/auth-mode.ts";
-import {
-  consumeRecoveryCode,
-  generateRecoveryCodes,
-  getRecoveryCodeStatus,
-  hashRecoveryCode,
-  replaceRecoveryCodes,
-} from "../auth/recovery-code-store.ts";
+import { consumeRecoveryCode, generateRecoveryCodes, getRecoveryCodeStatus, hashRecoveryCode, replaceRecoveryCodes } from "../auth/recovery-code-store.ts";
+import { canonicalUrlService, normalizeCanonicalOrigin } from "../platform/canonical-url.ts";
+import canonicalOriginRoutes from "./auth-canonical-origin.ts";
 
 const router = Router();
 // P1-12: forward async-handler rejections to the terminal errorHandler so a
@@ -133,8 +124,9 @@ function clearPendingAuthCookie(res: Response) {
   res.clearCookie(PENDING_AUTH_COOKIE_NAME, { path: "/" });
 }
 
-function webAuthnConfigForRequest(req: Request) {
-  return resolveWebAuthnConfig(process.env, { requestOrigin: req.get("origin") });
+async function webAuthnConfigForRequest(req: Request) {
+  const canonicalOrigin = await canonicalUrlService.resolveCanonicalOrigin(process.env);
+  return resolveWebAuthnConfig(process.env, { requestOrigin: req.get("origin"), canonicalOrigin });
 }
 
 function logDevPasskeyFailure(context: string, error: unknown) {
@@ -170,9 +162,16 @@ router.get("/setup/status", async (_req, res) => {
 });
 
 router.post("/setup/claim", ownerClaimLimiter, async (req, res) => {
+  let canonicalOrigin: string;
+  try {
+    canonicalOrigin = normalizeCanonicalOrigin(req.body?.canonicalOrigin);
+  } catch {
+    return res.status(400).json({ message: "Canonical URL is invalid" });
+  }
   const recoveryCodes = generateRecoveryCodes();
   const result = await claimInitialOwner(req.body?.password, {
     recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
+    canonicalOrigin,
   });
   if (result.status === "invalid") {
     return res.status(400).json({ message: "Password is required" });
@@ -255,7 +254,7 @@ router.post("/passkey/authentication/options", passkeyAuthLimiter, async (req, r
   const options = await buildAuthenticationOptions({
     passkeys,
     challenge: challenge.challenge,
-    config: webAuthnConfigForRequest(req),
+    config: await webAuthnConfigForRequest(req),
   });
   return res.json(options);
 });
@@ -279,7 +278,7 @@ router.post("/passkey/authentication/verify", passkeyAuthLimiter, async (req, re
     const verification = await verifyAuthenticationCredential({
       response: req.body,
       passkey,
-      config: webAuthnConfigForRequest(req),
+      config: await webAuthnConfigForRequest(req),
       expectedChallenge: async (challenge) => {
         consumedChallenge = await consumeChallenge(challenge, {
           userId: pending.userId,
@@ -345,7 +344,7 @@ router.post("/passkeys/registration/options", requireRecentAuth, async (req, res
     userId: owner.userId,
     existingPasskeys,
     challenge: challenge.challenge,
-    config: webAuthnConfigForRequest(req),
+    config: await webAuthnConfigForRequest(req),
   });
   res.json(options);
 });
@@ -362,7 +361,7 @@ router.post("/passkeys/registration/verify", requireRecentAuth, async (req, res)
     if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
     const verification = await verifyRegistrationCredential({
       response: req.body,
-      config: webAuthnConfigForRequest(req),
+      config: await webAuthnConfigForRequest(req),
       expectedChallenge: async (challenge) => {
         consumedChallenge = await consumeChallenge(challenge, {
           userId: owner.userId,
@@ -438,6 +437,8 @@ router.post("/security/step-up/password", requireCookieSession, async (req, res)
   await markSessionRecentlyAuthenticated(req.cookies?.ea_session);
   return res.json({ recentAuth: true });
 });
+
+router.use("/security/canonical-origin", canonicalOriginRoutes);
 
 router.patch("/security/auth-mode", requireRecentAuth, async (req, res) => {
   const authMode = req.body?.authMode;

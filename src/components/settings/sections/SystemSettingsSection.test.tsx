@@ -11,6 +11,11 @@ vi.mock("@/components/settings/cards/PasskeysCard", () => ({
     return <div data-testid="passkeys-card" />;
   },
 }));
+vi.mock("@/components/settings/cards/CanonicalDomainCard", () => ({
+  default: function CanonicalDomainCardMock() {
+    return <div data-testid="canonical-domain-card" />;
+  },
+}));
 
 const { default: SystemSettingsSection } = await import("./SystemSettingsSection");
 
@@ -26,6 +31,7 @@ describe("SystemSettingsSection", () => {
 
     expect(screen.getByTestId("api-tokens-card")).toBeTruthy();
     expect(screen.getByTestId("passkeys-card")).toBeTruthy();
+    expect(screen.getByTestId("canonical-domain-card")).toBeTruthy();
     expect(screen.queryByText("Bill Extraction AI")).toBeNull();
     expect(screen.queryByText("Email Triage Automation")).toBeNull();
     expect(screen.queryByText("Search & Historical Context")).toBeNull();

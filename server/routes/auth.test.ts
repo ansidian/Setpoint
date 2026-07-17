@@ -125,7 +125,7 @@ describe("auth routes", () => {
 
     const res = await request(makeApp())
       .post("/api/auth/setup/claim")
-      .send({ password: "new-owner-password" });
+      .send({ password: "new-owner-password", canonicalOrigin: "https://setpoint.example.com" });
     const ownerResult = await currentDb().execute(
       "SELECT user_id, password_hash, claimed_at FROM ea_owner",
     );
@@ -143,6 +143,21 @@ describe("auth routes", () => {
     expect(await bcrypt.compare("new-owner-password", String(ownerResult.rows[0]!.password_hash))).toBe(true);
     expect(res.text).not.toContain(String(ownerResult.rows[0]!.user_id));
     expect(res.text).not.toContain(String(ownerResult.rows[0]!.password_hash));
+    expect((await currentDb().execute("SELECT canonical_origin, source FROM ea_instance_metadata")).rows)
+      .toEqual([{ canonical_origin: "https://setpoint.example.com", source: "owner_confirmed" }]);
+  });
+
+  it("rejects an invalid canonical origin without claiming the instance", async () => {
+    await currentDb().execute("DELETE FROM ea_owner");
+
+    const res = await request(makeApp())
+      .post("/api/auth/setup/claim")
+      .send({ password: "new-owner-password", canonicalOrigin: "http://attacker.example.com/path" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Canonical URL is invalid" });
+    expect((await currentDb().execute("SELECT * FROM ea_owner")).rows).toEqual([]);
+    expect((await currentDb().execute("SELECT * FROM ea_instance_metadata")).rows).toEqual([]);
   });
 
   it("returns a fixed conflict without replacing an existing owner", async () => {
@@ -150,7 +165,7 @@ describe("auth routes", () => {
 
     const res = await request(makeApp())
       .post("/api/auth/setup/claim")
-      .send({ password: "replacement-password" });
+      .send({ password: "replacement-password", canonicalOrigin: "https://setpoint.example.com" });
     const after = await currentDb().execute("SELECT * FROM ea_owner");
 
     expect(res.status).toBe(409);
@@ -163,8 +178,8 @@ describe("auth routes", () => {
     const app = makeApp();
 
     const responses = await Promise.all([
-      request(app).post("/api/auth/setup/claim").send({ password: "first-owner-password" }),
-      request(app).post("/api/auth/setup/claim").send({ password: "second-owner-password" }),
+      request(app).post("/api/auth/setup/claim").send({ password: "first-owner-password", canonicalOrigin: "https://first.example.com" }),
+      request(app).post("/api/auth/setup/claim").send({ password: "second-owner-password", canonicalOrigin: "https://second.example.com" }),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
@@ -737,6 +752,48 @@ describe("auth routes", () => {
       .send({ password: "replacement-password" });
     expect(login.status).toBe(200);
     expect(login.body.authenticated).toBe(true);
+  });
+
+  it("previews and changes the canonical domain only with recent authentication", async () => {
+    await currentDb().execute({
+      sql: `INSERT INTO ea_instance_metadata
+              (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+            VALUES (1, ?, 'owner_confirmed', 100, 100)`,
+      args: ["https://old.example.com"],
+    });
+    await seedSession(currentDb(), "cookie-session", Date.now() + 60_000);
+    await seedPasskey();
+
+    const preview = await request(makeApp())
+      .post("/api/auth/security/canonical-origin/preview")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ canonicalOrigin: "https://new.example.com" });
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({
+      currentOrigin: "https://old.example.com",
+      proposedOrigin: "https://new.example.com",
+      affectedPasskeys: 1,
+      callbacks: expect.arrayContaining([
+        expect.objectContaining({ provider: "Google OAuth", previousUrl: expect.stringContaining("old.example.com"), nextUrl: expect.stringContaining("new.example.com") }),
+      ]),
+    });
+
+    const blocked = await request(makeApp())
+      .patch("/api/auth/security/canonical-origin")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ canonicalOrigin: "https://new.example.com" });
+    expect(blocked.status).toBe(403);
+    expect(blocked.body).toMatchObject({ code: "STEP_UP_REQUIRED" });
+
+    await currentDb().execute("UPDATE ea_sessions SET authenticated_at = ?", [Date.now()]);
+    const changed = await request(makeApp())
+      .patch("/api/auth/security/canonical-origin")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ canonicalOrigin: "https://new.example.com" });
+    expect(changed.status).toBe(200);
+    expect(changed.body).toMatchObject({ proposedOrigin: "https://new.example.com", affectedPasskeys: 1 });
+    expect((await currentDb().execute("SELECT canonical_origin FROM ea_instance_metadata")).rows)
+      .toEqual([{ canonical_origin: "https://new.example.com" }]);
   });
 
   it("consumes a recovery code once, resets credentials, and revokes prior auth state", async () => {
