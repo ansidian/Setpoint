@@ -6,24 +6,24 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 ## 1. Bill pay → Actual sync → metadata invalidation
 
-**Trigger:** user sends a bill from the bill badge form (`src/components/bills/useBillBadgeForm.js:handleSend`) → POST `/api/briefing/actual/send` handled in `server/routes/briefing/bills.js`.
+**Trigger:** user sends a bill from the bill badge form (`src/components/bills/useBillBadgeForm.ts:handleSend`) → POST `/api/briefing/actual/send` handled in `server/routes/briefing/bills.ts`.
 
-1. `server/bills/bills-service.js:sendBill` — runs the write, then the invalidation fan-out and mirror refresh scheduling
+1. `server/bills/bills-service.ts:sendBill` — runs the write, then the invalidation fan-out and mirror refresh scheduling
 2. `server/actual/actual.ts:sendBill` — 3-way write branch: lightweight CRDT → SDK worker fallback → in-process SDK
 3. `server/actual/actual-lightweight-writes.ts:sendBillLightweight` — serializes behind the lightweight write lock; sync-push failure is tagged `ACTUAL_LIGHTWEIGHT_SYNC_FAILED` with `localWriteApplied` (never retried)
 4. `server/actual/actual-worker.ts:runActualWorkerOperation` — fallback only on `ACTUAL_LIGHTWEIGHT_UNSUPPORTED`: SDK write in a forked worker (`server/actual/actual-core.ts:sendBill`)
 5. `server/actual/actual.ts:clearMetadataCache` — clears the facade's 5-min TTL cache (level b) immediately after the write
-6. `server/bills/bills-service.js:invalidateActualMetadata` — authoritative fan-out (run in background): clears level b, re-syncs level d, rewrites level c
+6. `server/bills/bills-service.ts:invalidateActualMetadata` — authoritative fan-out (run in background): clears level b, re-syncs level d, rewrites level c
 7. `server/actual/actual-local-metadata.ts:readLocalActualMetadata` — re-syncs the on-disk budget copy (level d) from the Actual server
 8. `server/actual/actual-metadata-projection.ts:refreshActualMetadataProjection` — rewrites the `ea_actual_metadata_mirror` DB projection (level c)
-9. `server/bills/bills-mirror-sync.js:scheduleBillsMirrorRefresh` — writes `pending_refresh_at` (+60s) and arms the in-process timer; `runDueBillsMirrorRefresh` later rewrites the bill schedule/occurrence mirrors
+9. `server/bills/bills-mirror-sync.ts:scheduleBillsMirrorRefresh` — writes `pending_refresh_at` (+60s) and arms the in-process timer; `runDueBillsMirrorRefresh` later rewrites the bill schedule/occurrence mirrors
 10. `server/dashboard/current-providers/bills-provider.js:onRefreshed` — when the visible bills projection changed, publishes a `source: "bills"` dashboard event
 11. `server/dashboard/current-events.js:publishCurrentDashboardEvent` — fans the event out to per-user SSE listeners
 12. `src/hooks/useCurrentDashboard.js:handleChanged` — on `source === "bills"`: invalidates the frontend metadata singleton, then refetches the dashboard payload
 13. `src/lib/actualMetadata.ts:invalidateActualMetadata` — nulls the singleton cache (level a) and bumps the generation counter so stale in-flight fetches can't repopulate it
 14. `src/lib/actualMetadata.ts:ensureMetadataLoaded` — next consumer refetches GET `/api/briefing/actual/metadata`, served from level c
 
-**Caches (the 4 levels, outermost first; layering diagram lives at the top of `server/bills/bills-service.js`):**
+**Caches (the 4 levels, outermost first; layering diagram lives at the top of `server/bills/bills-service.ts`):**
 - (a) frontend metadata singleton — `src/lib/actualMetadata.ts` — invalidated by the bills SSE event, generation-guarded
 - (b) in-process 5-min TTL caches — `server/actual/actual.ts` facade + `server/actual/actual-core.ts` worker side — cleared on every write and by the fan-out
 - (c) `ea_actual_metadata_mirror` DB projection — `server/actual/actual-metadata-projection.ts` — rewritten during the fan-out and by bills mirror refreshes

@@ -45,7 +45,7 @@ vi.mock("../tasks/deadlines-read.js", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
 }));
-vi.mock("../bills/bills-service.js", () => ({
+vi.mock("../bills/bills-service.ts", () => ({
   billMirrorRefreshRange: vi.fn(() => ({ start: "2026-04-12", end: "2027-11-12" })),
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
@@ -83,7 +83,7 @@ const { loadUserConfig } = await import("../platform/config-service.ts");
 const { fetchCalendar } = await import("../calendar/calendar.js");
 const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js");
 const { readCalendarDeadlineRange } = await import("../tasks/deadlines-read.js");
-const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.js");
+const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts");
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {

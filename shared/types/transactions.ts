@@ -9,6 +9,8 @@ export interface TransactionFilters {
   account?: string;
   notes?: string;
   direction?: TransactionDirection;
+  include_transfers?: boolean;
+  includeTransfers?: boolean;
   limit?: number;
   minAmount?: number;
   maxAmount?: number;
@@ -22,8 +24,11 @@ export interface TransactionRecord {
   amount: number;
   direction: Exclude<TransactionDirection, "all">;
   payee: string;
+  payeeId?: string | null;
   category: string;
   account: string;
+  accountId?: string | null;
+  transferAccountId?: string | null;
   notes: string;
 }
 

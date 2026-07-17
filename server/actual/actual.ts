@@ -29,7 +29,7 @@ export interface ActualQuickTransactionInput {
   type?: string;
   date?: string;
   notes?: string;
-  categoryName?: string;
+  categoryName?: string | null;
 }
 
 export interface ActualQuickTransactionResult {

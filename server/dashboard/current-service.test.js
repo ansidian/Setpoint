@@ -61,7 +61,7 @@ vi.mock("../tasks/todoist.js", () => ({
 vi.mock("../tasks/tombstones.js", () => ({
   hydrateRecurringTombstones: (...args) => testState.hydrateRecurringTombstones(...args),
 }));
-vi.mock("../bills/bills-service.js", () => ({
+vi.mock("../bills/bills-service.ts", () => ({
   readBillsMirrorCurrent: (...args) => testState.readBillsMirrorCurrent(...args),
   refreshBillsMirror: (...args) => testState.refreshBillsMirror(...args),
   getBillsMirrorState: (...args) => testState.getBillsMirrorState(...args),

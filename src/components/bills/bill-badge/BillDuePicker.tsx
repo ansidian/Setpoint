@@ -1,0 +1,82 @@
+import { CalendarDays } from "lucide-react";
+import type { RefObject } from "react";
+import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
+import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
+
+const PICKER_WIDTH = 300;
+const PICKER_HEIGHT = 386;
+const ACCENT = "var(--sp-accent)";
+
+export default function BillDuePicker({
+  anchorRef,
+  panelRef,
+  nowTick,
+  initialEpoch,
+  onSelect,
+  onClose,
+}: {
+  anchorRef: RefObject<HTMLElement | null>;
+  panelRef: RefObject<HTMLDivElement | null>;
+  nowTick: number;
+  initialEpoch: number | null;
+  onSelect: (epochMs: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <AnchoredFloatingPanel
+      anchorRef={anchorRef}
+      panelRef={panelRef}
+      onClose={onClose}
+      width={PICKER_WIDTH}
+      height={PICKER_HEIGHT}
+      role="dialog"
+      ariaLabel="Bill due date picker"
+      style={{
+        overflow: "hidden",
+        padding: 8,
+        zIndex: 10001,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "4px 8px 10px",
+          color: "rgba(205,214,244,0.72)",
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 2,
+          textTransform: "uppercase",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 8,
+            display: "inline-grid",
+            placeItems: "center",
+            color: ACCENT,
+            background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${ACCENT} 24%, transparent)`,
+          }}
+        >
+          <CalendarDays size={12} />
+        </span>
+        Due date
+      </div>
+      <CalendarDateTimeView
+        nowTick={nowTick}
+        initialEpoch={initialEpoch}
+        onSelect={onSelect}
+        onBack={onClose}
+        accent={ACCENT}
+        confirmLabel="Set due date"
+        mode="date-only"
+        allowPastDates
+      />
+    </AnchoredFloatingPanel>
+  );
+}

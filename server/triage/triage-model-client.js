@@ -4,7 +4,7 @@ import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
   isAllowedBillExtractModel,
-} from "../bills/bill-extractors/catalog.js";
+} from "../bills/bill-extractors/catalog.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;

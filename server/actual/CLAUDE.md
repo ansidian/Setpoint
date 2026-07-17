@@ -35,5 +35,5 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 
 ## Related
 
-- `server/bills/bills-service.js` — drives writes and owns Actual-metadata invalidation fan-out
+- `server/bills/bills-service.ts` — drives writes and owns Actual-metadata invalidation fan-out
 - `src/lib/actualMetadata.ts` — frontend cache mirroring this metadata

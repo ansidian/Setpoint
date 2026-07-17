@@ -45,7 +45,7 @@ vi.mock("../../hooks/useActiveSnapshot", () => ({
   default: () => activeSnapshotMock.state,
 }));
 
-vi.mock("../bills/BillBadge.jsx", () => ({
+vi.mock("../bills/BillBadge", () => ({
   default: function BillBadgeMock() {
     return <div data-testid="bill-badge">Bill badge</div>;
   },

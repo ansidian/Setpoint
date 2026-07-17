@@ -6,7 +6,7 @@ import {
   refreshBillsMirror,
   scheduleBillsMirrorRefresh,
   shouldScheduleImmediateBillsRefresh,
-} from "../../bills/bills-service.js";
+} from "../../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "../current-events.js";
 
 // Bills refresh failures are dominated by the Actual provider being down;

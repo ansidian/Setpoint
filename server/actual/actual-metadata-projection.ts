@@ -1,10 +1,13 @@
 import db from "../db/connection.ts";
 import { getMetadata as actualGetMetadata } from "./actual.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
-import type { Client, InStatement, Row } from "@libsql/client";
+import type { InStatement } from "@libsql/client";
 import type { ActualMetadata } from "../../shared/types/actual.ts";
 
 type ActualMetadataInput = Partial<ActualMetadata>;
+export interface ActualMetadataProjectionDb {
+  execute(statement: InStatement): Promise<{ rows: Array<Record<string, unknown>> }>;
+}
 export interface ActualMetadataSyncHealth {
   state: string;
   lastSuccessAt: string | null;
@@ -47,7 +50,7 @@ export function metadataWithPayeeMap(metadata: ActualMetadataInput = {}): Actual
   };
 }
 
-function metadataFromRow(row: Row | null): ProjectedActualMetadata | null {
+function metadataFromRow(row: Record<string, unknown> | null): ProjectedActualMetadata | null {
   if (!row) return null;
   const metadata = metadataWithPayeeMap({
     accounts: safeJson(row.accounts_json, []),
@@ -147,7 +150,7 @@ export function upsertMetadataProjectionQuery(userId: string, metadata: ActualMe
   };
 }
 
-export async function readActualMetadataProjection(userId: string, { dbClient = db }: { dbClient?: Client } = {}): Promise<ProjectedActualMetadata | null> {
+export async function readActualMetadataProjection(userId: string, { dbClient = db }: { dbClient?: ActualMetadataProjectionDb } = {}): Promise<ProjectedActualMetadata | null> {
   const result = await dbClient.execute({
     sql: `SELECT status, accounts_json, payees_json, categories_json, schedules_json,
                  recent_transactions_json, last_success_at, last_attempt_at, last_error
@@ -179,7 +182,7 @@ export async function refreshActualMetadataProjection(userId: string, {
   dbClient = db,
   now = new Date(),
   metadata = null,
-}: { dbClient?: Client; now?: Date; metadata?: ActualMetadataInput | null } = {}): Promise<ProjectedActualMetadata> {
+}: { dbClient?: ActualMetadataProjectionDb; now?: Date; metadata?: ActualMetadataInput | null } = {}): Promise<ProjectedActualMetadata> {
   const timestamp = isoNow(now);
   try {
     const actualMetadata = metadataWithPayeeMap(metadata || await loadActualMetadataForProjection(userId));

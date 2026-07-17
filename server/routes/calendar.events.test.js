@@ -55,7 +55,7 @@ vi.mock("../tasks/tasks-service.js", () => ({
   deleteDeadline: vi.fn(),
   updateDeadline: vi.fn(),
 }));
-vi.mock("../bills/bills-service.js", () => ({
+vi.mock("../bills/bills-service.ts", () => ({
   billMirrorRefreshRange: vi.fn(() => ({ start: "2026-05-01", end: "2026-05-31" })),
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),

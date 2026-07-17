@@ -1,11 +1,12 @@
 {
-  "remainingLegacyFiles": 993,
+  "remainingLegacyFiles": 955,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
     "shared",
     "shared/types/actual.ts",
     "shared/types/transactions.ts",
+    "shared/types/bills.ts",
     "src/components/ui",
     "src/components/shared",
     "src/api.ts",
@@ -64,7 +65,15 @@
     "server/reminders",
     "server/actual",
     "server/transactions",
+    "server/bills",
+    "server/routes/briefing/bills.ts",
+    "server/routes/briefing/bills.test.ts",
+    "server/routes/calendar-bills-range.ts",
+    "server/routes/calendar.range.test.ts",
     "server/routes/reminders.ts",
-    "src/components/calendar/reminders/ReminderDateTimePicker.tsx"
+    "src/components/calendar/reminders/ReminderDateTimePicker.tsx",
+    "src/components/bills",
+    "src/hooks/useUtilityPayLinks.ts",
+    "src/hooks/useUtilityPayLinks.test.ts"
   ]
 }

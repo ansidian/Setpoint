@@ -37,7 +37,7 @@ import {
   markCalendarSearchMirrorDirty,
   upsertCalendarSearchMirrorOccurrence,
 } from "../calendar/calendar-search-mirror.js";
-import { readCalendarBillsRange } from "./calendar-bills-range.js";
+import { readCalendarBillsRange } from "./calendar-bills-range.ts";
 
 const router = Router();
 router.use(requireCookieSession);

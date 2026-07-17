@@ -51,6 +51,22 @@ import type {
   ReminderListResponse,
   ReminderMutationResponse,
 } from "../shared/types/reminders.ts";
+import type {
+  ActualCacheHydrationResponse,
+  ActualCacheStatusResponse,
+  ActualConnectionOverrides,
+  ActualConnectionResponse,
+  ActualMetadataResponse,
+  BillCandidate,
+  BillExtractionInput,
+  BillExtractionResponse,
+  BillMutationResponse,
+  BillPayResolution,
+  BillPaySampleRequest,
+  BillPaySeedRequest,
+  CalendarBillsRangeResponse,
+} from "../shared/types/bills.ts";
+import type { ActualAccount, ActualCategoryGroup, ActualPayee } from "../shared/types/actual.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -419,7 +435,7 @@ export const completeDeadlineOccurrence = (id: ApiId, occurrenceDate: string): P
     `/api/calendar/deadlines/${encodeURIComponent(id)}/completed-occurrences/${encodeURIComponent(occurrenceDate)}`,
     { method: "POST" },
   );
-export const getCalendarBillsRange = (start: string, end: string): Promise<unknown> =>
+export const getCalendarBillsRange = (start: string, end: string): Promise<CalendarBillsRangeResponse> =>
   apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const getCalendarSearch = ({ scope, q, limit, signal }: CalendarSearchOptions = {}): Promise<unknown> => {
   const params = new URLSearchParams();
@@ -459,18 +475,18 @@ export const updateTodoistTask = (id: ApiId, data: unknown): Promise<unknown> =>
 export const deleteTodoistTask = (id: ApiId): Promise<unknown> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Actual Budget
-export const sendToActualBudget = (bill: unknown): Promise<unknown> => apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
-export const extractBillFromEmail = ({ subject, from, body }: { subject: unknown; from: unknown; body: unknown }): Promise<unknown> => apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
-export const resolveBillPaySeed = (payload: unknown): Promise<unknown> => apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
-export const resolveBillPayMappingSample = (payload: unknown): Promise<unknown> => apiFetch("/api/briefing/bills/resolve-sample", { method: "POST", body: JSON.stringify(payload || {}) });
-export const markBillPaid = (id: ApiId): Promise<unknown> => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
-export const getActualAccounts = (): Promise<unknown> => apiFetch("/api/briefing/actual/accounts");
-export const getActualPayees = (): Promise<unknown> => apiFetch("/api/briefing/actual/payees");
-export const getActualCategories = (): Promise<unknown> => apiFetch("/api/briefing/actual/categories");
-export const getActualMetadata = (): Promise<unknown> => apiFetch("/api/briefing/actual/metadata");
-export const testActualBudget = (overrides: unknown): Promise<unknown> => apiFetch("/api/briefing/actual/test", { method: "POST", body: JSON.stringify(overrides || {}) });
-export const getActualCacheStatus = (): Promise<unknown> => apiFetch("/api/briefing/actual/cache/status");
-export const hydrateActualBudgetCache = (): Promise<unknown> => apiFetch("/api/briefing/actual/cache/hydrate", { method: "POST" });
+export const sendToActualBudget = (bill: BillCandidate): Promise<BillMutationResponse> => apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
+export const extractBillFromEmail = ({ subject, from, body }: BillExtractionInput): Promise<BillExtractionResponse> => apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
+export const resolveBillPaySeed = (payload: BillPaySeedRequest): Promise<BillPayResolution> => apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
+export const resolveBillPayMappingSample = (payload: BillPaySampleRequest): Promise<BillPayResolution> => apiFetch("/api/briefing/bills/resolve-sample", { method: "POST", body: JSON.stringify(payload || {}) });
+export const markBillPaid = (id: ApiId): Promise<BillMutationResponse> => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
+export const getActualAccounts = (): Promise<ActualAccount[]> => apiFetch("/api/briefing/actual/accounts");
+export const getActualPayees = (): Promise<ActualPayee[]> => apiFetch("/api/briefing/actual/payees");
+export const getActualCategories = (): Promise<ActualCategoryGroup[]> => apiFetch("/api/briefing/actual/categories");
+export const getActualMetadata = (): Promise<ActualMetadataResponse> => apiFetch("/api/briefing/actual/metadata");
+export const testActualBudget = (overrides: ActualConnectionOverrides | null): Promise<ActualConnectionResponse> => apiFetch("/api/briefing/actual/test", { method: "POST", body: JSON.stringify(overrides || {}) });
+export const getActualCacheStatus = (): Promise<ActualCacheStatusResponse> => apiFetch("/api/briefing/actual/cache/status");
+export const hydrateActualBudgetCache = (): Promise<ActualCacheHydrationResponse> => apiFetch("/api/briefing/actual/cache/hydrate", { method: "POST" });
 
 // Accounts & Settings
 export const getAccounts = (): Promise<AccountSummary[]> => apiFetch("/api/ea/accounts");
