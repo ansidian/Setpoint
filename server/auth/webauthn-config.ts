@@ -69,22 +69,29 @@ function localDevConfigFromOrigin(requestOrigin: unknown) {
 
 export function resolveWebAuthnConfig(
   env: NodeJS.ProcessEnv = process.env,
-  options: { requestOrigin?: string } = {},
+  options: { requestOrigin?: string; canonicalOrigin?: string | null } = {},
 ): WebAuthnConfig {
   const mode = env.NODE_ENV === "production" ? "production" : "development";
   const missing: string[] = [];
+  const canonical = options.canonicalOrigin ? new URL(options.canonicalOrigin) : null;
   const explicitRpId = clean(env.EA_WEBAUTHN_RP_ID);
   const explicitOrigin = clean(env.EA_WEBAUTHN_ORIGIN);
   const localDevConfig = mode === "development" && !explicitRpId && !explicitOrigin
     ? localDevConfigFromOrigin(options.requestOrigin)
     : null;
-  const rpName = mode === "production"
+  const rpName = canonical
+    ? DEFAULT_DEV_RP_NAME
+    : mode === "production"
     ? requireClean(env, "EA_WEBAUTHN_RP_NAME", missing)
     : clean(env.EA_WEBAUTHN_RP_NAME) || DEFAULT_DEV_RP_NAME;
-  const rpId = mode === "production"
+  const rpId = canonical
+    ? canonical.hostname
+    : mode === "production"
     ? requireClean(env, "EA_WEBAUTHN_RP_ID", missing)
     : explicitRpId || localDevConfig?.rpId || DEFAULT_DEV_RP_ID;
-  const origin = mode === "production"
+  const origin = canonical
+    ? canonical.origin
+    : mode === "production"
     ? requireClean(env, "EA_WEBAUTHN_ORIGIN", missing)
     : explicitOrigin || localDevConfig?.origin || DEFAULT_DEV_ORIGIN;
 

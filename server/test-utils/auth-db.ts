@@ -13,6 +13,7 @@ const migrationFiles = [
   "028_provider_needs_reauth.sql",
   "030_owner_bootstrap.sql",
   "031_auth_recovery.sql",
+  "032_canonical_url.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>

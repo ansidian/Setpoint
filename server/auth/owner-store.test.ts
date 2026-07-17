@@ -12,7 +12,7 @@ describe("owner store", () => {
 
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
-    for (const migration of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "031_auth_recovery.sql"]) {
+    for (const migration of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "031_auth_recovery.sql", "032_canonical_url.sql"]) {
       await db.executeMultiple(readFileSync(join(__dirname, `../db/migrations/${migration}`), "utf8"));
     }
   });
@@ -63,6 +63,22 @@ describe("owner store", () => {
 
     const rows = await db.execute("SELECT code_hash FROM ea_owner_recovery_codes ORDER BY code_hash");
     expect(rows.rows.map((row) => row.code_hash)).toEqual(["sha256:first", "sha256:second"]);
+  });
+
+  it("persists the confirmed canonical origin in the winning claim transaction", async () => {
+    const store = createOwnerStore(db);
+    await db.execute(`INSERT INTO ea_instance_metadata
+      (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+      VALUES (1, 'https://stale.example.com', 'legacy_import', 50, 50)`);
+    await expect(store.claimOwner({
+      userId: "owner-a",
+      passwordHash: "hash-a",
+      claimedAt: 100,
+      canonicalOrigin: "https://setpoint.example.com",
+    })).resolves.toEqual({ claimed: true });
+
+    expect((await db.execute("SELECT canonical_origin, source FROM ea_instance_metadata")).rows)
+      .toEqual([{ canonical_origin: "https://setpoint.example.com", source: "owner_confirmed" }]);
   });
 
   it("never mutates the owner after the singleton is claimed", async () => {

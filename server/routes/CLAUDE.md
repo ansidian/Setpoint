@@ -6,6 +6,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Auth + accounts
 - `auth.ts` — owner claim, password/passkey login, recent-auth step-up, offline recovery, passkey/session management
+- `auth-canonical-origin.ts` — canonical-domain status, impact preview, and recent-auth-gated mutation
 - `accounts.ts` — Gmail OAuth callback and account binding; mounts settings/reminders routers
 
 ### Briefing

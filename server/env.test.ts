@@ -11,9 +11,6 @@ describe("required env validation", () => {
     expect(getMissingRequiredEnv({ ...baseEnv, NODE_ENV: "production" })).toEqual([
       "TURSO_DATABASE_URL",
       "TURSO_AUTH_TOKEN",
-      "EA_WEBAUTHN_RP_NAME",
-      "EA_WEBAUTHN_RP_ID",
-      "EA_WEBAUTHN_ORIGIN",
     ]);
     expect(getMissingRequiredEnv({
       ...baseEnv,

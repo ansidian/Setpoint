@@ -38,6 +38,7 @@ describe("gmail callback canonicalization", () => {
         "006_email_search_embedding_state.sql",
         "007_email_search_ai_usage.sql",
         "028_provider_needs_reauth.sql",
+        "032_canonical_url.sql",
       ],
     });
     fetchMock.mockReset();
@@ -142,5 +143,25 @@ describe("gmail callback canonicalization", () => {
 
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(fetchMock.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("uses the persisted canonical Google callback for token exchange", async () => {
+    await currentDb().execute({
+      sql: `INSERT INTO ea_instance_metadata
+              (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+            VALUES (1, ?, 'owner_confirmed', 100, 100)`,
+      args: ["https://setpoint.example.com"],
+    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "tok", refresh_token: "rtok", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ emailAddress: "user@example.com" }) });
+
+    await handleCallback("auth-code", null, "user-1");
+
+    const body = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(body.get("redirect_uri")).toBe("https://setpoint.example.com/api/ea/accounts/gmail/callback");
   });
 });

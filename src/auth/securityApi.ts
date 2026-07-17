@@ -4,6 +4,7 @@ import type {
   OwnerRecoveryResponse,
   RecoveryCodesResponse,
 } from "../../shared/types/accounts";
+import type { CanonicalOriginImpact, CanonicalOriginStatus } from "../../shared/types/canonical-url";
 
 async function securityFetch<T>(path: string, options: RequestInit): Promise<T> {
   if (isDemoMode()) throw new Error("DEMO_API_UNHANDLED");
@@ -48,4 +49,19 @@ export const regenerateRecoveryCodes = (): Promise<RecoveryCodesResponse> => sec
 export const recoverOwnerAccess = (recoveryCode: string, newPassword: string): Promise<OwnerRecoveryResponse> => securityFetch(
   "/api/auth/recovery",
   { method: "POST", body: JSON.stringify({ recoveryCode, newPassword }) },
+);
+
+export const getCanonicalOriginStatus = (): Promise<CanonicalOriginStatus> => securityFetch(
+  "/api/auth/security/canonical-origin",
+  { method: "GET" },
+);
+
+export const previewCanonicalOriginChange = (canonicalOrigin: string): Promise<CanonicalOriginImpact> => securityFetch(
+  "/api/auth/security/canonical-origin/preview",
+  { method: "POST", body: JSON.stringify({ canonicalOrigin }) },
+);
+
+export const changeCanonicalOrigin = (canonicalOrigin: string): Promise<CanonicalOriginImpact> => securityFetch(
+  "/api/auth/security/canonical-origin",
+  { method: "PATCH", body: JSON.stringify({ canonicalOrigin }) },
 );
