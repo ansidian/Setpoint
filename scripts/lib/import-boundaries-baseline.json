@@ -1,7 +1,7 @@
 {
   "entries": {
     "actual": [
-      "actual.js"
+      "actual.ts"
     ],
     "bills": [
       "bills-service.js"
@@ -43,15 +43,15 @@
     ]
   },
   "edges": [
-    "server/bills/bill-extraction-service.js -> server/actual/actual-metadata-projection.js",
-    "server/bills/bill-pay-service.js -> server/actual/actual-metadata-projection.js",
+    "server/bills/bill-extraction-service.js -> server/actual/actual-metadata-projection.ts",
+    "server/bills/bill-pay-service.js -> server/actual/actual-metadata-projection.ts",
     "server/bills/bill-pay-resolver.js -> server/snapshots/snapshot-lifecycle.js",
-    "server/bills/bills-mirror-sync.js -> server/actual/actual-metadata-projection.js",
-    "server/bills/bills-service.js -> server/actual/actual-local-metadata.js",
-    "server/bills/bills-service.js -> server/actual/actual-metadata-projection.js",
-    "server/bills/billsMirrorModel.js -> server/actual/actual-bill-occurrences.js",
-    "server/bills/billsMirrorModel.js -> server/actual/actual-metadata-projection.js",
-    "server/bills/statementActualStatusModel.js -> server/actual/scheduleMatchModel.js",
+    "server/bills/bills-mirror-sync.js -> server/actual/actual-metadata-projection.ts",
+    "server/bills/bills-service.js -> server/actual/actual-local-metadata.ts",
+    "server/bills/bills-service.js -> server/actual/actual-metadata-projection.ts",
+    "server/bills/billsMirrorModel.js -> server/actual/actual-bill-occurrences.ts",
+    "server/bills/billsMirrorModel.js -> server/actual/actual-metadata-projection.ts",
+    "server/bills/statementActualStatusModel.js -> server/actual/scheduleMatchModel.ts",
     "server/dashboard/current-service.js -> server/reminders/reminder-hydration.ts",
     "server/dashboard/current-service.js -> server/tasks/deadline-helpers.js",
     "server/dashboard/current-service.js -> server/tasks/todoist.js",
@@ -70,8 +70,6 @@
     "server/tasks/deadlines-read.js -> server/reminders/reminder-hydration.ts",
     "server/triage/triage-model-client.js -> server/bills/bill-extractors/catalog.js",
     "server/triage/triage-model-client.js -> server/email/email-ai-models.js",
-    "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js",
-    "server/transactions/transactions-service.js -> server/actual/actual-transactions-read.js",
-    "server/transactions/transactions-service.js -> server/bills/bills-mirror-sync.js"
+    "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js"
   ]
 }

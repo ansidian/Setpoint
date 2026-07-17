@@ -4,18 +4,18 @@ import {
   testConnection as actualTestConnection,
   createQuickTxn as actualCreateQuickTxn,
   invalidateActualMetadataCache,
-} from "../actual/actual.js";
+} from "../actual/actual.ts";
 import db from "../db/connection.ts";
 import { resolveBillPaySample as resolveBillPaySampleCore } from "./bill-pay-service.js";
 import {
   describeLocalActualCache,
   hydrateLocalActualCache,
-} from "../actual/actual-local-metadata.js";
+} from "../actual/actual-local-metadata.ts";
 import {
   getMetadata,
   loadActualMetadataForProjection,
   refreshActualMetadataProjection,
-} from "../actual/actual-metadata-projection.js";
+} from "../actual/actual-metadata-projection.ts";
 import {
   loadActualBudgetUrl,
   refreshBillsMirror,
@@ -26,7 +26,7 @@ export {
   getMetadata,
   readActualMetadataProjection,
   refreshActualMetadataProjection,
-} from "../actual/actual-metadata-projection.js";
+} from "../actual/actual-metadata-projection.ts";
 export { extractBill } from "./bill-extraction-service.js";
 export { shouldScheduleImmediateBillsRefresh } from "./bills-mirror-refresh-policy.js";
 export {
@@ -52,7 +52,7 @@ export {
 //
 //   (a) src/lib/actualMetadata.ts singleton — frontend; cleared by the bills
 //       SSE event (invalidateActualMetadata in that module), refetched on next use
-//   (b) in-process TTL caches — actual.js facade + actual-core.js (5 min);
+//   (b) in-process TTL caches — actual.ts facade + actual-core.ts (5 min);
 //       cleared by invalidateActualMetadataCache()
 //   (c) ea_actual_metadata_mirror — DB projection served by GET /actual/metadata;
 //       rewritten by refreshActualMetadataProjection()
@@ -92,7 +92,7 @@ async function scheduleBillsMirrorRefreshInBackground(userId, delayMs) {
 
 // A lightweight write that was applied to the local budget copy but failed
 // while pushing to the Actual server throws with err.localWriteApplied === true
-// (set in actual-lightweight-writes.js; never retried — see actual.js). The
+// (set in actual-lightweight-writes.ts; never retried — see actual.ts). The
 // write IS durable locally and re-syncs on the next successful push, so the
 // downstream invalidation fan-out must still run: without it the metadata
 // mirror and bills mirror keep serving pre-write data with no scheduled

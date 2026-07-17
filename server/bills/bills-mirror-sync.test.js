@@ -14,8 +14,8 @@ const mockActualLocal = {
   readLocalActualMetadata: vi.fn(),
 };
 const mockDb = { execute: vi.fn(), batch: vi.fn() };
-vi.mock("../actual/actual.js", () => mockActual);
-vi.mock("../actual/actual-local-metadata.js", () => mockActualLocal);
+vi.mock("../actual/actual.ts", () => mockActual);
+vi.mock("../actual/actual-local-metadata.ts", () => mockActualLocal);
 vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 
 beforeEach(() => {

@@ -62,7 +62,7 @@ vi.mock("../bills/bills-service.js", () => ({
     return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
   },
 }));
-vi.mock("../transactions/transactions-service.js", () => ({
+vi.mock("../transactions/transactions-service.ts", () => ({
   queryTransactions: vi.fn(),
 }));
 vi.mock("../dashboard/current-service.js", () => ({
@@ -99,7 +99,7 @@ const { loadUserConfig } = await import("../platform/config-service.ts");
 const { fetchCalendar } = await import("../calendar/calendar.js");
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.js");
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.js");
-const { queryTransactions } = await import("../transactions/transactions-service.js");
+const { queryTransactions } = await import("../transactions/transactions-service.ts");
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js");
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.js");
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.ts");

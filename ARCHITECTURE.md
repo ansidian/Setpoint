@@ -434,7 +434,7 @@ The fifth shell tab: RSS/Atom headlines only, no AI classification or summarizat
 | Calendar | `server/calendar/calendar.js` | Google Calendar API | Reuses Gmail OAuth | Empty array, continue |
 | Weather | `server/platform/weather.js` | Pirate Weather | API key | Cached data or placeholder |
 | Todoist | `server/tasks/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
-| Actual Budget | `server/actual/actual.js` + `server/bills/bills-service.js` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
+| Actual Budget | `server/actual/actual.ts` + `server/bills/bills-service.js` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
 | Email triage AI | `server/triage/triage-worker.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
 | Bill extraction AI | `server/bills/bill-extract.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
 All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage and bill extraction failures are isolated to durable jobs or the specific bill-signal request.

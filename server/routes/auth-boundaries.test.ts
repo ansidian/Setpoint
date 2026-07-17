@@ -95,7 +95,7 @@ vi.mock("../calendar/calendar.js", () => ({
   getNextWeekRange: vi.fn(() => [0, 0]),
   getTomorrowRange: vi.fn(() => [0, 0]),
 }));
-vi.mock("../actual/actual.js", () => ({
+vi.mock("../actual/actual.ts", () => ({
   getUpcomingBills: vi.fn(async () => []),
   getRecentTransactions: vi.fn(async () => []),
   getMetadata: vi.fn(async () => ({ schedules: [], payeeMap: {}, recentTransactions: [] })),

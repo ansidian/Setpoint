@@ -6,7 +6,7 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 
 ## Files
 
-- `transactions-service.js` — public API: `queryTransactions` (filtered transaction list)
+- `transactions-service.ts` — public API: `queryTransactions` (filtered transaction list)
   and `summarizeTransactions` (aggregate by category/payee/month). Filter policy, JS
   aggregation (top-15 + Other), `sync_state`, graceful errors. Injectable deps.
 
@@ -16,13 +16,13 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 
 - direction "expense" (default) = outflows (amount < 0); direction "income" = inflows (amount > 0). Transfers are excluded in both directions.
 - Internal calendar reads may use direction "all" to return both flows in one query; rows carry explicit `direction` and positive amount magnitudes.
-- Reads go through `server/actual/actual-transactions-read.js` → on-disk `db.sqlite`
+- Reads go through `server/actual/actual-transactions-read.ts` → on-disk `db.sqlite`
   via `@libsql/client`. No SDK, no budget-in-heap (Render 512MB firewall).
 - `sync_state` freshness is best-effort, sourced from `getBillsMirrorState`.
 
 ## Related
 
-- `server/actual/actual-transactions-read.js` — the low-level reader.
+- `server/actual/actual-transactions-read.ts` — the low-level reader.
 - `server/alfred/alfred-tools.js` — `search_transactions` / `summarize_transactions`.
 - `server/routes/calendar.js` — combined transaction rows in the Bills calendar range response.
 - `docs/adr/0006-alfred-trust-architecture.md` — read-only trust posture.

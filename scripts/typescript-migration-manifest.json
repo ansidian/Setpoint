@@ -1,9 +1,11 @@
 {
-  "remainingLegacyFiles": 1034,
+  "remainingLegacyFiles": 993,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
     "shared",
+    "shared/types/actual.ts",
+    "shared/types/transactions.ts",
     "src/components/ui",
     "src/components/shared",
     "src/api.ts",
@@ -60,6 +62,8 @@
     "server/routes/notes.test.ts",
     "src/components/notes",
     "server/reminders",
+    "server/actual",
+    "server/transactions",
     "server/routes/reminders.ts",
     "src/components/calendar/reminders/ReminderDateTimePicker.tsx"
   ]
