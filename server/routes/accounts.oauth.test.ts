@@ -3,15 +3,22 @@ import crypto from "crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import request from "supertest";
+import type { Response as SuperTestResponse } from "supertest";
+import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import {
   createAuthTestDb,
   seedGmailAccount,
   seedSession,
 } from "../test-utils/auth-db.ts";
+import type { AccountSummary } from "../../shared/types/accounts.ts";
 
-const testState = vi.hoisted(() => ({
+const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
 }));
+function currentDb(): Client {
+  if (!testState.db.current) throw new Error("Test database is not initialized");
+  return testState.db.current;
+}
 const gmailApi = vi.hoisted(() => ({
   getAuthUrl: vi.fn((state) => `https://accounts.example.test/oauth?state=${state}`),
   handleCallback: vi.fn(async () => ({ email: "user@example.com", accountId: "gmail-user@example.com" })),
@@ -21,8 +28,11 @@ const emailBackfillApi = vi.hoisted(() => ({ wakeEmailBackfillWorker: vi.fn() })
 
 vi.mock("../db/connection.ts", () => ({
   default: {
-    execute: (...args) => testState.db.current.execute(...args),
-    batch: (...args) => testState.db.current.batch(...args),
+    execute: (statement: InStatement) => currentDb().execute(statement),
+    batch: (
+      statements: Parameters<Client["batch"]>[0],
+      mode?: TransactionMode,
+    ) => currentDb().batch(statements, mode),
   },
 }));
 vi.mock("../email/gmail.js", () => ({
@@ -44,7 +54,7 @@ vi.mock("../email/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: emailBackfillApi.wakeEmailBackfillWorker,
 }));
 vi.mock("../platform/account-canonical.ts", () => ({
-  canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
+  canonicalizeConfiguredAccounts: vi.fn((rows: unknown[]) => rows),
 }));
 vi.mock("../bills/bill-extractors/catalog.js", () => ({
   billExtractAvailability: vi.fn(() => []),
@@ -55,7 +65,7 @@ vi.mock("../bills/bill-extractors/catalog.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const accountsRoutes = (await import("./accounts.js")).default;
+const accountsRoutes = (await import("./accounts.ts")).default;
 
 function makeApp() {
   const app = express();
@@ -65,11 +75,16 @@ function makeApp() {
   return app;
 }
 
+function setCookieHeader(response: SuperTestResponse): string {
+  const value = response.headers["set-cookie"];
+  return Array.isArray(value) ? value.join(";") : String(value || "");
+}
+
 describe("accounts Gmail OAuth binding", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     testState.db.current = await createAuthTestDb();
-    await seedSession(testState.db.current, "cookie-session");
+    await seedSession(currentDb(), "cookie-session");
   });
 
   afterEach(async () => {
@@ -84,28 +99,29 @@ describe("accounts Gmail OAuth binding", () => {
       .get("/api/ea/accounts/gmail/auth?label=Work")
       .set("Cookie", ["ea_session=cookie-session"]);
 
-    const csrfResult = await testState.db.current.execute({
+    const csrfResult = await currentDb().execute({
       sql: "SELECT token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label FROM ea_csrf_tokens",
       args: [],
     });
 
     expect(res.status).toBe(200);
     expect(res.body.url).toMatch(/^https:\/\/accounts\.example\.test\/oauth\?state=/);
-    const cookieHeader = res.headers["set-cookie"][0];
+    const cookieHeader = setCookieHeader(res);
     expect(cookieHeader).toContain("ea_oauth_bind=");
     expect(cookieHeader).toContain("SameSite=Lax");
     expect(cookieHeader).toContain("HttpOnly");
-    const rawBind = cookieHeader.match(/ea_oauth_bind=([^;]+)/)[1];
+    const rawBind = cookieHeader.match(/ea_oauth_bind=([^;]+)/)?.[1];
+    if (!rawBind) throw new Error("expected OAuth bind cookie");
     expect(csrfResult.rows).toHaveLength(1);
     expect(csrfResult.rows[0]).toMatchObject({
       account_label: "user-1:Work",
       oauth_user_id: "user-1",
       oauth_label: "Work",
     });
-    expect(csrfResult.rows[0].browser_bind_hash).toBe(
+    expect(csrfResult.rows[0]!.browser_bind_hash).toBe(
       crypto.createHash("sha256").update(rawBind).digest("hex"),
     );
-    expect(csrfResult.rows[0].expires_at).toBeGreaterThan(before + 9 * 60 * 1000);
+    expect(csrfResult.rows[0]!.expires_at).toBeGreaterThan(before + 9 * 60 * 1000);
   });
 
   it("rejects callback when browser bind cookie is missing", async () => {
@@ -118,7 +134,7 @@ describe("accounts Gmail OAuth binding", () => {
     const res = await request(makeApp())
       .get("/api/ea/accounts/gmail/callback?code=auth-code&state=state-1");
 
-    const csrfResult = await testState.db.current.execute({
+    const csrfResult = await currentDb().execute({
       sql: "SELECT token FROM ea_csrf_tokens WHERE token = ?",
       args: ["state-1"],
     });
@@ -130,7 +146,7 @@ describe("accounts Gmail OAuth binding", () => {
   });
 
   it("accepts callback only when browser bind cookie matches", async () => {
-    await seedGmailAccount(testState.db.current, { label: "Gmail" });
+    await seedGmailAccount(currentDb(), { label: "Gmail" });
     await seedCsrfToken({
       token: "state-1",
       browserBind: "bind-cookie",
@@ -141,11 +157,11 @@ describe("accounts Gmail OAuth binding", () => {
       .get("/api/ea/accounts/gmail/callback?code=auth-code&state=state-1")
       .set("Cookie", ["ea_oauth_bind=bind-cookie"]);
 
-    const accountResult = await testState.db.current.execute({
+    const accountResult = await currentDb().execute({
       sql: "SELECT label FROM ea_accounts WHERE id = ?",
       args: ["gmail-user@example.com"],
     });
-    const csrfResult = await testState.db.current.execute({
+    const csrfResult = await currentDb().execute({
       sql: "SELECT token FROM ea_csrf_tokens WHERE token = ?",
       args: ["state-1"],
     });
@@ -153,11 +169,11 @@ describe("accounts Gmail OAuth binding", () => {
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("http://localhost:5173/settings?account_connected=user@example.com");
     expect(gmailApi.handleCallback).toHaveBeenCalledWith("auth-code", null, "user-1");
-    expect(accountResult.rows[0].label).toBe("Work");
+    expect(accountResult.rows[0]!.label).toBe("Work");
     expect(csrfResult.rows).toHaveLength(0);
     expect(emailIndexApi.queueEmailIndexBackfill).toHaveBeenCalledWith("user-1");
     expect(emailBackfillApi.wakeEmailBackfillWorker).toHaveBeenCalledWith();
-    expect(res.headers["set-cookie"][0]).toContain("ea_oauth_bind=;");
+    expect(setCookieHeader(res)).toContain("ea_oauth_bind=;");
   });
 
   it("returns a generic message on callback failure without leaking the internal error", async () => {
@@ -185,7 +201,7 @@ describe("GET /accounts needs_reauth", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     testState.db.current = await createAuthTestDb();
-    await seedSession(testState.db.current, "cookie-session");
+    await seedSession(currentDb(), "cookie-session");
   });
 
   afterEach(async () => {
@@ -194,20 +210,21 @@ describe("GET /accounts needs_reauth", () => {
   });
 
   it("includes needs_reauth: false for an account in good standing", async () => {
-    await seedGmailAccount(testState.db.current, { id: "gmail-good", email: "good@example.com" });
+    await seedGmailAccount(currentDb(), { id: "gmail-good", email: "good@example.com" });
 
     const res = await request(makeApp())
       .get("/api/ea/accounts")
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    const account = res.body.find((a) => a.id === "gmail-good");
+    const account = (res.body as AccountSummary[]).find((candidate) => candidate.id === "gmail-good");
+    if (!account) throw new Error("expected account");
     expect(account.needs_reauth).toBe(false);
   });
 
   it("includes needs_reauth: true for an account flagged by a revoked grant", async () => {
-    await seedGmailAccount(testState.db.current, { id: "gmail-flagged", email: "flagged@example.com" });
-    await testState.db.current.execute({
+    await seedGmailAccount(currentDb(), { id: "gmail-flagged", email: "flagged@example.com" });
+    await currentDb().execute({
       sql: "UPDATE ea_accounts SET needs_reauth = 1 WHERE id = ?",
       args: ["gmail-flagged"],
     });
@@ -217,13 +234,22 @@ describe("GET /accounts needs_reauth", () => {
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    const account = res.body.find((a) => a.id === "gmail-flagged");
+    const account = (res.body as AccountSummary[]).find((candidate) => candidate.id === "gmail-flagged");
+    if (!account) throw new Error("expected account");
     expect(account.needs_reauth).toBe(true);
   });
 });
 
-async function seedCsrfToken({ token, browserBind, label }) {
-  await testState.db.current.execute({
+async function seedCsrfToken({
+  token,
+  browserBind,
+  label,
+}: {
+  token: string;
+  browserBind: string;
+  label: string;
+}): Promise<void> {
+  await currentDb().execute({
     sql: `INSERT INTO ea_csrf_tokens
             (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label)
           VALUES (?, ?, ?, ?, ?, ?)`,

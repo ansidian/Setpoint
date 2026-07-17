@@ -1,4 +1,6 @@
 import { Router } from "express";
+import type { CookieOptions, Response } from "express";
+import type { Value } from "@libsql/client";
 import crypto from "crypto";
 import db from "../db/connection.ts";
 import { hashToken, requireCookieSession } from "../middleware/auth.ts";
@@ -9,8 +11,31 @@ import { testConnection as testIcloud } from "../email/icloud.js";
 import { queueEmailIndexBackfill } from "../email/email-index.js";
 import { wakeEmailBackfillWorker } from "../email/email-backfill-worker.js";
 import { canonicalizeConfiguredAccounts } from "../platform/account-canonical.ts";
-import settingsRoutes from "./settings.js";
+import settingsRoutes from "./settings.ts";
 import remindersRoutes from "./reminders.js";
+import type {
+  AccountId,
+  AccountMutationResponse,
+  AccountPatchRequest,
+  AccountSummary,
+  GmailAuthUrlResponse,
+  GmailOAuthCallbackResult,
+  ICloudAccountRequest,
+  ICloudAccountResponse,
+} from "../../shared/types/accounts.ts";
+
+type ErrorResponse = { message: string };
+type GmailOAuthQuery = { code?: string; state?: string; error?: string };
+
+const handleGmailCallback = handleCallback as unknown as (
+  code: string,
+  redirectUri: null,
+  userId: string,
+) => Promise<GmailOAuthCallbackResult>;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const router = Router();
 // P1-12: forward async-handler rejections to the terminal errorHandler so a
@@ -21,7 +46,7 @@ wrapRouterAsync(router);
 const GMAIL_OAUTH_BIND_COOKIE = "ea_oauth_bind";
 const GMAIL_OAUTH_BIND_COOKIE_PATH = "/api/ea/accounts/gmail/callback";
 
-function gmailOauthBindCookieOptions() {
+function gmailOauthBindCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -31,12 +56,12 @@ function gmailOauthBindCookieOptions() {
   };
 }
 
-function clearGmailOauthBindCookie(res) {
+function clearGmailOauthBindCookie(res: Response): void {
   res.clearCookie(GMAIL_OAUTH_BIND_COOKIE, { path: GMAIL_OAUTH_BIND_COOKIE_PATH });
 }
 
 // Gmail OAuth callback — no auth required (it's a redirect from Google)
-router.get("/accounts/gmail/callback", async (req, res) => {
+router.get<Record<string, never>, string, never, GmailOAuthQuery>("/accounts/gmail/callback", async (req, res) => {
   const { code, state: csrfToken, error: oauthError } = req.query;
   const oauthBindCookie = req.cookies?.[GMAIL_OAUTH_BIND_COOKIE];
   clearGmailOauthBindCookie(res);
@@ -64,7 +89,7 @@ router.get("/accounts/gmail/callback", async (req, res) => {
       return res.status(400).send("Invalid OAuth state - CSRF validation failed");
     }
 
-    const csrfRow = csrfResult.rows[0];
+    const csrfRow = csrfResult.rows[0]!;
 
     // Delete token immediately (one-time use)
     await db.execute({
@@ -73,22 +98,22 @@ router.get("/accounts/gmail/callback", async (req, res) => {
     });
 
     // Check expiry
-    if (Date.now() > csrfRow.expires_at) {
+    if (Date.now() > Number(csrfRow.expires_at)) {
       return res.status(400).send("OAuth state expired - please try again");
     }
     if (!oauthBindCookie || !csrfRow.browser_bind_hash) {
       return res.status(400).send("OAuth browser binding missing - please try again");
     }
-    if (hashToken(oauthBindCookie) !== csrfRow.browser_bind_hash) {
+    if (hashToken(oauthBindCookie) !== String(csrfRow.browser_bind_hash)) {
       return res.status(400).send("OAuth browser binding mismatch - please try again");
     }
 
     // Recover userId and label from DB (tamper-proof)
     const [legacyUserId, ...legacyLabelParts] = String(csrfRow.account_label || "").split(":");
-    const userId = csrfRow.oauth_user_id || legacyUserId;
-    const label = csrfRow.oauth_label ?? legacyLabelParts.join(":");
+    const userId = String(csrfRow.oauth_user_id || legacyUserId);
+    const label = String(csrfRow.oauth_label ?? legacyLabelParts.join(":"));
 
-    const result = await handleCallback(code, null, userId);
+    const result = await handleGmailCallback(code, null, userId);
     if (label && label !== "Gmail") {
       await db.execute({
         sql: "UPDATE ea_accounts SET label = ? WHERE id = ?",
@@ -110,14 +135,25 @@ router.get("/accounts/gmail/callback", async (req, res) => {
 // All other routes require auth
 router.use(requireCookieSession);
 
-router.get("/accounts", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.get<Record<string, never>, AccountSummary[] | ErrorResponse>("/accounts", async (_req, res) => {
+  const userId = process.env.EA_USER_ID!;
   try {
     const result = await db.execute({
       sql: "SELECT id, type, email, label, color, icon, calendar_enabled, sort_order, created_at, needs_reauth FROM ea_accounts WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC",
       args: [userId],
     });
-    const accounts = result.rows.map((row) => ({ ...row, needs_reauth: !!row.needs_reauth }));
+    const accounts: AccountSummary[] = result.rows.map((row) => ({
+      id: String(row.id),
+      type: String(row.type),
+      email: String(row.email),
+      label: String(row.label),
+      color: row.color == null ? null : String(row.color),
+      icon: row.icon == null ? null : String(row.icon),
+      calendar_enabled: Number(row.calendar_enabled || 0),
+      sort_order: Number(row.sort_order || 0),
+      created_at: String(row.created_at),
+      needs_reauth: !!row.needs_reauth,
+    }));
     res.json(canonicalizeConfiguredAccounts(accounts));
   } catch (err) {
     console.error("Error listing accounts:", err);
@@ -125,8 +161,8 @@ router.get("/accounts", async (req, res) => {
   }
 });
 
-router.get("/accounts/gmail/auth", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.get<Record<string, never>, GmailAuthUrlResponse, never, { label?: string }>("/accounts/gmail/auth", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const label = req.query.label || "Gmail";
   const oauthBind = crypto.randomBytes(32).toString("base64url");
 
@@ -149,8 +185,8 @@ router.get("/accounts/gmail/auth", async (req, res) => {
   res.json({ url: getAuthUrl(csrfToken) });
 });
 
-router.post("/accounts/icloud", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.post<Record<string, never>, ICloudAccountResponse | ErrorResponse, ICloudAccountRequest>("/accounts/icloud", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { email, password, label, color } = req.body;
   if (!email || !password)
     return res
@@ -164,7 +200,7 @@ router.post("/accounts/icloud", async (req, res) => {
       sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM ea_accounts WHERE user_id = ?",
       args: [userId],
     });
-    const nextSort = maxSort.rows[0].next;
+    const nextSort = Number(maxSort.rows[0]?.next || 0);
     await db.execute({
       sql: `INSERT INTO ea_accounts (id, user_id, type, email, label, color, credentials_encrypted, sort_order)
             VALUES (?, ?, 'icloud', ?, ?, ?, ?, ?)
@@ -186,12 +222,12 @@ router.post("/accounts/icloud", async (req, res) => {
     res.json({ id: accountId, email, label: label || email });
   } catch (err) {
     console.error("Error adding iCloud account:", err);
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: errorMessage(err) });
   }
 });
 
-router.post("/accounts/test/:id", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.post<{ id: string }, AccountMutationResponse | ErrorResponse>("/accounts/test/:id", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { id } = req.params;
   try {
     const result = await db.execute({
@@ -200,19 +236,19 @@ router.post("/accounts/test/:id", async (req, res) => {
     });
     if (!result.rows.length)
       return res.status(404).json({ message: "Account not found" });
-    const account = result.rows[0];
+    const account = result.rows[0]!;
     if (account.type === "gmail") await testGmail(account);
     else if (account.type === "icloud")
-      await testIcloud(account.email, decrypt(account.credentials_encrypted));
+      await testIcloud(String(account.email), decrypt(String(account.credentials_encrypted)));
     res.json({ success: true });
   } catch (err) {
     console.error("Error testing account:", err);
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: errorMessage(err) });
   }
 });
 
-router.patch("/accounts/reorder", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.patch<Record<string, never>, AccountMutationResponse | ErrorResponse, { order: AccountId[] }>("/accounts/reorder", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { order } = req.body; // array of account IDs in desired order
   if (!Array.isArray(order) || !order.length)
     return res.status(400).json({ message: "order array required" });
@@ -229,8 +265,8 @@ router.patch("/accounts/reorder", async (req, res) => {
   }
 });
 
-router.patch("/accounts/:id", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.patch<{ id: string }, AccountMutationResponse | ErrorResponse, AccountPatchRequest>("/accounts/:id", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { id } = req.params;
   const { calendar_enabled, label, color, icon } = req.body;
 
@@ -246,8 +282,8 @@ router.patch("/accounts/:id", async (req, res) => {
   }
 
   try {
-    const updates = [];
-    const args = [];
+    const updates: string[] = [];
+    const args: Value[] = [];
     if (calendar_enabled !== undefined) {
       updates.push("calendar_enabled = ?");
       args.push(calendar_enabled ? 1 : 0);
@@ -279,8 +315,8 @@ router.patch("/accounts/:id", async (req, res) => {
   }
 });
 
-router.delete("/accounts/:id", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.delete<{ id: string }, AccountMutationResponse | ErrorResponse>("/accounts/:id", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { id } = req.params;
   try {
     const result = await db.execute({

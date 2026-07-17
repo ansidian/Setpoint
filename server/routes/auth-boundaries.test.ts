@@ -135,7 +135,7 @@ const { createQuickTxn, sendBill } = await import("../bills/bills-service.js");
 const emailService = await import("../email/email-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
-const accountsRoutes = (await import("./accounts.js")).default;
+const accountsRoutes = (await import("./accounts.ts")).default;
 const notesRoutes = (await import("./notes.js")).default;
 const discordReminders = await import("../reminders/discord-reminders.js");
 const {

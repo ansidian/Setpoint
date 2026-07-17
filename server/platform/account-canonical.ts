@@ -5,7 +5,6 @@ export type ConfiguredAccount = {
   sort_order?: unknown;
   created_at?: unknown;
   updated_at?: unknown;
-  [key: string]: unknown;
 };
 
 export function normalizeEmailAddress(email: unknown) {
@@ -17,31 +16,34 @@ function parseDateMs(value: unknown) {
   return Number.isFinite(ms) ? ms : 0;
 }
 
-function shouldReplaceCanonical<T extends ConfiguredAccount>(current: T | undefined, candidate: T) {
+function shouldReplaceCanonical<T extends object>(current: T | undefined, candidate: T) {
   if (!current) return true;
-  const currentUpdated = parseDateMs(current.updated_at);
-  const candidateUpdated = parseDateMs(candidate.updated_at);
+  const currentFields = current as ConfiguredAccount;
+  const candidateFields = candidate as ConfiguredAccount;
+  const currentUpdated = parseDateMs(currentFields.updated_at);
+  const candidateUpdated = parseDateMs(candidateFields.updated_at);
   if (candidateUpdated !== currentUpdated) return candidateUpdated > currentUpdated;
 
-  const currentCreated = parseDateMs(current.created_at);
-  const candidateCreated = parseDateMs(candidate.created_at);
+  const currentCreated = parseDateMs(currentFields.created_at);
+  const candidateCreated = parseDateMs(candidateFields.created_at);
   if (candidateCreated !== currentCreated) return candidateCreated > currentCreated;
 
-  const currentSort = Number.isFinite(Number(current.sort_order)) ? Number(current.sort_order) : Number.MAX_SAFE_INTEGER;
-  const candidateSort = Number.isFinite(Number(candidate.sort_order)) ? Number(candidate.sort_order) : Number.MAX_SAFE_INTEGER;
+  const currentSort = Number.isFinite(Number(currentFields.sort_order)) ? Number(currentFields.sort_order) : Number.MAX_SAFE_INTEGER;
+  const candidateSort = Number.isFinite(Number(candidateFields.sort_order)) ? Number(candidateFields.sort_order) : Number.MAX_SAFE_INTEGER;
   if (candidateSort !== currentSort) return candidateSort < currentSort;
 
-  return String(candidate.id || "").localeCompare(String(current.id || "")) < 0;
+  return String(candidateFields.id || "").localeCompare(String(currentFields.id || "")) < 0;
 }
 
-export function canonicalizeConfiguredAccounts<T extends ConfiguredAccount>(
+export function canonicalizeConfiguredAccounts<T extends object>(
   accounts: readonly T[] = [],
 ): T[] {
   const canonicalByKey = new Map<string, T>();
 
   for (const [index, account] of accounts.entries()) {
-    if (account?.type === "gmail") {
-      const normalizedEmail = normalizeEmailAddress(account.email);
+    const fields = account as ConfiguredAccount;
+    if (fields.type === "gmail") {
+      const normalizedEmail = normalizeEmailAddress(fields.email);
       if (!normalizedEmail) continue;
       const key = `gmail:${normalizedEmail}`;
       const current = canonicalByKey.get(key);
@@ -51,25 +53,30 @@ export function canonicalizeConfiguredAccounts<T extends ConfiguredAccount>(
       continue;
     }
 
-    const key = `id:${account?.id || index}`;
+    const key = `id:${fields.id || index}`;
     if (!canonicalByKey.has(key)) canonicalByKey.set(key, account);
   }
 
   return [...canonicalByKey.values()].sort((a, b) => {
-    const aSort = Number.isFinite(Number(a?.sort_order)) ? Number(a.sort_order) : Number.MAX_SAFE_INTEGER;
-    const bSort = Number.isFinite(Number(b?.sort_order)) ? Number(b.sort_order) : Number.MAX_SAFE_INTEGER;
+    const aFields = a as ConfiguredAccount;
+    const bFields = b as ConfiguredAccount;
+    const aSort = Number.isFinite(Number(aFields.sort_order)) ? Number(aFields.sort_order) : Number.MAX_SAFE_INTEGER;
+    const bSort = Number.isFinite(Number(bFields.sort_order)) ? Number(bFields.sort_order) : Number.MAX_SAFE_INTEGER;
     if (aSort !== bSort) return aSort - bSort;
-    return parseDateMs(a?.created_at) - parseDateMs(b?.created_at);
+    return parseDateMs(aFields.created_at) - parseDateMs(bFields.created_at);
   });
 }
 
-export function findCanonicalGmailAccount<T extends ConfiguredAccount>(
+export function findCanonicalGmailAccount<T extends object>(
   accounts: readonly T[] = [],
   email: unknown,
 ): T | null {
   const normalizedEmail = normalizeEmailAddress(email);
   if (!normalizedEmail) return null;
   return canonicalizeConfiguredAccounts(accounts).find(
-    (account) => account?.type === "gmail" && normalizeEmailAddress(account.email) === normalizedEmail,
+    (account) => {
+      const fields = account as ConfiguredAccount;
+      return fields.type === "gmail" && normalizeEmailAddress(fields.email) === normalizedEmail;
+    },
   ) || null;
 }

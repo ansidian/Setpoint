@@ -1,18 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@libsql/client";
+import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import express from "express";
 import request from "supertest";
 
 import { geocodeLocation } from "../platform/weather.ts";
 
-const testState = vi.hoisted(() => ({
+const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
 }));
 
+function currentDb(): Client {
+  if (!testState.db.current) throw new Error("Test database is not initialized");
+  return testState.db.current;
+}
+
 vi.mock("../db/connection.ts", () => ({
   default: {
-    execute: (...args) => testState.db.current.execute(...args),
-    batch: (...args) => testState.db.current.batch(...args),
+    execute: (statement: InStatement) => currentDb().execute(statement),
+    batch: (
+      statements: Parameters<Client["batch"]>[0],
+      mode?: TransactionMode,
+    ) => currentDb().batch(statements, mode),
   },
 }));
 vi.mock("../platform/encryption.ts", () => ({
@@ -34,7 +43,7 @@ vi.mock("../bills/bill-extractors/catalog.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const settingsRoutes = (await import("./settings.js")).default;
+const settingsRoutes = (await import("./settings.ts")).default;
 const { initScheduler } = await import("../scheduler.ts");
 
 function makeApp() {
@@ -82,11 +91,11 @@ async function createMigratedDb() {
 }
 
 async function getSettingsRow() {
-  const result = await testState.db.current.execute({
+  const result = await currentDb().execute({
     sql: "SELECT * FROM ea_settings WHERE user_id = ?",
     args: ["user-1"],
   });
-  return result.rows[0];
+  return result.rows[0]!;
 }
 
 beforeEach(async () => {
@@ -95,7 +104,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await testState.db.current?.close?.();
+  testState.db.current?.close();
   testState.db.current = null;
 });
 
@@ -118,7 +127,7 @@ describe("settings write-boundary validation", () => {
       .send({ schedules_json: schedules });
 
     expect(res.status).toBe(200);
-    expect(JSON.parse((await getSettingsRow()).schedules_json)).toEqual(schedules);
+    expect(JSON.parse(String((await getSettingsRow()).schedules_json))).toEqual(schedules);
     expect(initScheduler).toHaveBeenCalledTimes(1);
   });
 
@@ -158,7 +167,7 @@ describe("settings write-boundary validation", () => {
       .send({ senders });
 
     expect(res.status).toBe(200);
-    expect(JSON.parse((await getSettingsRow()).important_senders_json)).toEqual(senders);
+    expect(JSON.parse(String((await getSettingsRow()).important_senders_json))).toEqual(senders);
   });
 });
 
@@ -171,7 +180,7 @@ describe("GET /settings todoist_needs_reauth", () => {
   });
 
   it("includes todoist_needs_reauth: true when the Todoist grant was revoked", async () => {
-    await testState.db.current.execute({
+    await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
     });
@@ -185,7 +194,7 @@ describe("GET /settings todoist_needs_reauth", () => {
 
 describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)", () => {
   it("clears todoist_needs_reauth when a non-empty token is saved (manual reconnect)", async () => {
-    await testState.db.current.execute({
+    await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
     });
@@ -199,7 +208,7 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
   });
 
   it("does not clear todoist_needs_reauth when disconnecting (empty token)", async () => {
-    await testState.db.current.execute({
+    await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
     });
@@ -215,7 +224,7 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
 
 describe("settings error messages do not leak internals (P3-54)", () => {
   it("returns a fixed geocode failure string, not the raw error message", async () => {
-    geocodeLocation.mockRejectedValueOnce(new Error("ENOTFOUND api.pirateweather.net secret-key=abc123"));
+    vi.mocked(geocodeLocation).mockRejectedValueOnce(new Error("ENOTFOUND api.pirateweather.net secret-key=abc123"));
 
     const res = await request(makeApp()).get("/api/ea/geocode?q=Berlin");
 
@@ -225,13 +234,13 @@ describe("settings error messages do not leak internals (P3-54)", () => {
   });
 
   it("returns a fixed important-senders failure string, not the raw DB error", async () => {
-    const realExecute = testState.db.current.execute.bind(testState.db.current);
-    vi.spyOn(testState.db.current, "execute").mockImplementation((arg) => {
-      if (typeof arg?.sql === "string" && arg.sql.includes("important_senders_json")) {
+    const realExecute = currentDb().execute.bind(currentDb());
+    currentDb().execute = vi.fn((statement: InStatement) => {
+      if (typeof statement !== "string" && statement.sql.includes("important_senders_json")) {
         return Promise.reject(new Error("SQLITE_ERROR: no such column secret_internal_detail"));
       }
-      return realExecute(arg);
-    });
+      return realExecute(statement);
+    }) as unknown as Client["execute"];
 
     const res = await request(makeApp()).get("/api/ea/important-senders");
 
@@ -243,7 +252,7 @@ describe("settings error messages do not leak internals (P3-54)", () => {
 
 describe("GET /settings response allowlist (SEC-06)", () => {
   it("never leaks secret-shaped columns, including ones added after this test was written", async () => {
-    await testState.db.current.execute({
+    await currentDb().execute({
       sql: "UPDATE ea_settings SET future_secret_encrypted = ?, future_api_token = ?, weather_location = ?, todoist_oauth_scope = ? WHERE user_id = ?",
       args: [
         "super-secret-value",
