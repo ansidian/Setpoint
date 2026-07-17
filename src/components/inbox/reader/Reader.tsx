@@ -14,6 +14,8 @@ export default function Reader({
   accent,
   onAction,
   onClose,
+  onRemind,
+  onAskAlfred,
   showTriage,
   showDraft,
   billOpen,
@@ -27,6 +29,8 @@ export default function Reader({
   accent: string;
   onAction: InboxActionDispatcher;
   onClose: () => void;
+  onRemind?: () => void;
+  onAskAlfred?: () => void;
   showTriage: boolean;
   showDraft: boolean;
   billOpen: boolean;
@@ -55,6 +59,8 @@ export default function Reader({
     accent,
     onAction,
     onClose,
+    onRemind,
+    onAskAlfred,
     showTriage,
     showDraft,
     billOpen,

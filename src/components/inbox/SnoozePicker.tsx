@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import type { RefObject } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { CalendarClock } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
@@ -37,11 +37,27 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    window.queueMicrotask(() => {
+      panelRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
+    });
+  }, [view]);
+
   const presets = buildSnoozePresets(nowTick);
   const panelW = view === "custom" ? 300 : 240;
   const panelH = view === "custom" ? 400 : 180;
 
   const handlePick = (ts: number) => { onSelect(ts); onClose(); };
+  const handlePresetKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitem']"));
+    if (!items.length) return;
+    event.preventDefault();
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const offset = event.key === "ArrowDown" ? 1 : -1;
+    const next = current < 0 ? 0 : (current + offset + items.length) % items.length;
+    items[next]?.focus();
+  };
 
   return (
     <AnchoredFloatingPanel
@@ -58,7 +74,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
       }}
     >
       {view === "presets" ? (
-        <>
+        <div onKeyDown={handlePresetKeyDown}>
           <div
             style={{
               padding: "6px 10px 8px",
@@ -72,6 +88,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
             <button
               key={p.key}
               type="button"
+              role="menuitem"
               onClick={() => handlePick(p.at)}
               onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -98,6 +115,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
           />
           <button
             type="button"
+            role="menuitem"
             onClick={() => setView("custom")}
             onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -112,7 +130,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
             <CalendarClock size={12} color="rgba(205,214,244,0.6)" />
             <span>Pick date &amp; time</span>
           </button>
-        </>
+        </div>
       ) : (
         <CalendarDateTimeView
           nowTick={nowTick}

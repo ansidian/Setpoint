@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComponentProps } from "react";
+import { useState } from "react";
+import type { ComponentProps, SetStateAction } from "react";
 import DesktopReader from "./DesktopReader";
 import { shouldSuspendInboxHotkeys } from "../inboxHotkeys";
 import type { InboxEmailLike } from "../inboxTypes";
@@ -32,8 +33,13 @@ function renderReader(overrides: DesktopReaderOverrides = {}) {
   const onOpenRecordedBill = overrides.onOpenRecordedBill || vi.fn();
   const setBillOpen = overrides.setBillOpen || vi.fn();
   const setDrafting = overrides.setDrafting || vi.fn();
-  render(
-    <DesktopReader
+  function ReaderHarness() {
+    const [snoozeOpen, setSnoozeOpen] = useState(overrides.snoozeOpen ?? false);
+    const updateSnooze = (value: SetStateAction<boolean>) => {
+      setSnoozeOpen(value);
+      overrides.setSnoozeOpen?.(value);
+    };
+    return <DesktopReader
       email={{
         id: "msg-1",
         uid: "msg-1",
@@ -56,20 +62,129 @@ function renderReader(overrides: DesktopReaderOverrides = {}) {
       billMounted={overrides.billMounted || false}
       setBillOpen={setBillOpen}
       onOpenRecordedBill={onOpenRecordedBill}
-      snoozeBtnRef={{ current: null }}
-      snoozeOpen={overrides.snoozeOpen ?? false}
-      setSnoozeOpen={overrides.setSnoozeOpen || (() => {})}
+      snoozeOpen={snoozeOpen}
+      setSnoozeOpen={updateSnooze}
       bodyState={overrides.bodyState || { loading: false, error: null, body: "", source: "loaded" }}
       billResolution={overrides.billResolution ? { ...IDLE_BILL_RESOLUTION, ...overrides.billResolution } : undefined}
       drafting={overrides.drafting || false}
       setDrafting={setDrafting}
       readOnly={overrides.readOnly || false}
-    />,
-  );
+      onRemind={overrides.onRemind}
+      onAskAlfred={overrides.onAskAlfred}
+    />;
+  }
+  render(<ReaderHarness />);
   return { onAction, onOpenRecordedBill, setBillOpen, setDrafting };
 }
 
+function openMoveMenu() {
+  const trigger = screen.getByRole("button", { name: /move to/i });
+  fireEvent.click(trigger);
+  return {
+    trigger,
+    menu: screen.getByRole("menu", { name: /move email/i }),
+  };
+}
+
+function openTriageMenu() {
+  const trigger = screen.getByRole("button", { name: /^triage$/i });
+  fireEvent.click(trigger);
+  return {
+    trigger,
+    menu: screen.getByRole("menu", { name: /triage email/i }),
+  };
+}
+
 describe("DesktopReader snapshot actions", () => {
+  it("groups ordered lane and triage commands under stable labelled triggers", () => {
+    renderReader();
+
+    const move = openMoveMenu();
+    const moveItems = within(move.menu).getAllByRole("menuitem");
+    expect(moveItems.map((item) => item.textContent)).toEqual(["FYIF", "NoiseN"]);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    const triage = openTriageMenu();
+    const triageItems = within(triage.menu).getAllByRole("menuitem");
+    expect(triageItems.map((item) => item.textContent)).toEqual([
+      "Mark handledH",
+      "Dismiss from todayD",
+      "Snooze…S",
+      "PinP",
+      "Mark read",
+    ]);
+  });
+
+  it("closes grouped menus after dispatch and restores focus to the trigger", () => {
+    const { onAction } = renderReader();
+    const { trigger, menu } = openMoveMenu();
+
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /^fyi$/i }));
+
+    expect(onAction).toHaveBeenCalledWith("snapshot-move-lane", "fyi");
+    expect(screen.queryByRole("menu", { name: /move email/i })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("supports arrow navigation and predictable Escape dismissal", async () => {
+    renderReader();
+    const { trigger, menu } = openTriageMenu();
+    const items = within(menu).getAllByRole("menuitem");
+
+    await waitFor(() => expect(document.activeElement).toBe(items[0]));
+    fireEvent.keyDown(items[0], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("menu", { name: /triage email/i })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("reserves the work cluster for Remind me and Ask Alfred ahead of organize and utility actions", () => {
+    const onRemind = vi.fn();
+    const onAskAlfred = vi.fn();
+    renderReader({ onRemind, onAskAlfred });
+
+    fireEvent.click(screen.getByRole("button", { name: /remind me/i }));
+    fireEvent.click(screen.getByRole("button", { name: /ask alfred/i }));
+
+    expect(onRemind).toHaveBeenCalledOnce();
+    expect(onAskAlfred).toHaveBeenCalledOnce();
+    const clusters = screen.getByTestId("desktop-reader-action-bar")
+      .querySelectorAll<HTMLElement>("[data-action-cluster]");
+    expect(Array.from(clusters, (cluster) => cluster.dataset.actionCluster)).toEqual([
+      "work",
+      "organize",
+      "utilities",
+    ]);
+  });
+
+  it("disables Move as a whole while leaving unaffected Triage commands available", () => {
+    renderReader({ email: { _optimisticSnapshotPending: true } });
+
+    expect((screen.getByRole("button", { name: /move to/i }) as HTMLButtonElement).disabled).toBe(true);
+    const triage = openTriageMenu();
+    expect((within(triage.menu).getByRole("menuitem", { name: /mark handled/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(triage.menu).getByRole("menuitem", { name: /dismiss from today/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(triage.menu).getByRole("menuitem", { name: /snooze/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((within(triage.menu).getByRole("menuitem", { name: /^pin$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((within(triage.menu).getByRole("menuitem", { name: /mark read/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("hands focus from Triage to Snooze and restores it when the picker closes", async () => {
+    renderReader();
+    const { trigger, menu } = openTriageMenu();
+
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /snooze/i }));
+    const picker = await screen.findByRole("menu", { name: "Snooze" });
+    expect(screen.queryByRole("menu", { name: /triage email/i })).toBeNull();
+    await waitFor(() => expect(picker.contains(document.activeElement)).toBe(true));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("menu", { name: "Snooze" })).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("keeps the bill-pay affordance visible for triaged finance bill emails", () => {
     renderReader({
       email: {
@@ -244,22 +359,25 @@ describe("DesktopReader snapshot actions", () => {
   it("shows manual correction controls for active snapshot rows", () => {
     renderReader();
 
-    expect(screen.getByRole("button", { name: /move to fyi/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /move to noise/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /dismiss from today/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /pin email/i })).toBeTruthy();
-    expect(screen.queryByText("Move to FYI")).toBeNull();
-    expect(screen.queryByText("Move to Noise")).toBeNull();
-    expect(screen.queryByText("Dismiss")).toBeNull();
+    const move = openMoveMenu();
+    expect(within(move.menu).getByRole("menuitem", { name: "FYI" })).toBeTruthy();
+    expect(within(move.menu).getByRole("menuitem", { name: "Noise" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    const triage = openTriageMenu();
+    expect(within(triage.menu).getByRole("menuitem", { name: /mark handled/i })).toBeTruthy();
+    expect(within(triage.menu).getByRole("menuitem", { name: /dismiss from today/i })).toBeTruthy();
+    expect(within(triage.menu).getByRole("menuitem", { name: /^pin$/i })).toBeTruthy();
   });
 
   it("allows FYI snapshot rows to be marked handled", () => {
     const { onAction } = renderReader({ email: { _lane: "fyi" } });
 
-    const handledButton = screen.getByRole("button", { name: /mark handled/i });
+    const move = openMoveMenu();
+    expect(within(move.menu).queryByRole("menuitem", { name: "FYI" })).toBeNull();
+    fireEvent.keyDown(document, { key: "Escape" });
+    const handledButton = within(openTriageMenu().menu).getByRole("menuitem", { name: /mark handled/i });
     expect(handledButton.textContent).toContain("H");
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
 
     fireEvent.click(handledButton);
     expect(onAction).toHaveBeenCalledWith("snapshot-handled");
@@ -268,30 +386,33 @@ describe("DesktopReader snapshot actions", () => {
   it("shows compact desktop key hints for immediate reader actions", () => {
     renderReader();
 
-    expect(screen.getByRole("button", { name: /move to fyi/i }).textContent).toContain("F");
-    expect(screen.getByRole("button", { name: /move to noise/i }).textContent).toContain("N");
-    expect(screen.getByRole("button", { name: /mark handled/i }).textContent).toContain("H");
-    expect(screen.getByRole("button", { name: /dismiss from today/i }).textContent).toContain("D");
-    expect(screen.getByRole("button", { name: /snooze email/i }).textContent).toContain("S");
+    const move = openMoveMenu();
+    expect(within(move.menu).getByRole("menuitem", { name: "FYI" }).textContent).toContain("F");
+    expect(within(move.menu).getByRole("menuitem", { name: "Noise" }).textContent).toContain("N");
+    fireEvent.keyDown(document, { key: "Escape" });
+    const triage = openTriageMenu();
+    expect(within(triage.menu).getByRole("menuitem", { name: /mark handled/i }).textContent).toContain("H");
+    expect(within(triage.menu).getByRole("menuitem", { name: /dismiss from today/i }).textContent).toContain("D");
+    expect(within(triage.menu).getByRole("menuitem", { name: /snooze/i }).textContent).toContain("S");
+    expect(within(triage.menu).getByRole("menuitem", { name: /^pin$/i }).textContent).toContain("P");
     expect(screen.getByRole("button", { name: /trash email/i }).textContent).toContain("E");
-    expect(screen.getByRole("button", { name: /pin email/i }).textContent).toContain("P");
   });
 
   it("suspends inbox hotkeys while the desktop snooze menu is open without moving focus", () => {
     renderReader({ snoozeOpen: true });
-    const snoozeButton = screen.getByRole("button", { name: /snooze email/i });
-    snoozeButton.focus();
+    const triageButton = screen.getByRole("button", { name: /^triage$/i });
+    triageButton.focus();
 
-    expect(document.activeElement).toBe(snoozeButton);
-    expect(shouldSuspendInboxHotkeys(snoozeButton)).toBe(true);
+    expect(document.activeElement).toBe(triageButton);
+    expect(shouldSuspendInboxHotkeys(triageButton)).toBe(true);
   });
 
 	  it("dispatches snapshot lane and lifecycle actions", () => {
     const { onAction } = renderReader();
 
-    fireEvent.click(screen.getByRole("button", { name: /move to fyi/i }));
-    fireEvent.click(screen.getByRole("button", { name: /mark handled/i }));
-    fireEvent.click(screen.getByRole("button", { name: /dismiss from today/i }));
+    fireEvent.click(within(openMoveMenu().menu).getByRole("menuitem", { name: "FYI" }));
+    fireEvent.click(within(openTriageMenu().menu).getByRole("menuitem", { name: /mark handled/i }));
+    fireEvent.click(within(openTriageMenu().menu).getByRole("menuitem", { name: /dismiss from today/i }));
 
     expect(onAction).toHaveBeenCalledWith("snapshot-move-lane", "fyi");
     expect(onAction).toHaveBeenCalledWith("snapshot-handled");
@@ -306,26 +427,23 @@ describe("DesktopReader snapshot actions", () => {
 	      },
 	    });
 
-	    expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
-	    expect(screen.getByRole("button", { name: /reopen/i }).textContent).toContain("H");
-	    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
-	    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+	    expect(screen.queryByRole("button", { name: /move to/i })).toBeNull();
+	    const reopen = within(openTriageMenu().menu).getByRole("menuitem", { name: /reopen/i });
+	    expect(reopen.textContent).toContain("H");
+	    expect(screen.queryByRole("menuitem", { name: /mark handled/i })).toBeNull();
 
-	    fireEvent.click(screen.getByRole("button", { name: /reopen/i }));
+	    fireEvent.click(reopen);
 	    expect(onAction).toHaveBeenCalledWith("snapshot-reopen");
 	  });
 
   it("hides mutating actions for read-only snapshot rows", () => {
     renderReader({ readOnly: true });
 
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /mark read/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
     // Pin is exempt from the readOnly gate — pinning from a frozen snapshot is the feature.
-    expect(screen.getByRole("button", { name: /pin email/i })).toBeTruthy();
+    const triage = openTriageMenu();
+    expect(within(triage.menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["PinP"]);
   });
 
   it("limits Catch-up rows to read state and Gmail open actions", () => {
@@ -342,17 +460,16 @@ describe("DesktopReader snapshot actions", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: /mark read/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /open in gmail/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /move to needs attention/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /pay bill/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /review reply/i })).toBeNull();
+    const triage = openTriageMenu();
+    expect(within(triage.menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "PinP",
+      "Mark read",
+    ]);
   });
 
   it("keeps queued snapshot rows dismissible but blocks manual triage and handled workflows", () => {
@@ -364,17 +481,16 @@ describe("DesktopReader snapshot actions", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: /dismiss from today/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /mark read/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /snooze email/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /trash email/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /move to needs attention/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to/i })).toBeNull();
+    const triage = openTriageMenu();
+    expect(within(triage.menu).queryByRole("menuitem", { name: /mark handled/i })).toBeNull();
+    expect(within(triage.menu).getByRole("menuitem", { name: /dismiss from today/i })).toBeTruthy();
+    expect(within(triage.menu).getByRole("menuitem", { name: /mark read/i })).toBeTruthy();
+    expect(within(triage.menu).getByRole("menuitem", { name: /snooze/i })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /dismiss from today/i }));
+    fireEvent.click(within(triage.menu).getByRole("menuitem", { name: /dismiss from today/i }));
     expect(onAction).toHaveBeenCalledWith("snapshot-dismiss");
   });
 
@@ -388,13 +504,14 @@ describe("DesktopReader snapshot actions", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: /mark unread/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /snooze email/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /trash email/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to/i })).toBeNull();
+    const triage = openTriageMenu();
+    expect(within(triage.menu).getByRole("menuitem", { name: /mark unread/i })).toBeTruthy();
+    expect(within(triage.menu).getByRole("menuitem", { name: /snooze/i })).toBeTruthy();
+    expect(within(triage.menu).queryByRole("menuitem", { name: /dismiss from today/i })).toBeNull();
+    expect(within(triage.menu).queryByRole("menuitem", { name: /mark handled/i })).toBeNull();
   });
 
   it("hides snapshot lifecycle actions when snapshot_item_id is missing (drift guard)", () => {
@@ -402,10 +519,10 @@ describe("DesktopReader snapshot actions", () => {
     // dispatch + hotkeys both require it), so the buttons must not appear.
     renderReader({ email: { _lane: "needs_attention", snapshot_item_id: undefined } });
 
-    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to/i })).toBeNull();
+    const triage = openTriageMenu();
+    expect(within(triage.menu).queryByRole("menuitem", { name: /mark handled/i })).toBeNull();
+    expect(within(triage.menu).queryByRole("menuitem", { name: /dismiss from today/i })).toBeNull();
   });
 });
 
@@ -413,15 +530,16 @@ describe("DesktopReader pin toggle", () => {
   it("dispatches pin-toggle when clicked", () => {
     const { onAction } = renderReader();
 
-    fireEvent.click(screen.getByRole("button", { name: /pin email/i }));
+    fireEvent.click(within(openTriageMenu().menu).getByRole("menuitem", { name: /^pin$/i }));
     expect(onAction).toHaveBeenCalledWith("pin-toggle");
   });
 
   it("flips the aria-label when the email is pinned", () => {
     renderReader({ email: { _pinned: true } });
 
-    expect(screen.getByRole("button", { name: /unpin email/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^pin email$/i })).toBeNull();
+    const triage = openTriageMenu();
+    expect(within(triage.menu).getByRole("menuitem", { name: /^unpin$/i })).toBeTruthy();
+    expect(within(triage.menu).queryByRole("menuitem", { name: /^pin$/i })).toBeNull();
   });
 
   it("renders even for catch-up rows", () => {
@@ -432,7 +550,7 @@ describe("DesktopReader pin toggle", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: /pin email/i })).toBeTruthy();
+    expect(within(openTriageMenu().menu).getByRole("menuitem", { name: /^pin$/i })).toBeTruthy();
   });
 });
 

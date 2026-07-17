@@ -65,3 +65,105 @@ export function resolveReaderActions(
     pinned: !!email?._pinned,
   };
 }
+
+export type ReaderMoveDestination = {
+  lane: "needs_attention" | "fyi" | "noise";
+  label: string;
+  keyHint: "A" | "F" | "N";
+};
+
+export type ReaderTriageItem = {
+  key: "snapshot-reopen" | "snapshot-handled" | "snapshot-dismiss" | "snooze" | "pin-toggle" | "toggle-read";
+  label: string;
+  keyHint: "H" | "D" | "S" | "P" | null;
+  section: "lifecycle" | "state";
+  disabled: boolean;
+  active: boolean;
+};
+
+export function resolveReaderActionGroups(
+  email: InboxEmailLike,
+  options: { readOnly?: boolean } = {},
+) {
+  const actions = resolveReaderActions(email, options);
+  const snapshotPending = !!email._optimisticSnapshotPending;
+  const moveDestinations: ReaderMoveDestination[] = [];
+  const triageItems: ReaderTriageItem[] = [];
+
+  if (actions.canMoveToNeeds) {
+    moveDestinations.push({ lane: "needs_attention", label: "Needs Attention", keyHint: "A" });
+  }
+  if (actions.canMoveToFyi) {
+    moveDestinations.push({ lane: "fyi", label: "FYI", keyHint: "F" });
+  }
+  if (actions.canMoveToNoise) {
+    moveDestinations.push({ lane: "noise", label: "Noise", keyHint: "N" });
+  }
+
+  if (actions.canReopen) {
+    triageItems.push({
+      key: "snapshot-reopen",
+      label: "Reopen",
+      keyHint: "H",
+      section: "lifecycle",
+      disabled: snapshotPending,
+      active: false,
+    });
+  } else if (actions.canHandle) {
+    triageItems.push({
+      key: "snapshot-handled",
+      label: "Mark handled",
+      keyHint: "H",
+      section: "lifecycle",
+      disabled: snapshotPending,
+      active: false,
+    });
+  }
+  if (actions.canDismiss) {
+    triageItems.push({
+      key: "snapshot-dismiss",
+      label: "Dismiss from today",
+      keyHint: "D",
+      section: "lifecycle",
+      disabled: snapshotPending,
+      active: false,
+    });
+  }
+  if (actions.showDestructiveActions) {
+    triageItems.push({
+      key: "snooze",
+      label: "Snooze…",
+      keyHint: "S",
+      section: "lifecycle",
+      disabled: false,
+      active: false,
+    });
+  }
+  if (actions.canPin) {
+    triageItems.push({
+      key: "pin-toggle",
+      label: actions.pinned ? "Unpin" : "Pin",
+      keyHint: "P",
+      section: "state",
+      disabled: false,
+      active: actions.pinned,
+    });
+  }
+  if (actions.showMutableActions) {
+    triageItems.push({
+      key: "toggle-read",
+      label: email.read ? "Mark unread" : "Mark read",
+      keyHint: null,
+      section: "state",
+      disabled: false,
+      active: false,
+    });
+  }
+
+  return {
+    ...actions,
+    moveDestinations,
+    moveDisabled: snapshotPending,
+    triageItems,
+  };
+}
