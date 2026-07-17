@@ -56,4 +56,5 @@ function Button({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- established button module interface also exposes its variant helper
 export { Button, buttonVariants }

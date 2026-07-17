@@ -12,10 +12,9 @@ export default defineConfig({
   },
   test: {
     include: [
-      "server/**/*.test.js",
-      "src/**/*.test.js",
-      "src/**/*.test.jsx",
-      "scripts/**/*.test.mjs",
+      "server/**/*.test.{js,ts}",
+      "src/**/*.test.{js,jsx,ts,tsx}",
+      "scripts/**/*.test.{mjs,mts}",
     ],
     environment: "happy-dom",
     testTimeout: 10000,
