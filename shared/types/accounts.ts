@@ -13,6 +13,8 @@ export interface AccountSummary {
   needs_reauth: boolean;
 }
 
+export type AccountsResponse = AccountSummary[] | { accounts: AccountSummary[] };
+
 export interface AccountPatchRequest {
   calendar_enabled?: boolean;
   label?: string;
@@ -60,4 +62,31 @@ export interface CreateApiTokenResponse {
   label: string;
   scopes: string[];
   expires_at: number;
+}
+
+export interface PasskeyMetadata {
+  id: number;
+  credentialId: string;
+  userId: string;
+  label: string;
+  signCount: number;
+  transports: string[];
+  backedUp: boolean | null;
+  credentialDeviceType: string | null;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
+export interface PasskeyListResponse {
+  enforcementActive: boolean;
+  passkeys: PasskeyMetadata[];
+}
+
+export interface PasskeyRegistrationResponse {
+  enforcementActive: boolean;
+  passkey: PasskeyMetadata;
+}
+
+export interface PasskeyDeleteResponse extends PasskeyListResponse {
+  success: true;
 }

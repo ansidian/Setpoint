@@ -11,7 +11,11 @@ import type {
   AccountMutationResponse,
   AccountPatchRequest,
   AccountSummary,
+  AccountsResponse,
   ApiTokenMetadata,
+  PasskeyDeleteResponse,
+  PasskeyListResponse,
+  PasskeyRegistrationResponse,
   CreateApiTokenResponse,
   GmailAuthUrlResponse,
   ICloudAccountResponse,
@@ -261,7 +265,7 @@ export const cancelPasskeyAuthentication = (): Promise<unknown> => (
   })
 );
 export const logout = (): Promise<unknown> => apiFetch("/api/auth/logout", { method: "POST" });
-export const listPasskeys = (): Promise<unknown> => apiFetch("/api/auth/passkeys");
+export const listPasskeys = (): Promise<PasskeyListResponse> => apiFetch("/api/auth/passkeys");
 export const getPasskeyRegistrationOptions = (label: string): Promise<PublicKeyCredentialCreationOptionsJSON> => (
   apiFetch<PublicKeyCredentialCreationOptionsJSON>("/api/auth/passkeys/registration/options", {
     method: "POST",
@@ -269,14 +273,14 @@ export const getPasskeyRegistrationOptions = (label: string): Promise<PublicKeyC
     body: JSON.stringify({ label }),
   })
 );
-export const verifyPasskeyRegistration = (credential: RegistrationResponseJSON): Promise<unknown> => (
+export const verifyPasskeyRegistration = (credential: RegistrationResponseJSON & { label: string }): Promise<PasskeyRegistrationResponse> => (
   apiFetch("/api/auth/passkeys/registration/verify", {
     method: "POST",
     redirectOnAuthFailure: false,
     body: JSON.stringify(credential),
   })
 );
-export const deletePasskeyCredential = (credentialId: ApiId): Promise<unknown> => (
+export const deletePasskeyCredential = (credentialId: ApiId): Promise<PasskeyDeleteResponse> => (
   apiFetch(`/api/auth/passkeys/${encodeURIComponent(credentialId)}`, {
     method: "DELETE",
     redirectOnAuthFailure: false,
@@ -523,7 +527,7 @@ export const getActualCacheStatus = (): Promise<ActualCacheStatusResponse> => ap
 export const hydrateActualBudgetCache = (): Promise<ActualCacheHydrationResponse> => apiFetch("/api/briefing/actual/cache/hydrate", { method: "POST" });
 
 // Accounts & Settings
-export const getAccounts = (): Promise<AccountSummary[]> => apiFetch("/api/ea/accounts");
+export const getAccounts = (): Promise<AccountsResponse> => apiFetch("/api/ea/accounts");
 export const getGmailAuthUrl = (): Promise<GmailAuthUrlResponse> => apiFetch("/api/ea/accounts/gmail/auth");
 export const addICloudAccount = (email: string, password: string): Promise<ICloudAccountResponse> => apiFetch("/api/ea/accounts/icloud", { method: "POST", body: JSON.stringify({ email, password }) });
 export const updateAccount = (id: ApiId, data: AccountPatchRequest): Promise<AccountMutationResponse> => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
