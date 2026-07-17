@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
 import useAddTaskPanelController from "./useAddTaskPanelController";
-import { ensureChrono } from "../../calendar/events/parseCalendarTitle.js";
+import { ensureChrono } from "../../calendar/events/parseCalendarTitle";
 import { invalidateTodoistReferenceCache } from "./todoistReferenceCache";
 import type { AddTaskPanelProps } from "./types";
 import type * as Api from "../../../api";
@@ -71,7 +71,7 @@ async function flushSubmitSettled() {
 describe("AddTaskPanel due picker", () => {
   // The NLP/recurring path (controller -> add-task-panel/parsing) reuses the
   // same lazily-imported chrono-node singleton as the calendar editor
-  // (../../calendar/events/parseCalendarTitle.js). parsing.js calls the
+  // (../../calendar/events/parseCalendarTitle). parsing.js calls the
   // SYNCHRONOUS parseCalendarTitle, which only returns the full natural-language
   // result once chrono has finished loading; a cold singleton degrades to "no
   // temporal match", so the recurring `due_string`/preview is wrong. The

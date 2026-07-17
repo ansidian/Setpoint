@@ -1,61 +1,62 @@
 # Calendar Views Map
 
-Per-domain view layers for the calendar modal: events, bills, and deadlines each supply cell content, agenda rails, detail rails, and footers; `agenda/` holds the shared rail shell and mini calendar. Entry points are the view objects `eventsView.jsx` and `billsView.jsx`, which bundle a domain's compute/detail/footer/header exports.
+Per-domain view layers for the calendar modal: events, bills, and deadlines each supply cell content, agenda rails, detail rails, and footers; `agenda/` holds the shared rail shell and mini calendar. Entry points are the view objects `eventsView.tsx` and `billsView.tsx`, which bundle a domain's compute/detail/footer/header exports.
 
 ## Files
 
 ### Top-level
-- `eventsView.jsx` — events view object: weather integration, deadline overlay merging
-- `billsView.jsx` — bills view object: compute/detail/footer/header bundle
-- `EventsHeaderExtras.jsx` — events/deadlines overlay visibility toggles
+- `eventsView.tsx` — events view object: weather integration, deadline overlay merging
+- `calendarViewTypes.ts` — shared typed view, item, computed-data, and weather contracts
+- `billsView.tsx` — bills view object: compute/detail/footer/header bundle
+- `EventsHeaderExtras.tsx` — events/deadlines overlay visibility toggles
 
 ### agenda (shared rail infrastructure)
-- `agenda/AgendaRailShell.jsx` — scrollable rail container with focus and row navigation
-- `agenda/AgendaMonthScrollContainer.jsx` — multi-month rail scroller: section registration, topmost-date walk, entry anchor, passive-sync emission
-- `agenda/MiniCalendar.jsx` — month picker with day markers and counts
-- `agenda/agendaDateModel.js` — date grouping, month bounds, header label formatting
-- `agenda/miniCalendarModel.js` — mini-calendar cells, marker colors, item dedup
+- `agenda/AgendaRailShell.tsx` — scrollable rail container with focus and row navigation
+- `agenda/AgendaMonthScrollContainer.tsx` — multi-month rail scroller: section registration, topmost-date walk, entry anchor, passive-sync emission
+- `agenda/MiniCalendar.tsx` — month picker with day markers and counts
+- `agenda/agendaDateModel.ts` — date grouping, month bounds, header label formatting
+- `agenda/miniCalendarModel.ts` — mini-calendar cells, marker colors, item dedup
 
 ### events
-- `events/EventsAgendaRail.jsx` — combined timeline (events + deadline overlays) with weather
-- `events/EventsAgendaRailParts.jsx` — weather header and skeleton loader
-- `events/EventsAgendaEventRows.jsx` — all-day and timed event rows with location/reminders
-- `events/EventsAgendaDeadlineRow.jsx` — task-like agenda row with deadline status
-- `events/EventsCellContent.jsx` — event chips in grid cells, multi-day span handling
-- `events/EventsDetailRail.jsx` — event detail panel: duration, location, reminders, attendees
-- `events/EventSelectedCard.jsx` — selected-event hero card (title/time/meta chips); shared by the detail rail and the dashboard glance sheet
-- `events/eventsAgendaModel.js` — event → agenda conversion, date range clamping
-- `events/eventsPlanningModel.js` — deadline overlay merging and planning item ordering
-- `events/eventsAgendaColor.js` — hex → rgba and contrast text selection
-- `events/eventDetailModel.js` — pure event-detail transforms (title sanitize, time range, meta, accent, Google-calendar action url); shared by the card, detail rail, and dashboard glance sheet
+- `events/EventsAgendaRail.tsx` — combined timeline (events + deadline overlays) with weather
+- `events/EventsAgendaRailParts.tsx` — weather header and skeleton loader
+- `events/EventsAgendaEventRows.tsx` — all-day and timed event rows with location/reminders
+- `events/EventsAgendaDeadlineRow.tsx` — task-like agenda row with deadline status
+- `events/EventsCellContent.tsx` — event chips in grid cells, multi-day span handling
+- `events/EventsDetailRail.tsx` — event detail panel: duration, location, reminders, attendees
+- `events/EventSelectedCard.tsx` — selected-event hero card (title/time/meta chips); shared by the detail rail and the dashboard glance sheet
+- `events/eventsAgendaModel.ts` — event → agenda conversion, date range clamping
+- `events/eventsPlanningModel.ts` — deadline overlay merging and planning item ordering
+- `events/eventsAgendaColor.ts` — hex → rgba and contrast text selection
+- `events/eventDetailModel.ts` — pure event-detail transforms (title sanitize, time range, meta, accent, Google-calendar action url); shared by the card, detail rail, and dashboard glance sheet
 
 ### bills
-- `bills/BillsAgendaRail.jsx` — bill timeline grouped by date with utility status
-- `bills/BillsCellContent.jsx` — compact bill chips for grid cells
-- `bills/BillsDetailRail.jsx` — bill detail panel with schedule link and actions
-- `bills/BillSelectedCard.jsx` — selected-bill hero card (name/payee/amount/due/status); shared by the detail rail and the dashboard glance sheet
-- `bills/TransactionSelectedCard.jsx` — read-only transaction hero card (direction/amount/date/category/account/notes)
-- `bills/UtilityStatusButton.jsx` — tracked utility status pill
-- `bills/billsAgendaModel.js` — bill → agenda conversion, due labels, urgency coloring
-- `bills/billsModel.js` — day state computation, payment tracking, urgency colors
-- `bills/utilityStatusModel.js` — tracked-utility status: best-match selection, paid/stale/honored flags, date labels
-- `bills/financeSourceColors.js` — canonical income/outflow/transfer source colors for every Bills-view surface
+- `bills/BillsAgendaRail.tsx` — bill timeline grouped by date with utility status
+- `bills/BillsCellContent.tsx` — compact bill chips for grid cells
+- `bills/BillsDetailRail.tsx` — bill detail panel with schedule link and actions
+- `bills/BillSelectedCard.tsx` — selected-bill hero card (name/payee/amount/due/status); shared by the detail rail and the dashboard glance sheet
+- `bills/TransactionSelectedCard.tsx` — read-only transaction hero card (direction/amount/date/category/account/notes)
+- `bills/UtilityStatusButton.tsx` — tracked utility status pill
+- `bills/billsAgendaModel.ts` — bill → agenda conversion, due labels, urgency coloring
+- `bills/billsModel.ts` — day state computation, payment tracking, urgency colors
+- `bills/utilityStatusModel.ts` — tracked-utility status: best-match selection, paid/stale/honored flags, date labels
+- `bills/financeSourceColors.ts` — canonical income/outflow/transfer source colors for every Bills-view surface
 
 ### deadlines
-- `deadlines/DeadlinesAgendaRail.jsx` — task timeline grouped by due date with status
-- `deadlines/DeadlinesCellContent.jsx` — compact task chips for grid cells
-- `deadlines/DeadlinesDetailRail.jsx` — task detail panel: status, reminders, actions
-- `deadlines/DeadlinesFooter.jsx` — month summary: totals, due today/this week
-- `deadlines/DeadlinesHeaderExtras.jsx` — new-task button for the selected date
-- `deadlines/DeadlineDetailCard.jsx` — task card with metadata and reminders
-- `deadlines/DeadlineDetailActions.jsx` — mark-complete, edit, delete, link menu
-- `deadlines/DeadlineQuickActionLayer.jsx` — context menu for quick actions
-- `deadlines/DeadlineStatusIndicator.jsx` — status badge icon
-- `deadlines/deadlineDetailModel.js` — task formatting, priority/context labels, compression
-- `deadlines/deadlinesAgendaModel.js` — task → agenda conversion, status/accent mapping
-- `deadlines/deadlinesModel.js` — status normalization, priority colors, source resolution
-- `deadlines/calendarDeadlineRescheduleModel.js` — pure drag-reschedule target resolution + day-only payload (re-supplies `due_time`) + drag-eligibility gate
-- `deadlines/useDeadlineQuickActions.js` — quick-action menu building and handlers, plus the day-only drag-reschedule slice
+- `deadlines/DeadlinesAgendaRail.tsx` — task timeline grouped by due date with status
+- `deadlines/DeadlinesCellContent.tsx` — compact task chips for grid cells
+- `deadlines/DeadlinesDetailRail.tsx` — task detail panel: status, reminders, actions
+- `deadlines/DeadlinesFooter.tsx` — month summary: totals, due today/this week
+- `deadlines/DeadlinesHeaderExtras.tsx` — new-task button for the selected date
+- `deadlines/DeadlineDetailCard.tsx` — task card with metadata and reminders
+- `deadlines/DeadlineDetailActions.tsx` — mark-complete, edit, delete, link menu
+- `deadlines/DeadlineQuickActionLayer.tsx` — context menu for quick actions
+- `deadlines/DeadlineStatusIndicator.tsx` — status badge icon
+- `deadlines/deadlineDetailModel.ts` — task formatting, priority/context labels, compression
+- `deadlines/deadlinesAgendaModel.ts` — task → agenda conversion, status/accent mapping
+- `deadlines/deadlinesModel.ts` — status normalization, priority colors, source resolution
+- `deadlines/calendarDeadlineRescheduleModel.ts` — pure drag-reschedule target resolution + day-only payload (re-supplies `due_time`) + drag-eligibility gate
+- `deadlines/useDeadlineQuickActions.ts` — quick-action menu building and handlers, plus the day-only drag-reschedule slice
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

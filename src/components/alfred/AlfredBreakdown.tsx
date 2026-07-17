@@ -8,7 +8,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { countBreakdownRows } from "./alfredPanelModel";
 import { BillRow, DeadlineRow, EmailRow, EventRow, TransactionRow } from "./AlfredRows";
 import { resolveAlfredChipAction } from "./alfredChipActionModel";
-import { pacificYMD } from "../calendar/calendarDateUtils.js";
+import { pacificYMD } from "../calendar/calendarDateUtils.ts";
 import type { AlfredItemKind } from "../../../shared/types/alfred";
 import type { AlfredChipAction } from "./alfredChipActionModel";
 import type { AlfredLeafRowProps } from "./AlfredRows";

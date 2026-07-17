@@ -585,7 +585,7 @@ export function buildFollowingSeriesRecurrence(
     return buildGoogleRecurrenceRules(input.recurrence, {
       allDay: !!input.allDay,
       startDate: input.startDate,
-      startTime: input.startTime,
+      startTime: input.startTime ?? undefined,
     });
   }
 

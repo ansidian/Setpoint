@@ -20,7 +20,7 @@ import {
   isOverdueYmd,
   nextEventId,
 } from "./alfredRowOrdering";
-import { pacificYMD } from "../calendar/calendarDateUtils.js";
+import { pacificYMD } from "../calendar/calendarDateUtils.ts";
 import { resolveAlfredChipAction } from "./alfredChipActionModel";
 import type { AlfredChipAction } from "./alfredChipActionModel";
 import type { AlfredItemKind } from "../../../shared/types/alfred";

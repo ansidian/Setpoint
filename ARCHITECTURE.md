@@ -197,48 +197,10 @@ graph LR
 
 ### Hooks
 
-Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/components/**/use*.{js,ts}` (test files excluded). Each entry shows the file's first exported name. Model helpers (e.g. `calendarRangeModel.js`) live alongside hooks but are excluded from this list — they're pure modules, not React hooks.
+Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/components/**/use*.{js,ts}` (test files excluded). Each entry shows the file's first exported name. Model helpers (e.g. `calendarRangeModel.ts`) live alongside hooks but are excluded from this list — they're pure modules, not React hooks.
 
 <!-- BEGIN:hooks -->
-| Export | File |
-|--------|------|
-| `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.js` |
-| `useCalendarEventEditor` | `src/components/calendar/events/useCalendarEventEditor.js` |
-| `useCalendarEventTitleComposer` | `src/components/calendar/events/useCalendarEventTitleComposer.js` |
-| `useCalendarLocationSuggestions` | `src/components/calendar/events/useCalendarLocationSuggestions.js` |
-| `useCalendarQuickActions` | `src/components/calendar/events/useCalendarQuickActions.js` |
-| `useCalendarSources` | `src/components/calendar/events/useCalendarSources.js` |
-| `useEventRecurrenceDraft` | `src/components/calendar/events/useEventRecurrenceDraft.js` |
-| `useEventReminderDrafts` | `src/components/calendar/events/useEventReminderDrafts.js` |
-| `useCalendarGridEffects` | `src/components/calendar/modal/useCalendarGridEffects.js` |
-| `useCalendarGridOverflow` | `src/components/calendar/modal/useCalendarGridOverflow.js` |
-| `useFloatingDetailDrag` | `src/components/calendar/modal/useFloatingDetailDrag.js` |
-| `useFloatingDetailPlacement` | `src/components/calendar/modal/useFloatingDetailPlacement.js` |
-| `useCalendarGhostPreview` | `src/components/calendar/useCalendarGhostPreview.js` |
-| `useDeadlineQuickActions` | `src/components/calendar/views/deadlines/useDeadlineQuickActions.js` |
-| `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.js` |
-| `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.js` |
-| `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.js` |
-| `useCalendarDomainRange` | `src/hooks/calendar/useCalendarDomainRange.js` |
-| `useCalendarEventSelectionSet` | `src/hooks/calendar/useCalendarEventSelectionSet.js` |
-| `useCalendarFloatingDetail` | `src/hooks/calendar/useCalendarFloatingDetail.js` |
-| `useCalendarModalHotkeys` | `src/hooks/calendar/useCalendarModalHotkeys.js` |
-| `useCalendarModalSearch` | `src/hooks/calendar/useCalendarModalSearch.js` |
-| `useCalendarModalSelection` | `src/hooks/calendar/useCalendarModalSelection.js` |
-| `useCalendarModalViewModel` | `src/hooks/calendar/useCalendarModalViewModel.js` |
-| `useCalendarMonthNavigation` | `src/hooks/calendar/useCalendarMonthNavigation.js` |
-| `useCalendarRange` | `src/hooks/calendar/useCalendarRange.js` |
-| `useCalendarScrollSync` | `src/hooks/calendar/useCalendarScrollSync.js` |
-| `useCalendarScrollViewport` | `src/hooks/calendar/useCalendarScrollViewport.js` |
-| `useCalendarSearchActivation` | `src/hooks/calendar/useCalendarSearchActivation.js` |
-| `useDashboardDetailFocus` | `src/hooks/calendar/useDashboardDetailFocus.js` |
-| `useDashboardFocusRetry` | `src/hooks/calendar/useDashboardFocusRetry.js` |
-| `useDeadlineOverlayState` | `src/hooks/calendar/useDeadlineOverlayState.js` |
-| `useEditorCancelOnScroll` | `src/hooks/calendar/useEditorCancelOnScroll.js` |
-| `useFloatingEditorRouting` | `src/hooks/calendar/useFloatingEditorRouting.js` |
-| `usePlanningReadinessState` | `src/hooks/calendar/usePlanningReadinessState.js` |
-| `useStaleDomainCache` | `src/hooks/calendar/useStaleDomainCache.js` |
-| `useViewportWidth` | `src/hooks/calendar/useViewportWidth.js` |
+_No hooks detected._
 <!-- END:hooks -->
 
 ### Calendar Code Map

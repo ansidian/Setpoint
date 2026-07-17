@@ -1,7 +1,7 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { completeDeadlineOccurrence, updateDeadline } from "../api";
-import { buildDeadlineReschedulePayload } from "../components/calendar/views/deadlines/calendarDeadlineRescheduleModel.js";
+import { buildDeadlineReschedulePayload } from "../components/calendar/views/deadlines/calendarDeadlineRescheduleModel.ts";
 import {
   EMPTY_DEADLINES,
   applyDeadlineComplete,

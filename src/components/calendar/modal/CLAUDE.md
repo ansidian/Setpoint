@@ -1,74 +1,74 @@
 # Calendar Modal Map
 
-The calendar modal's structural layer: month grid, day cells with chip stacks and overflow, multi-day span lanes, floating detail panel, and the three-rail shell (search / grid / context). Entry point is `CalendarModalShell.jsx`; state arrives from `src/hooks/calendar/` controllers via `buildCalendarModalShellProps.js`.
+The calendar modal's structural layer: month grid, day cells with chip stacks and overflow, multi-day span lanes, floating detail panel, and the three-rail shell (search / grid / context). Entry point is `CalendarModalShell`; state arrives from `src/hooks/calendar/` controllers via `buildCalendarModalShellProps.ts`.
 
 ## Files
 
 ### Shell + header
-- `CalendarModalShell.jsx` — three-rail in-flow layout (calendar tab fill), floating detail
-- `CalendarModalHeader.jsx` — month/year title, view toggle, search, close
-- `CalendarJumpToMonth.jsx` — month/year jump picker popover with crossfade transitions
-- `CalendarModalTexture.jsx` — decorative noise overlay
-- `buildCalendarModalShellProps.js` — adapter: controller bundles → shell props contract
-- `buildContextContent.jsx` — context-rail content router (editor/detail/empty/summary)
+- `CalendarModalShell.tsx` — three-rail in-flow layout (calendar tab fill), floating detail
+- `CalendarModalHeader.tsx` — month/year title, view toggle, search, close
+- `CalendarJumpToMonth.tsx` — month/year jump picker popover with crossfade transitions
+- `CalendarModalTexture.tsx` — decorative noise overlay
+- `buildCalendarModalShellProps.ts` — adapter: controller bundles → shell props contract
+- `buildContextContent.tsx` — context-rail content router (editor/detail/empty/summary)
 
 ### Grid + cells
-- `CalendarScrollContainer.jsx` — thin scroll-viewport shell: hosts `useCalendarScrollViewport` + `useEditorCancelOnScroll`, maps the mounted window to `CalendarMonthBlock`s + spacers
-- `CalendarMonthBlock.jsx` — one mounted month: derives block state (`calendarMonthBlockModel`), resolves data/preview, renders the headerless `CalendarGrid`
-- `calendarMonthBlockModel.js` — per-block active/cached/full-data/skeleton derivation (pure)
-- `CalendarGrid.jsx` — month grid orchestration: cells, overlays, selection handlers
-- `CalendarGridCells.jsx` — renders day cells, derives per-cell state
-- `CalendarCell.jsx` — single day cell: styling, header, weather, drag-drop targets
-- `CalendarGridWeekHeader.jsx` — weekday header row
-- `CalendarGridLayers.jsx` — overlay compositor: spans, boundaries, inline overflow, skeleton
-- `CalendarGridSkeleton.jsx` — initial-load placeholder
-- `CalendarSelectedCellFrame.jsx` — selected-cell content wrapper
-- `calendarGridUtils.js` — grid constants, month cell builder, boundary helpers
-- `calendarGridCellModel.js` — per-cell derived state: filtering, overdue/complete status
-- `calendarMonthPreviewModel.js` — preview entries for mounted non-active months, reused while inputs are unchanged
+- `CalendarScrollContainer.tsx` — thin scroll-viewport shell: hosts `useCalendarScrollViewport` + `useEditorCancelOnScroll`, maps the mounted window to `CalendarMonthBlock`s + spacers
+- `CalendarMonthBlock.tsx` — one mounted month: derives block state (`calendarMonthBlockModel`), resolves data/preview, renders the headerless `CalendarGrid`
+- `calendarMonthBlockModel.ts` — per-block active/cached/full-data/skeleton derivation (pure)
+- `CalendarGrid.tsx` — month grid orchestration: cells, overlays, selection handlers
+- `CalendarGridCells.tsx` — renders day cells, derives per-cell state
+- `CalendarCell.tsx` — single day cell: styling, header, weather, drag-drop targets
+- `CalendarGridWeekHeader.tsx` — weekday header row
+- `CalendarGridLayers.tsx` — overlay compositor: spans, boundaries, inline overflow, skeleton
+- `CalendarGridSkeleton.tsx` — initial-load placeholder
+- `CalendarSelectedCellFrame.tsx` — selected-cell content wrapper
+- `calendarGridUtils.ts` — grid constants, month cell builder, boundary helpers
+- `calendarGridCellModel.ts` — per-cell derived state: filtering, overdue/complete status
+- `calendarMonthPreviewModel.ts` — preview entries for mounted non-active months, reused while inputs are unchanged
 
 ### Chips, stacks, overflow
-- `CalendarCellItemChip.jsx` — item chip button with metrics-driven sizing
-- `CalendarCellItemChipModel.js` — chip label compacting, leading-column width estimation
-- `CalendarCellItemStack.jsx` — visible/hidden item split with layout measurement
-- `CalendarCellItemStackModel.js` — stack height calculation and visibility split
-- `calendarCellItemMetrics.js` — per-tier item capacity for cells
-- `CalendarCellOverflowPopover.jsx` — portal popover for hidden items
-- `CalendarCellOverflowPopover.position.js` — popover viewport clamping from trigger rect
-- `CalendarInlineOverflowLayer.jsx` — inline overflow panel when space permits
-- `useCalendarGridOverflow.js` — overflow state machine: popover vs inline, reanchor on scroll
+- `CalendarCellItemChip.tsx` — item chip button with metrics-driven sizing
+- `CalendarCellItemChipModel.ts` — chip label compacting, leading-column width estimation
+- `CalendarCellItemStack.tsx` — visible/hidden item split with layout measurement
+- `CalendarCellItemStackModel.ts` — stack height calculation and visibility split
+- `calendarCellItemMetrics.ts` — per-tier item capacity for cells
+- `CalendarCellOverflowPopover.tsx` — portal popover for hidden items
+- `CalendarCellOverflowPopover.position.ts` — popover viewport clamping from trigger rect
+- `CalendarInlineOverflowLayer.tsx` — inline overflow panel when space permits
+- `useCalendarGridOverflow.ts` — overflow state machine: popover vs inline, reanchor on scroll
 
 ### Spans + boundaries
-- `CalendarEventSpanOverlay.jsx` — multi-day events as pinned row-spanning segments
-- `calendarEventSpanLayout.js` — span lane allocation, segment splitting, lane height single-source
+- `CalendarEventSpanOverlay.tsx` — multi-day events as pinned row-spanning segments
+- `calendarEventSpanLayout.ts` — span lane allocation, segment splitting, lane height single-source
 
 ### Floating detail
-- `CalendarFloatingDetailPanel.jsx` — anchored floating panel shell: Motion portal, caret, frame, editor autofocus/shake
-- `useFloatingDetailPlacement.js` — positioning state machine: measure (ResizeObserver) → reveal gate → side-flip snap + anchored-placement compute/clamp; hosts `useFloatingDetailDrag` (they share `measuredSize`/drag state in a cycle)
-- `useFloatingDetailDrag.js` — pointer-drag mechanics (drag session, rAF-throttled manual position, user-dragged commit) + `rectFromElement` helper
-- `calendarFloatingDetailRevealModel.js` — pure reveal/snap decision rules (`samePlacement`, anchored/render-placement merge, manual/snap/awaiting/instant transition predicates)
-- `CalendarFloatingDetailCaret.jsx` — anchored caret triangle pointing back to the source cell
-- `CalendarFloatingDetailCloseButton.jsx` — close control shared by detail and editor headers
-- `CalendarFloatingDetailContent.jsx` — routes detail/editor for deadlines vs events
-- `calendarFloatingDetailPlacement.js` — anchor placement geometry with viewport clamping and side flip
+- `CalendarFloatingDetailPanel.tsx` — anchored floating panel shell: Motion portal, caret, frame, editor autofocus/shake
+- `useFloatingDetailPlacement.ts` — positioning state machine: measure (ResizeObserver) → reveal gate → side-flip snap + anchored-placement compute/clamp; hosts `useFloatingDetailDrag` (they share `measuredSize`/drag state in a cycle)
+- `useFloatingDetailDrag.ts` — pointer-drag mechanics (drag session, rAF-throttled manual position, user-dragged commit) + `rectFromElement` helper
+- `calendarFloatingDetailRevealModel.ts` — pure reveal/snap decision rules (`samePlacement`, anchored/render-placement merge, manual/snap/awaiting/instant transition predicates)
+- `CalendarFloatingDetailCaret.tsx` — anchored caret triangle pointing back to the source cell
+- `CalendarFloatingDetailCloseButton.tsx` — close control shared by detail and editor headers
+- `CalendarFloatingDetailContent.tsx` — routes detail/editor for deadlines vs events
+- `calendarFloatingDetailPlacement.ts` — anchor placement geometry with viewport clamping and side flip
 
 ### Rails
-- `CalendarSearchRail.jsx` — left rail: search input, date-grouped results, keyboard nav
-- `CalendarSearchRailParts.jsx` — search result rows, date headers, skeletons
-- `CalendarModalContextRail.jsx` — right rail container for detail/editor/agenda
-- `CalendarModalAgendaRailContent.jsx` — agenda list entry for the right rail
-- `AnimatedRailContent.jsx` — motion wrapper for rail content swaps
+- `CalendarSearchRail.tsx` — left rail: search input, date-grouped results, keyboard nav
+- `CalendarSearchRailParts.tsx` — search result rows, date headers, skeletons
+- `CalendarModalContextRail.tsx` — right rail container for detail/editor/agenda
+- `CalendarModalAgendaRailContent.tsx` — agenda list entry for the right rail
+- `AnimatedRailContent.tsx` — motion wrapper for rail content swaps
 
 ### Effects
-- `useCalendarGridEffects.js` — wheel month nav, escape/outside overflow close, anchor refresh
+- `useCalendarGridEffects.ts` — wheel month nav, escape/outside overflow close, anchor refresh
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 
 - Metrics-driven sizing: chip heights and visible counts adapt to layout tier (uhd/xl/lg/md/sm).
 - Components are props-heavy and mostly stateless; derived state comes from the cell/stack models.
-- Span lane height/gap constants are single-sourced in `calendarEventSpanLayout.js` — don't duplicate.
+- Span lane height/gap constants are single-sourced in `calendarEventSpanLayout.ts` — don't duplicate.
 - Calendar focus ring uses `data-calendar-focus-ring="true"`.
 
 ## Related

@@ -17,9 +17,13 @@ import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel
 import type { NeedsYouBill } from "./needsYou/needsYouModel";
 
 interface DashboardBodyCalendarRange {
-  ensureRange: (start: string, end: string) => Promise<DashboardCalendarEvent[]>;
+  ensureRange: (start: string, end: string) => Promise<Array<Partial<NormalizedCalendarEvent>>>;
+  getEvents?: unknown;
+  hasMonth?: unknown;
+  isMonthLoading?: unknown;
+  loading?: boolean;
+  error?: unknown;
   revision?: number;
-  [key: string]: unknown;
 }
 
 type DashboardCalendarEvent = Pick<NormalizedCalendarEvent, "id" | "title" | "startMs" | "endMs"> &
@@ -105,11 +109,12 @@ function DashboardBodyInner({
     ensureCalendarRange(today, end)
       .then((result) => {
         if (!cancelled) {
+          const normalizedResult = result as DashboardCalendarEvent[];
           // Only swap the events reference when the resolved range content
           // actually differs, so an unchanged refetch doesn't reconcile the
           // (memoized) timeline/hero with a new-but-equal array.
           setEvents((prev) => (
-            calendarContentSignature(prev) === calendarContentSignature(result) ? prev : result
+            calendarContentSignature(prev) === calendarContentSignature(normalizedResult) ? prev : normalizedResult
           ));
           setLiveEventsReady(true);
         }

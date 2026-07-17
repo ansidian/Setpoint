@@ -3,7 +3,7 @@ import { applyTodoistReminderMutations } from "./applyTodoistReminderMutations";
 import {
   applyUpcomingReminderState,
   projectUpcomingReminderState,
-} from "../../calendar/reminderDisplay.js";
+} from "../../calendar/reminderDisplay.ts";
 import { todoistAnchorFromTask } from "./todoistReminderModel";
 import type { TodoistTask } from "../../../../shared/types/tasks";
 import type { UpcomingReminderState } from "../../../../shared/types/reminders";

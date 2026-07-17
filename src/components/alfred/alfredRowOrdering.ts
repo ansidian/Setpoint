@@ -2,7 +2,7 @@
 // (never reshape/recompute values) — reordering and grouping for display is
 // presentation only and does not touch the rows' content. No React here so the
 // grouping stays unit-testable with an injected `now`.
-import { addDaysYmd, pacificYMD, parseYmd } from "../calendar/calendarDateUtils.js";
+import { addDaysYmd, pacificYMD, parseYmd } from "../calendar/calendarDateUtils.ts";
 import type { AlfredItemKind } from "../../../shared/types/alfred";
 
 export interface AlfredRow extends Record<string, unknown> {

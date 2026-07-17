@@ -102,6 +102,7 @@ export interface StructuredCalendarRecurrence extends CalendarRecurrenceInput {
 export interface CalendarEventMutationInput {
   accountId?: string;
   calendarId?: CalendarId;
+  sourceAccountId?: string;
   originalCalendarId?: CalendarId;
   sourceCalendarId?: CalendarId;
   title?: string;
@@ -110,14 +111,14 @@ export interface CalendarEventMutationInput {
   allDay?: boolean;
   startDate?: string;
   endDate?: string;
-  startTime?: string;
-  endTime?: string;
+  startTime?: string | null;
+  endTime?: string | null;
   startDateTime?: string;
   endDateTime?: string;
   timeZone?: string;
   recurrence?: CalendarRecurrenceInput | string[] | null;
-  recurrenceScope?: CalendarRecurrenceScope;
-  scope?: CalendarRecurrenceScope;
+  recurrenceScope?: CalendarRecurrenceScope | null;
+  scope?: CalendarRecurrenceScope | null;
   originalStartTime?: string | null;
   recurringEventId?: string | null;
   attendees?: Array<string | { email: string }>;

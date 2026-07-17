@@ -1,72 +1,72 @@
 # Calendar Events Map
 
-Event creation and editing: the editor rail, natural-language title parsing, recurrence/reminder/location pickers, batch drafts, and recurring-scope prompts. Entry points are `useCalendarEventEditor.js` (state orchestration) and `CalendarEventEditorRail.jsx` (UI composition).
+Event creation and editing: the editor rail, natural-language title parsing, recurrence/reminder/location pickers, batch drafts, and recurring-scope prompts. Entry points are `useCalendarEventEditor.ts` (state orchestration) and `CalendarEventEditorRail.tsx` (UI composition).
 
 ## Files
 
 ### Editor core
-- `useCalendarEventEditor.js` — orchestrates editor state, validation, persistence, lifecycle
-- `useCalendarEditorPickers.js` — floating panel visibility and field anchor refs
-- `calendarEventEditorModel.js` — draft normalization, validation, recurrence serialization, batch ops
-- `calendarEventEditorSessionModel.js` — pure editor-session projections and transitions (validation visibility, title-assist draft sync, source seeding, batch edits)
-- `calendarEventEditorActions.js` — CRUD/reminder API calls and error formatting
-- `calendarEditorUtils.js` — date/time formatting, style constants, field helpers
+- `useCalendarEventEditor.ts` — orchestrates editor state, validation, persistence, lifecycle
+- `useCalendarEditorPickers.ts` — floating panel visibility and field anchor refs
+- `calendarEventEditorModel.ts` — draft normalization, validation, recurrence serialization, batch ops
+- `calendarEventEditorSessionModel.ts` — pure editor-session projections and transitions (validation visibility, title-assist draft sync, source seeding, batch edits)
+- `calendarEventEditorActions.ts` — CRUD/reminder API calls and error formatting
+- `calendarEditorUtils.ts` — date/time formatting, style constants, field helpers
 
 ### Editor UI
-- `CalendarEventEditorRail.jsx` — root editor layout combining sub-panels with animations
-- `CalendarEventEditorPanels.jsx` — floating date/time/location/source/recurrence pickers
-- `CalendarEventEditorHeader.jsx` — mode label and contextual copy (editing/batch/new)
-- `CalendarEventEditorActionBar.jsx` — save/delete/cancel with confirmation states
-- `CalendarEventEditorStatusMessages.jsx` — error and validation messaging
-- `CalendarEditorControls.jsx` — shared editor control primitives
+- `CalendarEventEditorRail.tsx` — root editor layout combining sub-panels with animations
+- `CalendarEventEditorPanels.tsx` — floating date/time/location/source/recurrence pickers
+- `CalendarEventEditorHeader.tsx` — mode label and contextual copy (editing/batch/new)
+- `CalendarEventEditorActionBar.tsx` — save/delete/cancel with confirmation states
+- `CalendarEventEditorStatusMessages.tsx` — error and validation messaging
+- `CalendarEditorControls.tsx` — shared editor control primitives
 
 ### Title + intent
-- `CalendarEventTitleField.jsx` — title input with placeholder hints
-- `CalendarEventTitleAssistPanel.jsx` — parsed location/calendar queries from the title
-- `parseCalendarTitle.js` — natural-language date/time extraction (Chrono, weekday patterns)
-- `calendarTitleIntent.js` — classifies title intent: batch, recurring, single
-- `useCalendarEventTitleComposer.js` — title input debounce/flush, Chrono readiness, parse projection, and uncontrolled-input synchronization
+- `CalendarEventTitleField.tsx` — title input with placeholder hints
+- `CalendarEventTitleAssistPanel.tsx` — parsed location/calendar queries from the title
+- `parseCalendarTitle.ts` — natural-language date/time extraction (Chrono, weekday patterns)
+- `calendarTitleIntent.ts` — classifies title intent: batch, recurring, single
+- `useCalendarEventTitleComposer.ts` — title input debounce/flush, Chrono readiness, parse projection, and uncontrolled-input synchronization
 
 ### Schedule + recurrence
-- `CalendarEventCompactSchedulePicker.jsx` — compact month + time picker
-- `calendarCompactSchedulePickerModel.js` — month grid generation and range logic
-- `CalendarRecurrenceSection.jsx` — full recurrence rule builder
-- `CalendarEventRecurrencePicker.jsx` — recurrence presets plus advanced options
-- `CalendarRecurringScopePrompt.jsx` — scope chooser (this/following/all) for recurring edits
-- `useEventRecurrenceDraft.js` — recurrence-draft sub-machine (draft + manual-override state, per-field/preset/weekday updates) lifted from useCalendarEventEditor; wraps normalize/validateRecurrenceDraft in calendarEventEditorModel.js
+- `CalendarEventCompactSchedulePicker.tsx` — compact month + time picker
+- `calendarCompactSchedulePickerModel.ts` — month grid generation and range logic
+- `CalendarRecurrenceSection.tsx` — full recurrence rule builder
+- `CalendarEventRecurrencePicker.tsx` — recurrence presets plus advanced options
+- `CalendarRecurringScopePrompt.tsx` — scope chooser (this/following/all) for recurring edits
+- `useEventRecurrenceDraft.ts` — recurrence-draft sub-machine (draft + manual-override state, per-field/preset/weekday updates) lifted from useCalendarEventEditor; wraps normalize/validateRecurrenceDraft in calendarEventEditorModel
 
 ### Notes, reminders, location, source
-- `CalendarEventNotesField.jsx` — description textarea with compact collapse
-- `CalendarEventReminderChips.jsx` — reminder chips with status badges and removal
-- `calendarEventReminderModel.js` — reminder offsets, presets, sent-status tracking
-- `useEventReminderDrafts.js` — reminder-draft sub-machine (drafts, removal ids, custom picker state, preset states memo) lifted from useCalendarEventEditor; wraps calendarEventReminderModel.js
-- `CalendarLocationSuggestionsPanel.jsx` — Places autocomplete results with keyboard nav
-- `useCalendarLocationSuggestions.js` — async Places fetching with session tokens
-- `CalendarSourcePickerPanel.jsx` — account/calendar selector with grouping
-- `useCalendarSources.js` — lazy-loads writable calendar list
+- `CalendarEventNotesField.tsx` — description textarea with compact collapse
+- `CalendarEventReminderChips.tsx` — reminder chips with status badges and removal
+- `calendarEventReminderModel.ts` — reminder offsets, presets, sent-status tracking
+- `useEventReminderDrafts.ts` — reminder-draft sub-machine (drafts, removal ids, custom picker state, preset states memo) lifted from useCalendarEventEditor; wraps calendarEventReminderModel
+- `CalendarLocationSuggestionsPanel.tsx` — Places autocomplete results with keyboard nav
+- `useCalendarLocationSuggestions.ts` — async Places fetching with session tokens
+- `CalendarSourcePickerPanel.tsx` — account/calendar selector with grouping
+- `useCalendarSources.ts` — lazy-loads writable calendar list
 
 ### Batch + quick actions
-- `CalendarBatchReviewSection.jsx` — review/edit multiple one-off drafts before creation
-- `CalendarEventCompactCorrectionToolbar.jsx` — quick per-draft adjustments in batch mode
-- `CalendarDraftPreviewPanel.jsx` — read-only draft summary with conflict count
-- `CalendarQuickActionLayer.jsx` — portal context menu for duplication and shortcuts
-- `useCalendarQuickActions.js` — clipboard paste, cloning, quick-create workflows
-- `calendarQuickActionModel.js` — pure reschedule/clone/paste/color/delete payload + date-math builders (DST-safe, Pacific epoch) consumed by `useCalendarQuickActions.js`
-- `quickActionColorModel.js` — pure color-id resolution + check-icon contrast for the quick-action color grid
-- `quickActionMenuLayout.js` — viewport-clamped menu positioning (`clampMenuPosition`, shared with the deadline quick-action menu in `views/deadlines/`) + focus/roving/tab helpers for the quick-action context menu (focus logic wired through `useDismissablePortal`)
+- `CalendarBatchReviewSection.tsx` — review/edit multiple one-off drafts before creation
+- `CalendarEventCompactCorrectionToolbar.tsx` — quick per-draft adjustments in batch mode
+- `CalendarDraftPreviewPanel.tsx` — read-only draft summary with conflict count
+- `CalendarQuickActionLayer.tsx` — portal context menu for duplication and shortcuts
+- `useCalendarQuickActions.ts` — clipboard paste, cloning, quick-create workflows
+- `calendarQuickActionModel.ts` — pure reschedule/clone/paste/color/delete payload + date-math builders (DST-safe, Pacific epoch) consumed by `useCalendarQuickActions.ts`
+- `quickActionColorModel.ts` — pure color-id resolution + check-icon contrast for the quick-action color grid
+- `quickActionMenuLayout.ts` — viewport-clamped menu positioning (`clampMenuPosition`, shared with the deadline quick-action menu in `views/deadlines/`) + focus/roving/tab helpers for the quick-action context menu (focus logic wired through `useDismissablePortal`)
 
 ### Selection
-- `calendarEventSelectionModel.js` — selection eligibility checks and identity keys
+- `calendarEventSelectionModel.ts` — selection eligibility checks and identity keys
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
 ## Local patterns
 
-- Draft model is separate from the persisted event model; normalization lives in `calendarEventEditorModel.js`.
-- Pickers anchor to fields via ref chaining; visibility is owned by `useCalendarEditorPickers.js`.
+- Draft model is separate from the persisted event model; normalization lives in `calendarEventEditorModel.ts`.
+- Pickers anchor to fields via ref chaining; visibility is owned by `useCalendarEditorPickers.ts`.
 - Pacific timezone is hardcoded for date operations, matching the server.
 
 ## Related
 
-- `src/hooks/calendar/useFloatingEditorRouting.js` — routes between detail and this editor
+- `src/hooks/calendar/useFloatingEditorRouting.ts` — routes between detail and this editor
 - `server/calendar/calendar-mutations.ts` — backend CRUD these actions call

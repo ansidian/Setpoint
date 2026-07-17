@@ -1,4 +1,4 @@
-import { addDaysYmd } from "../components/calendar/calendarDateUtils.js";
+import { addDaysYmd } from "../components/calendar/calendarDateUtils.ts";
 import type { DeadlineStats, TodoistTask } from "../../shared/types/tasks";
 
 export type DashboardDeadline = Pick<TodoistTask, "id"> & Partial<Pick<
