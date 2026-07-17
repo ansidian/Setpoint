@@ -24,7 +24,7 @@ export interface CalendarFloatingDetailState {
 // Anchor contract with CalendarCell: the cell root renders role="gridcell"
 // plus data-date-key (CalendarCell), and the floating-detail hook resolves
 // editor anchors through this selector. Covered by
-// useCalendarFloatingDetail.anchor.test.jsx — change both sides together.
+// useCalendarFloatingDetail.anchor.test.tsx — change both sides together.
 export function dateCellSelector(dateKey: string): string {
   return `[role='gridcell'][data-date-key='${dateKey}']`;
 }

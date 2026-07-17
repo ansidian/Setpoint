@@ -18,7 +18,7 @@ AI search pipeline over the email index: hybrid retrieval (FTS + embeddings) and
 - `email-search-dev-harness.ts` — CLI harness for index status and backfill experiments
 - `evals/email-search-retrieval.synthetic.json` — synthetic retrieval eval fixture (default for `npm run email-search:eval`)
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

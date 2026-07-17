@@ -137,7 +137,7 @@ Selection path:
 
 ## 6. Process shutdown → scheduler drain
 
-**Trigger:** SIGTERM/SIGINT enters `server/shutdown.ts:createGracefulShutdown` through `server/index.js`.
+**Trigger:** SIGTERM/SIGINT enters `server/shutdown.ts:createGracefulShutdown` through `server/index.ts`.
 
 1. `server/shutdown.ts:createGracefulShutdown` — starts the 15-second force-exit deadline, stops accepting HTTP work, then runs background stop functions in order
 2. `server/scheduler.ts:stopScheduler` — synchronously closes cron, interval, startup-timeout, and queued-immediate admission sources; repeated calls share one promise

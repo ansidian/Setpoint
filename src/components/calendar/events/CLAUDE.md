@@ -58,7 +58,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 ### Selection
 - `calendarEventSelectionModel.ts` — selection eligibility checks and identity keys
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

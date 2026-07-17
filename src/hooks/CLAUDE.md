@@ -31,7 +31,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Related
 

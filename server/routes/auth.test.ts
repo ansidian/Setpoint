@@ -73,7 +73,7 @@ function makeApp() {
   app.use(cookieParser());
   app.use("/api/auth", authRoutes);
   app.get("/protected", requireCookieSession, (_req, res) => res.json({ ok: true }));
-  app.use(errorHandler); // mirror server/index.js terminal error middleware
+  app.use(errorHandler); // mirror server/index.ts terminal error middleware
   return app;
 }
 

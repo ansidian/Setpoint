@@ -10,7 +10,7 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
   and `summarizeTransactions` (aggregate by category/payee/month). Filter policy, JS
   aggregation (top-15 + Other), `sync_state`, graceful errors. Injectable deps.
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

@@ -115,7 +115,7 @@ export function applyDeadlineUpsert(
   // entry to merge onto. Bail out with the same reference instead of pushing
   // a fresh entry beside the tombstone. Reachable via handleUpdateTask: the
   // deadline detail views offer "Edit" on a completed/tombstoned occurrence
-  // with no gating, and its save round-trip (see submitAddTaskFlow.js's
+  // with no gating, and its save round-trip (see submitAddTaskFlow.ts's
   // `{ ...editingTask, ...task }`) preserves the tombstone's `_tombstone`
   // flag onto the submitted deadline when the task's live sibling occurrence
   // isn't in the cached range. (handleMoveTask can't reach this: drag is

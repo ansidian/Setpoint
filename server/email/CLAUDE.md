@@ -1,6 +1,6 @@
 # Server Email Map
 
-Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.ts`; `email-backfill-worker.ts` and `gmail-sync.ts` expose the workers consumed by `server/index.js` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
+Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and incremental sync. Entry point is `email-service.ts`; `email-backfill-worker.ts` and `gmail-sync.ts` expose the workers consumed by `server/index.ts` and `server/scheduler.ts`. The AI search pipeline lives in `search/` (see its map).
 
 ## Files
 
@@ -15,7 +15,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-date.ts` — email date header → ISO UTC
 - `email-ai-models.ts` — email AI model catalog with defaults and provider inference
 - `gmail.ts` — Gmail API client: list, fetch, search, mutate
-- `gmail-sync.ts` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.js` too)
+- `gmail-sync.ts` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.ts` too)
 - `email-sync-types.ts` — local history, Pub/Sub, watch, provider-state, and sync error contracts
 - `gmailPubSubNotification.ts` — pure Pub/Sub notification decode: base64url JSON → emailAddress/historyId payload
 - `gmailHistoryProjection.ts` — pure history-record projections: inbox/unread id-sets, provider-removal events, provider state from metadata
@@ -31,7 +31,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `dev-service.ts` — dev/test helper: re-index recent emails
 - `test-utils/email-index-db.ts` — in-memory email index DB for tests
 
-(Other tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Other tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

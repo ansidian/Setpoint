@@ -123,7 +123,7 @@ export function deadlineContentSignature(upcoming: unknown): string {
 }
 
 // Mirrors stabilizeCalendar for the deadlines domain (see stableCalendarRef in
-// useCurrentDashboard.js for the ref-caching call-site pattern this pairs with).
+// useCurrentDashboard.ts for the ref-caching call-site pattern this pairs with).
 export function stabilizeDeadlines<T extends DeadlineSignatureItem>(
   prev: T[] | null,
   next: T[] | null,

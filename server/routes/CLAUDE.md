@@ -1,6 +1,6 @@
 # Server Routes Map
 
-The HTTP surface: Express routers that validate input, apply auth, and delegate to the `server/<domain>/` services (email, bills, calendar, snapshots, tasks, reminders, triage, actual, platform). `briefing/index.js` mounts the briefing sub-routers behind shared auth middleware; root-level routers cover auth, accounts, integrations, and webhooks.
+The HTTP surface: Express routers that validate input, apply auth, and delegate to the `server/<domain>/` services (email, bills, calendar, snapshots, tasks, reminders, triage, actual, platform). `briefing/index.ts` mounts the briefing sub-routers behind shared auth middleware; root-level routers cover auth, accounts, integrations, and webhooks.
 
 ## Files
 
@@ -9,7 +9,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `accounts.ts` — Gmail OAuth callback and account binding; mounts settings/reminders routers
 
 ### Briefing
-- `briefing/index.js` — mounts briefing sub-routers, applies auth middleware
+- `briefing/index.ts` — mounts briefing sub-routers, applies auth middleware
 - `briefing/bills.ts` — sends bills to Actual Budget, quick transactions
 - `briefing/email.ts` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.ts` — email index health checks, backfill queuing

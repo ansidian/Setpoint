@@ -15,7 +15,7 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 - `alfred-usage.ts` — usage rows into `ea_alfred_usage` (run turns + per-tool calls)
 - `alfred-usage-stats.ts` — aggregates `ea_alfred_usage` into the Alfred analytics summary (queries, cache hit, savings, model split, per-tool latency/errors)
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

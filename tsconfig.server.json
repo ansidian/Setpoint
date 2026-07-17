@@ -9,5 +9,6 @@
     "tsBuildInfoFile": "./node_modules/.cache/typescript/server.tsbuildinfo",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["server/**/*", "shared/**/*"]
+  "include": ["server/**/*", "shared/**/*"],
+  "exclude": ["server/scripts/clean-notification-mp3.test.ts"]
 }

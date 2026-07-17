@@ -8,7 +8,7 @@ import useIsMobile from "../../hooks/useIsMobile";
 // This file isolates the tabpanel<->tab ARIA linkage added by A11Y-05. Every
 // heavy child (lazy tab content, calendar workspace state, alfred, overlays) is
 // stubbed so the only thing under test is DashboardShell's own JSX: each
-// KeepAliveTab's thin `role="tabpanel"` wrapper (see KeepAliveTab.jsx for why a
+// KeepAliveTab's thin `role="tabpanel"` wrapper (see KeepAliveTab.tsx for why a
 // wrapper element was needed — Activity/FrozenWhenHidden render no DOM node of
 // their own) and ShellTabs' tab semantics wiring them together via
 // id="shell-tab-{key}" / aria-labelledby (desktop) or aria-label (mobile, where
@@ -18,7 +18,7 @@ vi.mock("../../hooks/useIsMobile", () => ({ default: vi.fn(() => false) }));
 vi.mock("../../hooks/useWarmImport", () => ({ default: () => {} }));
 vi.mock("../../hooks/useUtilityPayLinks", () => ({ useUtilityPayLinks: () => ({}) }));
 
-vi.mock("./useCalendarWorkspaceState.js", () => ({
+vi.mock("./useCalendarWorkspaceState.ts", () => ({
   default: () => ({
     calendarOpenRequestId: 0,
     calendarJumpTodayRequestId: 0,
@@ -34,7 +34,7 @@ vi.mock("./useCalendarWorkspaceState.js", () => ({
   }),
 }));
 
-vi.mock("./useAlfredPanelState.js", () => ({
+vi.mock("./useAlfredPanelState.ts", () => ({
   default: () => ({
     alfredOpen: false,
     alfredMounted: false,
@@ -47,7 +47,7 @@ vi.mock("./useAlfredPanelState.js", () => ({
   }),
 }));
 
-vi.mock("./useLiveReadOverrides.js", () => ({
+vi.mock("./useLiveReadOverrides.ts", () => ({
   default: () => ({
     liveReadOverrides: {},
     handleLiveReadOverrideChange: vi.fn(),
@@ -55,12 +55,12 @@ vi.mock("./useLiveReadOverrides.js", () => ({
   }),
 }));
 
-vi.mock("./useDashboardShellHotkeys.js", () => ({ default: () => {} }));
+vi.mock("./useDashboardShellHotkeys.ts", () => ({ default: () => {} }));
 
-vi.mock("./DashboardBody.jsx", () => ({
+vi.mock("./DashboardBody.tsx", () => ({
   DashboardBody: () => <div data-testid="dashboard-body-stub" />,
 }));
-vi.mock("./DashboardShellOverlays.jsx", () => ({ default: () => null }));
+vi.mock("./DashboardShellOverlays.tsx", () => ({ default: () => null }));
 vi.mock("./DashboardCalendarModalMount", () => ({
   default: () => null,
   importCalendar: () => Promise.resolve({}),

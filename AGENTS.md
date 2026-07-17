@@ -56,9 +56,9 @@ When adding tests, prefer durable behavior/model/state assertions over tests tha
 
 Prefer a layered Vitest structure. New behavior should usually start at the lowest layer that can express the product rule.
 
-1. Model/helper tests are the default home for domain rules. Use small `.test.js` files around pure modules for projections, command resolution, cache/range planning, view-model shaping, date math, lifecycle normalization, and state transitions. These tests should read like `input state -> model/helper -> expected state`.
+1. Model/helper tests are the default home for domain rules. Use small `.test.ts` files around pure modules for projections, command resolution, cache/range planning, view-model shaping, date math, lifecycle normalization, and state transitions. These tests should read like `input state -> model/helper -> expected state`.
 2. Hook/controller tests should prove async behavior, cache behavior, React state transitions, and wiring into model helpers. Do not make hook tests re-prove every pure date, grouping, projection, or command branch if that rule can live in a model test.
-3. Component/page tests should be thin outer guardrails. They should verify that visible controls exist, important states render, and user actions reach the right command path. Avoid adding broad DOM cases to files such as `CalendarModal.layout.test.jsx`, `InboxView.session.test.jsx`, or `Dashboard.mobile.test.jsx` when a focused model/helper test can protect the behavior.
+3. Component/page tests should be thin outer guardrails. They should verify that visible controls exist, important states render, and user actions reach the right command path. Avoid adding broad DOM cases to files such as `CalendarModal.layout.test.tsx`, `InboxView.session.test.tsx`, or `Dashboard.mobile.test.tsx` when a focused model/helper test can protect the behavior.
 4. Server route tests should protect auth, API contracts, response shape, durable DB state, and important boundary behavior. Avoid exact internal SQL/text assertions unless the SQL shape itself is the public contract or the bug is specifically about SQL generation.
 5. Existing broad tests may remain as integration guardrails, but future changes should ratchet behavior downward into focused model/helper tests first. Keep only one or two UI tests proving the component is wired to that behavior.
 
@@ -86,7 +86,7 @@ Directories with a `CLAUDE.md` map (calendar, inbox, dashboard, settings, hooks,
 
 ## Floating Panel Pattern
 
-For dropdowns, popovers, and panels, follow the repo pattern in `src/components/briefing/BriefingHistoryPanel.jsx` and `src/components/shared/pickers/AnchoredFloatingPanel.tsx`:
+For dropdowns, popovers, and panels, follow the repo pattern in `src/components/briefing/BriefingHistoryPanel.tsx` and `src/components/shared/pickers/AnchoredFloatingPanel.tsx`:
 
 1. `createPortal(..., document.body)`.
 2. `position: fixed` from `getBoundingClientRect()`, recalculated on scroll/resize.

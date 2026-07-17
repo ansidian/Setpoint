@@ -133,7 +133,7 @@ process.env.EA_USER_ID = "user-1";
 
 const { createQuickTxn, sendBill } = await import("../bills/bills-service.ts");
 const emailService = await import("../email/email-service.ts");
-const briefingRoutes = (await import("./briefing/index.js")).default;
+const briefingRoutes = (await import("./briefing/index.ts")).default;
 const dashboardRoutes = (await import("./dashboard.ts")).default;
 const accountsRoutes = (await import("./accounts.ts")).default;
 const notesRoutes = (await import("./notes.ts")).default;

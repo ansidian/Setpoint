@@ -105,7 +105,7 @@ describe("CalendarEventEditor quick action behavior", () => {
 
     // Integration concern this test owns: the context menu opens from an all-day
     // span segment (not just a cell chip). The color-dot aria-pressed/check
-    // contract is asserted at the focused layer in CalendarQuickActionLayer.test.jsx.
+    // contract is asserted at the focused layer in CalendarQuickActionLayer.test.tsx.
     expect(await screen.findByTestId("calendar-event-color-grid")).toBeTruthy();
   });
 

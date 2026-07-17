@@ -56,7 +56,7 @@ vi.mock("../../snapshots/snapshot-service.ts", () => ({
 process.env.EA_USER_ID = "user-1";
 
 const snapshotService = await import("../../snapshots/snapshot-service.ts");
-const briefingRoutes = (await import("./index.js")).default;
+const briefingRoutes = (await import("./index.ts")).default;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
 function makeApp() {
@@ -64,7 +64,7 @@ function makeApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/briefing", briefingRoutes);
-  // Production parity (server/index.js mounts a terminal errorHandler). A no-route
+  // Production parity (server/index.ts mounts a terminal errorHandler). A no-route
   // fall-through here returns a distinguishable JSON body instead of finalhandler's
   // text/html "Cannot POST", so any future 404 self-identifies its source via
   // res.body: {message:'Active handled snapshot item not found'} => the real service

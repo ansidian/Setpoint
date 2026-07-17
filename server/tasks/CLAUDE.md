@@ -1,6 +1,6 @@
 # Server Tasks Map
 
-Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus deadline reads and reconciliation. Entry points are `tasks-service.ts` (task mutations) and `deadlines-read.ts` (deadline reads); `todoist-webhook.ts` exposes the mirror-sync worker consumed by `server/index.js`.
+Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus deadline reads and reconciliation. Entry points are `tasks-service.ts` (task mutations) and `deadlines-read.ts` (deadline reads); `todoist-webhook.ts` exposes the mirror-sync worker consumed by `server/index.ts`.
 
 ## Files
 
@@ -17,7 +17,7 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 - `todoist-token.ts` — Todoist OAuth token storage/refresh
 - `tombstones.ts` — tombstones for completed recurring tasks (resurrection guard)
 
-(Other tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Other tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

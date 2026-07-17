@@ -26,7 +26,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-connection-test.ts` — HTTP-level reachability test for the Actual server
 - `actual-transactions-read.ts` — low-level on-disk transaction reader: queries `db.sqlite` directly via `@libsql/client` without booting the SDK
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

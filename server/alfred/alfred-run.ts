@@ -25,7 +25,7 @@ const MAX_TOKENS = 2000;
 const MAX_NUDGE_ITEMS = DEFAULT_SEARCH_LIMIT;
 const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, bills, or transactions, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
 
-// Second backstop (ADR 0006, alfred-prompt.js group_items rule): a question that
+// Second backstop (ADR 0006, alfred-prompt.ts group_items rule): a question that
 // asks for a SPLIT across 2+ categories should land as a group_items breakdown
 // card, not a prose enumeration. Smaller models (Haiku) skip the tool and narrate
 // every item instead — worst when a bucket is defined by absence (e.g. "ghosts" =

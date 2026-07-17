@@ -4,7 +4,7 @@
 // with a tone halo + pulse, mirrors the band dot at :77 and the timeline live
 // pill at :153). The mockup's tdk-pulse keyframe is not in the app's CSS, so
 // this primitive ships its own namespaced keyframe locally — same pattern as
-// InboxMountFallback.jsx, with a reduced-motion guard.
+// InboxMountFallback.tsx, with a reduced-motion guard.
 export function StatusDot({ tone, state = "solid" }: StatusDotProps) {
   const base: CSSProperties = {
     width: 6,
