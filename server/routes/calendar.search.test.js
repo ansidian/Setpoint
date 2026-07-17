@@ -41,7 +41,7 @@ vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
   requestCalendarSearchMirrorSync: vi.fn(),
   upsertCalendarSearchMirrorOccurrence: vi.fn(),
 }));
-vi.mock("../tasks/deadlines-read.js", () => ({
+vi.mock("../tasks/deadlines-read.ts", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
 }));
@@ -60,7 +60,7 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../tasks/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.ts", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
@@ -82,7 +82,7 @@ vi.mock("../reminders/reminder-hydration.ts", () => ({
 const { loadUserConfig } = await import("../platform/config-service.ts");
 const { fetchCalendar } = await import("../calendar/calendar.js");
 const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js");
-const { readCalendarDeadlineRange } = await import("../tasks/deadlines-read.js");
+const { readCalendarDeadlineRange } = await import("../tasks/deadlines-read.ts");
 const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts");
 const calendarRoutes = (await import("./calendar.js")).default;
 

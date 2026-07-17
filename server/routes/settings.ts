@@ -31,7 +31,7 @@ import {
 } from "../bills/bill-pay-mappings.ts";
 import { getTriageCacheStats } from "../triage/triage-cache-stats.js";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.js";
-import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.js";
+import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import {
   validateActualBudgetUrl,

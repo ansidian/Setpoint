@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 955,
+  "remainingLegacyFiles": 897,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -74,6 +74,13 @@
     "src/components/calendar/reminders/ReminderDateTimePicker.tsx",
     "src/components/bills",
     "src/hooks/useUtilityPayLinks.ts",
-    "src/hooks/useUtilityPayLinks.test.ts"
+    "src/hooks/useUtilityPayLinks.test.ts",
+    "shared/types/tasks.ts",
+    "server/tasks",
+    "server/routes/briefing/tasks.ts",
+    "server/routes/todoist-webhook.ts",
+    "server/routes/todoist-webhook.test.ts",
+    "server/routes/complete-task.test.ts",
+    "src/components/todoist"
   ]
 }

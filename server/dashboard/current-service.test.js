@@ -40,7 +40,7 @@ vi.mock("../platform/config-service.ts", () => ({
     },
   })),
 }));
-vi.mock("../tasks/deadline-helpers.js", () => ({
+vi.mock("../tasks/deadline-helpers.ts", () => ({
   loadCompletedTaskIds: vi.fn(async () => new Set()),
   filterCompletedTodoistTasks: (...args) => testState.filterCompletedTodoistTasks(...args),
   computeDeadlineStats: vi.fn((items) => ({ total: items.length })),
@@ -51,14 +51,14 @@ vi.mock("../platform/weather.ts", () => ({
 vi.mock("../calendar/calendar.js", () => ({
   fetchCalendar: (...args) => testState.fetchCalendar(...args),
 }));
-vi.mock("../tasks/todoist.js", () => ({
+vi.mock("../tasks/todoist.ts", () => ({
   fetchTodoistDueTaskIdSet: (...args) => testState.fetchTodoistDueTaskIdSet(...args),
   fetchTodoistTasks: (...args) => testState.fetchTodoistTasks(...args),
   fetchTodoistTasksAll: (...args) => testState.fetchTodoistTasks(...args),
   fetchTodoistTasksRange: (...args) => testState.fetchTodoistTasks(...args),
   getTodoistSyncHealth: (...args) => testState.getTodoistSyncHealth(...args),
 }));
-vi.mock("../tasks/tombstones.js", () => ({
+vi.mock("../tasks/tombstones.ts", () => ({
   hydrateRecurringTombstones: (...args) => testState.hydrateRecurringTombstones(...args),
 }));
 vi.mock("../bills/bills-service.ts", () => ({

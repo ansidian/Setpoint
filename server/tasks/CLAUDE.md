@@ -1,21 +1,21 @@
 # Server Tasks Map
 
-Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus deadline reads and reconciliation. Entry points are `tasks-service.js` (task mutations) and `deadlines-read.js` (deadline reads); `todoist-webhook.js` exposes the mirror-sync worker consumed by `server/index.js`.
+Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus deadline reads and reconciliation. Entry points are `tasks-service.ts` (task mutations) and `deadlines-read.ts` (deadline reads); `todoist-webhook.ts` exposes the mirror-sync worker consumed by `server/index.js`.
 
 ## Files
 
-- `tasks-service.js` — Todoist task complete/delete/projects/labels service wrappers
-- `deadlines-read.js` — reads current/range deadlines: Todoist merge, tombstones, reminders
-- `deadline-helpers.js` — task reconciliation: active filters, stats (covered by `carry-forward.test.js`)
-- `todoist.js` — Todoist facade: fetch tasks, sync health
-- `todoist-api.js` — Todoist REST client
-- `todoist-mirror.js` — syncs tasks into the local Todoist mirror tables (thin IO orchestrator over the two pure modules below)
-- `todoistMirrorStatements.js` — pure SQL statement-builders for the mirror tables and sync-state success/tombstone/reconcile writes
-- `todoistMirrorHealthModel.js` — pure derivation of mirror health (state/severity/ageMs) from sync-state freshness
-- `todoist-webhook.js` — webhook delta processing
-- `todoist-reminder-source.js` — exposes Todoist deadlines as reminder sources
-- `todoist-token.js` — Todoist OAuth token storage/refresh
-- `tombstones.js` — tombstones for completed recurring tasks (resurrection guard)
+- `tasks-service.ts` — Todoist task complete/delete/projects/labels service wrappers
+- `deadlines-read.ts` — reads current/range deadlines: Todoist merge, tombstones, reminders
+- `deadline-helpers.ts` — task reconciliation: active filters, stats (covered by `carry-forward.test.ts`)
+- `todoist.ts` — Todoist facade: fetch tasks, sync health
+- `todoist-api.ts` — Todoist REST client
+- `todoist-mirror.ts` — syncs tasks into the local Todoist mirror tables (thin IO orchestrator over the two pure modules below)
+- `todoistMirrorStatements.ts` — pure SQL statement-builders for the mirror tables and sync-state success/tombstone/reconcile writes
+- `todoistMirrorHealthModel.ts` — pure derivation of mirror health (state/severity/ageMs) from sync-state freshness
+- `todoist-webhook.ts` — webhook delta processing
+- `todoist-reminder-source.ts` — exposes Todoist deadlines as reminder sources
+- `todoist-token.ts` — Todoist OAuth token storage/refresh
+- `tombstones.ts` — tombstones for completed recurring tasks (resurrection guard)
 
 (Other tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
@@ -27,6 +27,6 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 
 ## Related
 
-- `server/routes/briefing/tasks.js` and `server/routes/todoist-webhook.js` — HTTP surfaces
-- `server/reminders/` — consumes `todoist-reminder-source.js`
+- `server/routes/briefing/tasks.ts` and `server/routes/todoist-webhook.ts` — HTTP surfaces
+- `server/reminders/` — consumes `todoist-reminder-source.ts`
 - `server/scheduler.ts` — cron entry for mirror maintenance

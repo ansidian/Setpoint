@@ -197,7 +197,7 @@ graph LR
 
 ### Hooks
 
-Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components/**/use*.js` (test files excluded). Each entry shows the file's first exported name. Model helpers (e.g. `calendarRangeModel.js`) live alongside hooks but are excluded from this list — they're pure modules, not React hooks.
+Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/components/**/use*.{js,ts}` (test files excluded). Each entry shows the file's first exported name. Model helpers (e.g. `calendarRangeModel.js`) live alongside hooks but are excluded from this list — they're pure modules, not React hooks.
 
 <!-- BEGIN:hooks -->
 | Export | File |
@@ -232,8 +232,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.js` |
 | `useIndexedSearch` | `src/components/inbox/useIndexedSearch.js` |
 | `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.js` |
-| `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.js` |
-| `useAddTaskPanelPlacement` | `src/components/todoist/add-task-panel/useAddTaskPanelPlacement.js` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.js` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.js` |
 | `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.js` |
@@ -431,7 +429,7 @@ The fifth shell tab: RSS/Atom headlines only, no AI classification or summarizat
 | iCloud | `server/email/icloud.js` | IMAP (imap.mail.me.com:993) | App-specific password | Empty array, continue |
 | Calendar | `server/calendar/calendar.js` | Google Calendar API | Reuses Gmail OAuth | Empty array, continue |
 | Weather | `server/platform/weather.js` | Pirate Weather | API key | Cached data or placeholder |
-| Todoist | `server/tasks/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
+| Todoist | `server/tasks/todoist.ts` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/actual/actual.ts` + `server/bills/bills-service.ts` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
 | Email triage AI | `server/triage/triage-worker.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
 | Bill extraction AI | `server/bills/bill-extract.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
@@ -687,7 +685,7 @@ Database-driven cron jobs via `node-cron`. Schedules stored as JSON array in `ea
 
 When a recurring Todoist task is completed, the Todoist API advances it to the next occurrence and the prior instance disappears from the live list. That would make the dashboard row flicker out before the user's "completed" strikethrough animation finishes.
 
-`server/tasks/tombstones.js`'s `hydrateRecurringTombstones(userId, todoistTaskIdSet)` compensates: it reads `ea_completed_tasks` entries whose `due_date` is still within the visibility window and whose `todoist_id` is no longer in the live set, then emits synthetic task rows rebuilt from `snapshot_json` (migration 025). The orchestrator merges these with the separated Todoist list so the completed instance keeps rendering until its due date falls off the window. `DeadlinesSection` treats tombstoned rows specially to avoid shared-id collisions (see recent commits `217286f`, `eb17d23`).
+`server/tasks/tombstones.ts`'s `hydrateRecurringTombstones(userId, todoistTaskIdSet)` compensates: it reads `ea_completed_tasks` entries whose `due_date` is still within the visibility window and whose `todoist_id` is no longer in the live set, then emits synthetic task rows rebuilt from `snapshot_json` (migration 025). The orchestrator merges these with the separated Todoist list so the completed instance keeps rendering until its due date falls off the window. `DeadlinesSection` treats tombstoned rows specially to avoid shared-id collisions (see recent commits `217286f`, `eb17d23`).
 
 ### Snooze
 
@@ -727,8 +725,6 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/briefing/snapshot/items/:itemId/reopen` | `server/routes/briefing/snapshot.js` |
 | POST | `/api/briefing/snapshot/items/:itemId/restore` | `server/routes/briefing/snapshot.js` |
 | POST | `/api/briefing/snapshot/sync` | `server/routes/briefing/snapshot.js` |
-| GET | `/api/briefing/todoist/labels` | `server/routes/briefing/tasks.js` |
-| GET | `/api/briefing/todoist/projects` | `server/routes/briefing/tasks.js` |
 | GET | `/api/calendar/bills/range` | `server/routes/calendar.js` |
 | GET | `/api/calendar/calendars` | `server/routes/calendar.js` |
 | GET | `/api/calendar/deadlines` | `server/routes/calendar.js` |
@@ -751,7 +747,6 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.js` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.js` |
-| POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.js` |
 <!-- END:routes -->
 
 ### Auth

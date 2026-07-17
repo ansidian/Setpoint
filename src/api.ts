@@ -67,6 +67,16 @@ import type {
   CalendarBillsRangeResponse,
 } from "../shared/types/bills.ts";
 import type { ActualAccount, ActualCategoryGroup, ActualPayee } from "../shared/types/actual.ts";
+import type {
+  CalendarDeadlineRangeResponse,
+  CompleteDeadlineOccurrenceResult,
+  DeadlineDeleteResponse,
+  DeadlineMutationRequest,
+  DeadlinePayload,
+  TodoistLabel,
+  TodoistProject,
+  TodoistTask,
+} from "../shared/types/tasks.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -414,23 +424,22 @@ export const settleArrivalGraceOnExit = (): void => {
   }).catch(() => {});
 };
 // Calendar
-function unwrapDeadlineMutationResult(result: unknown): unknown {
-  const deadline = isRecord(result) ? result.deadline : undefined;
-  return deadline ?? result;
+function unwrapDeadlineMutationResult<T>(result: T | { deadline: T }): T {
+  return isRecord(result) && "deadline" in result ? result.deadline as T : result as T;
 }
 
-export const getCalendarDeadlines = (): Promise<unknown> => apiFetch("/api/calendar/deadlines");
-export const getCalendarDeadlinesRange = (start: string, end: string): Promise<unknown> =>
+export const getCalendarDeadlines = (): Promise<DeadlinePayload> => apiFetch("/api/calendar/deadlines");
+export const getCalendarDeadlinesRange = (start: string, end: string): Promise<CalendarDeadlineRangeResponse> =>
   apiFetch(`/api/calendar/deadlines/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
-export const createDeadline = (data: unknown): Promise<unknown> =>
-  apiFetch("/api/calendar/deadlines", { method: "POST", body: JSON.stringify(data) })
+export const createDeadline = (data: DeadlineMutationRequest): Promise<TodoistTask> =>
+  apiFetch<TodoistTask | { deadline: TodoistTask }>("/api/calendar/deadlines", { method: "POST", body: JSON.stringify(data) })
     .then(unwrapDeadlineMutationResult);
-export const updateDeadline = (id: ApiId, data: unknown): Promise<unknown> =>
-  apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) })
+export const updateDeadline = (id: ApiId, data: DeadlineMutationRequest): Promise<TodoistTask> =>
+  apiFetch<TodoistTask | { deadline: TodoistTask }>(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) })
     .then(unwrapDeadlineMutationResult);
-export const deleteDeadline = (id: ApiId): Promise<unknown> =>
+export const deleteDeadline = (id: ApiId): Promise<DeadlineDeleteResponse> =>
   apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "DELETE" });
-export const completeDeadlineOccurrence = (id: ApiId, occurrenceDate: string): Promise<unknown> =>
+export const completeDeadlineOccurrence = (id: ApiId, occurrenceDate: string): Promise<CompleteDeadlineOccurrenceResult> =>
   apiFetch(
     `/api/calendar/deadlines/${encodeURIComponent(id)}/completed-occurrences/${encodeURIComponent(occurrenceDate)}`,
     { method: "POST" },
@@ -468,11 +477,11 @@ export const deleteCalendarEvent = (eventId: ApiId, data: unknown): Promise<unkn
   apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "DELETE", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 
 // Todoist
-export const getTodoistProjects = (): Promise<unknown> => apiFetch("/api/briefing/todoist/projects");
-export const getTodoistLabels = (): Promise<unknown> => apiFetch("/api/briefing/todoist/labels");
-export const createTodoistTask = (data: unknown): Promise<unknown> => apiFetch("/api/briefing/todoist/tasks", { method: "POST", body: JSON.stringify(data) });
-export const updateTodoistTask = (id: ApiId, data: unknown): Promise<unknown> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
-export const deleteTodoistTask = (id: ApiId): Promise<unknown> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const getTodoistProjects = (): Promise<TodoistProject[]> => apiFetch("/api/briefing/todoist/projects");
+export const getTodoistLabels = (): Promise<TodoistLabel[]> => apiFetch("/api/briefing/todoist/labels");
+export const createTodoistTask = (data: DeadlineMutationRequest): Promise<TodoistTask> => apiFetch("/api/briefing/todoist/tasks", { method: "POST", body: JSON.stringify(data) });
+export const updateTodoistTask = (id: ApiId, data: DeadlineMutationRequest): Promise<TodoistTask> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
+export const deleteTodoistTask = (id: ApiId): Promise<DeadlineDeleteResponse> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Actual Budget
 export const sendToActualBudget = (bill: BillCandidate): Promise<BillMutationResponse> => apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });

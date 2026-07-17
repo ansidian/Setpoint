@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { computeDeadlineStats } from "../../server/tasks/deadline-helpers.js";
+import { computeDeadlineStats } from "../../server/tasks/deadline-helpers.ts";
 import {
   applyDeadlineComplete,
   applyDeadlineCompleting,

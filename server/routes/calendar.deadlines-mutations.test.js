@@ -27,11 +27,11 @@ vi.mock("../platform/google-places.ts", () => ({
   getGooglePlaceDetails: vi.fn(),
   suggestGooglePlaces: vi.fn(),
 }));
-vi.mock("../tasks/deadlines-read.js", () => ({
+vi.mock("../tasks/deadlines-read.ts", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
 }));
-vi.mock("../tasks/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.ts", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
@@ -76,7 +76,7 @@ vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const tasksService = await import("../tasks/tasks-service.js");
+const tasksService = await import("../tasks/tasks-service.ts");
 const { applyDeadlineCurrentStatus } = await import("../dashboard/current-service.js");
 const calendarRoutes = (await import("./calendar.js")).default;
 

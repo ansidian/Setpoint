@@ -34,9 +34,9 @@
       "snooze-waker.js"
     ],
     "tasks": [
-      "tasks-service.js",
-      "deadlines-read.js",
-      "todoist-webhook.js"
+      "tasks-service.ts",
+      "deadlines-read.ts",
+      "todoist-webhook.ts"
     ],
     "triage": [
       "triage-worker.js"
@@ -53,8 +53,8 @@
     "server/bills/billsMirrorModel.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/statementActualStatusModel.ts -> server/actual/scheduleMatchModel.ts",
     "server/dashboard/current-service.js -> server/reminders/reminder-hydration.ts",
-    "server/dashboard/current-service.js -> server/tasks/deadline-helpers.js",
-    "server/dashboard/current-service.js -> server/tasks/todoist.js",
+    "server/dashboard/current-service.js -> server/tasks/deadline-helpers.ts",
+    "server/dashboard/current-service.js -> server/tasks/todoist.ts",
     "server/email/email-service.js -> server/snapshots/snapshot-lifecycle.js",
     "server/email/gmailTriageStatements.js -> server/snapshots/arrival-grace.js",
     "server/routes/alfred.js -> server/email/html-to-text.js",
@@ -67,7 +67,6 @@
     "server/snapshots/snapshot-triage-attachment.js -> server/email/email-index.js",
     "server/snapshots/snapshotStore.js -> server/triage/triage-mode.js",
     "server/snapshots/snooze-waker.js -> server/email/gmail.js",
-    "server/tasks/deadlines-read.js -> server/reminders/reminder-hydration.ts",
     "server/triage/triage-model-client.js -> server/bills/bill-extractors/catalog.ts",
     "server/triage/triage-model-client.js -> server/email/email-ai-models.js",
     "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js"
