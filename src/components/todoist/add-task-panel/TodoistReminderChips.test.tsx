@@ -46,6 +46,14 @@ describe("TodoistReminderChips", () => {
     expect(onAddPreset).not.toHaveBeenCalled();
   });
 
+  it("identifies reminders as Discord webhooks separate from Todoist", () => {
+    renderChips();
+
+    expect(screen.getByRole("region", { name: "Discord webhook reminders" })).toBeTruthy();
+    expect(screen.getByText("Discord webhook reminders")).toBeTruthy();
+    expect(screen.getByText("Separate from the Todoist deadline and notifications.")).toBeTruthy();
+  });
+
   it("keeps custom reminder creation available for anchored past tasks", () => {
     renderChips({
       presetStates: {

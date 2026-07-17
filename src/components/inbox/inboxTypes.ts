@@ -48,6 +48,8 @@ export interface InboxEmailLike {
   from_address?: string | null;
   preview?: string | null;
   summary?: string | null;
+  action?: string | null;
+  deadline_at?: string | null;
   body_preview?: string | null;
   fullBody?: string;
   body?: string;

@@ -1,4 +1,4 @@
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, ExternalLink } from "lucide-react";
 import TodoistDuePicker from "./TodoistDuePicker";
 import { RemoveLabelButton, TokenAutocomplete } from "./controls";
 import { formatFriendlyDraftPreview } from "./formatDraftPreview";
@@ -17,10 +17,26 @@ import type {
 import type { LucideIcon } from "lucide-react";
 import type { TodoistLabel, TodoistProject } from "../../../../shared/types/tasks";
 import type { AddTaskDraftPreview, AddTaskOverrides, AutocompleteType } from "./types";
+import { extractDescriptionUrls } from "./descriptionLinksModel";
 
 const TypedActionButton = ActionButton as ComponentType<PropsWithChildren<
   ButtonHTMLAttributes<HTMLButtonElement> & { subtle?: boolean; danger?: boolean; dataTestId?: string }
 >>;
+
+export function TodoistDescriptionLinks({ description }: { description: string }) {
+  const urls = extractDescriptionUrls(description);
+  if (!urls.length) return null;
+  return (
+    <div className="todoist-description-links" aria-label="Links in task description">
+      {urls.map((url) => (
+        <a key={url} className="todoist-description-link" href={url} target="_blank" rel="noopener noreferrer">
+          <ExternalLink size={11} aria-hidden />
+          <span>{url}</span>
+        </a>
+      ))}
+    </div>
+  );
+}
 
 export function TodoistErrorNotice({ error, compact = false }: { error: string | null; compact?: boolean }) {
   if (!error) return null;
@@ -211,7 +227,10 @@ export function TodoistActionFooter({
   canSubmit,
   cancelDelete,
   confirmDelete,
+  confirmDiscard,
   confirmDeleteIntent,
+  confirmDiscardChanges,
+  cancelDiscard,
   deleteTask,
   deleting,
   handleSubmit,
@@ -224,7 +243,10 @@ export function TodoistActionFooter({
   canSubmit: boolean;
   cancelDelete: () => void;
   confirmDelete: boolean;
+  confirmDiscard: boolean;
   confirmDeleteIntent: () => void;
+  confirmDiscardChanges: () => void;
+  cancelDiscard: () => void;
   deleteTask: () => void | Promise<void>;
   deleting: boolean;
   handleSubmit: () => void | Promise<void>;
@@ -250,6 +272,15 @@ export function TodoistActionFooter({
             </TypedActionButton>
             <TypedActionButton subtle onClick={cancelDelete} disabled={deleting || submitting}>
               Keep task
+            </TypedActionButton>
+          </>
+        ) : confirmDiscard ? (
+          <>
+            <TypedActionButton danger onClick={confirmDiscardChanges} disabled={submitting || deleting}>
+              Confirm
+            </TypedActionButton>
+            <TypedActionButton subtle onClick={cancelDiscard} disabled={submitting || deleting}>
+              Cancel
             </TypedActionButton>
           </>
         ) : (

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import DigestStrip from "./DigestStrip";
 import Sidebar from "./Sidebar";
 import InboxList from "./InboxList";
@@ -62,6 +62,18 @@ function InboxDesktopPane({
   onUndo,
   announcement,
 }: InboxPaneProps) {
+  const [workspaceDirty, setWorkspaceDirty] = useState(false);
+  const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
+  const guardedOpen: typeof onOpen = (...args) => {
+    if (!allowWorkspaceExit()) return;
+    setWorkspaceDirty(false);
+    onOpen(...args);
+  };
+  const guardedClose = () => {
+    if (!allowWorkspaceExit()) return;
+    setWorkspaceDirty(false);
+    closeSelectedEmail();
+  };
   return (
     <div
       data-testid="inbox-desktop-view"
@@ -135,7 +147,7 @@ function InboxDesktopPane({
               emails={visibleEmails}
               accountsById={rowAccountsById}
               selectedId={selectedEmail?.id || selectedEmail?.uid || null}
-              onOpen={onOpen}
+              onOpen={guardedOpen}
               density={density}
               layout={indexedSearchActive ? "flat" : grouping}
               showPreview={showPreview}
@@ -172,7 +184,8 @@ function InboxDesktopPane({
               account={selectedAccount}
               accent={accent}
               onAction={onAction}
-              onClose={closeSelectedEmail}
+              onClose={guardedClose}
+              onWorkspaceDirtyChange={setWorkspaceDirty}
               showTriage={showTriage}
               showDraft={showDraft}
               billOpen={billOpen}

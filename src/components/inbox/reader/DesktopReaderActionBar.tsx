@@ -30,7 +30,6 @@ import "./DesktopReaderActionBar.css";
 
 type BillAction = {
   label: string;
-  tooltip: string;
   primary: boolean;
   actioned: boolean;
   onClick: () => void;
@@ -111,6 +110,7 @@ function ToolbarButton({
     </button>
   );
 
+  if (!tooltip) return button;
   return (
     <Tooltip text={tooltip} side="bottom" sideOffset={8}>
       {button}
@@ -159,7 +159,7 @@ function MenuItem({
       <Icon size={13} aria-hidden="true" />
       <span className="desktop-reader-action-menu-label">{label}</span>
       {active && <Check size={12} color="var(--sp-accent)" aria-hidden="true" />}
-      {keyHint && <span className="desktop-reader-action-key" aria-hidden="true">{keyHint}</span>}
+      {keyHint && <span className="desktop-reader-action-key desktop-reader-action-menu-key" aria-hidden="true">{keyHint}</span>}
     </button>
   );
 }
@@ -285,7 +285,6 @@ export default function DesktopReaderActionBar({
             <ToolbarButton
               icon={BellPlus}
               label="Remind me"
-              tooltip="Remind me"
               adaptive
               onClick={onRemind}
             />
@@ -294,7 +293,6 @@ export default function DesktopReaderActionBar({
             <ToolbarButton
               icon={Sparkles}
               label="Ask Alfred"
-              tooltip="Ask Alfred"
               adaptive
               onClick={onAskAlfred}
             />
@@ -303,7 +301,6 @@ export default function DesktopReaderActionBar({
             <ToolbarButton
               icon={billAction.actioned ? CheckCircle2 : CreditCard}
               label={billAction.label}
-              tooltip={billAction.tooltip}
               adaptive
               primary={billAction.primary}
               accent="#a6e3a1"
@@ -320,7 +317,6 @@ export default function DesktopReaderActionBar({
               icon={ArrowRightLeft}
               label="Move to…"
               ariaLabel="Move to"
-              tooltip="Move to…"
               adaptive
               disabled={moveDisabled}
               expanded={openMenu === "move"}
@@ -334,7 +330,6 @@ export default function DesktopReaderActionBar({
             <ToolbarButton
               icon={ListChecks}
               label="Triage"
-              tooltip="Triage"
               adaptive
               expanded={openMenu === "triage"}
               popup="menu"

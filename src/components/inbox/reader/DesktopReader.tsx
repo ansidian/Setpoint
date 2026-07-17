@@ -236,6 +236,8 @@ export default function DesktopReader({
   readOnly = false,
   onRemind,
   onAskAlfred,
+  taskWorkspace,
+  setDraftDirty,
 }: ReaderSurfaceProps & { billMounted: boolean }) {
   const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
   const internalSnoozeBtnRef = useRef<HTMLButtonElement>(null);
@@ -390,15 +392,17 @@ export default function DesktopReader({
             bodyState={bodyState}
             billResolution={resolvedBillResolution}
           />
+          {taskWorkspace && <aside data-testid="inbox-remind-workspace" style={{ width: 360, flexShrink: 0, overflowY: "auto", overscrollBehavior: "contain", borderLeft: "1px solid rgba(255,255,255,0.06)", background: "var(--sp-panel)", padding: 16 }}>{taskWorkspace}</aside>}
         </div>
 
-        {showDraft && !catchUp && email.claude?.draftReply && (
+        {(drafting || showDraft) && !catchUp && email.claude?.draftReply && (
           <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}>
             <DraftReply
               key={email.id}
               email={email}
               accent={accent}
               onDiscard={() => setDrafting(false)}
+              onDirtyChange={setDraftDirty}
             />
           </div>
         )}

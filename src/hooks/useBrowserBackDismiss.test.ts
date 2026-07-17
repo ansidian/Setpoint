@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import useBrowserBackDismiss from "./useBrowserBackDismiss";
 
 function useDismissHarness() {
@@ -88,7 +88,7 @@ describe("useBrowserBackDismiss", () => {
     });
   });
 
-  it("unwinds its history entry on unmount while still enabled (mount-style consumers)", () => {
+  it("unwinds its history entry on unmount while still enabled (mount-style consumers)", async () => {
     const backSpy = vi.spyOn(window.history, "back");
     const { unmount } = renderHook(() => useBrowserBackDismiss({
       enabled: true,
@@ -100,7 +100,19 @@ describe("useBrowserBackDismiss", () => {
 
     unmount();
 
-    expect(backSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(backSpy).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not unwind a newly pushed entry during Strict Mode's simulated unmount", () => {
+    const backSpy = vi.spyOn(window.history, "back");
+    renderHook(() => useBrowserBackDismiss({
+      enabled: true,
+      historyKey: "eaTestStrictDismiss",
+      onDismiss: () => {},
+    }), { wrapper: StrictMode });
+
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(window.history.state.eaTestStrictDismiss).toBeTruthy();
   });
 
   it("does not unwind again on unmount after the entry was already popped", async () => {

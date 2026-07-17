@@ -235,6 +235,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.ts` |
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.ts` |
 | `useAddTaskPanelPlacement` | `src/components/todoist/add-task-panel/useAddTaskPanelPlacement.ts` |
+| `useDirtyCloseConfirmation` | `src/components/todoist/add-task-panel/useDirtyCloseConfirmation.ts` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.ts` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.ts` |
 | `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.ts` |

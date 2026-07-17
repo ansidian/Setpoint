@@ -18,6 +18,7 @@ export default function useBrowserBackDismiss({
   const entryTokenRef = useRef<string | null>(null);
   const popDismissedRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
+  const lifecycleGenerationRef = useRef(0);
 
   useEffect(() => {
     onDismissRef.current = onDismiss;
@@ -75,12 +76,21 @@ export default function useBrowserBackDismiss({
   // effect above never re-runs its unwind branch — this leaks the pushed entry.
   // Empty deps: runs once on unmount regardless of how `enabled` changed.
   useEffect(() => {
+    lifecycleGenerationRef.current += 1;
+    const generation = lifecycleGenerationRef.current;
     return () => {
       const token = entryTokenRef.current;
-      if (token && window.history.state?.[historyKey] === token) {
-        window.history.back();
-      }
-      entryTokenRef.current = null;
+      window.queueMicrotask(() => {
+        // React Strict Mode replays effects as setup -> cleanup -> setup while
+        // the component is still mounted. The second setup advances this
+        // generation before the microtask runs, so only a real unmount unwinds
+        // the history entry.
+        if (lifecycleGenerationRef.current !== generation) return;
+        if (token && window.history.state?.[historyKey] === token) {
+          window.history.back();
+        }
+        entryTokenRef.current = null;
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only cleanup by design
   }, []);

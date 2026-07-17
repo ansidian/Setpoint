@@ -3,10 +3,11 @@ import { Sparkles, X, Copy } from "lucide-react";
 import { QuickAction } from "../primitives";
 import type { InboxEmailLike } from "../inboxTypes";
 
-export default function DraftReply({ email, accent, onDiscard, isMobile = false }: {
+export default function DraftReply({ email, accent, onDiscard, onDirtyChange, isMobile = false }: {
   email: InboxEmailLike;
   accent: string;
   onDiscard?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   isMobile?: boolean;
 }) {
   // Parent keys this on email.id so the initializer runs fresh per email.
@@ -25,6 +26,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
       // Clipboard may be unavailable or permission-denied; dismissing the panel
       // is still non-destructive, so fall through to close either way.
     }
+    onDirtyChange?.(false);
     onDiscard?.();
   }
   return (
@@ -58,6 +60,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
         </span>
         <span style={{ flex: 1 }} />
         <button
+          className="inbox-draft-close"
           type="button"
           onClick={onDiscard}
           style={{
@@ -65,6 +68,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
             color: "rgba(205,214,244,0.5)", padding: 4, borderRadius: 4,
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             fontFamily: "inherit",
+            transition: "transform 160ms ease, background 160ms ease, color 160ms ease",
             width: isMobile ? "var(--sp-touch-min)" : undefined,
             height: isMobile ? "var(--sp-touch-min)" : undefined,
           }}
@@ -74,7 +78,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
       </div>
       <textarea
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => { setText(e.target.value); onDirtyChange?.(e.target.value !== (email.claude?.draftReply || "")); }}
         rows={4}
         className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
         style={{

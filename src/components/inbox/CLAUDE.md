@@ -57,6 +57,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `reader/actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
 - `reader/billExtractionBody.ts` — body state for the bill-pay workflow
 - `reader/billSeedModel.ts` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
+- `reader/remindMeTaskSeedModel.ts` — pure persisted-triage/manual email-to-Todoist seed derivation, including Pacific due-date subtraction and bounded provenance
 - `reader/MobileReader.tsx` — mobile detail pane with action row
 - `reader/MobileBillDrawer.tsx` — mobile slide-up bill-pay sheet (expand/collapse affordance) extracted from MobileReader
 - `reader/MobileReaderHeader.tsx` — mobile reader subject/sender/status-pills/briefing-triage header block extracted from MobileReader

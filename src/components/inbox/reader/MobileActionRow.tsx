@@ -25,6 +25,7 @@ export default function MobileActionRow({
 
   return (
     <button
+      className="inbox-mobile-action-row"
       type="button"
       disabled={disabled}
       onClick={onClick}
@@ -44,6 +45,7 @@ export default function MobileActionRow({
         opacity: disabled ? 0.55 : 1,
         fontFamily: "inherit",
         textAlign: "left",
+        transition: "transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease",
       }}
     >
       <IconComponent size={14} style={{ flexShrink: 0 }} />
