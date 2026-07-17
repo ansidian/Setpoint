@@ -31,7 +31,7 @@ import { resolveReaderActions } from "./readerActionsModel";
 import { resolveBillSeed } from "./billSeedModel";
 import {
   isActualActioned,
-  resolveRecordedActualCalendarTarget,
+  resolveActualCalendarTarget,
 } from "./actualActionStatusModel";
 import type { Dispatch, SetStateAction } from "react";
 import type { InboxEmailLike } from "../inboxTypes";
@@ -270,7 +270,7 @@ export default function DesktopReader({
   const showBillToggle = billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
   const actualActioned = isActualActioned(billResolution?.actualStatus);
-  const recordedCalendarTarget = resolveRecordedActualCalendarTarget(billResolution?.actualStatus);
+  const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
 
   return (
     <div
@@ -298,20 +298,20 @@ export default function DesktopReader({
         {showDestructiveActions && showBillToggle && (
           <QuickAction
             icon={actualActioned ? CheckCircle2 : CreditCard}
-            label={recordedCalendarTarget
+            label={actualCalendarTarget
               ? "View bill"
               : actualActioned
               ? (billOpen ? "Hide details" : "View bill")
               : (billOpen ? "Hide bill" : "Pay bill")}
             tooltip={actualActioned
-              ? (recordedCalendarTarget
-                  ? "Open matched Actual transaction in calendar"
+              ? (actualCalendarTarget
+                  ? "Open matched bill in calendar"
                   : (billOpen ? "Hide bill details" : "Review matched bill details"))
               : (billOpen ? "Hide bill panel" : "Open bill panel")}
             primary={!billOpen && !actualActioned}
             onClick={() => {
-              if (recordedCalendarTarget && onOpenRecordedBill) {
-                onOpenRecordedBill(recordedCalendarTarget);
+              if (actualCalendarTarget && onOpenRecordedBill) {
+                onOpenRecordedBill(actualCalendarTarget);
                 return;
               }
               setBillOpen((value) => !value);
