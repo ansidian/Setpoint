@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.js";
 import {
   fetchEmailBody as fetchGmailBody,

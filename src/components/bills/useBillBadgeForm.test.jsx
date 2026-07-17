@@ -19,7 +19,7 @@ vi.mock("../../api", () => ({
   sendToActualBudget: vi.fn().mockResolvedValue({ message: "sent" }),
 }));
 
-vi.mock("../../lib/actualMetadata.js", () => ({
+vi.mock("../../lib/actualMetadata", () => ({
   _metadataCache: actualMetadataMock.metadata,
   ensureMetadataLoaded: vi.fn((callback) => callback(actualMetadataMock.metadata)),
 }));

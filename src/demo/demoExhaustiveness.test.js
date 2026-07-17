@@ -68,7 +68,7 @@ async function importApiWithDemoMode() {
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", "1");
   vi.stubGlobal("fetch", vi.fn());
-  return import("../api.js");
+  return import("../api");
 }
 
 describe("demo API exhaustiveness", () => {

@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { fetchEmails, fetchEmailsByIds, isMessageRead } from "./gmail.js";
 import { indexEmails } from "./email-index.js";
 import {

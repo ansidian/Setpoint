@@ -27,7 +27,7 @@ const api = vi.hoisted(() => ({
   previewNewsSource: vi.fn(), createNewsSource: vi.fn(),
   getNewsCatalog: vi.fn(async () => ({ topics: [] })), importNewsStarterTopics: vi.fn(),
 }));
-vi.mock("../../api.js", () => api);
+vi.mock("../../api", () => api);
 
 const { default: NewsTab } = await import("./NewsTab.jsx");
 

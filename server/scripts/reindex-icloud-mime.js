@@ -5,7 +5,7 @@
 // change). DRY RUN by default; pass --apply to write.
 // Usage: node server/scripts/reindex-icloud-mime.js [--apply]
 import "dotenv/config";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { looksLikeRawMime } from "../email/mime-artifacts.js";
 import { loadUserConfig } from "../platform/config-service.js";
 import { fetchAllEmails } from "../email/email-fetch.js";

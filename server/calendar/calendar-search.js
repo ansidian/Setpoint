@@ -1,4 +1,4 @@
-import { TODOIST_DEADLINE_COLOR } from "../../shared/deadline-source-colors.js";
+import { TODOIST_DEADLINE_COLOR } from "../../shared/deadline-source-colors.ts";
 
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 

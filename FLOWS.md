@@ -20,11 +20,11 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 10. `server/dashboard/current-providers/bills-provider.js:onRefreshed` — when the visible bills projection changed, publishes a `source: "bills"` dashboard event
 11. `server/dashboard/current-events.js:publishCurrentDashboardEvent` — fans the event out to per-user SSE listeners
 12. `src/hooks/useCurrentDashboard.js:handleChanged` — on `source === "bills"`: invalidates the frontend metadata singleton, then refetches the dashboard payload
-13. `src/lib/actualMetadata.js:invalidateActualMetadata` — nulls the singleton cache (level a) and bumps the generation counter so stale in-flight fetches can't repopulate it
-14. `src/lib/actualMetadata.js:ensureMetadataLoaded` — next consumer refetches GET `/api/briefing/actual/metadata`, served from level c
+13. `src/lib/actualMetadata.ts:invalidateActualMetadata` — nulls the singleton cache (level a) and bumps the generation counter so stale in-flight fetches can't repopulate it
+14. `src/lib/actualMetadata.ts:ensureMetadataLoaded` — next consumer refetches GET `/api/briefing/actual/metadata`, served from level c
 
 **Caches (the 4 levels, outermost first; layering diagram lives at the top of `server/bills/bills-service.js`):**
-- (a) frontend metadata singleton — `src/lib/actualMetadata.js` — invalidated by the bills SSE event, generation-guarded
+- (a) frontend metadata singleton — `src/lib/actualMetadata.ts` — invalidated by the bills SSE event, generation-guarded
 - (b) in-process 5-min TTL caches — `server/actual/actual.js` facade + `server/actual/actual-core.js` worker side — cleared on every write and by the fan-out
 - (c) `ea_actual_metadata_mirror` DB projection — `server/actual/actual-metadata-projection.js` — rewritten during the fan-out and by bills mirror refreshes
 - (d) on-disk local budget copy — `server/actual/actual-local-metadata.js` — re-synced from the Actual server when the fan-out runs with fresh-local preference
@@ -51,9 +51,9 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 12. `src/hooks/dashboardEventRefreshModel.js:refreshScopeForDashboardEvent` / `src/hooks/useCurrentDashboard.js:handleChanged` — forwards the payload to the dashboard event handler, routes `email_triage` to the existing active-snapshot read, and keeps every other or unknown source on the full-current read; queued bursts retain the strongest pending scope and snapshot-read failure falls back once to full current
 13. `src/components/inbox/inboxWorkItems.js:collectActiveSnapshotEmails` — flattens snapshot lanes into normalized inbox rows
 14. `src/hooks/useTriageNotificationSounds.js:handleDashboardEvent` — resolves the sound for the trigger type
-15. `src/lib/triageSoundGate.js:createTriageSoundGate` — gate's accept() dedupes by eventKey and coalesces per trigger (4s window)
+15. `src/lib/triageSoundGate.ts:createTriageSoundGate` — gate's accept() dedupes by eventKey and coalesces per trigger (4s window)
 
-**Caches:** `ea_gmail_watch_state` history cursor (`server/email/gmail-sync.js`, reset on 404 recovery); `ea_email_index` (`server/email/email-index.js`); `ea_triage_jobs` queue + `ea_email_triage` decisions (written by the sync, settled by the worker); `ea_briefing_snapshot_items` (upserted at queue-attach and finalize); sessionStorage `ea_triage_sound_event_keys` (`src/lib/triageSoundGate.js`, capped 200).
+**Caches:** `ea_gmail_watch_state` history cursor (`server/email/gmail-sync.js`, reset on 404 recovery); `ea_email_index` (`server/email/email-index.js`); `ea_triage_jobs` queue + `ea_email_triage` decisions (written by the sync, settled by the worker); `ea_briefing_snapshot_items` (upserted at queue-attach and finalize); sessionStorage `ea_triage_sound_event_keys` (`src/lib/triageSoundGate.ts`, capped 200).
 
 **SSE:** `dashboard-current-changed` (reasons `email_triage_queued`/`email_triage_finalized`/`email_triage_failed`) — emitted by `server/dashboard/current-events.js:publishCurrentDashboardEvent`, streamed by GET `/current/events` in `server/routes/dashboard.js` — consumed by `src/hooks/useCurrentDashboard.js:handleChanged`, routed to `src/hooks/useTriageNotificationSounds.js` via `src/pages/Dashboard.jsx`.
 
@@ -93,10 +93,10 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 1. `src/hooks/calendar/useCalendarRange.js:ensureRange` — finds missing/in-flight month keys, awaits foreground groups, kicks stale refresh + prefetch
 2. `src/hooks/calendar/calendarRangeModel.js:groupMonthKeys` — pure month-key math: dedupe, contiguous groups capped at 2 months per fetch
 3. `src/hooks/calendar/useCalendarRange.js:fetchMonthGroup` — converts a group to bounds via `monthBounds`, fetches, buckets events per month into the cache
-4. `src/api.js:getCalendarRange` — GET `/api/calendar/range`
+4. `src/api.ts:getCalendarRange` — GET `/api/calendar/range`
 5. `server/routes/calendar.js:validateCalendarRange` — validates ISO dates and ≤62-day span; handler fetches live from Google and hydrates reminder state
 6. `src/hooks/calendar/useCalendarModalSearch.js:useCalendarModalSearch` — debounced (250ms) per-scope search with request-sequence guards
-7. `src/api.js:getCalendarSearch` — GET `/api/calendar/search`
+7. `src/api.ts:getCalendarSearch` — GET `/api/calendar/search`
 8. `server/routes/calendar.js:calendarSearchResponse` — merges mirror events + deadline candidates, builds coverage sources; stale/dirty mirror health triggers `requestCalendarSearchMirrorRepair` fire-and-forget
 9. `server/calendar/calendar-search-mirror.js:listCalendarSearchMirrorOccurrences` — SQL LIKE over `ea_calendar_search_occurrences`, ordered by distance from today
 10. `server/calendar/calendar-search.js:rankCalendarSearchCandidates` — ranks/truncates combined candidates to the client limit

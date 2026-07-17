@@ -16,7 +16,7 @@ const mockActualLocal = {
 const mockDb = { execute: vi.fn(), batch: vi.fn() };
 vi.mock("../actual/actual.js", () => mockActual);
 vi.mock("../actual/actual-local-metadata.js", () => mockActualLocal);
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 
 beforeEach(() => {
   Object.values(mockActual).forEach((fn) => fn.mockReset());

@@ -6,8 +6,8 @@ import {
   syncCurrentDashboard,
 } from "../api";
 import { isDemoMode } from "../demo/config.js";
-import { invalidateActualMetadata } from "../lib/actualMetadata.js";
-import { logTiming } from "../../shared/timing.js";
+import { invalidateActualMetadata } from "../lib/actualMetadata";
+import { logTiming } from "../../shared/timing";
 import {
   currentToBriefing,
   currentToLiveDataBulk,
@@ -294,7 +294,7 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       const closedState = typeof EventSource !== "undefined" ? EventSource.CLOSED : 2;
       if (source.readyState === closedState) {
         source.close();
-        // Mirror apiFetch's 401 handling (src/api.js) so recovery is immediate and not
+        // Mirror apiFetch's 401 handling (src/api.ts) so recovery is immediate and not
         // dependent on an unrelated poll firing its own redirect.
         window.location.href = "/login";
       }

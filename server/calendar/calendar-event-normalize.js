@@ -3,7 +3,7 @@ import {
   googleEventColorForSourceHex,
   googleEventColorForId,
   normalizeGoogleEventColorId,
-} from "../../shared/calendar-event-colors.js";
+} from "../../shared/calendar-event-colors.ts";
 
 export const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 

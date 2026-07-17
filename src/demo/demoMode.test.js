@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 async function importApiWithDemoMode(value) {
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", value);
-  return import("../api.js");
+  return import("../api");
 }
 
 describe("demo mode API network guard", () => {

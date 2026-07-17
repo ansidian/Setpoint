@@ -6,7 +6,7 @@ import {
   listPasskeys,
   verifyPasskeyRegistration,
 } from "@/api";
-import { startPasskeyRegistration } from "@/auth/passkeyBrowser.js";
+import { startPasskeyRegistration } from "@/auth/passkeyBrowser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

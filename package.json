@@ -18,7 +18,7 @@
     "build:demo": "VITE_EA_DEMO=1 vite build --outDir dist-demo && cp dist-demo/index.html dist-demo/404.html",
     "preview:demo": "vite preview --outDir dist-demo",
     "start": "NODE_ENV=production node server/index.js",
-    "db:init": "node server/db/migrate.js",
+    "db:init": "node server/db/migrate.ts",
     "auth:reset-passkeys": "node server/scripts/reset-passkeys.js",
     "lint": "eslint .",
     "typecheck:client": "tsc -p tsconfig.client.json --pretty false",

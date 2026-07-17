@@ -23,7 +23,7 @@ import {
   normalizeGoogleEvent,
   toIsoDate,
 } from "./calendar-event-normalize.js";
-import { normalizeGoogleEventColorId } from "../../shared/calendar-event-colors.js";
+import { normalizeGoogleEventColorId } from "../../shared/calendar-event-colors.ts";
 
 function assertWriteAccess(auth, calendar) {
   if (!auth.hasWriteScope) {

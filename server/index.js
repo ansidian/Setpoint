@@ -27,8 +27,8 @@ import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./b
 import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.js";
 import { createGracefulShutdown } from "./shutdown.js";
-import { migrate } from "./db/migrate.js";
-import { migrateCbcEncryption } from "./db/migrate-encryption.js";
+import { migrate } from "./db/migrate.ts";
+import { migrateCbcEncryption } from "./db/migrate-encryption.ts";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
 import { getMissingRequiredEnv } from "./env.js";
 import { resolveWebAuthnConfig } from "./auth/webauthn-config.js";

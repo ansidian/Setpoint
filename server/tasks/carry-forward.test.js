@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-vi.mock("../db/connection.js", () => ({ default: {} }));
+vi.mock("../db/connection.ts", () => ({ default: {} }));
 vi.mock("../platform/encryption.js", () => ({ decrypt: () => "mocked" }));
 vi.mock("../email/gmail.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("../email/icloud.js", () => ({ fetchEmails: async () => [] }));

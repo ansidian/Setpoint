@@ -1,5 +1,5 @@
 import "dotenv/config";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 export const PASSKEY_RESET_TABLES = [
   "ea_passkey_credentials",

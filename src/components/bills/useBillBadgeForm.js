@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractBillFromEmail, sendToActualBudget } from "../../api";
-import { ensureMetadataLoaded, _metadataCache } from "../../lib/actualMetadata.js";
+import { ensureMetadataLoaded, _metadataCache } from "../../lib/actualMetadata";
 import {
   detectFee,
   formatModelName,

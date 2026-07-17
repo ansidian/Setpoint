@@ -1,6 +1,6 @@
 import { Router } from "express";
 import crypto from "crypto";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { hashToken, requireCookieSession } from "../middleware/auth.js";
 import { wrapRouterAsync } from "../middleware/async-handler.js";
 import { encrypt, decrypt } from "../platform/encryption.js";

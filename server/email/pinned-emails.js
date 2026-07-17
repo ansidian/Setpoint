@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 // Pin state is a per-email overlay, entirely outside the snapshot tables — the
 // structural sibling of ea_snoozed_emails. Pins are NOT triage judgments and

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import BottomSheet from "../ui/BottomSheet.jsx";
+import BottomSheet from "../ui/BottomSheet";
 import CalendarModalAgendaRailContent from "./modal/CalendarModalAgendaRailContent.jsx";
 import CalendarFloatingDetailContent from "./modal/CalendarFloatingDetailContent.jsx";
 

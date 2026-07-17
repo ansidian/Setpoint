@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 function safeJsonParse(raw, fallback) {
   try {

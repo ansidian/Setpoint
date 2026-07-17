@@ -6,7 +6,7 @@ async function importDemoApi(now = "2026-05-12T15:30:00.000Z") {
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", "1");
   vi.stubGlobal("fetch", vi.fn());
-  return import("../api.js");
+  return import("../api");
 }
 
 describe("demo calendar API handlers", () => {

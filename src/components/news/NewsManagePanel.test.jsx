@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   getNewsCatalog: vi.fn(async () => ({ topics: [] })),
   importNewsStarterTopics: vi.fn(async () => ({ imported: [] })),
 }));
-vi.mock("../../api.js", () => api);
+vi.mock("../../api", () => api);
 
 const { default: NewsManagePanel } = await import("./NewsManagePanel.jsx");
 

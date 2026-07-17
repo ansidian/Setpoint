@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 const DEFAULT_WINDOW_DAYS = 7;
 const OPENAI_PRICE_PER_MILLION = {

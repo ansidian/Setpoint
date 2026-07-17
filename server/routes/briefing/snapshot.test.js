@@ -7,7 +7,7 @@ import { errorHandler } from "../../middleware/async-handler.js";
 
 const mockDb = { execute: vi.fn() };
 
-vi.mock("../../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
 vi.mock("../../snapshots/snapshot-service.js", () => ({
   getSnapshotHistory: vi.fn(async () => ({
     snapshots: [{ id: 1, status: "active", readOnly: false }],

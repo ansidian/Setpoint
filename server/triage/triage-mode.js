@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 export const STORED_EMAIL_TRIAGE_MODES = ["auto", "real", "no_model", "paused"];
 const STORED_EMAIL_TRIAGE_MODE_SET = new Set(STORED_EMAIL_TRIAGE_MODES);

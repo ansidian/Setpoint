@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 export const PENDING_AUTH_COOKIE_NAME = "ea_pending_auth";
 export const PENDING_AUTH_TTL_MS = 5 * 60 * 1000;

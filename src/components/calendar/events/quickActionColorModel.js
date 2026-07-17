@@ -1,4 +1,4 @@
-import { googleEventColorIdForSourceHex } from "../../../../shared/calendar-event-colors.js";
+import { googleEventColorIdForSourceHex } from "../../../../shared/calendar-event-colors";
 
 // Pure color resolution for the calendar quick-action color grid. Extracted from
 // CalendarQuickActionLayer so the colorId fallback chain and the check-icon

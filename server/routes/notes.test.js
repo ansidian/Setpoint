@@ -13,7 +13,7 @@ vi.mock("../middleware/auth.js", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
     executeMultiple: (...args) => testState.db.current.executeMultiple(...args),

@@ -72,7 +72,7 @@ export function buildSnoozePresets(nowMs) {
   ];
 }
 
-// DASHBOARD_TZ / laComponents / epochFromLa now live in src/lib/dashboard-helpers.js
+// DASHBOARD_TZ / laComponents / epochFromLa now live in src/lib/dashboard-helpers.ts
 // (pure Pacific date math belongs in lib, not a component helper). Re-exported
 // here for backward compatibility with existing inbox/calendar/todoist importers.
 export { DASHBOARD_TZ, laComponents, epochFromLa };

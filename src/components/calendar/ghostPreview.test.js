@@ -6,7 +6,7 @@ import {
   ghostDisplayRange,
   ghostSpanDays,
 } from "./ghostPreview.js";
-import { epochFromLa } from "../../lib/dashboard-helpers.js";
+import { epochFromLa } from "../../lib/dashboard-helpers";
 
 // Build a calendar event fixture whose Pacific epoch bounds line up with the
 // ghostPreview conflict math (which derives ghost epochs via the same

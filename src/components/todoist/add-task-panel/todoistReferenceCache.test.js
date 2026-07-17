@@ -5,7 +5,7 @@ const { mockGetTodoistProjects, mockGetTodoistLabels } = vi.hoisted(() => ({
   mockGetTodoistLabels: vi.fn(),
 }));
 
-vi.mock("../../../api.js", () => ({
+vi.mock("../../../api", () => ({
   getTodoistProjects: mockGetTodoistProjects,
   getTodoistLabels: mockGetTodoistLabels,
 }));

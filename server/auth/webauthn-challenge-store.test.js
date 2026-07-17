@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createAuthTestDb } from "../test-utils/auth-db.js";
+import { createAuthTestDb } from "../test-utils/auth-db.ts";
 import {
   createWebAuthnChallengeStore,
   hashWebAuthnChallenge,

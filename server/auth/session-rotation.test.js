@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAuthTestDb, seedSession } from "../test-utils/auth-db.js";
+import { createAuthTestDb, seedSession } from "../test-utils/auth-db.ts";
 import { createSessionRotation } from "./session-rotation.js";
 
 describe("session rotation helper", () => {

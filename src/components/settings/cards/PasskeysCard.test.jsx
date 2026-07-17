@@ -12,7 +12,7 @@ const mockBrowser = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api", () => mockApi);
-vi.mock("@/auth/passkeyBrowser.js", () => mockBrowser);
+vi.mock("@/auth/passkeyBrowser", () => mockBrowser);
 
 const { default: PasskeysCard } = await import("./PasskeysCard.jsx");
 

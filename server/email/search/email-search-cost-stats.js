@@ -1,4 +1,4 @@
-import db from "../../db/connection.js";
+import db from "../../db/connection.ts";
 import {
   EMAIL_SEARCH_EMBEDDING_DIMENSIONS,
   EMAIL_SEARCH_EMBEDDING_DOCUMENT_VERSION,

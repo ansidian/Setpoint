@@ -7,7 +7,7 @@
  * symbol here, so external callers are unchanged.
  */
 
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { normalizeSnapshotItem } from "./snapshot-lifecycle.js";
 import {
   TRIAGE_LANES,

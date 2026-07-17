@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import Tooltip from "@/components/shared/Tooltip";
-import { GOOGLE_EVENT_COLORS } from "../../../../shared/calendar-event-colors.js";
+import { GOOGLE_EVENT_COLORS } from "../../../../shared/calendar-event-colors";
 import useDismissablePortal from "../../../hooks/useDismissablePortal.js";
 import {
   containTabFocus,

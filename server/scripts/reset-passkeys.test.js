@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createAuthTestDb, seedSession } from "../test-utils/auth-db.js";
+import { createAuthTestDb, seedSession } from "../test-utils/auth-db.ts";
 import { createPasskeyStore } from "../auth/passkey-store.js";
 import { createPendingAuthStore } from "../auth/pending-auth-store.js";
 import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.js";

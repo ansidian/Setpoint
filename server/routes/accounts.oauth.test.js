@@ -7,7 +7,7 @@ import {
   createAuthTestDb,
   seedGmailAccount,
   seedSession,
-} from "../test-utils/auth-db.js";
+} from "../test-utils/auth-db.ts";
 
 const testState = vi.hoisted(() => ({
   db: { current: null },
@@ -19,7 +19,7 @@ const gmailApi = vi.hoisted(() => ({
 const emailIndexApi = vi.hoisted(() => ({ queueEmailIndexBackfill: vi.fn(async () => ({ queued: true })) }));
 const emailBackfillApi = vi.hoisted(() => ({ wakeEmailBackfillWorker: vi.fn() }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
     batch: (...args) => testState.db.current.batch(...args),

@@ -2,7 +2,7 @@ import { parseDueDate, toPacificDate, todayPacific } from "../../../../lib/dashb
 import { dueDateToMs } from "../../../../lib/shell-helpers";
 import { isDemoMode } from "../../../../demo/config.js";
 import { parseYmd } from "../../calendarDateUtils.js";
-import { TODOIST_DEADLINE_COLOR } from "../../../../../shared/deadline-source-colors.js";
+import { TODOIST_DEADLINE_COLOR } from "../../../../../shared/deadline-source-colors";
 
 export const MAX_PILLS = 2;
 

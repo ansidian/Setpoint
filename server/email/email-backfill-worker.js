@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.js";
 import { fetchEmailsInRange as fetchGmailEmailsInRange } from "./gmail.js";
 import { fetchEmailsInRange as fetchIcloudEmailsInRange } from "./icloud.js";

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
 import { timeAgo } from "../dashboard/rails/railModel.js";
-import EmptyStateSplash from "../shared/EmptyStateSplash.jsx";
+import EmptyStateSplash from "../shared/EmptyStateSplash";
 import NewsTopicSection from "./NewsTopicSection.jsx";
 import { planTopicSection, summarizeTopicSourceHealth } from "./newsPageModel.js";
 

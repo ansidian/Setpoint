@@ -22,7 +22,7 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 
 - All message-list logic is pure in `alfredPanelModel.js`; components stay presentational.
 - The panel stays mounted while closed (translateX off-screen) so the conversation survives close/reopen; only new chat clears it.
-- SSE consumption is fetch + `src/lib/sseStream.js` (EventSource can't POST).
+- SSE consumption is fetch + `src/lib/sseStream.ts` (EventSource can't POST).
 - Chips are interactive: rows resolve their navigation action via `alfredChipActionModel.js`; calendar actions bubble to DashboardShell (closes the panel, opens the calendar), email actions stay panel-local.
 - Layering: the panel portals to `document.body` (zIndex 60, above the calendar modal's 49) and carries `data-suspend-calendar-hotkeys="all"` — a marker the calendar honors to ignore BOTH its global hotkeys and its outside-click dismissal for events originating inside the overlay (so clicking Alfred over an open calendar never closes it). The panel owns Esc ordering (preview first, panel second) via a document-capture listener.
 

@@ -20,7 +20,7 @@ const testState = vi.hoisted(() => ({
   syncActiveSnapshot: vi.fn(),
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
     executeMultiple: (...args) => testState.db.current.executeMultiple(...args),

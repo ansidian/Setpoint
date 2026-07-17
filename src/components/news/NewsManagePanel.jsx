@@ -5,7 +5,7 @@ import useDismissablePortal from "../../hooks/useDismissablePortal.js";
 import {
   createNewsTopic, deleteNewsSource, deleteNewsTopic, renameNewsTopic,
   reorderNewsTopics, updateNewsSource, updateNewsTopicMutedTerms,
-} from "../../api.js";
+} from "../../api";
 import { describeSourceHealth, summarizeTopicSourceHealth } from "./newsPageModel.js";
 import NewsAddSourceForm from "./NewsAddSourceForm.jsx";
 import NewsCatalogPicker from "./NewsCatalogPicker.jsx";

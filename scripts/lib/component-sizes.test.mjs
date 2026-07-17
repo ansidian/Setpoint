@@ -7,7 +7,7 @@ describe("isSizeCheckedSource", () => {
     expect(isSizeCheckedSource("src/hooks/calendar/useCalendarModalController.jsx")).toBe(true)
     expect(isSizeCheckedSource("src/components/calendar/events/useCalendarEventEditor.js")).toBe(true)
     expect(isSizeCheckedSource("src/demo/store.js")).toBe(true)
-    expect(isSizeCheckedSource("src/api.js")).toBe(true)
+    expect(isSizeCheckedSource("src/api.ts")).toBe(true)
   })
 
   test("excludes test files and non-source assets", () => {

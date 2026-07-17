@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createNewsSource, previewNewsSource } from "../../api.js";
+import { createNewsSource, previewNewsSource } from "../../api";
 import { ManageButton } from "./manageUi.jsx";
 import { manageInputStyle } from "./manageStyles.js";
 

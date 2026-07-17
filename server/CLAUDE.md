@@ -26,10 +26,10 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `auth/webauthn-service.js` — registration/authentication option + verification flows (via `@simplewebauthn/server`)
 
 ### `db/` — connection and migrations
-- `db/config.js` — resolves the libsql client config (local file vs. remote URL/token) from env
-- `db/connection.js` — the shared libsql client instance (default export)
-- `db/migrate.js` — runs the SQL files under `db/migrations/` in order at startup
-- `db/migrate-encryption.js` — one-shot rewrite of legacy CBC-encrypted columns to GCM
+- `db/config.ts` — resolves the libsql client config (local file vs. remote URL/token) from env
+- `db/connection.ts` — the shared libsql client instance (default export)
+- `db/migrate.ts` — runs the SQL files under `db/migrations/` in order at startup
+- `db/migrate-encryption.ts` — one-shot rewrite of legacy CBC-encrypted columns to GCM
 
 ### `scripts/` — one-off/ad-hoc CLI maintenance scripts (not imported by the server)
 - `scripts/backfill-email-date-utc.js` — normalizes historical email dates to UTC
@@ -42,9 +42,9 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/triage-eval.js`, `scripts/triage-preflight-dry-run.js` — email triage model eval harness and preflight-rules dry run
 
 ### `test-utils/` — shared test-only helpers (not themselves test files, so mapped explicitly)
-- `test-utils/auth-db.js` — spins up an in-memory auth-schema db for tests
-- `test-utils/completed-tasks-db.js` — spins up an in-memory completed-tasks-schema db for tests
-- `test-utils/temp-dir.js` — Windows-safe temp-directory cleanup (libsql keeps file locks after close())
+- `test-utils/auth-db.ts` — spins up an in-memory auth-schema db for tests
+- `test-utils/completed-tasks-db.ts` — spins up an in-memory completed-tasks-schema db for tests
+- `test-utils/temp-dir.ts` — Windows-safe temp-directory cleanup (libsql keeps file locks after close())
 
 (Other tests are not listed: each file above has a same-named test file by convention.)
 
@@ -58,4 +58,4 @@ Composition root and cross-cutting server concerns that don't belong to a single
 ## Related
 
 - Domain background-worker modules such as `server/email/email-backfill-worker.js` and `server/reminders/reminder-scheduler.js` — the individual stop functions `index.js` passes into `shutdown.js`'s `stopFns`
-- `server/db/migrations/` — SQL files run by `db/migrate.js`
+- `server/db/migrations/` — SQL files run by `db/migrate.ts`

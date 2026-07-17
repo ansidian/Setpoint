@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
-import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.js";
+import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.ts";
 
 const testState = vi.hoisted(() => ({
   db: { current: null },
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
   },

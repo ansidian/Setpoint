@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCalendarSearch } from "../../api.js";
+import { getCalendarSearch } from "../../api";
 import {
   calendarSearchKeyAction,
   calendarSearchStartIndex,

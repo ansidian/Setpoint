@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { CreditCard, CalendarClock } from "lucide-react";
 import { SectionHeader, EmptyRow } from "../rails/railPrimitives.jsx";
-import { StatusChip } from "../../shared/StatusChip.jsx";
-import Tooltip from "../../shared/Tooltip.jsx";
+import { StatusChip } from "../../shared/StatusChip";
+import Tooltip from "../../shared/Tooltip";
 import MarkDoneAction from "../MarkDoneAction.jsx";
 
 // Map buildComingUp short chip keys to the canonical token strings StatusChip expects.

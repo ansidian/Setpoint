@@ -20,4 +20,4 @@ Cross-cutting Express request-pipeline middleware composed in `server/index.js`:
 ## Related
 
 - `server/index.js` — composition root that mounts these (compression, auth guards, terminal `errorHandler`).
-- `server/db/connection.js` — Turso/SQLite client used by `auth.js` for session/token validation.
+- `server/db/connection.ts` — Turso/SQLite client used by `auth.js` for session/token validation.

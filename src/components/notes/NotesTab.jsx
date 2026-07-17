@@ -6,7 +6,7 @@ import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-ki
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from "motion/react";
 import { Search, NotebookPen } from "lucide-react";
-import { getNotes, createNote, updateNote, deleteNote, reorderNotes, archiveNote } from "../../api.js";
+import { getNotes, createNote, updateNote, deleteNote, reorderNotes, archiveNote } from "../../api";
 import NoteItem from "./NoteItem.jsx";
 import NoteEditor from "./NoteEditor.jsx";
 import NotesPromoteMount from "./NotesPromoteMount.jsx";

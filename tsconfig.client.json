@@ -13,5 +13,9 @@
     "tsBuildInfoFile": "./node_modules/.cache/typescript/client.tsbuildinfo",
     "types": ["node", "vite/client", "vitest/globals"]
   },
-  "include": ["src/**/*", "shared/**/*"]
+  "include": [
+    "src/**/*",
+    "shared/**/*",
+    "server/triage/triage-sound-settings.js"
+  ]
 }

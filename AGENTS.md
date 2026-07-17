@@ -86,7 +86,7 @@ Directories with a `CLAUDE.md` map (calendar, inbox, dashboard, settings, hooks,
 
 ## Floating Panel Pattern
 
-For dropdowns, popovers, and panels, follow the repo pattern in `src/components/briefing/BriefingHistoryPanel.jsx` and `src/components/shared/pickers/AnchoredFloatingPanel.jsx`:
+For dropdowns, popovers, and panels, follow the repo pattern in `src/components/briefing/BriefingHistoryPanel.jsx` and `src/components/shared/pickers/AnchoredFloatingPanel.tsx`:
 
 1. `createPortal(..., document.body)`.
 2. `position: fixed` from `getBoundingClientRect()`, recalculated on scroll/resize.
@@ -102,7 +102,7 @@ For dropdowns, popovers, and panels, follow the repo pattern in `src/components/
 ## Demo Mode Contract
 
 - Demo mode is build-time only (`VITE_EA_DEMO=1`) and must not become a URL/query/runtime toggle.
-- Future `src/api.js` exports must have explicit demo behavior: demo data, in-memory mutation, inert demo-safe response, or intentional `DEMO_API_UNHANDLED` failure.
+- Future `src/api.ts` exports must have explicit demo behavior: demo data, in-memory mutation, inert demo-safe response, or intentional `DEMO_API_UNHANDLED` failure.
 - Demo mode must never fall through to real `/api/*`, SSE/EventSource, provider auth/test flows, AI calls, webhooks, Actual SDK work, token management, bill-pay provider actions, or external service navigation.
 - Demo data may mutate in memory for the walkthrough, but it must reset on page refresh and must not persist to localStorage, IndexedDB, or a server.
 

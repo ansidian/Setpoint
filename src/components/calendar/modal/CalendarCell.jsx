@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import { CELL_HEADER_HEIGHT, buildCellAriaLabel, formatCellDate, formatCellDateKey } from "./calendarGridUtils.js";
-import { resolveIcon } from "../../../lib/icons.js";
+import { resolveIcon } from "../../../lib/icons";
 import { isEventSelectionModifier } from "../events/calendarEventSelectionModel.js";
 
 function formatCellWeather(weather) {

@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 // Today's date in Pacific time (ISO format YYYY-MM-DD)
 function todayPacific() {

@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import { decrypt } from "../platform/encryption.js";
 import { formatDiscordReminderPayload, sendDiscordWebhook } from "./discord-reminders.js";

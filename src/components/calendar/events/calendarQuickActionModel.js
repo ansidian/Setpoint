@@ -3,7 +3,7 @@
 // Extracted from useCalendarQuickActions.js so the DST-safe / Pacific-epoch rules
 // are unit-testable in isolation (see calendarQuickActionModel.test.js) and the
 // hook stays a thin optimistic-mutation controller. No React, no side effects.
-import { googleEventColorForId } from "../../../../shared/calendar-event-colors.js";
+import { googleEventColorForId } from "../../../../shared/calendar-event-colors";
 import {
   addDaysYmd,
   daysBetweenYmd,

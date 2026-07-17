@@ -51,7 +51,7 @@ const apiStub = vi.hoisted(() => ({
   deleteTodoistTask: vi.fn(),
 }));
 vi.mock("@/api", () => apiStub);
-vi.mock("../../api.js", () => apiStub);
+vi.mock("../../api", () => apiStub);
 
 import useCalendarModalController from "./useCalendarModalController.jsx";
 

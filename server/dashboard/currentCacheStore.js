@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import {
   CURRENT_CACHE_KEYS,
   expiresAtFor,

@@ -19,7 +19,7 @@ const testState = vi.hoisted(() => ({
   requestTodoistMirrorSync: vi.fn(),
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.dbExecute(...args),
   },

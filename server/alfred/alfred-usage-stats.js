@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 const DEFAULT_WINDOW_DAYS = 7;
 

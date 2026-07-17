@@ -1,5 +1,5 @@
 import { Router } from "express";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.js";
 import { geocodeLocation } from "../platform/weather.js";
 import { initScheduler } from "../scheduler.js";

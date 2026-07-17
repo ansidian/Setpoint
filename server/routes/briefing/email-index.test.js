@@ -6,7 +6,7 @@ import request from "supertest";
 
 const mockDb = { execute: vi.fn() };
 
-vi.mock("../../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
 vi.mock("../../email/email-index.js", () => ({
   getEmailIndexHealth: vi.fn(async () => ({ accounts: [{ account_id: "gmail-work" }] })),
   queueEmailIndexBackfill: vi.fn(async () => ({ queued: true, accounts: [{ account_id: "gmail-work" }] })),

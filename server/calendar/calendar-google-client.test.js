@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ credentials: null }));
 
-vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
+vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 vi.mock("../platform/encryption.js", () => ({
   decrypt: () => JSON.stringify(mocks.credentials),
   encrypt: (value) => value,
@@ -10,7 +10,7 @@ vi.mock("../platform/encryption.js", () => ({
 
 vi.stubGlobal("fetch", vi.fn());
 
-const db = (await import("../db/connection.js")).default;
+const db = (await import("../db/connection.ts")).default;
 const {
   createCalendarEvent,
   fetchCalendarMirrorEvents,

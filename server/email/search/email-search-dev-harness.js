@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { resolveDatabaseClientConfig } from "../../db/config.js";
+import { resolveDatabaseClientConfig } from "../../db/config.ts";
 
 const DEFAULT_STATUS_LIMIT = 25;
 const MAX_BACKFILL_LIMIT = 500;

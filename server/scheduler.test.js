@@ -26,7 +26,7 @@ const reminderSchedulerApi = vi.hoisted(() => ({
 }));
 
 vi.mock("node-cron", () => ({ default: cronApi }));
-vi.mock("./db/connection.js", () => ({ default: mockDb }));
+vi.mock("./db/connection.ts", () => ({ default: mockDb }));
 vi.mock("./platform/config-service.js", () => configApi);
 vi.mock("./email/email-fetch.js", () => emailFetchApi);
 vi.mock("./snapshots/snapshot-service.js", () => snapshotApi);

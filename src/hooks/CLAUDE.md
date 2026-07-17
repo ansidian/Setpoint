@@ -35,5 +35,5 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 
 ## Related
 
-- `src/lib/triageSoundGate.js` — dedup gate consumed by `useTriageNotificationSounds.js`
+- `src/lib/triageSoundGate.ts` — dedup gate consumed by `useTriageNotificationSounds.js`
 - `server/routes/dashboard.js` — SSE stream consumed by `useCurrentDashboard.js`

@@ -5,7 +5,7 @@ import {
   createQuickTxn as actualCreateQuickTxn,
   invalidateActualMetadataCache,
 } from "../actual/actual.js";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { resolveBillPaySample as resolveBillPaySampleCore } from "./bill-pay-service.js";
 import {
   describeLocalActualCache,
@@ -50,7 +50,7 @@ export {
 // Actual metadata (accounts, payees, categories, schedules) is cached at four
 // levels:
 //
-//   (a) src/lib/actualMetadata.js singleton — frontend; cleared by the bills
+//   (a) src/lib/actualMetadata.ts singleton — frontend; cleared by the bills
 //       SSE event (invalidateActualMetadata in that module), refetched on next use
 //   (b) in-process TTL caches — actual.js facade + actual-core.js (5 min);
 //       cleared by invalidateActualMetadataCache()

@@ -1,5 +1,7 @@
-import { logTiming } from "../shared/timing.js";
-export { formatTimingLog, logTiming } from "../shared/timing.js";
+import * as sharedTiming from "../shared/timing.ts";
+
+export const formatTimingLog = sharedTiming.formatTimingLog;
+export const logTiming = sharedTiming.logTiming;
 
 export function getElapsedMs(startedAt) {
   return performance.now() - startedAt;

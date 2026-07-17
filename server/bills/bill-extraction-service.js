@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { trimBillBody } from "./bill-extract.js";
 import { ANTHROPIC_PROVIDER } from "./bill-extractors/anthropic.js";
 import { OPENAI_PROVIDER } from "./bill-extractors/openai.js";

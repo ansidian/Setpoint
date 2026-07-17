@@ -21,7 +21,7 @@ import {
 } from "./actualMetadataSync.js";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.js";
 
 // Facade re-exports: pure date helpers (actualMetadataModel.js) and filesystem

@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { normalizeEmailDateUtc } from "./email-date.js";
 
 export const EMAIL_INDEX_BODY_TEXT_MAX_CHARS = 20_000;

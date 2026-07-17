@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
 
-vi.mock("../../api.js", () => ({
+vi.mock("../../api", () => ({
   getNotes: vi.fn(),
   createNote: vi.fn(),
   updateNote: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("./NoteEditor.jsx", () => ({
   ),
 }));
 
-import { getNotes } from "../../api.js";
+import { getNotes } from "../../api";
 import NotesTab from "./NotesTab.jsx";
 
 describe("NotesTab", () => {
@@ -59,7 +59,7 @@ describe("NotesTab", () => {
   });
 
   it("promotes a note to a task and auto-archives it", async () => {
-    const { archiveNote } = await import("../../api.js");
+    const { archiveNote } = await import("../../api");
     render(<NotesTab accent="#cba6da" />);
     await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
 
@@ -85,7 +85,7 @@ describe("NotesTab", () => {
   });
 
   it("unarchives a note from the archived view (resurfacing it)", async () => {
-    const { archiveNote } = await import("../../api.js");
+    const { archiveNote } = await import("../../api");
     render(<NotesTab accent="#cba6da" />);
     await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
 
@@ -100,7 +100,7 @@ describe("NotesTab", () => {
   });
 
   it("deleting shows an undo toast; Undo restores the note and skips the server delete", async () => {
-    const { deleteNote } = await import("../../api.js");
+    const { deleteNote } = await import("../../api");
     render(<NotesTab accent="#cba6da" />);
     await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
 
@@ -115,7 +115,7 @@ describe("NotesTab", () => {
   });
 
   it("commits a deferred delete on unmount", async () => {
-    const { deleteNote } = await import("../../api.js");
+    const { deleteNote } = await import("../../api");
     const { unmount } = render(<NotesTab accent="#cba6da" />);
     await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
 
@@ -137,7 +137,7 @@ describe("NotesTab", () => {
     };
 
     it("Cmd+click selects notes; bulk Delete removes them, Undo restores (no server delete)", async () => {
-      const { deleteNote } = await import("../../api.js");
+      const { deleteNote } = await import("../../api");
       threeActive();
       render(<NotesTab accent="#cba6da" />);
       await waitFor(() => expect(screen.getByText("alpha")).toBeTruthy());

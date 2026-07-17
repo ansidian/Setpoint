@@ -155,7 +155,7 @@ server/
 /settings ─ Settings (auth required)
 ```
 
-Auth guard in `App.jsx`: `authenticated ? <Component /> : <Navigate to="/login" />`. Auth state: `null` = loading spinner, `true/false` = route.
+Auth guard in `App.tsx`: `authenticated ? <Component /> : <Navigate to="/login" />`. Auth state: `null` = loading spinner, `true/false` = route.
 
 ### Component Hierarchy
 
@@ -680,7 +680,7 @@ All dropdowns, popovers, and panels use:
 4. `isolation: isolate` + opaque background (`#16161e`)
 5. Click-outside via `pointerdown` on `document`
 
-Reference implementations: `BriefingHistoryPanel.jsx`, `src/components/shared/pickers/AnchoredFloatingPanel.jsx`.
+Reference implementations: `BriefingHistoryPanel.jsx`, `src/components/shared/pickers/AnchoredFloatingPanel.tsx`.
 
 ### Scheduler
 

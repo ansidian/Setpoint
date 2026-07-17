@@ -9,7 +9,7 @@ import {
 
 describe("isRequiredEntry", () => {
   test("requires plain source files", () => {
-    expect(isRequiredEntry("src/lib/triageSoundGate.js")).toBe(true)
+    expect(isRequiredEntry("src/lib/triageSoundGate.ts")).toBe(true)
     expect(isRequiredEntry("src/components/inbox/InboxView.jsx")).toBe(true)
   })
 

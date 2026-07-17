@@ -7,7 +7,7 @@
  * symbol here, so external callers are unchanged.
  */
 
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import {
   ARRIVAL_GRACE_READ_SOURCE,
   ARRIVAL_GRACE_SOURCE,

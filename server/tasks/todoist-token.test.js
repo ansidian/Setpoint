@@ -5,7 +5,7 @@ const testState = vi.hoisted(() => ({
   db: { current: null },
 }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
   },

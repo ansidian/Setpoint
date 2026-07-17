@@ -23,7 +23,7 @@ vi.mock("./actual-local-metadata.js", () => ({
 // The in-process branch dynamically imports actual-core; keep its heavyweight
 // dependencies inert.
 vi.mock("@actual-app/api", () => ({ default: {} }));
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: { execute: vi.fn(async () => ({ rows: [] })), batch: vi.fn(async () => []) },
 }));
 vi.mock("../platform/encryption.js", () => ({ decrypt: vi.fn((value) => value) }));

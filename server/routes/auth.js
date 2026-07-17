@@ -8,7 +8,7 @@ import {
   deleteSession,
   requireCookieSession,
 } from "../middleware/auth.js";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.js";
 import { timeRoute } from "../timing.js";
 import {

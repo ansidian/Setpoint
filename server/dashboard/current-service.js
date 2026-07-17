@@ -2,7 +2,7 @@
 // behavior (fetching, publish-on-change, backoff, maintenance) lives on the
 // provider modules in current-providers/; this file owns cache rows, refresh
 // planning/scheduling, and response composition.
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 import { getBillsMirrorState } from "../bills/bills-service.js";
 import { publishCurrentDashboardEvent } from "./current-events.js";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.js";

@@ -10,7 +10,7 @@ const testState = vi.hoisted(() => ({
 const gmailApi = vi.hoisted(() => ({ fetchEmailsInRange: vi.fn() }));
 const icloudApi = vi.hoisted(() => ({ fetchEmailsInRange: vi.fn() }));
 
-vi.mock("../db/connection.js", () => ({
+vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (...args) => testState.db.current.execute(...args),
     batch: (...args) => testState.db.current.batch(...args),

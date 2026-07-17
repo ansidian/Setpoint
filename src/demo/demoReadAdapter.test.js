@@ -5,7 +5,7 @@ async function importDemoApi(now = "2026-05-12T15:30:00.000Z") {
   vi.setSystemTime(new Date(now));
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", "1");
-  return import("../api.js");
+  return import("../api");
 }
 
 describe("demo mode read adapter", () => {

@@ -1,5 +1,5 @@
 import { decrypt } from "../platform/encryption.js";
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 

@@ -1,4 +1,4 @@
-import db from "../db/connection.js";
+import db from "../db/connection.ts";
 
 /**
  * Check if an error message or response body contains 'invalid_grant' (case-insensitive).

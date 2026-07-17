@@ -1,5 +1,5 @@
 import { Search, X } from "lucide-react";
-import { getLocationDisplayLabel } from "../../../lib/calendar-links.js";
+import { getLocationDisplayLabel } from "../../../lib/calendar-links";
 import { calendarSearchPlaceholder } from "../../../hooks/calendar/calendarModalSearchModel.js";
 import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import {

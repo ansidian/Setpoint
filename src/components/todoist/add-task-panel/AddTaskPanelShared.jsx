@@ -4,7 +4,7 @@ import { RemoveLabelButton, TokenAutocomplete } from "./controls";
 import { formatFriendlyDraftPreview } from "./formatDraftPreview.js";
 import { ActionButton, FieldLabel } from "../../calendar/events/CalendarEditorControls";
 import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
-import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors.js";
+import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors";
 
 export function TodoistErrorNotice({ error, compact = false }) {
   if (!error) return null;
