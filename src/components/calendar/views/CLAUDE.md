@@ -58,7 +58,7 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `deadlines/calendarDeadlineRescheduleModel.ts` — pure drag-reschedule target resolution + day-only payload (re-supplies `due_time`) + drag-eligibility gate
 - `deadlines/useDeadlineQuickActions.ts` — quick-action menu building and handlers, plus the day-only drag-reschedule slice
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

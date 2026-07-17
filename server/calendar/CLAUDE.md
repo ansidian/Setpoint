@@ -1,6 +1,6 @@
 # Server Calendar Map
 
-Google Calendar integration: range reads, event mutations (including recurring scopes), and the local search mirror. Entry point is `calendar.ts`; `calendar-search-mirror.ts` exposes the mirror-sync worker consumed by `server/index.js`.
+Google Calendar integration: range reads, event mutations (including recurring scopes), and the local search mirror. Entry point is `calendar.ts`; `calendar-search-mirror.ts` exposes the mirror-sync worker consumed by `server/index.ts`.
 
 ## Files
 

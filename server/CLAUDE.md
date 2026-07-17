@@ -5,7 +5,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 ## Files
 
 ### Root
-- `index.js` — Express app assembly; wires middleware, routes, and background workers; owns the HTTP server instance
+- `index.ts` — Express app assembly; wires middleware, routes, and background workers; owns the HTTP server instance
 - `scheduler.ts` — cron composition root; starts/stops all background workers across domains
 - `scheduler-work-registry.ts` — shared admission/single-flight registry that lets scheduler shutdown await every admitted task
 - `scheduler-email-triage-drain.ts` — scheduler-owned earliest-deadline controller and request seam for durable email-triage jobs
@@ -15,7 +15,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `static-assets.ts` — production frontend static-file serving and SPA fallback
 - `startup-delays.ts` — staggered startup delay/jitter calculation for background workers
 - `timing.ts` — request/phase timing log helpers
-- `hash-password.js` — one-shot CLI to bcrypt-hash a password for `EA_PASSWORD_HASH`
+- `hash-password.ts` — one-shot CLI to bcrypt-hash a password for `EA_PASSWORD_HASH`
 
 ### `auth/` — passkey/WebAuthn and session support
 - `auth/passkey-store.ts` — CRUD for stored passkey credentials
@@ -32,14 +32,14 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `db/migrate-encryption.ts` — one-shot rewrite of legacy CBC-encrypted columns to GCM
 
 ### `scripts/` — one-off/ad-hoc CLI maintenance scripts (not imported by the server)
-- `scripts/backfill-email-date-utc.js` — normalizes historical email dates to UTC
-- `scripts/email-search-embedding-backfill.js`, `scripts/email-search-embedding-status.js` — batch (re)compute and report embedding coverage for email search
-- `scripts/email-search-retrieval-eval.js`, `scripts/seed-email-search-retrieval-eval.js` — email search retrieval quality eval and its fixture seeding
-- `scripts/hydrate-actual-cache.js`, `scripts/prune-actual-cache.js` — warm and prune the local Actual Budget cache
-- `scripts/reindex-emails.js` — additive time-windowed email re-index
-- `scripts/reindex-icloud-mime.js` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
-- `scripts/reset-passkeys.js` — wipes passkey/session tables for local dev reset
-- `scripts/triage-eval.js`, `scripts/triage-preflight-dry-run.js` — email triage model eval harness and preflight-rules dry run
+- `scripts/backfill-email-date-utc.ts` — normalizes historical email dates to UTC
+- `scripts/email-search-embedding-backfill.ts`, `scripts/email-search-embedding-status.ts` — batch (re)compute and report embedding coverage for email search
+- `scripts/email-search-retrieval-eval.ts`, `scripts/seed-email-search-retrieval-eval.ts` — email search retrieval quality eval and its fixture seeding
+- `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
+- `scripts/reindex-emails.ts` — additive time-windowed email re-index
+- `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
+- `scripts/reset-passkeys.ts` — wipes passkey/session tables for local dev reset
+- `scripts/triage-eval.ts`, `scripts/triage-preflight-dry-run.ts` — email triage model eval harness and preflight-rules dry run
 
 ### `test-utils/` — shared test-only helpers (not themselves test files, so mapped explicitly)
 - `test-utils/auth-db.ts` — spins up an in-memory auth-schema db for tests
@@ -50,12 +50,12 @@ Composition root and cross-cutting server concerns that don't belong to a single
 
 ## Local patterns
 
-- `index.js` is the only place that should construct the real HTTP server and register `process.on('SIGTERM'|'SIGINT', ...)` handlers — signal registration is untestable under Vitest, so `shutdown.ts`'s `createGracefulShutdown` exposes a pure, injectable `shutdown(signal)` function instead of registering signal handlers itself; `scheduler.ts` no longer registers any signal handler of its own (its former partial, VITEST-gated one was deleted — see REL-03) and only exposes `stopScheduler()` as one of the `stopFns` `index.js` passes in.
+- `index.ts` is the only place that should construct the real HTTP server and register `process.on('SIGTERM'|'SIGINT', ...)` handlers — signal registration is untestable under Vitest, so `shutdown.ts`'s `createGracefulShutdown` exposes a pure, injectable `shutdown(signal)` function instead of registering signal handlers itself; `scheduler.ts` no longer registers any signal handler of its own (its former partial, VITEST-gated one was deleted — see REL-03) and only exposes `stopScheduler()` as one of the `stopFns` `index.ts` passes in.
 - `shutdown.ts` must stay generic: it takes `stopFns` as a parameter and must never import a specific domain's stop function or `scheduler.ts` directly.
 - `auth/` and `db/` modules are one-way dependencies for domain code (e.g. `server/platform/`, `server/routes/`) — nothing under `auth/`/`db/` should import a domain.
-- `scripts/` entries are run manually via `node server/scripts/<name>.js`, never imported by `index.js` or `scheduler.ts`.
+- `scripts/` entries are run manually via `node server/scripts/<name>.ts`, never imported by `index.ts` or `scheduler.ts`.
 
 ## Related
 
-- Domain background-worker modules such as `server/email/email-backfill-worker.ts` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.js` passes into `shutdown.ts`'s `stopFns`
+- Domain background-worker modules such as `server/email/email-backfill-worker.ts` and `server/reminders/reminder-scheduler.ts` — the individual stop functions `index.ts` passes into `shutdown.ts`'s `stopFns`
 - `server/db/migrations/` — SQL files run by `db/migrate.ts`

@@ -20,7 +20,7 @@ export interface CalendarDeadlineOverlayOptions<T = unknown> extends PlanningRea
   deadlinesData?: T | null;
 }
 
-// Deadline-overlay orchestration extracted from useCalendarModalController.jsx
+// Deadline-overlay orchestration extracted from useCalendarModalController.tsx
 // (fe-global::calendar-controller-god-component). Owns the planning-readiness
 // state machine, the late-deadline apply path, the per-settle committed-overlay
 // record, and the identity-stabilized overlay object that downstream memos key

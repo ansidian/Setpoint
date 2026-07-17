@@ -11,10 +11,11 @@
   },
   "include": [
     "scripts/**/*",
+    "server/scripts/clean-notification-mp3.test.ts",
     "e2e/**/*",
-    "eslint.config.js",
-    "playwright.config.js",
-    "vite.config.js",
-    "vitest.config.js"
+    "eslint.config.ts",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
   ]
 }

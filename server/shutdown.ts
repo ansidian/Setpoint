@@ -6,7 +6,7 @@
 // handler (which is untestable inside Vitest; see server/scheduler.ts's
 // VITEST/NODE_ENV=test gate on its own signal registration).
 //
-// The caller (server/index.js) is responsible for constructing this with the
+// The caller (server/index.ts) is responsible for constructing this with the
 // real `server` instance and the real list of `stopFns`, and for registering
 // the actual signal handlers that call `shutdown(signal)`.
 

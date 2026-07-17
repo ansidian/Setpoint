@@ -19,7 +19,7 @@ process.env.EA_USER_ID = "user-1";
 
 const emailIndexService = await import("../../email/email-index.ts");
 const emailBackfillWorker = await import("../../email/email-backfill-worker.ts");
-const briefingRoutes = (await import("./index.js")).default;
+const briefingRoutes = (await import("./index.ts")).default;
 const originalNodeEnv = process.env.NODE_ENV;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 

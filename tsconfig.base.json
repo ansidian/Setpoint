@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
     "allowImportingTsExtensions": true,
-    "allowJs": true,
-    "checkJs": false,
+    "allowJs": false,
     "composite": true,
     "erasableSyntaxOnly": true,
     "exactOptionalPropertyTypes": false,

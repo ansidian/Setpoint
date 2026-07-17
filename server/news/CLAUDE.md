@@ -30,7 +30,7 @@ summarization — metadata only, read-at-source. HTTP surface is
   `029_news_retry_after.sql`'s persisted source cooldown (lives here, not with
   the migration files)
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

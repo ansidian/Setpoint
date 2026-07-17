@@ -62,7 +62,7 @@ This project requires your own API keys and credentials.
 ### Environment variables
 
 ```bash
-# Auth (run `node server/hash-password.js <your-password>` to generate)
+# Auth (run `node server/hash-password.ts <your-password>` to generate)
 EA_PASSWORD_HASH=$2b$12$...
 EA_USER_ID=your-user-id
 

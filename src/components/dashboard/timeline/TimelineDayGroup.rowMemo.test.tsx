@@ -8,7 +8,7 @@ import type { TimelineRowProps } from "./TimelineRow";
 // PERF-L01: TimelineDayGroup must derive now-dependent row primitives once per
 // item (memoized on [items, now, isMobile]) so TimelineRow's own memo can bail
 // on a 30s tick for rows whose derived state didn't actually change. Mocking
-// TimelineRow here (rather than in TimelineDayGroup.test.jsx) keeps that
+// TimelineRow here (rather than in TimelineDayGroup.test.tsx) keeps that
 // file's real in-card-marker assertions intact — this file only probes render
 // counts per row.
 const { rowRenderCalls } = vi.hoisted(() => ({ rowRenderCalls: [] as TimelineRowProps[] }));

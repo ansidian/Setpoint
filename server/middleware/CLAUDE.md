@@ -1,6 +1,6 @@
 # Server Middleware Map
 
-Cross-cutting Express request-pipeline middleware composed in `server/index.js`: async-rejection forwarding, session/API-token auth guards, and dependency-free gzip. These are pipeline helpers — they hold no domain logic and must not import from a domain.
+Cross-cutting Express request-pipeline middleware composed in `server/index.ts`: async-rejection forwarding, session/API-token auth guards, and dependency-free gzip. These are pipeline helpers — they hold no domain logic and must not import from a domain.
 
 ## Files
 
@@ -19,5 +19,5 @@ Cross-cutting Express request-pipeline middleware composed in `server/index.js`:
 
 ## Related
 
-- `server/index.js` — composition root that mounts these (compression, auth guards, terminal `errorHandler`).
+- `server/index.ts` — composition root that mounts these (compression, auth guards, terminal `errorHandler`).
 - `server/db/connection.ts` — Turso/SQLite client used by `auth.ts` for session/token validation.

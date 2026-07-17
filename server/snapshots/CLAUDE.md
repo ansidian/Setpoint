@@ -1,6 +1,6 @@
 # Server Snapshots Map
 
-The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arrival grace. This is the product's "briefing" feature proper. Entry point is `snapshot-service.ts`; `snooze-waker.ts` exposes the waker worker consumed by `server/index.js`.
+The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arrival grace. This is the product's "briefing" feature proper. Entry point is `snapshot-service.ts`; `snooze-waker.ts` exposes the waker worker consumed by `server/index.ts`.
 
 ## Files
 
@@ -17,7 +17,7 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 - `snooze-waker.ts` — wakes due snoozes, reattaches arrival-grace emails
 - `arrival-grace.ts` — arrival grace window before new email is triaged
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 

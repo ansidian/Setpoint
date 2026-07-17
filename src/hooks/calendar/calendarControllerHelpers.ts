@@ -1,4 +1,4 @@
-// Pure, stateless helpers extracted from useCalendarModalController.jsx
+// Pure, stateless helpers extracted from useCalendarModalController.tsx
 // (fe-global::calendar-controller-god-component). These were module-scope
 // functions in the controller; moving them here shrinks the orchestrator
 // without changing any behavior. Each function is a pure transform over its

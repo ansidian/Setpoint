@@ -20,7 +20,7 @@ The Notes tab: a fourth shell tab for quick markdown jots with search, `#tag` fi
 - `notesUtils.tsx` — `linkifyText` (URL-only linkify; superseded in the tab by `renderNoteMarkdown`, retained for any other caller).
 - `NoteContextMenu.tsx` — portal action menu (Edit / Add to Todoist / Archive **or** Unarchive / Delete) positioned at the cursor, viewport-clamped. Renders Archive when given `onArchive`, Unarchive when given `onUnarchive`. A `count > 1` suffixes the action labels ("Archive 3", "Delete 3") for the bulk menu (the bulk caller omits Edit/Promote).
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns
 
@@ -34,4 +34,4 @@ The Notes tab: a fourth shell tab for quick markdown jots with search, `#tag` fi
 - `server/routes/notes.ts` — notes CRUD + the `PATCH /:id/archive` endpoint.
 - `src/components/dashboard/DashboardShell.tsx` — mounts `NotesTab` as a `KeepAliveTab` (key `4`).
 - `src/components/todoist/AddTaskPanel.tsx` — promote target, pre-seeded via `initialInput`/`initialDescription`.
-- `e2e/notes-editor.spec.js` — opt-in Playwright coverage for the editor (live markdown, autocomplete, checkbox persist).
+- `e2e/notes-editor.spec.ts` — opt-in Playwright coverage for the editor (live markdown, autocomplete, checkbox persist).
