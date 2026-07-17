@@ -278,11 +278,6 @@ export default function DesktopReader({
             : actualActioned
             ? (billOpen ? "Hide details" : "View bill")
             : (billOpen ? "Hide bill" : "Pay bill"),
-          tooltip: actualActioned
-            ? (actualCalendarTarget
-                ? "Open matched bill in calendar"
-                : (billOpen ? "Hide bill details" : "Review matched bill details"))
-            : (billOpen ? "Hide bill panel" : "Open bill panel"),
           primary: !billOpen && !actualActioned,
           actioned: actualActioned,
           onClick: () => {
