@@ -765,14 +765,6 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.js` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.js` |
-| GET | `/api/ea/accounts` | `server/routes/accounts.js` |
-| DELETE | `/api/ea/accounts/:id` | `server/routes/accounts.js` |
-| PATCH | `/api/ea/accounts/:id` | `server/routes/accounts.js` |
-| GET | `/api/ea/accounts/gmail/auth` | `server/routes/accounts.js` |
-| GET | `/api/ea/accounts/gmail/callback` | `server/routes/accounts.js` |
-| POST | `/api/ea/accounts/icloud` | `server/routes/accounts.js` |
-| PATCH | `/api/ea/accounts/reorder` | `server/routes/accounts.js` |
-| POST | `/api/ea/accounts/test/:id` | `server/routes/accounts.js` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.js` |
 | GET | `/api/news/` | `server/routes/news.js` |
 | GET | `/api/news/catalog` | `server/routes/news.js` |
@@ -794,20 +786,10 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | PATCH | `/api/notes/:id/archive` | `server/routes/notes.js` |
 | PATCH | `/api/notes/reorder` | `server/routes/notes.js` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.js` |
-| GET | `/bill-extract-models` | `server/routes/settings.js` |
-| GET | `/email-search/usage` | `server/routes/settings.js` |
-| GET | `/geocode` | `server/routes/settings.js` |
-| GET | `/important-senders` | `server/routes/settings.js` |
-| PUT | `/important-senders` | `server/routes/settings.js` |
-| GET | `/models` | `server/routes/settings.js` |
 | GET | `/reminders` | `server/routes/reminders.js` |
 | POST | `/reminders` | `server/routes/reminders.js` |
 | DELETE | `/reminders/:id` | `server/routes/reminders.js` |
-| POST | `/schedules/skip` | `server/routes/settings.js` |
-| GET | `/settings` | `server/routes/settings.js` |
-| PUT | `/settings` | `server/routes/settings.js` |
 | POST | `/settings/discord-reminder-test` | `server/routes/reminders.js` |
-| GET | `/triage/cache-stats` | `server/routes/settings.js` |
 <!-- END:routes -->
 
 ### Auth

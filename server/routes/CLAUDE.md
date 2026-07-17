@@ -6,7 +6,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Auth + accounts
 - `auth.ts` — login, passkey registration, WebAuthn, session management
-- `accounts.js` — Gmail OAuth callback, API tokens, account binding; mounts settings/reminders routers
+- `accounts.ts` — Gmail OAuth callback and account binding; mounts settings/reminders routers
 
 ### Briefing
 - `briefing/index.js` — mounts briefing sub-routers, applies auth middleware
@@ -25,7 +25,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `notes.js` — notes CRUD and reordering
 - `news.js` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.js` — Discord reminder testing and configuration
-- `settings.js` — user settings, model selection, integration configs
+- `settings.ts` — user settings, model selection, integration configs
 - `gmail-push.js` — Gmail Pub/Sub push intake, queues history syncs
 - `todoist-webhook.js` — Todoist webhook deliveries with signature verification
 

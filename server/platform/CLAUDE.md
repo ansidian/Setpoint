@@ -22,4 +22,4 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 
 ## Related
 
-- `server/routes/settings.js` — main consumer of settings/encryption helpers (converted in child 07)
+- `server/routes/settings.ts` — main consumer of settings/encryption helpers

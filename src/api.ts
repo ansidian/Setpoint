@@ -6,6 +6,25 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from "@simplewebauthn/browser";
+import type {
+  AccountId,
+  AccountMutationResponse,
+  AccountPatchRequest,
+  AccountSummary,
+  ApiTokenMetadata,
+  CreateApiTokenResponse,
+  GmailAuthUrlResponse,
+  ICloudAccountResponse,
+} from "../shared/types/accounts.ts";
+import type {
+  GeocodeResult,
+  ImportantSender,
+  ProviderModelAvailability,
+  ScheduleSkipResponse,
+  SettingsMutationResponse,
+  SettingsPatchRequest,
+  SettingsResponse,
+} from "../shared/types/settings.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -191,9 +210,9 @@ export const deletePasskeyCredential = (credentialId: ApiId): Promise<unknown> =
     redirectOnAuthFailure: false,
   })
 );
-export const listApiTokens = (): Promise<unknown> => apiFetch("/api/auth/api-tokens");
-export const createApiToken = (label: string, scopes: unknown): Promise<unknown> => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
-export const revokeApiToken = (id: ApiId): Promise<unknown> => apiFetch(`/api/auth/api-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const listApiTokens = (): Promise<ApiTokenMetadata[]> => apiFetch("/api/auth/api-tokens");
+export const createApiToken = (label: string, scopes: string[]): Promise<CreateApiTokenResponse> => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
+export const revokeApiToken = (id: ApiId): Promise<AccountMutationResponse> => apiFetch(`/api/auth/api-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Current snapshot and operational dashboard data
 export const getActiveSnapshot = (): Promise<unknown> => apiFetch("/api/briefing/snapshot/active");
@@ -434,14 +453,14 @@ export const getActualCacheStatus = (): Promise<unknown> => apiFetch("/api/brief
 export const hydrateActualBudgetCache = (): Promise<unknown> => apiFetch("/api/briefing/actual/cache/hydrate", { method: "POST" });
 
 // Accounts & Settings
-export const getAccounts = (): Promise<unknown> => apiFetch("/api/ea/accounts");
-export const getGmailAuthUrl = (): Promise<unknown> => apiFetch("/api/ea/accounts/gmail/auth");
-export const addICloudAccount = (email: string, password: string): Promise<unknown> => apiFetch("/api/ea/accounts/icloud", { method: "POST", body: JSON.stringify({ email, password }) });
-export const updateAccount = (id: ApiId, data: unknown): Promise<unknown> => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
-export const removeAccount = (id: ApiId): Promise<unknown> => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
-export const reorderAccounts = (order: unknown[]): Promise<unknown> => apiFetch("/api/ea/accounts/reorder", { method: "PATCH", body: JSON.stringify({ order }) });
-export const getSettings = (): Promise<unknown> => apiFetch("/api/ea/settings");
-export const updateSettings = (data: unknown): Promise<unknown> => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
+export const getAccounts = (): Promise<AccountSummary[]> => apiFetch("/api/ea/accounts");
+export const getGmailAuthUrl = (): Promise<GmailAuthUrlResponse> => apiFetch("/api/ea/accounts/gmail/auth");
+export const addICloudAccount = (email: string, password: string): Promise<ICloudAccountResponse> => apiFetch("/api/ea/accounts/icloud", { method: "POST", body: JSON.stringify({ email, password }) });
+export const updateAccount = (id: ApiId, data: AccountPatchRequest): Promise<AccountMutationResponse> => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
+export const removeAccount = (id: ApiId): Promise<AccountMutationResponse> => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const reorderAccounts = (order: AccountId[]): Promise<AccountMutationResponse> => apiFetch("/api/ea/accounts/reorder", { method: "PATCH", body: JSON.stringify({ order }) });
+export const getSettings = (): Promise<SettingsResponse> => apiFetch("/api/ea/settings");
+export const updateSettings = (data: SettingsPatchRequest): Promise<SettingsMutationResponse> => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
 export const testDiscordReminderWebhook = (): Promise<unknown> => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
 export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderListOptions = {}): Promise<unknown> => {
   const params = new URLSearchParams();
@@ -452,10 +471,10 @@ export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: 
 };
 export const createReminder = (data: unknown): Promise<unknown> => apiFetch("/api/ea/reminders", { method: "POST", body: JSON.stringify(data) });
 export const deleteReminder = (id: ApiId): Promise<unknown> => apiFetch(`/api/ea/reminders/${encodeURIComponent(id)}`, { method: "DELETE" });
-export const geocodeLocation = (q: string): Promise<unknown> => apiFetch(`/api/ea/geocode?q=${encodeURIComponent(q)}`);
-export const skipSchedule = (index: number, skip = true): Promise<unknown> => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
-export const getModels = (): Promise<unknown> => apiFetch("/api/ea/models");
-export const getBillExtractModels = (): Promise<unknown> => apiFetch("/api/ea/bill-extract-models");
+export const geocodeLocation = (q: string): Promise<GeocodeResult[]> => apiFetch(`/api/ea/geocode?q=${encodeURIComponent(q)}`);
+export const skipSchedule = (index: number, skip = true): Promise<ScheduleSkipResponse> => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
+export const getModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/models");
+export const getBillExtractModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/bill-extract-models");
 
 export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<unknown> => {
   const params = new URLSearchParams({ q: query });
@@ -498,8 +517,8 @@ export const deleteAlfredConversation = (id: ApiId): Promise<unknown> => (
 );
 
 // Important Senders
-export const getImportantSenders = (): Promise<unknown> => apiFetch("/api/ea/important-senders");
-export const updateImportantSenders = (senders: unknown[]): Promise<unknown> => apiFetch("/api/ea/important-senders", { method: "PUT", body: JSON.stringify({ senders }) });
+export const getImportantSenders = (): Promise<ImportantSender[]> => apiFetch("/api/ea/important-senders");
+export const updateImportantSenders = (senders: ImportantSender[]): Promise<SettingsMutationResponse> => apiFetch("/api/ea/important-senders", { method: "PUT", body: JSON.stringify({ senders }) });
 
 // Notes
 export const getNotes = (): Promise<unknown> => apiFetch("/api/notes");

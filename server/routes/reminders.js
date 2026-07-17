@@ -12,7 +12,7 @@ import {
 } from "../reminders/reminder-service.js";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 
-// Bare router: mounted behind requireCookieSession in routes/accounts.js.
+// Bare router: mounted behind requireCookieSession in routes/accounts.ts.
 const router = Router();
 
 router.post("/settings/discord-reminder-test", async (_req, res) => {

@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 1098,
+  "remainingLegacyFiles": 1094,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -46,6 +46,10 @@
     "server/startup-delays.ts",
     "server/startup-delays.test.ts",
     "server/timing.ts",
-    "server/timing.test.ts"
+    "server/timing.test.ts",
+    "server/routes/settings.ts",
+    "server/routes/settings.test.ts",
+    "server/routes/accounts.ts",
+    "server/routes/accounts.oauth.test.ts"
   ]
 }

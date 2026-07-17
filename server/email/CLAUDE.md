@@ -37,5 +37,5 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 ## Related
 
 - `server/email/search/` — AI search pipeline over the index (see its map)
-- `server/routes/briefing/email.js`, `server/routes/accounts.js`, `server/routes/gmail-push.js` — HTTP surfaces
+- `server/routes/briefing/email.js`, `server/routes/accounts.ts`, `server/routes/gmail-push.js` — HTTP surfaces
 - `FLOWS.md` — Gmail push → sync → triage flow, hop by hop

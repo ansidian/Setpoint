@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import authRoutes from "./routes/auth.ts";
 import briefingRoutes from "./routes/briefing/index.js";
-import accountsRoutes from "./routes/accounts.js";
+import accountsRoutes from "./routes/accounts.ts";
 import dashboardRoutes from "./routes/dashboard.js";
 import calendarRoutes from "./routes/calendar.js";
 import alfredRoutes from "./routes/alfred.js";

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Value } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
 import { geocodeLocation } from "../platform/weather.ts";
@@ -40,8 +41,25 @@ import {
   validateSchedules,
   validateUtilityPayLinks,
 } from "../platform/settings-schemas.ts";
+import type {
+  BriefingSchedule,
+  GeocodeResult,
+  ImportantSender,
+  ProviderModelAvailability,
+  ScheduleSkipRequest,
+  ScheduleSkipResponse,
+  SettingsMutationResponse,
+  SettingsPatchRequest,
+  SettingsResponse,
+} from "../../shared/types/settings.ts";
 
-// Bare router: mounted behind requireCookieSession in routes/accounts.js.
+type ErrorResponse = { message: string };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// Bare router: mounted behind requireCookieSession in routes/accounts.ts.
 const router = Router();
 
 // GET /settings response allowlist (SEC-06): every ea_settings column NOT
@@ -67,21 +85,21 @@ const SETTINGS_PUBLIC_FIELDS = [
   "todoist_needs_reauth",
 ];
 
-router.get("/geocode", async (req, res) => {
+router.get<Record<string, never>, GeocodeResult[] | ErrorResponse, never, { q?: string }>("/geocode", async (req, res) => {
   const { q } = req.query;
   if (!q) return res.status(400).json({ message: "q parameter required" });
   try {
     res.json(await geocodeLocation(q));
   } catch (err) {
-    // P3-54: do not leak raw err.message to the client; keep detail in the log
+    // P3-54: do not leak raw error message to the client; keep detail in the log
     // only, matching the other /settings handlers in this file.
-    console.error("Error geocoding location:", err.message);
+    console.error("Error geocoding location:", errorMessage(err));
     res.status(400).json({ message: "Failed to geocode location" });
   }
 });
 
-router.get("/settings", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings", async (_req, res) => {
+  const userId = process.env.EA_USER_ID!;
   try {
     let result = await db.execute({
       sql: "SELECT * FROM ea_settings WHERE user_id = ?",
@@ -97,7 +115,7 @@ router.get("/settings", async (req, res) => {
         args: [userId],
       });
     }
-    const row = result.rows[0];
+    const row = result.rows[0]!;
     const {
       actual_budget_password_encrypted,
       todoist_api_token_encrypted,
@@ -109,20 +127,22 @@ router.get("/settings", async (req, res) => {
       bill_pay_mappings_json,
       utility_pay_links_json,
     } = row;
-    const safe = Object.fromEntries(SETTINGS_PUBLIC_FIELDS.map((key) => [key, row[key]]));
+    const safe: Record<string, unknown> = Object.fromEntries(
+      SETTINGS_PUBLIC_FIELDS.map((key) => [key, row[key]]),
+    );
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
     safe.todoist_configured = !!todoist_api_token_encrypted;
     safe.todoist_needs_reauth = !!safe.todoist_needs_reauth;
     safe.todoist_oauth_configured = !!(todoist_api_token_encrypted && todoist_oauth_refresh_token_encrypted);
     safe.discord_webhook_configured = !!discord_webhook_url_encrypted;
     safe.schedules = schedules_json
-      ? JSON.parse(schedules_json)
+      ? JSON.parse(String(schedules_json))
       : [
           { label: "Morning Briefing", time: "08:00", enabled: false },
           { label: "Evening Briefing", time: "20:00", enabled: false },
         ];
     safe.email_interests = email_interests_json
-      ? JSON.parse(email_interests_json)
+      ? JSON.parse(String(email_interests_json))
       : [];
 
     const emailAiModel = resolveEmailAiModelConfig({
@@ -139,37 +159,37 @@ router.get("/settings", async (req, res) => {
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
     safe.bill_pay_mappings = parseBillPayMappingsJson(bill_pay_mappings_json);
-    safe.utility_pay_links = utility_pay_links_json ? JSON.parse(utility_pay_links_json) : [];
+    safe.utility_pay_links = utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
 
-    res.json(safe);
+    res.json(safe as unknown as SettingsResponse);
   } catch (err) {
     console.error("Error fetching EA settings:", err);
     res.status(500).json({ message: "Failed to fetch settings" });
   }
 });
 
-router.get("/triage/cache-stats", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.get("/triage/cache-stats", async (_req, res) => {
+  const userId = process.env.EA_USER_ID!;
   try {
     res.json(await getTriageCacheStats(userId));
   } catch (err) {
-    console.error("Error fetching triage cache stats:", err.message);
+    console.error("Error fetching triage cache stats:", errorMessage(err));
     res.status(500).json({ message: "Failed to fetch triage cache stats" });
   }
 });
 
-router.get("/email-search/usage", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.get("/email-search/usage", async (_req, res) => {
+  const userId = process.env.EA_USER_ID!;
   try {
     res.json(await getEmailSearchCostStats(userId));
   } catch (err) {
-    console.error("Error fetching email search usage:", err.message);
+    console.error("Error fetching email search usage:", errorMessage(err));
     res.status(500).json({ message: "Failed to fetch email search usage" });
   }
 });
 
-router.put("/settings", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
@@ -177,13 +197,13 @@ router.put("/settings", async (req, res) => {
       return res.status(400).json({ message: "Provide either todoist_api_token or todoist_oauth_token_response, not both" });
     }
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
-    const updates = [];
-    const args = [];
+    const updates: string[] = [];
+    const args: Value[] = [];
 
     if (schedules_json !== undefined) {
       const validation = validateSchedules(schedules_json);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
       updates.push("schedules_json = ?");
       args.push(JSON.stringify(validation.value));
@@ -216,9 +236,9 @@ router.put("/settings", async (req, res) => {
       }
       const validation = validateActualBudgetUrl(actual_budget_url);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
-      updates.push("actual_budget_url = ?"); args.push(validation.value);
+      updates.push("actual_budget_url = ?"); args.push(validation.value!);
     }
     if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
     if (actual_budget_sync_id !== undefined) {
@@ -243,7 +263,7 @@ router.put("/settings", async (req, res) => {
     if (email_interests_json !== undefined) {
       const validation = validateEmailInterests(email_interests_json);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
       updates.push("email_interests_json = ?");
       args.push(JSON.stringify(validation.value));
@@ -266,7 +286,7 @@ router.put("/settings", async (req, res) => {
     if (triage_sound_settings !== undefined) {
       const validation = validateTriageSoundSettings(triage_sound_settings);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
       updates.push("triage_sound_settings_json = ?");
       args.push(JSON.stringify(triage_sound_settings));
@@ -274,7 +294,7 @@ router.put("/settings", async (req, res) => {
     if (bill_pay_mappings !== undefined) {
       const validation = validateBillPayMappings(bill_pay_mappings);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
       updates.push("bill_pay_mappings_json = ?");
       args.push(JSON.stringify(bill_pay_mappings));
@@ -282,7 +302,7 @@ router.put("/settings", async (req, res) => {
     if (utility_pay_links !== undefined) {
       const validation = validateUtilityPayLinks(utility_pay_links);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
       updates.push("utility_pay_links_json = ?");
       args.push(JSON.stringify(validation.value));
@@ -290,7 +310,7 @@ router.put("/settings", async (req, res) => {
     if (discord_webhook_url !== undefined) {
       const validation = validateDiscordWebhookUrl(discord_webhook_url);
       if (!validation.valid) {
-        return res.status(400).json({ message: validation.message });
+        return res.status(400).json({ message: validation.message! });
       }
       updates.push("discord_webhook_url_encrypted = ?");
       args.push(validation.value ? encrypt(validation.value) : null);
@@ -318,7 +338,7 @@ router.put("/settings", async (req, res) => {
       try {
         await clearTodoistNeedsReauth(userId);
       } catch (clearErr) {
-        console.error("[Settings] Failed to clear todoist_needs_reauth:", clearErr.message);
+        console.error("[Settings] Failed to clear todoist_needs_reauth:", errorMessage(clearErr));
       }
     }
     if (todoist_oauth_token_response !== undefined) {
@@ -329,7 +349,7 @@ router.put("/settings", async (req, res) => {
       try {
         await clearTodoistNeedsReauth(userId);
       } catch (clearErr) {
-        console.error("[Settings] Failed to clear todoist_needs_reauth:", clearErr.message);
+        console.error("[Settings] Failed to clear todoist_needs_reauth:", errorMessage(clearErr));
       }
     }
 
@@ -343,7 +363,7 @@ router.put("/settings", async (req, res) => {
 
     // Hot-reload cron jobs when schedules change (no server restart needed)
     if (schedules_json !== undefined) {
-      initScheduler().catch(err => console.error("[EA Scheduler] Re-init failed:", err.message));
+      initScheduler().catch(err => console.error("[EA Scheduler] Re-init failed:", errorMessage(err)));
     }
 
     res.json({ success: true });
@@ -353,21 +373,22 @@ router.put("/settings", async (req, res) => {
   }
 });
 
-router.post("/schedules/skip", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.post<Record<string, never>, ScheduleSkipResponse | ErrorResponse, ScheduleSkipRequest>("/schedules/skip", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { index, skip } = req.body;
   if (index === undefined) return res.status(400).json({ message: "index is required" });
 
   try {
     const result = await db.execute({ sql: "SELECT schedules_json FROM ea_settings WHERE user_id = ?", args: [userId] });
-    const schedules = JSON.parse(result.rows[0]?.schedules_json || "[]");
+    const schedules = JSON.parse(String(result.rows[0]?.schedules_json || "[]")) as BriefingSchedule[];
     if (index < 0 || index >= schedules.length) return res.status(400).json({ message: "Invalid schedule index" });
+    const schedule = schedules[index]!;
 
     if (skip === false) {
-      delete schedules[index].skipped_until;
+      delete schedule.skipped_until;
     } else {
       // Skip until midnight tomorrow in the schedule's timezone, stored as UTC
-      const tz = schedules[index].tz || "America/Los_Angeles";
+      const tz = schedule.tz || "America/Los_Angeles";
       // Get tomorrow's date in the schedule's timezone
       const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
       const tomorrowDate = formatter.format(new Date(Date.now() + 86400000));
@@ -382,7 +403,7 @@ router.post("/schedules/skip", async (req, res) => {
       const asLocal = new Date(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`);
       const offsetMs = midnight.getTime() - asLocal.getTime();
       const midnightUtc = new Date(midnight.getTime() + offsetMs);
-      schedules[index].skipped_until = midnightUtc.toISOString();
+      schedule.skipped_until = midnightUtc.toISOString();
     }
 
     await db.execute({
@@ -397,50 +418,50 @@ router.post("/schedules/skip", async (req, res) => {
   }
 });
 
-router.get("/models", async (_req, res) => {
+router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/models", async (_req, res) => {
   try {
     res.json(emailAiModelAvailability());
   } catch (err) {
-    // P3-54: fixed user-facing string; raw err.message stays in the log only.
-    console.error("Error fetching models:", err.message);
+    // P3-54: fixed user-facing string; raw error message stays in the log only.
+    console.error("Error fetching models:", errorMessage(err));
     res.status(500).json({ message: "Failed to fetch models" });
   }
 });
 
-router.get("/bill-extract-models", async (_req, res) => {
+router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/bill-extract-models", async (_req, res) => {
   try {
     res.json(billExtractAvailability());
   } catch (err) {
-    // P3-54: fixed user-facing string; raw err.message stays in the log only.
-    console.error("Error fetching bill-extract catalog:", err.message);
+    // P3-54: fixed user-facing string; raw error message stays in the log only.
+    console.error("Error fetching bill-extract catalog:", errorMessage(err));
     res.status(500).json({ message: "Failed to fetch bill-extract models" });
   }
 });
 
 // --- Important Senders ---
 
-router.get("/important-senders", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.get<Record<string, never>, ImportantSender[] | ErrorResponse>("/important-senders", async (_req, res) => {
+  const userId = process.env.EA_USER_ID!;
   try {
     const result = await db.execute({
       sql: "SELECT important_senders_json FROM ea_settings WHERE user_id = ?",
       args: [userId],
     });
     const raw = result.rows[0]?.important_senders_json || "[]";
-    res.json(JSON.parse(raw));
+    res.json(JSON.parse(String(raw)) as ImportantSender[]);
   } catch (err) {
-    // P3-54: fixed user-facing string; raw err.message stays in the log only.
-    console.error("Error fetching important senders:", err.message);
+    // P3-54: fixed user-facing string; raw error message stays in the log only.
+    console.error("Error fetching important senders:", errorMessage(err));
     res.status(500).json({ message: "Failed to fetch important senders" });
   }
 });
 
-router.put("/important-senders", async (req, res) => {
-  const userId = process.env.EA_USER_ID;
+router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, { senders: ImportantSender[] }>("/important-senders", async (req, res) => {
+  const userId = process.env.EA_USER_ID!;
   const { senders } = req.body;
   const validation = validateImportantSenders(senders);
   if (!validation.valid) {
-    return res.status(400).json({ message: validation.message });
+    return res.status(400).json({ message: validation.message! });
   }
   try {
     await db.execute({
@@ -449,8 +470,8 @@ router.put("/important-senders", async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    // P3-54: fixed user-facing string; raw err.message stays in the log only.
-    console.error("Error updating important senders:", err.message);
+    // P3-54: fixed user-facing string; raw error message stays in the log only.
+    console.error("Error updating important senders:", errorMessage(err));
     res.status(500).json({ message: "Failed to update important senders" });
   }
 });

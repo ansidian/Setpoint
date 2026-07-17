@@ -53,4 +53,4 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 
 ## Related
 
-- `server/routes/settings.js` — persistence endpoint; schemas in `server/platform/settings-schemas.ts`
+- `server/routes/settings.ts` — persistence endpoint; schemas in `server/platform/settings-schemas.ts`
