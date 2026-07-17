@@ -216,15 +216,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useFloatingDetailPlacement` | `src/components/calendar/modal/useFloatingDetailPlacement.js` |
 | `useCalendarGhostPreview` | `src/components/calendar/useCalendarGhostPreview.js` |
 | `useDeadlineQuickActions` | `src/components/calendar/views/deadlines/useDeadlineQuickActions.js` |
-| `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.js` |
-| `useEmailBody` | `src/components/inbox/reader/useEmailBody.js` |
-| `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.js` |
-| `useInboxController` | `src/components/inbox/useInboxController.js` |
-| `useInboxKeyboardCommands` | `src/components/inbox/useInboxKeyboardCommands.js` |
-| `useInboxSessionStore` | `src/components/inbox/useInboxSessionState.js` |
-| `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.js` |
-| `useIndexedSearch` | `src/components/inbox/useIndexedSearch.js` |
-| `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.js` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.js` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.js` |
 | `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.js` |
@@ -248,7 +239,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `usePlanningReadinessState` | `src/hooks/calendar/usePlanningReadinessState.js` |
 | `useStaleDomainCache` | `src/hooks/calendar/useStaleDomainCache.js` |
 | `useViewportWidth` | `src/hooks/calendar/useViewportWidth.js` |
-| `useInboxSelectionHistory` | `src/hooks/email/useInboxSelectionHistory.js` |
 <!-- END:hooks -->
 
 ### Calendar Code Map

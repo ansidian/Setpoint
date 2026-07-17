@@ -1,4 +1,4 @@
-import { epochFromLa, laComponents } from "../inbox/helpers.js";
+import { epochFromLa, laComponents } from "../inbox/helpers";
 import { addDaysYmd, daysBetweenYmd, parseYmd } from "./calendarDateUtils.js";
 import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors";
 

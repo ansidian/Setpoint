@@ -49,7 +49,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 10. `server/triage/triage-finalize-store.ts:attachToActiveSnapshot` — upserts `ea_briefing_snapshot_items` with the decided lane
 11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — fans `email_triage_finalized`/`email_triage_failed` to SSE subscribers
 12. `src/hooks/dashboardEventRefreshModel.ts:refreshScopeForDashboardEvent` / `src/hooks/useCurrentDashboard.ts:handleChanged` — forwards the payload to the dashboard event handler, routes `email_triage` to the existing active-snapshot read, and keeps every other or unknown source on the full-current read; queued bursts retain the strongest pending scope and snapshot-read failure falls back once to full current
-13. `src/components/inbox/inboxWorkItems.js:collectActiveSnapshotEmails` — flattens snapshot lanes into normalized inbox rows
+13. `src/components/inbox/inboxWorkItems.ts:collectActiveSnapshotEmails` — flattens snapshot lanes into normalized inbox rows
 14. `src/hooks/useTriageNotificationSounds.ts:handleDashboardEvent` — resolves the sound for the trigger type
 15. `src/lib/triageSoundGate.ts:createTriageSoundGate` — gate's accept() dedupes by eventKey and coalesces per trigger (4s window)
 
@@ -57,7 +57,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **SSE:** `dashboard-current-changed` (reasons `email_triage_queued`/`email_triage_finalized`/`email_triage_failed`) — emitted by `server/dashboard/current-events.ts:publishCurrentDashboardEvent`, streamed by GET `/current/events` in `server/routes/dashboard.ts` — consumed by `src/hooks/useCurrentDashboard.ts:handleChanged`, routed to `src/hooks/useTriageNotificationSounds.ts` via `src/pages/Dashboard.tsx`.
 
-**UI:** inbox lanes (`src/components/inbox/InboxView.jsx` → `src/components/inbox/InboxDesktopPane.jsx` / `src/components/inbox/mobile/MobileInboxView.jsx`): email appears in Queued during arrival grace, moves to its decided lane after classification; lane counts in `src/components/inbox/DigestStrip.jsx`; one gated notification sound per eventKey.
+**UI:** inbox lanes (`src/components/inbox/InboxView.tsx` → `src/components/inbox/InboxDesktopPane.tsx` / `src/components/inbox/mobile/MobileInboxView.tsx`): email appears in Queued during arrival grace, moves to its decided lane after classification; lane counts in `src/components/inbox/DigestStrip.tsx`; one gated notification sound per eventKey.
 
 **Timing:** `server/email/email-arrival-timing.ts:projectEmailArrivalTiming` emits non-sensitive `[EA Timing]` evidence when a history job settles. `providerDeliveryMs` is Pub/Sub `publishTime` → durable history-job `created_at`; `historyQueueWaitMs` is durable enqueue → worker claim; `historySyncMs` is claim → completed Gmail fetch/index/snapshot attachment; `providerToQueuedMs` is Pub/Sub publish → durable triage rows ready for snapshot attachment; `snapshotAttachmentMs` is that durable milestone → history-job completion. Arrival-grace `scheduled_for` is the intentional classification boundary; the deadline wake-up removes cron-alignment jitter after that boundary without shortening grace. Missing/malformed timestamps omit dependent durations, and clock-skewed stages clamp to zero with validity metadata. `src/hooks/useCurrentDashboard.ts` separately measures `dashboard-event-refetch` from SSE receipt to accepted state dispatch with `performance.now()`, records the selected `active_snapshot` or `current` scope (including fallback scope), and does not log stale superseded responses as completed.
 
@@ -78,13 +78,13 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — lifecycle changes publish dashboard events
 12. `src/hooks/useCurrentDashboard.ts:handleChanged` — SSE-triggered refetch embeds the fresh snapshot view in the dashboard payload
 13. `src/hooks/useActiveSnapshot.ts:useActiveSnapshot` — standalone fallback fetch; 15s poll while processing is active
-14. `src/components/inbox/InboxView.jsx:InboxView` — renders snapshot lanes; read-only when frozen
+14. `src/components/inbox/InboxView.tsx:InboxView` — renders snapshot lanes; read-only when frozen
 
 **Caches:** single-flight sync map in `server/snapshots/snapshot-service.ts` (dedupes concurrent active-snapshot syncs); `ea_current_data_cache` rows in `server/dashboard/current-service.ts` (other providers; the active snapshot itself is fetched fresh); frontend snapshot state in `src/hooks/useActiveSnapshot.ts` and `src/hooks/useCurrentDashboard.ts`, overwritten on each refetch.
 
 **SSE:** `dashboard-current-changed` (reasons incl. `email_triage_queued`, `email_triage_finalized`, `snoozed_pending_deferred`) — same emitter/stream/consumer chain as flow 2. Supplemented by polling: `src/hooks/useActiveSnapshot.ts` every 15s while processing, `src/hooks/useCurrentDashboard.ts` short post-refresh polling.
 
-**UI:** inbox lane lists and counts (`src/components/inbox/InboxList.jsx`, `src/components/inbox/DigestStrip.jsx`, `src/components/inbox/Sidebar.jsx`); frozen snapshots render read-only — lane/hotkey rules mirrored in `src/components/inbox/activeSnapshotWorkflowModel.js`.
+**UI:** inbox lane lists and counts (`src/components/inbox/InboxList.tsx`, `src/components/inbox/DigestStrip.tsx`, `src/components/inbox/Sidebar.tsx`); frozen snapshots render read-only — lane/hotkey rules mirrored in `src/components/inbox/activeSnapshotWorkflowModel.ts`.
 
 ## 4. Calendar range planning → search mirror → modal controller
 

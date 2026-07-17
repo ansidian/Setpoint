@@ -35,6 +35,7 @@ import type { DashboardCalendarWorkspaceState } from "./useCalendarWorkspaceStat
 import type { DashboardActiveSnapshotController } from "./useLiveReadOverrides";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { ActualBillOccurrence } from "../../../shared/types/actual";
+import type { InboxViewProps } from "../inbox/InboxView";
 export { DashboardBody };
 
 export type DashboardShellLiveData = Omit<Partial<CurrentDashboardHookResult["liveData"]>,
@@ -48,32 +49,7 @@ export type DashboardShellLiveData = Omit<Partial<CurrentDashboardHookResult["li
 // Single import factory so the inbox chunk can be both lazy-mounted and warmed
 // in the background after the dashboard paints; the bundler dedupes to one fetch.
 const importInboxView = () => import("../inbox/InboxView");
-interface DashboardInboxViewProps {
-  accent: string;
-  customize: typeof SHELL_PREFS;
-  emailAccounts: [];
-  briefingSummary: string;
-  briefingGeneratedAt?: unknown;
-  liveEmails: [];
-  liveEmailsLoading: boolean;
-  activeSnapshot: {
-    snapshot: ActiveSnapshotView | null;
-    loading: boolean;
-    error: string | null;
-    refresh: () => Promise<unknown>;
-    sync: () => Promise<unknown>;
-  };
-  liveReadOverrides: Record<string, boolean>;
-  onLiveReadOverrideChange: (uid: string, read: boolean) => void;
-  snoozedEntries: [];
-  resurfacedEntries: [];
-  onOpenDashboard: () => void;
-  onRefresh?: () => unknown;
-  commitPendingUndoSignal: number;
-  isMobile: boolean;
-  onAskAlfred: (query: string) => void;
-}
-const InboxView = lazy(importInboxView) as unknown as ComponentType<DashboardInboxViewProps>;
+const InboxView = lazy(importInboxView) as ComponentType<InboxViewProps>;
 const importNotesTab = () => import("../notes/NotesTab");
 const NotesTab = lazy(importNotesTab);
 const importNewsTab = () => import("../news/NewsTab");
@@ -369,7 +345,7 @@ export function DashboardShell({
     openEvent: openDashboardEvent,
     openInCalendar: openItemSheetInCalendar,
   } = useDashboardItemSheet({ tab, openCalendar });
-  const handleInboxOpenRecordedBill = useCallback(({ date, itemId }) => {
+  const handleInboxOpenRecordedBill = useCallback(({ date, itemId }: { date: string; itemId: string }) => {
     openDashboardBill(date, itemId);
   }, [openDashboardBill]);
   const billPayLinksByScheduleId = useUtilityPayLinks();

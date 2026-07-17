@@ -18,7 +18,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 
 ### Browser interactions
 - `useBrowserBackDismiss.ts` — dismissal callback on browser back navigation
-- `email/useInboxSelectionHistory.js` — browser history state for inbox selection
+- `email/useInboxSelectionHistory.ts` — browser history state for inbox selection
 - `useIsMobile.ts` — mobile viewport detection
 - `useMediaQuery.ts` — reactive media query matching
 - `useKeyHold.ts` — key hold duration/progress with completion callback
