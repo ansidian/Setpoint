@@ -22,6 +22,7 @@ export type TriageSoundTriggerKey = (typeof TRIAGE_SOUND_TRIGGER_KEYS)[keyof typ
 export interface TriageSoundDefinition {
   id: string;
   path: string;
+  label?: string;
   [key: string]: unknown;
 }
 

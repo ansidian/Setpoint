@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 647,
+  "remainingLegacyFiles": 593,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -164,6 +164,11 @@
     "src/pages/Dashboard.events.test.tsx",
     "src/pages/Dashboard.mobile.test.tsx",
     "src/pages/Dashboard.refresh.test.tsx",
-    "src/pages/Dashboard.sync-animation.test.tsx"
+    "src/pages/Dashboard.sync-animation.test.tsx",
+    "src/components/settings",
+    "src/hooks/settings",
+    "src/pages/Settings.tsx",
+    "src/pages/Settings.test.tsx",
+    "src/pages/Settings.demo.test.tsx"
   ]
 }

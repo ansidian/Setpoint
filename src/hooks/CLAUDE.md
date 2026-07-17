@@ -29,7 +29,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useNotifications.js` — browser notifications for events, bills, important senders
 - `useTriageNotificationSounds.js` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
-- `settings/useSettingsPage.js` — settings UI orchestration: tabs, debounced auto-save, sync status
+- `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
