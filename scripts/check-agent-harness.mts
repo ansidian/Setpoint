@@ -5,7 +5,7 @@ import process from 'node:process'
 import { checkSizeBaseline, isSizeCheckedSource } from './lib/component-sizes.mts'
 
 const root = process.cwd()
-const componentSizeBaselinePath = 'docs/quality/component-size-baseline.json'
+const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
 
 const failures: string[] = []
 const warnings: string[] = []
