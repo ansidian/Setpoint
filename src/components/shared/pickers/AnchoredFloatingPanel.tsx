@@ -20,6 +20,8 @@ export type AnchoredFloatingPanelProps = {
   style?: CSSProperties;
   open?: boolean;
   disableMobileSheet?: boolean;
+  forceMobileSheet?: boolean;
+  mobileHeight?: string | null;
   hideTitle?: boolean;
   children: ReactNode;
 };
@@ -43,17 +45,21 @@ type PanelPosition = {
 // Mobile sheet intentionally ignores: anchorRef/panelRef (no anchoring),
 // width/minWidth/maxWidth/matchAnchorWidth (sheet is full-width), style
 // (desktop slab styling doesn't apply), role (both paths are dialogs).
-// `height` and `ariaLabel` are translated; `open` gates the sheet (see below).
-export default function AnchoredFloatingPanel({ open = true, disableMobileSheet = false, hideTitle = false, ...props }: AnchoredFloatingPanelProps) {
+// `height` and `ariaLabel` are translated; `mobileHeight={null}` opts into
+// content sizing when a desktop placement hint should not size the whole sheet.
+// `open` gates the sheet (see below).
+export default function AnchoredFloatingPanel({ open = true, disableMobileSheet = false, forceMobileSheet = false, mobileHeight, hideTitle = false, ...props }: AnchoredFloatingPanelProps) {
   const isMobile = useIsMobile();
-  if (isMobile && !disableMobileSheet) {
+  if ((forceMobileSheet || isMobile) && !disableMobileSheet) {
     return (
       <BottomSheet
         open={open}
         onClose={props.onClose as () => void}
         title={props.ariaLabel}
         hideTitle={hideTitle}
-        height={typeof props.height === "number" ? `min(${props.height}px, 70vh)` : props.height}
+        height={mobileHeight === null
+          ? undefined
+          : mobileHeight ?? (typeof props.height === "number" ? `min(${props.height}px, 70vh)` : props.height)}
       >
         {props.children}
       </BottomSheet>
@@ -66,7 +72,7 @@ export default function AnchoredFloatingPanel({ open = true, disableMobileSheet 
   return <AnchoredPanelDesktop {...props} dismissActive={open} />;
 }
 
-type AnchoredPanelDesktopProps = Omit<AnchoredFloatingPanelProps, "disableMobileSheet" | "hideTitle" | "open"> & {
+type AnchoredPanelDesktopProps = Omit<AnchoredFloatingPanelProps, "disableMobileSheet" | "forceMobileSheet" | "mobileHeight" | "hideTitle" | "open"> & {
   dismissActive?: boolean;
 };
 

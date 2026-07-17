@@ -296,6 +296,25 @@ describe("AnchoredFloatingPanel", () => {
     expect(recordedBottomSheetProps[recordedBottomSheetProps.length - 1]?.height).toBe("min(400px, 70vh)");
   });
 
+  it("lets a mobile caller size the sheet to its content instead of reusing a desktop panel height", () => {
+    recordedBottomSheetProps.length = 0;
+    vi.mocked(useIsMobile).mockReturnValue(true);
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        role="menu"
+        ariaLabel="Snooze"
+        height={180}
+        mobileHeight={null}
+        onClose={() => {}}
+      >
+        <div>Content-sized actions</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    expect(recordedBottomSheetProps[recordedBottomSheetProps.length - 1]?.height).toBeUndefined();
+  });
+
   it("does not crash and leaks no style when a desktop-only style/width prop reaches the mobile sheet (UX-L10)", () => {
     vi.mocked(useIsMobile).mockReturnValue(true);
     render(

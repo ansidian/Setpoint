@@ -26,6 +26,7 @@ export default function useAddTaskPanelPlacement({
   duePickerRef,
   duePickerOpen,
   setDuePickerOpen,
+  beforeClose,
 }: {
   isInline: boolean;
   host: AddTaskPanelHost;
@@ -37,6 +38,7 @@ export default function useAddTaskPanelPlacement({
   duePickerRef: RefObject<HTMLDivElement | null>;
   duePickerOpen: boolean;
   setDuePickerOpen: Dispatch<SetStateAction<boolean>>;
+  beforeClose?: () => boolean;
 }) {
   const [pos, setPos] = useState<PanelPosition | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -45,6 +47,7 @@ export default function useAddTaskPanelPlacement({
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const requestClose = useCallback(() => {
+    if (beforeClose && !beforeClose()) return;
     if (isInline) {
       onClose();
       return;
@@ -54,7 +57,7 @@ export default function useAddTaskPanelPlacement({
     closeTimerRef.current = setTimeout(() => {
       onClose();
     }, 180);
-  }, [isInline, onClose]);
+  }, [beforeClose, isInline, onClose]);
 
   useEffect(() => () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -191,6 +194,15 @@ export default function useAddTaskPanelPlacement({
     if (!element) return undefined;
     const scrollElement = element;
     function handleWheel(event: WheelEvent) {
+      let target = event.target instanceof HTMLElement ? event.target : null;
+      while (target && target !== scrollElement) {
+        const canScroll = target.scrollHeight > target.clientHeight;
+        const canConsume = event.deltaY < 0
+          ? target.scrollTop > 0
+          : target.scrollTop + target.clientHeight < target.scrollHeight - 1;
+        if (canScroll && canConsume) return;
+        target = target.parentElement;
+      }
       const { scrollTop, scrollHeight, clientHeight } = scrollElement;
       const atTop = scrollTop <= 0 && event.deltaY < 0;
       const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && event.deltaY > 0;

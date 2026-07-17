@@ -14,6 +14,7 @@ import type {
 } from "../../../../shared/types/reminders";
 
 export type AddTaskPanelHost = "anchored" | "floating" | "modal" | "inline";
+export type AddTaskDescriptionVariant = "default" | "email-context";
 export type AutocompleteType = "project" | "label" | null;
 export type CompactPanel = "description" | "project" | "priority" | "labels" | "due" | "reminders" | null;
 
@@ -31,8 +32,14 @@ export interface AddTaskPanelProps {
   editingTask?: TodoistEditorTask | null;
   host?: AddTaskPanelHost;
   initialDescription?: string;
+  descriptionVariant?: AddTaskDescriptionVariant;
+  confirmDirtyCloseInline?: boolean;
   initialDueDate?: string | null;
+  initialDueEpochMs?: number | null;
   initialInput?: string;
+  requireDue?: boolean;
+  supportingContext?: string | null;
+  requiredDescriptionSuffix?: string | null;
   onClose: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onDraftPreviewChange?: (preview: AddTaskDraftPreview | null) => void;

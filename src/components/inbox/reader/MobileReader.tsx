@@ -11,6 +11,7 @@ import {
   Pin,
   XCircle,
   Zap,
+  BellPlus,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
 import { timeSince } from "../helpers";
@@ -49,6 +50,8 @@ export default function MobileReader({
   billResolution,
   drafting,
   setDrafting,
+  setDraftDirty,
+  onRemind,
   readOnly = false,
 }: ReaderSurfaceProps) {
   const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
@@ -85,6 +88,7 @@ export default function MobileReader({
     setSnoozeOpen(true);
   };
   const overflowActionCount = [
+    !!onRemind,
     canPin,
     showBillToggle,
     !catchUp && !!email.claude?.draftReply,
@@ -209,6 +213,7 @@ export default function MobileReader({
               email={email}
               accent={accent}
               onDiscard={() => setDrafting(false)}
+              onDirtyChange={setDraftDirty}
               isMobile
             />
           </div>
@@ -238,11 +243,15 @@ export default function MobileReader({
           height={overflowPanelHeight}
           role="menu"
           ariaLabel="Email actions"
+          forceMobileSheet
           style={{
             padding: 8,
           }}
         >
           <div data-testid="inbox-mobile-actions-menu" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {onRemind && (
+              <MobileActionRow icon={BellPlus} label="Remind me" onClick={() => { setActionsOpen(false); onRemind(); }} />
+            )}
             {canPin && (
               <MobileActionRow
                 icon={Pin}
@@ -330,6 +339,7 @@ export default function MobileReader({
       {showDestructiveActions && snoozeOpen && (
         <SnoozePicker
           anchorRef={actionsBtnRef}
+          forceMobileSheet
           onSelect={(untilTs) => onAction("snooze", untilTs)}
           onClose={() => setSnoozeOpen(false)}
         />

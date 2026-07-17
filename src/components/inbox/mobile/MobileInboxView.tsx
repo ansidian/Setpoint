@@ -16,6 +16,7 @@ import { selectVisibleMobileChips } from "../inboxCountsModel";
 import type { CSSProperties, MouseEventHandler, Ref } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { InboxPaneProps } from "../inboxViewTypes";
+import { useState } from "react";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -226,6 +227,18 @@ export default function MobileInboxView({
   onUndo,
   announcement,
 }: InboxPaneProps) {
+  const [workspaceDirty, setWorkspaceDirty] = useState(false);
+  const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
+  const guardedOpen: typeof onOpen = (...args) => {
+    if (!allowWorkspaceExit()) return;
+    setWorkspaceDirty(false);
+    onOpen(...args);
+  };
+  const guardedClose = () => {
+    if (!allowWorkspaceExit()) return;
+    setWorkspaceDirty(false);
+    closeSelectedEmail();
+  };
   const snapshotSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
     : briefingSummary;
@@ -254,7 +267,8 @@ export default function MobileInboxView({
           account={selectedAccount}
           accent={accent}
           onAction={onAction}
-          onClose={closeSelectedEmail}
+          onClose={guardedClose}
+          onWorkspaceDirtyChange={setWorkspaceDirty}
           showTriage={showTriage}
           showDraft={showDraft}
           billOpen={billOpen}
@@ -502,7 +516,7 @@ export default function MobileInboxView({
                     email={email}
                     account={rowAccountsById[email.accountId || ""] || rowAccountsById[email._accountKey || ""]}
                     selected={false}
-                    onOpen={onOpen}
+                    onOpen={guardedOpen}
                     density={density}
                     showPreview={showPreview}
                     accent={accent}
@@ -516,7 +530,7 @@ export default function MobileInboxView({
                     email={email}
                     account={rowAccountsById[email.accountId || ""] || rowAccountsById[email._accountKey || ""]}
                     selected={false}
-                    onOpen={onOpen}
+                    onOpen={guardedOpen}
                     density={density}
                     showPreview={showPreview}
                     accent={accent}

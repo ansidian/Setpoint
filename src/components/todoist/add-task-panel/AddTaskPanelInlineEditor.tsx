@@ -8,6 +8,7 @@ import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
 import {
   TodoistActionFooter,
   TodoistDraftPreview,
+  TodoistDescriptionLinks,
   TodoistDuePickerLayer,
   TodoistErrorNotice,
   TodoistSelectedLabelChips,
@@ -191,32 +192,39 @@ function CompactDescriptionField({
   description,
   setDescription,
   isMobile,
+  emailContext = false,
 }: {
   description: string;
   setDescription: Dispatch<SetStateAction<string>>;
   isMobile: boolean;
+  emailContext?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
-  const expanded = focused || !!description.trim();
+  const expanded = emailContext || focused || !!description.trim();
 
   return (
-    <textarea
-      value={description}
-      data-compact-notes="true"
-      aria-label="Task description"
-      onChange={(event) => setDescription(event.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      placeholder="Notes"
-      rows={expanded ? 3 : 1}
-      style={{
-        ...(textFieldStyle() as CSSProperties),
-        resize: isMobile ? "none" : "vertical",
-        minHeight: expanded ? 72 : 38,
-        padding: "8px 10px",
-        transition: "min-height 160ms, background 140ms, border-color 140ms",
-      }}
-    />
+    <div>
+      <textarea
+        value={description}
+        data-compact-notes="true"
+        aria-label="Task description"
+        onChange={(event) => setDescription(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="Notes"
+        rows={emailContext ? 7 : expanded ? 3 : 1}
+        style={{
+          ...(textFieldStyle() as CSSProperties),
+          resize: emailContext || isMobile ? "none" : "vertical",
+          minHeight: emailContext ? 152 : expanded ? 72 : 38,
+          maxHeight: emailContext ? 240 : undefined,
+          overflowY: emailContext ? "auto" : undefined,
+          padding: "8px 10px",
+          transition: "min-height 160ms, background 140ms, border-color 140ms",
+        }}
+      />
+      <TodoistDescriptionLinks description={description} />
+    </div>
   );
 }
 
@@ -394,12 +402,16 @@ export default function AddTaskPanelInlineEditor({
     cancelDelete,
     closeDuePicker,
     confirmDelete,
+    confirmDiscard,
     confirmDeleteIntent,
+    confirmDiscardChanges,
+    cancelDiscard,
     cursorPos,
     customReminder,
     deleting,
     deleteTask,
     description,
+    descriptionVariant,
     draftPreview,
     dueDisplay,
     duePickerNow,
@@ -435,6 +447,7 @@ export default function AddTaskPanelInlineEditor({
     setManualProject,
     setOverrides,
     submitting,
+    supportingContext,
     todoistReminders,
     todoistReminderPresetStates,
     updateCustomReminder,
@@ -458,6 +471,7 @@ export default function AddTaskPanelInlineEditor({
             <div id="todoist-editor-title" style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
               {isEdit ? "Edit deadline" : "New deadline"}
             </div>
+            {supportingContext && <div style={{ marginTop: 4, fontSize: 10.5, color: "var(--color-text-faint)" }}>{supportingContext}</div>}
             <div style={{ marginTop: 3, fontSize: 11, color: "var(--color-text-faint)", lineHeight: 1.45 }}>
               Deadline text can carry dates, priority, projects, and labels.
             </div>
@@ -479,7 +493,7 @@ export default function AddTaskPanelInlineEditor({
             projects={projects}
             recurrenceSummary={recurrenceSummary}
           />
-          <CompactDescriptionField description={description} setDescription={setDescription} isMobile={isMobile} />
+          <CompactDescriptionField description={description} setDescription={setDescription} isMobile={isMobile} emailContext={descriptionVariant === "email-context"} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div data-testid="todoist-compact-toolbar" style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
@@ -536,7 +550,10 @@ export default function AddTaskPanelInlineEditor({
               canSubmit={canSubmit}
               cancelDelete={cancelDelete}
               confirmDelete={confirmDelete}
+              confirmDiscard={confirmDiscard}
               confirmDeleteIntent={confirmDeleteIntent}
+              confirmDiscardChanges={confirmDiscardChanges}
+              cancelDiscard={cancelDiscard}
               deleteTask={deleteTask}
               deleting={deleting}
               handleSubmit={handleSubmit}

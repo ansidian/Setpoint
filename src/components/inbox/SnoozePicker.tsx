@@ -17,10 +17,11 @@ export function CustomDateTimeView(props: Omit<CalendarDateTimeViewProps, "confi
 // "Floating Panel Pattern" — portal, fixed positioning, isolated stacking,
 // click-outside dismiss, and wheel-boundary capture so scroll inside the
 // picker can't leak to the page.
-export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
+export default function SnoozePicker({ anchorRef, onSelect, onClose, forceMobileSheet = false }: {
   anchorRef: RefObject<HTMLElement | null>;
   onSelect: (timestamp: number) => void;
   onClose: () => void;
+  forceMobileSheet?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   // View state: "presets" shows quick-picks, "custom" shows the calendar +
@@ -68,33 +69,41 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
       height={panelH}
       role="menu"
       ariaLabel="Snooze"
+      forceMobileSheet={forceMobileSheet}
+      mobileHeight={forceMobileSheet && view === "presets" ? null : undefined}
       style={{
         padding: view === "custom" ? 8 : 6,
         borderRadius: 8,
       }}
     >
       {view === "presets" ? (
-        <div onKeyDown={handlePresetKeyDown}>
-          <div
-            style={{
-              padding: "6px 10px 8px",
-              fontSize: 10, color: "var(--color-text-faint)",
-              textTransform: "uppercase", letterSpacing: 0.5,
-            }}
-          >
-            Snooze until
-          </div>
+        <div
+          role={forceMobileSheet ? "menu" : undefined}
+          aria-label={forceMobileSheet ? "Snooze until" : undefined}
+          onKeyDown={handlePresetKeyDown}
+          style={{ padding: forceMobileSheet ? "8px 12px 12px" : undefined }}
+        >
+          {!forceMobileSheet && (
+            <div
+              style={{
+                padding: "8px 12px",
+                fontSize: 10, color: "var(--color-text-faint)",
+                textTransform: "uppercase", letterSpacing: 0.5,
+              }}
+            >
+              Snooze until
+            </div>
+          )}
           {presets.map((p) => (
             <button
               key={p.key}
               type="button"
               role="menuitem"
+              className="inbox-snooze-menu-item"
               onClick={() => handlePick(p.at)}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", padding: "8px 10px",
+                width: "100%", minHeight: forceMobileSheet ? "var(--sp-touch-min)" : 34, padding: "8px 12px",
                 background: "transparent", border: "none", cursor: "pointer",
                 color: "rgba(205,214,244,0.85)", fontSize: 12, fontFamily: "inherit",
                 borderRadius: 6, textAlign: "left",
@@ -110,18 +119,17 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }: {
             </button>
           ))}
           <div
-            style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "6px 8px" }}
+            style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 12px" }}
             role="separator"
           />
           <button
             type="button"
             role="menuitem"
+            className="inbox-snooze-menu-item"
             onClick={() => setView("custom")}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              width: "100%", padding: "8px 10px",
+              width: "100%", minHeight: forceMobileSheet ? "var(--sp-touch-min)" : 34, padding: "8px 12px",
               background: "transparent", border: "none", cursor: "pointer",
               color: "rgba(205,214,244,0.85)", fontSize: 12, fontFamily: "inherit",
               borderRadius: 6, textAlign: "left",

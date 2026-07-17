@@ -129,6 +129,12 @@
     transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.desktop-reader-action-menu-key {
+  right: 9px;
+  bottom: 50%;
+  transform: translateY(50%);
+}
+
 .desktop-reader-action-menu-item:hover:not(:disabled),
 .desktop-reader-action-menu-item:focus-visible {
   outline: none;

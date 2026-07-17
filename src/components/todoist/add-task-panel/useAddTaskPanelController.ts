@@ -29,6 +29,7 @@ import {
 import { canSubmitTask } from "./submitPayload";
 import { submitAddTaskFlow } from "./submitAddTaskFlow";
 import useAddTaskPanelPlacement from "./useAddTaskPanelPlacement";
+import useDirtyCloseConfirmation from "./useDirtyCloseConfirmation";
 import {
   getCachedTodoistLabels,
   getCachedTodoistProjects,
@@ -63,11 +64,13 @@ export default function useAddTaskPanelController({
   onTaskUpdated,
   onTaskDeleted,
   host = "anchored",
-  initialDueDate = null,
+  initialDueDate = null, initialDueEpochMs = null,
   initialInput = "",
   initialDescription = "",
+  descriptionVariant = "default", confirmDirtyCloseInline = false,
   onDraftPreviewChange,
   onDirtyChange,
+  requireDue = false, supportingContext = null, requiredDescriptionSuffix = null,
 }: AddTaskPanelProps) {
   const isInline = host === "inline";
   const isEdit = !!editingTask;
@@ -86,8 +89,8 @@ export default function useAddTaskPanelController({
       : null,
   );
   const seededCreateDue = useMemo(
-    () => (!editingTask ? buildSeededDue(initialDueDate) : null),
-    [editingTask, initialDueDate],
+    () => (!editingTask ? (initialDueEpochMs ? buildManualDue(initialDueEpochMs) : buildSeededDue(initialDueDate)) : null),
+    [editingTask, initialDueDate, initialDueEpochMs],
   );
   const seededDueEpoch = useMemo(
     () => getInitialDueEpoch(editingTask) ?? seededCreateDue?.epochMs ?? null,
@@ -135,20 +138,17 @@ export default function useAddTaskPanelController({
   // Once a create succeeds, remember the new task so a retry (e.g. after a
   // reminder-create failure) updates it instead of creating a duplicate.
   const committedTaskRef = useRef<TodoistTask | null>(null);
+  const dirtyClose = useDirtyCloseConfirmation(confirmDirtyCloseInline);
 
   const { pos, keyboardOffset, visible, closing, requestClose } = useAddTaskPanelPlacement({
-    isInline,
-    host,
-    isMobile,
-    onClose,
-    anchorRef,
-    panelRef,
-    inputRef,
-    duePickerRef,
-    duePickerOpen,
-    setDuePickerOpen,
+    isInline, host, isMobile, onClose, anchorRef, panelRef, inputRef,
+    duePickerRef, duePickerOpen, setDuePickerOpen,
+    beforeClose: dirtyClose.beforeClose,
   });
 
+  const closeWithoutDirtyConfirmation = useCallback(() => {
+    dirtyClose.allowNextClose(); requestClose();
+  }, [dirtyClose, requestClose]);
   const confirmDeleteIntent = useCallback(() => {
     if (!isEdit || deleting) return;
     setConfirmDelete(true);
@@ -166,12 +166,12 @@ export default function useAddTaskPanelController({
     try {
       await deleteDeadline(editingTask.id);
       onTaskDeleted?.(editingTask.id);
-      requestClose();
+      closeWithoutDirtyConfirmation();
     } catch (err) {
       setError(errorMessage(err, "Failed to delete task"));
       setDeleting(false);
     }
-  }, [deleting, editingTask, isEdit, onTaskDeleted, requestClose]);
+  }, [closeWithoutDirtyConfirmation, deleting, editingTask, isEdit, onTaskDeleted]);
 
   useEffect(() => {
     getCachedTodoistProjects()
@@ -324,7 +324,8 @@ export default function useAddTaskPanelController({
     () => buildAddTaskDirtyBaseline({ editingTask, originalDueValue }),
     [editingTask, originalDueValue],
   );
-  const isDirty = dirtySnapshot !== dirtyBaseline;
+  const isDirty = !isEdit && input === initialInput && description === initialDescription && !Object.keys(overrides).length && !todoistReminders.length && !removedReminderIds.length ? false : dirtySnapshot !== dirtyBaseline;
+  dirtyClose.setDirty(isDirty);
 
   useEffect(() => {
     onDraftPreviewChange?.(draftPreview);
@@ -464,9 +465,7 @@ export default function useAddTaskPanelController({
     }, 0);
   }, [input]);
 
-  // Base canSubmit on the effective (token-stripped) title so tokens-only input
-  // like "#Work @home" disables submit instead of firing a doomed 400.
-  const canSubmit = canSubmitTask({ parsed, input });
+  const canSubmit = canSubmitTask({ parsed, input }) && (!requireDue || !!resolvedDue);
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -483,7 +482,7 @@ export default function useAddTaskPanelController({
         labels,
         seededNlpDueDate,
         seededCreateDue,
-        description,
+        description: requiredDescriptionSuffix && !description.includes(requiredDescriptionSuffix) ? [description.trim(), requiredDescriptionSuffix].filter(Boolean).join("\n\n") : description,
         resolvedProject,
         resolvedPriority,
         resolvedLabels,
@@ -518,7 +517,7 @@ export default function useAddTaskPanelController({
         );
         return;
       }
-      requestClose();
+      closeWithoutDirtyConfirmation();
     } catch (err) {
       setError(errorMessage(err, "Failed to create task"));
     } finally {
@@ -566,7 +565,7 @@ export default function useAddTaskPanelController({
     submitting,
     error,
     deleting,
-    confirmDelete,
+    confirmDelete, confirmDiscard: dirtyClose.confirming,
     pos,
     isMobile,
     keyboardOffset,
@@ -603,7 +602,8 @@ export default function useAddTaskPanelController({
     handleAutocompleteSelect,
     canSubmit,
     handleSubmit,
-    confirmDeleteIntent,
+    confirmDeleteIntent, cancelDiscard: dirtyClose.cancel,
+    confirmDiscardChanges: closeWithoutDirtyConfirmation,
     deleteTask,
     handleKeyDown,
     priorityOptions,
@@ -611,6 +611,6 @@ export default function useAddTaskPanelController({
     requestClose,
     cancelDelete,
     host,
-    isInline,
+    isInline, supportingContext, descriptionVariant,
   };
 }

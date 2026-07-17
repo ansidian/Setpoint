@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
@@ -102,6 +102,7 @@ describe("AddTaskPanel due picker", () => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("flushes pending Todoist reminders only after provider task creation succeeds", async () => {
@@ -720,6 +721,71 @@ describe("AddTaskPanel due picker", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("uses inline Confirm / Cancel controls when cancelling a dirty workspace", () => {
+    const onClose = vi.fn();
+    const confirmSpy = vi.fn();
+    vi.stubGlobal("confirm", confirmSpy);
+
+    render(
+      <AddTaskPanel
+        host="inline"
+        confirmDirtyCloseInline
+        onClose={onClose}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), { target: { value: "Changed task" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Add task" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not prevent downward wheel input while the description can still scroll", () => {
+    render(
+      <AddTaskPanel
+        host="inline"
+        descriptionVariant="email-context"
+        initialDescription={Array.from({ length: 20 }, (_, index) => `Context line ${index + 1}`).join("\n")}
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    const panel = screen.getByTestId("todoist-inline-editor");
+    const description = screen.getByRole("textbox", { name: "Task description" });
+    Object.defineProperties(panel, {
+      scrollHeight: { configurable: true, value: 500 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    });
+    Object.defineProperties(description, {
+      scrollHeight: { configurable: true, value: 400 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    });
+
+    const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 40 });
+    description.dispatchEvent(wheel);
+
+    expect(wheel.defaultPrevented).toBe(false);
+  });
+
   it("uses a two-step delete confirmation instead of hold-to-delete", async () => {
     const onTaskDeleted = vi.fn();
 
@@ -781,5 +847,49 @@ describe("useAddTaskPanelController seeding", () => {
     expect(result.current.input).toBe("Buy a standing-desk mat");
     expect(result.current.description).toBe("the cheap ones flatten out fast");
     expect(result.current.isEdit).toBe(false);
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  it("expands email context, removes native resizing, and exposes description URLs as links", () => {
+    render(<PanelHarness
+      host="inline"
+      descriptionVariant="email-context"
+      initialDescription={"From: Sender\nSource: https://mail.google.com/mail/u/0/#inbox/message"}
+    />);
+
+    const description = screen.getByRole("textbox", { name: "Task description" }) as HTMLTextAreaElement;
+    expect(description.getAttribute("rows")).toBe("7");
+    expect(description.style.minHeight).toBe("152px");
+    expect(description.style.maxHeight).toBe("240px");
+    expect(description.style.overflowY).toBe("auto");
+    expect(description.style.resize).toBe("none");
+    expect(screen.getByRole("link", { name: "https://mail.google.com/mail/u/0/#inbox/message" }).getAttribute("href"))
+      .toBe("https://mail.google.com/mail/u/0/#inbox/message");
+  });
+
+  it("requires an effective due value when the embedding flow requests one", () => {
+    const withoutDue = renderHook(() => useAddTaskPanelController({
+      host: "floating", onClose: () => {}, initialInput: "Follow up", requireDue: true,
+    }));
+    expect(withoutDue.result.current.canSubmit).toBe(false);
+    withoutDue.unmount();
+    const withDue = renderHook(() => useAddTaskPanelController({
+      host: "floating", onClose: () => {}, initialInput: "Follow up", requireDue: true,
+      initialDueEpochMs: Date.parse("2126-08-01T16:00:00Z"),
+    }));
+    expect(withDue.result.current.canSubmit).toBe(true);
+  });
+
+  it("enforces a required provenance suffix at submission even if it was removed from the editable description", async () => {
+    mockCreateDeadline.mockResolvedValueOnce({ id: "todo-source", title: "Follow up" });
+    const { result } = renderHook(() => useAddTaskPanelController({
+      host: "floating", onClose: () => {}, initialInput: "Follow up", initialDescription: "Manual notes",
+      requiredDescriptionSuffix: "Source: https://mail.google.com/mail/message",
+    }));
+    act(() => result.current.setDescription("Edited notes"));
+    await result.current.handleSubmit();
+    expect(mockCreateDeadline).toHaveBeenCalledWith(expect.objectContaining({
+      description: "Edited notes\n\nSource: https://mail.google.com/mail/message",
+    }));
   });
 });

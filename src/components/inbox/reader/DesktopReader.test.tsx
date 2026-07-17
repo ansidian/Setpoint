@@ -102,6 +102,8 @@ describe("DesktopReader snapshot actions", () => {
     const move = openMoveMenu();
     const moveItems = within(move.menu).getAllByRole("menuitem");
     expect(moveItems.map((item) => item.textContent)).toEqual(["FYIF", "NoiseN"]);
+    expect(moveItems[0]?.querySelector(".desktop-reader-action-menu-key")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Trash email" }).querySelector(".desktop-reader-action-menu-key")).toBeNull();
 
     fireEvent.keyDown(document, { key: "Escape" });
     const triage = openTriageMenu();
@@ -145,7 +147,9 @@ describe("DesktopReader snapshot actions", () => {
     const onAskAlfred = vi.fn();
     renderReader({ onRemind, onAskAlfred });
 
-    fireEvent.click(screen.getByRole("button", { name: /remind me/i }));
+    const remindButton = screen.getByRole("button", { name: /remind me/i });
+    expect(remindButton.closest("[data-slot='tooltip-trigger']")).toBeNull();
+    fireEvent.click(remindButton);
     fireEvent.click(screen.getByRole("button", { name: /ask alfred/i }));
 
     expect(onRemind).toHaveBeenCalledOnce();
@@ -279,42 +283,30 @@ describe("DesktopReader snapshot actions", () => {
     expect(setBillOpen).not.toHaveBeenCalled();
   });
 
-  it("dismisses the matched-bill tooltip before opening the calendar", async () => {
-    vi.useFakeTimers();
-    try {
-      const { onOpenRecordedBill } = renderReader({
-        email: {
-          subject: "Utility payment due",
-          category: "finance",
-          hasBill: true,
-        },
-        billResolution: {
-          status: "resolved",
-          actualStatus: {
-            status: "already_scheduled",
-            evidence: {
-              kind: "schedule",
-              scheduleId: "schedule-acme",
-              dueDate: "2026-08-12",
-            },
+  it("opens a matched bill without wrapping its self-explanatory action in a tooltip", () => {
+    const { onOpenRecordedBill } = renderReader({
+      email: {
+        subject: "Utility payment due",
+        category: "finance",
+        hasBill: true,
+      },
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_scheduled",
+          evidence: {
+            kind: "schedule",
+            scheduleId: "schedule-acme",
+            dueDate: "2026-08-12",
           },
         },
-      });
+      },
+    });
 
-      const button = screen.getByRole("button", { name: /view bill/i });
-      const trigger = button.closest("[data-slot='tooltip-trigger']");
-      expect(trigger).toBeTruthy();
-      fireEvent.focus(button);
-      await vi.advanceTimersByTimeAsync(700);
-      expect(screen.getByText("Open matched bill in calendar")).toBeTruthy();
-
-      fireEvent.click(button);
-
-      expect(onOpenRecordedBill).toHaveBeenCalled();
-      expect(screen.queryByText("Open matched bill in calendar")).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    const button = screen.getByRole("button", { name: /view bill/i });
+    expect(button.closest("[data-slot='tooltip-trigger']")).toBeNull();
+    fireEvent.click(button);
+    expect(onOpenRecordedBill).toHaveBeenCalled();
   });
 
   it("hides the bill-pay affordance for triaged non-bill emails", () => {

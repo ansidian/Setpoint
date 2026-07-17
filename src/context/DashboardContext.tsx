@@ -195,3 +195,8 @@ export function useDashboard() {
   if (!ctx) throw new Error("useDashboard must be used within DashboardProvider");
   return ctx;
 }
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOptionalDashboard() {
+  return useContext(DashboardContext);
+}

@@ -122,7 +122,7 @@ export default function TodoistReminderChips({
   return (
     <section
       data-testid="todoist-reminders"
-      aria-label="Todoist reminders"
+      aria-label="Discord webhook reminders"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -133,11 +133,16 @@ export default function TodoistReminderChips({
         padding: compact ? 9 : 10,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, minWidth: 0 }}>
-          <Bell size={13} color="color-mix(in srgb, var(--sp-cream) 86%, transparent)" aria-hidden />
-          <span style={{ color: "rgba(205,214,244,0.72)", fontSize: 11, fontWeight: 700 }}>
-            Reminders
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+            <Bell size={13} color="color-mix(in srgb, var(--sp-cream) 86%, transparent)" aria-hidden />
+            <span style={{ color: "rgba(205,214,244,0.72)", fontSize: 11, fontWeight: 700 }}>
+              Discord webhook reminders
+            </span>
+          </div>
+          <span style={{ paddingLeft: 20, color: "var(--color-text-faint)", fontSize: 9.5, lineHeight: 1.4 }}>
+            Separate from the Todoist deadline and notifications.
           </span>
         </div>
         {chips.length ? (
@@ -157,7 +162,7 @@ export default function TodoistReminderChips({
               subtle
               disabled={presetDisabled}
               title={disabledPresetTitle(state.reason)}
-              aria-label={`${preset.label} Todoist reminder preset`}
+              aria-label={`${preset.label} Discord webhook reminder preset`}
               dataTestId={`todoist-reminder-preset-${Math.abs(preset.offsetMinutes)}`}
               onClick={() => onAddPreset(preset.offsetMinutes)}
               style={{ padding: "6px 8px", fontSize: 10.5 }}
@@ -183,7 +188,7 @@ export default function TodoistReminderChips({
 
       <ReminderDateTimePicker
         accent="var(--sp-cream)"
-        ariaLabel="Custom Todoist reminder picker"
+        ariaLabel="Custom Discord webhook reminder picker"
         customReminder={customReminder}
         disabled={disabled || !hasAnchor}
         onSelect={(selection) => {

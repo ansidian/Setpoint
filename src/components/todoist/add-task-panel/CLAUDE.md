@@ -6,10 +6,11 @@ This directory owns the Todoist create/edit panel used by Notes promotion, Dashb
 
 - `useAddTaskPanelController.ts` — form, parser, reference-cache, reminder, submit, delete, and dirty/preview state orchestration.
 - `useAddTaskPanelPlacement.ts` — anchored/modal/mobile/inline placement, focus, dismissal, keyboard offset, scroll lock, and wheel containment.
+- `useDirtyCloseConfirmation.ts` — optional inline dirty-exit confirmation state used by embedded workspaces.
 - `AddTaskPanelView.tsx` — chooses the inline editor or the portaled floating editor.
 - `AddTaskPanelFloatingEditor.tsx` / `AddTaskPanelInlineEditor.tsx` — host-specific render trees; both consume the same controller.
 - `AddTaskPanelShared.tsx`, `controls.tsx`, `styles.ts` — shared editor fields, action controls, floating menus, and style projections.
-- `parsing.ts`, `due.ts`, `addTaskViewModel.ts`, `submitPayload.ts`, `formatDraftPreview.ts` — pure parsing, recurrence/due, preview, dirty-state, and mutation-payload models.
+- `parsing.ts`, `due.ts`, `addTaskViewModel.ts`, `submitPayload.ts`, `formatDraftPreview.ts`, `descriptionLinksModel.ts` — pure parsing, recurrence/due, preview, dirty-state, description-link, and mutation-payload models.
 - `todoistReminderModel.ts`, `applyTodoistReminderMutations.ts`, `TodoistReminderChips.tsx` — Todoist reminder anchoring, drafts, reconciliation, and controls.
 - `todoistReferenceCache.ts` — independent five-minute project/label caches with shared in-flight requests and rejection invalidation.
 - `submitAddTaskFlow.ts` — deadline-first create/update flow and non-fatal reminder reconciliation; retains the committed task across retry to prevent duplicate creates.

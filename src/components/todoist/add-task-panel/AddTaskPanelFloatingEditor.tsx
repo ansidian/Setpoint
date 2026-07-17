@@ -7,6 +7,7 @@ import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
 import {
   TodoistActionFooter,
   TodoistDraftPreview,
+  TodoistDescriptionLinks,
   TodoistDuePickerLayer,
   TodoistErrorNotice,
   TodoistSelectedLabelChips,
@@ -32,11 +33,15 @@ export default function AddTaskPanelFloatingEditor({
     cancelDelete,
     closeDuePicker,
     confirmDelete,
+    confirmDiscard,
     confirmDeleteIntent,
+    confirmDiscardChanges,
+    cancelDiscard,
     cursorPos,
     deleting,
     deleteTask,
     description,
+    descriptionVariant,
     draftPreview,
     dueDisplay,
     duePickerNow,
@@ -80,6 +85,7 @@ export default function AddTaskPanelFloatingEditor({
     todoistReminderPresetStates,
     updateCustomReminder,
     customReminder,
+    supportingContext,
   } = state;
 
   return (
@@ -106,6 +112,7 @@ export default function AddTaskPanelFloatingEditor({
             <div id="todoist-editor-title" style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
               {isEdit ? "Edit deadline" : "New deadline"}
             </div>
+            {supportingContext && <div style={{ marginTop: 4, fontSize: 10.5, color: "var(--color-text-faint)" }}>{supportingContext}</div>}
           </div>
           <button
             type="button"
@@ -165,13 +172,16 @@ export default function AddTaskPanelFloatingEditor({
               aria-label="Task description"
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Optional"
-              rows={2}
+              rows={descriptionVariant === "email-context" ? 7 : 2}
               style={{
                 ...(textFieldStyle() as CSSProperties),
-                resize: isMobile ? "none" : "vertical",
-                minHeight: 40,
+                resize: descriptionVariant === "email-context" || isMobile ? "none" : "vertical",
+                minHeight: descriptionVariant === "email-context" ? 152 : 40,
+                maxHeight: descriptionVariant === "email-context" ? 240 : undefined,
+                overflowY: descriptionVariant === "email-context" ? "auto" : undefined,
               }}
             />
+            <TodoistDescriptionLinks description={description} />
           </div>
         </div>
 
@@ -321,7 +331,10 @@ export default function AddTaskPanelFloatingEditor({
             canSubmit={canSubmit}
             cancelDelete={cancelDelete}
             confirmDelete={confirmDelete}
+            confirmDiscard={confirmDiscard}
             confirmDeleteIntent={confirmDeleteIntent}
+            confirmDiscardChanges={confirmDiscardChanges}
+            cancelDiscard={cancelDiscard}
             deleteTask={deleteTask}
             deleting={deleting}
             handleSubmit={handleSubmit}

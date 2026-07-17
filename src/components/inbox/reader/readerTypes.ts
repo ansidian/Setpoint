@@ -1,5 +1,5 @@
 import type { BillCandidate, BillPayMappingOutcome, StatementActualStatus } from "../../../../shared/types/bills";
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
 
@@ -56,6 +56,8 @@ export interface ReaderSurfaceProps {
   drafting: boolean;
   setDrafting: Dispatch<SetStateAction<boolean>>;
   readOnly?: boolean;
+  taskWorkspace?: ReactNode;
+  setDraftDirty?: (dirty: boolean) => void;
 }
 
 export const IDLE_BILL_RESOLUTION: BillResolutionState = {
