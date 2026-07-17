@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 897,
+  "remainingLegacyFiles": 872,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -81,6 +81,12 @@
     "server/routes/todoist-webhook.ts",
     "server/routes/todoist-webhook.test.ts",
     "server/routes/complete-task.test.ts",
-    "src/components/todoist"
+    "src/components/todoist",
+    "shared/types/calendar.ts",
+    "server/calendar",
+    "server/routes/calendar.ts",
+    "server/routes/calendar.deadlines-mutations.test.ts",
+    "server/routes/calendar.events.test.ts",
+    "server/routes/calendar.search.test.ts"
   ]
 }

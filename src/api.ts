@@ -77,6 +77,17 @@ import type {
   TodoistProject,
   TodoistTask,
 } from "../shared/types/tasks.ts";
+import type {
+  CalendarBatchMutationResponse,
+  CalendarDeleteResponse,
+  CalendarEventMutationInput,
+  CalendarEventMutationResponse,
+  CalendarPlaceDetailsResponse,
+  CalendarPlaceSuggestionsResponse,
+  CalendarRangeResponse,
+  CalendarSearchResponse,
+  CalendarSourcesResponse,
+} from "../shared/types/calendar.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -446,7 +457,7 @@ export const completeDeadlineOccurrence = (id: ApiId, occurrenceDate: string): P
   );
 export const getCalendarBillsRange = (start: string, end: string): Promise<CalendarBillsRangeResponse> =>
   apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
-export const getCalendarSearch = ({ scope, q, limit, signal }: CalendarSearchOptions = {}): Promise<unknown> => {
+export const getCalendarSearch = ({ scope, q, limit, signal }: CalendarSearchOptions = {}): Promise<CalendarSearchResponse> => {
   const params = new URLSearchParams();
   if (scope) params.set("scope", scope);
   if (q) params.set("q", q);
@@ -454,12 +465,12 @@ export const getCalendarSearch = ({ scope, q, limit, signal }: CalendarSearchOpt
   return apiFetch(`/api/calendar/search?${params.toString()}`, { signal });
 };
 // Calendar range fetch — used by useCalendarRange hook
-export const getCalendarRange = (start: string, end: string, { signal }: SignalOptions = {}): Promise<unknown> =>
+export const getCalendarRange = (start: string, end: string, { signal }: SignalOptions = {}): Promise<CalendarRangeResponse> =>
   apiFetch(`/api/calendar/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { signal });
-export const getCalendarSources = (): Promise<unknown> => apiFetch("/api/calendar/calendars");
-export const getCalendarPlaceSuggestions = (query: string, sessionToken?: string): Promise<unknown> =>
+export const getCalendarSources = (): Promise<CalendarSourcesResponse> => apiFetch("/api/calendar/calendars");
+export const getCalendarPlaceSuggestions = (query: string, sessionToken?: string): Promise<CalendarPlaceSuggestionsResponse> =>
   apiFetch(`/api/calendar/places/suggest?q=${encodeURIComponent(query)}${sessionToken ? `&sessionToken=${encodeURIComponent(sessionToken)}` : ""}`);
-export const getCalendarPlaceDetails = (placeId: string, sessionToken?: string): Promise<unknown> =>
+export const getCalendarPlaceDetails = (placeId: string, sessionToken?: string): Promise<CalendarPlaceDetailsResponse> =>
   apiFetch(`/api/calendar/places/${encodeURIComponent(placeId)}${sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : ""}`);
 // Client-side deadline for calendar write mutations so a stalled request always
 // settles (see apiFetch). 60s deliberately clears the server's own worst case —
@@ -467,13 +478,13 @@ export const getCalendarPlaceDetails = (placeId: string, sessionToken?: string):
 // recurring "following" flows — so a slow-but-succeeding server write is not
 // aborted into an inverse ghost. Reads/SSE intentionally opt out.
 const CALENDAR_MUTATION_TIMEOUT_MS = 60_000;
-export const createCalendarEvent = (data: unknown): Promise<unknown> =>
+export const createCalendarEvent = (data: CalendarEventMutationInput): Promise<CalendarEventMutationResponse> =>
   apiFetch("/api/calendar/events", { method: "POST", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
-export const createCalendarEventsBatch = (items: unknown[]): Promise<unknown> =>
+export const createCalendarEventsBatch = (items: CalendarEventMutationInput[]): Promise<CalendarBatchMutationResponse> =>
   apiFetch("/api/calendar/events/batch", { method: "POST", body: JSON.stringify({ items }), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
-export const updateCalendarEvent = (eventId: ApiId, data: unknown): Promise<unknown> =>
+export const updateCalendarEvent = (eventId: ApiId, data: CalendarEventMutationInput): Promise<CalendarEventMutationResponse> =>
   apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
-export const deleteCalendarEvent = (eventId: ApiId, data: unknown): Promise<unknown> =>
+export const deleteCalendarEvent = (eventId: ApiId, data: CalendarEventMutationInput): Promise<CalendarDeleteResponse> =>
   apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "DELETE", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 
 // Todoist

@@ -427,7 +427,7 @@ The fifth shell tab: RSS/Atom headlines only, no AI classification or summarizat
 |--------|--------|-----|------|----------------|
 | Gmail | `server/email/gmail.js` | Gmail REST API | OAuth 2.0 (auto-refresh tokens) | Empty array, continue |
 | iCloud | `server/email/icloud.js` | IMAP (imap.mail.me.com:993) | App-specific password | Empty array, continue |
-| Calendar | `server/calendar/calendar.js` | Google Calendar API | Reuses Gmail OAuth | Empty array, continue |
+| Calendar | `server/calendar/calendar.ts` | Google Calendar API | Reuses Gmail OAuth | Empty array, continue |
 | Weather | `server/platform/weather.js` | Pirate Weather | API key | Cached data or placeholder |
 | Todoist | `server/tasks/todoist.ts` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/actual/actual.ts` + `server/bills/bills-service.ts` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
@@ -725,22 +725,6 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/briefing/snapshot/items/:itemId/reopen` | `server/routes/briefing/snapshot.js` |
 | POST | `/api/briefing/snapshot/items/:itemId/restore` | `server/routes/briefing/snapshot.js` |
 | POST | `/api/briefing/snapshot/sync` | `server/routes/briefing/snapshot.js` |
-| GET | `/api/calendar/bills/range` | `server/routes/calendar.js` |
-| GET | `/api/calendar/calendars` | `server/routes/calendar.js` |
-| GET | `/api/calendar/deadlines` | `server/routes/calendar.js` |
-| POST | `/api/calendar/deadlines` | `server/routes/calendar.js` |
-| DELETE | `/api/calendar/deadlines/:deadlineId` | `server/routes/calendar.js` |
-| PATCH | `/api/calendar/deadlines/:deadlineId` | `server/routes/calendar.js` |
-| POST | `/api/calendar/deadlines/:deadlineId/completed-occurrences/:date` | `server/routes/calendar.js` |
-| GET | `/api/calendar/deadlines/range` | `server/routes/calendar.js` |
-| POST | `/api/calendar/events` | `server/routes/calendar.js` |
-| DELETE | `/api/calendar/events/:eventId` | `server/routes/calendar.js` |
-| PATCH | `/api/calendar/events/:eventId` | `server/routes/calendar.js` |
-| POST | `/api/calendar/events/batch` | `server/routes/calendar.js` |
-| GET | `/api/calendar/places/:placeId` | `server/routes/calendar.js` |
-| GET | `/api/calendar/places/suggest` | `server/routes/calendar.js` |
-| GET | `/api/calendar/range` | `server/routes/calendar.js` |
-| GET | `/api/calendar/search` | `server/routes/calendar.js` |
 | GET | `/api/dashboard/current` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.js` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.js` |

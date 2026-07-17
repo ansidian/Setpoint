@@ -69,4 +69,4 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 ## Related
 
 - `src/hooks/calendar/useFloatingEditorRouting.js` — routes between detail and this editor
-- `server/calendar/calendar-mutations.js` — backend CRUD these actions call
+- `server/calendar/calendar-mutations.ts` — backend CRUD these actions call

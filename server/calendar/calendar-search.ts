@@ -1,4 +1,10 @@
 import { TODOIST_DEADLINE_COLOR } from "../../shared/deadline-source-colors.ts";
+import type {
+  CalendarSearchCandidate,
+  CalendarSearchActivation,
+  CalendarSearchResult,
+} from "../../shared/types/calendar.ts";
+import type { DeadlinePayload } from "../../shared/types/tasks.ts";
 
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 
@@ -8,21 +14,21 @@ const SOURCE_COLORS = {
   bills: "#22c55e",
 };
 
-function normalizeText(value) {
+function normalizeText(value: unknown) {
   return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
 }
 
-function wordStartsWith(text, query) {
+function wordStartsWith(text: unknown, query: string) {
   return normalizeText(text)
     .split(/[^a-z0-9]+/i)
     .filter(Boolean)
     .some((word) => word.startsWith(query));
 }
 
-function dateKeyFromMs(ms) {
+function dateKeyFromMs(ms: number) {
   if (!Number.isFinite(ms)) return null;
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: DASHBOARD_CALENDAR_TZ,
@@ -32,12 +38,15 @@ function dateKeyFromMs(ms) {
   }).format(new Date(ms));
 }
 
-function dateSortMs(dateKey) {
+function dateSortMs(dateKey: string | null | undefined) {
   const parsed = Date.parse(`${dateKey || ""}T12:00:00Z`);
   return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
 }
 
-function classifyMatch(candidate, query) {
+function classifyMatch(
+  candidate: CalendarSearchCandidate,
+  query: string | undefined,
+): { reason: "exact" | "word_start" | "field"; bucket: number } | null {
   const normalizedQuery = normalizeText(query);
   if (!normalizedQuery) return null;
 
@@ -56,7 +65,9 @@ function classifyMatch(candidate, query) {
   return null;
 }
 
-function compareTimelineResults(a, b) {
+type RankedCalendarSearchResult = CalendarSearchResult & { matchReason: "exact" | "word_start" | "field"; rankBucket: number };
+
+function compareTimelineResults(a: RankedCalendarSearchResult, b: RankedCalendarSearchResult) {
   const aMs = dateSortMs(a.itemDate);
   const bMs = dateSortMs(b.itemDate);
   if (aMs !== bMs) return aMs - bMs;
@@ -67,7 +78,7 @@ function compareTimelineResults(a, b) {
   return a.id.localeCompare(b.id);
 }
 
-function compareCenteredResults(a, b, centerMs) {
+function compareCenteredResults(a: RankedCalendarSearchResult, b: RankedCalendarSearchResult, centerMs: number) {
   const aMs = dateSortMs(a.itemDate);
   const bMs = dateSortMs(b.itemDate);
   const aDistance = Math.abs(aMs - centerMs);
@@ -79,7 +90,7 @@ function compareCenteredResults(a, b, centerMs) {
   return compareTimelineResults(a, b);
 }
 
-function candidateDedupeKey(result) {
+function candidateDedupeKey(result: CalendarSearchResult | null) {
   if (!result) return null;
   const title = normalizeText(result.title);
   if (result.type === "event") {
@@ -116,7 +127,7 @@ function candidateDedupeKey(result) {
   ].join("|");
 }
 
-function eventDedupeBaseKey(result) {
+function eventDedupeBaseKey(result: CalendarSearchResult | null) {
   if (!result || result.type !== "event") return null;
   const payload = result.payload || {};
   return [
@@ -128,7 +139,7 @@ function eventDedupeBaseKey(result) {
   ].join("|");
 }
 
-function eventTimeRange(result) {
+function eventTimeRange(result: CalendarSearchResult | null | undefined) {
   const payload = result?.payload || {};
   const startMs = Number(payload.startMs);
   const rawEndMs = Number(payload.endMs);
@@ -137,14 +148,14 @@ function eventTimeRange(result) {
   return { startMs, endMs };
 }
 
-function eventRangesOverlap(left, right) {
+function eventRangesOverlap(left: CalendarSearchResult, right: CalendarSearchResult) {
   const a = eventTimeRange(left);
   const b = eventTimeRange(right);
   if (!a || !b) return false;
   return a.startMs < b.endMs && b.startMs < a.endMs;
 }
 
-function isDuplicateEventResult(result, acceptedResults) {
+function isDuplicateEventResult(result: CalendarSearchResult, acceptedResults: CalendarSearchResult[]) {
   const baseKey = eventDedupeBaseKey(result);
   if (!baseKey) return false;
   return acceptedResults.some((accepted) => (
@@ -152,15 +163,19 @@ function isDuplicateEventResult(result, acceptedResults) {
   ));
 }
 
-export function rankCalendarSearchCandidates(candidates, {
+export function rankCalendarSearchCandidates(candidates: CalendarSearchCandidate[], {
   query,
   limit,
   now = new Date(),
+}: {
+  query?: string;
+  limit?: number;
+  now?: Date;
 } = {}) {
   const centerMs = dateSortMs(dateKeyFromMs(now.getTime()));
-  const matched = [];
-  const seen = new Set();
-  const acceptedEventResults = [];
+  const matched: RankedCalendarSearchResult[] = [];
+  const seen = new Set<string>();
+  const acceptedEventResults: CalendarSearchResult[] = [];
   for (const candidate of candidates) {
     const match = classifyMatch(candidate, query);
     if (!match) continue;
@@ -188,11 +203,34 @@ export function rankCalendarSearchCandidates(candidates, {
   };
 }
 
-export function normalizeEventSearchCandidate(event, { coverageKey = "google_calendar" } = {}) {
+export interface EventSearchInput {
+  id: string;
+  startMs: number;
+  endMs?: number;
+  title?: string;
+  time?: string;
+  duration?: string;
+  location?: string;
+  description?: string;
+  source?: string;
+  calendarName?: string;
+  accountLabel?: string;
+  color?: string;
+  sourceColor?: string;
+  accountId?: string | null;
+  calendarId?: string | null;
+  originalStartTime?: string | null;
+  allDay?: boolean;
+}
+
+export function normalizeEventSearchCandidate(
+  event: EventSearchInput,
+  { coverageKey = "google_calendar" }: { coverageKey?: string } = {},
+): CalendarSearchCandidate {
   const itemDate = dateKeyFromMs(event.startMs);
   const sourceLabel = event.source || event.calendarName || event.accountLabel || "Google Calendar";
   const subtitle = [event.time, event.duration].filter(Boolean).join(" · ");
-  const activation = {
+  const activation: CalendarSearchActivation = {
     view: "events",
     detailView: "events",
     dateKey: itemDate,
@@ -232,15 +270,30 @@ export function normalizeEventSearchCandidate(event, { coverageKey = "google_cal
   };
 }
 
-function deadlineTitle(task) {
+interface DeadlineSearchInput {
+  id: string | number;
+  title?: string;
+  name?: string;
+  summary?: string;
+  due_date?: string | null;
+  dueDate?: string | null;
+  date?: string | null;
+  itemDate?: string | null;
+  course_name?: string;
+  course?: string;
+  project_name?: string;
+  status?: string;
+}
+
+function deadlineTitle(task: DeadlineSearchInput) {
   return task.title || task.name || task.summary || "Untitled deadline";
 }
 
-function deadlineDate(task) {
+function deadlineDate(task: DeadlineSearchInput) {
   return task.due_date || task.dueDate || task.date || task.itemDate || null;
 }
 
-export function normalizeDeadlineSearchCandidate(task) {
+export function normalizeDeadlineSearchCandidate(task: DeadlineSearchInput): CalendarSearchCandidate {
   const itemDate = deadlineDate(task);
   const title = deadlineTitle(task);
   const subtitle = [task.course_name || task.course || task.project_name, task.status]
@@ -286,11 +339,24 @@ export function normalizeDeadlineSearchCandidate(task) {
   };
 }
 
-export function deadlineSearchCandidates(payload = {}) {
+export function deadlineSearchCandidates(payload: Pick<DeadlinePayload, "upcoming"> | { upcoming?: DeadlineSearchInput[] } = {}) {
   return (payload.upcoming || []).map((task) => normalizeDeadlineSearchCandidate(task));
 }
 
-export function normalizeBillSearchCandidate(bill) {
+interface BillSearchInput {
+  id: string;
+  name?: string;
+  payee?: string;
+  next_date?: string | null;
+  occurrenceDate?: string | null;
+  date?: string | null;
+  amount?: number;
+  paid?: boolean;
+  type?: string;
+  scheduleId?: string | null;
+}
+
+export function normalizeBillSearchCandidate(bill: BillSearchInput): CalendarSearchCandidate {
   const title = bill.name || bill.payee || "Unknown bill";
   const itemDate = bill.next_date || bill.occurrenceDate || bill.date || null;
   const amount = Number(bill.amount || 0);
@@ -331,7 +397,10 @@ export function normalizeBillSearchCandidate(bill) {
   };
 }
 
-export function normalizeLimit(value, { defaultLimit = 50, maxLimit = 100 } = {}) {
+export function normalizeLimit(
+  value: unknown,
+  { defaultLimit = 50, maxLimit = 100 }: { defaultLimit?: number; maxLimit?: number } = {},
+) {
   if (value === undefined || value === null || value === "") return defaultLimit;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return null;

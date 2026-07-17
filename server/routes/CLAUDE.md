@@ -19,7 +19,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Domains + integrations
 - `alfred.js` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
-- `calendar.js` — calendar CRUD, deadline reads, event search, reminder hydration
+- `calendar.ts` — calendar CRUD, deadline reads, event search, reminder hydration
 - `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
 - `dashboard.js` — dashboard state, current-data SSE stream, health checks
 - `notes.ts` — notes CRUD and reordering
@@ -29,7 +29,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `gmail-push.js` — Gmail Pub/Sub push intake, queues history syncs
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
 
-(Tests are not listed: `X.test.js(x)` covers `X` by convention.)
+Tests are not listed; adjacent test files cover their same-named route by convention.
 
 ## Local patterns
 

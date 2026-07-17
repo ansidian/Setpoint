@@ -1,4 +1,4 @@
-import { fetchCalendar } from "../../calendar/calendar.js";
+import { fetchCalendar } from "../../calendar/calendar.ts";
 
 const calendarProvider = {
   key: "calendar_current",

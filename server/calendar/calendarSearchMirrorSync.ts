@@ -2,7 +2,7 @@ import db from "../db/connection.ts";
 import {
   fetchCalendarMirrorEvents,
   listCalendarsForAccount,
-} from "./calendar.js";
+} from "./calendar.ts";
 import {
   iso,
   mirrorOccurrenceStatement,
@@ -12,8 +12,15 @@ import {
   tombstoneCalendarStatement,
   tombstoneRecurringFamilyStatement,
   tombstoneUnlistedCalendarStatements,
-} from "./calendarSearchMirrorStatements.js";
-import { addMonthsIso } from "./calendar-range-model.js";
+} from "./calendarSearchMirrorStatements.ts";
+import { addMonthsIso } from "./calendar-range-model.ts";
+import type { Client, Row } from "@libsql/client";
+import type {
+  GoogleCalendarSource,
+  NormalizedCalendarEvent,
+} from "../../shared/types/calendar.ts";
+import type { StoredCalendarAccount } from "./calendar-google-client.ts";
+import type { MirrorEvent } from "./calendarSearchMirrorStatements.ts";
 
 export { addMonthsIso };
 
@@ -25,13 +32,45 @@ const MIRROR_FUTURE_MONTHS = 18;
 // recreates it, so a short retention is safe and keeps the table bounded.
 const TOMBSTONE_RETENTION_DAYS = 30;
 
-function pacificDate(now) {
+type MirrorDbClient = Pick<Client, "execute" | "batch">;
+
+interface MirrorWindow {
+  start: string;
+  end: string;
+}
+
+interface MirrorStateRow {
+  sync_token?: string | null;
+}
+
+interface MirrorSyncResponse {
+  events: MirrorEvent[];
+  nextSyncToken?: string | null;
+  syncToken?: string | null;
+  fullSync?: boolean;
+}
+
+interface MirrorSyncClientInput {
+  account: StoredCalendarAccount;
+  calendar: GoogleCalendarSource;
+  window: MirrorWindow;
+  syncToken: string | null;
+  mode?: "full" | "incremental";
+}
+
+type MirrorSyncClient = (input: MirrorSyncClientInput) => Promise<MirrorSyncResponse>;
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function pacificDate(now: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: DASHBOARD_CALENDAR_TZ,
   }).format(now);
 }
 
-export function calendarSearchMirrorWindow({ now = new Date() } = {}) {
+export function calendarSearchMirrorWindow({ now = new Date() }: { now?: Date } = {}): MirrorWindow {
   const today = pacificDate(now);
   return {
     start: addMonthsIso(today, -MIRROR_HISTORY_MONTHS),
@@ -39,20 +78,31 @@ export function calendarSearchMirrorWindow({ now = new Date() } = {}) {
   };
 }
 
-function enabledCalendarAccounts(accounts = []) {
+function enabledCalendarAccounts(accounts: StoredCalendarAccount[] = []) {
   return accounts.filter((account) => account?.type === "gmail" && account.calendar_enabled);
 }
 
-async function loadState(userId, accountId, calendarId, dbClient) {
+async function loadState(
+  userId: string,
+  accountId: string,
+  calendarId: string,
+  dbClient: MirrorDbClient,
+): Promise<MirrorStateRow | null> {
   const result = await dbClient.execute({
     sql: `SELECT * FROM ea_calendar_search_mirror_state
           WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
     args: [userId, accountId, calendarId],
   });
-  return result.rows[0] || null;
+  return result.rows[0] as MirrorStateRow | undefined || null;
 }
 
-async function markSyncing(userId, accountId, calendarId, dbClient, timestamp) {
+async function markSyncing(
+  userId: string,
+  accountId: string,
+  calendarId: string,
+  dbClient: MirrorDbClient,
+  timestamp: string,
+) {
   await dbClient.execute({
     sql: `UPDATE ea_calendar_search_mirror_state
           SET status = 'syncing',
@@ -64,7 +114,14 @@ async function markSyncing(userId, accountId, calendarId, dbClient, timestamp) {
   });
 }
 
-async function markSyncFailed(userId, accountId, calendarId, dbClient, timestamp, err) {
+async function markSyncFailed(
+  userId: string,
+  accountId: string,
+  calendarId: string,
+  dbClient: MirrorDbClient,
+  timestamp: string,
+  err: unknown,
+) {
   await dbClient.execute({
     sql: `UPDATE ea_calendar_search_mirror_state
           SET status = 'idle',
@@ -75,7 +132,7 @@ async function markSyncFailed(userId, accountId, calendarId, dbClient, timestamp
               updated_at = ?
           WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
     args: [
-      String(err?.message || err || "Calendar Search Mirror sync failed").slice(0, 500),
+      errorMessage(err || "Calendar Search Mirror sync failed").slice(0, 500),
       timestamp,
       timestamp,
       userId,
@@ -85,12 +142,18 @@ async function markSyncFailed(userId, accountId, calendarId, dbClient, timestamp
   });
 }
 
-function shouldTombstoneRecurringFamily(event) {
+function shouldTombstoneRecurringFamily(event: MirrorEvent) {
   const status = event?.status || (event?.is_deleted ? "cancelled" : "confirmed");
   return status === "cancelled" && !!event?.id && !event?.originalStartTime;
 }
 
-async function tombstoneUnlistedCalendars(userId, account, calendars, dbClient, timestamp) {
+async function tombstoneUnlistedCalendars(
+  userId: string,
+  account: StoredCalendarAccount,
+  calendars: GoogleCalendarSource[],
+  dbClient: MirrorDbClient,
+  timestamp: string,
+) {
   if (!userId || !account?.id || !Array.isArray(calendars)) return 0;
   if (calendars.some((calendar) => calendar?.syntheticCalendarListFallback)) return 0;
   const activeIds = new Set(
@@ -117,12 +180,13 @@ async function tombstoneUnlistedCalendars(userId, account, calendars, dbClient, 
   return staleCalendarIds.length;
 }
 
-function isInvalidSyncTokenError(err) {
-  const text = `${err?.code || ""} ${err?.message || ""}`.toLowerCase();
-  return err?.status === 410 || text.includes("sync_token_invalid") || text.includes("sync token");
+function isInvalidSyncTokenError(err: unknown) {
+  const error = err as { code?: string; message?: string; status?: number };
+  const text = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+  return error?.status === 410 || text.includes("sync_token_invalid") || text.includes("sync token");
 }
 
-function isRecurringSeriesMutation(event) {
+function isRecurringSeriesMutation(event: MirrorEvent) {
   if (!event) return false;
   if (event.recurringKind === "series") return true;
   if (event.recurrence) return true;
@@ -133,33 +197,49 @@ function isRecurringSeriesMutation(event) {
   );
 }
 
-function incrementalResponseNeedsFullSyncRepair(response) {
+function incrementalResponseNeedsFullSyncRepair(response: MirrorSyncResponse) {
   return (response?.events || []).some(isRecurringSeriesMutation);
 }
 
-async function defaultSyncClient({ account, calendar, window, syncToken }) {
+async function defaultSyncClient({
+  account,
+  calendar,
+  window,
+  syncToken,
+}: MirrorSyncClientInput): Promise<MirrorSyncResponse> {
   return fetchCalendarMirrorEvents(account, calendar, { window, syncToken });
 }
 
-async function syncCalendar(userId, account, calendar, {
-  dbClient,
-  syncClient,
-  timestamp,
-  window,
-  forceFull,
-}) {
+async function syncCalendar(
+  userId: string,
+  account: StoredCalendarAccount,
+  calendar: GoogleCalendarSource,
+  {
+    dbClient,
+    syncClient,
+    timestamp,
+    window,
+    forceFull,
+  }: {
+    dbClient: MirrorDbClient;
+    syncClient: MirrorSyncClient;
+    timestamp: string;
+    window: MirrorWindow;
+    forceFull: boolean;
+  },
+) {
   const state = await loadState(userId, account.id, calendar.id, dbClient);
   const canIncrement = !forceFull && state?.sync_token;
   await markSyncing(userId, account.id, calendar.id, dbClient, timestamp);
 
-  let mode = canIncrement ? "incremental" : "full";
-  let response;
+  let mode: "incremental" | "full" = canIncrement ? "incremental" : "full";
+  let response: MirrorSyncResponse;
   try {
     response = await syncClient({
       account,
       calendar,
       window,
-      syncToken: canIncrement ? state.sync_token : null,
+      syncToken: canIncrement ? String(state.sync_token) : null,
       mode,
     });
   } catch (err) {
@@ -211,20 +291,30 @@ async function syncCalendar(userId, account, calendar, {
     calendarId: event.calendarId || calendar.id,
     calendarName: event.calendarName || calendar.summary,
     source: event.source || calendar.summary,
-    sourceColor: event.sourceColor || calendar.backgroundColor || account.color,
+    sourceColor: event.sourceColor || calendar.backgroundColor || account.color || undefined,
   }, timestamp)));
   statements.push(stateSuccessStatement(userId, account, calendar, response, timestamp, isFullSync));
   await dbClient.batch(statements);
   return { fullSync: isFullSync, occurrences: events.filter((event) => event.status !== "cancelled" && !event.is_deleted).length };
 }
 
-export async function syncCalendarSearchMirror(userId, accounts, {
-  dbClient = db,
-  listCalendars = listCalendarsForAccount,
-  syncClient = defaultSyncClient,
-  now = new Date(),
-  forceFull = false,
-} = {}) {
+export async function syncCalendarSearchMirror(
+  userId: string,
+  accounts: StoredCalendarAccount[],
+  {
+    dbClient = db,
+    listCalendars = listCalendarsForAccount,
+    syncClient = defaultSyncClient,
+    now = new Date(),
+    forceFull = false,
+  }: {
+    dbClient?: MirrorDbClient;
+    listCalendars?: (account: StoredCalendarAccount) => Promise<GoogleCalendarSource[]>;
+    syncClient?: MirrorSyncClient;
+    now?: Date;
+    forceFull?: boolean;
+  } = {},
+) {
   if (!userId) return { status: "unconfigured", synced: false, calendars: 0, occurrences: 0 };
   const timestamp = iso(now);
   const window = calendarSearchMirrorWindow({ now });

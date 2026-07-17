@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCalendarSearchService } from "./calendar-search-service.js";
+import { createCalendarSearchService } from "./calendar-search-service.ts";
 
 function dependencies(overrides = {}) {
   return {

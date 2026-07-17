@@ -24,5 +24,5 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 
 - `server/actual/actual-transactions-read.ts` — the low-level reader.
 - `server/alfred/alfred-tools.js` — `search_transactions` / `summarize_transactions`.
-- `server/routes/calendar.js` — combined transaction rows in the Bills calendar range response.
+- `server/routes/calendar.ts` — combined transaction rows in the Bills calendar range response.
 - `docs/adr/0006-alfred-trust-architecture.md` — read-only trust posture.

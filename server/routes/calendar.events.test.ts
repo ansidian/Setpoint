@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import express from "express";
 import request from "supertest";
 
 vi.mock("../middleware/auth.ts", () => ({
-  requireCookieSession: (_req, _res, next) => next(),
+  requireCookieSession: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
@@ -12,14 +12,14 @@ vi.mock("../tasks/deadline-helpers.ts", () => ({
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
-vi.mock("../calendar/calendar.js", () => ({
+vi.mock("../calendar/calendar.ts", () => ({
   fetchCalendar: vi.fn(),
-  pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
+  pacificDayBoundaries: vi.fn((date: Date) => ({ dayStart: date, dayEnd: date })),
   getCalendarSourceGroups: vi.fn(),
   createCalendarEvent: vi.fn(),
   updateCalendarEvent: vi.fn(),
   deleteCalendarEvent: vi.fn(),
-  formatCalendarRouteError: vi.fn((err) => ({
+  formatCalendarRouteError: vi.fn((err: Error & { status?: number; code?: string }) => ({
     status: err.status || 500,
     body: { code: err.code || "unknown", message: err.message || "unknown" },
   })),
@@ -27,7 +27,7 @@ vi.mock("../calendar/calendar.js", () => ({
   isCalendarSearchInputError: vi.fn(() => false),
   searchCalendar: vi.fn(),
 }));
-vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
+vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers the route's range helpers);
   // only the DB-touching functions are stubbed below.
   ...(await importActual()),
@@ -38,10 +38,10 @@ vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
   requestCalendarSearchMirrorSync: vi.fn(),
   upsertCalendarSearchMirrorOccurrence: vi.fn().mockResolvedValue({ upserted: true }),
 }));
-vi.mock("../calendar/calendar-search.js", () => ({
+vi.mock("../calendar/calendar-search", () => ({
   deadlineSearchCandidates: vi.fn(() => []),
-  normalizeBillSearchCandidate: vi.fn((bill) => bill),
-  normalizeEventSearchCandidate: vi.fn((event) => event),
+  normalizeBillSearchCandidate: vi.fn((bill: unknown) => bill),
+  normalizeEventSearchCandidate: vi.fn((event: unknown) => event),
   normalizeLimit: vi.fn(() => 20),
   rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
 }));
@@ -84,7 +84,11 @@ vi.mock("../reminders/reminder-service.ts", () => ({
   recomputeUnsentRemindersForSource: vi.fn(),
   deleteSourceReminders: vi.fn(),
   listUpcomingReminderStatesForSources: vi.fn().mockResolvedValue(new Map()),
-  reminderSourceKey: ({ sourceType, sourceItemId, sourceOccurrenceId = null }) => `${sourceType}:${sourceItemId}:${sourceOccurrenceId || ""}`,
+  reminderSourceKey: ({
+    sourceType,
+    sourceItemId,
+    sourceOccurrenceId = null,
+  }: { sourceType: string; sourceItemId: string; sourceOccurrenceId?: string | null }) => `${sourceType}:${sourceItemId}:${sourceOccurrenceId || ""}`,
 }));
 vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 
@@ -94,14 +98,23 @@ const {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-} = await import("../calendar/calendar.js");
-const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js");
+} = await import("../calendar/calendar.ts");
+const calendarSearchMirror = await import("../calendar/calendar-search-mirror.ts");
 const {
   suggestGooglePlaces,
   getGooglePlaceDetails,
 } = await import("../platform/google-places.ts");
 const reminderService = await import("../reminders/reminder-service.ts");
-const calendarRoutes = (await import("./calendar.js")).default;
+const calendarRoutes = (await import("./calendar.ts")).default;
+const loadUserConfigMock = loadUserConfig as Mock;
+const getCalendarSourceGroupsMock = getCalendarSourceGroups as Mock;
+const createCalendarEventMock = createCalendarEvent as Mock;
+const updateCalendarEventMock = updateCalendarEvent as Mock;
+const deleteCalendarEventMock = deleteCalendarEvent as Mock;
+const suggestGooglePlacesMock = suggestGooglePlaces as Mock;
+const getGooglePlaceDetailsMock = getGooglePlaceDetails as Mock;
+const deleteSourceRemindersMock = reminderService.deleteSourceReminders as Mock;
+const recomputeRemindersMock = reminderService.recomputeUnsentRemindersForSource as Mock;
 
 function makeApp() {
   const app = express();
@@ -113,7 +126,7 @@ function makeApp() {
 describe("calendar event routes", () => {
   beforeEach(() => {
     process.env.EA_USER_ID = "test-user";
-    loadUserConfig.mockResolvedValue({
+    loadUserConfigMock.mockResolvedValue({
       accounts: [
         {
           id: "gmail-main",
@@ -132,7 +145,7 @@ describe("calendar event routes", () => {
   });
 
   it("returns grouped calendar sources", async () => {
-    getCalendarSourceGroups.mockResolvedValue([
+    getCalendarSourceGroupsMock.mockResolvedValue([
       {
         accountId: "gmail-main",
         accountLabel: "Google",
@@ -153,7 +166,7 @@ describe("calendar event routes", () => {
   });
 
   it("creates a calendar event on the selected account", async () => {
-    createCalendarEvent.mockResolvedValue({
+    createCalendarEventMock.mockResolvedValue({
       id: "event-1",
       title: "Planning",
       accountId: "gmail-main",
@@ -213,7 +226,7 @@ describe("calendar event routes", () => {
   });
 
   it("creates a recurring calendar event when recurrence is provided", async () => {
-    createCalendarEvent.mockResolvedValue({
+    createCalendarEventMock.mockResolvedValue({
       id: "event-recurring-1",
       title: "Work",
       accountId: "gmail-main",
@@ -259,7 +272,7 @@ describe("calendar event routes", () => {
   });
 
   it("creates a batch of calendar events and reports per-item failures", async () => {
-    createCalendarEvent
+    createCalendarEventMock
       .mockResolvedValueOnce({ id: "event-1", title: "Tue shift" })
       .mockRejectedValueOnce({
         status: 400,
@@ -302,7 +315,7 @@ describe("calendar event routes", () => {
   });
 
   it("loads the account config once per batch request regardless of item count (PERF-06)", async () => {
-    loadUserConfig.mockResolvedValue({
+    loadUserConfigMock.mockResolvedValue({
       accounts: [
         {
           id: "gmail-main",
@@ -321,7 +334,7 @@ describe("calendar event routes", () => {
       ],
       settings: {},
     });
-    createCalendarEvent
+    createCalendarEventMock
       .mockResolvedValueOnce({ id: "event-1", title: "Tue shift" })
       .mockResolvedValueOnce({ id: "event-2", title: "Wed shift" });
 
@@ -370,7 +383,7 @@ describe("calendar event routes", () => {
   });
 
   it("updates a calendar event", async () => {
-    updateCalendarEvent.mockResolvedValue({
+    updateCalendarEventMock.mockResolvedValue({
       id: "event-1",
       title: "Updated",
       accountId: "gmail-main",
@@ -443,7 +456,7 @@ describe("calendar event routes", () => {
   });
 
   it("passes recurring edit scope through to the calendar service", async () => {
-    updateCalendarEvent.mockResolvedValue({
+    updateCalendarEventMock.mockResolvedValue({
       id: "event-1",
       title: "Weekly sync",
       accountId: "gmail-main",
@@ -496,7 +509,7 @@ describe("calendar event routes", () => {
   });
 
   it("deletes a calendar event", async () => {
-    deleteCalendarEvent.mockResolvedValue(undefined);
+    deleteCalendarEventMock.mockResolvedValue(undefined);
 
     const res = await request(makeApp())
       .delete("/api/calendar/events/event-1")
@@ -528,7 +541,7 @@ describe("calendar event routes", () => {
   });
 
   it("passes recurring delete scope through to the calendar service", async () => {
-    deleteCalendarEvent.mockResolvedValue(undefined);
+    deleteCalendarEventMock.mockResolvedValue(undefined);
 
     const res = await request(makeApp())
       .delete("/api/calendar/events/event-1")
@@ -570,8 +583,8 @@ describe("calendar event routes", () => {
     // Google has already deleted the event by the time deleteSourceReminders runs.
     // A rejection here must NOT 500 the route — that would make the client revert
     // an event Google no longer has (the inverse ghost).
-    deleteCalendarEvent.mockResolvedValue(undefined);
-    reminderService.deleteSourceReminders.mockRejectedValueOnce(new Error("reminder store down"));
+    deleteCalendarEventMock.mockResolvedValue(undefined);
+    deleteSourceRemindersMock.mockRejectedValueOnce(new Error("reminder store down"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const res = await request(makeApp())
@@ -586,14 +599,14 @@ describe("calendar event routes", () => {
   });
 
   it("still returns the updated event when reminder recompute fails after a successful update", async () => {
-    updateCalendarEvent.mockResolvedValue({
+    updateCalendarEventMock.mockResolvedValue({
       id: "event-1",
       title: "Updated",
       accountId: "gmail-main",
       calendarId: "primary",
       startMs: Date.parse("2026-04-20T16:00:00.000Z"),
     });
-    reminderService.recomputeUnsentRemindersForSource.mockRejectedValueOnce(new Error("reminder store down"));
+    recomputeRemindersMock.mockRejectedValueOnce(new Error("reminder store down"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const res = await request(makeApp())
@@ -618,7 +631,7 @@ describe("calendar event routes", () => {
   });
 
   it("surfaces typed calendar errors from create", async () => {
-    createCalendarEvent.mockRejectedValue({
+    createCalendarEventMock.mockRejectedValue({
       status: 403,
       code: "calendar_reauth_required",
       message: "Reconnect this Gmail account to edit calendar events.",
@@ -640,7 +653,7 @@ describe("calendar event routes", () => {
   });
 
   it("returns place suggestions using the saved weather coordinates as bias", async () => {
-    loadUserConfig.mockResolvedValue({
+    loadUserConfigMock.mockResolvedValue({
       accounts: [
         {
           id: "gmail-main",
@@ -655,7 +668,7 @@ describe("calendar event routes", () => {
         weather_lng: -118.2437,
       },
     });
-    suggestGooglePlaces.mockResolvedValue([
+    suggestGooglePlacesMock.mockResolvedValue([
       {
         placeId: "place-1",
         primaryText: "McDonald's",
@@ -691,7 +704,7 @@ describe("calendar event routes", () => {
   });
 
   it("returns normalized place details for a selected place", async () => {
-    getGooglePlaceDetails.mockResolvedValue({
+    getGooglePlaceDetailsMock.mockResolvedValue({
       placeId: "place-1",
       displayName: "McDonald's",
       formattedAddress: "123 Main St, Los Angeles, CA 90012, USA",

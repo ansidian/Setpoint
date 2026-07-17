@@ -1,30 +1,44 @@
-import { throwCalendarError } from "./calendar-google-client.js";
+import { throwCalendarError } from "./calendar-google-client.ts";
 import {
   googleEventColorForSourceHex,
   googleEventColorForId,
   normalizeGoogleEventColorId,
 } from "../../shared/calendar-event-colors.ts";
+import type {
+  CalendarAccount,
+  CalendarEventMutationInput,
+  CalendarRecurrenceEnds,
+  CalendarRecurrenceInput,
+  GoogleCalendarSource,
+  GoogleEventAttendee,
+  GoogleEventDateTime,
+  GoogleEventResource,
+  NormalizedCalendarEvent,
+  StructuredCalendarRecurrence,
+} from "../../shared/types/calendar.ts";
+
+type RRuleParts = Record<string, string>;
 
 export const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 
 const GOOGLE_BIRTHDAY_SOURCE_LABEL = "Birthdays";
 const GOOGLE_BIRTHDAY_SOURCE_COLOR = "#ff887c";
 
-function findConferenceLink(event) {
+function findConferenceLink(event: GoogleEventResource) {
   if (event?.hangoutLink) return event.hangoutLink;
   const entry = event?.conferenceData?.entryPoints?.find((item) => item.entryPointType === "video");
   return entry?.uri || null;
 }
 
-export function isRecurringEventResource(event) {
+export function isRecurringEventResource(event: GoogleEventResource) {
   return !!(event?.recurrence?.length || event?.recurringEventId || event?.originalStartTime);
 }
 
-function allDayAnchorMs(dateStr) {
+function allDayAnchorMs(dateStr: string) {
   return new Date(`${dateStr}T12:00:00Z`).getTime();
 }
 
-function formatTime(dateStr) {
+function formatTime(dateStr: string | undefined) {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleTimeString("en-US", {
     timeZone: DASHBOARD_CALENDAR_TZ,
@@ -34,16 +48,16 @@ function formatTime(dateStr) {
   });
 }
 
-function formatAllDayDuration(startStr, endStr) {
+function formatAllDayDuration(startStr: string | undefined, endStr: string | undefined) {
   if (!startStr || !endStr) return "";
-  const days = Math.round((new Date(endStr) - new Date(startStr)) / 86400000);
+  const days = Math.round((new Date(endStr).getTime() - new Date(startStr).getTime()) / 86400000);
   if (days <= 1) return "";
   return `${days} days`;
 }
 
-function formatDuration(startStr, endStr) {
+function formatDuration(startStr: string | undefined, endStr: string | undefined) {
   if (!startStr || !endStr) return "";
-  const ms = new Date(endStr) - new Date(startStr);
+  const ms = new Date(endStr).getTime() - new Date(startStr).getTime();
   const mins = Math.round(ms / 60000);
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
@@ -51,11 +65,11 @@ function formatDuration(startStr, endStr) {
   return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
-function normalizeAttendees(attendees) {
+function normalizeAttendees(attendees: GoogleEventAttendee[] | undefined) {
   if (!Array.isArray(attendees)) return [];
   return attendees
     .filter((attendee) => attendee?.email && !attendee.resource)
-    .map((attendee) => attendee.displayName || attendee.email);
+    .map((attendee) => attendee.displayName || attendee.email!);
 }
 
 const RECURRENCE_FREQ = new Set(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]);
@@ -86,7 +100,7 @@ const WEEKDAY_TO_RRULE = {
   SA: "SA",
 };
 
-function formatUtcCompact(date) {
+function formatUtcCompact(date: Date) {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
@@ -96,9 +110,9 @@ function formatUtcCompact(date) {
   return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
 }
 
-function laDateTimeToEpoch(dateStr, timeStr = "00:00") {
-  const [year, month, day] = String(dateStr).split("-").map(Number);
-  const [hour, minute] = String(timeStr).split(":").map(Number);
+function laDateTimeToEpoch(dateStr: string, timeStr = "00:00") {
+  const [year = 0, month = 0, day = 0] = String(dateStr).split("-").map(Number);
+  const [hour = 0, minute = 0] = String(timeStr).split(":").map(Number);
   const target = Date.UTC(year, month - 1, day, hour || 0, minute || 0, 0);
   let epoch = target;
 
@@ -113,11 +127,11 @@ function laDateTimeToEpoch(dateStr, timeStr = "00:00") {
   });
 
   for (let pass = 0; pass < 2; pass += 1) {
-    const out = {};
+    const out: Record<string, number> = {};
     for (const part of formatter.formatToParts(new Date(epoch))) {
       if (part.type !== "literal") out[part.type] = Number(part.value);
     }
-    const actual = Date.UTC(out.year, (out.month || 1) - 1, out.day || 1, out.hour === 24 ? 0 : (out.hour || 0), out.minute || 0, 0);
+    const actual = Date.UTC(out.year ?? 0, (out.month || 1) - 1, out.day || 1, out.hour === 24 ? 0 : (out.hour || 0), out.minute || 0, 0);
     const drift = target - actual;
     if (drift === 0) break;
     epoch += drift;
@@ -126,19 +140,19 @@ function laDateTimeToEpoch(dateStr, timeStr = "00:00") {
   return epoch;
 }
 
-function toAllDayUntil(dateStr) {
+function toAllDayUntil(dateStr: string) {
   return String(dateStr || "").replaceAll("-", "");
 }
 
-function normalizeWeekdayToken(value) {
-  const token = WEEKDAY_TO_RRULE[String(value || "").trim()];
+function normalizeWeekdayToken(value: string) {
+  const token = WEEKDAY_TO_RRULE[String(value || "").trim() as keyof typeof WEEKDAY_TO_RRULE];
   if (!token) {
     throwCalendarError(400, "calendar_validation_error", `Unsupported weekday "${value}".`);
   }
   return token;
 }
 
-function parseRecurrenceRule(ruleLine) {
+function parseRecurrenceRule(ruleLine: string | null): RRuleParts | null {
   if (typeof ruleLine !== "string" || !ruleLine.startsWith("RRULE:")) return null;
   return ruleLine
     .slice(6)
@@ -146,24 +160,24 @@ function parseRecurrenceRule(ruleLine) {
     .filter(Boolean)
     .reduce((acc, segment) => {
       const [key, ...rest] = segment.split("=");
-      acc[key] = rest.join("=");
+      if (key) acc[key] = rest.join("=");
       return acc;
-    }, {});
+    }, {} as RRuleParts);
 }
 
-function serializeRecurrenceRule(parts) {
+function serializeRecurrenceRule(parts: RRuleParts) {
   return `RRULE:${Object.entries(parts)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
     .map(([key, value]) => `${key}=${value}`)
     .join(";")}`;
 }
 
-function getRecurrenceRuleLine(recurrence) {
+function getRecurrenceRuleLine(recurrence: string[] | undefined | null) {
   if (!Array.isArray(recurrence)) return null;
   return recurrence.find((line) => String(line).startsWith("RRULE:")) || null;
 }
 
-function parseRecurrenceEnds(parts) {
+function parseRecurrenceEnds(parts: RRuleParts): CalendarRecurrenceEnds {
   if (parts.COUNT) {
     return {
       type: "afterCount",
@@ -196,7 +210,9 @@ function parseRecurrenceEnds(parts) {
   return { type: "never" };
 }
 
-export function extractStructuredRecurrence(recurrence) {
+export function extractStructuredRecurrence(
+  recurrence: string[] | undefined | null,
+): StructuredCalendarRecurrence | null {
   if (!Array.isArray(recurrence) || !recurrence.length) return null;
 
   const parts = parseRecurrenceRule(getRecurrenceRuleLine(recurrence));
@@ -212,13 +228,24 @@ export function extractStructuredRecurrence(recurrence) {
   };
 }
 
-function buildUntilValue({ allDay, untilDate, startTime }) {
+function buildUntilValue({
+  allDay,
+  untilDate,
+  startTime,
+}: {
+  allDay: boolean;
+  untilDate: string;
+  startTime: string;
+}) {
   if (allDay) return toAllDayUntil(untilDate);
   const epoch = laDateTimeToEpoch(untilDate, startTime || "00:00");
   return formatUtcCompact(new Date(epoch));
 }
 
-export function buildGoogleRecurrenceRules(input, timing = {}) {
+export function buildGoogleRecurrenceRules(
+  input: CalendarRecurrenceInput | string[] | null | undefined,
+  timing: { allDay?: boolean; startDate?: string; startTime?: string } = {},
+) {
   if (!input) return null;
   if (Array.isArray(input)) return input.filter(Boolean);
 
@@ -234,7 +261,7 @@ export function buildGoogleRecurrenceRules(input, timing = {}) {
 
   const startDate = toIsoDate(timing.startDate);
   const startTime = timing.startTime || "00:00";
-  const parts = {
+  const parts: RRuleParts = {
     FREQ: frequency,
     INTERVAL: String(interval),
   };
@@ -289,22 +316,22 @@ export function buildGoogleRecurrenceRules(input, timing = {}) {
   return [serializeRecurrenceRule(parts)];
 }
 
-function normalizeOriginalStartTime(originalStartTime) {
+function normalizeOriginalStartTime(originalStartTime: GoogleEventDateTime | undefined) {
   if (!originalStartTime) return null;
   return originalStartTime.dateTime || originalStartTime.date || null;
 }
 
-function recurrenceKindForEvent(event) {
+function recurrenceKindForEvent(event: GoogleEventResource): "series" | "instance" | null {
   if (Array.isArray(event?.recurrence) && event.recurrence.length) return "series";
   if (event?.recurringEventId || event?.originalStartTime) return "instance";
   return null;
 }
 
-function normalizeGoogleEventType(event) {
+function normalizeGoogleEventType(event: GoogleEventResource) {
   return String(event?.eventType || "default");
 }
 
-function normalizeBirthdayProperties(value) {
+function normalizeBirthdayProperties(value: GoogleEventResource["birthdayProperties"]) {
   if (!value) return null;
   return {
     type: value.type || "birthday",
@@ -313,13 +340,17 @@ function normalizeBirthdayProperties(value) {
   };
 }
 
-function googleEventReadOnlyReason(event) {
+function googleEventReadOnlyReason(event: GoogleEventResource) {
   const eventType = normalizeGoogleEventType(event);
   if (eventType === "default") return null;
   return eventType === "birthday" ? "birthday" : "google_event_type";
 }
 
-function googleEventDisplaySource(event, calendar, account) {
+function googleEventDisplaySource(
+  event: GoogleEventResource,
+  calendar: GoogleCalendarSource,
+  account: CalendarAccount,
+) {
   if (normalizeGoogleEventType(event) === "birthday") {
     return {
       label: GOOGLE_BIRTHDAY_SOURCE_LABEL,
@@ -332,7 +363,7 @@ function googleEventDisplaySource(event, calendar, account) {
   };
 }
 
-export function assertMutableGoogleEvent(event) {
+export function assertMutableGoogleEvent(event: GoogleEventResource) {
   const reason = googleEventReadOnlyReason(event);
   if (!reason) return;
   throwCalendarError(
@@ -345,7 +376,10 @@ export function assertMutableGoogleEvent(event) {
   );
 }
 
-export function normalizeGoogleCalendarLink(rawUrl, accountEmail) {
+export function normalizeGoogleCalendarLink(
+  rawUrl: string | null | undefined,
+  accountEmail: string | null | undefined,
+) {
   if (!rawUrl || !accountEmail) return rawUrl || null;
 
   try {
@@ -359,7 +393,7 @@ export function normalizeGoogleCalendarLink(rawUrl, accountEmail) {
 
     if (isGoogleEventRedirect) {
       const eventId = url.searchParams.get("eid");
-      const normalized = new URL(`https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(eventId)}`);
+      const normalized = new URL(`https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(eventId!)}`);
       normalized.searchParams.set("authuser", accountEmail);
       return normalized.toString();
     }
@@ -371,12 +405,22 @@ export function normalizeGoogleCalendarLink(rawUrl, accountEmail) {
   }
 }
 
-export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange = false }) {
+export function normalizeGoogleEvent({
+  account,
+  calendar,
+  event,
+  isMultiDayRange = false,
+}: {
+  account: CalendarAccount;
+  calendar: GoogleCalendarSource;
+  event: GoogleEventResource;
+  isMultiDayRange?: boolean;
+}): NormalizedCalendarEvent {
   const isAllDay = !event.start?.dateTime && !!event.start?.date;
   const startValue = event.start?.dateTime || event.start?.date;
   const endValue = event.end?.dateTime || event.end?.date;
-  const startMs = isAllDay ? allDayAnchorMs(startValue) : new Date(startValue).getTime();
-  const endMs = isAllDay ? allDayAnchorMs(endValue) : new Date(endValue).getTime();
+  const startMs = isAllDay ? allDayAnchorMs(startValue!) : new Date(startValue!).getTime();
+  const endMs = isAllDay ? allDayAnchorMs(endValue!) : new Date(endValue!).getTime();
   const openUrl = normalizeGoogleCalendarLink(event.htmlLink || null, account.email);
   const recurrence = extractStructuredRecurrence(event.recurrence);
   const colorId = normalizeGoogleEventColorId(event.colorId);
@@ -405,7 +449,7 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
     sourceColor: displaySource.color,
     sourceColorId: sourceEventColor?.colorId || null,
     accountId: account.id,
-    accountLabel: account.label,
+    accountLabel: account.label || account.email,
     accountEmail: account.email,
     calendarId: calendar.id,
     calendarName: displaySource.label,
@@ -430,7 +474,7 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
       : null,
     passed: false,
     ...(isMultiDayRange && {
-      dayLabel: new Date(isAllDay ? `${startValue}T12:00:00Z` : startValue).toLocaleDateString("en-US", {
+      dayLabel: new Date(isAllDay ? `${startValue}T12:00:00Z` : startValue!).toLocaleDateString("en-US", {
         timeZone: DASHBOARD_CALENDAR_TZ,
         weekday: "short",
         month: "short",
@@ -440,7 +484,15 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
   };
 }
 
-export function normalizeCancelledGoogleOccurrence({ account, calendar, event }) {
+export function normalizeCancelledGoogleOccurrence({
+  account,
+  calendar,
+  event,
+}: {
+  account: CalendarAccount;
+  calendar: GoogleCalendarSource;
+  event: GoogleEventResource;
+}): NormalizedCalendarEvent {
   const originalStartTime = normalizeOriginalStartTime(event.originalStartTime);
   return {
     id: event.id,
@@ -453,7 +505,7 @@ export function normalizeCancelledGoogleOccurrence({ account, calendar, event })
     source: calendar.summary,
     sourceColor: calendar.backgroundColor || account.color || "#4285f4",
     accountId: account.id,
-    accountLabel: account.label,
+    accountLabel: account.label || account.email,
     accountEmail: account.email,
     calendarId: calendar.id,
     calendarName: calendar.summary,
@@ -468,27 +520,30 @@ export function normalizeCancelledGoogleOccurrence({ account, calendar, event })
   };
 }
 
-export function toIsoDate(dateValue) {
+export function toIsoDate(dateValue: unknown): string {
   if (typeof dateValue !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
     throwCalendarError(400, "calendar_validation_error", "Dates must use YYYY-MM-DD.");
   }
   return dateValue;
 }
 
-export function addDaysIso(dateStr, days) {
+export function addDaysIso(dateStr: string, days: number) {
   const date = new Date(`${dateStr}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function stripRecurringEnds(ruleParts) {
+function stripRecurringEnds(ruleParts: RRuleParts) {
   const next = { ...ruleParts };
   delete next.UNTIL;
   delete next.COUNT;
   return next;
 }
 
-function assertSimpleSeriesRecurrence(event, { allowCount = false } = {}) {
+function assertSimpleSeriesRecurrence(
+  event: GoogleEventResource,
+  { allowCount = false }: { allowCount?: boolean } = {},
+) {
   const rules = event?.recurrence || [];
   const ruleLine = getRecurrenceRuleLine(rules);
   if (!ruleLine) {
@@ -504,7 +559,10 @@ function assertSimpleSeriesRecurrence(event, { allowCount = false } = {}) {
   return parts;
 }
 
-export function buildSeriesTrimmedBeforeTarget(parentEvent, targetOriginalStart) {
+export function buildSeriesTrimmedBeforeTarget(
+  parentEvent: GoogleEventResource,
+  targetOriginalStart: string,
+) {
   const ruleParts = assertSimpleSeriesRecurrence(parentEvent, { allowCount: true });
   const trimmed = { ...ruleParts };
   delete trimmed.COUNT;
@@ -519,7 +577,10 @@ export function buildSeriesTrimmedBeforeTarget(parentEvent, targetOriginalStart)
   return [serializeRecurrenceRule(trimmed)];
 }
 
-export function buildFollowingSeriesRecurrence(parentEvent, input) {
+export function buildFollowingSeriesRecurrence(
+  parentEvent: GoogleEventResource,
+  input: CalendarEventMutationInput,
+) {
   if (input.recurrence) {
     return buildGoogleRecurrenceRules(input.recurrence, {
       allDay: !!input.allDay,

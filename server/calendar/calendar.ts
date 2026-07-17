@@ -4,43 +4,61 @@ import {
   getRawEvent,
   googleCalendarFetch,
   listCalendarsForAccount,
-} from "./calendar-google-client.js";
+} from "./calendar-google-client.ts";
 import {
   DASHBOARD_CALENDAR_TZ,
   normalizeCancelledGoogleOccurrence,
   normalizeGoogleEvent,
-} from "./calendar-event-normalize.js";
+} from "./calendar-event-normalize.ts";
+import type {
+  CalendarAccount,
+  GoogleCalendarSource,
+  GoogleEventResource,
+  NormalizedCalendarEvent,
+} from "../../shared/types/calendar.ts";
+import type { CalendarServiceError, StoredCalendarAccount } from "./calendar-google-client.ts";
+
+interface GoogleEventsResponse {
+  items?: GoogleEventResource[];
+  nextPageToken?: string;
+  nextSyncToken?: string;
+}
+
+interface CalendarMirrorWindow {
+  start: string;
+  end: string;
+}
 
 export {
   CALENDAR_WRITE_SCOPE,
   CALENDAR_FULL_SCOPE,
   invalidateCalendarListCache,
   listCalendarsForAccount,
-} from "./calendar-google-client.js";
+} from "./calendar-google-client.ts";
 export {
   DASHBOARD_CALENDAR_TZ,
   buildGoogleRecurrenceRules,
   extractStructuredRecurrence,
   normalizeGoogleCalendarLink,
   normalizeGoogleEvent,
-} from "./calendar-event-normalize.js";
+} from "./calendar-event-normalize.ts";
 export {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-} from "./calendar-mutations.js";
-export { validateCalendarRange } from "./calendar-range-model.js";
+} from "./calendar-mutations.ts";
+export { validateCalendarRange } from "./calendar-range-model.ts";
 export {
   isCalendarSearchInputError,
   searchCalendar,
-} from "./calendar-search-service.js";
+} from "./calendar-search-service.ts";
 
 /**
  * Returns midnight (start) and 23:59:59.999 (end) for the Pacific-time date
  * that `date` falls on, as proper UTC-anchored Date objects regardless of the
  * server's local timezone.
  */
-export function pacificDayBoundaries(date) {
+export function pacificDayBoundaries(date: Date) {
   const offsetPart = new Intl.DateTimeFormat("en-US", {
     timeZone: DASHBOARD_CALENDAR_TZ,
     timeZoneName: "shortOffset",
@@ -48,8 +66,8 @@ export function pacificDayBoundaries(date) {
     .formatToParts(date)
     .find((p) => p.type === "timeZoneName")?.value;
   const offsetMatch = offsetPart?.match(/GMT([+-]\d+(?::\d+)?)/);
-  const [offsetHours, offsetMins] = offsetMatch
-    ? offsetMatch[1].split(":").map(Number)
+  const [offsetHours = -8, offsetMins = 0] = offsetMatch
+    ? offsetMatch[1]!.split(":").map(Number)
     : [-8, 0];
   const totalOffsetMs = (offsetHours * 60 + (offsetMins || 0) * Math.sign(offsetHours)) * 60000;
 
@@ -60,7 +78,7 @@ export function pacificDayBoundaries(date) {
     day: "2-digit",
   })
     .formatToParts(date)
-    .reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    .reduce<Record<string, string>>((acc, p) => { acc[p.type] = p.value; return acc; }, {});
 
   const yyyy = parts.year;
   const mm = parts.month;
@@ -84,16 +102,23 @@ export function pacificDayBoundaries(date) {
  * O(n log n) for n timed events; behavior-identical for real (positive-duration)
  * calendar events.
  */
-export function markCalendarConflicts(events) {
+interface CalendarConflictEvent {
+  startMs: number;
+  endMs: number;
+  allDay: boolean;
+  flag?: "Conflict" | null;
+}
+
+export function markCalendarConflicts<T extends CalendarConflictEvent>(events: T[]): T[] {
   const timed = events.filter(
     (event) => !event.allDay && Number.isFinite(event.startMs) && Number.isFinite(event.endMs),
   );
   timed.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
 
-  const active = [];
+  const active: T[] = [];
   for (const event of timed) {
     for (let i = active.length - 1; i >= 0; i -= 1) {
-      if (active[i].endMs <= event.startMs) active.splice(i, 1);
+      if (active[i]!.endMs <= event.startMs) active.splice(i, 1);
     }
     if (active.length > 0) {
       event.flag = "Conflict";
@@ -105,8 +130,16 @@ export function markCalendarConflicts(events) {
   return events;
 }
 
-export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, limit } = {}) {
-  const allEvents = [];
+export async function fetchCalendar(
+  gmailAccounts: StoredCalendarAccount[],
+  {
+    startDate,
+    endDate,
+    query,
+    limit,
+  }: { startDate?: Date; endDate?: Date; query?: string; limit?: number } = {},
+): Promise<NormalizedCalendarEvent[]> {
+  const allEvents: NormalizedCalendarEvent[] = [];
   if (!gmailAccounts?.length) return allEvents;
 
   let rangeStart;
@@ -140,16 +173,17 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, 
             q: query,
             maxResults: limit,
           },
-        }).catch((err) => {
-          if (err.code === "calendar_google_forbidden" || err.code === "calendar_google_error") {
-            console.warn(`[Calendar] events fetch failed for ${account.email} cal=${calendar.id}: ${err.message}`);
+        }).catch((err: unknown) => {
+          const error = err as CalendarServiceError;
+          if (error.code === "calendar_google_forbidden" || error.code === "calendar_google_error") {
+            console.warn(`[Calendar] events fetch failed for ${account.email} cal=${calendar.id}: ${error.message}`);
             return null;
           }
           throw err;
         });
 
         if (!res) return [];
-        const data = await res.json();
+        const data = await res.json() as GoogleEventsResponse;
         return (data.items || []).map((event) => normalizeGoogleEvent({
           account,
           calendar,
@@ -159,8 +193,8 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, 
       }));
 
       return perCalendarEvents.flat();
-    } catch (err) {
-      console.error(`Calendar error for ${account.email}:`, err.message);
+    } catch (err: unknown) {
+      console.error(`Calendar error for ${account.email}:`, err instanceof Error ? err.message : String(err));
       return [];
     }
   }));
@@ -184,11 +218,19 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, 
   }));
 }
 
-export async function fetchCalendarMirrorEvents(account, calendar, { window, syncToken = null, pageSize = 2500 } = {}) {
+export async function fetchCalendarMirrorEvents(
+  account: StoredCalendarAccount,
+  calendar: GoogleCalendarSource,
+  {
+    window,
+    syncToken = null,
+    pageSize = 2500,
+  }: { window?: CalendarMirrorWindow; syncToken?: string | null; pageSize?: number },
+) {
   const auth = await getAuthorizedAccount(account);
-  const events = [];
-  let pageToken = null;
-  let nextSyncToken = null;
+  const events: NormalizedCalendarEvent[] = [];
+  let pageToken: string | null = null;
+  let nextSyncToken: string | null = null;
 
   do {
     const query = syncToken
@@ -203,8 +245,8 @@ export async function fetchCalendarMirrorEvents(account, calendar, { window, syn
           // orderBy is set, which would silently force every mirror sync to be
           // a full re-sync. Mirror writes are keyed per occurrence, so response
           // order is irrelevant.
-          timeMin: new Date(`${window.start}T00:00:00.000Z`).toISOString(),
-          timeMax: new Date(`${window.end}T23:59:59.999Z`).toISOString(),
+          timeMin: new Date(`${window!.start}T00:00:00.000Z`).toISOString(),
+          timeMax: new Date(`${window!.end}T23:59:59.999Z`).toISOString(),
           singleEvents: true,
           showDeleted: true,
           maxResults: pageSize,
@@ -214,7 +256,7 @@ export async function fetchCalendarMirrorEvents(account, calendar, { window, syn
     const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
       query,
     });
-    const data = await res.json();
+    const data = await res.json() as GoogleEventsResponse;
     nextSyncToken = data.nextSyncToken || nextSyncToken;
     for (const event of data.items || []) {
       if (event.status === "cancelled" && (!event.start?.dateTime && !event.start?.date)) {
@@ -238,13 +280,18 @@ export async function fetchCalendarMirrorEvents(account, calendar, { window, syn
   };
 }
 
-export async function getCalendarSourceGroups(accounts) {
-  const groups = [];
+export async function getCalendarSourceGroups(accounts: StoredCalendarAccount[]) {
+  const groups: Array<{
+    accountId: string;
+    accountLabel: string;
+    accountEmail: string;
+    calendars: GoogleCalendarSource[];
+  }> = [];
   for (const account of accounts) {
     const calendars = await listCalendarsForAccount(account);
     groups.push({
       accountId: account.id,
-      accountLabel: account.label,
+      accountLabel: account.label || account.email,
       accountEmail: account.email,
       calendars,
     });
@@ -252,19 +299,24 @@ export async function getCalendarSourceGroups(accounts) {
   return groups;
 }
 
-export async function getCalendarEvent(account, calendarId, eventId) {
+export async function getCalendarEvent(
+  account: StoredCalendarAccount,
+  calendarId: string,
+  eventId: string,
+): Promise<NormalizedCalendarEvent> {
   const calendars = await listCalendarsForAccount(account);
   const calendar = calendars.find((entry) => entry.id === calendarId) || buildSyntheticPrimaryCalendar(account, false);
   const { event } = await getRawEvent(account, calendarId, eventId);
   return normalizeGoogleEvent({ account, calendar, event });
 }
 
-export function formatCalendarRouteError(err) {
+export function formatCalendarRouteError(err: unknown) {
+  const error = err as Partial<CalendarServiceError>;
   return {
-    status: err?.status || 500,
+    status: error?.status || 500,
     body: {
-      code: err?.code || "calendar_unknown_error",
-      message: err?.message || "Calendar request failed",
+      code: error?.code || "calendar_unknown_error",
+      message: error?.message || "Calendar request failed",
     },
   };
 }

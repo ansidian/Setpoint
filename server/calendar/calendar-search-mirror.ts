@@ -4,13 +4,20 @@ import {
   iso,
   normalizeText,
   mirrorOccurrenceStatement,
-} from "./calendarSearchMirrorStatements.js";
-import { computeCalendarSearchMirrorHealth } from "./calendarSearchMirrorHealthModel.js";
+} from "./calendarSearchMirrorStatements.ts";
+import { computeCalendarSearchMirrorHealth } from "./calendarSearchMirrorHealthModel.ts";
 import {
   syncCalendarSearchMirror,
   calendarSearchMirrorWindow,
   addMonthsIso,
-} from "./calendarSearchMirrorSync.js";
+} from "./calendarSearchMirrorSync.ts";
+import type { Client, Row } from "@libsql/client";
+import type {
+  NormalizedCalendarEvent,
+} from "../../shared/types/calendar.ts";
+import type { StoredCalendarAccount } from "./calendar-google-client.ts";
+import type { MirrorEvent } from "./calendarSearchMirrorStatements.ts";
+import type { EventSearchInput as CalendarEventSearchInput } from "./calendar-search.ts";
 
 // Re-export the sync-engine surface so the public module path stays unchanged.
 export { syncCalendarSearchMirror, calendarSearchMirrorWindow, addMonthsIso };
@@ -18,27 +25,61 @@ export { syncCalendarSearchMirror, calendarSearchMirrorWindow, addMonthsIso };
 const DEFAULT_SYNC_DEBOUNCE_MS = 1000;
 export const CALENDAR_SEARCH_MIRROR_SYNC_BACKSTOP_MS = 15 * 60 * 1000;
 
-const pendingSyncs = new Map();
-const activeSyncs = new Map();
-let mirrorSyncWorkerTimer = null;
+type MirrorDbClient = Pick<Client, "execute">;
+type MirrorSyncFn = (
+  userId: string,
+  accounts: StoredCalendarAccount[],
+  options: { forceFull: boolean },
+) => Promise<unknown>;
+type LoadConfigFn = (userId: string) => Promise<{ accounts: unknown[] }>;
+type RecordSyncRequestFn = (userId: string, options: { reason: string }) => Promise<unknown>;
+type GetHealthFn = (userId: string) => Promise<{
+  state: string;
+  sources?: Array<{ lastSuccessAt?: string | null }>;
+}>;
+type EventSearchInput = CalendarEventSearchInput & Record<string, unknown>;
+
+interface PendingSync {
+  reason: string;
+  forceFull: boolean;
+  timer: NodeJS.Timeout | null;
+}
+
+interface RequestSyncOptions {
+  reason?: string;
+  debounceMs?: number;
+  forceFull?: boolean;
+  syncFn?: MirrorSyncFn;
+  loadConfigFn?: LoadConfigFn;
+  recordSyncRequestFn?: RecordSyncRequestFn;
+}
+
+const pendingSyncs = new Map<string, PendingSync>();
+const activeSyncs = new Map<string, Promise<unknown | null>>();
+let mirrorSyncWorkerTimer: NodeJS.Timeout | null = null;
 
 // Escape LIKE metacharacters so a query containing `_` or `%` matches literally
 // instead of acting as a wildcard. Used with `ESCAPE '\'` in
 // listCalendarSearchMirrorOccurrences.
-function escapeLikePattern(value) {
+function escapeLikePattern(value: string) {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
-function dateMs(isoDate, end = false) {
+function dateMs(isoDate: string, end = false) {
   const suffix = end ? "T23:59:59.999Z" : "T00:00:00.000Z";
   return Date.parse(`${isoDate}${suffix}`);
 }
 
-function scheduleRequestedCalendarSearchMirrorSync(userId, {
+function scheduleRequestedCalendarSearchMirrorSync(userId: string, {
   delayMs,
   syncFn,
   loadConfigFn,
   recordSyncRequestFn,
+}: {
+  delayMs?: number;
+  syncFn?: MirrorSyncFn;
+  loadConfigFn?: LoadConfigFn;
+  recordSyncRequestFn?: RecordSyncRequestFn;
 } = {}) {
   const pending = pendingSyncs.get(userId);
   if (!pending || pending.timer || activeSyncs.has(userId)) return;
@@ -47,14 +88,18 @@ function scheduleRequestedCalendarSearchMirrorSync(userId, {
     const next = pendingSyncs.get(userId);
     if (next) next.timer = null;
     runRequestedCalendarSearchMirrorSync(userId, { syncFn, loadConfigFn, recordSyncRequestFn });
-  }, delayMs);
+  }, delayMs ?? 0);
   pending.timer.unref?.();
 }
 
-async function runRequestedCalendarSearchMirrorSync(userId, {
+async function runRequestedCalendarSearchMirrorSync(userId: string, {
   syncFn = syncCalendarSearchMirror,
   loadConfigFn = loadUserConfig,
   recordSyncRequestFn = recordCalendarSearchMirrorSyncRequest,
+}: {
+  syncFn?: MirrorSyncFn;
+  loadConfigFn?: LoadConfigFn;
+  recordSyncRequestFn?: RecordSyncRequestFn;
 } = {}) {
   const requested = pendingSyncs.get(userId);
   if (!requested || activeSyncs.has(userId)) return null;
@@ -66,12 +111,12 @@ async function runRequestedCalendarSearchMirrorSync(userId, {
         reason: requested.reason,
       });
       const { accounts } = await loadConfigFn(userId);
-      return syncFn(userId, accounts, {
+      return syncFn(userId, accounts as StoredCalendarAccount[], {
         forceFull: !!requested.forceFull,
       });
     })
-    .catch((err) => {
-      console.error("[Calendar] requested search mirror sync failed:", err.message);
+    .catch((err: unknown) => {
+      console.error("[Calendar] requested search mirror sync failed:", err instanceof Error ? err.message : String(err));
       return null;
     })
     .finally(() => {
@@ -89,14 +134,14 @@ async function runRequestedCalendarSearchMirrorSync(userId, {
   return active;
 }
 
-export function requestCalendarSearchMirrorSync(userId, {
+export function requestCalendarSearchMirrorSync(userId: string, {
   reason = "manual",
   debounceMs = DEFAULT_SYNC_DEBOUNCE_MS,
   forceFull = false,
   syncFn,
   loadConfigFn,
   recordSyncRequestFn,
-} = {}) {
+}: RequestSyncOptions = {}) {
   if (!userId) return { queued: false };
   const existing = pendingSyncs.get(userId);
   if (existing) {
@@ -119,9 +164,12 @@ export function requestCalendarSearchMirrorSync(userId, {
   return { queued: true, coalesced: false };
 }
 
-async function requestStartupCalendarSearchMirrorSyncIfNeeded(userId, {
+async function requestStartupCalendarSearchMirrorSyncIfNeeded(userId: string, {
   getHealthFn = getCalendarSearchMirrorHealth,
   requestSyncFn = requestCalendarSearchMirrorSync,
+}: {
+  getHealthFn?: GetHealthFn;
+  requestSyncFn?: typeof requestCalendarSearchMirrorSync;
 } = {}) {
   if (!userId) return;
   const health = await getHealthFn(userId);
@@ -139,11 +187,19 @@ export function startCalendarSearchMirrorSyncWorker({
   intervalMs = CALENDAR_SEARCH_MIRROR_SYNC_BACKSTOP_MS,
   getHealthFn = getCalendarSearchMirrorHealth,
   requestSyncFn = requestCalendarSearchMirrorSync,
+}: {
+  userId?: string;
+  intervalMs?: number;
+  getHealthFn?: GetHealthFn;
+  requestSyncFn?: typeof requestCalendarSearchMirrorSync;
 } = {}) {
   if (!userId || mirrorSyncWorkerTimer) return { started: false };
 
   requestStartupCalendarSearchMirrorSyncIfNeeded(userId, { getHealthFn, requestSyncFn })
-    .catch((err) => console.error("[Calendar] search mirror startup sync check failed:", err.message));
+    .catch((err: unknown) => console.error(
+      "[Calendar] search mirror startup sync check failed:",
+      err instanceof Error ? err.message : String(err),
+    ));
 
   mirrorSyncWorkerTimer = setInterval(() => {
     requestSyncFn(userId, {
@@ -167,17 +223,23 @@ export function stopCalendarSearchMirrorSyncWorker() {
   activeSyncs.clear();
 }
 
-export async function recordCalendarSearchMirrorSyncRequest(userId, {
+export async function recordCalendarSearchMirrorSyncRequest(userId: string, {
   dbClient = db,
   accountId = null,
   calendarId = null,
   reason = "calendar-search",
   now = new Date(),
+}: {
+  dbClient?: MirrorDbClient;
+  accountId?: string | null;
+  calendarId?: string | null;
+  reason?: string;
+  now?: Date;
 } = {}) {
   if (!userId) return { recorded: false };
   const timestamp = iso(now);
-  const filters = [];
-  const args = [timestamp, reason, timestamp, userId];
+  const filters: string[] = [];
+  const args: string[] = [timestamp, reason, timestamp, userId];
   if (accountId) {
     filters.push("account_id = ?");
     args.push(accountId);
@@ -198,12 +260,18 @@ export async function recordCalendarSearchMirrorSyncRequest(userId, {
   return { recorded: true, syncRequestedAt: timestamp, reason };
 }
 
-export async function markCalendarSearchMirrorDirty(userId, {
+export async function markCalendarSearchMirrorDirty(userId: string, {
   dbClient = db,
   accountId,
   calendarId,
   reason = "calendar-write",
   now = new Date(),
+}: {
+  dbClient?: MirrorDbClient;
+  accountId?: string;
+  calendarId?: string;
+  reason?: string;
+  now?: Date;
 } = {}) {
   if (!userId || !accountId || !calendarId) return { marked: false };
   const timestamp = iso(now);
@@ -220,11 +288,11 @@ export async function markCalendarSearchMirrorDirty(userId, {
   return { marked: true, dirtySince: timestamp, reason };
 }
 
-export async function upsertCalendarSearchMirrorOccurrence(userId, event, {
+export async function upsertCalendarSearchMirrorOccurrence(userId: string, event: MirrorEvent, {
   dbClient = db,
   now = new Date(),
   recordPendingSync = true,
-} = {}) {
+}: { dbClient?: MirrorDbClient; now?: Date; recordPendingSync?: boolean } = {}) {
   if (!userId || !event?.accountId || !event?.calendarId || !event?.id) return { upserted: false };
   const timestamp = iso(now);
   await dbClient.execute(mirrorOccurrenceStatement(userId, event, timestamp));
@@ -240,7 +308,7 @@ export async function upsertCalendarSearchMirrorOccurrence(userId, event, {
   return { upserted: true };
 }
 
-export async function deleteCalendarSearchMirrorOccurrence(userId, {
+export async function deleteCalendarSearchMirrorOccurrence(userId: string, {
   dbClient = db,
   accountId,
   calendarId,
@@ -248,6 +316,14 @@ export async function deleteCalendarSearchMirrorOccurrence(userId, {
   originalStartTime = null,
   now = new Date(),
   recordPendingSync = true,
+}: {
+  dbClient?: MirrorDbClient;
+  accountId?: string;
+  calendarId?: string;
+  eventId?: string;
+  originalStartTime?: string | null;
+  now?: Date;
+  recordPendingSync?: boolean;
 } = {}) {
   if (!userId || !accountId || !calendarId || !eventId) return { deleted: false };
   const timestamp = iso(now);
@@ -280,42 +356,49 @@ export async function deleteCalendarSearchMirrorOccurrence(userId, {
   return { deleted: true };
 }
 
-function rowToOccurrence(row) {
+function rowToOccurrence(row: Row): EventSearchInput {
   return {
-    id: row.event_id,
-    title: row.title || "(No title)",
-    location: row.location || "",
-    description: row.description || "",
+    id: String(row.event_id || ""),
+    title: String(row.title || "(No title)"),
+    location: String(row.location || ""),
+    description: String(row.description || ""),
     startMs: Number(row.start_ms),
     endMs: Number(row.end_ms),
-    time: row.time_label || "",
-    duration: row.duration_label || "",
-    source: row.source_label || "Google Calendar",
-    sourceColor: row.source_color || "#4285f4",
-    color: row.event_color || row.source_color || "#4285f4",
-    colorId: row.color_id || null,
-    accountId: row.account_id,
-    accountLabel: row.account_label || null,
-    accountEmail: row.account_email || null,
-    calendarId: row.calendar_id,
-    calendarName: row.source_label || null,
+    time: String(row.time_label || ""),
+    duration: String(row.duration_label || ""),
+    source: String(row.source_label || "Google Calendar"),
+    sourceColor: String(row.source_color || "#4285f4"),
+    color: String(row.event_color || row.source_color || "#4285f4"),
+    colorId: row.color_id ? String(row.color_id) : null,
+    accountId: String(row.account_id || ""),
+    accountLabel: row.account_label ? String(row.account_label) : "",
+    accountEmail: row.account_email ? String(row.account_email) : "",
+    calendarId: String(row.calendar_id || ""),
+    calendarName: row.source_label ? String(row.source_label) : "",
     allDay: !!row.all_day,
-    originalStartTime: row.original_start_key || null,
-    recurringEventId: row.recurring_event_id || null,
-    recurringKind: row.recurring_kind || null,
+    originalStartTime: row.original_start_key ? String(row.original_start_key) : null,
+    recurringEventId: row.recurring_event_id ? String(row.recurring_event_id) : null,
+    recurringKind: row.recurring_kind === "series" || row.recurring_kind === "instance" ? row.recurring_kind : null,
     isRecurring: !!row.is_recurring,
-    htmlLink: row.html_link || null,
-    openUrl: row.open_url || row.html_link || null,
+    htmlLink: row.html_link ? String(row.html_link) : null,
+    openUrl: row.open_url || row.html_link ? String(row.open_url || row.html_link) : null,
   };
 }
 
-export async function listCalendarSearchMirrorOccurrences(userId, {
+export async function listCalendarSearchMirrorOccurrences(userId: string, {
   dbClient = db,
   start,
   end,
   query = null,
   limit = 500,
   centerDate = null,
+}: {
+  dbClient?: MirrorDbClient;
+  start?: string;
+  end?: string;
+  query?: string | null;
+  limit?: number;
+  centerDate?: string | null;
 } = {}) {
   const startMs = dateMs(start || "0001-01-01");
   const endMs = dateMs(end || "9999-12-31", true);
@@ -355,10 +438,10 @@ export async function listCalendarSearchMirrorOccurrences(userId, {
   return result.rows.map(rowToOccurrence);
 }
 
-export async function getCalendarSearchMirrorHealth(userId, {
+export async function getCalendarSearchMirrorHealth(userId: string, {
   dbClient = db,
   now = new Date(),
-} = {}) {
+}: { dbClient?: MirrorDbClient; now?: Date } = {}) {
   const result = await dbClient.execute({
     sql: `SELECT *
           FROM ea_calendar_search_mirror_state
@@ -366,5 +449,5 @@ export async function getCalendarSearchMirrorHealth(userId, {
           ORDER BY account_label COLLATE NOCASE ASC, calendar_label COLLATE NOCASE ASC, calendar_id ASC`,
     args: [userId],
   });
-  return computeCalendarSearchMirrorHealth(result.rows, { now });
+  return computeCalendarSearchMirrorHealth(result.rows as unknown as Parameters<typeof computeCalendarSearchMirrorHealth>[0], { now });
 }

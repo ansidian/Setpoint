@@ -9,7 +9,7 @@ import {
   tombstoneCalendarStatement,
   tombstoneRecurringFamilyStatement,
   tombstoneUnlistedCalendarStatements,
-} from "./calendarSearchMirrorStatements.js";
+} from "./calendarSearchMirrorStatements.ts";
 
 describe("iso / normalizeText", () => {
   it("iso formats a Date as ISO", () => {

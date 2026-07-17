@@ -8,10 +8,11 @@ vi.mock("../platform/encryption.ts", () => ({
     expires_at: Date.now() + 3600_000,
     scopes: ["https://www.googleapis.com/auth/calendar.events"],
   }),
-  encrypt: (value) => value,
+  encrypt: (value: string) => value,
 }));
 
-vi.stubGlobal("fetch", vi.fn());
+const fetchMock = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>();
+vi.stubGlobal("fetch", fetchMock);
 
 const {
   createCalendarEvent,
@@ -21,7 +22,7 @@ const {
   invalidateCalendarListCache,
   listCalendarsForAccount,
   updateCalendarEvent,
-} = await import("./calendar.js");
+} = await import("./calendar.ts");
 
 const account = {
   id: "acct-1",
@@ -46,16 +47,16 @@ const calendarList = {
   ],
 };
 
-function jsonResponse(body, status = 200) {
+function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
     text: async () => JSON.stringify(body),
-  };
+  } as Response;
 }
 
-function selectedInstance(overrides = {}) {
+function selectedInstance(overrides: Record<string, unknown> = {}) {
   return {
     id: "instance-1",
     recurringEventId: "series-1",
@@ -68,7 +69,7 @@ function selectedInstance(overrides = {}) {
   };
 }
 
-function parentSeries(overrides = {}) {
+function parentSeries(overrides: Record<string, unknown> = {}) {
   return {
     id: "series-1",
     etag: '"parent-current"',
@@ -80,8 +81,11 @@ function parentSeries(overrides = {}) {
   };
 }
 
-function installCalendarFetch({ selected = selectedInstance(), parent = parentSeries() } = {}) {
-  fetch.mockImplementation(async (url, init = {}) => {
+function installCalendarFetch({
+  selected = selectedInstance(),
+  parent = parentSeries(),
+}: { selected?: ReturnType<typeof selectedInstance>; parent?: ReturnType<typeof parentSeries> } = {}) {
+  fetchMock.mockImplementation(async (url, init = {}) => {
     const parsed = new URL(String(url));
     const method = init.method || "GET";
     const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -96,7 +100,7 @@ function installCalendarFetch({ selected = selectedInstance(), parent = parentSe
       return jsonResponse(parent);
     }
     if (method === "PATCH" && path === "calendars/primary/events/series-1") {
-      return jsonResponse({ ...parent, ...JSON.parse(init.body || "{}") });
+      return jsonResponse({ ...parent, ...JSON.parse(String(init.body || "{}")) });
     }
     if (method === "DELETE" && path === "calendars/primary/events/series-1") {
       return jsonResponse({});
@@ -105,10 +109,14 @@ function installCalendarFetch({ selected = selectedInstance(), parent = parentSe
   });
 }
 
-function findFetchCall(method, eventId) {
-  return fetch.mock.calls.find(([url, init = {}]) => {
+function findFetchCall(
+  method: string,
+  eventId: string,
+): [string | URL | Request, RequestInit] | undefined {
+  const call = fetchMock.mock.calls.find(([url, init = {}]) => {
     return (init.method || "GET") === method && String(url).includes(`/events/${eventId}`);
   });
+  return call ? [call[0], call[1] || {}] : undefined;
 }
 
 describe("calendar recurring mutations", () => {
@@ -122,7 +130,7 @@ describe("calendar recurring mutations", () => {
   });
 
   it("omits CalendarList entries that are not selected in Google Calendar", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -145,7 +153,7 @@ describe("calendar recurring mutations", () => {
   });
 
   it("preserves cancelled status for expanded recurring mirror occurrences with start times", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -189,7 +197,7 @@ describe("calendar recurring mutations", () => {
   });
 
   it("windowed mirror fetch omits orderBy so Google returns a nextSyncToken", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -203,7 +211,7 @@ describe("calendar recurring mutations", () => {
       window: { start: "2026-05-01", end: "2026-06-01" },
     })).resolves.toMatchObject({ nextSyncToken: "sync-1" });
 
-    const [url] = fetch.mock.calls.find(([callUrl]) => String(callUrl).includes("calendars/work/events"));
+    const [url] = fetchMock.mock.calls.find(([callUrl]) => String(callUrl).includes("calendars/work/events"))!;
     const params = new URL(String(url)).searchParams;
     expect(params.get("orderBy")).toBeNull();
     expect(params.get("singleEvents")).toBe("true");
@@ -227,12 +235,12 @@ describe("calendar recurring mutations", () => {
       endTime: "09:30",
     });
 
-    const [, init] = findFetchCall("PATCH", "series-1");
-    expect(init.headers["If-Match"]).toBe('"parent-current"');
+    const [, init] = findFetchCall("PATCH", "series-1")!;
+    expect(new Headers(init.headers).get("If-Match")).toBe('"parent-current"');
   });
 
   it("moves a single event from its source calendar before patching the target calendar", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -263,7 +271,7 @@ describe("calendar recurring mutations", () => {
         return jsonResponse({
           id: "event-1",
           etag: '"patched-current"',
-          ...JSON.parse(init.body || "{}"),
+          ...JSON.parse(String(init.body || "{}")),
         });
       }
       return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
@@ -283,18 +291,18 @@ describe("calendar recurring mutations", () => {
 
     expect(updated.calendarId).toBe("school");
     expect(updated.calendarName).toBe("School");
-    const moveCall = fetch.mock.calls.find(([url, init = {}]) => {
+    const moveCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "POST" && String(url).includes("/events/event-1/move");
     });
-    expect(moveCall[1].headers["If-Match"]).toBe('"source-current"');
-    const patchCall = fetch.mock.calls.find(([url, init = {}]) => {
+    expect(new Headers(moveCall?.[1]?.headers).get("If-Match")).toBe('"source-current"');
+    const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
-    expect(patchCall[1].headers["If-Match"]).toBe('"moved-current"');
+    expect(new Headers(patchCall?.[1]?.headers).get("If-Match")).toBe('"moved-current"');
   });
 
   it("recovers cross-calendar update retries after Google already moved the event", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -324,7 +332,7 @@ describe("calendar recurring mutations", () => {
         return jsonResponse({
           id: "event-1",
           etag: '"patched-current"',
-          ...JSON.parse(init.body || "{}"),
+          ...JSON.parse(String(init.body || "{}")),
         });
       }
       return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
@@ -344,17 +352,17 @@ describe("calendar recurring mutations", () => {
 
     expect(updated.calendarId).toBe("school");
     expect(updated.title).toBe("Planning moved");
-    expect(fetch.mock.calls.some(([url, init = {}]) => {
+    expect(fetchMock.mock.calls.some(([url, init = {}]) => {
       return (init.method || "GET") === "POST" && String(url).includes("/events/event-1/move");
     })).toBe(false);
-    const patchCall = fetch.mock.calls.find(([url, init = {}]) => {
+    const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
-    expect(patchCall[1].headers["If-Match"]).toBe('"target-current"');
+    expect(new Headers(patchCall?.[1]?.headers).get("If-Match")).toBe('"target-current"');
   });
 
   it("recovers when Google reports the moved event already exists in the target calendar", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -393,7 +401,7 @@ describe("calendar recurring mutations", () => {
         return jsonResponse({
           id: "event-1",
           etag: '"patched-current"',
-          ...JSON.parse(init.body || "{}"),
+          ...JSON.parse(String(init.body || "{}")),
         });
       }
       return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
@@ -412,14 +420,14 @@ describe("calendar recurring mutations", () => {
     });
 
     expect(updated.calendarId).toBe("school");
-    const patchCall = fetch.mock.calls.find(([url, init = {}]) => {
+    const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
-    expect(patchCall[1].headers["If-Match"]).toBe('"target-current"');
+    expect(new Headers(patchCall?.[1]?.headers).get("If-Match")).toBe('"target-current"');
   });
 
   it("normalizes raw Google save errors without exposing the provider body", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -460,12 +468,13 @@ describe("calendar recurring mutations", () => {
       message: "Google Calendar could not save this event. Refresh the calendar and try again.",
       googleMessage: "Huge provider stack with request internals",
     });
-    expect(error.message).not.toContain("Huge provider stack");
-    expect(error.rawGoogleError).toContain("Huge provider stack");
+    const calendarError = error as Error & { rawGoogleError: string };
+    expect(calendarError.message).not.toContain("Huge provider stack");
+    expect(calendarError.rawGoogleError).toContain("Huge provider stack");
   });
 
   it("rejects birthday event mutations before patching or deleting Google Calendar", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -505,14 +514,14 @@ describe("calendar recurring mutations", () => {
       code: "calendar_event_read_only",
     });
 
-    expect(fetch.mock.calls.some(([url, init = {}]) => {
+    expect(fetchMock.mock.calls.some(([url, init = {}]) => {
       const method = init.method || "GET";
       return ["PATCH", "DELETE"].includes(method) && String(url).includes("/events/birthday-1");
     })).toBe(false);
   });
 
   it("sends a valid event color when creating an event", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -524,7 +533,7 @@ describe("calendar recurring mutations", () => {
         return jsonResponse({
           id: "event-colored",
           etag: '"created"',
-          ...JSON.parse(init.body || "{}"),
+          ...JSON.parse(String(init.body || "{}")),
         });
       }
       return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
@@ -541,16 +550,16 @@ describe("calendar recurring mutations", () => {
       colorId: "9",
     });
 
-    const createCall = fetch.mock.calls.find(([url, init = {}]) => {
+    const createCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "POST" && String(url).includes("/calendars/primary/events");
     });
-    expect(JSON.parse(createCall[1].body).colorId).toBe("9");
+    expect(JSON.parse(String(createCall?.[1]?.body)).colorId).toBe("9");
     expect(created.colorId).toBe("9");
     expect(created.color).toBe("#5484ed");
   });
 
   it("rejects unsupported event colors", async () => {
-    fetch.mockImplementation(async (url, init = {}) => {
+    fetchMock.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));
       const method = init.method || "GET";
       const path = parsed.pathname.replace("/calendar/v3/", "");
@@ -594,9 +603,9 @@ describe("calendar recurring mutations", () => {
       originalStartTime: "2026-04-27T16:00:00.000Z",
     });
 
-    const [, init] = findFetchCall("PATCH", "series-1");
-    expect(init.headers["If-Match"]).toBe('"parent-current"');
-    expect(JSON.parse(init.body).recurrence).toEqual([
+    const [, init] = findFetchCall("PATCH", "series-1")!;
+    expect(new Headers(init.headers).get("If-Match")).toBe('"parent-current"');
+    expect(JSON.parse(String(init.body)).recurrence).toEqual([
       "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;UNTIL=20260427T155959Z",
     ]);
   });
@@ -624,9 +633,9 @@ describe("calendar recurring mutations", () => {
       endTime: "09:30",
     });
 
-    const [, init] = findFetchCall("PATCH", "series-1");
-    expect(init.headers["If-Match"]).toBe('"parent-current"');
-    expect(fetch.mock.calls.some(([url, callInit = {}]) => {
+    const [, init] = findFetchCall("PATCH", "series-1")!;
+    expect(new Headers(init.headers).get("If-Match")).toBe('"parent-current"');
+    expect(fetchMock.mock.calls.some(([url, callInit = {}]) => {
       return (callInit.method || "GET") === "POST" && String(url).endsWith("/events");
     })).toBe(false);
   });
@@ -648,8 +657,8 @@ describe("calendar recurring mutations", () => {
       originalStartTime: "2026-04-06T16:00:00.000Z",
     });
 
-    const [, init] = findFetchCall("DELETE", "series-1");
-    expect(init.headers["If-Match"]).toBe('"parent-current"');
+    const [, init] = findFetchCall("DELETE", "series-1")!;
+    expect(new Headers(init.headers).get("If-Match")).toBe('"parent-current"');
     expect(findFetchCall("PATCH", "series-1")).toBeUndefined();
   });
 

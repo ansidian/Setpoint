@@ -94,16 +94,16 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 2. `src/hooks/calendar/calendarRangeModel.js:groupMonthKeys` — pure month-key math: dedupe, contiguous groups capped at 2 months per fetch
 3. `src/hooks/calendar/useCalendarRange.js:fetchMonthGroup` — converts a group to bounds via `monthBounds`, fetches, buckets events per month into the cache
 4. `src/api.ts:getCalendarRange` — GET `/api/calendar/range`
-5. `server/routes/calendar.js:validateCalendarRange` — validates ISO dates and ≤62-day span; handler fetches live from Google and hydrates reminder state
+5. `server/routes/calendar.ts:validateCalendarRange` — validates ISO dates and ≤62-day span; handler fetches live from Google and hydrates reminder state
 6. `src/hooks/calendar/useCalendarModalSearch.js:useCalendarModalSearch` — debounced (250ms) per-scope search with request-sequence guards
 7. `src/api.ts:getCalendarSearch` — GET `/api/calendar/search`
-8. `server/routes/calendar.js:calendarSearchResponse` — merges mirror events + deadline candidates, builds coverage sources; stale/dirty mirror health triggers `requestCalendarSearchMirrorRepair` fire-and-forget
-9. `server/calendar/calendar-search-mirror.js:listCalendarSearchMirrorOccurrences` — SQL LIKE over `ea_calendar_search_occurrences`, ordered by distance from today
-10. `server/calendar/calendar-search.js:rankCalendarSearchCandidates` — ranks/truncates combined candidates to the client limit
+8. `server/routes/calendar.ts:calendarSearchResponse` — merges mirror events + deadline candidates, builds coverage sources; stale/dirty mirror health triggers `requestCalendarSearchMirrorRepair` fire-and-forget
+9. `server/calendar/calendar-search-mirror.ts:listCalendarSearchMirrorOccurrences` — SQL LIKE over `ea_calendar_search_occurrences`, ordered by distance from today
+10. `server/calendar/calendar-search.ts:rankCalendarSearchCandidates` — ranks/truncates combined candidates to the client limit
 11. `src/hooks/calendar/useCalendarSearchActivation.js:activateCalendarSearchResult` — on activation: blocks if editor dirty, switches view, sets selection + pending detail focus
 12. `src/hooks/calendar/useCalendarModalController.jsx:useCalendarModalController` — builds viewData.events (prev/current/next month) and the search shell, hands both to shell props
 
-**Caches:** per-month events cache in `src/hooks/calendar/useCalendarRange.js` (30-min TTL, ±3-month prefetch radius; invalidated by explicit sync, patched by editor saves); per-scope search snapshots in `src/hooks/calendar/useCalendarModalSearch.js` (reset on query change/modal close); server mirror `ea_calendar_search_occurrences` owned by `server/calendar/calendar-search-mirror.js` (`syncCalendarSearchMirror` full/incremental + 15-min backstop worker; write-through upserts on single-event mutations in `server/routes/calendar.js`, recurring edits mark dirty for async repair).
+**Caches:** per-month events cache in `src/hooks/calendar/useCalendarRange.js` (30-min TTL, ±3-month prefetch radius; invalidated by explicit sync, patched by editor saves); per-scope search snapshots in `src/hooks/calendar/useCalendarModalSearch.js` (reset on query change/modal close); server mirror `ea_calendar_search_occurrences` owned by `server/calendar/calendar-search-mirror.ts` (`syncCalendarSearchMirror` full/incremental + 15-min backstop worker; write-through upserts on single-event mutations in `server/routes/calendar.ts`, recurring edits mark dirty for async repair).
 
 **SSE:** `dashboard-current-changed` marks bill/deadline range caches stale (via `src/pages/Dashboard.refreshModel.js`) but does NOT touch the events month cache or the search mirror — those refresh via their own timers and explicit sync.
 

@@ -1,4 +1,4 @@
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../db/migrations");
 
-async function applyMirrorMigration(db) {
+async function applyMirrorMigration(db: Client) {
   await db.executeMultiple(readFileSync(join(migrationsDir, "011_calendar_search_mirror.sql"), "utf8"));
 }
 
@@ -55,12 +55,12 @@ const occurrence = {
 };
 
 describe("Calendar Search Mirror service", () => {
-  let db = null;
+  let db: Client | null = null;
 
   afterEach(async () => {
     await db?.close?.();
     db = null;
-    const mirror = await import("./calendar-search-mirror.js");
+    const mirror = await import("./calendar-search-mirror.ts");
     mirror.stopCalendarSearchMirrorSyncWorker();
     vi.useRealTimers();
   });
@@ -71,14 +71,14 @@ describe("Calendar Search Mirror service", () => {
     vi.setSystemTime(now);
     db = createClient({ url: "file::memory:" });
     await applyMirrorMigration(db);
-    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.ts");
 
     const laterDirty = "2026-05-12T19:00:05.000Z"; // a write landing 5s into the fetch
     const listCalendars = vi.fn(async () => [primaryCalendar]);
     // Simulate a recurring-event edit marking the row dirty (newer than the sync
     // start) WHILE the Google round-trip is still in flight.
     const syncClient = vi.fn(async ({ calendar, window }) => {
-      await db.execute({
+      await db!.execute({
         sql: `UPDATE ea_calendar_search_mirror_state
               SET dirty_since = ?, dirty_reason = 'recurring-edit'
               WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
@@ -101,7 +101,7 @@ describe("Calendar Search Mirror service", () => {
     });
     // The write landed after sync start, so the success update must not clear it,
     // otherwise the mirror would serve stale occurrences with no follow-up sync.
-    expect(state.rows[0].dirty_since).toBe(laterDirty);
+    expect(state.rows[0]!.dirty_since).toBe(laterDirty);
   });
 
   it("full-syncs enabled Google calendars into searchable occurrence rows and current health", async () => {
@@ -113,7 +113,7 @@ describe("Calendar Search Mirror service", () => {
       getCalendarSearchMirrorHealth,
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const listCalendars = vi.fn(async () => [primaryCalendar, workCalendar]);
     const syncClient = vi.fn(async ({ calendar, window }) => ({
@@ -207,7 +207,7 @@ describe("Calendar Search Mirror service", () => {
     const {
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const listCalendars = vi.fn(async () => [primaryCalendar]);
     const syncClient = vi.fn()
@@ -261,7 +261,7 @@ describe("Calendar Search Mirror service", () => {
   it("skips rewriting an occurrence when a sync re-delivers identical event data", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMirrorMigration(db);
-    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.ts");
 
     const listCalendars = vi.fn(async () => [primaryCalendar]);
     const syncClient = vi.fn()
@@ -293,13 +293,13 @@ describe("Calendar Search Mirror service", () => {
     });
     // The sync itself still completed and advanced the token.
     const state = await db.execute("SELECT sync_token FROM ea_calendar_search_mirror_state");
-    expect(state.rows[0].sync_token).toBe("sync-2");
+    expect(state.rows[0]!.sync_token).toBe("sync-2");
   });
 
   it("full sync leaves already-cancelled tombstones untouched", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMirrorMigration(db);
-    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.ts");
 
     const listCalendars = vi.fn(async () => [primaryCalendar]);
     const syncClient = vi.fn()
@@ -344,7 +344,7 @@ describe("Calendar Search Mirror service", () => {
   it("purges cancelled tombstones older than the retention window during sync", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMirrorMigration(db);
-    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.ts");
 
     const secondOccurrence = { ...occurrence, id: "event-2", originalStartTime: "2026-05-21T17:00:00.000Z" };
     const listCalendars = vi.fn(async () => [primaryCalendar]);
@@ -395,7 +395,7 @@ describe("Calendar Search Mirror service", () => {
     const {
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const workOccurrence = {
       ...occurrence,
@@ -452,7 +452,7 @@ describe("Calendar Search Mirror service", () => {
   it("repairs expired incremental tokens with a safe full sync", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMirrorMigration(db);
-    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.ts");
 
     const replacement = { ...occurrence, id: "event-2", title: "Replacement event" };
     const listCalendars = vi.fn(async () => [primaryCalendar]);
@@ -484,11 +484,11 @@ describe("Calendar Search Mirror service", () => {
       now: new Date("2026-05-12T20:00:00.000Z"),
     });
 
-    expect(syncClient.mock.calls[1][0]).toMatchObject({
+    expect(syncClient.mock.calls[1]![0]).toMatchObject({
       mode: "incremental",
       syncToken: "sync-1",
     });
-    expect(syncClient.mock.calls[2][0]).toMatchObject({
+    expect(syncClient.mock.calls[2]![0]).toMatchObject({
       mode: "full",
       syncToken: null,
     });
@@ -513,7 +513,7 @@ describe("Calendar Search Mirror service", () => {
     const {
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const staleFutureOccurrence = {
       ...occurrence,
@@ -565,11 +565,11 @@ describe("Calendar Search Mirror service", () => {
       now: new Date("2026-05-12T20:00:00.000Z"),
     });
 
-    expect(syncClient.mock.calls[1][0]).toMatchObject({
+    expect(syncClient.mock.calls[1]![0]).toMatchObject({
       mode: "incremental",
       syncToken: "sync-1",
     });
-    expect(syncClient.mock.calls[2][0]).toMatchObject({
+    expect(syncClient.mock.calls[2]![0]).toMatchObject({
       mode: "full",
       syncToken: null,
     });
@@ -592,7 +592,7 @@ describe("Calendar Search Mirror service", () => {
     const {
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const staleFutureOccurrence = {
       ...occurrence,
@@ -654,7 +654,7 @@ describe("Calendar Search Mirror service", () => {
       getCalendarSearchMirrorHealth,
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const listCalendars = vi.fn(async () => [primaryCalendar]);
     const syncClient = vi.fn()
@@ -711,7 +711,7 @@ describe("Calendar Search Mirror service", () => {
       listCalendarSearchMirrorOccurrences,
       syncCalendarSearchMirror,
       upsertCalendarSearchMirrorOccurrence,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     await syncCalendarSearchMirror("test-user", [account], {
       dbClient: db,
@@ -761,9 +761,9 @@ describe("Calendar Search Mirror service", () => {
     const {
       listCalendarSearchMirrorOccurrences,
       upsertCalendarSearchMirrorOccurrence,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
-    const rows = [
+    const rows: Array<[string, string]> = [
       ["work-old-1", "2025-07-25T17:00:00.000Z"],
       ["work-old-2", "2025-07-26T17:00:00.000Z"],
       ["work-old-3", "2025-07-27T17:00:00.000Z"],
@@ -805,7 +805,7 @@ describe("Calendar Search Mirror service", () => {
     const {
       listCalendarSearchMirrorOccurrences,
       upsertCalendarSearchMirrorOccurrence,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const rows = [
       ["lit-underscore", "design a_b review"],
@@ -854,7 +854,7 @@ describe("Calendar Search Mirror service", () => {
     await applyMirrorMigration(db);
     const {
       requestCalendarSearchMirrorSync,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const recordSyncRequestFn = vi.fn(async () => ({ recorded: true }));
     const loadConfigFn = vi.fn(async () => ({ accounts: [account] }));
@@ -888,7 +888,7 @@ describe("Calendar Search Mirror service", () => {
     const {
       CALENDAR_SEARCH_MIRROR_SYNC_BACKSTOP_MS,
       startCalendarSearchMirrorSyncWorker,
-    } = await import("./calendar-search-mirror.js");
+    } = await import("./calendar-search-mirror.ts");
 
     const getHealthFn = vi.fn(async () => ({
       state: "initializing",
@@ -921,7 +921,7 @@ describe("Calendar Search Mirror service", () => {
 
 describe("addMonthsIso (P3-40 month-end clamp)", () => {
   it("clamps day-of-month to the target month's last day instead of overflowing", async () => {
-    const { addMonthsIso } = await import("./calendar-search-mirror.js");
+    const { addMonthsIso } = await import("./calendar-search-mirror.ts");
     // Jan 31 + 1mo would naively roll to Mar 3; clamp keeps it inside February.
     expect(addMonthsIso("2026-01-31", 1)).toBe("2026-02-28");
     expect(addMonthsIso("2026-03-31", -1)).toBe("2026-02-28");
@@ -930,7 +930,7 @@ describe("addMonthsIso (P3-40 month-end clamp)", () => {
   });
 
   it("lands the +18mo / -12mo search window on the correct boundary from a month-end anchor", async () => {
-    const { addMonthsIso } = await import("./calendar-search-mirror.js");
+    const { addMonthsIso } = await import("./calendar-search-mirror.ts");
     // Aug 31 anchor: +18mo lands in a leap February (29th), -12mo stays on the 31st.
     expect(addMonthsIso("2026-08-31", 18)).toBe("2028-02-29");
     expect(addMonthsIso("2026-08-31", -12)).toBe("2025-08-31");
@@ -939,7 +939,7 @@ describe("addMonthsIso (P3-40 month-end clamp)", () => {
   });
 
   it("leaves non-overflowing dates unchanged", async () => {
-    const { addMonthsIso } = await import("./calendar-search-mirror.js");
+    const { addMonthsIso } = await import("./calendar-search-mirror.ts");
     expect(addMonthsIso("2026-05-12", 18)).toBe("2027-11-12");
     expect(addMonthsIso("2026-05-12", -12)).toBe("2025-05-12");
   });

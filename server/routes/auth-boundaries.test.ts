@@ -90,7 +90,7 @@ vi.mock("../platform/weather.ts", () => ({
   fetchWeather: vi.fn(async () => ({ temp: 0, high: 0, low: 0, summary: "", hourly: [] })),
   geocodeLocation: vi.fn(async () => []),
 }));
-vi.mock("../calendar/calendar.js", () => ({
+vi.mock("../calendar/calendar.ts", () => ({
   fetchCalendar: vi.fn(async () => []),
   getNextWeekRange: vi.fn(() => [0, 0]),
   getTomorrowRange: vi.fn(() => [0, 0]),

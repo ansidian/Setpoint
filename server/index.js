@@ -12,7 +12,7 @@ import authRoutes from "./routes/auth.ts";
 import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.ts";
 import dashboardRoutes from "./routes/dashboard.js";
-import calendarRoutes from "./routes/calendar.js";
+import calendarRoutes from "./routes/calendar.ts";
 import alfredRoutes from "./routes/alfred.js";
 import { startAlfredConversationSweeper, stopAlfredConversationSweeper } from "./alfred/alfred-conversations.js";
 import notesRoutes from "./routes/notes.ts";
@@ -24,7 +24,7 @@ import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.js";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.ts";
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";
-import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
+import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.ts";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
 import { createGracefulShutdown } from "./shutdown.ts";
 import { migrate } from "./db/migrate.ts";
@@ -165,7 +165,7 @@ timeAsync("migrations", () => migrate())
         stopSnoozeWaker,                      // Task 1
         stopTodoistMirrorSyncWorker,          // tasks/todoist-webhook.ts:248
         stopBillsMirrorRefreshWorker,         // Task 1
-        stopCalendarSearchMirrorSyncWorker,   // calendar/calendar-search-mirror.js:159
+        stopCalendarSearchMirrorSyncWorker,   // calendar/calendar-search-mirror:159
         stopNewsPollWorker,                   // news/news-poller.js:249
         stopAlfredConversationSweeper,        // Task 1
       ],

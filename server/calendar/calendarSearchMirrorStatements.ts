@@ -1,23 +1,50 @@
-export function iso(now) {
+import type { InValue } from "@libsql/client";
+import type {
+  CalendarAccount,
+  GoogleCalendarSource,
+  NormalizedCalendarEvent,
+} from "../../shared/types/calendar.ts";
+
+interface MirrorWindow {
+  start: string;
+  end: string;
+}
+
+interface MirrorSyncResponse {
+  nextSyncToken?: string | null;
+  syncToken?: string | null;
+}
+
+export interface CalendarMirrorSqlStatement {
+  sql: string;
+  args: InValue[];
+}
+
+type MirrorStatementAccount = Pick<CalendarAccount, "id"> & Partial<CalendarAccount>;
+type MirrorStatementCalendar = Pick<GoogleCalendarSource, "id"> & Partial<GoogleCalendarSource>;
+
+export type MirrorEvent = Partial<NormalizedCalendarEvent> & { id?: string; is_deleted?: boolean };
+
+export function iso(now: Date) {
   return now.toISOString();
 }
 
-function boolInt(value) {
+function boolInt(value: unknown) {
   return value ? 1 : 0;
 }
 
-export function normalizeText(value) {
+export function normalizeText(value: unknown) {
   return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
 }
 
-function occurrenceKey(event) {
+function occurrenceKey(event: MirrorEvent) {
   return String(event?.originalStartTime || event?.startMs || event?.id || "");
 }
 
-function searchableText(event) {
+function searchableText(event: MirrorEvent) {
   return normalizeText([
     event.title,
     event.location,
@@ -25,7 +52,7 @@ function searchableText(event) {
   ].filter(Boolean).join(" "));
 }
 
-export function mirrorOccurrenceStatement(userId, event, timestamp) {
+export function mirrorOccurrenceStatement(userId: string, event: MirrorEvent, timestamp: string): CalendarMirrorSqlStatement {
   const status = event.status || (event.is_deleted ? "cancelled" : "confirmed");
   const deletedAt = status === "cancelled" || event.is_deleted ? timestamp : null;
   return {
@@ -120,7 +147,13 @@ export function mirrorOccurrenceStatement(userId, event, timestamp) {
   };
 }
 
-export function upsertStateStatement(userId, account, calendar, window, timestamp) {
+export function upsertStateStatement(
+  userId: string,
+  account: MirrorStatementAccount,
+  calendar: MirrorStatementCalendar,
+  window: MirrorWindow,
+  timestamp: string,
+): CalendarMirrorSqlStatement {
   return {
     sql: `INSERT INTO ea_calendar_search_mirror_state
             (user_id, account_id, calendar_id, account_label, account_email,
@@ -149,7 +182,14 @@ export function upsertStateStatement(userId, account, calendar, window, timestam
   };
 }
 
-export function stateSuccessStatement(userId, account, calendar, response, timestamp, isFullSync) {
+export function stateSuccessStatement(
+  userId: string,
+  account: MirrorStatementAccount,
+  calendar: MirrorStatementCalendar,
+  response: MirrorSyncResponse,
+  timestamp: string,
+  isFullSync: boolean,
+): CalendarMirrorSqlStatement {
   return {
     // dirty_since / sync_requested_at are only cleared if they predate this sync's
     // start (`timestamp`). A write that marks the row dirty DURING the fetch sets a
@@ -190,7 +230,12 @@ export function stateSuccessStatement(userId, account, calendar, response, times
   };
 }
 
-export function tombstoneCalendarStatement(userId, account, calendar, timestamp) {
+export function tombstoneCalendarStatement(
+  userId: string,
+  account: MirrorStatementAccount,
+  calendar: MirrorStatementCalendar,
+  timestamp: string,
+): CalendarMirrorSqlStatement {
   return {
     sql: `UPDATE ea_calendar_search_occurrences
           SET status = 'cancelled',
@@ -202,7 +247,13 @@ export function tombstoneCalendarStatement(userId, account, calendar, timestamp)
   };
 }
 
-export function tombstoneRecurringFamilyStatement(userId, account, calendar, event, timestamp) {
+export function tombstoneRecurringFamilyStatement(
+  userId: string,
+  account: MirrorStatementAccount,
+  calendar: MirrorStatementCalendar,
+  event: MirrorEvent,
+  timestamp: string,
+): CalendarMirrorSqlStatement {
   const familyId = String(event.recurringEventId || event.id || "");
   return {
     sql: `UPDATE ea_calendar_search_occurrences
@@ -217,7 +268,7 @@ export function tombstoneRecurringFamilyStatement(userId, account, calendar, eve
   };
 }
 
-export function purgeExpiredTombstonesStatement(userId, cutoff) {
+export function purgeExpiredTombstonesStatement(userId: string, cutoff: string): CalendarMirrorSqlStatement {
   return {
     sql: `DELETE FROM ea_calendar_search_occurrences
           WHERE user_id = ?
@@ -228,7 +279,12 @@ export function purgeExpiredTombstonesStatement(userId, cutoff) {
   };
 }
 
-export function tombstoneUnlistedCalendarStatements(userId, account, calendarId, timestamp) {
+export function tombstoneUnlistedCalendarStatements(
+  userId: string,
+  account: MirrorStatementAccount,
+  calendarId: string,
+  timestamp: string,
+): [CalendarMirrorSqlStatement, CalendarMirrorSqlStatement] {
   return [
     {
       sql: `UPDATE ea_calendar_search_occurrences

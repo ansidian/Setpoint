@@ -1,24 +1,25 @@
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_SPAN_DAYS = 62;
+import type { CalendarRangeValidationResult } from "../../shared/types/calendar.ts";
 
-export function addMonthsIso(isoDate, months) {
-  const [year, month, day] = isoDate.split("-").map(Number);
+export function addMonthsIso(isoDate: string, months: number) {
+  const [year = 0, month = 0, day = 0] = isoDate.split("-").map(Number);
   const targetMonth = month - 1 + months;
   const lastDay = new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate();
   const date = new Date(Date.UTC(year, targetMonth, Math.min(day, lastDay)));
   return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
 }
 
-function pacificDate(now) {
+function pacificDate(now: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
   }).format(now);
 }
 
-export function validateCalendarRange({ start, end } = {}, {
+export function validateCalendarRange({ start, end }: { start?: string; end?: string } = {}, {
   enforceHistoryWindow = false,
   now = new Date(),
-} = {}) {
+}: { enforceHistoryWindow?: boolean; now?: Date } = {}): CalendarRangeValidationResult {
   if (!start) {
     return {
       ok: false,
@@ -52,7 +53,7 @@ export function validateCalendarRange({ start, end } = {}, {
       message: "end must be >= start",
     };
   }
-  const spanDays = Math.round((endDate - startDate) / 86400000);
+  const spanDays = Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
   if (spanDays > MAX_SPAN_DAYS) {
     return {
       ok: false,

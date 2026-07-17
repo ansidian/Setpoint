@@ -1,19 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import express from "express";
 import request from "supertest";
 
 vi.mock("../middleware/auth.ts", () => ({
-  requireCookieSession: (_req, _res, next) => next(),
+  requireCookieSession: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../calendar/calendar.js", async () => {
-  const rangeModel = await import("../calendar/calendar-range-model.js");
-  const searchService = await import("../calendar/calendar-search-service.js");
+vi.mock("../calendar/calendar.ts", async () => {
+  const rangeModel = await import("../calendar/calendar-range-model.ts");
+  const searchService = await import("../calendar/calendar-search-service.ts");
   return {
     fetchCalendar: vi.fn(),
-    pacificDayBoundaries: vi.fn((date) => ({
+    pacificDayBoundaries: vi.fn((date: Date) => ({
       dayStart: new Date(`${date.toISOString().slice(0, 10)}T08:00:00.000Z`),
       dayEnd: new Date(`${date.toISOString().slice(0, 10)}T07:59:59.999Z`),
     })),
@@ -21,7 +21,7 @@ vi.mock("../calendar/calendar.js", async () => {
     createCalendarEvent: vi.fn(),
     updateCalendarEvent: vi.fn(),
     deleteCalendarEvent: vi.fn(),
-    formatCalendarRouteError: vi.fn((err) => ({
+    formatCalendarRouteError: vi.fn((err: Error & { status?: number; code?: string }) => ({
       status: err.status || 500,
       body: { code: err.code || "unknown", message: err.message || "unknown" },
     })),
@@ -30,7 +30,7 @@ vi.mock("../calendar/calendar.js", async () => {
     searchCalendar: searchService.searchCalendar,
   };
 });
-vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
+vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers calendarSearchRange in the route);
   // only the DB-touching functions are stubbed below.
   ...(await importActual()),
@@ -50,7 +50,10 @@ vi.mock("../bills/bills-service.ts", () => ({
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
   scheduleBillsMirrorRefresh: vi.fn(),
-  shouldScheduleImmediateBillsRefresh: (health, now) => {
+  shouldScheduleImmediateBillsRefresh: (
+    health: { state?: string; pendingRefreshAt?: string | null },
+    now?: Date,
+  ) => {
     if (health?.state !== "needs_sync") return false;
     const pendingAt = health?.pendingRefreshAt ? new Date(health.pendingRefreshAt).getTime() : null;
     return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
@@ -80,11 +83,18 @@ vi.mock("../reminders/reminder-hydration.ts", () => ({
 }));
 
 const { loadUserConfig } = await import("../platform/config-service.ts");
-const { fetchCalendar } = await import("../calendar/calendar.js");
-const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js");
+const { fetchCalendar } = await import("../calendar/calendar.ts");
+const calendarSearchMirror = await import("../calendar/calendar-search-mirror.ts");
 const { readCalendarDeadlineRange } = await import("../tasks/deadlines-read.ts");
 const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts");
-const calendarRoutes = (await import("./calendar.js")).default;
+const calendarRoutes = (await import("./calendar.ts")).default;
+const loadUserConfigMock = loadUserConfig as Mock;
+const readCalendarDeadlineRangeMock = readCalendarDeadlineRange as Mock;
+const readBillsMirrorRangeMock = readBillsMirrorRange as Mock;
+const scheduleBillsMirrorRefreshMock = scheduleBillsMirrorRefresh as Mock;
+const listMirrorOccurrencesMock = calendarSearchMirror.listCalendarSearchMirrorOccurrences as Mock;
+const getMirrorHealthMock = calendarSearchMirror.getCalendarSearchMirrorHealth as Mock;
+const requestMirrorSyncMock = calendarSearchMirror.requestCalendarSearchMirrorSync as Mock;
 
 function makeApp() {
   const app = express();
@@ -92,7 +102,7 @@ function makeApp() {
   return app;
 }
 
-function event(overrides = {}) {
+function event(overrides: Record<string, unknown> = {}) {
   return {
     id: "event-1",
     title: "Final presentation",
@@ -132,16 +142,16 @@ describe("GET /api/calendar/search", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
     process.env.EA_USER_ID = "test-user";
-    loadUserConfig.mockResolvedValue({
+    loadUserConfigMock.mockResolvedValue({
       accounts: [
         { id: "gmail-main", type: "gmail", email: "me@example.com", calendar_enabled: 1 },
       ],
       settings: {},
     });
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([event()]);
-    calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValue(currentMirrorHealth);
-    calendarSearchMirror.requestCalendarSearchMirrorSync.mockReturnValue({ queued: true });
-    readCalendarDeadlineRange.mockResolvedValue({
+    listMirrorOccurrencesMock.mockResolvedValue([event()]);
+    getMirrorHealthMock.mockResolvedValue(currentMirrorHealth);
+    requestMirrorSyncMock.mockReturnValue({ queued: true });
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: {
         upcoming: [
           {
@@ -155,14 +165,14 @@ describe("GET /api/calendar/search", () => {
       },
       errors: [],
     });
-    readBillsMirrorRange.mockResolvedValue({
+    readBillsMirrorRangeMock.mockResolvedValue({
       schedules: [],
       recentTransactions: [],
       payeeMap: {},
       actualBudgetUrl: null,
       syncHealth: { state: "current", configured: true },
     });
-    scheduleBillsMirrorRefresh.mockResolvedValue({ pendingRefreshAt: "2026-05-12T18:00:00.000Z" });
+    scheduleBillsMirrorRefreshMock.mockResolvedValue({ pendingRefreshAt: "2026-05-12T18:00:00.000Z" });
   });
 
   afterEach(() => {
@@ -248,7 +258,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("returns completed deadline-history occurrences with domain identity and labels", async () => {
-    readCalendarDeadlineRange.mockResolvedValueOnce({
+    readCalendarDeadlineRangeMock.mockResolvedValueOnce({
       payload: {
         upcoming: [
           {
@@ -299,8 +309,8 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("returns deadline results and requests non-blocking repair when the event mirror is initializing", async () => {
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValueOnce([]);
-    calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValueOnce({
+    listMirrorOccurrencesMock.mockResolvedValueOnce([]);
+    getMirrorHealthMock.mockResolvedValueOnce({
       state: "initializing",
       configured: true,
       severity: "info",
@@ -330,7 +340,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("reports stale mirror coverage while returning usable last-known event rows", async () => {
-    calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValueOnce({
+    getMirrorHealthMock.mockResolvedValueOnce({
       ...currentMirrorHealth,
       state: "stale",
       severity: "warning",
@@ -347,7 +357,7 @@ describe("GET /api/calendar/search", () => {
     const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=final");
 
     expect(res.status).toBe(200);
-    expect(res.body.results.some((result) => result.type === "event")).toBe(true);
+    expect(res.body.results.some((result: Record<string, unknown>) => result.type === "event")).toBe(true);
     expect(res.body.coverage.sources[0]).toMatchObject({
       key: "google_calendar",
       searched: true,
@@ -397,7 +407,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("searches only mirrored bill occurrences and reports mirror coverage", async () => {
-    readBillsMirrorRange.mockResolvedValueOnce({
+    readBillsMirrorRangeMock.mockResolvedValueOnce({
       schedules: [
         {
           id: "schedule-rent:2026-05-15",
@@ -434,7 +444,7 @@ describe("GET /api/calendar/search", () => {
       start: "2026-04-12",
       end: "2027-11-12",
     });
-    expect(res.body.results.map((result) => result.type)).toEqual(["bill", "bill"]);
+    expect(res.body.results.map((result: Record<string, unknown>) => result.type)).toEqual(["bill", "bill"]);
     expect(res.body.results[0]).toMatchObject({
       itemId: "schedule-rent:2026-05-15",
       itemDate: "2026-05-15",
@@ -464,7 +474,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("keeps Calendar Search Ranking and chronological result shape stable with mirror rows", async () => {
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+    listMirrorOccurrencesMock.mockResolvedValue([
       event({
         id: "event-prefix-later",
         title: "Rent review",
@@ -492,7 +502,7 @@ describe("GET /api/calendar/search", () => {
         startMs: Date.parse("2026-05-19T17:00:00.000Z"),
       }),
     ]);
-    readCalendarDeadlineRange.mockResolvedValue({
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
@@ -501,12 +511,12 @@ describe("GET /api/calendar/search", () => {
 
     expect(res.status).toBe(200);
     expect(fetchCalendar).not.toHaveBeenCalled();
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
+    expect(res.body.results.map((result: Record<string, unknown>) => result.itemId)).toEqual([
       "event-field",
       "event-prefix-sooner",
       "event-prefix-later",
     ]);
-    expect(res.body.results.map((result) => result.rankBucket)).toEqual([2, 1, 1]);
+    expect(res.body.results.map((result: Record<string, unknown>) => result.rankBucket)).toEqual([2, 1, 1]);
     expect(res.body.totalMatches).toBe(5);
     expect(res.body.resultCount).toBe(3);
     expect(res.body.truncated).toBe(true);
@@ -524,10 +534,10 @@ describe("GET /api/calendar/search", () => {
       event({ id: "work-yesterday", title: "Work", startMs: Date.parse("2026-05-11T17:00:00.000Z") }),
     ];
     const ascendingMirrorRows = [...oldWorkEvents, ...centeredWorkEvents];
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockImplementationOnce(
+    listMirrorOccurrencesMock.mockImplementationOnce(
       async (_userId, { limit }) => ascendingMirrorRows.slice(0, limit),
     );
-    readCalendarDeadlineRange.mockResolvedValue({
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
@@ -542,8 +552,8 @@ describe("GET /api/calendar/search", () => {
         limit: expect.any(Number),
       }),
     );
-    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences.mock.calls.at(-1)[1].limit).toBeGreaterThan(3);
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
+    expect(listMirrorOccurrencesMock.mock.calls.at(-1)?.[1]?.limit).toBeGreaterThan(3);
+    expect(res.body.results.map((result: Record<string, unknown>) => result.itemId)).toEqual([
       "work-yesterday",
       "work-today",
       "work-tomorrow",
@@ -551,7 +561,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("dedupes mirrored event doubles before applying the visible result limit", async () => {
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+    listMirrorOccurrencesMock.mockResolvedValue([
       event({
         id: "work-google-expanded",
         title: "Work",
@@ -574,7 +584,7 @@ describe("GET /api/calendar/search", () => {
         endMs: Date.parse("2026-05-13T20:45:00.000Z"),
       }),
     ]);
-    readCalendarDeadlineRange.mockResolvedValue({
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
@@ -582,7 +592,7 @@ describe("GET /api/calendar/search", () => {
     const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=2");
 
     expect(res.status).toBe(200);
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
+    expect(res.body.results.map((result: Record<string, unknown>) => result.itemId)).toEqual([
       "work-google-expanded",
       "work-next-day",
     ]);
@@ -592,7 +602,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("dedupes overlapping same-day mirrored event doubles even when their end times differ", async () => {
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+    listMirrorOccurrencesMock.mockResolvedValue([
       event({
         id: "work-short",
         title: "Work",
@@ -612,7 +622,7 @@ describe("GET /api/calendar/search", () => {
         endMs: Date.parse("2026-05-13T20:45:00.000Z"),
       }),
     ]);
-    readCalendarDeadlineRange.mockResolvedValue({
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
@@ -620,7 +630,7 @@ describe("GET /api/calendar/search", () => {
     const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=3");
 
     expect(res.status).toBe(200);
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
+    expect(res.body.results.map((result: Record<string, unknown>) => result.itemId)).toEqual([
       "work-short",
       "work-next-day",
     ]);
@@ -629,7 +639,7 @@ describe("GET /api/calendar/search", () => {
   });
 
   it("does not match Google events by calendar source label alone", async () => {
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+    listMirrorOccurrencesMock.mockResolvedValue([
       event({
         id: "source-only",
         title: "asdasd",
@@ -645,7 +655,7 @@ describe("GET /api/calendar/search", () => {
         startMs: Date.parse("2026-05-13T17:00:00.000Z"),
       }),
     ]);
-    readCalendarDeadlineRange.mockResolvedValue({
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
@@ -653,11 +663,11 @@ describe("GET /api/calendar/search", () => {
     const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=5");
 
     expect(res.status).toBe(200);
-    expect(res.body.results.map((result) => result.itemId)).toEqual(["title-match"]);
+    expect(res.body.results.map((result: Record<string, unknown>) => result.itemId)).toEqual(["title-match"]);
   });
 
   it("uses explicit event colors before calendar source colors in search results", async () => {
-    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValueOnce([
+    listMirrorOccurrencesMock.mockResolvedValueOnce([
       event({
         id: "event-explicit-color",
         title: "Rent review",
@@ -666,7 +676,7 @@ describe("GET /api/calendar/search", () => {
         color: "#d50000",
       }),
     ]);
-    readCalendarDeadlineRange.mockResolvedValue({
+    readCalendarDeadlineRangeMock.mockResolvedValue({
       payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
