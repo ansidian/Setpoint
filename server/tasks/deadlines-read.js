@@ -11,7 +11,7 @@ import {
   TODOIST_DEADLINE_SOURCE_LABEL,
 } from "../../shared/deadline-source-colors.ts";
 import { computeDeadlineStats } from "./deadline-helpers.js";
-import { hydrateTodoistTasksWithReminderState } from "../reminders/reminder-hydration.js";
+import { hydrateTodoistTasksWithReminderState } from "../reminders/reminder-hydration.ts";
 import { hydrateRecurringTombstones } from "./tombstones.js";
 
 function unavailableTodoistHealth(err) {

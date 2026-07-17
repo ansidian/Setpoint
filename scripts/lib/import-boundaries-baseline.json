@@ -26,8 +26,8 @@
       "*"
     ],
     "reminders": [
-      "reminder-service.js",
-      "reminder-scheduler.js"
+      "reminder-service.ts",
+      "reminder-scheduler.ts"
     ],
     "snapshots": [
       "snapshot-service.js",
@@ -52,7 +52,7 @@
     "server/bills/billsMirrorModel.js -> server/actual/actual-bill-occurrences.js",
     "server/bills/billsMirrorModel.js -> server/actual/actual-metadata-projection.js",
     "server/bills/statementActualStatusModel.js -> server/actual/scheduleMatchModel.js",
-    "server/dashboard/current-service.js -> server/reminders/reminder-hydration.js",
+    "server/dashboard/current-service.js -> server/reminders/reminder-hydration.ts",
     "server/dashboard/current-service.js -> server/tasks/deadline-helpers.js",
     "server/dashboard/current-service.js -> server/tasks/todoist.js",
     "server/email/email-service.js -> server/snapshots/snapshot-lifecycle.js",
@@ -60,15 +60,14 @@
     "server/routes/alfred.js -> server/email/html-to-text.js",
     "server/routes/alfred.js -> server/email/search/email-search-retrieval.js",
     "server/routes/briefing/email-index.js -> server/email/email-index.js",
-    "server/routes/calendar.js -> server/reminders/reminder-hydration.js",
-    "server/routes/reminders.js -> server/reminders/discord-reminders.js",
+    "server/routes/calendar.js -> server/reminders/reminder-hydration.ts",
     "server/snapshots/snapshot-service.js -> server/email/email-fetch.js",
     "server/snapshots/snapshot-service.js -> server/email/email-index.js",
     "server/snapshots/snapshot-service.js -> server/email/pinned-emails.js",
     "server/snapshots/snapshot-triage-attachment.js -> server/email/email-index.js",
     "server/snapshots/snapshotStore.js -> server/triage/triage-mode.js",
     "server/snapshots/snooze-waker.js -> server/email/gmail.js",
-    "server/tasks/deadlines-read.js -> server/reminders/reminder-hydration.js",
+    "server/tasks/deadlines-read.js -> server/reminders/reminder-hydration.ts",
     "server/triage/triage-model-client.js -> server/bills/bill-extractors/catalog.js",
     "server/triage/triage-model-client.js -> server/email/email-ai-models.js",
     "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js",

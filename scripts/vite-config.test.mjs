@@ -14,6 +14,6 @@ describe("manualChunks", () => {
   });
 
   it("leaves application modules to the default chunking strategy", () => {
-    expect(manualChunks("/app/src/components/notes/NotesTab.jsx")).toBeUndefined();
+    expect(manualChunks("/app/src/components/notes/NotesTab.tsx")).toBeUndefined();
   });
 });

@@ -111,7 +111,7 @@ vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
-vi.mock("../reminders/discord-reminders.js", () => ({
+vi.mock("../reminders/discord-reminders.ts", () => ({
   formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "Setpoint reminder test" }] })),
   sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
 }));
@@ -136,8 +136,8 @@ const emailService = await import("../email/email-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
 const accountsRoutes = (await import("./accounts.ts")).default;
-const notesRoutes = (await import("./notes.js")).default;
-const discordReminders = await import("../reminders/discord-reminders.js");
+const notesRoutes = (await import("./notes.ts")).default;
+const discordReminders = await import("../reminders/discord-reminders.ts");
 const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,

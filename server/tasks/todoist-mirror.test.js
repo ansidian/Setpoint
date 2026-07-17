@@ -12,12 +12,12 @@ vi.mock("../db/connection.ts", () => ({
   },
 }));
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value) => value }));
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   deleteSourceReminders: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
 }));
 
-const reminderService = await import("../reminders/reminder-service.js");
+const reminderService = await import("../reminders/reminder-service.ts");
 const {
   getTodoistMirrorHealth,
   listTodoistMirrorActiveTaskIds,

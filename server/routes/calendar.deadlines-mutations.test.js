@@ -47,11 +47,11 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   deleteSourceReminders: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
 }));
-vi.mock("../reminders/reminder-hydration.js", () => ({
+vi.mock("../reminders/reminder-hydration.ts", () => ({
   calendarEventAnchorAt: vi.fn(),
   hydrateCalendarEventsWithReminderState: vi.fn(async (_userId, events) => events),
 }));

@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RailAction } from "../components/calendar/DetailRailPrimitives.jsx";
 import { openInNewTab } from "../components/calendar/views/deadlines/deadlinesModel.js";
-import { linkifyText } from "../components/notes/notesUtils.jsx";
+import { linkifyText } from "../components/notes/notesUtils";
 import { getGmailUrl } from "../lib/email-links";
 import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "./demoSafeLocalStorage.js";
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bell, X } from "lucide-react";
 import { ActionButton } from "../../calendar/events/CalendarEditorControls";
-import ReminderDateTimePicker from "../../calendar/reminders/ReminderDateTimePicker.jsx";
+import ReminderDateTimePicker from "../../calendar/reminders/ReminderDateTimePicker.tsx";
 import {
   projectTodoistReminderChips,
   TODOIST_REMINDER_PRESETS,

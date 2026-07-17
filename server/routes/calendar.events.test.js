@@ -80,7 +80,7 @@ vi.mock("../tasks/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   recomputeUnsentRemindersForSource: vi.fn(),
   deleteSourceReminders: vi.fn(),
   listUpcomingReminderStatesForSources: vi.fn().mockResolvedValue(new Map()),
@@ -100,7 +100,7 @@ const {
   suggestGooglePlaces,
   getGooglePlaceDetails,
 } = await import("../platform/google-places.ts");
-const reminderService = await import("../reminders/reminder-service.js");
+const reminderService = await import("../reminders/reminder-service.ts");
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {

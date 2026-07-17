@@ -25,6 +25,32 @@ import type {
   SettingsPatchRequest,
   SettingsResponse,
 } from "../shared/types/settings.ts";
+import type {
+  CreateNewsSourceRequest,
+  CreateNewsSourceResponse,
+  CreateNewsTopicResponse,
+  ImportNewsTopicsResponse,
+  MarkNewsSeenResponse,
+  NewsCatalogResponse,
+  NewsMutationResponse,
+  NewsPageEnvelope,
+  NewsSourcePreview,
+  RefreshNewsResponse,
+  UpdateNewsSourceRequest,
+} from "../shared/types/news.ts";
+import type {
+  Note,
+  NoteId,
+  NoteMutationResponse,
+} from "../shared/types/notes.ts";
+import type {
+  CreateReminderRequest,
+  CreateReminderResponse,
+  DiscordReminderTestResponse,
+  ReminderListOptions,
+  ReminderListResponse,
+  ReminderMutationResponse,
+} from "../shared/types/reminders.ts";
 
 type ApiId = string | number;
 type ApiFetchOptions = RequestInit & {
@@ -63,12 +89,6 @@ type CalendarSearchOptions = {
 };
 
 type SignalOptions = { signal?: AbortSignal };
-
-type ReminderListOptions = {
-  sourceType?: string;
-  sourceItemId?: string;
-  sourceOccurrenceId?: string;
-};
 
 type AlfredStreamOptions = {
   message: string;
@@ -461,16 +481,16 @@ export const removeAccount = (id: ApiId): Promise<AccountMutationResponse> => ap
 export const reorderAccounts = (order: AccountId[]): Promise<AccountMutationResponse> => apiFetch("/api/ea/accounts/reorder", { method: "PATCH", body: JSON.stringify({ order }) });
 export const getSettings = (): Promise<SettingsResponse> => apiFetch("/api/ea/settings");
 export const updateSettings = (data: SettingsPatchRequest): Promise<SettingsMutationResponse> => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
-export const testDiscordReminderWebhook = (): Promise<unknown> => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
-export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderListOptions = {}): Promise<unknown> => {
+export const testDiscordReminderWebhook = (): Promise<DiscordReminderTestResponse> => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
+export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderListOptions = {}): Promise<ReminderListResponse> => {
   const params = new URLSearchParams();
   if (sourceType) params.set("sourceType", sourceType);
   if (sourceItemId) params.set("sourceItemId", sourceItemId);
   if (sourceOccurrenceId) params.set("sourceOccurrenceId", sourceOccurrenceId);
   return apiFetch(`/api/ea/reminders?${params.toString()}`);
 };
-export const createReminder = (data: unknown): Promise<unknown> => apiFetch("/api/ea/reminders", { method: "POST", body: JSON.stringify(data) });
-export const deleteReminder = (id: ApiId): Promise<unknown> => apiFetch(`/api/ea/reminders/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const createReminder = (data: CreateReminderRequest): Promise<CreateReminderResponse> => apiFetch("/api/ea/reminders", { method: "POST", body: JSON.stringify(data) });
+export const deleteReminder = (id: ApiId): Promise<ReminderMutationResponse> => apiFetch(`/api/ea/reminders/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const geocodeLocation = (q: string): Promise<GeocodeResult[]> => apiFetch(`/api/ea/geocode?q=${encodeURIComponent(q)}`);
 export const skipSchedule = (index: number, skip = true): Promise<ScheduleSkipResponse> => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
 export const getModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/models");
@@ -521,37 +541,37 @@ export const getImportantSenders = (): Promise<ImportantSender[]> => apiFetch("/
 export const updateImportantSenders = (senders: ImportantSender[]): Promise<SettingsMutationResponse> => apiFetch("/api/ea/important-senders", { method: "PUT", body: JSON.stringify({ senders }) });
 
 // Notes
-export const getNotes = (): Promise<unknown> => apiFetch("/api/notes");
-export const createNote = (content: string): Promise<unknown> => apiFetch("/api/notes", { method: "POST", body: JSON.stringify({ content }) });
-export const updateNote = (id: ApiId, content: string): Promise<unknown> => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ content }) });
-export const deleteNote = (id: ApiId): Promise<unknown> => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" });
-export const reorderNotes = (noteIds: ApiId[]): Promise<unknown> => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
-export const archiveNote = (id: ApiId, archived: boolean): Promise<unknown> =>
+export const getNotes = (): Promise<Note[]> => apiFetch("/api/notes");
+export const createNote = (content: string): Promise<Note> => apiFetch("/api/notes", { method: "POST", body: JSON.stringify({ content }) });
+export const updateNote = (id: NoteId, content: string): Promise<NoteMutationResponse> => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ content }) });
+export const deleteNote = (id: NoteId): Promise<NoteMutationResponse> => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const reorderNotes = (noteIds: NoteId[]): Promise<NoteMutationResponse> => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
+export const archiveNote = (id: NoteId, archived: boolean): Promise<NoteMutationResponse> =>
   apiFetch(`/api/notes/${encodeURIComponent(id)}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) });
 
 // News
-export const getNews = (): Promise<unknown> => apiFetch("/api/news");
-export const getNewsCatalog = (): Promise<unknown> => apiFetch("/api/news/catalog");
-export const markNewsSeen = (at: string): Promise<unknown> =>
+export const getNews = (): Promise<NewsPageEnvelope> => apiFetch("/api/news");
+export const getNewsCatalog = (): Promise<NewsCatalogResponse> => apiFetch("/api/news/catalog");
+export const markNewsSeen = (at: string): Promise<MarkNewsSeenResponse> =>
   apiFetch("/api/news/seen", { method: "POST", body: JSON.stringify({ at }) });
-export const refreshNews = (): Promise<unknown> => apiFetch("/api/news/refresh", { method: "POST" });
-export const createNewsTopic = (name: string): Promise<unknown> =>
+export const refreshNews = (): Promise<RefreshNewsResponse> => apiFetch("/api/news/refresh", { method: "POST" });
+export const createNewsTopic = (name: string): Promise<CreateNewsTopicResponse> =>
   apiFetch("/api/news/topics", { method: "POST", body: JSON.stringify({ name }) });
-export const renameNewsTopic = (id: ApiId, name: string): Promise<unknown> =>
+export const renameNewsTopic = (id: ApiId, name: string): Promise<NewsMutationResponse> =>
   apiFetch(`/api/news/topics/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
-export const updateNewsTopicMutedTerms = (id: ApiId, mutedTerms: string[]): Promise<unknown> =>
+export const updateNewsTopicMutedTerms = (id: ApiId, mutedTerms: string[]): Promise<NewsMutationResponse> =>
   apiFetch(`/api/news/topics/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ mutedTerms }) });
-export const reorderNewsTopics = (ids: ApiId[]): Promise<unknown> =>
+export const reorderNewsTopics = (ids: ApiId[]): Promise<NewsMutationResponse> =>
   apiFetch("/api/news/topics/reorder", { method: "POST", body: JSON.stringify({ ids }) });
-export const deleteNewsTopic = (id: ApiId): Promise<unknown> =>
+export const deleteNewsTopic = (id: ApiId): Promise<NewsMutationResponse> =>
   apiFetch(`/api/news/topics/${encodeURIComponent(id)}`, { method: "DELETE" });
-export const importNewsStarterTopics = (names: string[]): Promise<unknown> =>
+export const importNewsStarterTopics = (names: string[]): Promise<ImportNewsTopicsResponse> =>
   apiFetch("/api/news/topics/import-starter", { method: "POST", body: JSON.stringify({ names }) });
-export const previewNewsSource = (url: string): Promise<unknown> =>
+export const previewNewsSource = (url: string): Promise<NewsSourcePreview> =>
   apiFetch("/api/news/sources/preview", { method: "POST", body: JSON.stringify({ url }) });
-export const createNewsSource = (data: unknown): Promise<unknown> =>
+export const createNewsSource = (data: CreateNewsSourceRequest): Promise<CreateNewsSourceResponse> =>
   apiFetch("/api/news/sources", { method: "POST", body: JSON.stringify(data) });
-export const updateNewsSource = (id: ApiId, data: unknown): Promise<unknown> =>
+export const updateNewsSource = (id: ApiId, data: UpdateNewsSourceRequest): Promise<NewsMutationResponse> =>
   apiFetch(`/api/news/sources/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
-export const deleteNewsSource = (id: ApiId): Promise<unknown> =>
+export const deleteNewsSource = (id: ApiId): Promise<NewsMutationResponse> =>
   apiFetch(`/api/news/sources/${encodeURIComponent(id)}`, { method: "DELETE" });

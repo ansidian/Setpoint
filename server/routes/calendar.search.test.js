@@ -70,11 +70,11 @@ vi.mock("../platform/google-places.ts", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
 }));
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   recomputeUnsentRemindersForSource: vi.fn(),
   deleteSourceReminders: vi.fn(),
 }));
-vi.mock("../reminders/reminder-hydration.js", () => ({
+vi.mock("../reminders/reminder-hydration.ts", () => ({
   calendarEventAnchorAt: vi.fn(),
   hydrateCalendarEventsWithReminderState: vi.fn(async (_userId, events) => events),
 }));

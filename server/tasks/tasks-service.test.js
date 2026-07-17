@@ -24,13 +24,13 @@ vi.mock("./todoist.js", () => ({
   createTodoistTask: vi.fn(),
   updateTodoistTask: vi.fn(),
 }));
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   deleteSourceReminders: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
 }));
 
 const todoist = await import("./todoist.js");
-const reminderService = await import("../reminders/reminder-service.js");
+const reminderService = await import("../reminders/reminder-service.ts");
 const {
   completeDeadlineOccurrence,
   createDeadline,

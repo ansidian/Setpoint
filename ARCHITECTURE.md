@@ -268,7 +268,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useIsMobile` | `src/hooks/useIsMobile.js` |
 | `useKeyHold` | `src/hooks/useKeyHold.js` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.js` |
-| `useNews` | `src/hooks/useNews.js` |
 | `useNotifications` | `src/hooks/useNotifications.js` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.js` |
 | `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.js` |
@@ -766,30 +765,7 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.js` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.js` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.js` |
-| GET | `/api/news/` | `server/routes/news.js` |
-| GET | `/api/news/catalog` | `server/routes/news.js` |
-| POST | `/api/news/refresh` | `server/routes/news.js` |
-| POST | `/api/news/seen` | `server/routes/news.js` |
-| POST | `/api/news/sources` | `server/routes/news.js` |
-| DELETE | `/api/news/sources/:id` | `server/routes/news.js` |
-| PATCH | `/api/news/sources/:id` | `server/routes/news.js` |
-| POST | `/api/news/sources/preview` | `server/routes/news.js` |
-| POST | `/api/news/topics` | `server/routes/news.js` |
-| DELETE | `/api/news/topics/:id` | `server/routes/news.js` |
-| PATCH | `/api/news/topics/:id` | `server/routes/news.js` |
-| POST | `/api/news/topics/import-starter` | `server/routes/news.js` |
-| POST | `/api/news/topics/reorder` | `server/routes/news.js` |
-| GET | `/api/notes/` | `server/routes/notes.js` |
-| POST | `/api/notes/` | `server/routes/notes.js` |
-| DELETE | `/api/notes/:id` | `server/routes/notes.js` |
-| PATCH | `/api/notes/:id` | `server/routes/notes.js` |
-| PATCH | `/api/notes/:id/archive` | `server/routes/notes.js` |
-| PATCH | `/api/notes/reorder` | `server/routes/notes.js` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.js` |
-| GET | `/reminders` | `server/routes/reminders.js` |
-| POST | `/reminders` | `server/routes/reminders.js` |
-| DELETE | `/reminders/:id` | `server/routes/reminders.js` |
-| POST | `/settings/discord-reminder-test` | `server/routes/reminders.js` |
 <!-- END:routes -->
 
 ### Auth

@@ -71,7 +71,7 @@ vi.mock("../inbox/InboxView", () => ({
 vi.mock("../notes/NotesTab", () => ({
   default: () => <div data-testid="notes-tab-stub" />,
 }));
-vi.mock("../news/NewsTab.jsx", () => ({
+vi.mock("../news/NewsTab", () => ({
   default: () => <div data-testid="news-tab-stub" />,
 }));
 vi.mock("../alfred/AlfredPanel", () => ({ default: () => null }));

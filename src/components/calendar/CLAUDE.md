@@ -36,7 +36,7 @@ Calendar UI root: `CalendarModal.jsx` is the entry point (named for history; the
 - `useCalendarGhostPreview.js` — combined ghost previews with auto-navigation
 
 ### Reminders
-- `reminders/ReminderDateTimePicker.jsx` — date/time picker for reminder scheduling
+- `reminders/ReminderDateTimePicker.tsx` — date/time picker for reminder scheduling
 
 ### Shared test infrastructure
 - `CalendarModal.test-setup.js` — mocks calendar sources and Todoist API

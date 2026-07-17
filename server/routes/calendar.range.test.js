@@ -83,7 +83,7 @@ vi.mock("../tasks/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   deleteSourceReminders: vi.fn(),
   listUpcomingReminderStatesForSources: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
@@ -102,7 +102,7 @@ const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRe
 const { queryTransactions } = await import("../transactions/transactions-service.js");
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js");
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.js");
-const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.js");
+const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.ts");
 const db = (await import("../db/connection.ts")).default;
 const calendarRoutes = (await import("./calendar.js")).default;
 

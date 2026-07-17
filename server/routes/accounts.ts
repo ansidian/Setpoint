@@ -12,7 +12,7 @@ import { queueEmailIndexBackfill } from "../email/email-index.js";
 import { wakeEmailBackfillWorker } from "../email/email-backfill-worker.js";
 import { canonicalizeConfiguredAccounts } from "../platform/account-canonical.ts";
 import settingsRoutes from "./settings.ts";
-import remindersRoutes from "./reminders.js";
+import remindersRoutes from "./reminders.ts";
 import type {
   AccountId,
   AccountMutationResponse,

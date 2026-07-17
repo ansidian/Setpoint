@@ -30,7 +30,7 @@ const importInboxView = () => import("../inbox/InboxView");
 const InboxView = lazy(importInboxView);
 const importNotesTab = () => import("../notes/NotesTab");
 const NotesTab = lazy(importNotesTab);
-const importNewsTab = () => import("../news/NewsTab.jsx");
+const importNewsTab = () => import("../news/NewsTab");
 const NewsTab = lazy(importNewsTab);
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 

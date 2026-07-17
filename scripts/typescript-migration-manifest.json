@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 1094,
+  "remainingLegacyFiles": 1034,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -50,6 +50,17 @@
     "server/routes/settings.ts",
     "server/routes/settings.test.ts",
     "server/routes/accounts.ts",
-    "server/routes/accounts.oauth.test.ts"
+    "server/routes/accounts.oauth.test.ts",
+    "server/news",
+    "server/routes/news.ts",
+    "server/routes/news.test.ts",
+    "src/hooks/useNews.ts",
+    "src/components/news",
+    "server/routes/notes.ts",
+    "server/routes/notes.test.ts",
+    "src/components/notes",
+    "server/reminders",
+    "server/routes/reminders.ts",
+    "src/components/calendar/reminders/ReminderDateTimePicker.tsx"
   ]
 }

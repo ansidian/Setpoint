@@ -256,7 +256,7 @@ body {
 }
 
 /* Notes search input: match the CM capture field placeholder (.cm-placeholder in
-   noteEditorExtensions.js noteTheme) so both notes placeholders read identically.
+   noteEditorExtensions.ts noteTheme) so both notes placeholders read identically.
    opacity:1 stops Firefox/UA from dimming the already-faint token further. */
 .notes-search-input::placeholder {
   color: var(--color-text-faint);

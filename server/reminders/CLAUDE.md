@@ -1,14 +1,14 @@
 # Server Reminders Map
 
-Reminder domain: CRUD, schedule persistence, trigger firing, and notification formatting. Entry point for routes is `reminder-service.js`; `reminder-scheduler.js` exposes the background batch hook consumed by `server/scheduler.ts`.
+Reminder domain: CRUD, schedule persistence, trigger firing, and notification formatting. Entry point for routes is `reminder-service.ts`; `reminder-scheduler.ts` exposes the background batch hook consumed by `server/scheduler.ts`.
 
 ## Files
 
-- `reminder-service.js` — public reminders API: CRUD, schedules, triggers
-- `reminder-scheduler.js` — persists schedules, arms timers, fires notifications
-- `reminder-model.js` — reminder validation/normalization: anchor kinds, missed-grace, Pacific TZ
-- `reminder-hydration.js` — hydrates tasks/events with reminder state and next trigger
-- `discord-reminders.js` — formats reminder payloads as Discord embeds
+- `reminder-service.ts` — public reminders API: CRUD, schedules, triggers
+- `reminder-scheduler.ts` — persists schedules, arms timers, fires notifications
+- `reminder-model.ts` — reminder validation/normalization: anchor kinds, missed-grace, Pacific TZ
+- `reminder-hydration.ts` — hydrates tasks/events with reminder state and next trigger
+- `discord-reminders.ts` — formats reminder payloads as Discord embeds
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
@@ -19,5 +19,5 @@ Reminder domain: CRUD, schedule persistence, trigger firing, and notification fo
 
 ## Related
 
-- `server/routes/reminders.js` — HTTP surface
+- `server/routes/reminders.ts` — HTTP surface
 - `server/scheduler.ts` — fires `processDueReminderBatch` on cron

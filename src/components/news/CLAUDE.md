@@ -1,25 +1,25 @@
 # News Map
 
 The News tab: a fifth shell tab, topic-sectioned RSS/HN headline river with a
-seen-marker divider and an in-tab source manager. Entry point is `NewsTab.jsx`
+seen-marker divider and an in-tab source manager. Entry point is `NewsTab.tsx`
 (mounted as a lazy `KeepAliveTab` by `DashboardShell`, first-visit-gated like
 calendar since it triggers a real fetch on mount). Desktop-only in v1.
 
 ## Files
 
 ### Tab + reading surface
-- `NewsTab.jsx` — owns `useNews`, the held seen-divider marker (adjusted
+- `NewsTab.tsx` — owns `useNews`, the held seen-divider marker (adjusted
   during render on a `news` identity change — not an effect, to satisfy the
   repo's ref/set-state-in-effect lint rules), the manage-panel open state, and
   the seen-marker bump-on-leave/pagehide lifecycle; also owns the persisted
   All/New mode (localStorage `news.hideSeen`), the mark-caught-up action
   (fire-and-forget `markNewsSeen(now)` + immediate local re-split), and the
   source-manager target topic. The manager closes when the tab becomes inactive.
-- `NewsView.jsx` — sticky toolbar (new-count summary, truthful last-check time,
+- `NewsView.tsx` — sticky toolbar (new-count summary, truthful last-check time,
   All/New segmented control, Mark caught up, refresh, Sources) + a sticky topic
   index beside stable full-width topic bands; loading skeleton (static bars, no
   spinner), error/first-run empty states
-- `NewsTopicSection.jsx` — one sentence-case topic band with a "{n} new" accent
+- `NewsTopicSection.tsx` — one sentence-case topic band with a "{n} new" accent
   pill, actionable source-health status, a lead lane (newest fresh item, or
   newest item at all when quiet), compact headline lane, and the seen
   divider (only when both fresh and visible-older are non-empty), then older
@@ -27,7 +27,7 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
   from `planTopicSection` (owns the caps + lead/divider/older split, and the
   hide-seen branch); no-items topics show "No stories yet", quiet topics
   under hide-seen show a "Caught up" stub instead of their old rows
-- `NewsItemRow.jsx` — one headline; the whole row is the link
+- `NewsItemRow.tsx` — one headline; the whole row is the link
   (`target="_blank"`), hover/focus styling via `.news-row` in `index.css`
   (row tint + title→accent). Title color lives on `.news-row` (inherited by
   `.news-row-title` via `color: inherit`, not an inline span style), so a
@@ -39,7 +39,7 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
   (DuckDuckGo icon service, hidden on error) + source + relative time
 
 ### Manage panel
-- `NewsManagePanel.jsx` — modal right-side slide-over (`createPortal` to
+- `NewsManagePanel.tsx` — modal right-side slide-over (`createPortal` to
   `document.body`, `useDismissablePortal`) with contained focus, a topic
   overview, and focused per-topic detail (including direct open from a health
   cue). It keeps the existing topic create/rename/reorder/delete
@@ -48,18 +48,18 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
   chips (add via a "Mute keyword…" input, remove via chip ×, both calling
   `updateNewsTopicMutedTerms`), mounts `NewsCatalogPicker` when the owner has
   zero topics
-- `NewsAddSourceForm.jsx` — paste-URL → `previewNewsSource` → confirm
+- `NewsAddSourceForm.tsx` — paste-URL → `previewNewsSource` → confirm
   (`createNewsSource`), with an "HN keyword" mode toggle for query + points
-- `NewsCatalogPicker.jsx` — starter-bundle checkboxes (topic name + source
+- `NewsCatalogPicker.tsx` — starter-bundle checkboxes (topic name + source
   count) → `importNewsStarterTopics`; also the first-run empty-state body
-- `manageUi.jsx` — shared `ManageButton` (150ms hover/focus motion, matches
+- `manageUi.tsx` — shared `ManageButton` (150ms hover/focus motion, matches
   every other enabled control here)
-- `manageStyles.js` — shared `manageInputStyle`; split out of `manageUi.jsx`
+- `manageStyles.ts` — shared `manageInputStyle`; split out of `manageUi.tsx`
   because `react-refresh/only-export-components` forbids mixing a component
   export with a plain constant in one file
 
 ### Model
-- `newsPageModel.js` — pure client view rules: `splitItemsBySeen` (fresh vs
+- `newsPageModel.ts` — pure client view rules: `splitItemsBySeen` (fresh vs
   older around the divider timestamp), `resolveDividerMarker` (hold the first
   non-null server marker for the whole visit), `displayExcerpt` (suppress
   link-aggregator boilerplate), `describeSourceHealth` (generic failure at 5+
@@ -74,7 +74,7 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
 ## Local patterns
 
 - The server shapes the page payload (`buildNewsPagePayload` in
-  `server/news/news-model.js`); this directory owns only presentation splits
+  `server/news/news-model.ts`); this directory owns only presentation splits
   that depend on client-side visit state (the divider).
 - `useDismissablePortal` here uses a single panel ref plus `onActivate` and
   `onTabKey` for modal focus entry/containment; there is no anchor because the
@@ -87,8 +87,8 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
 ## Related
 
 - `server/news/` — poller, models, and the API this tab consumes (see its map)
-- `server/routes/news.js` — HTTP surface
-- `src/hooks/useNews.js` — data hook (initial load, tab-visibility background
+- `server/routes/news.ts` — HTTP surface
+- `src/hooks/useNews.ts` — data hook (initial load, tab-visibility background
   refetch, manual refresh)
 - `src/components/dashboard/DashboardShell.jsx` — mounts `NewsTab` as a
   `KeepAliveTab` (key `5`)

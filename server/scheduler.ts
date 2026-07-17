@@ -17,7 +17,7 @@ import {
   pruneCompletedTriageJobs,
 } from "./triage/triage-worker.js";
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.js";
-import { processDueReminderBatch } from "./reminders/reminder-scheduler.js";
+import { processDueReminderBatch } from "./reminders/reminder-scheduler.ts";
 import { createSchedulerWorkRegistry } from "./scheduler-work-registry.ts";
 import {
   createEmailTriageDeadlineController,

@@ -27,7 +27,7 @@ vi.mock("./tombstones.js", () => ({
   hydrateRecurringTombstones: (...args) => testState.hydrateRecurringTombstones(...args),
 }));
 
-vi.mock("../reminders/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.ts", () => ({
   listUpcomingReminderStatesForSources: (...args) => testState.listUpcomingReminderStatesForSources(...args),
   reminderSourceKey: ({ sourceType, sourceItemId, sourceOccurrenceId = null }) => (
     `${sourceType}:${sourceItemId}:${sourceOccurrenceId || ""}`
