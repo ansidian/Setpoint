@@ -14,16 +14,67 @@ export interface TriageSoundTriggerSetting {
   soundId: string;
 }
 
+export type TriageSoundLaneScope = "needs_attention_only" | "needs_attention_and_fyi";
+export type TriageSoundTriggerKey =
+  | "needs_attention_finalized"
+  | "email_queued"
+  | "fyi_finalized"
+  | "weak_security_grace"
+  | "triage_failed"
+  | "event_upcoming"
+  | "task_completed";
+
 export interface TriageSoundSettings {
-  laneScope: string;
+  laneScope: TriageSoundLaneScope;
   volume: number;
-  triggers: Record<string, TriageSoundTriggerSetting>;
+  triggers: Record<TriageSoundTriggerKey, TriageSoundTriggerSetting>;
 }
 
 export interface TriageNotificationSound {
   id: string;
   label: string;
   path: string;
+}
+
+export interface TriageCacheTierStats {
+  calls: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+  estimatedSavingsUsd: number;
+}
+
+export interface TriageCacheStatsWindow {
+  windowDays: number | null;
+  windowLabel: string | null;
+  generatedAt?: string;
+  openaiCalls: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+  estimatedSavingsUsd: number;
+  hitRate: number;
+  lastTriagedAt?: string | null;
+  models?: string[];
+  byTier?: {
+    cheap: TriageCacheTierStats;
+    strong: TriageCacheTierStats;
+  };
+}
+
+export interface TriageCacheStatsResponse extends TriageCacheStatsWindow {
+  generatedAt: string;
+  lastTriagedAt: string | null;
+  models: string[];
+  byTier: {
+    cheap: TriageCacheTierStats;
+    strong: TriageCacheTierStats;
+  };
+  comparisonWindows: {
+    monthToDate: TriageCacheStatsWindow;
+  };
 }
 
 export type BillPayMatcher = string | string[];

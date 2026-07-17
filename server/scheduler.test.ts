@@ -28,12 +28,12 @@ const reminderSchedulerApi = vi.hoisted(() => ({
 vi.mock("node-cron", () => ({ default: cronApi }));
 vi.mock("./db/connection.ts", () => ({ default: mockDb }));
 vi.mock("./platform/config-service.ts", () => configApi);
-vi.mock("./email/email-fetch.js", () => emailFetchApi);
+vi.mock("./email/email-fetch.ts", () => emailFetchApi);
 vi.mock("./snapshots/snapshot-service.ts", () => snapshotApi);
-vi.mock("./email/email-index.js", () => ({ indexEmails: vi.fn() }));
-vi.mock("./email/gmail-sync.js", () => gmailSyncApi);
-vi.mock("./triage/triage-worker.js", () => triageWorkerApi);
-vi.mock("./email/search/email-search-embedding-worker.js", () => embeddingWorkerApi);
+vi.mock("./email/email-index.ts", () => ({ indexEmails: vi.fn() }));
+vi.mock("./email/gmail-sync.ts", () => gmailSyncApi);
+vi.mock("./triage/triage-worker.ts", () => triageWorkerApi);
+vi.mock("./email/search/email-search-embedding-worker.ts", () => embeddingWorkerApi);
 vi.mock("./reminders/reminder-scheduler.ts", () => reminderSchedulerApi);
 
 const {

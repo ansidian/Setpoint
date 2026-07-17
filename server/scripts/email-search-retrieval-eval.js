@@ -1,12 +1,12 @@
 import "dotenv/config";
 import { readFile } from "fs/promises";
 import db from "../db/connection.ts";
-import { searchEmails } from "../email/email-service.js";
+import { searchEmails } from "../email/email-service.ts";
 import {
   createSyntheticEvalRetriever,
   evaluateRetrievalCases,
-} from "../email/search/email-search-retrieval-eval.js";
-import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
+} from "../email/search/email-search-retrieval-eval.ts";
+import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.ts";
 
 const fixturePath = process.argv[2] || "server/email/search/evals/email-search-retrieval.synthetic.json";
 const userId = process.argv[3] || process.env.EA_USER_ID || "eval-user";

@@ -6,10 +6,10 @@
 // Usage: node server/scripts/reindex-icloud-mime.js [--apply]
 import "dotenv/config";
 import db from "../db/connection.ts";
-import { looksLikeRawMime } from "../email/mime-artifacts.js";
+import { looksLikeRawMime } from "../email/mime-artifacts.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
-import { fetchAllEmails } from "../email/email-fetch.js";
-import { indexEmails } from "../email/email-index.js";
+import { fetchAllEmails } from "../email/email-fetch.ts";
+import { indexEmails } from "../email/email-index.ts";
 
 const apply = process.argv.includes("--apply");
 const userId = process.env.EA_USER_ID;

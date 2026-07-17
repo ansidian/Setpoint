@@ -6,10 +6,11 @@ import db from "../db/connection.ts";
 import { hashToken, requireCookieSession } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import { encrypt, decrypt } from "../platform/encryption.ts";
-import { getAuthUrl, handleCallback, testConnection as testGmail } from "../email/gmail.js";
-import { testConnection as testIcloud } from "../email/icloud.js";
-import { queueEmailIndexBackfill } from "../email/email-index.js";
-import { wakeEmailBackfillWorker } from "../email/email-backfill-worker.js";
+import { getAuthUrl, handleCallback, testConnection as testGmail } from "../email/gmail.ts";
+import { testConnection as testIcloud } from "../email/icloud.ts";
+import type { ConfiguredEmailAccount } from "../email/email-provider-types.ts";
+import { queueEmailIndexBackfill } from "../email/email-index.ts";
+import { wakeEmailBackfillWorker } from "../email/email-backfill-worker.ts";
 import { canonicalizeConfiguredAccounts } from "../platform/account-canonical.ts";
 import settingsRoutes from "./settings.ts";
 import remindersRoutes from "./reminders.ts";
@@ -237,7 +238,7 @@ router.post<{ id: string }, AccountMutationResponse | ErrorResponse>("/accounts/
     if (!result.rows.length)
       return res.status(404).json({ message: "Account not found" });
     const account = result.rows[0]!;
-    if (account.type === "gmail") await testGmail(account);
+    if (account.type === "gmail") await testGmail(account as unknown as ConfiguredEmailAccount);
     else if (account.type === "icloud")
       await testIcloud(String(account.email), decrypt(String(account.credentials_encrypted)));
     res.json({ success: true });

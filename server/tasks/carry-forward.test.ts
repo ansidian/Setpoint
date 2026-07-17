@@ -2,8 +2,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("../db/connection.ts", () => ({ default: {} }));
 vi.mock("../platform/encryption.ts", () => ({ decrypt: () => "mocked" }));
-vi.mock("../email/gmail.js", () => ({ fetchEmails: async () => [] }));
-vi.mock("../email/icloud.js", () => ({ fetchEmails: async () => [] }));
+vi.mock("../email/gmail.ts", () => ({ fetchEmails: async () => [] }));
+vi.mock("../email/icloud.ts", () => ({ fetchEmails: async () => [] }));
 vi.mock("../calendar/calendar.ts", () => ({ fetchCalendar: async () => [] }));
 vi.mock("../platform/weather.ts", () => ({ fetchWeather: async () => ({}) }));
 vi.mock("../actual/actual.ts", () => ({ getCategories: async () => [] }));

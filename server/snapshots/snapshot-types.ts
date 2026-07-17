@@ -22,7 +22,7 @@ export interface SnapshotEmailSource extends Record<string, unknown> {
   uid?: string;
   id?: string;
   email_id?: string;
-  thread_id?: string;
+  thread_id?: string | null;
   threadId?: string;
   account_id?: string;
   accountId?: string;

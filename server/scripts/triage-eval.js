@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { access } from "fs/promises";
 import { resolve } from "path";
-import { runTriageEval } from "../triage/triage-eval.js";
+import { runTriageEval } from "../triage/triage-eval.ts";
 
 const DEFAULT_FIXTURE = "docs/triage-redesign/labeled-triage-eval.json";
 

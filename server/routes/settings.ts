@@ -14,23 +14,23 @@ import {
   emailAiModelAvailability,
   isAllowedEmailAiModel,
   resolveEmailAiModelConfig,
-} from "../email/email-ai-models.js";
+} from "../email/email-ai-models.ts";
 import {
   getEmailTriageModeForUser,
   isAllowedStoredEmailTriageMode,
   normalizeStoredEmailTriageMode,
-} from "../triage/triage-mode.js";
+} from "../triage/triage-mode.ts";
 import {
   parseTriageSoundSettingsJson,
   TRIAGE_NOTIFICATION_SOUNDS,
   validateTriageSoundSettings,
-} from "../triage/triage-sound-settings.js";
+} from "../triage/triage-sound-settings.ts";
 import {
   parseBillPayMappingsJson,
   validateBillPayMappings,
 } from "../bills/bill-pay-mappings.ts";
-import { getTriageCacheStats } from "../triage/triage-cache-stats.js";
-import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.js";
+import { getTriageCacheStats } from "../triage/triage-cache-stats.ts";
+import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.ts";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import {

@@ -35,22 +35,22 @@ vi.mock("../db/connection.ts", () => ({
     ) => currentDb().batch(statements, mode),
   },
 }));
-vi.mock("../email/gmail.js", () => ({
+vi.mock("../email/gmail.ts", () => ({
   getAuthUrl: gmailApi.getAuthUrl,
   handleCallback: gmailApi.handleCallback,
   testConnection: vi.fn(),
 }));
-vi.mock("../email/icloud.js", () => ({ testConnection: vi.fn() }));
+vi.mock("../email/icloud.ts", () => ({ testConnection: vi.fn() }));
 vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => value),
   decrypt: vi.fn((value) => value),
 }));
 vi.mock("../platform/weather.ts", () => ({ geocodeLocation: vi.fn(async () => []) }));
 vi.mock("../scheduler.ts", () => ({ initScheduler: vi.fn() }));
-vi.mock("../email/email-index.js", () => ({
+vi.mock("../email/email-index.ts", () => ({
   queueEmailIndexBackfill: emailIndexApi.queueEmailIndexBackfill,
 }));
-vi.mock("../email/email-backfill-worker.js", () => ({
+vi.mock("../email/email-backfill-worker.ts", () => ({
   wakeEmailBackfillWorker: emailBackfillApi.wakeEmailBackfillWorker,
 }));
 vi.mock("../platform/account-canonical.ts", () => ({

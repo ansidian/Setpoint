@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmailIndexTestDb,
   seedEmailAccount,
-} from "./test-utils/email-index-db.js";
+} from "./test-utils/email-index-db.ts";
 
 // Mirror gmail-callback.test.js: a real in-memory libsql DB behind the
 // connection mock, and passthrough encryption so we can read/write the stored
@@ -25,7 +25,7 @@ vi.mock("../platform/encryption.ts", () => ({
 
 vi.stubGlobal("fetch", vi.fn());
 
-const { getAccessToken } = await import("./gmail.js");
+const { getAccessToken } = await import("./gmail.ts");
 
 describe("getValidToken expires_at handling (P3-48)", () => {
   beforeEach(async () => {
