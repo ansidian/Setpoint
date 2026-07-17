@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as tasksService from "../../tasks/tasks-service.ts";
 
 const router = Router();
-const EA_USER_ID = process.env.EA_USER_ID;
+const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function errorDetails(error: unknown): { message: string; status: number } {
   if (error instanceof Error) {
@@ -14,7 +14,7 @@ function errorDetails(error: unknown): { message: string; status: number } {
 
 router.get("/todoist/projects", async (_req, res) => {
   try {
-    res.json(await tasksService.listProjects(EA_USER_ID!));
+    res.json(await tasksService.listProjects(ownerUserId()));
   } catch (err) {
     const { message, status } = errorDetails(err);
     console.error("Error fetching Todoist projects:", message);
@@ -24,7 +24,7 @@ router.get("/todoist/projects", async (_req, res) => {
 
 router.get("/todoist/labels", async (_req, res) => {
   try {
-    res.json(await tasksService.listLabels(EA_USER_ID!));
+    res.json(await tasksService.listLabels(ownerUserId()));
   } catch (err) {
     const { message, status } = errorDetails(err);
     console.error("Error fetching Todoist labels:", message);

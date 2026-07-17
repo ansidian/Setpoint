@@ -37,6 +37,11 @@ import { logTiming, timeAsync } from "./timing.ts";
 import { installProductionFrontend } from "./static-assets.ts";
 import { responseCompression } from "./middleware/compression.ts";
 import { errorHandler } from "./middleware/async-handler.ts";
+import { requireClaimedInstance } from "./middleware/owner-gate.ts";
+import { resolveOwnerBootstrap } from "./auth/owner-bootstrap.ts";
+import { ownerStore } from "./auth/owner-store.ts";
+import { activateOwner, getActiveOwner, onOwnerActivated } from "./auth/owner-context.ts";
+import { createOwnerRuntimeGate } from "./auth/owner-runtime.ts";
 
 
 // fail fast if critical env vars are missing
@@ -70,6 +75,10 @@ applySecurityMiddleware(app);
 // so the Alfred + dashboard event streams are never buffered. Sits ahead of the
 // routes and installProductionFrontend so both API and asset payloads shrink.
 app.use(responseCompression());
+app.get("/healthz", (_req, res) => {
+  res.json({ status: "ok", claimed: Boolean(getActiveOwner()) });
+});
+app.use("/api", requireClaimedInstance);
 app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRoutes);
 app.use(express.json());
 app.use(cookieParser());
@@ -83,6 +92,7 @@ app.use("/api", (req, res, next) => {
   }
   if (req.path === "/gmail/push") return next();
   if (req.path === "/auth/login") return next();
+  if (req.path === "/auth/setup/claim") return next();
   if (req.headers.authorization?.startsWith("Bearer ")) return next();
   if (req.headers["x-requested-with"] !== "Setpoint") {
     return res.status(403).json({ message: "Forbidden" });
@@ -136,9 +146,30 @@ function scheduleStartupWorker(
   timer.unref?.();
 }
 
+function startOwnerRuntime(): void {
+  const startupDelays = buildStartupWorkerDelays();
+  scheduleStartupWorker("scheduler", startupDelays.scheduler, () => initScheduler());
+  scheduleStartupWorker("indexer", startupDelays.indexer, () => startBackgroundIndexer());
+  scheduleStartupWorker("backfill", startupDelays.backfill, () => startEmailBackfillWorker());
+  scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
+  scheduleStartupWorker("todoist-sync", startupDelays.todoistSync, () => startTodoistMirrorSyncWorker());
+  scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
+  scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
+  scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
+  scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
+  startAlfredConversationSweeper();
+}
+
+const ownerRuntimeGate = createOwnerRuntimeGate(() => startOwnerRuntime());
+
 timeAsync("migrations", () => migrate())
   .then(() => timeAsync("encryption-rewrite", () => migrateCbcEncryption()))
-  .then(() => {
+  .then(() => timeAsync("owner-bootstrap", () => resolveOwnerBootstrap({
+    store: ownerStore,
+    env: process.env,
+  })))
+  .then((bootstrap) => {
+    if (bootstrap.claimed) activateOwner(bootstrap.owner);
     const server = app.listen(PORT, () => {
       console.log(`Setpoint running on http://localhost:${PORT}`);
       logTiming({
@@ -148,17 +179,11 @@ timeAsync("migrations", () => migrate())
         status: "ok",
         port: PORT,
       });
-      const startupDelays = buildStartupWorkerDelays();
-      scheduleStartupWorker("scheduler", startupDelays.scheduler, () => initScheduler());
-      scheduleStartupWorker("indexer", startupDelays.indexer, () => startBackgroundIndexer());
-      scheduleStartupWorker("backfill", startupDelays.backfill, () => startEmailBackfillWorker());
-      scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
-      scheduleStartupWorker("todoist-sync", startupDelays.todoistSync, () => startTodoistMirrorSyncWorker());
-      scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
-      scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
-      scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
-      scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
-      startAlfredConversationSweeper();
+      ownerRuntimeGate.startForOwner(getActiveOwner());
+    });
+
+    onOwnerActivated((owner) => {
+      ownerRuntimeGate.startForOwner(owner);
     });
 
     const { shutdown } = createGracefulShutdown({
@@ -176,6 +201,6 @@ timeAsync("migrations", () => migrate())
     });
     for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => shutdown(signal));
   }).catch((err) => {
-    console.error("Migration failed:", err);
+    console.error("Startup failed:", err);
     process.exit(1);
   });

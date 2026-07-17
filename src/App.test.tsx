@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
   checkAuth: vi.fn(),
+  getSetupStatus: vi.fn(),
   prefetchCurrentDashboard: vi.fn(),
 }));
 const routeFailures = vi.hoisted(() => ({
@@ -13,6 +14,16 @@ const routeFailures = vi.hoisted(() => ({
 vi.mock("./api", () => ({
   checkAuth: mockApi.checkAuth,
   prefetchCurrentDashboard: mockApi.prefetchCurrentDashboard,
+}));
+
+vi.mock("./setupApi", () => ({
+  getSetupStatus: mockApi.getSetupStatus,
+}));
+
+vi.mock("./pages/OwnerSetup", () => ({
+  default: function OwnerSetupMock({ onClaimed }: { onClaimed: () => void }) {
+    return <button data-testid="owner-setup-page" onClick={onClaimed}>claim</button>;
+  },
 }));
 
 vi.mock("./pages/Login", () => ({
@@ -43,6 +54,7 @@ describe("App auth redirects", () => {
     routeFailures.login = false;
     routeFailures.settings = false;
     mockApi.checkAuth.mockResolvedValue({ authenticated: true });
+    mockApi.getSetupStatus.mockResolvedValue({ claimed: true });
     window.history.replaceState({}, "", "/");
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,
@@ -108,6 +120,28 @@ describe("App auth redirects", () => {
     expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
   });
 
+  it("routes an unclaimed instance to owner setup without checking auth", async () => {
+    mockApi.getSetupStatus.mockResolvedValue({ claimed: false });
+    window.history.replaceState({}, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("owner-setup-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/setup");
+    expect(mockApi.checkAuth).not.toHaveBeenCalled();
+    expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
+  });
+
+  it("enters the authenticated app immediately after owner claim", async () => {
+    mockApi.getSetupStatus.mockResolvedValue({ claimed: false });
+
+    render(<App />);
+    fireEvent.click(await screen.findByTestId("owner-setup-page"));
+
+    expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/");
+  });
+
   it("shows a recoverable fallback when Login throws during render", async () => {
     routeFailures.login = true;
     mockApi.checkAuth.mockResolvedValue({ authenticated: false });
@@ -137,6 +171,7 @@ describe("App auth redirects", () => {
 
     expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
     expect(mockApi.checkAuth).not.toHaveBeenCalled();
+    expect(mockApi.getSetupStatus).not.toHaveBeenCalled();
     expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
   });
 

@@ -6,7 +6,7 @@ import {
 import { wakeEmailBackfillWorker } from "../../email/email-backfill-worker.ts";
 
 const router = Router();
-const EA_USER_ID = process.env.EA_USER_ID!;
+const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error || "");
@@ -14,7 +14,7 @@ function errorMessage(error: unknown): string {
 
 router.get("/email-index/health", async (_req, res) => {
   try {
-    res.json(await getEmailIndexHealth(EA_USER_ID));
+    res.json(await getEmailIndexHealth(ownerUserId()));
   } catch (err) {
     console.error("[EA] Email index health failed:", errorMessage(err));
     res.status(500).json({ message: "Email index health failed" });
@@ -23,7 +23,7 @@ router.get("/email-index/health", async (_req, res) => {
 
 router.post("/email-index/backfill", async (req, res) => {
   try {
-    const result = await queueEmailIndexBackfill(EA_USER_ID, {
+    const result = await queueEmailIndexBackfill(ownerUserId(), {
       targetDays: req.body?.targetDays,
     });
     wakeEmailBackfillWorker();

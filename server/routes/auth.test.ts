@@ -9,7 +9,7 @@ import type {
   GenerateAuthenticationOptionsOpts,
   GenerateRegistrationOptionsOpts,
 } from "@simplewebauthn/server";
-import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.ts";
+import { createAuthTestDb, hashApiToken, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import { createPasskeyStore } from "../auth/passkey-store.ts";
 import { createPendingAuthStore, hashPendingAuthToken } from "../auth/pending-auth-store.ts";
 import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.ts";
@@ -85,6 +85,7 @@ function setCookieHeader(response: SuperTestResponse): string {
 describe("auth routes", () => {
   beforeEach(async () => {
     testState.db.current = await createAuthTestDb();
+    await seedOwner(currentDb(), { passwordHash: authPasswordHash });
     // P2-27: validateSession now memoizes positive results in a module-level cache;
     // clear it between tests so each starts from a clean DB-backed state (otherwise
     // a prior test's cached "cookie-session" masks this test's DB-error path).
@@ -107,6 +108,62 @@ describe("auth routes", () => {
     process.env.NODE_ENV = "test";
     process.env.EA_USER_ID = "user-1";
     process.env.EA_PASSWORD_HASH = authPasswordHash;
+  });
+
+  it("exposes only whether public setup is still available", async () => {
+    await currentDb().execute("DELETE FROM ea_owner");
+
+    const res = await request(makeApp()).get("/api/auth/setup/status");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ claimed: false });
+  });
+
+  it("atomically claims a fresh instance and authenticates that browser", async () => {
+    await currentDb().execute("DELETE FROM ea_owner");
+
+    const res = await request(makeApp())
+      .post("/api/auth/setup/claim")
+      .send({ password: "new-owner-password" });
+    const ownerResult = await currentDb().execute(
+      "SELECT user_id, password_hash, claimed_at FROM ea_owner",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ authenticated: true, claimed: true });
+    expect(setCookieHeader(res)).toContain("ea_session=");
+    expect(ownerResult.rows).toHaveLength(1);
+    expect(ownerResult.rows[0]!.user_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await bcrypt.compare("new-owner-password", String(ownerResult.rows[0]!.password_hash))).toBe(true);
+    expect(res.text).not.toContain(String(ownerResult.rows[0]!.user_id));
+    expect(res.text).not.toContain(String(ownerResult.rows[0]!.password_hash));
+  });
+
+  it("returns a fixed conflict without replacing an existing owner", async () => {
+    const before = await currentDb().execute("SELECT * FROM ea_owner");
+
+    const res = await request(makeApp())
+      .post("/api/auth/setup/claim")
+      .send({ password: "replacement-password" });
+    const after = await currentDb().execute("SELECT * FROM ea_owner");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Instance is already claimed" });
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  it("lets exactly one of two concurrent claim requests succeed", async () => {
+    await currentDb().execute("DELETE FROM ea_owner");
+    const app = makeApp();
+
+    const responses = await Promise.all([
+      request(app).post("/api/auth/setup/claim").send({ password: "first-owner-password" }),
+      request(app).post("/api/auth/setup/claim").send({ password: "second-owner-password" }),
+    ]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const owners = await currentDb().execute("SELECT user_id FROM ea_owner");
+    expect(owners.rows).toHaveLength(1);
   });
 
   afterEach(async () => {
