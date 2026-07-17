@@ -1,4 +1,4 @@
-import { timeAgo } from "../dashboard/rails/railModel.js";
+import { timeAgo } from "../dashboard/rails/railModel";
 import { displayExcerpt } from "./newsPageModel";
 import type { NewsItem } from "../../../shared/types/news.ts";
 

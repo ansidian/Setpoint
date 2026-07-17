@@ -109,7 +109,7 @@ function combineDeadlineDataForRange(entries, start, end, emptyData) {
       const identity = itemIdentity(item);
       if (seen.has(identity)) continue;
       seen.add(identity);
-      // Shallow copy is sufficient: every mutation flow (dashboardTaskProjection.js)
+      // Shallow copy is sufficient: every mutation flow (dashboardTaskProjection.ts)
       // deep-clones the whole root before assigning top-level properties, and
       // nothing mutates nested structure on these items post-combine — this
       // copy only needs to sever top-level property aliasing with the cache.

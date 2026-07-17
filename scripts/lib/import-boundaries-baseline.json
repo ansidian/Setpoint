@@ -11,8 +11,8 @@
       "calendar-search-mirror.ts"
     ],
     "dashboard": [
-      "current-service.js",
-      "current-events.js"
+      "current-service.ts",
+      "current-events.ts"
     ],
     "email": [
       "email-service.ts",
@@ -52,9 +52,6 @@
     "server/bills/billsMirrorModel.ts -> server/actual/actual-bill-occurrences.ts",
     "server/bills/billsMirrorModel.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/statementActualStatusModel.ts -> server/actual/scheduleMatchModel.ts",
-    "server/dashboard/current-service.js -> server/reminders/reminder-hydration.ts",
-    "server/dashboard/current-service.js -> server/tasks/deadline-helpers.ts",
-    "server/dashboard/current-service.js -> server/tasks/todoist.ts",
     "server/routes/alfred.js -> server/email/html-to-text.ts",
     "server/routes/alfred.js -> server/email/search/email-search-retrieval.ts"
   ]

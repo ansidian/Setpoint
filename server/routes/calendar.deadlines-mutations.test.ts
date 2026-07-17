@@ -43,7 +43,7 @@ vi.mock("../bills/bills-service.ts", () => ({
   readBillsMirrorRange: vi.fn(),
   scheduleBillsMirrorRefresh: vi.fn(),
 }));
-vi.mock("../dashboard/current-service.js", () => ({
+vi.mock("../dashboard/current-service.ts", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
@@ -77,7 +77,7 @@ vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
 process.env.EA_USER_ID = "user-1";
 
 const tasksService = await import("../tasks/tasks-service.ts");
-const { applyDeadlineCurrentStatus } = await import("../dashboard/current-service.js");
+const { applyDeadlineCurrentStatus } = await import("../dashboard/current-service.ts");
 const calendarRoutes = (await import("./calendar.ts")).default;
 const createDeadlineMock = tasksService.createDeadline as Mock;
 const updateDeadlineMock = tasksService.updateDeadline as Mock;

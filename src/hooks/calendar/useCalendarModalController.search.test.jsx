@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DashboardProvider } from "../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../context/DashboardContext";
 import useCalendarModalController from "./useCalendarModalController.jsx";
 
 let latestShellProps = null;

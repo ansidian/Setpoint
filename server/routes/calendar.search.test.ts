@@ -59,7 +59,7 @@ vi.mock("../bills/bills-service.ts", () => ({
     return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
   },
 }));
-vi.mock("../dashboard/current-service.js", () => ({
+vi.mock("../dashboard/current-service.ts", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));

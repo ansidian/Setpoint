@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DashboardProvider } from "../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView.jsx";
 import { searchEmails, markEmailAsRead, markEmailAsUnread } from "../../api";
 import {

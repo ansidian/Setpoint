@@ -310,7 +310,7 @@ async function loadProductionSearchCalendar() {
   if (productionSearchCalendar) return productionSearchCalendar;
   const [bills, current, deadlines, mirror] = await Promise.all([
     import("../bills/bills-service.ts"),
-    import("../dashboard/current-service.js"),
+    import("../dashboard/current-service.ts"),
     import("../tasks/deadlines-read.ts"),
     import("./calendar-search-mirror.ts"),
   ]);

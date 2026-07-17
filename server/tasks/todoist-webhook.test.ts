@@ -13,7 +13,7 @@ const {
 const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
-} = await import("../dashboard/current-events.js");
+} = await import("../dashboard/current-events.ts");
 
 function signPayload(rawBody: Buffer, secret: string): string {
   return crypto.createHmac("sha256", secret).update(rawBody).digest("base64");

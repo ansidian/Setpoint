@@ -1,5 +1,5 @@
 {
-  "remainingLegacyFiles": 756,
+  "remainingLegacyFiles": 647,
   "typedScopes": [
     "scripts/check-typescript-migration.mts",
     "scripts/check-typescript-migration.test.mts",
@@ -139,6 +139,31 @@
     "server/email/dev-service.ts",
     "server/routes/briefing/email.ts",
     "server/routes/briefing/dev.ts",
-    "server/triage"
+    "server/triage",
+    "shared/types/dashboard.ts",
+    "server/dashboard",
+    "server/routes/dashboard.ts",
+    "server/routes/dashboard.test.ts",
+    "src/hooks/currentDashboardModel.ts",
+    "src/hooks/currentDashboardModel.test.ts",
+    "src/hooks/dashboardEventRefreshModel.ts",
+    "src/hooks/dashboardEventRefreshModel.test.ts",
+    "src/hooks/useCurrentDashboard.ts",
+    "src/hooks/useCurrentDashboard.test.ts",
+    "src/hooks/useActiveSnapshot.ts",
+    "src/hooks/useAutoRefresh.ts",
+    "src/hooks/useAutoRefresh.test.ts",
+    "src/context",
+    "src/pages/Dashboard.bootState.ts",
+    "src/pages/Dashboard.refreshModel.ts",
+    "src/pages/Dashboard.refreshModel.test.ts",
+    "src/components/dashboard",
+    "src/pages/Dashboard.tsx",
+    "src/pages/Dashboard.boot.test.tsx",
+    "src/pages/Dashboard.currentBoot.test.tsx",
+    "src/pages/Dashboard.events.test.tsx",
+    "src/pages/Dashboard.mobile.test.tsx",
+    "src/pages/Dashboard.refresh.test.tsx",
+    "src/pages/Dashboard.sync-animation.test.tsx"
   ]
 }

@@ -17,9 +17,9 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 7. `server/actual/actual-local-metadata.ts:readLocalActualMetadata` — re-syncs the on-disk budget copy (level d) from the Actual server
 8. `server/actual/actual-metadata-projection.ts:refreshActualMetadataProjection` — rewrites the `ea_actual_metadata_mirror` DB projection (level c)
 9. `server/bills/bills-mirror-sync.ts:scheduleBillsMirrorRefresh` — writes `pending_refresh_at` (+60s) and arms the in-process timer; `runDueBillsMirrorRefresh` later rewrites the bill schedule/occurrence mirrors
-10. `server/dashboard/current-providers/bills-provider.js:onRefreshed` — when the visible bills projection changed, publishes a `source: "bills"` dashboard event
-11. `server/dashboard/current-events.js:publishCurrentDashboardEvent` — fans the event out to per-user SSE listeners
-12. `src/hooks/useCurrentDashboard.js:handleChanged` — on `source === "bills"`: invalidates the frontend metadata singleton, then refetches the dashboard payload
+10. `server/dashboard/current-providers/bills-provider.ts:onRefreshed` — when the visible bills projection changed, publishes a `source: "bills"` dashboard event
+11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — fans the event out to per-user SSE listeners
+12. `src/hooks/useCurrentDashboard.ts:handleChanged` — on `source === "bills"`: invalidates the frontend metadata singleton, then refetches the dashboard payload
 13. `src/lib/actualMetadata.ts:invalidateActualMetadata` — nulls the singleton cache (level a) and bumps the generation counter so stale in-flight fetches can't repopulate it
 14. `src/lib/actualMetadata.ts:ensureMetadataLoaded` — next consumer refetches GET `/api/briefing/actual/metadata`, served from level c
 
@@ -29,9 +29,9 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 - (c) `ea_actual_metadata_mirror` DB projection — `server/actual/actual-metadata-projection.ts` — rewritten during the fan-out and by bills mirror refreshes
 - (d) on-disk local budget copy — `server/actual/actual-local-metadata.ts` — re-synced from the Actual server when the fan-out runs with fresh-local preference
 
-**SSE:** `dashboard-current-changed` with `source: "bills"` — emitted via `server/dashboard/current-events.js:publishCurrentDashboardEvent`, streamed by the GET `/current/events` handler in `server/routes/dashboard.js` — consumed by `src/hooks/useCurrentDashboard.js:handleChanged`.
+**SSE:** `dashboard-current-changed` with `source: "bills"` — emitted via `server/dashboard/current-events.ts:publishCurrentDashboardEvent`, streamed by the GET `/current/events` handler in `server/routes/dashboard.ts` — consumed by `src/hooks/useCurrentDashboard.ts:handleChanged`.
 
-**UI:** dashboard Needs-you band + Coming-up card (`src/components/dashboard/needsYou/needsYouModel.js` classifies due-today bills; `src/components/dashboard/context/ComingUpCard.jsx` lists upcoming ones), calendar bills view (`src/components/calendar/views/bills/BillsDetailRail.jsx`), and bill badge form dropdowns on next metadata load.
+**UI:** dashboard Needs-you band + Coming-up card (`src/components/dashboard/needsYou/needsYouModel.ts` classifies due-today bills; `src/components/dashboard/context/ComingUpCard.tsx` lists upcoming ones), calendar bills view (`src/components/calendar/views/bills/BillsDetailRail.jsx`), and bill badge form dropdowns on next metadata load.
 
 ## 2. Email sync → inbox triage
 
@@ -47,19 +47,19 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 8. `server/triage/triage-worker.ts:routeEmailForTriage` — preflight rules, then cheap-model classification with strong-model escalation
 9. `server/triage/triage-finalize-store.ts:updateTriageRow` — persists the decision (lane, summary, bill candidate) to `ea_email_triage`
 10. `server/triage/triage-finalize-store.ts:attachToActiveSnapshot` — upserts `ea_briefing_snapshot_items` with the decided lane
-11. `server/dashboard/current-events.js:publishCurrentDashboardEvent` — fans `email_triage_finalized`/`email_triage_failed` to SSE subscribers
-12. `src/hooks/dashboardEventRefreshModel.js:refreshScopeForDashboardEvent` / `src/hooks/useCurrentDashboard.js:handleChanged` — forwards the payload to the dashboard event handler, routes `email_triage` to the existing active-snapshot read, and keeps every other or unknown source on the full-current read; queued bursts retain the strongest pending scope and snapshot-read failure falls back once to full current
+11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — fans `email_triage_finalized`/`email_triage_failed` to SSE subscribers
+12. `src/hooks/dashboardEventRefreshModel.ts:refreshScopeForDashboardEvent` / `src/hooks/useCurrentDashboard.ts:handleChanged` — forwards the payload to the dashboard event handler, routes `email_triage` to the existing active-snapshot read, and keeps every other or unknown source on the full-current read; queued bursts retain the strongest pending scope and snapshot-read failure falls back once to full current
 13. `src/components/inbox/inboxWorkItems.js:collectActiveSnapshotEmails` — flattens snapshot lanes into normalized inbox rows
 14. `src/hooks/useTriageNotificationSounds.js:handleDashboardEvent` — resolves the sound for the trigger type
 15. `src/lib/triageSoundGate.ts:createTriageSoundGate` — gate's accept() dedupes by eventKey and coalesces per trigger (4s window)
 
 **Caches:** `ea_gmail_watch_state` history cursor (`server/email/gmail-sync.ts`, reset on 404 recovery); `ea_email_index` (`server/email/email-index.ts`); `ea_triage_jobs` queue + `ea_email_triage` decisions (written by the sync, settled by the worker); `ea_briefing_snapshot_items` (upserted at queue-attach and finalize); sessionStorage `ea_triage_sound_event_keys` (`src/lib/triageSoundGate.ts`, capped 200).
 
-**SSE:** `dashboard-current-changed` (reasons `email_triage_queued`/`email_triage_finalized`/`email_triage_failed`) — emitted by `server/dashboard/current-events.js:publishCurrentDashboardEvent`, streamed by GET `/current/events` in `server/routes/dashboard.js` — consumed by `src/hooks/useCurrentDashboard.js:handleChanged`, routed to `src/hooks/useTriageNotificationSounds.js` via `src/pages/Dashboard.jsx`.
+**SSE:** `dashboard-current-changed` (reasons `email_triage_queued`/`email_triage_finalized`/`email_triage_failed`) — emitted by `server/dashboard/current-events.ts:publishCurrentDashboardEvent`, streamed by GET `/current/events` in `server/routes/dashboard.ts` — consumed by `src/hooks/useCurrentDashboard.ts:handleChanged`, routed to `src/hooks/useTriageNotificationSounds.js` via `src/pages/Dashboard.tsx`.
 
 **UI:** inbox lanes (`src/components/inbox/InboxView.jsx` → `src/components/inbox/InboxDesktopPane.jsx` / `src/components/inbox/mobile/MobileInboxView.jsx`): email appears in Queued during arrival grace, moves to its decided lane after classification; lane counts in `src/components/inbox/DigestStrip.jsx`; one gated notification sound per eventKey.
 
-**Timing:** `server/email/email-arrival-timing.ts:projectEmailArrivalTiming` emits non-sensitive `[EA Timing]` evidence when a history job settles. `providerDeliveryMs` is Pub/Sub `publishTime` → durable history-job `created_at`; `historyQueueWaitMs` is durable enqueue → worker claim; `historySyncMs` is claim → completed Gmail fetch/index/snapshot attachment; `providerToQueuedMs` is Pub/Sub publish → durable triage rows ready for snapshot attachment; `snapshotAttachmentMs` is that durable milestone → history-job completion. Arrival-grace `scheduled_for` is the intentional classification boundary; the deadline wake-up removes cron-alignment jitter after that boundary without shortening grace. Missing/malformed timestamps omit dependent durations, and clock-skewed stages clamp to zero with validity metadata. `src/hooks/useCurrentDashboard.js` separately measures `dashboard-event-refetch` from SSE receipt to accepted state dispatch with `performance.now()`, records the selected `active_snapshot` or `current` scope (including fallback scope), and does not log stale superseded responses as completed.
+**Timing:** `server/email/email-arrival-timing.ts:projectEmailArrivalTiming` emits non-sensitive `[EA Timing]` evidence when a history job settles. `providerDeliveryMs` is Pub/Sub `publishTime` → durable history-job `created_at`; `historyQueueWaitMs` is durable enqueue → worker claim; `historySyncMs` is claim → completed Gmail fetch/index/snapshot attachment; `providerToQueuedMs` is Pub/Sub publish → durable triage rows ready for snapshot attachment; `snapshotAttachmentMs` is that durable milestone → history-job completion. Arrival-grace `scheduled_for` is the intentional classification boundary; the deadline wake-up removes cron-alignment jitter after that boundary without shortening grace. Missing/malformed timestamps omit dependent durations, and clock-skewed stages clamp to zero with validity metadata. `src/hooks/useCurrentDashboard.ts` separately measures `dashboard-event-refetch` from SSE receipt to accepted state dispatch with `performance.now()`, records the selected `active_snapshot` or `current` scope (including fallback scope), and does not log stale superseded responses as completed.
 
 ## 3. Snapshot / briefing lifecycle
 
@@ -75,14 +75,14 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 8. `server/snapshots/snapshot-item-mutations.ts:moveSnapshotItemLane` — user lane transitions (plus handled/reopen mutations) via the snapshot item routes
 9. `server/snapshots/snapshot-service.ts:getActiveSnapshotView` — loads items, derives lanes and read-only state (frozen snapshots are read-only)
 10. `server/snapshots/snapshot-lifecycle.ts:normalizeSnapshotItem` — normalizes DB rows: lane, catch-up id, resurfaced flags, bill candidate
-11. `server/dashboard/current-events.js:publishCurrentDashboardEvent` — lifecycle changes publish dashboard events
-12. `src/hooks/useCurrentDashboard.js:handleChanged` — SSE-triggered refetch embeds the fresh snapshot view in the dashboard payload
-13. `src/hooks/useActiveSnapshot.js:useActiveSnapshot` — standalone fallback fetch; 15s poll while processing is active
+11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — lifecycle changes publish dashboard events
+12. `src/hooks/useCurrentDashboard.ts:handleChanged` — SSE-triggered refetch embeds the fresh snapshot view in the dashboard payload
+13. `src/hooks/useActiveSnapshot.ts:useActiveSnapshot` — standalone fallback fetch; 15s poll while processing is active
 14. `src/components/inbox/InboxView.jsx:InboxView` — renders snapshot lanes; read-only when frozen
 
-**Caches:** single-flight sync map in `server/snapshots/snapshot-service.ts` (dedupes concurrent active-snapshot syncs); `ea_current_data_cache` rows in `server/dashboard/current-service.js` (other providers; the active snapshot itself is fetched fresh); frontend snapshot state in `src/hooks/useActiveSnapshot.js` and `src/hooks/useCurrentDashboard.js`, overwritten on each refetch.
+**Caches:** single-flight sync map in `server/snapshots/snapshot-service.ts` (dedupes concurrent active-snapshot syncs); `ea_current_data_cache` rows in `server/dashboard/current-service.ts` (other providers; the active snapshot itself is fetched fresh); frontend snapshot state in `src/hooks/useActiveSnapshot.ts` and `src/hooks/useCurrentDashboard.ts`, overwritten on each refetch.
 
-**SSE:** `dashboard-current-changed` (reasons incl. `email_triage_queued`, `email_triage_finalized`, `snoozed_pending_deferred`) — same emitter/stream/consumer chain as flow 2. Supplemented by polling: `src/hooks/useActiveSnapshot.js` every 15s while processing, `src/hooks/useCurrentDashboard.js` short post-refresh polling.
+**SSE:** `dashboard-current-changed` (reasons incl. `email_triage_queued`, `email_triage_finalized`, `snoozed_pending_deferred`) — same emitter/stream/consumer chain as flow 2. Supplemented by polling: `src/hooks/useActiveSnapshot.ts` every 15s while processing, `src/hooks/useCurrentDashboard.ts` short post-refresh polling.
 
 **UI:** inbox lane lists and counts (`src/components/inbox/InboxList.jsx`, `src/components/inbox/DigestStrip.jsx`, `src/components/inbox/Sidebar.jsx`); frozen snapshots render read-only — lane/hotkey rules mirrored in `src/components/inbox/activeSnapshotWorkflowModel.js`.
 
@@ -105,7 +105,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **Caches:** per-month events cache in `src/hooks/calendar/useCalendarRange.js` (30-min TTL, ±3-month prefetch radius; invalidated by explicit sync, patched by editor saves); per-scope search snapshots in `src/hooks/calendar/useCalendarModalSearch.js` (reset on query change/modal close); server mirror `ea_calendar_search_occurrences` owned by `server/calendar/calendar-search-mirror.ts` (`syncCalendarSearchMirror` full/incremental + 15-min backstop worker; write-through upserts on single-event mutations in `server/routes/calendar.ts`, recurring edits mark dirty for async repair).
 
-**SSE:** `dashboard-current-changed` marks bill/deadline range caches stale (via `src/pages/Dashboard.refreshModel.js`) but does NOT touch the events month cache or the search mirror — those refresh via their own timers and explicit sync.
+**SSE:** `dashboard-current-changed` marks bill/deadline range caches stale (via `src/pages/Dashboard.refreshModel.ts`) but does NOT touch the events month cache or the search mirror — those refresh via their own timers and explicit sync.
 
 **UI:** month grid + agenda render through `src/components/calendar/modal/CalendarModalShell.jsx`; search results in `src/components/calendar/modal/CalendarSearchRail.jsx`; activating a result repositions the grid, selects the day/item, and opens the floating detail.
 

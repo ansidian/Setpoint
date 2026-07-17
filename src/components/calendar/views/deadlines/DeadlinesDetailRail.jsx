@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense, useState } from "react";
-import { useDashboard } from "../../../../context/DashboardContext.jsx";
+import { useDashboard } from "../../../../context/DashboardContext";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
   DEADLINE_COLOR,

@@ -121,7 +121,7 @@ vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
   DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));
-vi.mock("../dashboard/current-service.js", () => ({
+vi.mock("../dashboard/current-service.ts", () => ({
   applyDeadlineCurrentStatus: vi.fn(async () => ({ updated: true })),
   getCurrentDashboard: vi.fn(async () => ({ weather: null, providerHealth: {} })),
   getDashboardSystemHealth: vi.fn(async () => ({ providerHealth: {}, systemStatus: { state: "current", sources: [] } })),
@@ -134,14 +134,14 @@ process.env.EA_USER_ID = "user-1";
 const { createQuickTxn, sendBill } = await import("../bills/bills-service.ts");
 const emailService = await import("../email/email-service.ts");
 const briefingRoutes = (await import("./briefing/index.js")).default;
-const dashboardRoutes = (await import("./dashboard.js")).default;
+const dashboardRoutes = (await import("./dashboard.ts")).default;
 const accountsRoutes = (await import("./accounts.ts")).default;
 const notesRoutes = (await import("./notes.ts")).default;
 const discordReminders = await import("../reminders/discord-reminders.ts");
 const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
-} = await import("../dashboard/current-events.js");
+} = await import("../dashboard/current-events.ts");
 const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../triage/triage-sound-settings.ts");
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;

@@ -12,7 +12,7 @@ vi.mock("../../../../api", async () => {
   };
 });
 
-const { DashboardProvider } = await import("../../../../context/DashboardContext.jsx");
+const { DashboardProvider } = await import("../../../../context/DashboardContext");
 const { renderDeadlinesDetail } = await import("./DeadlinesDetailRail.jsx");
 
 afterEach(() => {

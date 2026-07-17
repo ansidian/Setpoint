@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DashboardProvider } from "../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../context/DashboardContext";
 import CalendarModal from "./CalendarModal.jsx";
 
 const mockDeleteDeadline = vi.fn();

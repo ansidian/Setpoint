@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import type { TriageDb, TriageJob } from "./triage-types.ts";
 
 // ea_triage_jobs queue persistence lifted from triage-worker.ts: claim, requeue,

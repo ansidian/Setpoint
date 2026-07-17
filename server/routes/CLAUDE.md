@@ -21,7 +21,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `alfred.js` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
 - `calendar.ts` — calendar CRUD, deadline reads, event search, reminder hydration
 - `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
-- `dashboard.js` — dashboard state, current-data SSE stream, health checks
+- `dashboard.ts` — dashboard state, current-data SSE stream, health checks
 - `notes.ts` — notes CRUD and reordering
 - `news.ts` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.ts` — Discord reminder testing and configuration
@@ -40,4 +40,4 @@ Tests are not listed; adjacent test files cover their same-named route by conven
 ## Related
 
 - `server/<domain>/` directories — service layers these routes delegate to (see their maps)
-- `dashboard.js` SSE stream is the push channel the frontend caches listen to
+- `dashboard.ts` SSE stream is the push channel the frontend caches listen to

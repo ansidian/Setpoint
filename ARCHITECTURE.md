@@ -217,12 +217,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useFloatingDetailPlacement` | `src/components/calendar/modal/useFloatingDetailPlacement.js` |
 | `useCalendarGhostPreview` | `src/components/calendar/useCalendarGhostPreview.js` |
 | `useDeadlineQuickActions` | `src/components/calendar/views/deadlines/useDeadlineQuickActions.js` |
-| `useAlfredPanelState` | `src/components/dashboard/useAlfredPanelState.js` |
-| `useCalendarWorkspaceState` | `src/components/dashboard/useCalendarWorkspaceState.js` |
-| `useDashboardItemSheet` | `src/components/dashboard/useDashboardItemSheet.js` |
-| `useDashboardShellHotkeys` | `src/components/dashboard/useDashboardShellHotkeys.js` |
-| `useLiveReadOverrides` | `src/components/dashboard/useLiveReadOverrides.js` |
-| `useMobileDashboardScrollRestoration` | `src/components/dashboard/useMobileDashboardScrollRestoration.js` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.js` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.js` |
 | `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.js` |
@@ -256,11 +250,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useStaleDomainCache` | `src/hooks/calendar/useStaleDomainCache.js` |
 | `useViewportWidth` | `src/hooks/calendar/useViewportWidth.js` |
 | `useInboxSelectionHistory` | `src/hooks/email/useInboxSelectionHistory.js` |
-| `useSettingsPage` | `src/hooks/settings/useSettingsPage.js` |
-| `useActiveSnapshot` | `src/hooks/useActiveSnapshot.js` |
-| `useAutoRefresh` | `src/hooks/useAutoRefresh.js` |
 | `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.js` |
-| `useCurrentDashboard` | `src/hooks/useCurrentDashboard.js` |
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.js` |
 | `useIsMobile` | `src/hooks/useIsMobile.js` |
 | `useKeyHold` | `src/hooks/useKeyHold.js` |
@@ -701,11 +691,6 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.js` |
 | POST | `/api/alfred/run` | `server/routes/alfred.js` |
 | GET | `/api/alfred/usage` | `server/routes/alfred.js` |
-| GET | `/api/dashboard/current` | `server/routes/dashboard.js` |
-| GET | `/api/dashboard/current/events` | `server/routes/dashboard.js` |
-| POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.js` |
-| POST | `/api/dashboard/current/sync` | `server/routes/dashboard.js` |
-| GET | `/api/dashboard/health` | `server/routes/dashboard.js` |
 <!-- END:routes -->
 
 ### Auth

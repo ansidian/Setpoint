@@ -7,7 +7,7 @@
  */
 
 import db from "../db/connection.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { parseFrom } from "../email/email-index.ts";
 import {
   ARRIVAL_GRACE_QUEUED_LANE,

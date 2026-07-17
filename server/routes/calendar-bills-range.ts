@@ -4,7 +4,7 @@ import {
   scheduleBillsMirrorRefresh,
   shouldScheduleImmediateBillsRefresh,
 } from "../bills/bills-service.ts";
-import { requestBillsCurrentMaintenanceRefresh } from "../dashboard/current-service.js";
+import { requestBillsCurrentMaintenanceRefresh } from "../dashboard/current-service.ts";
 import { queryTransactions } from "../transactions/transactions-service.ts";
 import type { ActualDateRange } from "../../shared/types/actual.ts";
 

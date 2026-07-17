@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DashboardProvider } from "../../context/DashboardContext.jsx";
+import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView.jsx";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
 import { resetInboxSession } from "./useInboxSessionState.js";
