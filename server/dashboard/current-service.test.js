@@ -48,7 +48,7 @@ vi.mock("../tasks/deadline-helpers.ts", () => ({
 vi.mock("../platform/weather.ts", () => ({
   fetchWeather: (...args) => testState.fetchWeather(...args),
 }));
-vi.mock("../calendar/calendar.js", () => ({
+vi.mock("../calendar/calendar.ts", () => ({
   fetchCalendar: (...args) => testState.fetchCalendar(...args),
 }));
 vi.mock("../tasks/todoist.ts", () => ({

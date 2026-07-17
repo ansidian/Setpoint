@@ -6,7 +6,7 @@ const clientMocks = vi.hoisted(() => ({
   googleCalendarFetch: vi.fn(),
 }));
 
-vi.mock("./calendar-google-client.js", async (importOriginal) => ({
+vi.mock("./calendar-google-client", async (importOriginal) => ({
   ...(await importOriginal()),
   getAuthorizedAccount: clientMocks.getAuthorizedAccount,
   listCalendarsForAccount: clientMocks.listCalendarsForAccount,
@@ -21,11 +21,18 @@ import {
   markCalendarConflicts,
   normalizeGoogleCalendarLink,
   normalizeGoogleEvent,
-} from "./calendar.js";
+} from "./calendar.ts";
 
 describe("markCalendarConflicts", () => {
-  const ev = (id, startMs, endMs, allDay = false) => ({ id, startMs, endMs, allDay });
-  const flagged = (events) => events.filter((e) => e.flag === "Conflict").map((e) => e.id).sort();
+  type ConflictEvent = {
+    id: string;
+    startMs: number;
+    endMs: number;
+    allDay: boolean;
+    flag?: "Conflict";
+  };
+  const ev = (id: string, startMs: number, endMs: number, allDay = false): ConflictEvent => ({ id, startMs, endMs, allDay });
+  const flagged = (events: ConflictEvent[]) => events.filter((e) => e.flag === "Conflict").map((e) => e.id).sort();
 
   it("flags both events when two timed events strictly overlap", () => {
     const events = [ev("a", 0, 100), ev("b", 50, 150)];
@@ -58,13 +65,13 @@ describe("markCalendarConflicts", () => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       return seed / 0x7fffffff;
     };
-    const bruteForce = (events) => {
+    const bruteForce = (events: ConflictEvent[]) => {
       const flags = events.map(() => false);
       for (let i = 0; i < events.length; i += 1) {
-        if (events[i].allDay) continue;
+        if (events[i]!.allDay) continue;
         for (let j = i + 1; j < events.length; j += 1) {
-          if (events[j].allDay) continue;
-          if (events[i].startMs < events[j].endMs && events[j].startMs < events[i].endMs) {
+          if (events[j]!.allDay) continue;
+          if (events[i]!.startMs < events[j]!.endMs && events[j]!.startMs < events[i]!.endMs) {
             flags[i] = true;
             flags[j] = true;
           }
@@ -97,11 +104,11 @@ describe("fetchCalendar fan-out", () => {
     endDate: new Date("2026-04-21T06:59:59.999Z"),
   };
 
-  function eventsResponse(items) {
-    return { json: async () => ({ items }) };
+  function eventsResponse(items: unknown[]): Response {
+    return { json: async () => ({ items }) } as Response;
   }
 
-  function timedItem(id) {
+  function timedItem(id: string) {
     return {
       id,
       summary: id,
@@ -116,7 +123,7 @@ describe("fetchCalendar fan-out", () => {
       { id: "primary", summary: "Primary" },
       { id: "work", summary: "Work" },
     ]);
-    clientMocks.googleCalendarFetch.mockImplementation(async (_auth, path) =>
+    clientMocks.googleCalendarFetch.mockImplementation(async (_auth: unknown, path: string) =>
       eventsResponse([timedItem(path)]));
 
     const events = await fetchCalendar(
@@ -135,9 +142,9 @@ describe("fetchCalendar fan-out", () => {
       { id: "primary", summary: "Primary" },
       { id: "broken", summary: "Broken" },
     ]);
-    clientMocks.googleCalendarFetch.mockImplementation(async (_auth, path) => {
+    clientMocks.googleCalendarFetch.mockImplementation(async (_auth: unknown, path: string) => {
       if (path.includes("broken")) {
-        const err = new Error("nope");
+        const err = new Error("nope") as Error & { code: string };
         err.code = "calendar_google_error";
         throw err;
       }
@@ -149,7 +156,7 @@ describe("fetchCalendar fan-out", () => {
     // The failing calendar is swallowed by its per-calendar .catch; the healthy
     // calendar still populates the response.
     expect(events).toHaveLength(1);
-    expect(events[0].id).toContain("primary");
+    expect(events[0]!.id).toContain("primary");
   });
 });
 

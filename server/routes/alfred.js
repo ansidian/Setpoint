@@ -12,7 +12,7 @@ import { getAlfredUsageStats } from "../alfred/alfred-usage-stats.js";
 import { getEmailBody } from "../email/email-service.js";
 import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
 import { htmlToPlainText } from "../email/html-to-text.js";
-import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.js";
+import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.ts";
 import { readBillsMirrorRange } from "../bills/bills-service.ts";

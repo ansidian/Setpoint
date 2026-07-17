@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildGoogleRecurrenceRules,
   extractStructuredRecurrence,
-} from "./calendar.js";
+} from "./calendar.ts";
+import type { CalendarRecurrenceInput } from "../../shared/types/calendar.ts";
 
-function roundTrip(input, timing) {
+function roundTrip(
+  input: CalendarRecurrenceInput,
+  timing: { allDay: boolean; startDate: string; startTime?: string },
+) {
   return extractStructuredRecurrence(buildGoogleRecurrenceRules(input, timing));
 }
 
@@ -69,7 +73,7 @@ describe("recurrence round-trip: UNTIL across timezones (D-CAL-9 / T-3)", () => 
       { allDay: false, startDate: "2026-08-01", startTime: "10:00" },
     );
     expect(rules).toEqual(["RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260820T170000Z"]);
-    expect(extractStructuredRecurrence(rules).ends).toEqual({ type: "onDate", untilDate: "2026-08-20" });
+    expect(extractStructuredRecurrence(rules)!.ends).toEqual({ type: "onDate", untilDate: "2026-08-20" });
   });
 
   it("serializes a PST (winter, UTC-8) until date with the event start time in UTC", () => {
@@ -78,7 +82,7 @@ describe("recurrence round-trip: UNTIL across timezones (D-CAL-9 / T-3)", () => 
       { allDay: false, startDate: "2026-01-05", startTime: "10:00" },
     );
     expect(rules).toEqual(["RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260120T180000Z"]);
-    expect(extractStructuredRecurrence(rules).ends).toEqual({ type: "onDate", untilDate: "2026-01-20" });
+    expect(extractStructuredRecurrence(rules)!.ends).toEqual({ type: "onDate", untilDate: "2026-01-20" });
   });
 
   it("keeps the Pacific until date when a late-evening start pushes UNTIL past UTC midnight", () => {
@@ -88,7 +92,7 @@ describe("recurrence round-trip: UNTIL across timezones (D-CAL-9 / T-3)", () => 
     );
     // 23:30 PDT on Aug 20 is 06:30Z on Aug 21 — the UTC date is one day ahead.
     expect(rules).toEqual(["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=TH;UNTIL=20260821T063000Z"]);
-    expect(extractStructuredRecurrence(rules).ends).toEqual({ type: "onDate", untilDate: "2026-08-20" });
+    expect(extractStructuredRecurrence(rules)!.ends).toEqual({ type: "onDate", untilDate: "2026-08-20" });
   });
 
   it("uses the compact date-only UNTIL for all-day events and round-trips it", () => {
@@ -97,7 +101,7 @@ describe("recurrence round-trip: UNTIL across timezones (D-CAL-9 / T-3)", () => 
       { allDay: true, startDate: "2026-08-03" },
     );
     expect(rules).toEqual(["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;UNTIL=20260820"]);
-    expect(extractStructuredRecurrence(rules).ends).toEqual({ type: "onDate", untilDate: "2026-08-20" });
+    expect(extractStructuredRecurrence(rules)!.ends).toEqual({ type: "onDate", untilDate: "2026-08-20" });
   });
 
   it("round-trips an until date on the spring-forward day even for a nonexistent local time", () => {
@@ -106,6 +110,6 @@ describe("recurrence round-trip: UNTIL across timezones (D-CAL-9 / T-3)", () => 
       { frequency: "daily", ends: { type: "onDate", untilDate: "2026-03-08" } },
       { allDay: false, startDate: "2026-03-01", startTime: "02:30" },
     );
-    expect(extractStructuredRecurrence(rules).ends).toEqual({ type: "onDate", untilDate: "2026-03-08" });
+    expect(extractStructuredRecurrence(rules)!.ends).toEqual({ type: "onDate", untilDate: "2026-03-08" });
   });
 });

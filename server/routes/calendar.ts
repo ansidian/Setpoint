@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
+import type { Row } from "@libsql/client";
 import { requireCookieSession } from "../middleware/auth.ts";
 import { applyDeadlineCurrentStatus } from "../dashboard/current-service.js";
 import {
@@ -18,7 +19,7 @@ import {
   isCalendarSearchInputError,
   searchCalendar,
   validateCalendarRange as validateCalendarRangeQuery,
-} from "../calendar/calendar.js";
+} from "../calendar/calendar.ts";
 import {
   getGooglePlaceDetails,
   suggestGooglePlaces,
@@ -36,43 +37,64 @@ import {
   deleteCalendarSearchMirrorOccurrence,
   markCalendarSearchMirrorDirty,
   upsertCalendarSearchMirrorOccurrence,
-} from "../calendar/calendar-search-mirror.js";
+} from "../calendar/calendar-search-mirror.ts";
 import { readCalendarBillsRange } from "./calendar-bills-range.ts";
+import type {
+  CalendarEventMutationInput,
+  CalendarRecurrenceScope,
+  NormalizedCalendarEvent,
+} from "../../shared/types/calendar.ts";
+import type { StoredCalendarAccount } from "../calendar/calendar-google-client.ts";
+
+type RouteError = Error & { status?: number; code?: string };
+type CalendarIdentityEvent = Partial<Pick<
+  NormalizedCalendarEvent,
+  "isRecurring" | "originalStartTime" | "recurringEventId" | "recurrence" | "accountId" | "calendarId" | "id"
+>>;
+
+function calendarUserId(): string {
+  return process.env.EA_USER_ID!;
+}
+
+function routeError(error: unknown): RouteError {
+  return error as RouteError;
+}
 
 const router = Router();
 router.use(requireCookieSession);
 
-function handleCalendarRouteError(res, err, fallbackMessage) {
-  if (err?.status && err?.code) {
-    const formatted = formatCalendarRouteError(err);
+function handleCalendarRouteError(res: Response, err: unknown, fallbackMessage: string) {
+  const error = routeError(err);
+  if (error?.status && error?.code) {
+    const formatted = formatCalendarRouteError(error);
     return res.status(formatted.status).json(formatted.body);
   }
   console.error(fallbackMessage, err);
   return res.status(500).json({ code: "calendar_route_error", message: fallbackMessage });
 }
 
-function resolveCalendarAccount(accounts, accountId) {
+function resolveCalendarAccount(accounts: Row[], accountId: string): StoredCalendarAccount {
   const account = accounts.find(
     (entry) => entry.id === accountId && entry.type === "gmail" && entry.calendar_enabled,
   );
   if (!account) {
-    const err = new Error("Calendar account not found");
+    const err = new Error("Calendar account not found") as RouteError;
     err.status = 404;
     err.code = "calendar_account_not_found";
     throw err;
   }
-  return account;
+  return account as unknown as StoredCalendarAccount;
 }
 
-async function loadCalendarAccount(accountId) {
-  const userId = process.env.EA_USER_ID;
+async function loadCalendarAccount(accountId: string) {
+  const userId = calendarUserId();
   const { accounts } = await loadUserConfig(userId);
   return resolveCalendarAccount(accounts, accountId);
 }
 
 router.get("/deadlines", async (_req, res) => {
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     res.json(await readCalendarDeadlines(userId));
   } catch (err) {
     console.error("[Calendar] deadlines fetch failed:", err);
@@ -80,15 +102,16 @@ router.get("/deadlines", async (_req, res) => {
   }
 });
 
-function handleDeadlineMutationError(res, err, fallbackMessage) {
-  const status = err?.status || 500;
+function handleDeadlineMutationError(res: Response, err: unknown, fallbackMessage: string) {
+  const error = routeError(err);
+  const status = error?.status || 500;
   if (status >= 500) console.error(fallbackMessage, err);
-  return res.status(status).json({ message: err?.message || fallbackMessage });
+  return res.status(status).json({ message: error?.message || fallbackMessage });
 }
 
 router.post("/deadlines", async (req, res) => {
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     const deadline = await tasksService.createDeadline(userId, req.body || {});
     res.status(201).json({ deadline });
   } catch (err) {
@@ -98,7 +121,7 @@ router.post("/deadlines", async (req, res) => {
 
 router.patch("/deadlines/:deadlineId", async (req, res) => {
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     const deadline = await tasksService.updateDeadline(userId, req.params.deadlineId, req.body || {});
     res.json({ deadline });
   } catch (err) {
@@ -108,7 +131,7 @@ router.patch("/deadlines/:deadlineId", async (req, res) => {
 
 router.delete("/deadlines/:deadlineId", async (req, res) => {
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     await tasksService.deleteDeadline(userId, req.params.deadlineId);
     res.json({ ok: true });
   } catch (err) {
@@ -121,14 +144,14 @@ router.post("/deadlines/:deadlineId/completed-occurrences/:date", async (req, re
     return res.status(400).json({ message: "Deadline occurrence date must be YYYY-MM-DD" });
   }
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     const result = await tasksService.completeDeadlineOccurrence(
       userId,
       req.params.deadlineId,
       req.params.date,
     );
-    applyDeadlineCurrentStatus(userId, req.params.deadlineId, "complete").catch((err) => {
-      console.error("[Calendar] Failed to update current Todoist deadline cache:", err.message);
+    applyDeadlineCurrentStatus(userId, req.params.deadlineId, "complete").catch((err: unknown) => {
+      console.error("[Calendar] Failed to update current Todoist deadline cache:", routeError(err).message);
     });
     res.json(result);
   } catch (err) {
@@ -141,24 +164,37 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 router.get("/search", async (req, res) => {
   try {
-    return res.json(await searchCalendar(process.env.EA_USER_ID, req.query));
+    return res.json(await searchCalendar(calendarUserId(), req.query));
   } catch (err) {
     if (isCalendarSearchInputError(err)) {
-      return res.status(err.status).json({ code: err.code, message: err.message });
+      const error = routeError(err);
+      return res.status(error.status || 400).json({ code: error.code, message: error.message });
     }
     console.error("[Calendar] search failed:", err);
     return res.status(500).json({ code: "calendar_search_error", message: "Failed to search calendar" });
   }
 });
 
-function validateCalendarRange(req, res, { enforceHistoryWindow = false } = {}) {
+function validateCalendarRange(
+  req: Request,
+  res: Response,
+  { enforceHistoryWindow = false }: { enforceHistoryWindow?: boolean } = {},
+) {
   const result = validateCalendarRangeQuery(req.query, { enforceHistoryWindow });
   if (result.ok) return result.value;
   res.status(400).json({ message: result.message });
   return null;
 }
 
-function eventOccurrenceIdentity({ event, originalStartTime, scope }) {
+function eventOccurrenceIdentity({
+  event,
+  originalStartTime,
+  scope,
+}: {
+  event: CalendarIdentityEvent;
+  originalStartTime?: string | null;
+  scope?: CalendarRecurrenceScope;
+}) {
   if (scope && scope !== "one") return undefined;
   if (originalStartTime) return originalStartTime;
   if (event?.isRecurring) {
@@ -168,7 +204,18 @@ function eventOccurrenceIdentity({ event, originalStartTime, scope }) {
   return undefined;
 }
 
-function isRecurringCalendarMirrorWrite(event, { scope, recurringEventId, originalStartTime } = {}) {
+function isRecurringCalendarMirrorWrite(
+  event: CalendarIdentityEvent | null,
+  {
+    scope,
+    recurringEventId,
+    originalStartTime,
+  }: {
+    scope?: CalendarRecurrenceScope;
+    recurringEventId?: string | null;
+    originalStartTime?: string | null;
+  } = {},
+) {
   return !!(
     event?.isRecurring
     || event?.recurringEventId
@@ -179,13 +226,18 @@ function isRecurringCalendarMirrorWrite(event, { scope, recurringEventId, origin
   );
 }
 
-function scheduleCalendarMirrorDirty({ userId, accountId, calendarId, reason = "calendar-write" }) {
-  markCalendarSearchMirrorDirty(userId, { accountId, calendarId, reason }).catch((err) => {
-    console.error("[Calendar] search mirror dirty marking failed:", err.message);
+function scheduleCalendarMirrorDirty({
+  userId,
+  accountId,
+  calendarId,
+  reason = "calendar-write",
+}: { userId: string; accountId: string; calendarId: string; reason?: string }) {
+  markCalendarSearchMirrorDirty(userId, { accountId, calendarId, reason }).catch((err: unknown) => {
+    console.error("[Calendar] search mirror dirty marking failed:", routeError(err).message);
   });
 }
 
-function scheduleCalendarMirrorUpsert(userId, event) {
+function scheduleCalendarMirrorUpsert(userId: string, event: NormalizedCalendarEvent) {
   if (!event?.accountId || !event?.calendarId) return;
   if (isRecurringCalendarMirrorWrite(event)) {
     scheduleCalendarMirrorDirty({
@@ -195,18 +247,25 @@ function scheduleCalendarMirrorUpsert(userId, event) {
     });
     return;
   }
-  upsertCalendarSearchMirrorOccurrence(userId, event).catch((err) => {
-    console.error("[Calendar] search mirror write-through failed:", err.message);
+  upsertCalendarSearchMirrorOccurrence(userId, event).catch((err: unknown) => {
+    console.error("[Calendar] search mirror write-through failed:", routeError(err).message);
   });
 }
 
-function scheduleCalendarMirrorDelete(userId, {
+function scheduleCalendarMirrorDelete(userId: string, {
   accountId,
   calendarId,
   eventId,
   scope,
   recurringEventId,
   originalStartTime,
+}: {
+  accountId?: string;
+  calendarId?: string;
+  eventId?: string;
+  scope?: CalendarRecurrenceScope;
+  recurringEventId?: string | null;
+  originalStartTime?: string | null;
 }) {
   if (!accountId || !calendarId || !eventId) return;
   if (isRecurringCalendarMirrorWrite(null, { scope, recurringEventId, originalStartTime })) {
@@ -217,8 +276,8 @@ function scheduleCalendarMirrorDelete(userId, {
     accountId,
     calendarId,
     eventId,
-  }).catch((err) => {
-    console.error("[Calendar] search mirror delete write-through failed:", err.message);
+  }).catch((err: unknown) => {
+    console.error("[Calendar] search mirror delete write-through failed:", routeError(err).message);
   });
 }
 
@@ -228,7 +287,7 @@ router.get("/range", async (req, res) => {
   const { startDate, endDate } = range;
 
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     const { accounts } = await loadUserConfig(userId);
     const calendarAccounts = accounts.filter(
       (account) => account.type === "gmail" && account.calendar_enabled,
@@ -237,7 +296,7 @@ router.get("/range", async (req, res) => {
     const { dayStart } = pacificDayBoundaries(startDate);
     const { dayEnd } = pacificDayBoundaries(endDate);
 
-    const events = await fetchCalendar(calendarAccounts, {
+    const events = await fetchCalendar(calendarAccounts as unknown as StoredCalendarAccount[], {
       startDate: dayStart,
       endDate: dayEnd,
     });
@@ -245,7 +304,7 @@ router.get("/range", async (req, res) => {
 
     res.json({ events: hydratedEvents, fetchedAt: new Date().toISOString() });
   } catch (err) {
-    console.error("[Calendar] range fetch failed:", err.message);
+    console.error("[Calendar] range fetch failed:", routeError(err).message);
     res.status(500).json({ message: "Failed to fetch calendar range" });
   }
 });
@@ -255,7 +314,7 @@ router.get("/deadlines/range", async (req, res) => {
   if (!range) return undefined;
 
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     const { payload, errors } = await readCalendarDeadlineRange(userId, range);
 
     res.json({
@@ -276,7 +335,7 @@ router.get("/bills/range", async (req, res) => {
   if (!range) return undefined;
 
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     res.json({
       ...await readCalendarBillsRange(userId, range),
       minDate: range.minDate,
@@ -291,12 +350,12 @@ router.get("/bills/range", async (req, res) => {
 
 router.get("/calendars", async (_req, res) => {
   try {
-    const userId = process.env.EA_USER_ID;
+    const userId = calendarUserId();
     const { accounts } = await loadUserConfig(userId);
     const calendarAccounts = accounts.filter(
       (account) => account.type === "gmail" && account.calendar_enabled,
     );
-    const groups = await getCalendarSourceGroups(calendarAccounts);
+    const groups = await getCalendarSourceGroups(calendarAccounts as unknown as StoredCalendarAccount[]);
     res.json({ accounts: groups });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to fetch calendar sources");
@@ -314,12 +373,12 @@ router.get("/places/suggest", placesLimiter, async (req, res) => {
   }
 
   try {
-    const userId = process.env.EA_USER_ID;
-    const { settings = {} } = await loadUserConfig(userId);
+    const userId = calendarUserId();
+    const { settings } = await loadUserConfig(userId);
     const places = await suggestGooglePlaces(query, {
-      sessionToken: sessionToken || null,
-      lat: settings.weather_lat,
-      lng: settings.weather_lng,
+      sessionToken: sessionToken || undefined,
+      lat: typeof settings?.weather_lat === "number" ? settings.weather_lat : undefined,
+      lng: typeof settings?.weather_lng === "number" ? settings.weather_lng : undefined,
     });
     res.json({ places });
   } catch (err) {
@@ -333,7 +392,7 @@ router.get("/places/:placeId", placesLimiter, async (req, res) => {
 
   try {
     const place = await getGooglePlaceDetails(placeId, {
-      sessionToken: sessionToken || null,
+      sessionToken: sessionToken || undefined,
     });
     res.json({ place });
   } catch (err) {
@@ -372,7 +431,7 @@ router.post("/events", async (req, res) => {
       colorId,
       recurrence,
     });
-    scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
+    scheduleCalendarMirrorUpsert(calendarUserId(), event);
     res.status(201).json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to create calendar event");
@@ -391,21 +450,22 @@ router.post("/events/batch", async (req, res) => {
   try {
     const created = [];
     const failed = [];
-    const { accounts } = await loadUserConfig(process.env.EA_USER_ID);
+    const { accounts } = await loadUserConfig(calendarUserId());
 
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index] || {};
       try {
         const account = resolveCalendarAccount(accounts, item.accountId);
         const event = await createCalendarEvent(account, item);
-        scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
+        scheduleCalendarMirrorUpsert(calendarUserId(), event);
         created.push({ index, event });
       } catch (err) {
+        const error = routeError(err);
         failed.push({
           index,
           input: item,
-          code: err?.code || "calendar_batch_item_failed",
-          message: err?.message || "Failed to create event.",
+          code: error?.code || "calendar_batch_item_failed",
+          message: error?.message || "Failed to create event.",
         });
       }
     }
@@ -468,13 +528,13 @@ router.patch("/events/:eventId", async (req, res) => {
       originalStartTime,
     });
     if (sourceCalendarId && sourceCalendarId !== calendarId && !isRecurringCalendarMirrorWrite(event, { scope, recurringEventId, originalStartTime })) {
-      scheduleCalendarMirrorDelete(process.env.EA_USER_ID, {
+      scheduleCalendarMirrorDelete(calendarUserId(), {
         accountId,
         calendarId: sourceCalendarId,
         eventId,
       });
     }
-    scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
+    scheduleCalendarMirrorUpsert(calendarUserId(), event);
     const anchorAt = calendarEventAnchorAt(event);
     if (anchorAt) {
       // Reminder bookkeeping runs AFTER Google has already applied the update.
@@ -483,7 +543,7 @@ router.patch("/events/:eventId", async (req, res) => {
       // benign next to a diverged UI, so log and still return the updated event.
       try {
         await recomputeUnsentRemindersForSource({
-          userId: process.env.EA_USER_ID,
+          userId: calendarUserId(),
           sourceType: "calendar_event",
           sourceItemId: eventId,
           sourceOccurrenceId: eventOccurrenceIdentity({ event, originalStartTime, scope }),
@@ -491,7 +551,7 @@ router.patch("/events/:eventId", async (req, res) => {
           anchorAt,
         });
       } catch (err) {
-        console.error("[Calendar] reminder recompute after event update failed:", err.message);
+        console.error("[Calendar] reminder recompute after event update failed:", routeError(err).message);
       }
     }
     res.json({ event });
@@ -512,7 +572,7 @@ router.delete("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
-    scheduleCalendarMirrorDelete(process.env.EA_USER_ID, {
+    scheduleCalendarMirrorDelete(calendarUserId(), {
       accountId,
       calendarId,
       eventId,
@@ -525,7 +585,7 @@ router.delete("/events/:eventId", async (req, res) => {
     // deletion Google has applied (the inverse ghost). Log and still return ok.
     try {
       await deleteSourceReminders({
-        userId: process.env.EA_USER_ID,
+        userId: calendarUserId(),
         sourceType: "calendar_event",
         sourceItemId: eventId,
         sourceOccurrenceId: eventOccurrenceIdentity({
@@ -535,7 +595,7 @@ router.delete("/events/:eventId", async (req, res) => {
         }),
       });
     } catch (err) {
-      console.error("[Calendar] reminder cleanup after event delete failed:", err.message);
+      console.error("[Calendar] reminder cleanup after event delete failed:", routeError(err).message);
     }
     res.json({ ok: true });
   } catch (err) {

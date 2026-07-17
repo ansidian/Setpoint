@@ -2,6 +2,69 @@ import db from "../db/connection.ts";
 import { decrypt, encrypt } from "../platform/encryption.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.ts";
+import type {
+  CalendarAccount,
+  GoogleCalendarSource,
+  GoogleEventResource,
+} from "../../shared/types/calendar.ts";
+
+export interface StoredCalendarAccount extends CalendarAccount {
+  credentials_encrypted?: string | null;
+  needs_reauth?: boolean | number;
+}
+
+interface CalendarCredentials {
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  scopes?: string[];
+}
+
+export interface AuthorizedCalendarAccount {
+  account: StoredCalendarAccount;
+  accessToken: string;
+  credentials: CalendarCredentials;
+  hasWriteScope: boolean;
+}
+
+interface GoogleTokenResponse {
+  access_token: string;
+  expires_in?: number;
+  refresh_token?: string;
+  scope?: string;
+}
+
+interface GoogleErrorDetails extends Record<string, unknown> {
+  googleStatus: number;
+  googleReason: string | null;
+  googleMessage: string;
+  rawGoogleError: string;
+}
+
+interface GoogleErrorEnvelope {
+  error?: { errors?: Array<{ reason?: string }>; status?: string; message?: string; code?: number };
+}
+
+interface RawCalendarListEntry {
+  id?: string;
+  summary?: string;
+  summaryOverride?: string;
+  backgroundColor?: string;
+  accessRole?: string;
+  primary?: boolean;
+  selected?: boolean;
+  hidden?: boolean;
+  deleted?: boolean;
+}
+
+interface CalendarListResponse {
+  items?: RawCalendarListEntry[];
+  nextPageToken?: string;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export const CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 export const CALENDAR_FULL_SCOPE = "https://www.googleapis.com/auth/calendar";
@@ -20,13 +83,18 @@ const DEFAULT_TOKEN_TTL_SECONDS = 3600;
 
 // Compute an absolute expiry (ms epoch) from a token response's expires_in,
 // falling back to DEFAULT_TOKEN_TTL_SECONDS when it is missing or non-finite.
-function computeExpiresAt(expiresIn, now = Date.now()) {
-  const ttl = Number.isFinite(expiresIn) ? expiresIn : DEFAULT_TOKEN_TTL_SECONDS;
+function computeExpiresAt(expiresIn: number | undefined, now = Date.now()) {
+  const ttl = typeof expiresIn === "number" && Number.isFinite(expiresIn)
+    ? expiresIn
+    : DEFAULT_TOKEN_TTL_SECONDS;
   return now + ttl * 1000;
 }
 
 export class CalendarServiceError extends Error {
-  constructor(status, code, message, details = {}) {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string, message: string, details: Record<string, unknown> = {}) {
     super(message);
     this.name = "CalendarServiceError";
     this.status = status;
@@ -35,32 +103,37 @@ export class CalendarServiceError extends Error {
   }
 }
 
-export function throwCalendarError(status, code, message, details) {
+export function throwCalendarError(
+  status: number,
+  code: string,
+  message: string,
+  details: Record<string, unknown> = {},
+): never {
   throw new CalendarServiceError(status, code, message, details);
 }
 
-function getStoredScopes(credentials) {
+function getStoredScopes(credentials: CalendarCredentials) {
   if (!Array.isArray(credentials?.scopes)) return [];
   return credentials.scopes.filter(Boolean);
 }
 
-function hasCalendarWriteScope(credentials) {
+function hasCalendarWriteScope(credentials: CalendarCredentials) {
   const scopes = getStoredScopes(credentials);
   return scopes.includes(CALENDAR_WRITE_SCOPE) || scopes.includes(CALENDAR_FULL_SCOPE);
 }
 
-async function getAccountCredentials(account) {
+async function getAccountCredentials(account: StoredCalendarAccount): Promise<CalendarCredentials> {
   if (!account?.credentials_encrypted) {
     throwCalendarError(400, "calendar_auth_missing", "Calendar credentials are missing for this account");
   }
   try {
-    return JSON.parse(decrypt(account.credentials_encrypted));
+    return JSON.parse(decrypt(account.credentials_encrypted)) as CalendarCredentials;
   } catch {
     throwCalendarError(500, "calendar_auth_invalid", "Calendar credentials could not be read");
   }
 }
 
-async function persistCredentials(accountId, credentials) {
+async function persistCredentials(accountId: string, credentials: CalendarCredentials) {
   await db.execute({
     sql: `UPDATE ea_accounts
           SET credentials_encrypted = ?, updated_at = datetime('now')
@@ -69,17 +142,19 @@ async function persistCredentials(accountId, credentials) {
   });
 }
 
-export async function getAuthorizedAccount(account) {
+export async function getAuthorizedAccount(account: StoredCalendarAccount): Promise<AuthorizedCalendarAccount> {
   const credentials = await getAccountCredentials(account);
 
-  if (!Number.isFinite(credentials.expires_at) || credentials.expires_at < Date.now() + 5 * 60 * 1000) {
+  if (typeof credentials.expires_at !== "number"
+    || !Number.isFinite(credentials.expires_at)
+    || credentials.expires_at < Date.now() + 5 * 60 * 1000) {
     const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        refresh_token: credentials.refresh_token,
+        client_id: GOOGLE_CLIENT_ID!,
+        client_secret: GOOGLE_CLIENT_SECRET!,
+        refresh_token: credentials.refresh_token!,
         grant_type: "refresh_token",
       }),
     }, { timeoutMs: TOKEN_REFRESH_TIMEOUT_MS });
@@ -90,13 +165,13 @@ export async function getAuthorizedAccount(account) {
         try {
           await markAccountNeedsReauth(account.id);
         } catch (markErr) {
-          console.error("[Calendar] Failed to mark needs_reauth:", markErr.message);
+          console.error("[Calendar] Failed to mark needs_reauth:", errorMessage(markErr));
         }
       }
       throwCalendarError(401, "calendar_token_refresh_failed", `Calendar token refresh failed: ${text || res.status}`);
     }
 
-    const data = await res.json();
+    const data = await res.json() as GoogleTokenResponse;
     credentials.access_token = data.access_token;
     credentials.expires_at = computeExpiresAt(data.expires_in);
     if (data.refresh_token) credentials.refresh_token = data.refresh_token;
@@ -108,7 +183,7 @@ export async function getAuthorizedAccount(account) {
       try {
         await clearAccountNeedsReauth(account.id);
       } catch (clearErr) {
-        console.error("[Calendar] Failed to clear needs_reauth:", clearErr.message);
+        console.error("[Calendar] Failed to clear needs_reauth:", errorMessage(clearErr));
       }
     }
   }
@@ -121,7 +196,21 @@ export async function getAuthorizedAccount(account) {
   };
 }
 
-export async function googleCalendarFetch(auth, path, { method = "GET", query, body, headers = {} } = {}) {
+export async function googleCalendarFetch(
+  auth: AuthorizedCalendarAccount,
+  path: string,
+  {
+    method = "GET",
+    query,
+    body,
+    headers = {},
+  }: {
+    method?: string;
+    query?: Record<string, string | number | boolean | null | undefined>;
+    body?: unknown;
+    headers?: Record<string, string>;
+  } = {},
+) {
   const url = new URL(path, "https://www.googleapis.com/calendar/v3/");
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -164,12 +253,12 @@ export async function googleCalendarFetch(auth, path, { method = "GET", query, b
   return res;
 }
 
-async function readGoogleErrorDetails(res) {
+async function readGoogleErrorDetails(res: Response): Promise<GoogleErrorDetails> {
   const rawGoogleError = await res.text().catch(() => "");
-  let parsed = null;
+  let parsed: GoogleErrorEnvelope | null = null;
   if (rawGoogleError) {
     try {
-      parsed = JSON.parse(rawGoogleError);
+      parsed = JSON.parse(rawGoogleError) as GoogleErrorEnvelope;
     } catch {
       parsed = null;
     }
@@ -189,7 +278,7 @@ async function readGoogleErrorDetails(res) {
   };
 }
 
-function googleCalendarUserMessage(details = {}) {
+function googleCalendarUserMessage(details: Partial<GoogleErrorDetails> = {}) {
   const googleStatus = Number(details.googleStatus) || 0;
   const googleReason = String(details.googleReason || "").toLowerCase();
   const googleMessage = String(details.googleMessage || "");
@@ -204,31 +293,38 @@ function googleCalendarUserMessage(details = {}) {
   return "Google Calendar could not save this event. Refresh the calendar and try again.";
 }
 
-export function isGoogleEventNotFoundError(err) {
-  return err?.code === "calendar_google_error"
-    && (Number(err.googleStatus) === 404 || String(err.googleReason || "").toLowerCase() === "notfound");
+export function isGoogleEventNotFoundError(err: unknown) {
+  const error = err as CalendarServiceError & Partial<GoogleErrorDetails>;
+  return error?.code === "calendar_google_error"
+    && (Number(error.googleStatus) === 404 || String(error.googleReason || "").toLowerCase() === "notfound");
 }
 
-export function isGoogleEventAlreadyExistsError(err) {
-  return err?.code === "calendar_google_error"
-    && (Number(err.googleStatus) === 409 || String(err.googleMessage || "").toLowerCase().includes("already exists"));
+export function isGoogleEventAlreadyExistsError(err: unknown) {
+  const error = err as CalendarServiceError & Partial<GoogleErrorDetails>;
+  return error?.code === "calendar_google_error"
+    && (Number(error.googleStatus) === 409 || String(error.googleMessage || "").toLowerCase().includes("already exists"));
 }
 
-export function ifMatchHeaders(etag) {
+export function ifMatchHeaders(etag: string | null | undefined): Record<string, string> {
   return etag ? { "If-Match": etag } : {};
 }
 
-export async function getRawEvent(account, calendarId, eventId, { auth: providedAuth = null } = {}) {
+export async function getRawEvent(
+  account: StoredCalendarAccount,
+  calendarId: string,
+  eventId: string,
+  { auth: providedAuth = null }: { auth?: AuthorizedCalendarAccount | null } = {},
+): Promise<{ auth: AuthorizedCalendarAccount; event: GoogleEventResource }> {
   // Callers that already resolved an authorized account (e.g. a recurring-event
   // mutation that just fetched the selected instance) can pass it to skip a
   // redundant credential decrypt + possible token refresh.
   const auth = providedAuth || await getAuthorizedAccount(account);
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
-  const event = await res.json();
+  const event = await res.json() as GoogleEventResource;
   return { auth, event };
 }
 
-export function buildSyntheticPrimaryCalendar(account, writable) {
+export function buildSyntheticPrimaryCalendar(account: StoredCalendarAccount, writable: boolean) {
   return {
     id: "primary",
     summary: "Primary",
@@ -240,15 +336,19 @@ export function buildSyntheticPrimaryCalendar(account, writable) {
   };
 }
 
-function calendarListEntrySelected(raw) {
+function calendarListEntrySelected(raw: RawCalendarListEntry) {
   return raw?.selected !== false && raw?.hidden !== true && raw?.deleted !== true;
 }
 
-function normalizeCalendarEntry(account, raw, hasWriteScope) {
+function normalizeCalendarEntry(
+  account: StoredCalendarAccount,
+  raw: RawCalendarListEntry,
+  hasWriteScope: boolean,
+): GoogleCalendarSource {
   const accessRole = raw.accessRole || "reader";
   const writable = hasWriteScope && (accessRole === "owner" || accessRole === "writer");
   return {
-    id: raw.id,
+    id: raw.id || "primary",
     summary: raw.summary || raw.summaryOverride || raw.id || "Untitled calendar",
     backgroundColor: raw.backgroundColor || account.color || "#4285f4",
     accessRole,
@@ -266,12 +366,16 @@ function normalizeCalendarEntry(account, raw, hasWriteScope) {
 // and must NOT serve a stale writable=false list. credentials_encrypted is stable
 // between (hourly) token refreshes, so the hot-path benefit holds. Invalidated on
 // event mutations (see invalidateCalendarListCache callers in
-// calendar-mutations.js). Single-user (EA_USER_ID) app, so a process-global Map
+// calendar-mutations). Single-user (EA_USER_ID) app, so a process-global Map
 // is sufficient.
 const CALENDAR_LIST_CACHE_TTL_MS = 120_000;
-const calendarListCache = new Map();
+const calendarListCache = new Map<string, {
+  value: GoogleCalendarSource[];
+  expiresAt: number;
+  credentialsKey: string;
+}>();
 
-export function invalidateCalendarListCache(accountId) {
+export function invalidateCalendarListCache(accountId?: string | null) {
   if (accountId == null) {
     calendarListCache.clear();
     return;
@@ -279,7 +383,7 @@ export function invalidateCalendarListCache(accountId) {
   calendarListCache.delete(accountId);
 }
 
-export async function listCalendarsForAccount(account) {
+export async function listCalendarsForAccount(account: StoredCalendarAccount): Promise<GoogleCalendarSource[]> {
   const cacheKey = account?.id ?? null;
   const credentialsKey = account?.credentials_encrypted ?? "";
   if (cacheKey != null) {
@@ -290,21 +394,22 @@ export async function listCalendarsForAccount(account) {
   }
 
   const auth = await getAuthorizedAccount(account);
-  let rawCalendars = [];
-  let pageToken = null;
+  const rawCalendars: RawCalendarListEntry[] = [];
+  let pageToken: string | null = null;
 
   do {
     const res = await googleCalendarFetch(auth, "users/me/calendarList", {
       query: { pageToken, maxResults: 250, showHidden: false },
-    }).catch((err) => {
-      if (err.code === "calendar_google_forbidden" || err.code === "calendar_google_error") {
+    }).catch((err: unknown) => {
+      const error = err as CalendarServiceError;
+      if (error.code === "calendar_google_forbidden" || error.code === "calendar_google_error") {
         return null;
       }
       throw err;
     });
 
     if (!res) break;
-    const data = await res.json();
+    const data = await res.json() as CalendarListResponse;
     rawCalendars.push(...(data.items || []));
     pageToken = data.nextPageToken || null;
   } while (pageToken);

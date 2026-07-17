@@ -1,6 +1,6 @@
 # Server Dashboard Map
 
-Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/scheduling/backoff, the per-provider fetch-timeout race, background in-flight dedup, system-status composition, and final response shaping. Entry point is `current-service.js`, driven by `server/routes/dashboard.js` and `server/routes/calendar.js`. Provider-specific fetch/publish/maintenance behavior lives in `current-providers/` (see its map).
+Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/scheduling/backoff, the per-provider fetch-timeout race, background in-flight dedup, system-status composition, and final response shaping. Entry point is `current-service.js`, driven by `server/routes/dashboard.js` and `server/routes/calendar.ts`. Provider-specific fetch/publish/maintenance behavior lives in `current-providers/` (see its map).
 
 ## Files
 
@@ -21,5 +21,5 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 
 ## Related
 
-- `server/routes/dashboard.js`, `server/routes/calendar.js` — HTTP surfaces consuming the public exports
+- `server/routes/dashboard.js`, `server/routes/calendar.ts` — HTTP surfaces consuming the public exports
 - `server/dashboard/current-providers/` — per-source fetch/publish/maintenance modules (see its map)

@@ -1,8 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { computeCalendarSearchMirrorHealth } from "./calendarSearchMirrorHealthModel.js";
+import { computeCalendarSearchMirrorHealth } from "./calendarSearchMirrorHealthModel.ts";
+import type { CalendarMirrorStateRow } from "./calendarSearchMirrorHealthModel.ts";
 
 const now = new Date("2026-05-12T19:00:00.000Z");
-const row = (over) => ({ account_id: "a1", calendar_id: "c1", status: "idle", ...over });
+const row = (over: Partial<CalendarMirrorStateRow>): CalendarMirrorStateRow => ({
+  account_id: "a1",
+  calendar_id: "c1",
+  window_start: "2025-05-12",
+  window_end: "2027-11-12",
+  status: "idle",
+  ...over,
+});
 
 describe("computeCalendarSearchMirrorHealth", () => {
   it("is initializing with no sources", () => {

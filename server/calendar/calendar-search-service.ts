@@ -4,27 +4,99 @@ import {
   normalizeEventSearchCandidate,
   normalizeLimit,
   rankCalendarSearchCandidates,
-} from "./calendar-search.js";
-import { addMonthsIso } from "./calendar-range-model.js";
+} from "./calendar-search.ts";
+import { addMonthsIso } from "./calendar-range-model.ts";
+import type {
+  CalendarMirrorHealth,
+  CalendarSearchCandidate,
+} from "../../shared/types/calendar.ts";
+import type { DeadlinePayload } from "../../shared/types/tasks.ts";
+
+interface CalendarSearchInputError extends Error {
+  status: number;
+  code: string;
+}
+
+interface DateRange {
+  start: string;
+  end: string;
+}
+
+interface CoverageSource {
+  key: string;
+  label: string;
+  searched: boolean;
+  start: string;
+  end: string;
+  strategy?: string;
+  syncHealth?: unknown;
+  errors?: Array<{ source?: string; message: string }>;
+  actualBudgetUrl?: string | null;
+}
+
+interface SearchHealth {
+  state: string;
+  configured?: boolean | null;
+  severity?: string;
+  sources?: Array<{ lastSuccessAt?: string | null }>;
+}
+
+type EventSearchInput = Parameters<typeof normalizeEventSearchCandidate>[0];
+type BillSearchInput = Parameters<typeof normalizeBillSearchCandidate>[0];
+
+interface BillsMirrorResult {
+  schedules?: BillSearchInput[];
+  syncHealth?: SearchHealth | null;
+  actualBudgetUrl?: string | null;
+}
+
+interface CalendarSearchDependencies {
+  billMirrorRefreshRange: (options: { now: Date }) => DateRange;
+  getCalendarSearchMirrorHealth: (userId: string) => Promise<SearchHealth>;
+  isBillsMirrorMaintenanceDue: (health: SearchHealth | null | undefined) => boolean;
+  listCalendarSearchMirrorOccurrences: (
+    userId: string,
+    options: DateRange & { query: string; limit: number; centerDate: string },
+  ) => Promise<EventSearchInput[]>;
+  logger?: Pick<Console, "error">;
+  now?: () => Date;
+  readBillsMirrorRange: (userId: string, range: DateRange) => Promise<BillsMirrorResult>;
+  readCalendarDeadlineRange: (
+    userId: string,
+    range: DateRange,
+  ) => Promise<{ payload: DeadlinePayload; errors?: Array<{ source?: string; message: string }> }>;
+  requestBillsCurrentMaintenanceRefresh: (userId: string, options: { now: Date }) => Promise<unknown>;
+  requestCalendarSearchMirrorSync: (
+    userId: string,
+    options: { reason: string; forceFull: boolean },
+  ) => unknown;
+  scheduleBillsMirrorRefresh: (userId: string) => Promise<unknown>;
+  shouldScheduleImmediateBillsRefresh: (health: SearchHealth) => boolean;
+}
 
 const SEARCH_MIN_QUERY_LENGTH = 2;
 const SEARCH_MIRROR_CANDIDATE_LIMIT = 1000;
 const SEARCH_HISTORY_MONTHS = 12;
 const SEARCH_FUTURE_MONTHS = 18;
 
-function calendarSearchInputError(code, message) {
-  const err = new Error(message);
+function calendarSearchInputError(code: string, message: string): CalendarSearchInputError {
+  const err = new Error(message) as CalendarSearchInputError;
   err.name = "CalendarSearchInputError";
   err.status = 400;
   err.code = code;
   return err;
 }
 
-export function isCalendarSearchInputError(err) {
-  return err?.name === "CalendarSearchInputError";
+export function isCalendarSearchInputError(err: unknown) {
+  return (err as Error)?.name === "CalendarSearchInputError";
 }
 
-function cheapEmptyCalendarSearchResponse({ query, scope, limit, fetchedAt }) {
+function cheapEmptyCalendarSearchResponse({
+  query,
+  scope,
+  limit,
+  fetchedAt,
+}: { query: string; scope: string; limit: number; fetchedAt: string }) {
   return {
     query,
     scope,
@@ -42,13 +114,13 @@ function cheapEmptyCalendarSearchResponse({ query, scope, limit, fetchedAt }) {
   };
 }
 
-function pacificDate(now) {
+function pacificDate(now: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
   }).format(now);
 }
 
-function calendarSearchMirrorWindow({ now }) {
+function calendarSearchMirrorWindow({ now }: { now: Date }): DateRange {
   const today = pacificDate(now);
   return {
     start: addMonthsIso(today, -SEARCH_HISTORY_MONTHS),
@@ -56,7 +128,21 @@ function calendarSearchMirrorWindow({ now }) {
   };
 }
 
-function calendarSearchResponse({ query, scope, limit, candidates, coverageSources, now }) {
+function calendarSearchResponse({
+  query,
+  scope,
+  limit,
+  candidates,
+  coverageSources,
+  now,
+}: {
+  query: string;
+  scope: string;
+  limit: number;
+  candidates: CalendarSearchCandidate[];
+  coverageSources: CoverageSource[];
+  now: Date;
+}) {
   const ranked = rankCalendarSearchCandidates(candidates, { query, limit, now });
   return {
     query,
@@ -74,12 +160,12 @@ function calendarSearchResponse({ query, scope, limit, candidates, coverageSourc
   };
 }
 
-function shouldRequestCalendarSearchMirrorRepair(syncHealth) {
+function shouldRequestCalendarSearchMirrorRepair(syncHealth: SearchHealth) {
   return ["initializing", "stale", "degraded", "dirty", "unavailable", "needs_sync"]
     .includes(syncHealth?.state);
 }
 
-function calendarSearchMirrorSearched(syncHealth, events) {
+function calendarSearchMirrorSearched(syncHealth: SearchHealth, events: EventSearchInput[]) {
   if (events?.length) return true;
   return !["initializing", "unavailable"].includes(syncHealth?.state);
 }
@@ -97,8 +183,11 @@ export function createCalendarSearchService({
   requestCalendarSearchMirrorSync,
   scheduleBillsMirrorRefresh,
   shouldScheduleImmediateBillsRefresh,
-} = {}) {
-  return async function searchCalendar(userId, queryParams = {}) {
+}: CalendarSearchDependencies) {
+  return async function searchCalendar(
+    userId: string,
+    queryParams: { q?: unknown; scope?: unknown; limit?: unknown } = {},
+  ) {
     const query = String(queryParams.q || "").trim();
     const scope = String(queryParams.scope || "events").trim();
     const limit = normalizeLimit(queryParams.limit);
@@ -183,13 +272,13 @@ export function createCalendarSearchService({
     const data = await readBillsMirrorRange(userId, range);
     if (data.syncHealth?.state === "needs_sync") {
       if (shouldScheduleImmediateBillsRefresh(data.syncHealth)) {
-        scheduleBillsMirrorRefresh(userId).catch((err) => {
-          logger.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
+        scheduleBillsMirrorRefresh(userId).catch((err: unknown) => {
+          logger.error("[Calendar] bills mirror refresh scheduling failed:", err instanceof Error ? err.message : String(err));
         });
       }
     } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
-      requestBillsCurrentMaintenanceRefresh(userId, { now: currentTime }).catch((err) => {
-        logger.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err.message);
+      requestBillsCurrentMaintenanceRefresh(userId, { now: currentTime }).catch((err: unknown) => {
+        logger.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err instanceof Error ? err.message : String(err));
       });
     }
 
@@ -215,7 +304,7 @@ export function createCalendarSearchService({
   };
 }
 
-let productionSearchCalendar;
+let productionSearchCalendar: ReturnType<typeof createCalendarSearchService> | null = null;
 
 async function loadProductionSearchCalendar() {
   if (productionSearchCalendar) return productionSearchCalendar;
@@ -223,7 +312,7 @@ async function loadProductionSearchCalendar() {
     import("../bills/bills-service.ts"),
     import("../dashboard/current-service.js"),
     import("../tasks/deadlines-read.ts"),
-    import("./calendar-search-mirror.js"),
+    import("./calendar-search-mirror.ts"),
   ]);
   productionSearchCalendar = createCalendarSearchService({
     billMirrorRefreshRange: bills.billMirrorRefreshRange,
@@ -240,7 +329,7 @@ async function loadProductionSearchCalendar() {
   return productionSearchCalendar;
 }
 
-export async function searchCalendar(...args) {
+export async function searchCalendar(...args: Parameters<ReturnType<typeof createCalendarSearchService>>) {
   const search = await loadProductionSearchCalendar();
   return search(...args);
 }

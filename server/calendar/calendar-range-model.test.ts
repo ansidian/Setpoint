@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateCalendarRange } from "./calendar-range-model.js";
+import { validateCalendarRange } from "./calendar-range-model.ts";
 
 describe("validateCalendarRange", () => {
   it("reports the existing missing-start validation message", () => {

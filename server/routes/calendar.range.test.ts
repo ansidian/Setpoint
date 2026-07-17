@@ -20,8 +20,8 @@ vi.mock("../tasks/deadline-helpers.ts", () => ({
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
-vi.mock("../calendar/calendar.js", async () => {
-  const { validateCalendarRange } = await import("../calendar/calendar-range-model.js");
+vi.mock("../calendar/calendar.ts", async () => {
+  const { validateCalendarRange } = await import("../calendar/calendar-range-model.ts");
   return {
     fetchCalendar: vi.fn(),
     pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
@@ -38,7 +38,7 @@ vi.mock("../calendar/calendar.js", async () => {
     searchCalendar: vi.fn(),
   };
 });
-vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
+vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers validateCalendarRange in the route);
   // only the DB-touching functions are stubbed below.
   ...(await importActual()),
@@ -100,7 +100,7 @@ const {
   loadCompletedTaskIds,
 } = await import("../tasks/deadline-helpers.ts") as unknown as { computeDeadlineStats: MockFunction; loadCompletedTaskIds: MockFunction };
 const { loadUserConfig } = await import("../platform/config-service.ts") as unknown as { loadUserConfig: MockFunction };
-const { fetchCalendar } = await import("../calendar/calendar.js") as unknown as { fetchCalendar: MockFunction };
+const { fetchCalendar } = await import("../calendar/calendar.ts") as unknown as { fetchCalendar: MockFunction };
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.ts") as unknown as Record<"fetchTodoistDueTaskIdSet" | "fetchTodoistTasksAll" | "fetchTodoistTasksRange" | "getTodoistSyncHealth", MockFunction>;
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts") as unknown as Record<"isBillsMirrorMaintenanceDue" | "readBillsMirrorRange" | "scheduleBillsMirrorRefresh", MockFunction>;
 const { queryTransactions } = await import("../transactions/transactions-service.ts") as unknown as { queryTransactions: MockFunction };
@@ -108,7 +108,7 @@ const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/cur
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.ts") as unknown as { hydrateRecurringTombstones: MockFunction };
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.ts") as unknown as { listUpcomingReminderStatesForSources: MockFunction };
 const db = (await import("../db/connection.ts")).default as unknown as { execute: MockFunction };
-const calendarRoutes = (await import("./calendar.js")).default;
+const calendarRoutes = (await import("./calendar.ts")).default;
 
 function makeApp() {
   const app = express();

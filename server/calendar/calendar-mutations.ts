@@ -1,7 +1,8 @@
-// Mirror invalidation is intentionally not synchronous here: routes/calendar.js
+// Mirror invalidation is intentionally not synchronous here: routes/calendar
 // triggers calendar-search-mirror via requestCalendarSearchMirrorSync (1 s
 // debounce + 15 min backstop worker, D-CAL-10).
 import {
+  type AuthorizedCalendarAccount,
   getAuthorizedAccount,
   getRawEvent,
   googleCalendarFetch,
@@ -11,7 +12,7 @@ import {
   isGoogleEventNotFoundError,
   listCalendarsForAccount,
   throwCalendarError,
-} from "./calendar-google-client.js";
+} from "./calendar-google-client.ts";
 import {
   addDaysIso,
   assertMutableGoogleEvent,
@@ -22,10 +23,39 @@ import {
   isRecurringEventResource,
   normalizeGoogleEvent,
   toIsoDate,
-} from "./calendar-event-normalize.js";
+} from "./calendar-event-normalize.ts";
 import { normalizeGoogleEventColorId } from "../../shared/calendar-event-colors.ts";
+import type {
+  CalendarAccount,
+  CalendarEventMutationInput,
+  GoogleCalendarSource,
+  GoogleEventDateTime,
+  GoogleEventResource,
+  NormalizedCalendarEvent,
+} from "../../shared/types/calendar.ts";
+import type { StoredCalendarAccount } from "./calendar-google-client.ts";
 
-function assertWriteAccess(auth, calendar) {
+interface GoogleCalendarMutationPayload {
+  summary: string;
+  location: string;
+  description: string;
+  start: GoogleEventDateTime;
+  end: GoogleEventDateTime;
+  colorId?: string;
+  recurrence?: string[];
+}
+
+interface MutableEventContext {
+  auth: AuthorizedCalendarAccount;
+  calendar: GoogleCalendarSource;
+  event: GoogleEventResource;
+}
+
+type CalendarMutationDraft = CalendarEventMutationInput & {
+  calendarId: string;
+};
+
+function assertWriteAccess(auth: AuthorizedCalendarAccount, calendar: GoogleCalendarSource) {
   if (!auth.hasWriteScope) {
     throwCalendarError(403, "calendar_reauth_required", "Reconnect this Gmail account to edit calendar events.");
   }
@@ -34,7 +64,7 @@ function assertWriteAccess(auth, calendar) {
   }
 }
 
-async function getWritableCalendarContext(account, calendarId) {
+async function getWritableCalendarContext(account: StoredCalendarAccount, calendarId: string) {
   const auth = await getAuthorizedAccount(account);
   const calendars = await listCalendarsForAccount(account);
   const calendar = calendars.find((entry) => entry.id === calendarId);
@@ -45,14 +75,14 @@ async function getWritableCalendarContext(account, calendarId) {
   return { auth, calendar };
 }
 
-function toTime(value, label) {
+function toTime(value: unknown, label: string) {
   if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) {
     throwCalendarError(400, "calendar_validation_error", `${label} must use HH:MM.`);
   }
   return value;
 }
 
-function toCalendarMutationPayload(input) {
+function toCalendarMutationPayload(input: CalendarEventMutationInput): GoogleCalendarMutationPayload {
   const title = String(input.title || "").trim();
   if (!title) {
     throwCalendarError(400, "calendar_validation_error", "Title is required.");
@@ -77,7 +107,7 @@ function toCalendarMutationPayload(input) {
     if (endDate < startDate) {
       throwCalendarError(400, "calendar_validation_error", "End date must be on or after the start date.");
     }
-    const payload = {
+    const payload: GoogleCalendarMutationPayload = {
       summary: title,
       location,
       description,
@@ -97,7 +127,7 @@ function toCalendarMutationPayload(input) {
     throwCalendarError(400, "calendar_validation_error", "End time must be on or after start time.");
   }
 
-  const payload = {
+  const payload: GoogleCalendarMutationPayload = {
     summary: title,
     location,
     description,
@@ -109,47 +139,60 @@ function toCalendarMutationPayload(input) {
   return payload;
 }
 
-async function getMutableEventContext(account, calendarId, eventId) {
+async function getMutableEventContext(
+  account: StoredCalendarAccount,
+  calendarId: string,
+  eventId: string,
+): Promise<MutableEventContext> {
   const { auth, calendar } = await getWritableCalendarContext(account, calendarId);
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
-  const event = await res.json();
+  const event = await res.json() as GoogleEventResource;
   assertMutableGoogleEvent(event);
   return { auth, calendar, event };
 }
 
-async function moveCalendarEvent(auth, sourceCalendarId, eventId, destinationCalendarId, etag) {
+async function moveCalendarEvent(
+  auth: AuthorizedCalendarAccount,
+  sourceCalendarId: string,
+  eventId: string,
+  destinationCalendarId: string,
+  etag?: string | null,
+): Promise<GoogleEventResource> {
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(sourceCalendarId)}/events/${encodeURIComponent(eventId)}/move`, {
     method: "POST",
     query: { destination: destinationCalendarId },
     headers: ifMatchHeaders(etag),
   });
-  return res.json();
+  return res.json() as Promise<GoogleEventResource>;
 }
 
-function toDraftFromGoogleEvent(event, fallback = {}) {
+function toDraftFromGoogleEvent(
+  event: GoogleEventResource,
+  fallback: CalendarEventMutationInput = {},
+): CalendarEventMutationInput {
   const allDay = !event.start?.dateTime && !!event.start?.date;
   const startValue = event.start?.dateTime || event.start?.date;
   const endValue = event.end?.dateTime || event.end?.date;
-  const startDate = allDay ? startValue : startValue.slice(0, 10);
-  const endDate = allDay ? addDaysIso(endValue, -1) : endValue.slice(0, 10);
+  const startDate = allDay ? startValue! : startValue!.slice(0, 10);
+  const endDate = allDay ? addDaysIso(endValue!, -1) : endValue!.slice(0, 10);
   return {
     title: event.summary || fallback.title || "",
     allDay,
     startDate,
     endDate,
-    startTime: allDay ? "" : startValue.slice(11, 16),
-    endTime: allDay ? "" : endValue.slice(11, 16),
+    startTime: allDay ? "" : startValue!.slice(11, 16),
+    endTime: allDay ? "" : endValue!.slice(11, 16),
     location: event.location || fallback.location || "",
     description: event.description || fallback.description || "",
     recurrence: fallback.recurrence,
   };
 }
 
-function getTargetOriginalStart(event) {
+function getTargetOriginalStart(event: GoogleEventResource): string | null {
   return event?.originalStartTime?.dateTime || event?.originalStartTime?.date || event?.start?.dateTime || event?.start?.date || null;
 }
 
-function isSameRecurringStart(left, right) {
+function isSameRecurringStart(left: string | null, right: string | null) {
   if (!left || !right) return false;
   const leftHasTime = String(left).includes("T");
   const rightHasTime = String(right).includes("T");
@@ -163,7 +206,12 @@ function isSameRecurringStart(left, right) {
   return String(left).slice(0, 10) === String(right).slice(0, 10);
 }
 
-async function getRecurringMutationContext(account, calendarId, eventId, input = {}) {
+async function getRecurringMutationContext(
+  account: StoredCalendarAccount,
+  calendarId: string,
+  eventId: string,
+  input: CalendarEventMutationInput = {},
+) {
   const selected = await getMutableEventContext(account, calendarId, eventId);
   const parentEventId = input.recurringEventId || selected.event.recurringEventId || selected.event.id;
   const parentEvent = parentEventId === selected.event.id
@@ -179,18 +227,25 @@ async function getRecurringMutationContext(account, calendarId, eventId, input =
   };
 }
 
-async function createCalendarEventImpl(account, input) {
+async function createCalendarEventImpl(
+  account: StoredCalendarAccount,
+  input: CalendarMutationDraft,
+): Promise<NormalizedCalendarEvent> {
   const { auth, calendar } = await getWritableCalendarContext(account, input.calendarId);
   const payload = toCalendarMutationPayload(input);
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
     method: "POST",
     body: payload,
   });
-  const event = await res.json();
+  const event = await res.json() as GoogleEventResource;
   return normalizeGoogleEvent({ account, calendar, event });
 }
 
-async function getMutableEventContextIfExists(account, calendarId, eventId) {
+async function getMutableEventContextIfExists(
+  account: StoredCalendarAccount,
+  calendarId: string,
+  eventId: string,
+): Promise<MutableEventContext | null> {
   try {
     return await getMutableEventContext(account, calendarId, eventId);
   } catch (err) {
@@ -199,7 +254,16 @@ async function getMutableEventContextIfExists(account, calendarId, eventId) {
   }
 }
 
-async function patchSingleCalendarEvent(account, { auth, calendar, event, eventId, input }) {
+async function patchSingleCalendarEvent(
+  account: CalendarAccount,
+  {
+    auth,
+    calendar,
+    event,
+    eventId,
+    input,
+  }: MutableEventContext & { eventId: string; input: CalendarMutationDraft },
+): Promise<NormalizedCalendarEvent> {
   const payload = toCalendarMutationPayload(input);
   const targetEventId = event?.id || eventId;
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(targetEventId)}`, {
@@ -207,10 +271,14 @@ async function patchSingleCalendarEvent(account, { auth, calendar, event, eventI
     body: payload,
     headers: ifMatchHeaders(event?.etag || input.etag),
   });
-  return normalizeGoogleEvent({ account, calendar, event: await res.json() });
+  return normalizeGoogleEvent({ account, calendar, event: await res.json() as GoogleEventResource });
 }
 
-async function updateCalendarEventImpl(account, eventId, input) {
+async function updateCalendarEventImpl(
+  account: StoredCalendarAccount,
+  eventId: string,
+  input: CalendarMutationDraft,
+): Promise<NormalizedCalendarEvent> {
   const scope = input.scope || null;
   const sourceCalendarId = input.sourceCalendarId || input.calendarId;
   const targetCalendarId = input.calendarId;
@@ -285,7 +353,7 @@ async function updateCalendarEventImpl(account, eventId, input) {
       body: payload,
       headers: ifMatchHeaders(event.etag || input.etag),
     });
-    return normalizeGoogleEvent({ account, calendar, event: await res.json() });
+    return normalizeGoogleEvent({ account, calendar, event: await res.json() as GoogleEventResource });
   }
 
   const recurring = await getRecurringMutationContext(account, sourceCalendarId, eventId, input);
@@ -307,7 +375,7 @@ async function updateCalendarEventImpl(account, eventId, input) {
       body: payload,
       headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
     });
-    return normalizeGoogleEvent({ account, calendar, event: await res.json() });
+    return normalizeGoogleEvent({ account, calendar, event: await res.json() as GoogleEventResource });
   }
 
   if (scope !== "following") {
@@ -326,10 +394,10 @@ async function updateCalendarEventImpl(account, eventId, input) {
       body: payload,
       headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
     });
-    return normalizeGoogleEvent({ account, calendar, event: await res.json() });
+    return normalizeGoogleEvent({ account, calendar, event: await res.json() as GoogleEventResource });
   }
 
-  const trimmedRecurrence = buildSeriesTrimmedBeforeTarget(recurring.parentEvent, recurring.targetOriginalStart);
+  const trimmedRecurrence = buildSeriesTrimmedBeforeTarget(recurring.parentEvent, recurring.targetOriginalStart!);
   await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
     method: "PATCH",
     body: { recurrence: trimmedRecurrence },
@@ -359,10 +427,14 @@ async function updateCalendarEventImpl(account, eventId, input) {
     method: "POST",
     body: insertPayload,
   });
-  return normalizeGoogleEvent({ account, calendar, event: await inserted.json() });
+  return normalizeGoogleEvent({ account, calendar, event: await inserted.json() as GoogleEventResource });
 }
 
-async function deleteCalendarEventImpl(account, eventId, input) {
+async function deleteCalendarEventImpl(
+  account: StoredCalendarAccount,
+  eventId: string,
+  input: CalendarMutationDraft,
+): Promise<void> {
   const scope = input.scope || null;
   const { auth, event } = await getMutableEventContext(account, input.calendarId, eventId);
 
@@ -409,7 +481,7 @@ async function deleteCalendarEventImpl(account, eventId, input) {
     return;
   }
 
-  const trimmedRecurrence = buildSeriesTrimmedBeforeTarget(recurring.parentEvent, recurring.targetOriginalStart);
+  const trimmedRecurrence = buildSeriesTrimmedBeforeTarget(recurring.parentEvent, recurring.targetOriginalStart!);
   await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
     method: "PATCH",
     body: { recurrence: trimmedRecurrence },
@@ -420,7 +492,10 @@ async function deleteCalendarEventImpl(account, eventId, input) {
 // Public mutation entry points invalidate the cached calendar list for the
 // account on completion, so the next /range or /calendars read re-fetches a
 // fresh list rather than serving a pre-write snapshot for up to the cache TTL.
-export async function createCalendarEvent(account, input) {
+export async function createCalendarEvent(
+  account: StoredCalendarAccount,
+  input: CalendarMutationDraft,
+): Promise<NormalizedCalendarEvent> {
   try {
     return await createCalendarEventImpl(account, input);
   } finally {
@@ -428,7 +503,11 @@ export async function createCalendarEvent(account, input) {
   }
 }
 
-export async function updateCalendarEvent(account, eventId, input) {
+export async function updateCalendarEvent(
+  account: StoredCalendarAccount,
+  eventId: string,
+  input: CalendarMutationDraft,
+): Promise<NormalizedCalendarEvent> {
   try {
     return await updateCalendarEventImpl(account, eventId, input);
   } finally {
@@ -436,7 +515,11 @@ export async function updateCalendarEvent(account, eventId, input) {
   }
 }
 
-export async function deleteCalendarEvent(account, eventId, input) {
+export async function deleteCalendarEvent(
+  account: StoredCalendarAccount,
+  eventId: string,
+  input: CalendarMutationDraft,
+): Promise<void> {
   try {
     return await deleteCalendarEventImpl(account, eventId, input);
   } finally {

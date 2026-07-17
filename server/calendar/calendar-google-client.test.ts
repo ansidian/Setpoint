@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ credentials: null }));
+interface TestCredentials {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number | string;
+  scopes: string[];
+}
+
+const mocks = vi.hoisted((): { credentials: TestCredentials | null } => ({ credentials: null }));
 
 vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify(mocks.credentials),
-  encrypt: (value) => value,
+  encrypt: (value: string) => value,
 }));
 
-vi.stubGlobal("fetch", vi.fn());
+const fetchMock = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>();
+vi.stubGlobal("fetch", fetchMock);
 
 const db = (await import("../db/connection.ts")).default;
 const {
@@ -16,8 +24,8 @@ const {
   fetchCalendarMirrorEvents,
   invalidateCalendarListCache,
   listCalendarsForAccount,
-} = await import("./calendar.js");
-const { getRawEvent, getAuthorizedAccount } = await import("./calendar-google-client.js");
+} = await import("./calendar.ts");
+const { getRawEvent, getAuthorizedAccount } = await import("./calendar-google-client.ts");
 
 const account = {
   id: "acct-1",
@@ -27,7 +35,7 @@ const account = {
   credentials_encrypted: "stub",
 };
 
-function freshCredentials(overrides = {}) {
+function freshCredentials(overrides: Partial<TestCredentials> = {}): TestCredentials {
   return {
     access_token: "token-1",
     refresh_token: "refresh-1",
@@ -37,13 +45,18 @@ function freshCredentials(overrides = {}) {
   };
 }
 
-function jsonResponse(body, status = 200) {
+function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
     text: async () => JSON.stringify(body),
-  };
+  } as Response;
+}
+
+function fetchCall(index: number): [string | URL | Request, RequestInit] {
+  const [input, init] = fetchMock.mock.calls[index]!;
+  return [input, init || {}];
 }
 
 beforeEach(() => {
@@ -57,7 +70,7 @@ beforeEach(() => {
 describe("OAuth token refresh", () => {
   it("refreshes an expiring access token, persists it, and uses it for the API call", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({
         access_token: "token-2",
         expires_in: 3600,
@@ -69,13 +82,13 @@ describe("OAuth token refresh", () => {
 
     const calendars = await listCalendarsForAccount(account);
 
-    const [refreshUrl, refreshInit] = fetch.mock.calls[0];
+    const [refreshUrl, refreshInit] = fetchCall(0);
     expect(String(refreshUrl)).toBe("https://oauth2.googleapis.com/token");
     expect(String(refreshInit.body)).toContain("grant_type=refresh_token");
     expect(String(refreshInit.body)).toContain("refresh_token=refresh-1");
 
-    const [, listInit] = fetch.mock.calls[1];
-    expect(listInit.headers.Authorization).toBe("Bearer token-2");
+    const [, listInit] = fetchCall(1);
+    expect(new Headers(listInit.headers).get("Authorization")).toBe("Bearer token-2");
 
     expect(db.execute).toHaveBeenCalledWith(expect.objectContaining({
       sql: expect.stringContaining("UPDATE ea_accounts"),
@@ -86,7 +99,7 @@ describe("OAuth token refresh", () => {
 
   it("maps a rejected refresh to calendar_token_refresh_failed", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
 
     await expect(listCalendarsForAccount(account)).rejects.toMatchObject({
       status: 401,
@@ -96,7 +109,7 @@ describe("OAuth token refresh", () => {
 
   it("marks the account needs_reauth on an invalid_grant refresh failure (REL-01)", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
 
     await expect(getAuthorizedAccount(account)).rejects.toMatchObject({
       code: "calendar_token_refresh_failed",
@@ -110,7 +123,7 @@ describe("OAuth token refresh", () => {
 
   it("does not mark needs_reauth on a non-invalid_grant (e.g. rate limit) refresh failure", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch.mockResolvedValueOnce(jsonResponse({ error: "rate_limit_exceeded" }, 429));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "rate_limit_exceeded" }, 429));
 
     await expect(getAuthorizedAccount(account)).rejects.toMatchObject({
       code: "calendar_token_refresh_failed",
@@ -123,7 +136,7 @@ describe("OAuth token refresh", () => {
 
   it("clears needs_reauth on a successful refresh for a previously flagged account", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch.mockResolvedValueOnce(jsonResponse({
+    fetchMock.mockResolvedValueOnce(jsonResponse({
       access_token: "token-2",
       expires_in: 3600,
       scope: "https://www.googleapis.com/auth/calendar.events",
@@ -139,7 +152,7 @@ describe("OAuth token refresh", () => {
 
   it("does not attempt to clear needs_reauth on a successful refresh when the flag was never set", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch.mockResolvedValueOnce(jsonResponse({
+    fetchMock.mockResolvedValueOnce(jsonResponse({
       access_token: "token-2",
       expires_in: 3600,
       scope: "https://www.googleapis.com/auth/calendar.events",
@@ -153,20 +166,20 @@ describe("OAuth token refresh", () => {
   });
 
   it("skips the refresh entirely when the token is still valid", async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({
+    fetchMock.mockResolvedValueOnce(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
     }));
 
     await listCalendarsForAccount(account);
 
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(String(fetch.mock.calls[0][0])).toContain("users/me/calendarList");
+    expect(String(fetchCall(0)[0])).toContain("users/me/calendarList");
     expect(db.execute).not.toHaveBeenCalled();
   });
 
   it("sends the token refresh request with an AbortSignal", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({
         access_token: "token-2",
         expires_in: 3600,
@@ -178,17 +191,17 @@ describe("OAuth token refresh", () => {
 
     await listCalendarsForAccount(account);
 
-    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetchCall(0)[1].signal).toBeInstanceOf(AbortSignal);
   });
 
   it("sends the generic Google Calendar API fetch with an AbortSignal", async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({
+    fetchMock.mockResolvedValueOnce(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
     }));
 
     await listCalendarsForAccount(account);
 
-    expect(fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetchCall(0)[1].signal).toBeInstanceOf(AbortSignal);
   });
 
   it("forces a refresh when the stored expires_at is non-finite, rather than treating it as valid", async () => {
@@ -198,7 +211,7 @@ describe("OAuth token refresh", () => {
     // and every call 401s after the real token expires. The fix treats a
     // non-finite expires_at as already-expired and forces a refresh.
     mocks.credentials = freshCredentials({ expires_at: "not-a-number" });
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({
         access_token: "token-2",
         expires_in: 3600,
@@ -211,14 +224,14 @@ describe("OAuth token refresh", () => {
     await listCalendarsForAccount(account);
 
     expect(fetch).toHaveBeenCalledTimes(2);
-    const [refreshUrl, refreshInit] = fetch.mock.calls[0];
+    const [refreshUrl, refreshInit] = fetchCall(0);
     expect(String(refreshUrl)).toBe("https://oauth2.googleapis.com/token");
     expect(String(refreshInit.body)).toContain("grant_type=refresh_token");
   });
 
   it("persists a finite expires_at (default TTL) when the refresh response omits expires_in", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({
         access_token: "token-2",
         expires_in: undefined,
@@ -231,9 +244,13 @@ describe("OAuth token refresh", () => {
     const before = Date.now();
     await listCalendarsForAccount(account);
 
-    const persistedArgs = db.execute.mock.calls.find(([call]) =>
-      call.sql.includes("UPDATE ea_accounts"))[0].args;
-    const persisted = JSON.parse(persistedArgs[0]);
+    const executeCalls = vi.mocked(db.execute).mock.calls as unknown as Array<[
+      { sql: string; args: unknown[] },
+    ]>;
+    const persistedStatement = executeCalls.find(([call]) => (
+      call.sql.includes("UPDATE ea_accounts")
+    ))![0];
+    const persisted = JSON.parse(String(persistedStatement.args[0]));
 
     expect(Number.isFinite(persisted.expires_at)).toBe(true);
     // Default TTL is 3600s; allow slack for clock drift during the test.
@@ -243,7 +260,7 @@ describe("OAuth token refresh", () => {
 
 describe("listCalendarsForAccount", () => {
   it("filters hidden/unselected entries and sorts primary, writable, then alphabetical", async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({
+    fetchMock.mockResolvedValueOnce(jsonResponse({
       items: [
         { id: "zeta", summary: "Zeta", accessRole: "writer" },
         { id: "read", summary: "Read Only", accessRole: "reader" },
@@ -257,24 +274,24 @@ describe("listCalendarsForAccount", () => {
     const calendars = await listCalendarsForAccount(account);
 
     expect(calendars.map((c) => c.id)).toEqual(["primary", "alpha", "zeta", "read"]);
-    expect(calendars[0].writable).toBe(true);
-    expect(calendars[3].writable).toBe(false);
+    expect(calendars[0]!.writable).toBe(true);
+    expect(calendars[3]!.writable).toBe(false);
   });
 
   it("marks every calendar read-only when stored scopes lack calendar write access", async () => {
     mocks.credentials = freshCredentials({ scopes: ["https://www.googleapis.com/auth/gmail.readonly"] });
-    fetch.mockResolvedValueOnce(jsonResponse({
+    fetchMock.mockResolvedValueOnce(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
     }));
 
     const calendars = await listCalendarsForAccount(account);
 
     expect(calendars).toHaveLength(1);
-    expect(calendars[0].writable).toBe(false);
+    expect(calendars[0]!.writable).toBe(false);
   });
 
   it("falls back to a synthetic primary calendar when Google rejects the calendar list", async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({ error: { code: 403, message: "forbidden" } }, 403));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: { code: 403, message: "forbidden" } }, 403));
 
     const calendars = await listCalendarsForAccount(account);
 
@@ -289,7 +306,7 @@ describe("listCalendarsForAccount", () => {
 
 describe("calendar-list caching", () => {
   it("serves a second call from the per-account memo without re-hitting Google", async () => {
-    fetch.mockResolvedValue(jsonResponse({
+    fetchMock.mockResolvedValue(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
     }));
 
@@ -301,7 +318,7 @@ describe("calendar-list caching", () => {
   });
 
   it("re-fetches after the entry is invalidated", async () => {
-    fetch.mockResolvedValue(jsonResponse({
+    fetchMock.mockResolvedValue(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
     }));
 
@@ -313,36 +330,36 @@ describe("calendar-list caching", () => {
   });
 
   it("does not cache the synthetic fallback when Google rejects the list", async () => {
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({ error: { code: 403, message: "forbidden" } }, 403))
       .mockResolvedValueOnce(jsonResponse({
         items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
       }));
 
     const fallback = await listCalendarsForAccount(account);
-    expect(fallback[0].syntheticCalendarListFallback).toBe(true);
+    expect(fallback[0]!.syntheticCalendarListFallback).toBe(true);
 
     // A transient error must not poison the cache: the next call retries Google.
     const recovered = await listCalendarsForAccount(account);
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(recovered[0].syntheticCalendarListFallback).toBeUndefined();
+    expect(recovered[0]!.syntheticCalendarListFallback).toBeUndefined();
   });
 
   it("re-fetches when the account's credentials change so re-auth scope is not served stale", async () => {
-    fetch.mockResolvedValue(jsonResponse({
+    fetchMock.mockResolvedValue(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
     }));
 
     // First, a read-only-scope credential caches writable=false.
     mocks.credentials = freshCredentials({ scopes: ["https://www.googleapis.com/auth/gmail.readonly"] });
     const readOnly = await listCalendarsForAccount({ ...account, credentials_encrypted: "creds-readonly" });
-    expect(readOnly[0].writable).toBe(false);
+    expect(readOnly[0]!.writable).toBe(false);
 
     // Re-auth adds calendar write scope -> credentials_encrypted changes. The
     // cache must NOT serve the stale writable=false entry under the same id.
     mocks.credentials = freshCredentials({ scopes: ["https://www.googleapis.com/auth/calendar.events"] });
     const writable = await listCalendarsForAccount({ ...account, credentials_encrypted: "creds-write" });
-    expect(writable[0].writable).toBe(true);
+    expect(writable[0]!.writable).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
@@ -350,37 +367,42 @@ describe("calendar-list caching", () => {
 describe("getRawEvent auth reuse", () => {
   it("reuses a provided auth and skips the token refresh on an expired credential", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch.mockResolvedValueOnce(jsonResponse({ id: "evt-1", summary: "Standup" }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: "evt-1", summary: "Standup" }));
 
     const { event } = await getRawEvent(account, "primary", "evt-1", {
-      auth: { accessToken: "preauth-token" },
+      auth: {
+        account,
+        accessToken: "preauth-token",
+        credentials: freshCredentials() as never,
+        hasWriteScope: true,
+      },
     });
 
     // Only the event GET fires — no oauth2 token round-trip — and it carries the
     // caller-provided bearer rather than a freshly refreshed one.
     expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = fetch.mock.calls[0];
+    const [url, init] = fetchCall(0);
     expect(String(url)).toContain("calendars/primary/events/evt-1");
-    expect(init.headers.Authorization).toBe("Bearer preauth-token");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer preauth-token");
     expect(event).toMatchObject({ id: "evt-1" });
   });
 
   it("falls back to getAuthorizedAccount (refreshing) when no auth is provided", async () => {
     mocks.credentials = freshCredentials({ expires_at: Date.now() - 1000 });
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({ access_token: "token-2", expires_in: 3600 }))
       .mockResolvedValueOnce(jsonResponse({ id: "evt-1", summary: "Standup" }));
 
     await getRawEvent(account, "primary", "evt-1");
 
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(String(fetch.mock.calls[0][0])).toBe("https://oauth2.googleapis.com/token");
+    expect(String(fetchCall(0)[0])).toBe("https://oauth2.googleapis.com/token");
   });
 });
 
 describe("Google error mapping", () => {
   it("maps a 412 precondition failure to a 409 calendar_event_conflict", async () => {
-    fetch
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({
         items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
       }))
@@ -398,7 +420,7 @@ describe("Google error mapping", () => {
   });
 
   it("maps a 410 to calendar_sync_token_invalid for incremental mirror syncs", async () => {
-    fetch.mockResolvedValueOnce(jsonResponse({ error: { code: 410, message: "gone" } }, 410));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: { code: 410, message: "gone" } }, 410));
 
     await expect(fetchCalendarMirrorEvents(account, { id: "primary", summary: "Primary" }, {
       syncToken: "stale-token",

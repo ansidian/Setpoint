@@ -1,21 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import express from "express";
 import request from "supertest";
 
 vi.mock("../middleware/auth.ts", () => ({
-  requireCookieSession: (_req, _res, next) => next(),
+  requireCookieSession: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../calendar/calendar.js", () => ({
+vi.mock("../calendar/calendar.ts", () => ({
   fetchCalendar: vi.fn(),
-  pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
+  pacificDayBoundaries: vi.fn((date: Date) => ({ dayStart: date, dayEnd: date })),
   getCalendarSourceGroups: vi.fn(),
   createCalendarEvent: vi.fn(),
   updateCalendarEvent: vi.fn(),
   deleteCalendarEvent: vi.fn(),
-  formatCalendarRouteError: vi.fn((err) => ({
+  formatCalendarRouteError: vi.fn((err: Error & { status?: number; code?: string }) => ({
     status: err.status || 500,
     body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
   })),
@@ -55,14 +55,14 @@ vi.mock("../reminders/reminder-hydration.ts", () => ({
   calendarEventAnchorAt: vi.fn(),
   hydrateCalendarEventsWithReminderState: vi.fn(async (_userId, events) => events),
 }));
-vi.mock("../calendar/calendar-search.js", () => ({
+vi.mock("../calendar/calendar-search", () => ({
   deadlineSearchCandidates: vi.fn(() => []),
-  normalizeBillSearchCandidate: vi.fn((bill) => bill),
-  normalizeEventSearchCandidate: vi.fn((event) => event),
+  normalizeBillSearchCandidate: vi.fn((bill: unknown) => bill),
+  normalizeEventSearchCandidate: vi.fn((event: unknown) => event),
   normalizeLimit: vi.fn(() => 20),
   rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
 }));
-vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
+vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers the route's range helpers);
   // only the DB-touching functions are stubbed below.
   ...(await importActual()),
@@ -78,7 +78,12 @@ process.env.EA_USER_ID = "user-1";
 
 const tasksService = await import("../tasks/tasks-service.ts");
 const { applyDeadlineCurrentStatus } = await import("../dashboard/current-service.js");
-const calendarRoutes = (await import("./calendar.js")).default;
+const calendarRoutes = (await import("./calendar.ts")).default;
+const createDeadlineMock = tasksService.createDeadline as Mock;
+const updateDeadlineMock = tasksService.updateDeadline as Mock;
+const deleteDeadlineMock = tasksService.deleteDeadline as Mock;
+const completeDeadlineOccurrenceMock = tasksService.completeDeadlineOccurrence as Mock;
+const applyDeadlineCurrentStatusMock = applyDeadlineCurrentStatus as Mock;
 
 function makeApp() {
   const app = express();
@@ -87,24 +92,24 @@ function makeApp() {
   return app;
 }
 
-function serviceError(message, status) {
-  const err = new Error(message);
+function serviceError(message: string, status: number) {
+  const err = new Error(message) as Error & { status: number };
   err.status = status;
   return err;
 }
 
 describe("calendar deadline mutation routes", () => {
   beforeEach(() => {
-    tasksService.createDeadline.mockReset().mockResolvedValue({ id: "td-new", title: "Pay invoice" });
-    tasksService.updateDeadline.mockReset().mockResolvedValue({ id: "td-1", title: "Renamed" });
-    tasksService.deleteDeadline.mockReset().mockResolvedValue(undefined);
-    tasksService.completeDeadlineOccurrence.mockReset().mockResolvedValue({
+    createDeadlineMock.mockReset().mockResolvedValue({ id: "td-new", title: "Pay invoice" });
+    updateDeadlineMock.mockReset().mockResolvedValue({ id: "td-1", title: "Renamed" });
+    deleteDeadlineMock.mockReset().mockResolvedValue(undefined);
+    completeDeadlineOccurrenceMock.mockReset().mockResolvedValue({
       completed: true,
       alreadyCompleted: false,
       deadlineId: "td-rec",
       occurrenceDate: "2026-05-12",
     });
-    applyDeadlineCurrentStatus.mockReset().mockResolvedValue({ updated: true });
+    applyDeadlineCurrentStatusMock.mockReset().mockResolvedValue({ updated: true });
   });
 
   it("creates deadlines through the calendar deadline domain endpoint", async () => {
@@ -158,7 +163,7 @@ describe("calendar deadline mutation routes", () => {
   });
 
   it("does not update current cache when occurrence completion fails validation", async () => {
-    tasksService.completeDeadlineOccurrence.mockRejectedValueOnce(
+    completeDeadlineOccurrenceMock.mockRejectedValueOnce(
       serviceError("Deadline occurrence date must be YYYY-MM-DD", 400),
     );
 

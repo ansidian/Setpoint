@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addMonthsIso, calendarSearchMirrorWindow } from "./calendarSearchMirrorSync.js";
+import { addMonthsIso, calendarSearchMirrorWindow } from "./calendarSearchMirrorSync.ts";
 
 describe("addMonthsIso (P3-40 month-end clamp)", () => {
   it("clamps an overflowing day-of-month to the target month's last day", () => {
