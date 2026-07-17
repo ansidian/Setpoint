@@ -1,34 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  BellOff,
-  CalendarX,
-  Check,
-  CheckCircle2,
-  Clock,
-  CreditCard,
-  ExternalLink,
-  FileText,
-  Mail,
-  MailOpen,
-  Pin,
   Reply,
   Sparkles,
-  Trash2,
-  Zap,
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
 import { pendingSecurityGraceLabel, timeClock, timeSince } from "../helpers";
 import { Avatar, QuickAction } from "../primitives";
-import SnoozePicker from "../SnoozePicker";
 import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 import ActualActionStatus from "./ActualActionStatus";
 import { resolveBillExtractionBody } from "./billExtractionBody";
-import { resolveReaderActions } from "./readerActionsModel";
+import { resolveReaderActionGroups } from "./readerActionsModel";
 import { resolveBillSeed } from "./billSeedModel";
+import DesktopReaderActionBar from "./DesktopReaderActionBar";
 import {
   isActualActioned,
   resolveActualCalendarTarget,
@@ -247,28 +234,23 @@ export default function DesktopReader({
   drafting,
   setDrafting,
   readOnly = false,
+  onRemind,
+  onAskAlfred,
 }: ReaderSurfaceProps & { billMounted: boolean }) {
   const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
   const internalSnoozeBtnRef = useRef<HTMLButtonElement>(null);
   const resolvedSnoozeBtnRef = snoozeBtnRef || internalSnoozeBtnRef;
   const gmailUrl = getGmailUrl(email);
+  const readerActionGroups = resolveReaderActionGroups(email, { readOnly });
   const {
     catchUp,
-    showMutableActions,
     showDestructiveActions,
     billToggleEligible,
-    canReopen,
-    canHandle,
-    canDismiss,
-    canMoveToNeeds,
-    canMoveToFyi,
-    canMoveToNoise,
-    canPin,
-    pinned,
-  } = resolveReaderActions(email, { readOnly });
-  const showReadAction = showMutableActions;
+    moveDestinations,
+    moveDisabled,
+    triageItems,
+  } = readerActionGroups;
   const showBillToggle = billToggleEligible;
-  const snapshotPending = !!email._optimisticSnapshotPending;
   const actualActioned = isActualActioned(billResolution?.actualStatus);
   const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
 
@@ -283,184 +265,42 @@ export default function DesktopReader({
         minHeight: 0,
       }}
     >
-      <div
-        data-suspend-inbox-hotkeys={snoozeOpen ? "true" : undefined}
-        style={{
-          padding: "14px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ flex: 1 }} />
-        {showDestructiveActions && showBillToggle && (
-          <QuickAction
-            icon={actualActioned ? CheckCircle2 : CreditCard}
-            label={actualCalendarTarget
-              ? "View bill"
-              : actualActioned
-              ? (billOpen ? "Hide details" : "View bill")
-              : (billOpen ? "Hide bill" : "Pay bill")}
-            tooltip={actualActioned
-              ? (actualCalendarTarget
-                  ? "Open matched bill in calendar"
-                  : (billOpen ? "Hide bill details" : "Review matched bill details"))
-              : (billOpen ? "Hide bill panel" : "Open bill panel")}
-            primary={!billOpen && !actualActioned}
-            onClick={() => {
-              if (actualCalendarTarget && onOpenRecordedBill) {
-                onOpenRecordedBill(actualCalendarTarget);
-                return;
-              }
-              setBillOpen((value) => !value);
-            }}
-            accent="#a6e3a1"
-          />
-        )}
-        {canReopen && (
-          <QuickAction
-            icon={Check}
-            ariaLabel="Reopen"
-            tooltip="Reopen"
-            onClick={() => onAction("snapshot-reopen")}
-            accent="#a6e3a1"
-            keyHint="H"
-            disabled={snapshotPending}
-          />
-        )}
-        {canMoveToNeeds && (
-          <QuickAction
-            icon={Zap}
-            ariaLabel="Move to Needs Attention"
-            tooltip="Move to Needs Attention"
-            onClick={() => onAction("snapshot-move-lane", "needs_attention")}
-            accent="#f38ba8"
-            keyHint="A"
-            disabled={snapshotPending}
-          />
-        )}
-        {canMoveToFyi && (
-          <QuickAction
-            icon={FileText}
-            ariaLabel="Move to FYI"
-            tooltip="Move to FYI"
-            onClick={() => onAction("snapshot-move-lane", "fyi")}
-            accent="#89b4fa"
-            keyHint="F"
-            disabled={snapshotPending}
-          />
-        )}
-        {canMoveToNoise && (
-          <QuickAction
-            icon={BellOff}
-            ariaLabel="Move to Noise"
-            tooltip="Move to Noise"
-            onClick={() => onAction("snapshot-move-lane", "noise")}
-            accent="#a6adc8"
-            keyHint="N"
-            disabled={snapshotPending}
-          />
-        )}
-        {canHandle && (
-          <QuickAction
-            icon={Check}
-            ariaLabel="Mark handled"
-            tooltip="Mark handled"
-            onClick={() => onAction("snapshot-handled")}
-            accent="#a6e3a1"
-            keyHint="H"
-            disabled={snapshotPending}
-          />
-        )}
-        {canDismiss && (
-          <QuickAction
-            icon={CalendarX}
-            ariaLabel="Dismiss from today"
-            tooltip="Dismiss from today"
-            onClick={() => onAction("snapshot-dismiss")}
-            accent="#f9e2af"
-            keyHint="D"
-            disabled={snapshotPending}
-          />
-        )}
-        {showReadAction && (
-          <QuickAction
-            icon={email.read ? Mail : MailOpen}
-            ariaLabel={email.read ? "Mark unread" : "Mark read"}
-            tooltip={email.read ? "Mark unread" : "Mark read"}
-            onClick={() => onAction("toggle-read")}
-            accent={accent}
-          />
-        )}
-        {canPin && (
-          <QuickAction
-            icon={Pin}
-            ariaLabel={pinned ? "Unpin email" : "Pin email"}
-            tooltip={pinned ? "Unpin email" : "Pin email"}
-            primary={pinned}
-            onClick={() => onAction("pin-toggle")}
-            accent="#b4befe"
-            keyHint="P"
-          />
-        )}
-        {showDestructiveActions && (
-          <QuickAction
-            icon={Clock}
-            ariaLabel="Snooze email"
-            tooltip="Snooze email"
-            buttonRef={resolvedSnoozeBtnRef}
-            onClick={() => setSnoozeOpen((value) => !value)}
-            accent={accent}
-            keyHint="S"
-          />
-        )}
-        {showDestructiveActions && snoozeOpen && (
-          <SnoozePicker
-            anchorRef={resolvedSnoozeBtnRef}
-            onSelect={(untilTs) => onAction("snooze", untilTs)}
-            onClose={() => setSnoozeOpen(false)}
-          />
-        )}
-        {gmailUrl && (
-          <QuickAction
-            icon={ExternalLink}
-            ariaLabel="Open in Gmail"
-            tooltip="Open in Gmail"
-            onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")}
-            accent={accent}
-            keyHint="O"
-          />
-        )}
-        {showDestructiveActions && (
-          <QuickAction
-            icon={Trash2}
-            ariaLabel="Trash email"
-            tooltip="Trash email"
-            danger
-            onClick={() => onAction("trash")}
-            accent={accent}
-            keyHint="E"
-          />
-        )}
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            color: "rgba(205,214,244,0.5)",
-            padding: 4,
-            borderRadius: 4,
-            display: "inline-flex",
-            fontFamily: "inherit",
-          }}
-        >
-          <X size={12} />
-        </button>
-      </div>
+      <DesktopReaderActionBar
+        accent={accent}
+        moveDestinations={moveDestinations}
+        moveDisabled={moveDisabled}
+        triageItems={triageItems}
+        billAction={showDestructiveActions && showBillToggle ? {
+          label: actualCalendarTarget
+            ? "View bill"
+            : actualActioned
+            ? (billOpen ? "Hide details" : "View bill")
+            : (billOpen ? "Hide bill" : "Pay bill"),
+          tooltip: actualActioned
+            ? (actualCalendarTarget
+                ? "Open matched bill in calendar"
+                : (billOpen ? "Hide bill details" : "Review matched bill details"))
+            : (billOpen ? "Hide bill panel" : "Open bill panel"),
+          primary: !billOpen && !actualActioned,
+          actioned: actualActioned,
+          onClick: () => {
+            if (actualCalendarTarget && onOpenRecordedBill) {
+              onOpenRecordedBill(actualCalendarTarget);
+              return;
+            }
+            setBillOpen((value) => !value);
+          },
+        } : null}
+        gmailUrl={gmailUrl}
+        showTrash={showDestructiveActions}
+        onAction={onAction}
+        onClose={onClose}
+        onRemind={onRemind}
+        onAskAlfred={onAskAlfred}
+        snoozeAnchorRef={resolvedSnoozeBtnRef}
+        snoozeOpen={snoozeOpen}
+        setSnoozeOpen={setSnoozeOpen}
+      />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "22px 24px 8px", flexShrink: 0 }}>

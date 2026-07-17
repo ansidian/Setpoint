@@ -44,6 +44,8 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 ### Reader
 - `reader/Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
 - `reader/DesktopReader.tsx` — desktop detail layout with triage panel
+- `reader/DesktopReaderActionBar.tsx` — desktop reader action clusters, grouped menus, and adaptive label collapse
+- `reader/DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
 - `reader/EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
 - `reader/TriagePanel.tsx` — AI summary, bullets, urgency, lane tag display
 - `reader/DraftReply.tsx` — AI-drafted reply with send/discard

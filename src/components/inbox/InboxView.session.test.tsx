@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import type { ComponentProps } from "react";
@@ -66,6 +66,16 @@ afterEach(() => {
   vi.clearAllMocks();
   resetInboxSession();
 });
+
+function openDesktopTriageMenu() {
+  fireEvent.click(screen.getByRole("button", { name: /^triage$/i }));
+  return screen.getByRole("menu", { name: /triage email/i });
+}
+
+function openDesktopMoveMenu() {
+  fireEvent.click(screen.getByRole("button", { name: /move to/i }));
+  return screen.getByRole("menu", { name: /move email/i });
+}
 
 function makeSessionSnapshot(includeAction = true) {
   return makeActiveSnapshot({
@@ -770,8 +780,8 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /snooze email/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /6 hours/i }));
+    fireEvent.click(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /snooze/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /6 hours/i }));
 
     expect(snoozeEmail).toHaveBeenCalledWith(
       "gmail-a-msg-1",
@@ -917,7 +927,7 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /mark handled/i }));
+    fireEvent.click(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /mark handled/i }));
 
     await waitFor(() => {
       expect(refreshSnapshot).toHaveBeenCalled();
@@ -1005,16 +1015,19 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /move to fyi/i }));
+    fireEvent.click(within(openDesktopMoveMenu()).getByRole("menuitem", { name: /^fyi$/i }));
 
     expect(moveSnapshotItemLane).toHaveBeenCalledWith(42, "fyi");
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /move to needs attention/i })).toBeTruthy();
+    expect((screen.getByRole("button", { name: /move to/i }) as HTMLButtonElement).disabled).toBe(true);
 
     resolveMove();
     await waitFor(() => {
       expect(refreshSnapshot).toHaveBeenCalled();
+      expect((screen.getByRole("button", { name: /move to/i }) as HTMLButtonElement).disabled).toBe(false);
     });
+    const movedMenu = openDesktopMoveMenu();
+    expect(within(movedMenu).queryByRole("menuitem", { name: /^fyi$/i })).toBeNull();
+    expect(within(movedMenu).getByRole("menuitem", { name: /needs attention/i })).toBeTruthy();
   });
 
   it("hides an active snapshot row immediately when dismissed", async () => {
@@ -1083,7 +1096,7 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /dismiss from today/i }));
+    fireEvent.click(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /dismiss from today/i }));
 
     expect(dismissSnapshotItemForToday).toHaveBeenCalledWith(42);
     await waitFor(() => {
@@ -1141,25 +1154,24 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    const handledButton = await screen.findByRole("button", { name: /mark handled/i });
+    const handledButton = within(openDesktopTriageMenu()).getByRole("menuitem", { name: /mark handled/i });
     fireEvent.click(handledButton);
     fireEvent.click(handledButton);
 
 	    expect(markSnapshotItemHandled).toHaveBeenCalledTimes(1);
-	    await waitFor(() => {
-	      expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
-	    });
+	    await waitFor(() => expect(screen.getByRole("button", { name: /^triage$/i })).toBeTruthy());
 	    fireEvent.click(screen.getByText("Handled"));
 	    const pendingRow = document.querySelector('[aria-busy="true"]');
 	    expect(pendingRow).toBeTruthy();
-	    expect(screen.getByRole("button", { name: /reopen/i }).hasAttribute("disabled")).toBe(true);
-	    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+	    const pendingMenu = openDesktopTriageMenu();
+	    expect(within(pendingMenu).getByRole("menuitem", { name: /reopen/i }).hasAttribute("disabled")).toBe(true);
+	    expect(within(pendingMenu).queryByRole("menuitem", { name: /mark handled/i })).toBeNull();
 	    expect(reopenSnapshotItem).not.toHaveBeenCalled();
 
 	    resolveMutation();
 	    await waitFor(() => {
 	      expect(pendingRow?.getAttribute("aria-busy")).toBeNull();
-	      expect(screen.getByRole("button", { name: /reopen/i }).hasAttribute("disabled")).toBe(false);
+	      expect(within(pendingMenu).getByRole("menuitem", { name: /reopen/i }).hasAttribute("disabled")).toBe(false);
 	    });
 	  });
 
@@ -1228,20 +1240,19 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /mark handled/i }));
+    fireEvent.click(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /mark handled/i }));
     expect(markSnapshotItemHandled).toHaveBeenCalledWith(12);
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
-    });
+    await waitFor(() => expect(screen.getByRole("button", { name: /^triage$/i })).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: /^undo$/i }));
 
     expect(reopenSnapshotItem).toHaveBeenCalledWith(12);
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /move to needs attention/i })).toBeTruthy();
-    });
-    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("button", { name: /move to/i })).toBeTruthy());
+    const moveMenu = openDesktopMoveMenu();
+    expect(within(moveMenu).getByRole("menuitem", { name: /needs attention/i })).toBeTruthy();
+    expect(within(moveMenu).queryByRole("menuitem", { name: /^fyi$/i })).toBeNull();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /mark handled/i })).toBeTruthy();
   });
 
 	  it("reopens handled active snapshot rows through the controller", async () => {
@@ -1310,12 +1321,11 @@ describe("InboxView session state", () => {
 	      </DashboardProvider>,
 	    );
 
-	    fireEvent.click(await screen.findByRole("button", { name: /reopen/i }));
+	    fireEvent.click(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /reopen/i }));
 
 	    expect(reopenSnapshotItem).toHaveBeenCalledWith(11);
-	    await waitFor(() => {
-	      expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
-	    });
+	    await waitFor(() => expect(screen.getByRole("button", { name: /^triage$/i })).toBeTruthy());
+	    expect(within(openDesktopTriageMenu()).getByRole("menuitem", { name: /mark handled/i })).toBeTruthy();
 	  });
 
   it("dispatches desktop single-key snapshot actions and preserves shell number keys", async () => {
@@ -1493,8 +1503,7 @@ describe("InboxView session state", () => {
     expect(dismissSnapshotItemForToday).not.toHaveBeenCalled();
 
     searchInput.blur();
-    fireEvent.click(screen.getByRole("button", { name: /snooze email/i }));
-    const menu = await screen.findByRole("menu");
+    const menu = openDesktopTriageMenu();
     const menuButton = menu.querySelector("button");
     expect(menuButton).toBeTruthy();
     menuButton?.focus();
