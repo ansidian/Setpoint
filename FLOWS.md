@@ -151,3 +151,18 @@ Selection path:
 **SSE:** none — purely client-side state.
 
 **UI:** selected chips get the selection accent border/wash on every surface; first modifier-click closes any open detail/editor; bare cmd/ctrl promotes-or-dismisses; plain click anywhere clears the set.
+
+## 7. First-run owner claim → authenticated runtime
+
+**Trigger:** the SPA reads `GET /api/auth/setup/status` before normal session auth. A missing `ea_owner` singleton routes the browser to `/setup`.
+
+1. `src/pages/OwnerSetup.tsx` — confirms the password locally and sends only the write-only password to `POST /api/auth/setup/claim`.
+2. `server/auth/owner-claim-service.ts:claimInitialOwner` — rate-limited route work generates a stable UUID and bcrypt hash.
+3. `server/auth/owner-store.ts:claimOwner` — `INSERT OR IGNORE` against singleton key `1`; the uniqueness invariant admits one concurrent claimant and all others receive the fixed conflict.
+4. `server/middleware/auth.ts:createSession` — persists only the hashed session token; the successful browser receives the raw token in an HttpOnly cookie.
+5. `server/auth/owner-context.ts:activateOwner` — exposes the claimed ID to remaining single-owner runtime modules and notifies startup gating.
+6. `server/auth/owner-runtime.ts:createOwnerRuntimeGate` — starts schedulers and provider workers once, only after a stored or newly claimed owner exists.
+
+**Compatibility:** `server/auth/owner-bootstrap.ts:resolveOwnerBootstrap` runs after migrations and before listen. It imports an exact legacy `EA_USER_ID`/`EA_PASSWORD_HASH` pair into `ea_owner`, preserves the bcrypt hash and ID, and fails closed for partial or conflicting state.
+
+**Pre-claim boundary:** `server/middleware/owner-gate.ts` returns a fixed setup-required response for non-setup APIs. `GET /healthz` remains successful and reports only readiness plus the non-secret claimed boolean. Demo mode resolves setup as already claimed and rejects claim mutations locally without a network call.

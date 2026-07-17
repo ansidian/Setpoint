@@ -62,9 +62,9 @@ This project requires your own API keys and credentials.
 ### Environment variables
 
 ```bash
-# Auth (run `node server/hash-password.ts <your-password>` to generate)
-EA_PASSWORD_HASH=$2b$12$...
-EA_USER_ID=your-user-id
+# Optional legacy auth import for existing installations
+# EA_PASSWORD_HASH=$2b$12$...
+# EA_USER_ID=your-user-id
 
 # WebAuthn passkeys. Production requires all three and must use your HTTPS app origin.
 # Local dev defaults to Setpoint / localhost / http://localhost:5173 when unset.
@@ -116,6 +116,16 @@ on startup by default; set `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` to queue a
 new broad backfill automatically.
 
 ### Dashboard auth and passkey recovery
+
+On a fresh database, open Setpoint after startup and create the owner password
+in the browser. The first successful claim atomically creates the stable owner
+ID, stores only the bcrypt password hash, signs that browser in, and permanently
+closes public setup. Provider APIs and background workers remain disabled until
+the claim succeeds. `GET /healthz` remains available for deployment readiness.
+
+Existing installations may keep `EA_USER_ID` and `EA_PASSWORD_HASH`; startup
+imports that exact legacy identity once. Partial or conflicting legacy auth
+configuration fails closed instead of reopening public setup.
 
 The private app uses a dashboard password plus WebAuthn passkeys. If no
 registered passkey exists, a valid password creates an authenticated browser

@@ -43,14 +43,14 @@ import {
 } from "../auth/webauthn-service.ts";
 import { resolveWebAuthnConfig } from "../auth/webauthn-config.ts";
 import { rotateSessionsForCurrentBrowser } from "../auth/session-rotation.ts";
+import { getOwner } from "../auth/owner-store.ts";
+import { claimInitialOwner } from "../auth/owner-claim-service.ts";
 
 const router = Router();
 // P1-12: forward async-handler rejections to the terminal errorHandler so a
 // transient DB/crypto failure returns a 500 instead of hanging the request
 // (notably the CSRF-exempt /login). Must run before any route is registered.
 wrapRouterAsync(router);
-const EA_PASSWORD_HASH = process.env.EA_PASSWORD_HASH;
-const EA_USER_ID = process.env.EA_USER_ID!;
 const API_TOKEN_TTL_DAYS = Number.parseInt(process.env.EA_API_TOKEN_TTL_DAYS || "90", 10) || 90;
 const API_TOKEN_TTL_MS = API_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
@@ -78,6 +78,14 @@ const passkeyAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 15,
   message: { message: "Too many passkey attempts, try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const ownerClaimLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: "Too many setup attempts, try again later" },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -127,21 +135,41 @@ async function clearPendingAuthState(req: Request, res: Response) {
   clearPendingAuthCookie(res);
 }
 
+router.get("/setup/status", async (_req, res) => {
+  res.json({ claimed: Boolean(await getOwner()) });
+});
+
+router.post("/setup/claim", ownerClaimLimiter, async (req, res) => {
+  const result = await claimInitialOwner(req.body?.password);
+  if (result.status === "invalid") {
+    return res.status(400).json({ message: "Password is required" });
+  }
+  if (result.status === "conflict") {
+    return res.status(409).json({ message: "Instance is already claimed" });
+  }
+
+  const token = await createSession();
+  setSessionCookie(res, token);
+  clearPendingAuthCookie(res);
+  return res.json({ authenticated: true, claimed: true });
+});
+
 router.post("/login", timeRoute("/api/auth/login"), loginLimiter, async (req, res) => {
   const { password } = req.body;
+  const owner = await getOwner();
 
-  if (!EA_USER_ID || !EA_PASSWORD_HASH || !password) {
+  if (!owner || !password) {
     return res.status(401).json({ message: "Invalid password" });
   }
 
-  const match = await bcrypt.compare(password, EA_PASSWORD_HASH);
+  const match = await bcrypt.compare(password, owner.passwordHash);
   if (!match) {
     return res.status(401).json({ message: "Invalid password" });
   }
 
-  const registeredPasskeyCount = await countPasskeys(EA_USER_ID);
+  const registeredPasskeyCount = await countPasskeys(owner.userId);
   if (registeredPasskeyCount > 0) {
-    const pending = await createPendingAuth({ userId: EA_USER_ID });
+    const pending = await createPendingAuth({ userId: owner.userId });
     setPendingAuthCookie(res, pending.token);
     clearSessionCookie(res);
     return res.json({
@@ -241,7 +269,8 @@ router.post("/passkey/authentication/cancel", passkeyAuthLimiter, async (req, re
 });
 
 router.get("/passkeys", requireCookieSession, async (_req, res) => {
-  const passkeys = await listPasskeyMetadata(EA_USER_ID);
+  const owner = await getOwner();
+  const passkeys = owner ? await listPasskeyMetadata(owner.userId) : [];
   res.json({
     enforcementActive: passkeys.length > 0,
     passkeys,
@@ -254,13 +283,15 @@ router.post("/passkeys/registration/options", requireCookieSession, async (req, 
     return res.status(400).json({ message: "label is required" });
   }
 
-  const existingPasskeys = await listPasskeys(EA_USER_ID);
+  const owner = await getOwner();
+  if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
+  const existingPasskeys = await listPasskeys(owner.userId);
   const challenge = await createChallenge({
-    userId: EA_USER_ID,
+    userId: owner.userId,
     challengeType: "registration",
   });
   const options = await buildRegistrationOptions({
-    userId: EA_USER_ID,
+    userId: owner.userId,
     existingPasskeys,
     challenge: challenge.challenge,
     config: webAuthnConfigForRequest(req),
@@ -276,13 +307,15 @@ router.post("/passkeys/registration/verify", requireCookieSession, async (req, r
 
   let consumedChallenge = null;
   try {
-    const existingCount = await countPasskeys(EA_USER_ID);
+    const owner = await getOwner();
+    if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
+    const existingCount = await countPasskeys(owner.userId);
     const verification = await verifyRegistrationCredential({
       response: req.body,
       config: webAuthnConfigForRequest(req),
       expectedChallenge: async (challenge) => {
         consumedChallenge = await consumeChallenge(challenge, {
-          userId: EA_USER_ID,
+          userId: owner.userId,
           challengeType: "registration",
         });
         return Boolean(consumedChallenge);
@@ -296,7 +329,7 @@ router.post("/passkeys/registration/verify", requireCookieSession, async (req, r
     const registrationInfo = verification.registrationInfo;
     const credential = registrationInfo.credential;
     const passkey = await createPasskey({
-      userId: EA_USER_ID,
+      userId: owner.userId,
       credentialId: credential.id,
       label,
       publicKey: Buffer.from(credential.publicKey).toString("base64url"),
@@ -323,14 +356,16 @@ router.post("/passkeys/registration/verify", requireCookieSession, async (req, r
 
 router.delete("/passkeys/:credentialId", requireCookieSession, async (req, res) => {
   const credentialId = req.params.credentialId!;
-  const deleted = await deletePasskey(credentialId, EA_USER_ID);
+  const owner = await getOwner();
+  if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
+  const deleted = await deletePasskey(credentialId, owner.userId);
   if (!deleted) {
     return res.status(404).json({ message: "Passkey not found" });
   }
 
   const token = await rotateSessionsForCurrentBrowser();
   setSessionCookie(res, token);
-  const passkeys = await listPasskeyMetadata(EA_USER_ID);
+  const passkeys = await listPasskeyMetadata(owner.userId);
   res.json({
     success: true,
     enforcementActive: passkeys.length > 0,

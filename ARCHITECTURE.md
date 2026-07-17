@@ -336,7 +336,7 @@ graph LR
 
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
-| Auth | `/api/auth` | 13 | Password/passkey login, passkey management, session check/logout, scoped API tokens |
+| Auth | `/api/auth` | 15 | First-run owner claim, password/passkey login, passkey management, session check/logout, scoped API tokens |
 | Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 15 | Account CRUD, Gmail OAuth, settings, schedules, geocode, important senders |
@@ -350,8 +350,18 @@ sequenceDiagram
     participant S as Server
     participant DB as Turso
 
+    B->>S: GET /api/auth/setup/status
+    alt Instance is unclaimed
+        B->>S: POST /api/auth/setup/claim {password}
+        S->>S: Generate stable owner UUID and bcrypt hash
+        S->>DB: INSERT OR IGNORE ea_owner singleton
+        S->>DB: INSERT ea_sessions (hashed token, expires_at)
+        S->>B: Set-Cookie: ea_session; close public setup
+    end
+
     B->>S: POST /api/auth/login {password}
-    S->>S: bcrypt.compare(password, EA_PASSWORD_HASH)
+    S->>DB: SELECT password_hash FROM ea_owner singleton
+    S->>S: bcrypt.compare(password, stored password_hash)
     alt No registered passkeys
         S->>DB: INSERT ea_sessions (token, expires_at)
         S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
@@ -373,12 +383,19 @@ sequenceDiagram
     S->>B: 200 current dashboard envelope (or 401 if expired)
 ```
 
-The browser auth model has four distinct states:
+The browser auth model has five distinct states:
 
-1. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
-2. **Pending Password Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created only after a correct password when at least one passkey is registered. It can request and verify WebAuthn authentication options, but it cannot access dashboard routes or passkey registration endpoints.
-3. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
-4. **Passkey Reset** - local operator recovery via `npm run auth:reset-passkeys -- --confirm`. It clears registered passkeys, pending auth, WebAuthn challenges, and browser sessions so the next password login returns to setup mode.
+1. **Unclaimed Instance** - no `ea_owner` singleton row. Only static/setup auth routes and `GET /healthz` are available; provider APIs and all background workers are gated.
+2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
+3. **Pending Password Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created only after a correct password when at least one passkey is registered. It can request and verify WebAuthn authentication options, but it cannot access dashboard routes or passkey registration endpoints.
+4. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
+5. **Passkey Reset** - local operator recovery via `npm run auth:reset-passkeys -- --confirm`. It clears registered passkeys, pending auth, WebAuthn challenges, and browser sessions so the next password login returns to setup mode.
+
+Ownership is database-backed in the singleton `ea_owner` row. Fresh claims rely on
+the singleton primary-key invariant so exactly one concurrent insert succeeds.
+Existing `EA_USER_ID` plus `EA_PASSWORD_HASH` values are an optional startup
+compatibility source: startup imports the exact pair when no owner exists and
+fails closed for partial or conflicting state.
 
 Two credential paths exist, but they no longer feed a single shared "any auth works" guard:
 
@@ -635,6 +652,7 @@ erDiagram
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
+| `ea_owner` | `030_owner_bootstrap.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql` |
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
@@ -722,6 +740,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | DELETE | `/api/auth/passkeys/:credentialId` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/options` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/verify` | `server/routes/auth.ts` |
+| POST | `/api/auth/setup/claim` | `server/routes/auth.ts` |
+| GET | `/api/auth/setup/status` | `server/routes/auth.ts` |
 | GET | `/api/briefing/actual/accounts` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/bills/:id/mark-paid` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/cache/hydrate` | `server/routes/briefing/bills.ts` |
@@ -955,6 +975,6 @@ Passkeys and API tokens are separate auth surfaces. A registered passkey can unl
 1. `npm run dev` → concurrently runs Vite (HMR) + Express (--watch)
 2. Vite proxies `/api/*` to Express on port 3001
 
-**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_PASSWORD_HASH` (bcrypt), `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, database tokens.
+**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, and database tokens. `EA_USER_ID` plus `EA_PASSWORD_HASH` remain an optional legacy owner-import pair.
 
 **Security defaults:** production enables HSTS + CSP + frame/referrer/permissions headers. `trust proxy` defaults to `1` only in production and can be overridden via `TRUST_PROXY`.

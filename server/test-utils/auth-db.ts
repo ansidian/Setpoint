@@ -7,7 +7,12 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../db/migrations");
 
-const migrationFiles = ["001_ea_tables.sql", "012_passkey_auth.sql", "028_provider_needs_reauth.sql"];
+const migrationFiles = [
+  "001_ea_tables.sql",
+  "012_passkey_auth.sql",
+  "028_provider_needs_reauth.sql",
+  "030_owner_bootstrap.sql",
+];
 
 const migrationSql = migrationFiles.map((file) =>
   readFileSync(join(migrationsDir, file), "utf8"),
@@ -48,6 +53,21 @@ export async function seedSession(
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
     args: [hashSessionToken(token), expiresAt],
+  });
+}
+
+export async function seedOwner(
+  db: Client,
+  {
+    userId = "user-1",
+    passwordHash,
+    claimedAt = Date.now(),
+  }: { userId?: string; passwordHash: string; claimedAt?: number },
+) {
+  await db.execute({
+    sql: `INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)
+          VALUES (1, ?, ?, ?)`,
+    args: [userId, passwordHash, claimedAt],
   });
 }
 

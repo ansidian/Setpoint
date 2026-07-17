@@ -4,8 +4,6 @@ import { getMissingRequiredEnv } from "./env.ts";
 describe("required env validation", () => {
   it("requires Turso credentials only in production", () => {
     const baseEnv = {
-      EA_USER_ID: "user-1",
-      EA_PASSWORD_HASH: "hash",
       EA_ENCRYPTION_KEY: "a".repeat(64),
     };
 
@@ -25,6 +23,13 @@ describe("required env validation", () => {
       EA_WEBAUTHN_RP_NAME: "Setpoint",
       EA_WEBAUTHN_RP_ID: "dashboard.example.com",
       EA_WEBAUTHN_ORIGIN: "https://dashboard.example.com",
+    })).toEqual([]);
+  });
+
+  it("keeps legacy owner variables optional in every environment", () => {
+    expect(getMissingRequiredEnv({
+      NODE_ENV: "development",
+      EA_ENCRYPTION_KEY: "a".repeat(64),
     })).toEqual([]);
   });
 });
