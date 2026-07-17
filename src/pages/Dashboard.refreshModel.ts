@@ -54,7 +54,7 @@ export function resolveDashboardRefreshPlan({
 
   const explicit = trigger === "explicit";
   const eventsRange = calendarWorkspace?.eventsRange;
-  const shouldRefreshVisibleEvents = (
+  const shouldRefreshVisibleEvents = !!(
     explicit
     && calendarWorkspace?.open
     && calendarWorkspace?.view === "events"
@@ -66,7 +66,7 @@ export function resolveDashboardRefreshPlan({
     shouldRun: true,
     syncActiveSnapshot: true,
     refreshVisibleEvents: shouldRefreshVisibleEvents
-      ? { start: eventsRange.start, end: eventsRange.end }
+      ? { start: eventsRange!.start!, end: eventsRange!.end! }
       : null,
     markCalendarEventsStale: explicit && !shouldRefreshVisibleEvents,
     markDeadlineRangeStale: explicit,

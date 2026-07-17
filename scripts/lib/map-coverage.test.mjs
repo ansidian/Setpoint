@@ -31,7 +31,7 @@ describe("isRequiredEntry", () => {
 
 describe("scopeOf", () => {
   const files = [
-    "src/components/calendar/CalendarModal.jsx",
+    "src/components/calendar/CalendarModal.tsx",
     "src/components/calendar/modal/CalendarSearchRail.jsx",
     "src/components/calendar/reminders/ReminderRow.jsx",
     "src/components/inbox/InboxView.jsx",
@@ -40,7 +40,7 @@ describe("scopeOf", () => {
 
   test("covers own subtree excluding nested-mapped dirs", () => {
     expect(scopeOf("src/components/calendar", mapDirs, files)).toEqual([
-      "src/components/calendar/CalendarModal.jsx",
+      "src/components/calendar/CalendarModal.tsx",
       "src/components/calendar/reminders/ReminderRow.jsx",
     ])
   })

@@ -1016,7 +1016,7 @@ body {
    (computed per selected/past-tone/etc state). The `:not()` guards preserve
    the original priority order — drop-target and inline-overflow (not
    fallback/popover overflow) still win over hover, matching
-   CalendarCell.jsx's style branch order (`inlineOverflowOpen`). The
+   CalendarCell's style branch order (`inlineOverflowOpen`). The
    out-of-month rule is more specific (extra attribute selector) so it wins
    over the base rule without relying on source order. */
 [data-calcell="true"][data-selected="false"]:not([data-drop-target="true"]):not([data-overflow-open="true"][data-overflow-mode="inline"]):hover {

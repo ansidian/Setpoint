@@ -100,7 +100,7 @@ function toCalendarMutationPayload(input: CalendarEventMutationInput): GoogleCal
   const recurrence = buildGoogleRecurrenceRules(input.recurrence, {
     allDay,
     startDate,
-    startTime: input.startTime,
+    startTime: input.startTime ?? undefined,
   });
 
   if (allDay) {

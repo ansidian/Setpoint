@@ -3,7 +3,7 @@
 // Extracted from useAddTaskPanelController so these projections are unit-testable.
 // Each function takes exactly the fields the caller's memo depends on, so the
 // controller's memoization granularity is preserved.
-import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.js";
+import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.ts";
 import type { TodoistPriority } from "../../../../shared/types/tasks";
 import type {
   AddTaskDraftPreview,

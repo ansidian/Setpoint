@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 async function freshParsing() {
   vi.resetModules();
   const parsing = await import("./parsing");
-  const chrono = await import("../../calendar/events/parseCalendarTitle.js");
+  const chrono = await import("../../calendar/events/parseCalendarTitle");
   return { parsing, chrono };
 }
 
