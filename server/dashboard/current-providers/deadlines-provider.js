@@ -1,4 +1,4 @@
-import { readCurrentDeadlines } from "../../tasks/deadlines-read.js";
+import { readCurrentDeadlines } from "../../tasks/deadlines-read.ts";
 
 export const EMPTY_DEADLINES = {
   upcoming: [],

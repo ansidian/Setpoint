@@ -16,7 +16,7 @@ function bearerToken(req) {
 // Constant-time token compare. Hash both sides first so the timingSafeEqual
 // buffers are always equal length (sha256 digests are fixed 32 bytes),
 // avoiding both the length leak and the throw on mismatched lengths.
-// Mirrors the safeEqual pattern in server/tasks/todoist-webhook.js.
+// Mirrors the safeEqual pattern in server/tasks/todoist-webhook.ts.
 function safeEqualToken(candidate, expected) {
   if (!candidate || !expected) return false;
   const left = crypto.createHash("sha256").update(String(candidate)).digest();

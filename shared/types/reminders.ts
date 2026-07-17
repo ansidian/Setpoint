@@ -24,9 +24,9 @@ export interface ReminderPayloadSnapshot extends Record<string, unknown> {
   name?: string;
   context?: string;
   sourceLabel?: string;
-  url?: string;
+  url?: string | null;
   description?: string;
-  color?: string;
+  color?: string | null;
 }
 
 export interface Reminder {

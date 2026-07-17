@@ -14,7 +14,7 @@ import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js
 import { htmlToPlainText } from "../email/html-to-text.js";
 import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.js";
 import { loadUserConfig } from "../platform/config-service.ts";
-import { readCalendarDeadlineRange } from "../tasks/deadlines-read.js";
+import { readCalendarDeadlineRange } from "../tasks/deadlines-read.ts";
 import { readBillsMirrorRange } from "../bills/bills-service.ts";
 import { queryTransactions, summarizeTransactions } from "../transactions/transactions-service.ts";
 

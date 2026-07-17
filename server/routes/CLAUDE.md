@@ -14,7 +14,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/email.js` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.js` — email index health checks, backfill queuing
 - `briefing/snapshot.js` — snapshot fetch/sync, kanban lane reorder
-- `briefing/tasks.js` — Todoist projects and labels listing
+- `briefing/tasks.ts` — Todoist projects and labels listing
 - `briefing/dev.js` — dev-only email re-indexing endpoint
 
 ### Domains + integrations
@@ -27,7 +27,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `reminders.ts` — Discord reminder testing and configuration
 - `settings.ts` — user settings, model selection, integration configs
 - `gmail-push.js` — Gmail Pub/Sub push intake, queues history syncs
-- `todoist-webhook.js` — Todoist webhook deliveries with signature verification
+- `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

@@ -4,7 +4,7 @@ import dev from "./dev.js";
 import bills, { quickTxnRouter } from "./bills.ts";
 import email from "./email.js";
 import emailIndex from "./email-index.js";
-import tasks from "./tasks.js";
+import tasks from "./tasks.ts";
 import snapshot from "./snapshot.js";
 
 const router = Router();

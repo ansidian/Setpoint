@@ -69,7 +69,7 @@ export function applyDeadlineUpsert(root, deadline, { merge = false, now = new D
   if (!deadline?.id) return root;
   // A merge means "update the existing live entry" — if the only cache
   // entry for this id is a tombstone (a completed recurring occurrence's
-  // historical snapshot, see server/tasks/tombstones.js), there is no live
+  // historical snapshot, see server/tasks/tombstones.ts), there is no live
   // entry to merge onto. Bail out with the same reference instead of pushing
   // a fresh entry beside the tombstone. Reachable via handleUpdateTask: the
   // deadline detail views offer "Edit" on a completed/tombstoned occurrence

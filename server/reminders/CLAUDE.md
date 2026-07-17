@@ -15,7 +15,7 @@ Reminder domain: CRUD, schedule persistence, trigger firing, and notification fo
 ## Local patterns
 
 - Pacific time (`America/Los_Angeles`) is the canonical display timezone.
-- Reminder sources span domains: Todoist deadlines surface through `server/tasks/todoist-reminder-source.js`.
+- Reminder sources span domains: Todoist deadlines surface through `server/tasks/todoist-reminder-source.ts`.
 
 ## Related
 

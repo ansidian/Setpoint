@@ -54,7 +54,7 @@ vi.mock("../email/email-service.js", () => ({
   searchEmails: vi.fn(),
   settleArrivalGrace: vi.fn(async () => ({ settled: 2, emailIds: ["msg-1", "msg-2"] })),
 }));
-vi.mock("../tasks/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.ts", () => ({
   completeTask: vi.fn(),
   dismissTombstone: vi.fn(),
   updateCTMStatus: vi.fn(),

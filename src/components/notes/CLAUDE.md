@@ -33,5 +33,5 @@ The Notes tab: a fourth shell tab for quick markdown jots with search, `#tag` fi
 
 - `server/routes/notes.ts` — notes CRUD + the `PATCH /:id/archive` endpoint.
 - `src/components/dashboard/DashboardShell.jsx` — mounts `NotesTab` as a `KeepAliveTab` (key `4`).
-- `src/components/todoist/AddTaskPanel.jsx` — promote target, pre-seeded via `initialInput`/`initialDescription`.
+- `src/components/todoist/AddTaskPanel.tsx` — promote target, pre-seeded via `initialInput`/`initialDescription`.
 - `e2e/notes-editor.spec.js` — opt-in Playwright coverage for the editor (live markdown, autocomplete, checkbox persist).

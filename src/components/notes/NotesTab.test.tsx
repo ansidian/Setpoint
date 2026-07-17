@@ -14,7 +14,7 @@ vi.mock("../../api", () => ({
   archiveNote: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-vi.mock("../todoist/AddTaskPanel.jsx", () => ({
+vi.mock("../todoist/AddTaskPanel", () => ({
   default: ({ onTaskAdded }: FakeAddTaskPanelProps) => (
     <button type="button" data-testid="fake-add-task" onClick={() => onTaskAdded({ id: 99 })}>add</button>
   ),

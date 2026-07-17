@@ -8,7 +8,7 @@ vi.mock("../middleware/auth.ts", () => ({
 vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../tasks/deadline-helpers.js", () => ({
+vi.mock("../tasks/deadline-helpers.ts", () => ({
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
@@ -45,11 +45,11 @@ vi.mock("../calendar/calendar-search.js", () => ({
   normalizeLimit: vi.fn(() => 20),
   rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
 }));
-vi.mock("../tasks/deadlines-read.js", () => ({
+vi.mock("../tasks/deadlines-read.ts", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
 }));
-vi.mock("../tasks/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.ts", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
@@ -69,14 +69,14 @@ vi.mock("../platform/google-places.ts", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
 }));
-vi.mock("../tasks/todoist.js", () => ({
+vi.mock("../tasks/todoist.ts", () => ({
   fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasks: vi.fn(),
   fetchTodoistTasksAll: vi.fn(),
   fetchTodoistTasksRange: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
 }));
-vi.mock("../tasks/tombstones.js", () => ({
+vi.mock("../tasks/tombstones.ts", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));

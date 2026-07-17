@@ -13,7 +13,7 @@ vi.mock("../middleware/auth.ts", () => ({
 vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../tasks/deadline-helpers.js", () => ({
+vi.mock("../tasks/deadline-helpers.ts", () => ({
   filterCompletedTodoistTasks: vi.fn((tasks: Array<Record<string, unknown>>, completedIds?: Set<unknown>) => (
     (tasks || []).filter((task) => !completedIds?.has(task.id) && !completedIds?.has(String(task.id)))
   )),
@@ -49,7 +49,7 @@ vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
   requestCalendarSearchMirrorSync: vi.fn(),
   upsertCalendarSearchMirrorOccurrence: vi.fn(),
 }));
-vi.mock("../tasks/todoist.js", () => ({
+vi.mock("../tasks/todoist.ts", () => ({
   fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasks: vi.fn(),
   fetchTodoistTasksAll: vi.fn(),
@@ -73,7 +73,7 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../tasks/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.ts", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
@@ -83,7 +83,7 @@ vi.mock("../platform/google-places.ts", () => ({
   getGooglePlaceDetails: vi.fn(),
   suggestGooglePlaces: vi.fn(),
 }));
-vi.mock("../tasks/tombstones.js", () => ({
+vi.mock("../tasks/tombstones.ts", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
@@ -98,14 +98,14 @@ vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
 const {
   computeDeadlineStats,
   loadCompletedTaskIds,
-} = await import("../tasks/deadline-helpers.js") as unknown as { computeDeadlineStats: MockFunction; loadCompletedTaskIds: MockFunction };
+} = await import("../tasks/deadline-helpers.ts") as unknown as { computeDeadlineStats: MockFunction; loadCompletedTaskIds: MockFunction };
 const { loadUserConfig } = await import("../platform/config-service.ts") as unknown as { loadUserConfig: MockFunction };
 const { fetchCalendar } = await import("../calendar/calendar.js") as unknown as { fetchCalendar: MockFunction };
-const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.js") as unknown as Record<"fetchTodoistDueTaskIdSet" | "fetchTodoistTasksAll" | "fetchTodoistTasksRange" | "getTodoistSyncHealth", MockFunction>;
+const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.ts") as unknown as Record<"fetchTodoistDueTaskIdSet" | "fetchTodoistTasksAll" | "fetchTodoistTasksRange" | "getTodoistSyncHealth", MockFunction>;
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts") as unknown as Record<"isBillsMirrorMaintenanceDue" | "readBillsMirrorRange" | "scheduleBillsMirrorRefresh", MockFunction>;
 const { queryTransactions } = await import("../transactions/transactions-service.ts") as unknown as { queryTransactions: MockFunction };
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js") as unknown as { requestBillsCurrentMaintenanceRefresh: MockFunction };
-const { hydrateRecurringTombstones } = await import("../tasks/tombstones.js") as unknown as { hydrateRecurringTombstones: MockFunction };
+const { hydrateRecurringTombstones } = await import("../tasks/tombstones.ts") as unknown as { hydrateRecurringTombstones: MockFunction };
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.ts") as unknown as { listUpcomingReminderStatesForSources: MockFunction };
 const db = (await import("../db/connection.ts")).default as unknown as { execute: MockFunction };
 const calendarRoutes = (await import("./calendar.js")).default;

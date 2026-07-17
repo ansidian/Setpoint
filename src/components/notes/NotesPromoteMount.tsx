@@ -1,4 +1,4 @@
-import AddTaskPanel from "../todoist/AddTaskPanel.jsx";
+import AddTaskPanel from "../todoist/AddTaskPanel";
 import { splitNoteForTask } from "./notesModel";
 import type { RefObject } from "react";
 import type { Note, NoteId } from "../../../shared/types/notes";

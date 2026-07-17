@@ -4,8 +4,8 @@ import { applyDeadlineCurrentStatus } from "../dashboard/current-service.js";
 import {
   readCalendarDeadlines,
   readCalendarDeadlineRange,
-} from "../tasks/deadlines-read.js";
-import * as tasksService from "../tasks/tasks-service.js";
+} from "../tasks/deadlines-read.ts";
+import * as tasksService from "../tasks/tasks-service.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import {
   fetchCalendar,

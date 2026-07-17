@@ -18,11 +18,11 @@ import { startAlfredConversationSweeper, stopAlfredConversationSweeper } from ".
 import notesRoutes from "./routes/notes.ts";
 import newsRoutes from "./routes/news.ts";
 import gmailPushRoutes from "./routes/gmail-push.js";
-import todoistWebhookRoutes from "./routes/todoist-webhook.js";
+import todoistWebhookRoutes from "./routes/todoist-webhook.ts";
 import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.js";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.js";
-import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.js";
+import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.ts";
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";
 import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
@@ -163,7 +163,7 @@ timeAsync("migrations", () => migrate())
         stopScheduler,                        // cron jobs + reminder worker (scheduler.ts)
         stopEmailBackfillWorker,              // Task 1
         stopSnoozeWaker,                      // Task 1
-        stopTodoistMirrorSyncWorker,          // tasks/todoist-webhook.js:248
+        stopTodoistMirrorSyncWorker,          // tasks/todoist-webhook.ts:248
         stopBillsMirrorRefreshWorker,         // Task 1
         stopCalendarSearchMirrorSyncWorker,   // calendar/calendar-search-mirror.js:159
         stopNewsPollWorker,                   // news/news-poller.js:249
