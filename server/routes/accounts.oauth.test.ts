@@ -56,7 +56,7 @@ vi.mock("../email/email-backfill-worker.js", () => ({
 vi.mock("../platform/account-canonical.ts", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows: unknown[]) => rows),
 }));
-vi.mock("../bills/bill-extractors/catalog.js", () => ({
+vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",

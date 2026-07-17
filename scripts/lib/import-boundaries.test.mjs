@@ -3,7 +3,7 @@ import { collectCrossDomainEdges, checkImportBoundaries } from "./import-boundar
 
 const ENTRIES = {
   email: ["email-service.js", "search/email-search-answer.js"],
-  bills: ["bills-service.js"],
+  bills: ["bills-service.ts"],
   platform: ["*"],
 }
 
@@ -36,7 +36,7 @@ describe("collectCrossDomainEdges", () => {
       },
       {
         path: "server/email/test-utils/email-index-db.js",
-        source: 'import { x } from "../../bills/bill-extract.js"\n',
+        source: 'import { x } from "../../bills/bill-extract.ts"\n',
       },
       {
         path: "server/scripts/reindex-emails.js",

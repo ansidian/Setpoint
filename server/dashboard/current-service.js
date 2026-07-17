@@ -3,7 +3,7 @@
 // provider modules in current-providers/; this file owns cache rows, refresh
 // planning/scheduling, and response composition.
 import db from "../db/connection.ts";
-import { getBillsMirrorState } from "../bills/bills-service.js";
+import { getBillsMirrorState } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "./current-events.js";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.js";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.js";

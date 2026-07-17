@@ -23,7 +23,7 @@ import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, st
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.js";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tasks/todoist-webhook.js";
-import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.js";
+import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";
 import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.js";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
 import { createGracefulShutdown } from "./shutdown.ts";

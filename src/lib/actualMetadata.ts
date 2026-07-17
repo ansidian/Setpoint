@@ -16,21 +16,11 @@ export interface ActualMetadata {
   categories: ActualCategoryMetadata[];
 }
 
-// Temporary transport projection owned by the Actual domain; replace in child 11.
-interface ActualMetadataResponseChild11 {
-  accounts?: ActualMetadataEntry[];
-  payees?: ActualMetadataEntry[];
-  categories?: Array<{
-    group_name: string;
-    categories: ActualMetadataEntry[];
-  }>;
-}
-
 type ActualMetadataListener = (metadata: ActualMetadata) => void;
 
 // Shared Actual Budget metadata cache — single fetch for accounts, payees,
 // categories. Layer (a) of the Actual metadata cache stack (see the layering
-// diagram in server/bills/bills-service.js). Invalidated when the bills
+// diagram in server/bills/bills-service.ts). Invalidated when the bills
 // SSE event signals that bill data changed; the next consumer refetches.
 let _metadataCache: ActualMetadata | null = null;
 let _metadataFetching = false;
@@ -63,13 +53,13 @@ export function ensureMetadataLoaded(callback: ActualMetadataListener): void {
   if (_metadataFetching) return;
   _metadataFetching = true;
   const generation = _generation;
-  (getActualMetadata() as Promise<ActualMetadataResponseChild11>)
+  getActualMetadata()
     .then(data => {
       // Flatten grouped categories into a flat list
       const flatCategories: ActualCategoryMetadata[] = [];
       for (const g of data.categories || []) {
         for (const c of g.categories) {
-          flatCategories.push({ id: c.id, name: c.name, group: g.group_name });
+          flatCategories.push({ id: c.id, name: c.name, group: g.group_name || g.name || "" });
         }
       }
       const metadata = { accounts: data.accounts || [], payees: data.payees || [], categories: flatCategories };

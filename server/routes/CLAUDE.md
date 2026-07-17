@@ -10,7 +10,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Briefing
 - `briefing/index.js` — mounts briefing sub-routers, applies auth middleware
-- `briefing/bills.js` — sends bills to Actual Budget, quick transactions
+- `briefing/bills.ts` — sends bills to Actual Budget, quick transactions
 - `briefing/email.js` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.js` — email index health checks, backfill queuing
 - `briefing/snapshot.js` — snapshot fetch/sync, kanban lane reorder
@@ -20,7 +20,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 ### Domains + integrations
 - `alfred.js` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
 - `calendar.js` — calendar CRUD, deadline reads, event search, reminder hydration
-- `calendar-bills-range.js` — composes bill occurrences with read-only Actual transactions and independent degradation
+- `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
 - `dashboard.js` — dashboard state, current-data SSE stream, health checks
 - `notes.ts` — notes CRUD and reordering
 - `news.ts` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh

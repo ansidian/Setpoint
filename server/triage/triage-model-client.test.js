@@ -6,7 +6,7 @@ import {
 import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
-} from "../bills/bill-extractors/catalog.js";
+} from "../bills/bill-extractors/catalog.ts";
 
 const email = {
   from_name: "University Billing",

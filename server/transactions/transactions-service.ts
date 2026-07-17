@@ -1,5 +1,5 @@
 import { readTransactionsRange } from "../actual/actual-transactions-read.ts";
-import { getBillsMirrorState } from "../bills/bills-mirror-sync.js";
+import { getBillsMirrorState } from "../bills/bills-mirror-sync.ts";
 import type {
   TransactionFilters,
   TransactionGroupBy,

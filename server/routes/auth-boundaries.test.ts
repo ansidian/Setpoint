@@ -29,7 +29,7 @@ vi.mock("../db/connection.ts", () => ({
     ) => currentDb().batch(statements, mode),
   },
 }));
-vi.mock("../bills/bills-service.js", () => ({
+vi.mock("../bills/bills-service.ts", () => ({
   sendBill: vi.fn(async () => ({ success: true })),
   markBillPaid: vi.fn(async () => ({ success: true })),
   listAccounts: vi.fn(async () => [{ id: "acct-1", name: "Checking" }]),
@@ -115,7 +115,7 @@ vi.mock("../reminders/discord-reminders.ts", () => ({
   formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "Setpoint reminder test" }] })),
   sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
 }));
-vi.mock("../bills/bill-extractors/catalog.js", () => ({
+vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
@@ -131,7 +131,7 @@ vi.mock("../dashboard/current-service.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const { createQuickTxn, sendBill } = await import("../bills/bills-service.js");
+const { createQuickTxn, sendBill } = await import("../bills/bills-service.ts");
 const emailService = await import("../email/email-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;

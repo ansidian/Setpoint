@@ -34,7 +34,7 @@ vi.mock("../platform/weather.ts", () => ({
 vi.mock("../scheduler.ts", () => ({
   initScheduler: vi.fn(async () => {}),
 }));
-vi.mock("../bills/bill-extractors/catalog.js", () => ({
+vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",

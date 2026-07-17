@@ -9,7 +9,7 @@ import {
   isAllowedBillExtractModel,
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
-} from "../bills/bill-extractors/catalog.js";
+} from "../bills/bill-extractors/catalog.ts";
 import {
   emailAiModelAvailability,
   isAllowedEmailAiModel,
@@ -28,7 +28,7 @@ import {
 import {
   parseBillPayMappingsJson,
   validateBillPayMappings,
-} from "../bills/bill-pay-mappings.js";
+} from "../bills/bill-pay-mappings.ts";
 import { getTriageCacheStats } from "../triage/triage-cache-stats.js";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.js";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.js";
