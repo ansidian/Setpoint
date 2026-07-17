@@ -90,6 +90,20 @@ describe("calendar modal interaction model", () => {
       usesFloatingEditor: true,
       view: "events",
     })).toBeNull();
+
+    expect(dashboardDetailFocusRequest({
+      open: true,
+      focusOpenDetail: true,
+      focusItemId: "bill-1",
+      focusDate: "2026-05-08",
+      openRequestId: 4,
+      usesFloatingEditor: true,
+      view: "bills",
+    })).toMatchObject({
+      view: "bills",
+      itemId: "bill-1",
+      anchorKind: "grid-chip",
+    });
   });
 
   it("does not export floatingWorkspaceNavigationEffect (parking is rAF-driven)", async () => {

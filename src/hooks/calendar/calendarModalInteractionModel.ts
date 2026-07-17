@@ -12,6 +12,7 @@ export interface DashboardDetailFocusRequest {
   openRequestId: number;
   view: CalendarView;
   detailKind?: "deadline";
+  anchorKind?: "grid-chip";
   dateKey: string;
   itemId: string;
   requestKey: string;
@@ -137,14 +138,17 @@ export function dashboardDetailFocusRequest({
   const dateKey = focusDate || activeSelectedDateKey;
   if (!dateKey) return null;
   const itemId = String(focusItemId);
-  const detailKind = view === "events" && forceDeadlineOverlay ? "deadline" : null;
+  const normalizedView = normalizeCalendarWorkspaceView(view);
+  const detailKind = normalizedView === "events" && forceDeadlineOverlay ? "deadline" : null;
+  const anchorKind = normalizedView === "bills" ? "grid-chip" : null;
   return {
     openRequestId,
-    view: normalizeCalendarWorkspaceView(view),
+    view: normalizedView,
     ...(detailKind ? { detailKind } : {}),
+    ...(anchorKind ? { anchorKind } : {}),
     dateKey,
     itemId,
-    requestKey: `${openRequestId}:${normalizeCalendarWorkspaceView(view)}:${detailKind || "item"}:${dateKey}:${itemId}`,
+    requestKey: `${openRequestId}:${normalizedView}:${detailKind || "item"}:${dateKey}:${itemId}`,
     attempts: 0,
   };
 }

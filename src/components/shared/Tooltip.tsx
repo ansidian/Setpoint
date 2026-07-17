@@ -13,6 +13,7 @@ export type TooltipProps = {
   closeDelay?: number;
   disableHoverablePopup?: boolean;
   contentStyle?: CSSProperties;
+  actionsRef?: TooltipPrimitive.Root.Props["actionsRef"];
 };
 
 export default function Tooltip({
@@ -26,11 +27,12 @@ export default function Tooltip({
   closeDelay,
   disableHoverablePopup,
   contentStyle,
+  actionsRef,
 }: TooltipProps) {
   if (!text) return children;
 
   return (
-    <ShadTooltip delay={delay} disableHoverablePopup={disableHoverablePopup}>
+    <ShadTooltip actionsRef={actionsRef} delay={delay} disableHoverablePopup={disableHoverablePopup}>
       <TooltipPrimitive.Trigger
         data-slot="tooltip-trigger"
         closeDelay={closeDelay}

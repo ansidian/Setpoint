@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CSSProperties, MouseEventHandler, ReactNode, Ref } from "react";
+import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History, Check, MailOpen, Clock, Pin } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
@@ -273,6 +274,7 @@ export function QuickAction({
   disabled?: boolean;
 }) {
   const [hover, setHover] = useState(false);
+  const tooltipActionsRef = useRef<TooltipPrimitive.Root.Actions | null>(null);
   const iconOnly = !label;
   const accessibleLabel = ariaLabel || tooltip || label;
   const control = (
@@ -280,7 +282,10 @@ export function QuickAction({
       ref={buttonRef}
       type="button"
       disabled={disabled}
-      onClick={onClick}
+      onClick={(event) => {
+        tooltipActionsRef.current?.unmount();
+        onClick?.(event);
+      }}
       aria-label={iconOnly ? accessibleLabel : ariaLabel}
       onMouseEnter={() => { if (!disabled) setHover(true); }}
       onMouseLeave={() => setHover(false)}
@@ -337,7 +342,7 @@ export function QuickAction({
     </button>
   );
   return tooltip ? (
-    <Tooltip text={tooltip} side="bottom" sideOffset={8}>
+    <Tooltip actionsRef={tooltipActionsRef} text={tooltip} side="bottom" sideOffset={8}>
       {control}
     </Tooltip>
   ) : control;

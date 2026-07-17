@@ -164,6 +164,44 @@ describe("DesktopReader snapshot actions", () => {
     expect(setBillOpen).not.toHaveBeenCalled();
   });
 
+  it("dismisses the matched-bill tooltip before opening the calendar", async () => {
+    vi.useFakeTimers();
+    try {
+      const { onOpenRecordedBill } = renderReader({
+        email: {
+          subject: "Utility payment due",
+          category: "finance",
+          hasBill: true,
+        },
+        billResolution: {
+          status: "resolved",
+          actualStatus: {
+            status: "already_scheduled",
+            evidence: {
+              kind: "schedule",
+              scheduleId: "schedule-acme",
+              dueDate: "2026-08-12",
+            },
+          },
+        },
+      });
+
+      const button = screen.getByRole("button", { name: /view bill/i });
+      const trigger = button.closest("[data-slot='tooltip-trigger']");
+      expect(trigger).toBeTruthy();
+      fireEvent.focus(button);
+      await vi.advanceTimersByTimeAsync(700);
+      expect(screen.getByText("Open matched bill in calendar")).toBeTruthy();
+
+      fireEvent.click(button);
+
+      expect(onOpenRecordedBill).toHaveBeenCalled();
+      expect(screen.queryByText("Open matched bill in calendar")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("hides the bill-pay affordance for triaged non-bill emails", () => {
     renderReader({
       email: {
