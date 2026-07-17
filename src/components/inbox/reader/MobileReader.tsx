@@ -30,7 +30,7 @@ import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import ActualActionStatus from "./ActualActionStatus";
 import {
   isActualActioned,
-  resolveRecordedActualCalendarTarget,
+  resolveActualCalendarTarget,
 } from "./actualActionStatusModel";
 
 export default function MobileReader({
@@ -70,7 +70,7 @@ export default function MobileReader({
   const showBillToggle = showDestructiveActions && billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
   const actualActioned = isActualActioned(billResolution?.actualStatus);
-  const recordedCalendarTarget = resolveRecordedActualCalendarTarget(billResolution?.actualStatus);
+  const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
@@ -255,7 +255,7 @@ export default function MobileReader({
             {showBillToggle && (
               <MobileActionRow
                 icon={actualActioned ? CheckCircle2 : CreditCard}
-                label={recordedCalendarTarget
+                label={actualCalendarTarget
                   ? "View bill details"
                   : actualActioned
                   ? (billOpen ? "Hide bill details" : "View bill details")
@@ -263,8 +263,8 @@ export default function MobileReader({
                 active={billOpen}
                 onClick={() => {
                   setActionsOpen(false);
-                  if (recordedCalendarTarget && onOpenRecordedBill) {
-                    onOpenRecordedBill(recordedCalendarTarget);
+                  if (actualCalendarTarget && onOpenRecordedBill) {
+                    onOpenRecordedBill(actualCalendarTarget);
                     return;
                   }
                   setBillOpen((value) => !value);

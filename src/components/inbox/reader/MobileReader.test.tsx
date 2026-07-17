@@ -162,6 +162,32 @@ describe("MobileReader bill extraction", () => {
     expect(setBillOpen).not.toHaveBeenCalled();
   });
 
+  it("opens an already-scheduled bill in the calendar from the actions menu", () => {
+    const { onOpenRecordedBill, setBillOpen } = renderMobileReader({
+      billOpen: true,
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_scheduled",
+          evidence: {
+            kind: "schedule",
+            scheduleId: "schedule-acme",
+            dueDate: "2026-08-12",
+          },
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+    fireEvent.click(screen.getByText("View bill details"));
+
+    expect(onOpenRecordedBill).toHaveBeenCalledWith({
+      date: "2026-08-12",
+      itemId: "schedule-acme",
+    });
+    expect(setBillOpen).not.toHaveBeenCalled();
+  });
+
   it("hides mobile bill pay for triaged non-bill emails", () => {
     renderMobileReader({
       email: {

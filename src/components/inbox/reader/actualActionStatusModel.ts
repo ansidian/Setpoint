@@ -54,12 +54,14 @@ export function isActualActioned(actualStatus: StatementActualStatus | null | un
   return actualStatus ? ACTIONED_STATUSES.has(actualStatus.status) : false;
 }
 
-export function resolveRecordedActualCalendarTarget(
+export function resolveActualCalendarTarget(
   actualStatus: StatementActualStatus | null | undefined,
 ): { date: string; itemId: string } | null {
-  if (actualStatus?.status !== "already_recorded") return null;
+  if (!actualStatus || !ACTIONED_STATUSES.has(actualStatus.status)) return null;
   const date = actualStatus.evidence?.dueDate;
-  const itemId = actualStatus.evidence?.transactionId;
+  const itemId = actualStatus.status === "already_scheduled"
+    ? actualStatus.evidence?.scheduleId
+    : actualStatus.evidence?.transactionId;
   if (!date || !itemId) return null;
   return { date, itemId };
 }

@@ -134,6 +134,36 @@ describe("DesktopReader snapshot actions", () => {
     expect(setBillOpen).not.toHaveBeenCalled();
   });
 
+  it("opens an already-scheduled bill in the calendar instead of the inline bill drawer", () => {
+    const { onOpenRecordedBill, setBillOpen } = renderReader({
+      billOpen: true,
+      email: {
+        subject: "Utility payment due",
+        category: "finance",
+        hasBill: true,
+      },
+      billResolution: {
+        status: "resolved",
+        actualStatus: {
+          status: "already_scheduled",
+          evidence: {
+            kind: "schedule",
+            scheduleId: "schedule-acme",
+            dueDate: "2026-08-12",
+          },
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /view bill/i }));
+
+    expect(onOpenRecordedBill).toHaveBeenCalledWith({
+      date: "2026-08-12",
+      itemId: "schedule-acme",
+    });
+    expect(setBillOpen).not.toHaveBeenCalled();
+  });
+
   it("hides the bill-pay affordance for triaged non-bill emails", () => {
     renderReader({
       email: {
