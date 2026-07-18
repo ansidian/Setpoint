@@ -7,7 +7,7 @@ import {
   getInstanceCredentials,
   importInstanceCredentialEnvironment,
   stageGoogleOAuthApplication,
-  useHostInstanceCredential,
+  useHostInstanceCredential as restoreHostInstanceCredential,
 } from "@/api";
 import { getCanonicalOriginStatus } from "@/auth/securityApi";
 import { isDemoMode } from "@/demo/config";
@@ -94,7 +94,7 @@ export default function GoogleOAuthCredentialsCard() {
         ? importInstanceCredentialEnvironment(key)
         : action === "disable"
           ? disableInstanceCredential(key)
-          : useHostInstanceCredential(key)));
+          : restoreHostInstanceCredential(key)));
       await refresh();
       setMessage(action === "import"
         ? "Host-managed Google application credentials moved into encrypted Setpoint storage."

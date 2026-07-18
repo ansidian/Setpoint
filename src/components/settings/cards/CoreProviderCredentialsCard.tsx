@@ -6,7 +6,7 @@ import {
   importInstanceCredentialEnvironment,
   stageInstanceCredential,
   testInstanceCredential,
-  useHostInstanceCredential,
+  useHostInstanceCredential as restoreHostInstanceCredential,
 } from "@/api";
 import { isDemoMode } from "@/demo/config";
 import { Button } from "@/components/ui/button";
@@ -114,7 +114,7 @@ function CredentialRow({
         ? await importInstanceCredentialEnvironment(definition.key)
         : action === "disable"
           ? await disableInstanceCredential(definition.key)
-          : await useHostInstanceCredential(definition.key);
+          : await restoreHostInstanceCredential(definition.key);
       onMetadata(updated);
       setMessage(action === "import"
         ? "Moved into encrypted Setpoint storage."
