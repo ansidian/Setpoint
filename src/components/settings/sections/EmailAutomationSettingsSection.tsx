@@ -1,4 +1,4 @@
-import { Clock, Tag, X } from "lucide-react";
+import { BrainCircuit, Clock, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,6 +12,7 @@ import EmailAiModelCard from "@/components/settings/cards/EmailAiModelCard";
 import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
+import CoreProviderCredentialsCard from "@/components/settings/cards/CoreProviderCredentialsCard";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { FormEvent } from "react";
 
@@ -22,6 +23,27 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
     <>
       <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
       <TriageSoundSettingsCard settings={settings} setSettings={setSettings} patch={patch} />
+      <CoreProviderCredentialsCard
+        title="AI provider credentials"
+        icon={<BrainCircuit size={14} />}
+        description="Write-only provider keys used by email triage, bill extraction, search, and Alfred. Model selection stays separate below."
+        credentials={[
+          {
+            key: "ai.openai_api_key",
+            label: "OpenAI",
+            inputLabel: "OpenAI API key",
+            placeholder: "Enter a new API key",
+            help: "Enables OpenAI-backed triage, bill extraction, semantic email search, and configured fallbacks.",
+          },
+          {
+            key: "ai.anthropic_api_key",
+            label: "Anthropic",
+            inputLabel: "Anthropic API key",
+            placeholder: "Enter a new API key",
+            help: "Enables Anthropic-backed triage, bill extraction, Alfred, and configured fallbacks.",
+          },
+        ]}
+      />
       <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />
       <BillExtractionAiCard settings={settings} setSettings={setSettings} patch={patch} />
 

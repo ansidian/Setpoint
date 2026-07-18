@@ -19,7 +19,7 @@ const STATUS_TONE_CLASSES = {
   danger: "border-[var(--sp-rose)]/20 bg-[var(--sp-rose)]/10 text-[var(--sp-rose)]",
 };
 
-type StatusTone = keyof typeof STATUS_TONE_CLASSES;
+export type StatusTone = keyof typeof STATUS_TONE_CLASSES;
 
 export function StatusPill({ tone = "neutral", className, children }: { tone?: StatusTone; className?: string; children: ReactNode }) {
   return (
