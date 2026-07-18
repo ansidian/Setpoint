@@ -55,66 +55,51 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 
 For a detailed look at how everything fits together, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Setup (BYOK)
+## Deploy on Render
 
-This project requires your own API keys and credentials.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ansidian/Setpoint/tree/master)
 
-### Environment variables
+The Blueprint creates one native Node 24 web service on Render's paid Starter
+plan. It asks for only a [Turso](https://turso.tech/) database URL and auth token;
+Render generates the 256-bit `EA_ENCRYPTION_KEY`. Starter is intentionally
+always on because Setpoint's schedulers, reconciliation jobs, and reminders stop
+when a service sleeps. Check Render's current pricing before creating the
+service; the free plan is not a supported Setpoint production configuration.
 
-```bash
-# Optional legacy auth import for existing installations
-# EA_PASSWORD_HASH=$2b$12$...
-# EA_USER_ID=your-user-id
+1. Create a Turso database and token, then click **Deploy to Render**.
+2. Enter `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` when Render prompts.
+3. Wait for `/healthz` to pass, open the service URL, and claim the instance by
+   confirming its canonical URL and creating the owner password.
+4. Save the one-time recovery codes offline, then use the skippable onboarding
+   checklist to connect email/calendar, AI, tasks, weather, finances, and
+   notifications as useful. Provider credentials are entered write-only inside
+   Setpoint; they are not required to boot the service.
 
-# Optional legacy WebAuthn compatibility for existing installations.
-# New installations confirm their canonical HTTPS origin in the browser.
-# EA_WEBAUTHN_RP_NAME=Setpoint
-# EA_WEBAUTHN_RP_ID=your-app-domain.com
-# EA_WEBAUTHN_ORIGIN=https://your-app-domain.com
+Turso and the root key are separate parts of the backup boundary. Copy the
+generated `EA_ENCRYPTION_KEY` from Render's environment settings into a secure
+password manager or secret backup. Setpoint cannot display or reconstruct it.
+A Turso backup without that exact key cannot decrypt stored credentials, and a
+key backup without the Turso database does not restore the installation.
 
-# Database (Turso)
-TURSO_DATABASE_URL=libsql://your-ea-db.turso.io
-TURSO_AUTH_TOKEN=
+### Environment variable groups
 
-# Encryption key for stored credentials (64-char hex)
-EA_ENCRYPTION_KEY=
+The complete template is in [`.env.example`](.env.example):
 
-# Email AI providers (BYOK)
-ANTHROPIC_API_KEY=
+- **Required production bootstrap:** `TURSO_DATABASE_URL`,
+  `TURSO_AUTH_TOKEN`, and a 256-bit hex or base64 `EA_ENCRYPTION_KEY`.
+- **Optional advanced provider sources:** AI, Google, Todoist, Pirate Weather,
+  Google Places, and Gmail Pub/Sub values. Normal setup stores these write-only
+  in Setpoint; existing host values remain supported and can be migrated from
+  Settings without revealing them.
+- **Operational tuning and compatibility:** worker timing, local-development
+  switches, and legacy owner/origin imports. Fresh installs do not set an owner
+  ID, password hash, WebAuthn origin, or redirect URI.
 
-# OpenAI (enables OpenAI email AI, bill extraction, embeddings, and Ask AI)
-OPENAI_API_KEY=
-
-# Google OAuth (Gmail + Calendar)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-# Optional legacy callback compatibility; normally derived from the canonical URL.
-# GOOGLE_REDIRECT_URI=https://your-app.onrender.com/api/ea/accounts/gmail/callback
-GMAIL_PUBSUB_TOPIC=projects/your-project/topics/gmail-push
-GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
-
-# Optional advanced Todoist OAuth/webhook host fallback (also configurable in Settings)
-TODOIST_CLIENT_ID=todoist-developer-app-client-id
-TODOIST_CLIENT_SECRET=todoist-developer-app-client-secret
-
-# Pirate Weather (optional)
-PIRATE_WEATHER_API_KEY=
-
-# Startup workers (optional)
-EA_STARTUP_WORKER_DELAY_MS=
-EA_STARTUP_WORKER_JITTER_MS=
-EA_STARTUP_INDEXER_OFFSET_MS=
-EA_STARTUP_BACKFILL_OFFSET_MS=
-EA_STARTUP_TODOIST_SYNC_OFFSET_MS=
-EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=
-```
-
-In production, startup workers are delayed so the web server can accept the
-first dashboard requests before catch-up jobs start. The default worker delay is
-60-120 seconds, with an extra 2 minutes before the passive email indexer and an
-extra 10 minutes before email backfill. Backfill only resumes interrupted jobs
-on startup by default; set `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` to queue a
-new broad backfill automatically.
+Production startup delays workers so the web server can accept initial requests
+before catch-up jobs start. The default worker delay is 60–120 seconds, with an
+extra 2 minutes before the passive email indexer and an extra 10 minutes before
+email backfill. Backfill resumes interrupted jobs by default; set
+`EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` only to queue a new broad backfill.
 
 ### Dashboard auth and passkey recovery
 
@@ -196,6 +181,38 @@ Setpoint without revealing them. Webhook HMAC verification and token refresh
 resolve the current credentials at request time, so replacements do not require
 a restart. Saving a personal token later explicitly returns the connection to
 personal-token mode and periodic delivery.
+
+### Deployment operations
+
+The `master` branch is the stable release branch. Stable versions are tagged and
+published as non-prerelease GitHub Releases; feature branches and prereleases are
+not deployment targets. The Blueprint disables automatic deploys, so upstream
+pushes never roll out to owner-operated instances.
+
+For an upgrade, read the target release notes and database migration guidance,
+back up Turso and the root key, then use Render's **Manual Deploy → Deploy a
+specific commit** and select the commit named by that release. Confirm `/healthz`
+and sign in before considering the upgrade complete. Roll back by deploying the
+previous release commit only when its release notes say the database migrations
+are backward-compatible; otherwise restore the matching Turso backup and retain
+the same root key. Do not use **Deploy latest commit** as an upgrade shortcut.
+
+To redeploy an existing database, supply the same Turso URL/token and the exact
+existing `EA_ENCRYPTION_KEY`; never allow a new generated key to replace it.
+Existing `EA_USER_ID`, `EA_PASSWORD_HASH`, provider variables, and compatible
+WebAuthn/redirect variables may stay in the host environment while migrating.
+Setpoint imports legacy owner auth once and keeps optional provider environment
+fallbacks active until they are explicitly migrated or disabled in Settings.
+
+When adding or changing a custom domain, attach and verify it in Render first,
+then change the canonical URL under Settings → System using recent password
+confirmation. Review the displayed passkey and OAuth/webhook consequences and
+update external provider callback registrations. Changing only Render or DNS
+does not update Setpoint's canonical security boundary.
+
+Other Node hosts remain supported through the same production commands and
+bootstrap variables, but their always-on process, HTTPS proxy, secret backup,
+and explicit release pinning are operator responsibilities.
 
 ### Running locally
 
