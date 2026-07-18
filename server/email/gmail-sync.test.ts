@@ -299,6 +299,22 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     ]);
   });
 
+  it("resolves the current Pub/Sub topic for every renewal sweep and skips cleanly when absent", async () => {
+    const topicResolver = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce("projects/ea/topics/gmail");
+
+    await expect(gmailSync.renewDueGmailWatches({
+      dbClient: testState.db.current,
+      topicResolver,
+    })).resolves.toEqual({ checked: 0, renewed: 0, skipped: true });
+    await expect(gmailSync.renewDueGmailWatches({
+      dbClient: testState.db.current,
+      topicResolver,
+    })).resolves.toEqual({ checked: 0, renewed: 0, skipped: false });
+    expect(topicResolver).toHaveBeenCalledTimes(2);
+  });
+
   it("fetches Gmail history broadly while watch registration remains INBOX scoped", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

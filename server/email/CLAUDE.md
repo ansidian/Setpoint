@@ -17,6 +17,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `gmail.ts` — Gmail API client: list, fetch, search, mutate
 - `gmail-oauth-url.ts` — combined Gmail + Calendar scope set and canonical Google authorization-URL construction
 - `gmail-sync.ts` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.ts` too)
+- `gmail-pubsub.ts` — hashed push-token lifecycle, runtime topic/status projection, callback generation, and explicit watch tests
 - `email-sync-types.ts` — local history, Pub/Sub, watch, provider-state, and sync error contracts
 - `gmailPubSubNotification.ts` — pure Pub/Sub notification decode: base64url JSON → emailAddress/historyId payload
 - `gmailHistoryProjection.ts` — pure history-record projections: inbox/unread id-sets, provider-removal events, provider state from metadata
