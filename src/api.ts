@@ -115,6 +115,10 @@ import type {
   AlfredUsageStats,
 } from "../shared/types/alfred.ts";
 import type { CapabilityStatusResponse } from "../shared/types/capabilities.ts";
+import type {
+  InstanceCredentialMetadata,
+  InstanceCredentialMetadataResponse,
+} from "../shared/types/instance-credentials.ts";
 
 type ApiId = string | number;
 export type AuthResponse = {
@@ -463,6 +467,31 @@ export const getSettings = (): Promise<SettingsResponse> => apiFetch("/api/ea/se
 export const getCapabilities = (refresh = false): Promise<CapabilityStatusResponse> => (
   apiFetch(`/api/capabilities${refresh ? "?refresh=1" : ""}`)
 );
+export const getInstanceCredentials = (): Promise<InstanceCredentialMetadataResponse> =>
+  apiFetch("/api/instance-credentials");
+export const stageInstanceCredential = (key: string, value: string): Promise<InstanceCredentialMetadata> =>
+  apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/pending`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+export const testInstanceCredential = (key: string): Promise<{
+  ok: boolean;
+  code: string;
+  metadata: InstanceCredentialMetadata;
+}> => apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/test`, { method: "POST" });
+export const importInstanceCredentialEnvironment = (key: string): Promise<InstanceCredentialMetadata> =>
+  apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/import-environment`, { method: "POST" });
+export const disableInstanceCredential = (key: string): Promise<InstanceCredentialMetadata> =>
+  apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/disable`, { method: "POST" });
+export const useHostInstanceCredential = (key: string): Promise<InstanceCredentialMetadata> =>
+  apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/use-host`, { method: "POST" });
+export const stageGoogleOAuthApplication = (clientId: string, clientSecret: string): Promise<{
+  credentials: InstanceCredentialMetadata[];
+  candidateVersions: { clientId: number; clientSecret: number };
+}> => apiFetch("/api/instance-credentials/google-oauth/pending", {
+  method: "PUT",
+  body: JSON.stringify({ clientId, clientSecret }),
+});
 export const updateSettings = (data: SettingsPatchRequest): Promise<SettingsMutationResponse> => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
 export const testDiscordReminderWebhook = (): Promise<DiscordReminderTestResponse> => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
 export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderListOptions = {}): Promise<ReminderListResponse> => {

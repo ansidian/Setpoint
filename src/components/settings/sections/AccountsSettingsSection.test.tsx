@@ -10,6 +10,13 @@ const mockApi = vi.hoisted(() => ({
   testDiscordReminderWebhook: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
+  getInstanceCredentials: vi.fn(),
+  disableInstanceCredential: vi.fn(),
+  importInstanceCredentialEnvironment: vi.fn(),
+  stageInstanceCredential: vi.fn(),
+  stageGoogleOAuthApplication: vi.fn(),
+  testInstanceCredential: vi.fn(),
+  useHostInstanceCredential: vi.fn(),
 }));
 
 vi.mock("@/api", () => ({
@@ -21,6 +28,21 @@ vi.mock("@/api", () => ({
   testDiscordReminderWebhook: mockApi.testDiscordReminderWebhook,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
+  getInstanceCredentials: mockApi.getInstanceCredentials,
+  disableInstanceCredential: mockApi.disableInstanceCredential,
+  importInstanceCredentialEnvironment: mockApi.importInstanceCredentialEnvironment,
+  stageInstanceCredential: mockApi.stageInstanceCredential,
+  stageGoogleOAuthApplication: mockApi.stageGoogleOAuthApplication,
+  testInstanceCredential: mockApi.testInstanceCredential,
+  useHostInstanceCredential: mockApi.useHostInstanceCredential,
+}));
+
+vi.mock("@/auth/securityApi", () => ({
+  getCanonicalOriginStatus: vi.fn().mockResolvedValue({ callbacks: [] }),
+}));
+
+vi.mock("@/lib/todoistSetupApi", () => ({
+  getTodoistConnectionStatus: vi.fn().mockResolvedValue(null),
 }));
 
 const { default: AccountsSettingsSection } = await import("./AccountsSettingsSection");
@@ -31,6 +53,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  mockApi.getInstanceCredentials.mockResolvedValue({ credentials: [], rootKey: {} });
   mockApi.geocodeLocation.mockResolvedValue([
     { name: "Los Angeles, CA", lat: 34.0522, lng: -118.2437 },
     { name: "Los Angeles County, CA", lat: 34.155, lng: -118.25 },
