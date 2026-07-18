@@ -113,4 +113,15 @@ describe("instance credential service", () => {
     });
     expect(JSON.stringify(metadata)).not.toContain(ROOT_KEY);
   });
+
+  it("projects one credential's availability without returning its value", async () => {
+    const service = createService({
+      EA_ENCRYPTION_KEY: ROOT_KEY,
+      ANTHROPIC_API_KEY: "host-anthropic-secret",
+    });
+    const metadata = await service.getCredentialMetadata("ai.anthropic_api_key");
+    expect(metadata).toMatchObject({ source: "environment", activeConfigured: true });
+    expect(metadata.capabilities).toEqual(["email_triage", "bill_extraction", "alfred"]);
+    expect(JSON.stringify(metadata)).not.toContain("host-anthropic-secret");
+  });
 });

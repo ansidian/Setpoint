@@ -86,12 +86,6 @@ export async function extractBill(userId: string, { subject, from, body }: BillE
     err.status = 400;
     throw err;
   }
-  if (!process.env[provider.envVar]) {
-    const err: HttpError = new Error(`Bill extract unavailable: ${provider.envVar} not set`);
-    err.status = 503;
-    throw err;
-  }
-
   const { fields, usage } = await provider.extract({
     model,
     systemPrompt,

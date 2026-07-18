@@ -124,6 +124,7 @@ export function createInstanceCredentialService({
     return {
       key,
       handling: definition.handling,
+      capabilities: [...definition.capabilities],
       source,
       activeConfigured: Boolean(record?.activeValueEncrypted) || source === "environment",
       pendingConfigured: Boolean(record?.pendingValueEncrypted),
@@ -161,6 +162,11 @@ export function createInstanceCredentialService({
         ? await rootKeyHealthResolver()
         : await rootKeyMetadata(records),
     };
+  }
+
+  async function getCredentialMetadata(inputKey: string): Promise<InstanceCredentialMetadata> {
+    const key = requireKey(inputKey);
+    return metadataFor(key, await store.get(key));
   }
 
   async function stagePending(inputKey: string, value: string): Promise<InstanceCredentialMetadata> {
@@ -212,6 +218,7 @@ export function createInstanceCredentialService({
     resolve,
     readPending,
     getMetadata,
+    getCredentialMetadata,
     stagePending,
     promotePending,
     recordPendingFailure,

@@ -10,6 +10,7 @@ import type {
   RunAlfredOptions,
 } from "./alfred-types.ts";
 import { errorMessage } from "./alfred-types.ts";
+import { resolveAiApiKey } from "../ai-credentials.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -79,7 +80,8 @@ async function runAlfredInner({
   emit,
   signal = null,
   fetchImpl = globalThis.fetch,
-  apiKey = process.env.ANTHROPIC_API_KEY,
+  apiKey,
+  credentialResolver = () => resolveAiApiKey("anthropic"),
   deps,
   recordUsage = recordAlfredUsage,
   now = () => new Date(),
@@ -87,6 +89,8 @@ async function runAlfredInner({
 }: RunAlfredOptions & { transcriptCheckpoint: number }): Promise<void> {
   conversation.messages.push({ role: "user", content: String(message) });
   const system = buildAlfredSystemPrompt({ now: now() });
+  const currentApiKey = apiKey === undefined ? await credentialResolver() : apiKey;
+  if (!currentApiKey) throw Object.assign(new Error("Anthropic API key is not configured"), { status: 503 });
 
   let retrievedCount = 0;
   let showItemsCalled = false;
@@ -117,16 +121,16 @@ async function runAlfredInner({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "x-api-key": currentApiKey,
         "anthropic-version": ANTHROPIC_VERSION,
       },
       body: JSON.stringify(body),
       ...(signal ? { signal } : {}),
     });
     if (!res.ok) {
-      const text = await res.text?.().catch(() => "");
+      await res.text?.().catch(() => "");
       const err = Object.assign(
-        new Error(`Anthropic API error (${res.status})${text ? `: ${String(text).slice(0, 300)}` : ""}`),
+        new Error(`Anthropic API error (${res.status})`),
         { status: res.status },
       );
       throw err;

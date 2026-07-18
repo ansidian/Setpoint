@@ -3,6 +3,7 @@
 // caller does not branch on provider.
 
 import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
+import { resolveAiApiKey } from "../../ai-credentials.ts";
 import type { BillCandidate, BillExtractionProvider, BillExtractionRequest } from "../../../shared/types/bills.ts";
 
 type HttpError = Error & { status?: number };
@@ -36,7 +37,7 @@ export const OPENAI_PROVIDER: BillExtractionProvider & { id: string; envVar: str
   envVar: "OPENAI_API_KEY",
 
   async extract({ model, systemPrompt, content }: BillExtractionRequest) {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = await resolveAiApiKey("openai");
     if (!apiKey) {
       const err: HttpError = new Error("OPENAI_API_KEY not set");
       err.status = 503;
@@ -66,8 +67,8 @@ export const OPENAI_PROVIDER: BillExtractionProvider & { id: string; envVar: str
     }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
 
     if (!apiRes.ok) {
-      const text = await apiRes.text();
-      console.error(`[EA] Bill extract OpenAI error (${apiRes.status}):`, text);
+      await apiRes.text();
+      console.error(`[EA] Bill extract OpenAI error (${apiRes.status})`);
       const err: HttpError = new Error(`OpenAI API error (${apiRes.status})`);
       err.status = 502;
       throw err;

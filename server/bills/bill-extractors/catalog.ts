@@ -1,3 +1,6 @@
+import { getAiCredentialMetadata, type AiProvider } from "../../ai-credentials.ts";
+import type { InstanceCredentialService } from "../../platform/instance-credential-service.ts";
+
 export const BILL_EXTRACT_CATALOG = [
   {
     provider: "anthropic",
@@ -31,13 +34,15 @@ export function isAllowedBillExtractModel(provider: unknown, model: unknown): bo
   return entry.models.some((m) => m.id === model);
 }
 
-export function billExtractAvailability() {
-  return BILL_EXTRACT_CATALOG.map((entry) => ({
+export async function billExtractAvailability(
+  credentials?: Pick<InstanceCredentialService, "getCredentialMetadata">,
+) {
+  return Promise.all(BILL_EXTRACT_CATALOG.map(async (entry) => ({
     provider: entry.provider,
     label: entry.label,
     envVar: entry.envVar,
-    available: !!process.env[entry.envVar],
+    available: (await getAiCredentialMetadata(entry.provider as AiProvider, credentials)).activeConfigured,
     defaultModel: entry.defaultModel,
     models: entry.models,
-  }));
+  })));
 }

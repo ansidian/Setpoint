@@ -140,8 +140,27 @@ describe("email search embedding client", () => {
     await expect(client.embed(["doc"])).rejects.toMatchObject({
       status: 502,
       code: "email_search_embeddings_provider_error",
-      message: "OpenAI embeddings request failed: rate limited",
+      message: "OpenAI embeddings request failed",
     });
+  });
+
+  it("resolves the current key for every request so rotation needs no restart", async () => {
+    let currentKey = "first-key";
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({ data: [{ index: 0, embedding: [0.1] }] }),
+    }));
+    const client = createEmailSearchEmbeddingClient({
+      credentialResolver: async () => currentKey,
+      fetchImpl,
+    });
+
+    await client.embed(["first"]);
+    currentKey = "rotated-key";
+    await client.embed(["second"]);
+
+    expect(fetchImpl.mock.calls[0]?.[1]?.headers).toMatchObject({ Authorization: "Bearer first-key" });
+    expect(fetchImpl.mock.calls[1]?.[1]?.headers).toMatchObject({ Authorization: "Bearer rotated-key" });
   });
 });
 

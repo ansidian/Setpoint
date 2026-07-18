@@ -1,3 +1,6 @@
+import { getAiCredentialMetadata } from "../ai-credentials.ts";
+import type { InstanceCredentialService } from "../platform/instance-credential-service.ts";
+
 export type EmailAiProvider = "anthropic" | "openai";
 
 export interface EmailAiModelEntry {
@@ -79,13 +82,15 @@ export function resolveEmailAiModelConfig({
   };
 }
 
-export function emailAiModelAvailability() {
-  return EMAIL_AI_MODEL_CATALOG.map((entry) => ({
+export async function emailAiModelAvailability(
+  credentials?: Pick<InstanceCredentialService, "getCredentialMetadata">,
+) {
+  return Promise.all(EMAIL_AI_MODEL_CATALOG.map(async (entry) => ({
     provider: entry.provider,
     label: entry.label,
     envVar: entry.envVar,
-    available: !!process.env[entry.envVar],
+    available: (await getAiCredentialMetadata(entry.provider, credentials)).activeConfigured,
     defaultModel: entry.defaultModel,
     models: [...entry.models],
-  }));
+  })));
 }
