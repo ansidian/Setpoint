@@ -648,6 +648,7 @@ erDiagram
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
+| `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_instance_credentials` | `033_instance_credentials.sql` |
 | `ea_instance_metadata` | `032_canonical_url.sql` |
@@ -819,6 +820,13 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | PUT | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/test` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/use-host` | `server/routes/instance-credentials.ts` |
+| GET | `/api/instance-credentials/gmail-pubsub` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/generate-callback` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/import-environment-token` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/revoke-token` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/test-watches` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/gmail-pubsub/topic` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/use-host-token` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |

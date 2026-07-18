@@ -17,6 +17,10 @@ import {
   googleOAuthCredentialManager,
   type GoogleOAuthCredentialManager,
 } from "../google-oauth-credentials.ts";
+import {
+  gmailPubSubService,
+  type GmailPubSubService,
+} from "../email/gmail-pubsub.ts";
 
 const MAX_CREDENTIAL_LENGTH = 65_536;
 
@@ -32,6 +36,7 @@ export function createInstanceCredentialsRouter(
   aiManager: AiCredentialManager = aiCredentialManager,
   locationManager: LocationCredentialManager = locationCredentialManager,
   googleOAuthManager: GoogleOAuthCredentialManager = googleOAuthCredentialManager,
+  gmailPubSubManager: GmailPubSubService = gmailPubSubService,
 ) {
   const router = Router();
   wrapRouterAsync(router);
@@ -47,6 +52,37 @@ export function createInstanceCredentialsRouter(
       return res.status(400).json({ message: "Google client ID and client secret are required" });
     }
     return res.json(await googleOAuthManager.stageCandidate({ clientId, clientSecret }));
+  });
+
+  router.get("/gmail-pubsub", requireCookieSession, async (_req, res) => {
+    return res.json(await gmailPubSubManager.getStatus());
+  });
+
+  router.put("/gmail-pubsub/topic", requireCookieSession, async (req, res) => {
+    const value = candidateValue(req.body?.value);
+    if (value === null) return res.status(400).json({ message: "Pub/Sub topic is required" });
+    return res.json(await gmailPubSubManager.setTopic(value));
+  });
+
+  router.post("/gmail-pubsub/generate-callback", requireCookieSession, async (_req, res) => {
+    return res.json(await gmailPubSubManager.generateCallback());
+  });
+
+  router.post("/gmail-pubsub/import-environment-token", requireCookieSession, async (_req, res) => {
+    return res.json(await gmailPubSubManager.importEnvironmentToken());
+  });
+
+  router.post("/gmail-pubsub/use-host-token", requireCookieSession, async (_req, res) => {
+    return res.json(await gmailPubSubManager.useHostToken());
+  });
+
+  router.post("/gmail-pubsub/revoke-token", requireCookieSession, async (_req, res) => {
+    return res.json(await gmailPubSubManager.revokeToken());
+  });
+
+  router.post("/gmail-pubsub/test-watches", requireCookieSession, async (_req, res) => {
+    const result = await gmailPubSubManager.testWatches();
+    return res.status(result.ok ? 200 : 422).json(result);
   });
 
   router.put("/:key/pending", requireCookieSession, async (req, res) => {

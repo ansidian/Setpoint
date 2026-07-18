@@ -6,6 +6,7 @@ import type { InstanceCredentialService } from "../platform/instance-credential-
 import type { AiCredentialManager } from "../ai-credentials.ts";
 import type { LocationCredentialManager } from "../location-credentials.ts";
 import type { GoogleOAuthCredentialManager } from "../google-oauth-credentials.ts";
+import type { GmailPubSubService } from "../email/gmail-pubsub.ts";
 
 vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
@@ -20,6 +21,7 @@ function createApp(
   aiManagerOverrides: Partial<AiCredentialManager> = {},
   locationManagerOverrides: Partial<LocationCredentialManager> = {},
   googleOAuthManagerOverrides: Partial<GoogleOAuthCredentialManager> = {},
+  gmailPubSubManagerOverrides: Partial<GmailPubSubService> = {},
 ) {
   const metadata = {
     key: "ai.openai_api_key",
@@ -62,14 +64,27 @@ function createApp(
     })),
     ...googleOAuthManagerOverrides,
   } as unknown as GoogleOAuthCredentialManager;
+  const gmailPubSubManager = {
+    getStatus: vi.fn(async () => ({ configured: false, healthy: true, deliveryMode: "periodic", delayedUpdates: true })),
+    setTopic: vi.fn(async () => metadata),
+    generateCallback: vi.fn(async () => ({
+      callbackUrl: "https://setpoint.example.com/api/gmail/push?token=one-time-value",
+      status: { configured: true },
+    })),
+    importEnvironmentToken: vi.fn(async () => ({ configured: true })),
+    useHostToken: vi.fn(async () => ({ configured: true })),
+    revokeToken: vi.fn(async () => ({ configured: false })),
+    testWatches: vi.fn(async () => ({ ok: true, errorCode: null, checked: 1, registered: 1 })),
+    ...gmailPubSubManagerOverrides,
+  } as unknown as GmailPubSubService;
   app.use(express.json());
   app.use(cookieParser());
   app.use(
     "/api/instance-credentials",
-    createInstanceCredentialsRouter(service, aiManager, locationManager, googleOAuthManager),
+    createInstanceCredentialsRouter(service, aiManager, locationManager, googleOAuthManager, gmailPubSubManager),
   );
   app.use(errorHandler);
-  return { app, service, aiManager, locationManager, googleOAuthManager };
+  return { app, service, aiManager, locationManager, googleOAuthManager, gmailPubSubManager };
 }
 
 describe("instance credential routes", () => {
@@ -183,5 +198,31 @@ describe("instance credential routes", () => {
     expect(response.status).toBe(200);
     expect(locationManager.testPending).toHaveBeenCalledWith("weather.pirate_weather_api_key");
     expect(aiManager.testPending).not.toHaveBeenCalled();
+  });
+
+  it("reveals a generated Gmail callback only from the generation action", async () => {
+    const { app, gmailPubSubManager } = createApp();
+    const generated = await request(app)
+      .post("/api/instance-credentials/gmail-pubsub/generate-callback")
+      .set("Cookie", "ea_session=valid");
+    const status = await request(app)
+      .get("/api/instance-credentials/gmail-pubsub")
+      .set("Cookie", "ea_session=valid");
+
+    expect(generated.status).toBe(200);
+    expect(generated.body.callbackUrl).toContain("one-time-value");
+    expect(JSON.stringify(status.body)).not.toContain("one-time-value");
+    expect(gmailPubSubManager.generateCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes an explicit redacted Gmail watch-registration test action", async () => {
+    const { app, gmailPubSubManager } = createApp();
+    const response = await request(app)
+      .post("/api/instance-credentials/gmail-pubsub/test-watches")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ok: true, errorCode: null, checked: 1, registered: 1 });
+    expect(gmailPubSubManager.testWatches).toHaveBeenCalledTimes(1);
   });
 });

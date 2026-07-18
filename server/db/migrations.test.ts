@@ -510,4 +510,23 @@ describe("database migrations", () => {
       args: ["ai.openai_api_key"],
     })).rejects.toThrow();
   });
+
+  it("stores Gmail push verification material as a non-reversible singleton hash", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["035_gmail_pubsub_config.sql"]);
+
+    await db.execute({
+      sql: `INSERT INTO ea_gmail_pubsub_config
+              (singleton_id, push_token_hash, updated_at)
+            VALUES (1, 'sha256-only', 10)`,
+      args: [],
+    });
+    const columns = await db.execute("PRAGMA table_info('ea_gmail_pubsub_config')");
+    const names = columns.rows.map((row) => row.name);
+    expect(names).toContain("push_token_hash");
+    expect(names).not.toContain("push_token");
+    await expect(db.execute(
+      "UPDATE ea_gmail_pubsub_config SET token_disabled = 1 WHERE singleton_id = 1",
+    )).rejects.toThrow();
+  });
 });
