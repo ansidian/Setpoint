@@ -20,6 +20,7 @@ import newsRoutes from "./routes/news.ts";
 import gmailPushRoutes from "./routes/gmail-push.ts";
 import todoistWebhookRoutes from "./routes/todoist-webhook.ts";
 import instanceCredentialRoutes from "./routes/instance-credentials.ts";
+import todoistOAuthRoutes from "./routes/todoist-oauth.ts";
 import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.ts";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.ts";
@@ -107,6 +108,7 @@ app.use("/api", (req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/briefing", briefingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/ea", todoistOAuthRoutes);
 app.use("/api/ea", accountsRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/alfred", alfredRoutes);

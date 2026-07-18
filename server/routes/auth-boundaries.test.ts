@@ -183,6 +183,7 @@ async function createMigratedDb() {
       todoist_oauth_access_token_expires_at TEXT,
       todoist_oauth_scope TEXT,
       todoist_oauth_token_type TEXT,
+      todoist_connection_mode TEXT,
       discord_webhook_url_encrypted TEXT,
       discord_user_id TEXT,
       schedules_json TEXT,
@@ -582,6 +583,7 @@ describe("auth boundaries", () => {
       todoist_oauth_refresh_token_encrypted: "enc:refresh-1",
       todoist_oauth_token_type: "Bearer",
       todoist_oauth_scope: "data:read_write,data:delete",
+      todoist_connection_mode: "oauth",
     });
     expect(settings!.todoist_oauth_access_token_expires_at).toEqual(expect.any(String));
 
@@ -626,6 +628,7 @@ describe("auth boundaries", () => {
       todoist_oauth_access_token_expires_at: null,
       todoist_oauth_scope: null,
       todoist_oauth_token_type: null,
+      todoist_connection_mode: "personal_token",
     });
   });
 

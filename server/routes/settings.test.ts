@@ -74,6 +74,7 @@ async function createMigratedDb() {
       todoist_oauth_access_token_expires_at INTEGER,
       todoist_oauth_scope TEXT,
       todoist_oauth_token_type TEXT,
+      todoist_connection_mode TEXT,
       discord_webhook_url_encrypted TEXT,
       future_secret_encrypted TEXT,
       future_api_token TEXT
@@ -204,7 +205,10 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
       .send({ todoist_api_token: "a-fresh-valid-token" });
 
     expect(res.status).toBe(200);
-    expect((await getSettingsRow()).todoist_needs_reauth).toBe(0);
+    expect(await getSettingsRow()).toMatchObject({
+      todoist_needs_reauth: 0,
+      todoist_connection_mode: "personal_token",
+    });
   });
 
   it("does not clear todoist_needs_reauth when disconnecting (empty token)", async () => {
@@ -218,7 +222,10 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
       .send({ todoist_api_token: "" });
 
     expect(res.status).toBe(200);
-    expect((await getSettingsRow()).todoist_needs_reauth).toBe(1);
+    expect(await getSettingsRow()).toMatchObject({
+      todoist_needs_reauth: 1,
+      todoist_connection_mode: null,
+    });
   });
 });
 

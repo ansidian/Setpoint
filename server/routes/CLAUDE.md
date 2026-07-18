@@ -29,6 +29,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `settings.ts` — user settings, model selection, integration configs
 - `gmail-push.ts` — Gmail Pub/Sub push intake, queues history syncs
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
+- `todoist-oauth.ts` — Todoist OAuth begin/callback/status routes with callback-scoped browser binding
 - `instance-credentials.ts` — authenticated metadata and write-only deployment credential mutations; dispatches allowlisted validation/promotion and Gmail Pub/Sub lifecycle actions to provider-owned managers
 
 Tests are not listed; adjacent test files cover their same-named route by convention.

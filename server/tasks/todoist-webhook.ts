@@ -10,6 +10,7 @@ import type { Client } from "@libsql/client";
 import type { IncomingHttpHeaders } from "node:http";
 import type { TodoistMirrorHealth } from "../../shared/types/tasks.ts";
 import type { TodoistMirrorSyncResult } from "./todoist-mirror.ts";
+import { todoistOAuthCredentialManager } from "./todoist-oauth-credentials.ts";
 
 type TodoistWebhookDb = Client;
 type TodoistSyncFn = (userId: string, options?: { forceFull?: boolean }) => Promise<TodoistMirrorSyncResult | Record<string, unknown> | null>;
@@ -210,7 +211,8 @@ export async function handleTodoistWebhookDelivery({
   userId,
   rawBody,
   headers,
-  clientSecret = process.env.TODOIST_CLIENT_SECRET,
+  clientSecret,
+  resolveClientSecret = async () => (await todoistOAuthCredentialManager.resolveActive()).clientSecret,
   dbClient = db,
   requestSync = requestTodoistMirrorSync,
   now = new Date(),
@@ -219,6 +221,7 @@ export async function handleTodoistWebhookDelivery({
   rawBody?: Buffer | string;
   headers?: IncomingHttpHeaders | Record<string, string | string[] | undefined>;
   clientSecret?: string;
+  resolveClientSecret?: () => Promise<string>;
   dbClient?: TodoistWebhookDb;
   requestSync?: TodoistRequestSyncFn;
   now?: Date;
@@ -226,10 +229,19 @@ export async function handleTodoistWebhookDelivery({
   const signature = firstHeader(headers, "x-todoist-hmac-sha256");
   const deliveryId = firstHeader(headers, "x-todoist-delivery-id");
 
-  if (!verifyTodoistWebhookSignature(rawBody, signature, clientSecret)) {
+  let currentClientSecret = clientSecret;
+  if (currentClientSecret === undefined) {
+    try {
+      currentClientSecret = await resolveClientSecret();
+    } catch {
+      throw new TodoistWebhookError("Todoist webhook client secret is not configured", 503);
+    }
+  }
+
+  if (!verifyTodoistWebhookSignature(rawBody, signature, currentClientSecret)) {
     throw new TodoistWebhookError(
       "Invalid Todoist webhook signature",
-      clientSecret ? 401 : process.env.NODE_ENV === "production" ? 503 : 401,
+      currentClientSecret ? 401 : process.env.NODE_ENV === "production" ? 503 : 401,
     );
   }
   if (!deliveryId) {

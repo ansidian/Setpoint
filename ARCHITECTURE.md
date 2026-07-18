@@ -663,10 +663,11 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |
+| `ea_todoist_oauth_states` | `036_todoist_oauth_setup.sql` |
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
@@ -813,6 +814,9 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
+| GET | `/api/ea/accounts/todoist/auth` | `server/routes/todoist-oauth.ts` |
+| GET | `/api/ea/accounts/todoist/callback` | `server/routes/todoist-oauth.ts` |
+| GET | `/api/ea/accounts/todoist/status` | `server/routes/todoist-oauth.ts` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.ts` |
 | GET | `/api/instance-credentials/` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/disable` | `server/routes/instance-credentials.ts` |
@@ -828,6 +832,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | PUT | `/api/instance-credentials/gmail-pubsub/topic` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/gmail-pubsub/use-host-token` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/todoist-oauth/import-environment` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/todoist-oauth/pending` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |
 | POST | `/api/news/refresh` | `server/routes/news.ts` |

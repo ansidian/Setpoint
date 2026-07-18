@@ -161,6 +161,45 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
     return (await get(key))!;
   }
 
+  async function importActiveGroup(
+    entries: Array<{ key: InstanceCredentialKey; encryptedValue: string }>,
+    now = Date.now(),
+  ): Promise<InstanceCredentialRecord[]> {
+    for (const entry of entries) assertSupportedKey(entry.key);
+    const tx = await dbClient.transaction("write");
+    try {
+      for (const entry of entries) {
+        await tx.execute({
+          sql: `INSERT INTO ea_instance_credentials
+                  (credential_key, active_value_encrypted, disabled, validation_state, version, updated_at)
+                VALUES (?, ?, 0, 'untested', 1, ?)
+                ON CONFLICT(credential_key) DO UPDATE SET
+                  active_value_encrypted = excluded.active_value_encrypted,
+                  pending_value_encrypted = NULL,
+                  disabled = 0,
+                  validation_state = 'untested',
+                  error_code = NULL,
+                  version = ea_instance_credentials.version + 1,
+                  updated_at = excluded.updated_at`,
+          args: [entry.key, entry.encryptedValue, now],
+        });
+      }
+      const records: InstanceCredentialRecord[] = [];
+      for (const entry of entries) {
+        const selected = await tx.execute({
+          sql: `SELECT ${SELECT_COLUMNS} FROM ea_instance_credentials WHERE credential_key = ?`,
+          args: [entry.key],
+        });
+        records.push(recordFromRow(selected.rows[0]!));
+      }
+      await tx.commit();
+      return records;
+    } catch (error) {
+      await tx.rollback().catch(() => {});
+      throw error;
+    }
+  }
+
   async function promotePending(key: InstanceCredentialKey, expectedVersion: number, now = Date.now()): Promise<InstanceCredentialRecord> {
     assertSupportedKey(key);
     const tx = await dbClient.transaction("write");
@@ -287,6 +326,7 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
     stagePending,
     stagePendingGroup,
     importActive,
+    importActiveGroup,
     promotePending,
     promotePendingGroup,
     recordPendingFailure,

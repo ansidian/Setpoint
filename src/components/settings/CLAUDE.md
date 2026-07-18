@@ -33,7 +33,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 
 ### Cards: connections + security
 - `cards/ConnectedAccountsCard.tsx` — Gmail OAuth + iCloud IMAP account add/remove; feeds the email snapshot pipeline
-- `cards/TodoistCard.tsx` — Todoist API token save/disconnect for email-automation follow-up sync
+- `cards/TodoistCard.tsx` — personal-token default plus advanced Todoist app migration, OAuth, callback, and webhook setup
 - `cards/DiscordRemindersCard.tsx` — Discord webhook URL + user ID for private reminder delivery, with test-send
 - `cards/WeatherLocationCard.tsx` — city geocode → lat/lng patch for dashboard weather snapshots
 - `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration

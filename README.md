@@ -93,7 +93,7 @@ GOOGLE_CLIENT_SECRET=
 GMAIL_PUBSUB_TOPIC=projects/your-project/topics/gmail-push
 GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
 
-# Todoist OAuth refresh + webhook verification
+# Optional advanced Todoist OAuth/webhook host fallback (also configurable in Settings)
 TODOIST_CLIENT_ID=todoist-developer-app-client-id
 TODOIST_CLIENT_SECRET=todoist-developer-app-client-secret
 
@@ -178,58 +178,24 @@ semantic coverage changes only when you run an explicit bounded backfill.
 
 ### Todoist OAuth and webhook setup
 
-The server uses `TODOIST_CLIENT_SECRET` to verify Todoist's
-`X-Todoist-Hmac-SHA256` signature against the raw webhook body. It also uses
-`TODOIST_CLIENT_ID` plus `TODOIST_CLIENT_SECRET` to refresh Todoist OAuth access
-tokens before they expire.
+The default setup is a personal API token entered in Settings. It supports full
+Todoist read/write behavior and uses periodic reconciliation; OAuth is not
+required.
 
-In the Todoist Developer app console, configure the webhook callback URL to:
+For optional OAuth refresh and real-time webhooks, open Todoist's advanced
+Settings section and enter the client ID and client secret from your deployment's
+Todoist Developer app. Set the OAuth callback and webhook URLs in Todoist to the
+canonical URLs shown there, then choose **Connect with OAuth**. Setpoint binds the
+callback to the initiating browser, exchanges the code server-side, encrypts the
+access and refresh tokens, and promotes replacement app credentials only after a
+successful callback.
 
-```text
-https://your-app.onrender.com/api/todoist/webhook
-```
-
-Todoist requires webhook URLs to be HTTPS and to omit explicit ports. For local
-testing, expose the Express server with a tunnel and use the tunnel HTTPS URL:
-
-```text
-https://<your-tunnel-host>/api/todoist/webhook
-```
-
-Todoist webhooks are tied to a Todoist app. For personal use, Todoist documents
-that webhooks do not fire for the app creator by default; activate them by
-completing that Todoist app's OAuth flow for your own account. Use scopes:
-
-```text
-data:read_write,data:delete
-```
-
-After exchanging the OAuth code for JSON containing `access_token`,
-`refresh_token`, and `expires_in`, store that full JSON response through the
-authenticated settings API. The app encrypts the access and refresh tokens,
-tracks expiry, and refreshes before Todoist REST/Sync calls:
-
-```bash
-curl -X PUT "https://ea.andysu.tech/api/ea/settings" \
-  -H "Content-Type: application/json" \
-  -H "X-Requested-With: Setpoint" \
-  -H "Cookie: ea_session=<your-session-cookie>" \
-  --data-binary @- <<'JSON'
-{
-  "todoist_oauth_token_response": {
-    "access_token": "...",
-    "token_type": "Bearer",
-    "expires_in": 3600,
-    "refresh_token": "...",
-    "scope": "data:read_write,data:delete"
-  }
-}
-JSON
-```
-
-Existing long-lived personal Todoist tokens still work. Setting a personal token
-through the Settings UI clears OAuth refresh metadata and uses personal-token
-mode.
+`TODOIST_CLIENT_ID` and `TODOIST_CLIENT_SECRET` remain supported as advanced host
+fallbacks. Settings identifies that source and can migrate both values into
+Setpoint without revealing them. Webhook HMAC verification and token refresh
+resolve the current credentials at request time, so replacements do not require
+a restart. Saving a personal token later explicitly returns the connection to
+personal-token mode and periodic delivery.
 
 ### Running locally
 

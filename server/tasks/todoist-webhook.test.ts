@@ -65,6 +65,25 @@ afterEach(async () => {
 });
 
 describe("handleTodoistWebhookDelivery", () => {
+  it("resolves the current application secret for every delivery", async () => {
+    const rawBody = Buffer.from('{"event_name":"item:updated"}');
+    const resolveClientSecret = vi.fn(async () => "rotated-secret");
+
+    await handleTodoistWebhookDelivery({
+      userId: "u1",
+      rawBody,
+      headers: {
+        "x-todoist-hmac-sha256": signPayload(rawBody, "rotated-secret"),
+        "x-todoist-delivery-id": "delivery-runtime-secret",
+      },
+      resolveClientSecret,
+      dbClient: testDb,
+      requestSync: vi.fn(),
+    });
+
+    expect(resolveClientSecret).toHaveBeenCalledTimes(1);
+  });
+
   it("persists a verified delivery and requests mirror sync", async () => {
     const rawBody = Buffer.from(JSON.stringify({
       event_name: "item:updated",
