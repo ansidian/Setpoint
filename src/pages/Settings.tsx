@@ -14,6 +14,8 @@ export default function Settings() {
     accounts,
     setAccounts,
     settings,
+    capabilities,
+    refreshCapabilities,
     setSettings,
     loading,
     tab,
@@ -38,6 +40,8 @@ export default function Settings() {
           setAccounts={setAccounts}
           settings={settings}
           patch={patch}
+          capabilities={capabilities}
+          onRefreshCapabilities={refreshCapabilities}
         />
       );
     } else if (tab === "actual") {

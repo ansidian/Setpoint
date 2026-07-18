@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getAccounts, getSettings, updateSettings } from "@/api";
+import { getAccounts, getCapabilities, getSettings, updateSettings } from "@/api";
 import {
   normalizeSettingsTab,
   readTabFromSearchParams,
@@ -8,6 +8,7 @@ import {
 import type { AccountSummary } from "../../../shared/types/accounts";
 import type { SettingsPatchRequest, SettingsResponse } from "../../../shared/types/settings";
 import type { SettingsTab } from "@/components/settings/settings-core";
+import type { CapabilityStatus } from "../../../shared/types/capabilities";
 
 export type SettingsSaveStatus = "idle" | "saving" | "saved" | "error";
 type PendingSettingsPatch = Partial<SettingsPatchRequest>;
@@ -74,6 +75,7 @@ export default function useSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [settings, setSettings] = useState<Partial<SettingsResponse> | null>(null);
+  const [capabilities, setCapabilities] = useState<CapabilityStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const { patch, status: saveStatus } = useSettingsAutoSave();
   const tab = readTabFromSearchParams(searchParams);
@@ -89,10 +91,15 @@ export default function useSettingsPage() {
   }, [setSearchParams]);
 
   useEffect(() => {
-    Promise.all([getAccounts(), getSettings()])
-      .then(([accountsResult, settingsResult]) => {
+    Promise.all([
+      getAccounts(),
+      getSettings(),
+      getCapabilities().catch(() => ({ generatedAt: "", capabilities: [] })),
+    ])
+      .then(([accountsResult, settingsResult, capabilityResult]) => {
         setAccounts(Array.isArray(accountsResult) ? accountsResult : accountsResult.accounts);
         setSettings(settingsResult);
+        setCapabilities(capabilityResult.capabilities);
       })
       .catch(() => {
         setAccounts([]);
@@ -101,10 +108,18 @@ export default function useSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const refreshCapabilities = useCallback(() => {
+    void getCapabilities(true)
+      .then((result) => setCapabilities(result.capabilities))
+      .catch(() => {});
+  }, []);
+
   return {
     accounts,
     setAccounts,
     settings,
+    capabilities,
+    refreshCapabilities,
     setSettings,
     loading,
     tab,
