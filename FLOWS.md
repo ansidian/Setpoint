@@ -204,3 +204,17 @@ Selection path:
 4. `src/api.ts:getCapabilities` uses the private endpoint in normal builds and the fictional inert projection in demo builds.
 
 **Separation:** onboarding completion/progress is not part of capability health. Optional Gmail Pub/Sub, Todoist OAuth/webhooks, and Places states cannot degrade their base capabilities.
+
+## 11. Authenticated onboarding progress → shared Settings workflows
+
+**Trigger:** after an authenticated bootstrap or login, `src/App.tsx` reads onboarding progress. A newly claimed owner is sent to `/onboarding`; an owner whose checklist was explicitly finished continues to the dashboard.
+
+1. `server/db/migrations/037_onboarding_progress.sql` — creates owner-keyed, versioned presentation progress and backfills owners present at migration time as finished so existing installations keep their current entry behavior.
+2. `server/onboarding-progress-store.ts` — reads and allowlist-updates reviewed/completed/skipped step state separately from `completed_at`; finish and reopen change only the checklist lifecycle.
+3. `server/routes/onboarding.ts` — exposes authenticated `GET` and allowlisted `PATCH` mutations without accepting provider values or returning secrets.
+4. `src/lib/onboardingApi.ts` — uses the authenticated API normally and an in-memory, network-free projection in demo builds.
+5. `src/lib/onboardingModel.ts` — owns the locked capability order and selects the first unfinished step without consulting capability health.
+6. `src/pages/Onboarding.tsx` — renders the resumable checklist, reads live `/api/capabilities` metadata, and routes configuration into the existing Settings controls so tests, OAuth, and write-only credential behavior are shared.
+7. `src/App.tsx` — keeps dashboard access available while unfinished, resumes the checklist from login, and observes finish/reopen events so an explicit finish is immediately non-blocking.
+
+**Separation:** capability degradation never reopens onboarding or changes persisted presentation progress. Finishing is permitted with every integration pending, and demo onboarding never calls setup, provider, or onboarding endpoints.

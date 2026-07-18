@@ -656,6 +656,7 @@ erDiagram
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
+| `ea_onboarding_progress` | `037_onboarding_progress.sql` |
 | `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql` |
 | `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
@@ -848,6 +849,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | PATCH | `/api/news/topics/:id` | `server/routes/news.ts` |
 | POST | `/api/news/topics/import-starter` | `server/routes/news.ts` |
 | POST | `/api/news/topics/reorder` | `server/routes/news.ts` |
+| GET | `/api/onboarding/` | `server/routes/onboarding.ts` |
+| PATCH | `/api/onboarding/` | `server/routes/onboarding.ts` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.ts` |
 | GET | `/email-search/usage` | `server/routes/settings.ts` |
 | POST | `/preview` | `server/routes/auth-canonical-origin.ts` |
