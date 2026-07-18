@@ -7,6 +7,7 @@ import type { AiCredentialManager } from "../ai-credentials.ts";
 import type { LocationCredentialManager } from "../location-credentials.ts";
 import type { GoogleOAuthCredentialManager } from "../google-oauth-credentials.ts";
 import type { GmailPubSubService } from "../email/gmail-pubsub.ts";
+import type { TodoistOAuthCredentialManager } from "../tasks/todoist-oauth-credentials.ts";
 
 vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
@@ -22,6 +23,7 @@ function createApp(
   locationManagerOverrides: Partial<LocationCredentialManager> = {},
   googleOAuthManagerOverrides: Partial<GoogleOAuthCredentialManager> = {},
   gmailPubSubManagerOverrides: Partial<GmailPubSubService> = {},
+  todoistOAuthManagerOverrides: Partial<TodoistOAuthCredentialManager> = {},
 ) {
   const metadata = {
     key: "ai.openai_api_key",
@@ -77,14 +79,40 @@ function createApp(
     testWatches: vi.fn(async () => ({ ok: true, errorCode: null, checked: 1, registered: 1 })),
     ...gmailPubSubManagerOverrides,
   } as unknown as GmailPubSubService;
+  const todoistOAuthManager = {
+    stageCandidate: vi.fn(async () => ({
+      credentials: [metadata, { ...metadata, key: "tasks.todoist_client_secret" }],
+      candidateVersions: { clientId: 5, clientSecret: 6 },
+    })),
+    importEnvironment: vi.fn(async () => [
+      { ...metadata, key: "tasks.todoist_client_id" },
+      { ...metadata, key: "tasks.todoist_client_secret" },
+    ]),
+    ...todoistOAuthManagerOverrides,
+  } as unknown as TodoistOAuthCredentialManager;
   app.use(express.json());
   app.use(cookieParser());
   app.use(
     "/api/instance-credentials",
-    createInstanceCredentialsRouter(service, aiManager, locationManager, googleOAuthManager, gmailPubSubManager),
+    createInstanceCredentialsRouter(
+      service,
+      aiManager,
+      locationManager,
+      googleOAuthManager,
+      gmailPubSubManager,
+      todoistOAuthManager,
+    ),
   );
   app.use(errorHandler);
-  return { app, service, aiManager, locationManager, googleOAuthManager, gmailPubSubManager };
+  return {
+    app,
+    service,
+    aiManager,
+    locationManager,
+    googleOAuthManager,
+    gmailPubSubManager,
+    todoistOAuthManager,
+  };
 }
 
 describe("instance credential routes", () => {
@@ -119,6 +147,33 @@ describe("instance credential routes", () => {
     });
     expect(JSON.stringify(response.body)).not.toContain("browser-client-id");
     expect(JSON.stringify(response.body)).not.toContain("browser-client-secret");
+  });
+
+  it("stages the Todoist application pair without returning plaintext", async () => {
+    const { app, todoistOAuthManager } = createApp();
+    const response = await request(app)
+      .put("/api/instance-credentials/todoist-oauth/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ clientId: "browser-client-id", clientSecret: "browser-client-secret" });
+
+    expect(response.status).toBe(200);
+    expect(todoistOAuthManager.stageCandidate).toHaveBeenCalledWith({
+      clientId: "browser-client-id",
+      clientSecret: "browser-client-secret",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("browser-client-id");
+    expect(JSON.stringify(response.body)).not.toContain("browser-client-secret");
+  });
+
+  it("migrates Todoist host credentials through an explicit redacted action", async () => {
+    const { app, todoistOAuthManager } = createApp();
+    const response = await request(app)
+      .post("/api/instance-credentials/todoist-oauth/import-environment")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    expect(todoistOAuthManager.importEnvironment).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response.body)).not.toContain("environment-secret-value");
   });
 
   it("returns a fixed allowlist error without reflecting unknown keys or submitted values", async () => {

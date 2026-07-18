@@ -488,6 +488,29 @@ describe("database migrations", () => {
     expect(Number(row.rows[0]!.carryover_count)).toBe(0);
   });
 
+  it("preserves existing Todoist connections while adding explicit OAuth state", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["001_ea_tables.sql"]);
+    await db.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, todoist_api_token_encrypted, todoist_oauth_refresh_token_encrypted)
+            VALUES (?, ?, ?), (?, ?, NULL)`,
+      args: ["oauth-owner", "encrypted-access", "encrypted-refresh", "personal-owner", "encrypted-personal"],
+    });
+
+    await applyMigrations(db, ["036_todoist_oauth_setup.sql"]);
+
+    const rows = await db.execute(
+      "SELECT user_id, todoist_connection_mode FROM ea_settings ORDER BY user_id",
+    );
+    expect(rows.rows).toEqual([
+      { user_id: "oauth-owner", todoist_connection_mode: "oauth" },
+      { user_id: "personal-owner", todoist_connection_mode: "personal_token" },
+    ]);
+    const stateColumns = await db.execute("PRAGMA table_info('ea_todoist_oauth_states')");
+    expect(stateColumns.rows.map((row) => row.name)).toContain("browser_bind_hash");
+  });
+
   it("adds the singleton instance credential registry with disablement integrity", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, ["033_instance_credentials.sql"]);

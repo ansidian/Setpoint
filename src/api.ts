@@ -1,5 +1,6 @@
 import { isDemoMode } from "./demo/config.ts";
 import { readSseStream } from "./lib/sseStream";
+import { apiFetch } from "./lib/apiFetch";
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
@@ -115,16 +116,6 @@ import type {
 } from "../shared/types/alfred.ts";
 
 type ApiId = string | number;
-type ApiFetchOptions = RequestInit & {
-  redirectOnAuthFailure?: boolean;
-  timeoutMs?: number;
-};
-type ApiError = Error & {
-  code?: unknown;
-  status?: number;
-};
-type DemoApiRequestHandler = (path: string, options: ApiFetchOptions) => Promise<unknown>;
-
 export type AuthResponse = {
   authenticated: boolean;
   demo?: boolean;
@@ -159,70 +150,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function errorMessage(value: unknown): string | null {
   const message = isRecord(value) ? value.message : null;
   return message ? String(message) : null;
-}
-
-function errorCode(value: unknown): unknown {
-  return isRecord(value) ? (value.code || null) : null;
-}
-
-async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  // Keep this literal env check: Vite must eliminate the adapter import from production builds.
-  if (import.meta.env.VITE_EA_DEMO === "1") {
-    const demoModule = await import("./demo/apiAdapter.ts");
-    const handleDemoApiRequest = demoModule.handleDemoApiRequest as DemoApiRequestHandler;
-    return handleDemoApiRequest(path, options) as Promise<T>;
-  }
-  const { redirectOnAuthFailure = true, timeoutMs, ...fetchOptions } = options;
-
-  // A request that never settles (stalled TCP, dead network) would otherwise
-  // leave an optimistic mutation applied forever with no revert path — the
-  // 2026-07-06 calendar ghost-delete incident. When timeoutMs is set we arm an
-  // AbortSignal.timeout so fetch rejects, and the rejection flows to the caller's
-  // catch (which reverts). Only opted-in helpers pass timeoutMs — SSE streams and
-  // long snapshot reads must not inherit a deadline. No current timeoutMs caller
-  // also supplies options.signal, so timeoutMs simply provides the signal; if that
-  // ever changes, compose the two via AbortSignal.any here.
-  const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : fetchOptions.signal;
-
-  let res;
-  try {
-    res = await fetch(path, {
-      ...fetchOptions,
-      signal,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "Setpoint",
-        ...(fetchOptions.headers as Record<string, string> | undefined),
-      },
-    });
-  } catch (err) {
-    // AbortSignal.timeout rejects the fetch with a TimeoutError; translate it into
-    // a settled, caller-friendly error. A caller-supplied AbortController abort
-    // surfaces as AbortError and is left untouched — search cancellation depends
-    // on seeing AbortError (see the calendar search abort flow).
-    if (timeoutMs && isRecord(err) && err.name === "TimeoutError") {
-      const timeoutErr = new Error(
-        "Request timed out — check the calendar before retrying; the change may not have saved.",
-      );
-      (timeoutErr as ApiError).code = "request_timeout";
-      throw timeoutErr;
-    }
-    throw err;
-  }
-
-  if (res.status === 401 && redirectOnAuthFailure) {
-    window.location.href = "/login";
-    throw new Error("Not authenticated");
-  }
-
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => null);
-    const error = new Error(errorMessage(body) || `API error: ${res.status}`) as ApiError;
-    error.code = errorCode(body);
-    error.status = res.status;
-    throw error;
-  }
-  return res.json() as Promise<T>;
 }
 
 // Auth

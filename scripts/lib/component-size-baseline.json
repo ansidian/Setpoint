@@ -20,7 +20,6 @@
     "server/actual/actual-core.ts": 673,
     "server/scheduler.ts": 655,
     "server/tasks/todoist.ts": 629,
-    "src/api.ts": 631,
     "server/email/search/email-search-retrieval.ts": 686,
     "server/routes/calendar.ts": 606,
     "src/components/todoist/add-task-panel/useAddTaskPanelController.ts": 616,

@@ -5,6 +5,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 ## Files
 
 - `actualMetadata.ts` — shared Actual Budget metadata cache (accounts/payees/categories), single fetch, invalidated on the bills SSE change signal
+- `apiFetch.ts` — shared JSON request transport, timeout/auth error handling, and build-time demo adapter boundary
 - `bill-utils.ts` — bill amount/date formatting helpers
 - `breakpoints.ts` — `MOBILE_MAX_WIDTH` — single source of truth for the app's mobile gate
 - `briefing-email-state.ts` — unread-count + status-map helpers for briefing email lanes
@@ -19,6 +20,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `shell-helpers.ts` — shared dashboard/hero/timeline/rail helpers (day bucketing, due-date-to-ms, duration formatting), kept pure and React-free
 - `sseStream.ts` — reads a fetch() response body as text/event-stream frames, calling `onEvent` per JSON payload
 - `textContrast.ts` — WCAG contrast tiers for the app's readable-text colors
+- `todoistSetupApi.ts` — authenticated Todoist setup/status client calls with demo-safe routing through `apiFetch`
 - `triageSoundGate.ts` — dedup + coalesce gate shared by every triage-sound publisher
 - `triageSoundPlayback.ts` — Web Audio playback constants + the audio-unlock/gain/fade-out mechanics for triage sounds
 - `triageSoundRouter.ts` — resolves which triage sound plays for a given trigger against the user's sound settings

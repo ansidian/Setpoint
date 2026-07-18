@@ -21,6 +21,10 @@ import {
   gmailPubSubService,
   type GmailPubSubService,
 } from "../email/gmail-pubsub.ts";
+import {
+  todoistOAuthCredentialManager,
+  type TodoistOAuthCredentialManager,
+} from "../tasks/todoist-setup.ts";
 
 const MAX_CREDENTIAL_LENGTH = 65_536;
 
@@ -37,6 +41,7 @@ export function createInstanceCredentialsRouter(
   locationManager: LocationCredentialManager = locationCredentialManager,
   googleOAuthManager: GoogleOAuthCredentialManager = googleOAuthCredentialManager,
   gmailPubSubManager: GmailPubSubService = gmailPubSubService,
+  todoistOAuthManager: TodoistOAuthCredentialManager = todoistOAuthCredentialManager,
 ) {
   const router = Router();
   wrapRouterAsync(router);
@@ -52,6 +57,19 @@ export function createInstanceCredentialsRouter(
       return res.status(400).json({ message: "Google client ID and client secret are required" });
     }
     return res.json(await googleOAuthManager.stageCandidate({ clientId, clientSecret }));
+  });
+
+  router.put("/todoist-oauth/pending", requireCookieSession, async (req, res) => {
+    const clientId = candidateValue(req.body?.clientId);
+    const clientSecret = candidateValue(req.body?.clientSecret);
+    if (clientId === null || clientSecret === null) {
+      return res.status(400).json({ message: "Todoist client ID and client secret are required" });
+    }
+    return res.json(await todoistOAuthManager.stageCandidate({ clientId, clientSecret }));
+  });
+
+  router.post("/todoist-oauth/import-environment", requireCookieSession, async (_req, res) => {
+    return res.json({ credentials: await todoistOAuthManager.importEnvironment() });
   });
 
   router.get("/gmail-pubsub", requireCookieSession, async (_req, res) => {

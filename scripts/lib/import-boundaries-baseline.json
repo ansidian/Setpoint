@@ -37,6 +37,7 @@
     "tasks": [
       "tasks-service.ts",
       "deadlines-read.ts",
+      "todoist-setup.ts",
       "todoist-webhook.ts"
     ],
     "triage": [

@@ -129,3 +129,29 @@ export interface TodoistWebhookDelta {
   initiatedFrom?: string | null;
   version?: string | null;
 }
+
+export type TodoistConnectionMode = "disconnected" | "personal_token" | "oauth";
+
+export interface TodoistConnectionStatus {
+  mode: TodoistConnectionMode;
+  configured: boolean;
+  oauthRefreshable: boolean;
+  needsReauth: boolean;
+  application: {
+    configured: boolean;
+    source: "stored" | "environment" | "disabled" | "absent" | "mixed";
+    pendingConfigured: boolean;
+  };
+  callbackUrl: string;
+  webhookUrl: string;
+  deliveryMode: "periodic" | "webhook_ready";
+}
+
+export interface TodoistOAuthApplicationRequest {
+  clientId: string;
+  clientSecret: string;
+}
+
+export interface TodoistOAuthAuthorizationResponse {
+  url: string;
+}

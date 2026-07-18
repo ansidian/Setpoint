@@ -238,6 +238,18 @@ export function createInstanceCredentialService({
     return metadataFor(key, record);
   }
 
+  async function importEnvironmentGroup(inputKeys: string[]): Promise<InstanceCredentialMetadata[]> {
+    const entries = inputKeys.map((inputKey) => {
+      const key = requireKey(inputKey);
+      const value = environmentValue(key, environment);
+      if (value === null) throw new HostCredentialUnavailableError();
+      return { key, encryptedValue: encryption.encrypt(value) };
+    });
+    const records = await store.importActiveGroup(entries);
+    for (const record of records) publish({ key: record.key, reason: "environment_imported" });
+    return records.map((record) => metadataFor(record.key, record));
+  }
+
   return {
     resolve,
     readPending,
@@ -251,6 +263,7 @@ export function createInstanceCredentialService({
     disable,
     useHostValue,
     importEnvironment,
+    importEnvironmentGroup,
     subscribe,
   };
 }

@@ -83,6 +83,7 @@ const SETTINGS_PUBLIC_FIELDS = [
   "email_triage_mode",
   "discord_user_id",
   "todoist_needs_reauth",
+  "todoist_connection_mode",
 ];
 
 router.get<Record<string, never>, GeocodeResult[] | ErrorResponse, never, { q?: string }>("/geocode", async (req, res) => {
@@ -133,7 +134,13 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
     safe.todoist_configured = !!todoist_api_token_encrypted;
     safe.todoist_needs_reauth = !!safe.todoist_needs_reauth;
-    safe.todoist_oauth_configured = !!(todoist_api_token_encrypted && todoist_oauth_refresh_token_encrypted);
+    safe.todoist_connection_mode = safe.todoist_connection_mode
+      || (todoist_api_token_encrypted
+        ? todoist_oauth_refresh_token_encrypted ? "oauth" : "personal_token"
+        : "disconnected");
+    safe.todoist_oauth_configured = !!(
+      todoist_api_token_encrypted && safe.todoist_connection_mode === "oauth"
+    );
     safe.discord_webhook_configured = !!discord_webhook_url_encrypted;
     safe.schedules = schedules_json
       ? JSON.parse(String(schedules_json))
@@ -275,6 +282,9 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       updates.push("todoist_oauth_access_token_expires_at = NULL");
       updates.push("todoist_oauth_scope = NULL");
       updates.push("todoist_oauth_token_type = NULL");
+      updates.push(todoist_api_token
+        ? "todoist_connection_mode = 'personal_token'"
+        : "todoist_connection_mode = NULL");
     }
     if (email_triage_mode !== undefined) {
       if (!isAllowedStoredEmailTriageMode(email_triage_mode)) {

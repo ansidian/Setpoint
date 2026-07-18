@@ -177,6 +177,7 @@ export interface SettingsResponse {
   actual_budget_configured: boolean;
   todoist_configured: boolean;
   todoist_oauth_configured: boolean;
+  todoist_connection_mode: "disconnected" | "personal_token" | "oauth";
   discord_webhook_configured: boolean;
   schedules: BriefingSchedule[];
   email_interests: string[];
