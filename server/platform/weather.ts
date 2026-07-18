@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
+import { resolvePirateWeatherApiKey } from "../location-credentials.ts";
+import type { InstanceCredentialService } from "./instance-credential-service.ts";
 import { fetchWithTimeout } from "./fetch-with-timeout.ts";
 
-const PIRATE_WEATHER_API_KEY = process.env.PIRATE_WEATHER_API_KEY;
 const PIRATE_WEATHER_TIMEOUT_MS = 10_000;
 const NOMINATIM_TIMEOUT_MS = 10_000;
 
@@ -177,20 +179,25 @@ export function __resetWeatherCacheForTests() {
   weatherRefresh = null;
 }
 
-async function refreshWeather(cacheKey: string, lat: string | number, lng: string | number) {
+async function refreshWeather(cacheKey: string, apiKey: string, lat: string | number, lng: string | number) {
   // Coalesce concurrent refreshes for the same location so a TTL lapse under the
   // /current poll loop doesn't fan out into many simultaneous Pirate Weather hits.
   if (weatherRefresh && weatherRefresh.key === cacheKey) return weatherRefresh.promise;
   const promise = (async () => {
-    const url = `https://api.pirateweather.net/forecast/${PIRATE_WEATHER_API_KEY}/${lat},${lng}?exclude=minutely,flags&units=us`;
-    const res = await fetchWithTimeout(url, {}, { timeoutMs: PIRATE_WEATHER_TIMEOUT_MS });
+    const url = `https://api.pirateweather.net/forecast/${encodeURIComponent(apiKey)}/${lat},${lng}?exclude=minutely,flags&units=us`;
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, {}, { timeoutMs: PIRATE_WEATHER_TIMEOUT_MS });
+    } catch {
+      if (weatherCache.key === cacheKey && weatherCache.data) return weatherCache.data;
+      throw new Error("Pirate Weather request failed");
+    }
     if (!res.ok) {
-      if (weatherCache.data) {
+      if (weatherCache.key === cacheKey && weatherCache.data) {
         console.warn("Pirate Weather error, returning cached data");
         return weatherCache.data;
       }
-      const text = await res.text();
-      throw new Error(`Pirate Weather error: ${res.status} ${text}`);
+      throw new Error(`Pirate Weather error: ${res.status}`);
     }
     const data = await res.json();
     const result = normalizeWeatherPayload(data);
@@ -205,10 +212,16 @@ async function refreshWeather(cacheKey: string, lat: string | number, lng: strin
   }
 }
 
-export async function fetchWeather(lat: string | number, lng: string | number) {
-  if (!PIRATE_WEATHER_API_KEY) throw new Error("PIRATE_WEATHER_API_KEY not set");
+export async function fetchWeather(
+  lat: string | number,
+  lng: string | number,
+  credentials?: Pick<InstanceCredentialService, "resolve">,
+) {
+  const apiKey = await resolvePirateWeatherApiKey(credentials);
+  if (!apiKey) throw new Error("Pirate Weather is not configured");
 
-  const cacheKey = `${lat},${lng}`;
+  const credentialFingerprint = createHash("sha256").update(apiKey).digest("hex");
+  const cacheKey = `${credentialFingerprint}:${lat},${lng}`;
   const cachedForKey = weatherCache.key === cacheKey && weatherCache.data;
   if (cachedForKey && Date.now() - weatherCache.ts < CACHE_TTL) {
     return weatherCache.data!;
@@ -219,11 +232,11 @@ export async function fetchWeather(lat: string | number, lng: string | number) {
   // so no request blocks on a cold Pirate Weather fetch. Only the very first
   // (uncached) load for a location blocks.
   if (cachedForKey) {
-    refreshWeather(cacheKey, lat, lng).catch(() => {});
+    refreshWeather(cacheKey, apiKey, lat, lng).catch(() => {});
     return weatherCache.data!;
   }
 
-  return refreshWeather(cacheKey, lat, lng);
+  return refreshWeather(cacheKey, apiKey, lat, lng);
 }
 
 // Geocode using OpenStreetMap Nominatim (free, no key required)

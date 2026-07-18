@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// suggestGooglePlaces/getGooglePlaceDetails capture GOOGLE_PLACES_API_KEY at
-// module load, so set it before import.
-vi.hoisted(() => {
-  process.env.GOOGLE_PLACES_API_KEY = "test-places-key";
-});
-
 import { getGooglePlaceDetails, suggestGooglePlaces } from "./google-places.ts";
+
+const credentials = (value: string | null) => ({
+  resolve: vi.fn(async () => ({
+    key: "calendar.google_places_api_key" as const,
+    source: value ? "stored" as const : "absent" as const,
+    value,
+  })),
+});
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -38,7 +40,7 @@ describe("google-places fetch deadlines", () => {
         ],
       }));
 
-    await suggestGooglePlaces("123 Main", { lat: 1.1, lng: 2.2 });
+    await suggestGooglePlaces("123 Main", { lat: 1.1, lng: 2.2 }, credentials("test-places-key") as never);
 
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
@@ -52,8 +54,28 @@ describe("google-places fetch deadlines", () => {
         googleMapsUri: "https://maps.google.com/?q=place-1",
       }));
 
-    await getGooglePlaceDetails("place-1");
+    await getGooglePlaceDetails("place-1", {}, credentials("test-places-key") as never);
 
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("resolves a rotated key for each request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ suggestions: [] }));
+
+    await suggestGooglePlaces("coffee", {}, credentials("first-key") as never);
+    await suggestGooglePlaces("coffee", {}, credentials("rotated-key") as never);
+
+    expect(fetchMock.mock.calls[0]![1]?.headers).toMatchObject({ "X-Goog-Api-Key": "first-key" });
+    expect(fetchMock.mock.calls[1]![1]?.headers).toMatchObject({ "X-Goog-Api-Key": "rotated-key" });
+  });
+
+  it("degrades only Places when no key is configured", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    await expect(suggestGooglePlaces("coffee", {}, credentials(null) as never)).rejects.toMatchObject({
+      status: 503,
+      code: "calendar_places_not_configured",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

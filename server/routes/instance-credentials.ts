@@ -9,6 +9,10 @@ import {
   aiCredentialManager,
   type AiCredentialManager,
 } from "../ai-credentials.ts";
+import {
+  locationCredentialManager,
+  type LocationCredentialManager,
+} from "../location-credentials.ts";
 
 const MAX_CREDENTIAL_LENGTH = 65_536;
 
@@ -22,6 +26,7 @@ function candidateValue(value: unknown): string | null {
 export function createInstanceCredentialsRouter(
   service: InstanceCredentialService = instanceCredentialService,
   aiManager: AiCredentialManager = aiCredentialManager,
+  locationManager: LocationCredentialManager = locationCredentialManager,
 ) {
   const router = Router();
   wrapRouterAsync(router);
@@ -37,7 +42,10 @@ export function createInstanceCredentialsRouter(
   });
 
   router.post("/:key/test", requireCookieSession, async (req, res) => {
-    const result = await aiManager.testPending(req.params.key!);
+    const key = req.params.key!;
+    const result = key === "weather.pirate_weather_api_key" || key === "calendar.google_places_api_key"
+      ? await locationManager.testPending(key)
+      : await aiManager.testPending(key);
     return res.status(result.ok ? 200 : 422).json(result);
   });
 
