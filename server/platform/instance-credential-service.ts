@@ -176,11 +176,35 @@ export function createInstanceCredentialService({
     return metadataFor(key, record);
   }
 
+  async function stagePendingGroup(
+    entries: Array<{ key: string; value: string }>,
+  ): Promise<InstanceCredentialMetadata[]> {
+    const supported = entries.map((entry) => ({
+      key: requireKey(entry.key),
+      encryptedValue: encryption.encrypt(entry.value),
+    }));
+    const records = await store.stagePendingGroup(supported);
+    for (const record of records) publish({ key: record.key, reason: "pending_staged" });
+    return records.map((record) => metadataFor(record.key, record));
+  }
+
   async function promotePending(inputKey: string, expectedVersion: number): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
     const record = await store.promotePending(key, expectedVersion);
     publish({ key, reason: "promoted" });
     return metadataFor(key, record);
+  }
+
+  async function promotePendingGroup(
+    entries: Array<{ key: string; expectedVersion: number }>,
+  ): Promise<InstanceCredentialMetadata[]> {
+    const supported = entries.map((entry) => ({
+      key: requireKey(entry.key),
+      expectedVersion: entry.expectedVersion,
+    }));
+    const records = await store.promotePendingGroup(supported);
+    for (const record of records) publish({ key: record.key, reason: "promoted" });
+    return records.map((record) => metadataFor(record.key, record));
   }
 
   async function recordPendingFailure(inputKey: string, expectedVersion: number, errorCode: string): Promise<InstanceCredentialMetadata> {
@@ -220,7 +244,9 @@ export function createInstanceCredentialService({
     getMetadata,
     getCredentialMetadata,
     stagePending,
+    stagePendingGroup,
     promotePending,
+    promotePendingGroup,
     recordPendingFailure,
     disable,
     useHostValue,

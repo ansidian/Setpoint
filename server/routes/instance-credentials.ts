@@ -13,6 +13,10 @@ import {
   locationCredentialManager,
   type LocationCredentialManager,
 } from "../location-credentials.ts";
+import {
+  googleOAuthCredentialManager,
+  type GoogleOAuthCredentialManager,
+} from "../google-oauth-credentials.ts";
 
 const MAX_CREDENTIAL_LENGTH = 65_536;
 
@@ -27,12 +31,22 @@ export function createInstanceCredentialsRouter(
   service: InstanceCredentialService = instanceCredentialService,
   aiManager: AiCredentialManager = aiCredentialManager,
   locationManager: LocationCredentialManager = locationCredentialManager,
+  googleOAuthManager: GoogleOAuthCredentialManager = googleOAuthCredentialManager,
 ) {
   const router = Router();
   wrapRouterAsync(router);
 
   router.get("/", requireCookieSession, async (_req, res) => {
     return res.json(await service.getMetadata());
+  });
+
+  router.put("/google-oauth/pending", requireCookieSession, async (req, res) => {
+    const clientId = candidateValue(req.body?.clientId);
+    const clientSecret = candidateValue(req.body?.clientSecret);
+    if (clientId === null || clientSecret === null) {
+      return res.status(400).json({ message: "Google client ID and client secret are required" });
+    }
+    return res.json(await googleOAuthManager.stageCandidate({ clientId, clientSecret }));
   });
 
   router.put("/:key/pending", requireCookieSession, async (req, res) => {

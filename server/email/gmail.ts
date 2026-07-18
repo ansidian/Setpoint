@@ -9,6 +9,12 @@ import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../
 import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
 import { emailErrorMessage } from "./email-provider-types.ts";
 import { canonicalUrlService } from "../platform/canonical-url.ts";
+import {
+  googleOAuthCredentialManager,
+  type GoogleOAuthApplicationCredentials,
+} from "../google-oauth-credentials.ts";
+import { GOOGLE_COMBINED_SCOPES } from "./gmail-oauth-url.ts";
+export { getAuthUrl } from "./gmail-oauth-url.ts";
 
 interface GmailCredentials {
   access_token: string;
@@ -76,15 +82,6 @@ const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
 const PROFILE_FETCH_TIMEOUT_MS = 30_000;
 const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-
-const SCOPES = [
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-];
-
 // Google's OAuth token responses normally carry expires_in (seconds), but a
 // malformed/partial response can omit it. Defaulting to this TTL keeps
 // expires_at finite so the refresh guard stays deterministic instead of
@@ -100,39 +97,28 @@ function computeExpiresAt(expiresIn: unknown, now = Date.now()): number {
   return now + ttl * 1000;
 }
 
-// --- OAuth flow ---
-
-export async function getAuthUrl(state: string): Promise<string> {
-  const redirectUri = await canonicalUrlService.resolveProviderCallbackUrl("googleOAuth");
-  const params = new URLSearchParams({
-    client_id: String(GOOGLE_CLIENT_ID),
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: SCOPES.join(" "),
-    access_type: "offline",
-    prompt: "consent",
-    state: state,
-  });
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
-
-export async function handleCallback(code: string, _accountId: string | null | undefined, userId: string): Promise<{ email: string; accountId: string }> {
+export async function handleCallback(
+  code: string,
+  _accountId: string | null | undefined,
+  userId: string,
+  applicationCredentials: GoogleOAuthApplicationCredentials,
+  onValidated?: () => Promise<void>,
+): Promise<{ email: string; accountId: string }> {
   const redirectUri = await canonicalUrlService.resolveProviderCallbackUrl("googleOAuth");
   const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: String(GOOGLE_CLIENT_ID),
-      client_secret: String(GOOGLE_CLIENT_SECRET),
+      client_id: applicationCredentials.clientId,
+      client_secret: applicationCredentials.clientSecret,
       redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   }, { timeoutMs: TOKEN_EXCHANGE_TIMEOUT_MS });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token exchange failed: ${text}`);
+    throw new Error(`Google OAuth token exchange failed (${res.status})`);
   }
 
   const tokens = await res.json() as GmailTokenResponse;
@@ -140,7 +126,7 @@ export async function handleCallback(code: string, _accountId: string | null | u
     access_token: tokens.access_token || "",
     refresh_token: tokens.refresh_token || "",
     expires_at: computeExpiresAt(tokens.expires_in),
-    scopes: tokens.scope ? tokens.scope.split(" ").filter(Boolean) : SCOPES,
+    scopes: tokens.scope ? tokens.scope.split(" ").filter(Boolean) : GOOGLE_COMBINED_SCOPES,
   };
 
   // Fetch the user's email address for the label
@@ -149,8 +135,13 @@ export async function handleCallback(code: string, _accountId: string | null | u
     { headers: { Authorization: `Bearer ${credentials.access_token}` } },
     { timeoutMs: PROFILE_FETCH_TIMEOUT_MS },
   );
+  if (!profileRes.ok) {
+    throw new Error(`Google OAuth profile validation failed (${profileRes.status})`);
+  }
   const profile = await profileRes.json() as GmailProfileResponse;
   const email = profile.emailAddress || "";
+  if (!email) throw new Error("Google OAuth profile did not include an email address");
+  await onValidated?.();
 
   const existingAccounts = await db.execute({
     sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail' ORDER BY sort_order ASC, created_at ASC",
@@ -200,12 +191,13 @@ async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
   const expiresAt = credentials.expires_at;
   const isExpiring = !Number.isFinite(expiresAt) || expiresAt < Date.now() + 5 * 60 * 1000;
   if (isExpiring) {
+    const applicationCredentials = await googleOAuthCredentialManager.resolveActive();
     const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: String(GOOGLE_CLIENT_ID),
-        client_secret: String(GOOGLE_CLIENT_SECRET),
+        client_id: applicationCredentials.clientId,
+        client_secret: applicationCredentials.clientSecret,
         refresh_token: credentials.refresh_token,
         grant_type: "refresh_token",
       }),

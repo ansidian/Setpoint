@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { InstanceCredentialService } from "../platform/instance-credential-service.ts";
 import type { AiCredentialManager } from "../ai-credentials.ts";
 import type { LocationCredentialManager } from "../location-credentials.ts";
+import type { GoogleOAuthCredentialManager } from "../google-oauth-credentials.ts";
 
 vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
@@ -18,6 +19,7 @@ function createApp(
   serviceOverrides: Partial<InstanceCredentialService> = {},
   aiManagerOverrides: Partial<AiCredentialManager> = {},
   locationManagerOverrides: Partial<LocationCredentialManager> = {},
+  googleOAuthManagerOverrides: Partial<GoogleOAuthCredentialManager> = {},
 ) {
   const metadata = {
     key: "ai.openai_api_key",
@@ -53,11 +55,21 @@ function createApp(
     testPending: vi.fn(async () => ({ ok: true, code: "VALID", metadata })),
     ...locationManagerOverrides,
   } as unknown as LocationCredentialManager;
+  const googleOAuthManager = {
+    stageCandidate: vi.fn(async () => ({
+      credentials: [metadata, { ...metadata, key: "google.oauth_client_secret" }],
+      candidateVersions: { clientId: 3, clientSecret: 4 },
+    })),
+    ...googleOAuthManagerOverrides,
+  } as unknown as GoogleOAuthCredentialManager;
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/instance-credentials", createInstanceCredentialsRouter(service, aiManager, locationManager));
+  app.use(
+    "/api/instance-credentials",
+    createInstanceCredentialsRouter(service, aiManager, locationManager, googleOAuthManager),
+  );
   app.use(errorHandler);
-  return { app, service, aiManager, locationManager };
+  return { app, service, aiManager, locationManager, googleOAuthManager };
 }
 
 describe("instance credential routes", () => {
@@ -76,6 +88,22 @@ describe("instance credential routes", () => {
     expect(response.status).toBe(200);
     expect(service.stagePending).toHaveBeenCalledWith("ai.openai_api_key", "browser-secret");
     expect(JSON.stringify(response.body)).not.toContain("browser-secret");
+  });
+
+  it("stages the Google application pair through one write-only provider action", async () => {
+    const { app, googleOAuthManager } = createApp();
+    const response = await request(app)
+      .put("/api/instance-credentials/google-oauth/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ clientId: "browser-client-id", clientSecret: "browser-client-secret" });
+
+    expect(response.status).toBe(200);
+    expect(googleOAuthManager.stageCandidate).toHaveBeenCalledWith({
+      clientId: "browser-client-id",
+      clientSecret: "browser-client-secret",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("browser-client-id");
+    expect(JSON.stringify(response.body)).not.toContain("browser-client-secret");
   });
 
   it("returns a fixed allowlist error without reflecting unknown keys or submitted values", async () => {
