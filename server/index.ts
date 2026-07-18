@@ -20,6 +20,7 @@ import newsRoutes from "./routes/news.ts";
 import gmailPushRoutes from "./routes/gmail-push.ts";
 import todoistWebhookRoutes from "./routes/todoist-webhook.ts";
 import instanceCredentialRoutes from "./routes/instance-credentials.ts";
+import capabilityRoutes from "./routes/capabilities.ts";
 import todoistOAuthRoutes from "./routes/todoist-oauth.ts";
 import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.ts";
@@ -116,6 +117,7 @@ app.use("/api/notes", notesRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/gmail", gmailPushRoutes);
 app.use("/api/instance-credentials", instanceCredentialRoutes);
+app.use("/api/capabilities", capabilityRoutes);
 
 // Serve static frontend in production (behind auth)
 if (process.env.NODE_ENV === "production") {
