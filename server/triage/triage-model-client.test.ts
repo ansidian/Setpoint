@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createTriageModelClient,
+  createTriageModelClient as createRuntimeTriageModelClient,
   loadTriageModelConfig,
 } from "./triage-model-client.ts";
 import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
 } from "../bills/bill-extractors/catalog.ts";
+
+function createTriageModelClient(
+  options: Parameters<typeof createRuntimeTriageModelClient>[0] = {},
+) {
+  return createRuntimeTriageModelClient({
+    ...options,
+    credentialResolver: async (provider) => process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
+  });
+}
 
 const email = {
   from_name: "University Billing",

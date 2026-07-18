@@ -817,6 +817,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/instance-credentials/:key/disable` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/import-environment` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/test` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/use-host` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |

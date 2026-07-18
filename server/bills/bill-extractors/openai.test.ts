@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPENAI_PROVIDER } from "./openai.ts";
 
+vi.mock("../../ai-credentials.ts", () => ({
+  resolveAiApiKey: async () => process.env.OPENAI_API_KEY || null,
+}));
+
 describe("OPENAI_PROVIDER.extract", () => {
   let savedApiKey: string | undefined;
 

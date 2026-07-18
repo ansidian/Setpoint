@@ -5,6 +5,10 @@ import {
   instanceCredentialService,
   type InstanceCredentialService,
 } from "../platform/instance-credential-service.ts";
+import {
+  aiCredentialManager,
+  type AiCredentialManager,
+} from "../ai-credentials.ts";
 
 const MAX_CREDENTIAL_LENGTH = 65_536;
 
@@ -17,6 +21,7 @@ function candidateValue(value: unknown): string | null {
 
 export function createInstanceCredentialsRouter(
   service: InstanceCredentialService = instanceCredentialService,
+  aiManager: AiCredentialManager = aiCredentialManager,
 ) {
   const router = Router();
   wrapRouterAsync(router);
@@ -29,6 +34,11 @@ export function createInstanceCredentialsRouter(
     const value = candidateValue(req.body?.value);
     if (value === null) return res.status(400).json({ message: "Credential value is required" });
     return res.json(await service.stagePending(req.params.key!, value));
+  });
+
+  router.post("/:key/test", requireCookieSession, async (req, res) => {
+    const result = await aiManager.testPending(req.params.key!);
+    return res.status(result.ok ? 200 : 422).json(result);
   });
 
   router.post("/:key/import-environment", requireCookieSession, async (req, res) => {

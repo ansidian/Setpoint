@@ -4,6 +4,11 @@ import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 import type { InStatement } from "@libsql/client";
 
+vi.mock("../ai-credentials.ts", () => ({
+  resolveAiApiKey: async (provider: "openai" | "anthropic") =>
+    process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
+}));
+
 describe("email triage worker model routing", () => {
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
     __resetCurrentDashboardEventsForTests();

@@ -420,7 +420,7 @@ router.post<Record<string, never>, ScheduleSkipResponse | ErrorResponse, Schedul
 
 router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/models", async (_req, res) => {
   try {
-    res.json(emailAiModelAvailability());
+    res.json(await emailAiModelAvailability());
   } catch (err) {
     // P3-54: fixed user-facing string; raw error message stays in the log only.
     console.error("Error fetching models:", errorMessage(err));
@@ -430,7 +430,7 @@ router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("
 
 router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/bill-extract-models", async (_req, res) => {
   try {
-    res.json(billExtractAvailability());
+    res.json(await billExtractAvailability());
   } catch (err) {
     // P3-54: fixed user-facing string; raw error message stays in the log only.
     console.error("Error fetching bill-extract catalog:", errorMessage(err));

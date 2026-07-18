@@ -47,7 +47,10 @@ function buildApp(): express.Express {
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/alfred", createAlfredRouter({ run: testState.run }));
+  app.use("/api/alfred", createAlfredRouter({
+    run: testState.run,
+    credentialResolver: async () => process.env.ANTHROPIC_API_KEY || null,
+  }));
   return app;
 }
 

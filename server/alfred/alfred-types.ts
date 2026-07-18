@@ -127,6 +127,7 @@ export interface RunAlfredOptions {
   signal?: AbortSignal | null;
   fetchImpl?: AlfredFetch;
   apiKey?: string;
+  credentialResolver?: () => Promise<string | null>;
   deps: AlfredDependencies;
   recordUsage?: AlfredUsageRecorder;
   now?: () => Date;

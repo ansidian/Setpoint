@@ -29,6 +29,10 @@ vi.mock("../actual/actual.ts", () => mockActual);
 vi.mock("../actual/actual-local-metadata.ts", () => mockActualLocal);
 vi.mock("./bill-extract.ts", () => ({ trimBillBody: ({ body }: { body: string }) => body.slice(0, 100) }));
 vi.mock("../db/connection.ts", () => ({ default: mockDb }));
+vi.mock("../ai-credentials.ts", () => ({
+  resolveAiApiKey: async (provider: "openai" | "anthropic") =>
+    process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
+}));
 
 const originalFetch = global.fetch;
 const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;

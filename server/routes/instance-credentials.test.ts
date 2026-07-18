@@ -3,6 +3,7 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import type { InstanceCredentialService } from "../platform/instance-credential-service.ts";
+import type { AiCredentialManager } from "../ai-credentials.ts";
 
 vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
@@ -12,10 +13,14 @@ vi.mock("../middleware/auth.ts", () => ({
 const { errorHandler } = await import("../middleware/async-handler.ts");
 const { createInstanceCredentialsRouter } = await import("./instance-credentials.ts");
 
-function createApp(serviceOverrides: Partial<InstanceCredentialService> = {}) {
+function createApp(
+  serviceOverrides: Partial<InstanceCredentialService> = {},
+  aiManagerOverrides: Partial<AiCredentialManager> = {},
+) {
   const metadata = {
     key: "ai.openai_api_key",
     handling: "secret" as const,
+    capabilities: ["email_triage", "bill_extraction", "semantic_email_search"],
     source: "stored" as const,
     activeConfigured: true,
     pendingConfigured: true,
@@ -38,11 +43,15 @@ function createApp(serviceOverrides: Partial<InstanceCredentialService> = {}) {
     ...serviceOverrides,
   } as unknown as InstanceCredentialService;
   const app = express();
+  const aiManager = {
+    testPending: vi.fn(async () => ({ ok: true, code: "VALID", metadata })),
+    ...aiManagerOverrides,
+  } as unknown as AiCredentialManager;
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/instance-credentials", createInstanceCredentialsRouter(service));
+  app.use("/api/instance-credentials", createInstanceCredentialsRouter(service, aiManager));
   app.use(errorHandler);
-  return { app, service };
+  return { app, service, aiManager };
 }
 
 describe("instance credential routes", () => {
@@ -87,5 +96,46 @@ describe("instance credential routes", () => {
       .set("Cookie", "ea_session=valid");
     expect(promotion.status).toBe(404);
     expect(read.status).toBe(404);
+  });
+
+  it("tests and promotes only through the provider-owned redacted workflow", async () => {
+    const { app, aiManager } = createApp();
+    const response = await request(app)
+      .post("/api/instance-credentials/ai.openai_api_key/test")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ ok: true, code: "VALID" });
+    expect(aiManager.testPending).toHaveBeenCalledWith("ai.openai_api_key");
+  });
+
+  it("returns a stable failed-test result without provider detail", async () => {
+    const { app } = createApp({}, {
+      testPending: vi.fn(async (_key: string) => ({
+        ok: false,
+        code: "INVALID_CREDENTIAL" as const,
+        metadata: {
+          key: "ai.openai_api_key",
+          handling: "secret" as const,
+          capabilities: ["email_triage", "bill_extraction", "semantic_email_search"],
+          source: "stored" as const,
+          activeConfigured: true,
+          pendingConfigured: true,
+          validationState: "invalid" as const,
+          lastTestedAt: 1,
+          lastSucceededAt: null,
+          lastFailedAt: 1,
+          errorCode: "INVALID_CREDENTIAL",
+          version: 4,
+        },
+      })),
+    });
+    const response = await request(app)
+      .post("/api/instance-credentials/ai.openai_api_key/test")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(422);
+    expect(response.body).toMatchObject({ ok: false, code: "INVALID_CREDENTIAL" });
+    expect(JSON.stringify(response.body)).not.toContain("provider body");
   });
 });

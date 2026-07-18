@@ -4,6 +4,7 @@ export type InstanceCredentialValidationState = "untested" | "pending" | "valid"
 export type InstanceCredentialMetadata = {
   key: string;
   handling: "secret" | "non_secret";
+  capabilities: string[];
   source: InstanceCredentialSource;
   activeConfigured: boolean;
   pendingConfigured: boolean;
