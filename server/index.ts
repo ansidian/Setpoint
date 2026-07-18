@@ -19,6 +19,7 @@ import notesRoutes from "./routes/notes.ts";
 import newsRoutes from "./routes/news.ts";
 import gmailPushRoutes from "./routes/gmail-push.ts";
 import todoistWebhookRoutes from "./routes/todoist-webhook.ts";
+import instanceCredentialRoutes from "./routes/instance-credentials.ts";
 import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker, stopScheduler } from "./scheduler.ts";
 import { startSnoozeWaker, stopSnoozeWaker } from "./snapshots/snooze-waker.ts";
 import { startEmailBackfillWorker, stopEmailBackfillWorker } from "./email/email-backfill-worker.ts";
@@ -42,12 +43,20 @@ import { ownerStore } from "./auth/owner-store.ts";
 import { activateOwner, getActiveOwner, onOwnerActivated } from "./auth/owner-context.ts";
 import { createOwnerRuntimeGate } from "./auth/owner-runtime.ts";
 import { canonicalUrlService } from "./platform/canonical-url.ts";
+import { assertValidRootEncryptionKey } from "./platform/encryption.ts";
+import { rootKeyHealthService } from "./platform/root-key-health.ts";
 
 
 // fail fast if critical env vars are missing
 const missing = getMissingRequiredEnv();
 if (missing.length) {
   console.error(`[EA] Missing required env vars: ${missing.join(", ")}`);
+  process.exit(1);
+}
+try {
+  assertValidRootEncryptionKey();
+} catch (error) {
+  console.error(`[EA] ${error instanceof Error ? error.message : "EA_ENCRYPTION_KEY is invalid"}`);
   process.exit(1);
 }
 
@@ -104,6 +113,7 @@ app.use("/api/alfred", alfredRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/gmail", gmailPushRoutes);
+app.use("/api/instance-credentials", instanceCredentialRoutes);
 
 // Serve static frontend in production (behind auth)
 if (process.env.NODE_ENV === "production") {
@@ -158,6 +168,7 @@ const ownerRuntimeGate = createOwnerRuntimeGate(() => startOwnerRuntime());
 
 timeAsync("migrations", () => migrate())
   .then(() => timeAsync("encryption-rewrite", () => migrateCbcEncryption()))
+  .then(() => timeAsync("root-key-health", () => rootKeyHealthService.assertDecryptable()))
   .then(() => timeAsync("owner-bootstrap", () => resolveOwnerBootstrap({
     store: ownerStore,
     env: process.env,

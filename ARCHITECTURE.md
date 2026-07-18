@@ -649,6 +649,7 @@ erDiagram
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
+| `ea_instance_credentials` | `033_instance_credentials.sql` |
 | `ea_instance_metadata` | `032_canonical_url.sql` |
 | `ea_news_items` | `026_news.sql` |
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
@@ -812,6 +813,11 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.ts` |
+| GET | `/api/instance-credentials/` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/disable` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/import-environment` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/use-host` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |
 | POST | `/api/news/refresh` | `server/routes/news.ts` |

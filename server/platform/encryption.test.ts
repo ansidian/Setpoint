@@ -6,7 +6,13 @@ import crypto from "crypto";
 const TEST_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 process.env.EA_ENCRYPTION_KEY = TEST_KEY;
 
-const { encrypt, decrypt } = await import("./encryption.ts");
+const {
+  createEncryption,
+  decrypt,
+  encrypt,
+  getRootKeyHealth,
+  parseRootEncryptionKey,
+} = await import("./encryption.ts");
 
 // Helper: encrypt using the CBC algorithm to generate compatibility test fixtures.
 function cbcEncrypt(plaintext: string) {
@@ -22,6 +28,43 @@ function cbcEncrypt(plaintext: string) {
 }
 
 describe("encryption", () => {
+  describe("root key parsing", () => {
+    it("accepts existing 64-character hex keys", () => {
+      expect(parseRootEncryptionKey(TEST_KEY)).toHaveLength(32);
+    });
+
+    it("accepts Render-style base64 256-bit keys without changing ciphertext format", () => {
+      const base64Key = Buffer.from(TEST_KEY, "hex").toString("base64");
+      const base64Encryption = createEncryption(() => base64Key);
+      const encrypted = base64Encryption.encrypt("render-secret");
+      expect(encrypted).toMatch(/^gcm:/);
+      expect(base64Encryption.decrypt(encrypted)).toBe("render-secret");
+      expect(base64Encryption.decrypt(encrypt("existing-ciphertext"))).toBe("existing-ciphertext");
+    });
+
+    it("rejects malformed and wrong-length keys deterministically", () => {
+      expect(() => parseRootEncryptionKey("not-a-key")).toThrow(
+        "EA_ENCRYPTION_KEY must be a 256-bit hex or base64 value",
+      );
+      expect(() => parseRootEncryptionKey(Buffer.alloc(31).toString("base64"))).toThrow(
+        "EA_ENCRYPTION_KEY must be a 256-bit hex or base64 value",
+      );
+    });
+
+    it("projects a stable non-secret fingerprint", () => {
+      expect(getRootKeyHealth(TEST_KEY)).toEqual({
+        configured: true,
+        valid: true,
+        fingerprint: expect.stringMatching(/^sha256:[a-f0-9]{12}$/),
+      });
+      expect(getRootKeyHealth("invalid")).toEqual({
+        configured: true,
+        valid: false,
+        fingerprint: null,
+      });
+    });
+  });
+
   describe("GCM round-trip", () => {
     it("encrypt then decrypt returns the original plaintext", () => {
       const secret = "test-secret";

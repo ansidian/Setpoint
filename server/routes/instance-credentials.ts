@@ -1,0 +1,49 @@
+import { Router } from "express";
+import { requireCookieSession } from "../middleware/auth.ts";
+import { wrapRouterAsync } from "../middleware/async-handler.ts";
+import {
+  instanceCredentialService,
+  type InstanceCredentialService,
+} from "../platform/instance-credential-service.ts";
+
+const MAX_CREDENTIAL_LENGTH = 65_536;
+
+function candidateValue(value: unknown): string | null {
+  if (typeof value !== "string" || value.length < 1 || value.length > MAX_CREDENTIAL_LENGTH) {
+    return null;
+  }
+  return value;
+}
+
+export function createInstanceCredentialsRouter(
+  service: InstanceCredentialService = instanceCredentialService,
+) {
+  const router = Router();
+  wrapRouterAsync(router);
+
+  router.get("/", requireCookieSession, async (_req, res) => {
+    return res.json(await service.getMetadata());
+  });
+
+  router.put("/:key/pending", requireCookieSession, async (req, res) => {
+    const value = candidateValue(req.body?.value);
+    if (value === null) return res.status(400).json({ message: "Credential value is required" });
+    return res.json(await service.stagePending(req.params.key!, value));
+  });
+
+  router.post("/:key/import-environment", requireCookieSession, async (req, res) => {
+    return res.json(await service.importEnvironment(req.params.key!));
+  });
+
+  router.post("/:key/disable", requireCookieSession, async (req, res) => {
+    return res.json(await service.disable(req.params.key!));
+  });
+
+  router.post("/:key/use-host", requireCookieSession, async (req, res) => {
+    return res.json(await service.useHostValue(req.params.key!));
+  });
+
+  return router;
+}
+
+export default createInstanceCredentialsRouter();
