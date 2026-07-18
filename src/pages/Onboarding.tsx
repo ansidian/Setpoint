@@ -112,9 +112,16 @@ export default function Onboarding(): ReactElement {
       <main className="relative isolate flex min-h-screen items-center justify-center px-4 py-8 text-foreground">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,var(--sp-page),var(--sp-deep)_60%)]" />
         <section className="w-full max-w-xl border-y border-white/[0.07] py-8 text-center">
-          <Check aria-hidden="true" className="mx-auto text-[var(--sp-green)]" size={24} />
-          <h1 ref={headingRef} tabIndex={-1} className="mt-4 text-[24px] font-semibold outline-none">Onboarding is finished</h1>
+          <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-[var(--sp-green)]/25 bg-[var(--sp-green)]/10 text-[var(--sp-green)] motion-safe:animate-[scaleIn_240ms_cubic-bezier(0.16,1,0.3,1)]">
+            <Check aria-hidden="true" size={20} />
+          </div>
+          <h1 ref={headingRef} tabIndex={-1} className="mt-4 text-[24px] font-semibold outline-none">Setup checklist complete</h1>
           <p className="mx-auto mt-2 max-w-[58ch] text-pretty text-[13px] leading-relaxed text-muted-foreground">
+            <span className="block text-foreground">
+              {checklist.completedCount === ONBOARDING_STEPS.length
+                ? "You reviewed every setup option."
+                : "Your setup choices are saved."}
+            </span>
             Setpoint will not force this checklist open again. Capability health continues to update independently in Settings.
           </p>
           {error ? <p role="alert" className="mt-3 text-[12px] text-[var(--sp-rose)]">{error}</p> : null}

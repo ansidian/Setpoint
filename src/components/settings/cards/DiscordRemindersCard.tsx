@@ -106,6 +106,7 @@ export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStat
 
   return (
     <SettingsCard
+      id="discord-reminders"
       title="Discord Reminders"
       icon={<Bell size={14} />}
       description="Private Discord delivery for custom Event and Todoist reminders."

@@ -74,6 +74,8 @@ export default function GmailRealtimeCard() {
   const periodic = !status?.configured;
   return (
     <SettingsCard
+      id="gmail-realtime-delivery"
+      ready={demo || status !== null || message !== null}
       title="Gmail real-time delivery"
       icon={<RadioTower size={14} />}
       description="Optional enhancement. Periodic reconciliation keeps Gmail working when Pub/Sub is skipped."

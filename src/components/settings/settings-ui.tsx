@@ -79,7 +79,9 @@ export function FieldHint({ children, className }: { children: ReactNode; classN
   );
 }
 
-export function SettingsCard({ title, icon, description, children, headerAction, className }: {
+export function SettingsCard({ id, ready = true, title, icon, description, children, headerAction, className }: {
+  id?: string;
+  ready?: boolean;
   title: ReactNode;
   icon: ReactNode;
   description?: ReactNode;
@@ -89,9 +91,14 @@ export function SettingsCard({ title, icon, description, children, headerAction,
 }) {
   return (
     <section
+      id={id}
+      tabIndex={id ? -1 : undefined}
+      aria-labelledby={id ? `${id}-title` : undefined}
+      aria-busy={id && !ready ? true : undefined}
       data-settings-section=""
+      data-settings-target-ready={id ? String(ready) : undefined}
       className={cn(
-        "border-t border-white/[0.06] py-5 first:border-t-0 first:pt-0",
+        "scroll-mt-6 border-t border-white/[0.06] py-5 outline-none first:border-t-0 first:pt-0",
         className,
       )}
     >
@@ -102,7 +109,7 @@ export function SettingsCard({ title, icon, description, children, headerAction,
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
+              <div id={id ? `${id}-title` : undefined} className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 {title}
               </div>
               {description ? (

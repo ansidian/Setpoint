@@ -195,6 +195,8 @@ export default function ActualBudgetConnectionCard({ settings }: Pick<SettingsCa
 
   return (
     <SettingsCard
+      id="actual-budget-connection"
+      ready={hydrateStatus !== "checking"}
       title="Actual Budget"
       icon={<SiActualbudget size={14} title="" aria-hidden="true" />}
       description="Connect the Actual server used for finance sync and transaction actions."

@@ -27,7 +27,21 @@ describe("onboarding model", () => {
       "advanced_delivery",
     ]);
     expect(checklist.activeStepId).toBe("tasks");
-    expect(checklist.completedCount).toBe(2);
+    expect(checklist.completedCount).toBe(1);
+  });
+
+  it("keeps skipped items incomplete after every other item is reviewed", () => {
+    const checklist = projectOnboardingChecklist({
+      ...progress,
+      steps: Object.fromEntries(ONBOARDING_STEPS.map((step) => [
+        step.id,
+        step.id === "ai" ? "skipped" : "completed",
+      ])),
+    });
+
+    expect(checklist.activeStepId).toBe("ai");
+    expect(checklist.completedCount).toBe(ONBOARDING_STEPS.length - 1);
+    expect(checklist.finished).toBe(false);
   });
 
   it("does not infer presentation completion from capability health", () => {
@@ -40,5 +54,17 @@ describe("onboarding model", () => {
     const checklist = projectOnboardingChecklist({ ...progress, status: "complete", completedAt: 200 });
     expect(checklist.finished).toBe(true);
     expect(checklist.activeStepId).toBe("tasks");
+  });
+
+  it("routes every setup action to its exact settings card", () => {
+    expect(Object.fromEntries(ONBOARDING_STEPS.map((step) => [step.id, step.settingsHref]))).toEqual({
+      email_calendar: "/settings?tab=accounts#connected-accounts",
+      ai: "/settings?tab=briefing#ai-provider-credentials",
+      tasks: "/settings?tab=accounts#todoist-setup",
+      weather: "/settings?tab=accounts#location-provider-credentials",
+      finances: "/settings?tab=actual#actual-budget-connection",
+      notifications: "/settings?tab=accounts#discord-reminders",
+      advanced_delivery: "/settings?tab=accounts#gmail-realtime-delivery",
+    });
   });
 });

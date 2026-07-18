@@ -43,7 +43,7 @@ describe("Onboarding", () => {
     render(<MemoryRouter><Onboarding /></MemoryRouter>);
 
     expect(await screen.findByRole("heading", { name: "Connect email and calendar" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open account connections" }).getAttribute("href")).toBe("/settings");
+    expect(screen.getByRole("link", { name: "Open account connections" }).getAttribute("href")).toBe("/settings?tab=accounts#connected-accounts");
     expect(screen.getByRole("button", { name: /Enable AI features/ })).toBeTruthy();
   });
 
@@ -60,6 +60,67 @@ describe("Onboarding", () => {
     expect(await screen.findByRole("heading", { name: "Enable AI features" })).toBeTruthy();
   });
 
+  it("shows the completion state after reviewing the final checklist item", async () => {
+    const finalStep: OnboardingProgress = {
+      ...pending,
+      steps: {
+        email_calendar: "completed",
+        ai: "completed",
+        tasks: "completed",
+        weather: "completed",
+        finances: "completed",
+        notifications: "completed",
+      },
+    };
+    api.getOnboardingProgress.mockResolvedValue(finalStep);
+    api.updateOnboardingProgress.mockResolvedValue({
+      ...finalStep,
+      status: "complete",
+      steps: { ...finalStep.steps, advanced_delivery: "completed" },
+      completedAt: 100,
+    });
+
+    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    expect(await screen.findByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark reviewed" }));
+
+    expect(await screen.findByRole("heading", { name: "Setup checklist complete" })).toBeTruthy();
+    expect(screen.getByText("You reviewed every setup option.")).toBeTruthy();
+  });
+
+  it("does not show the completion state when the final unresolved item is skipped", async () => {
+    const finalStep: OnboardingProgress = {
+      ...pending,
+      steps: {
+        email_calendar: "completed",
+        ai: "completed",
+        tasks: "completed",
+        weather: "completed",
+        finances: "completed",
+        notifications: "completed",
+      },
+    };
+    api.getOnboardingProgress.mockResolvedValue(finalStep);
+    api.updateOnboardingProgress.mockResolvedValue({
+      ...finalStep,
+      steps: { ...finalStep.steps, advanced_delivery: "skipped" },
+    });
+
+    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    expect(await screen.findByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+
+    await waitFor(() => expect(api.updateOnboardingProgress).toHaveBeenCalledWith({
+      action: "skip",
+      stepId: "advanced_delivery",
+    }));
+    expect(screen.queryByRole("heading", { name: "Setup checklist complete" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Finish onboarding" })).toBeTruthy();
+  });
+
   it("finishes with every integration still pending and offers explicit reopen", async () => {
     const changed = vi.fn();
     window.addEventListener("ea-onboarding-changed", changed);
@@ -67,7 +128,7 @@ describe("Onboarding", () => {
     await screen.findByRole("heading", { name: "Connect email and calendar" });
 
     fireEvent.click(screen.getByRole("button", { name: "Finish onboarding" }));
-    expect(await screen.findByRole("heading", { name: "Onboarding is finished" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Setup checklist complete" })).toBeTruthy();
     expect(changed).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Reopen checklist" }));

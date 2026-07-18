@@ -20,7 +20,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Connect email and calendar",
     description: "Authorize Google once for Gmail and Calendar, or add an iCloud inbox.",
     capabilityIds: ["email_calendar"],
-    settingsHref: "/settings",
+    settingsHref: "/settings?tab=accounts#connected-accounts",
     actionLabel: "Open account connections",
   },
   {
@@ -28,7 +28,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Enable AI features",
     description: "Add OpenAI, Anthropic, or both. Triage and extraction model choices stay in advanced Settings.",
     capabilityIds: ["ai"],
-    settingsHref: "/settings",
+    settingsHref: "/settings?tab=briefing#ai-provider-credentials",
     actionLabel: "Open AI credentials",
   },
   {
@@ -36,7 +36,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Add tasks",
     description: "Start with a Todoist personal token. OAuth and webhooks remain optional advanced setup.",
     capabilityIds: ["tasks"],
-    settingsHref: "/settings",
+    settingsHref: "/settings?tab=accounts#todoist-setup",
     actionLabel: "Open Todoist setup",
   },
   {
@@ -44,7 +44,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Add weather",
     description: "Choose a location and add Pirate Weather. Location search itself does not need a key.",
     capabilityIds: ["weather"],
-    settingsHref: "/settings",
+    settingsHref: "/settings?tab=accounts#location-provider-credentials",
     actionLabel: "Open weather setup",
   },
   {
@@ -52,7 +52,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Connect finances",
     description: "Connect your existing Actual Budget server when you want bills and transactions in Setpoint.",
     capabilityIds: ["finances"],
-    settingsHref: "/settings?tab=actual",
+    settingsHref: "/settings?tab=actual#actual-budget-connection",
     actionLabel: "Open Actual Budget setup",
   },
   {
@@ -60,7 +60,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Configure notifications",
     description: "Add a private Discord reminder destination, or leave notifications off for now.",
     capabilityIds: ["notifications"],
-    settingsHref: "/settings",
+    settingsHref: "/settings?tab=accounts#discord-reminders",
     actionLabel: "Open notification setup",
   },
   {
@@ -68,7 +68,7 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Optional delivery enhancements",
     description: "Real-time Gmail, Todoist OAuth/webhooks, and Calendar places are independent advanced options.",
     capabilityIds: ["gmail_realtime", "todoist_advanced", "calendar_places"],
-    settingsHref: "/settings",
+    settingsHref: "/settings?tab=accounts#gmail-realtime-delivery",
     actionLabel: "Open advanced setup",
   },
 ];
@@ -81,8 +81,9 @@ export function projectOnboardingChecklist(progress: OnboardingProgress) {
   return {
     steps,
     activeStepId: steps.find((step) => step.state === "pending" || step.state === "reviewed")?.id
+      ?? steps.find((step) => step.state === "skipped")?.id
       ?? steps[0]!.id,
-    completedCount: steps.filter((step) => step.state === "completed" || step.state === "skipped").length,
+    completedCount: steps.filter((step) => step.state === "completed").length,
     finished: progress.status === "complete",
   };
 }

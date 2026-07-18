@@ -53,6 +53,46 @@ describe("onboarding progress store", () => {
     });
   });
 
+  it("finishes automatically when the final checklist item is marked reviewed", async () => {
+    const store = createOnboardingProgressStore(db, () => 250);
+
+    for (const stepId of [
+      "email_calendar",
+      "ai",
+      "tasks",
+      "weather",
+      "finances",
+      "notifications",
+    ] as const) {
+      await store.update("new-owner", { action: "complete", stepId });
+    }
+
+    await expect(store.update("new-owner", { action: "complete", stepId: "advanced_delivery" })).resolves.toMatchObject({
+      status: "complete",
+      completedAt: 250,
+    });
+  });
+
+  it("does not finish automatically when any checklist item is skipped", async () => {
+    const store = createOnboardingProgressStore(db, () => 275);
+
+    for (const stepId of [
+      "email_calendar",
+      "ai",
+      "tasks",
+      "weather",
+      "finances",
+      "notifications",
+    ] as const) {
+      await store.update("new-owner", { action: "complete", stepId });
+    }
+
+    await expect(store.update("new-owner", { action: "skip", stepId: "advanced_delivery" })).resolves.toMatchObject({
+      status: "in_progress",
+      completedAt: null,
+    });
+  });
+
   it("backfills an owner present during migration as already finished", async () => {
     const legacyDb = createClient({ url: "file::memory:" });
     try {

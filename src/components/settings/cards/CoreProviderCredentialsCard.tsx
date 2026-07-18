@@ -239,11 +239,13 @@ function CredentialRow({
 }
 
 export default function CoreProviderCredentialsCard({
+  id,
   title,
   icon,
   description,
   credentials,
 }: {
+  id?: string;
   title: string;
   icon: ReactNode;
   description: string;
@@ -277,6 +279,8 @@ export default function CoreProviderCredentialsCard({
 
   return (
     <SettingsCard
+      id={id}
+      ready={demo || !loading}
       title={title}
       icon={icon}
       description={description}
