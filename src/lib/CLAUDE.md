@@ -17,6 +17,8 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `icons.ts` — lucide icon name → component resolver (`resolveIcon`) for briefing/category icon fields
 - `Icon.tsx` — universal icon renderer (lucide name or known emoji); unknown input falls back to Sparkles
 - `open-day-summary.ts` — "what's due/urgent today" summary builder for deadlines
+- `onboardingModel.ts` — locked capability-led onboarding sequence and pure persisted-progress projection
+- `onboardingApi.ts` — authenticated onboarding progress calls plus demo-only in-memory behavior
 - `scrollLock.ts` — ref-counted scroll lock (`acquireScrollLock`) shared by BottomSheet and the AddTaskPanel mobile placement so nested opens/closes can never strand or prematurely release the lock
 - `shell-helpers.ts` — shared dashboard/hero/timeline/rail helpers (day bucketing, due-date-to-ms, duration formatting), kept pure and React-free
 - `sseStream.ts` — reads a fetch() response body as text/event-stream frames, calling `onEvent` per JSON payload

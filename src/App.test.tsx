@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockApi = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   getSetupStatus: vi.fn(),
+  getOnboardingProgress: vi.fn(),
   prefetchCurrentDashboard: vi.fn(),
 }));
 const routeFailures = vi.hoisted(() => ({
@@ -18,6 +19,10 @@ vi.mock("./api", () => ({
 
 vi.mock("./setupApi", () => ({
   getSetupStatus: mockApi.getSetupStatus,
+}));
+
+vi.mock("./lib/onboardingApi", () => ({
+  getOnboardingProgress: mockApi.getOnboardingProgress,
 }));
 
 vi.mock("./pages/OwnerSetup", () => ({
@@ -46,6 +51,12 @@ vi.mock("./pages/SettingsRoute", () => ({
   },
 }));
 
+vi.mock("./pages/Onboarding", () => ({
+  default: function OnboardingMock() {
+    return <div data-testid="onboarding-page">onboarding</div>;
+  },
+}));
+
 const { default: App } = await import("./App");
 const { resolveRouterBasename } = await import("./routerBase");
 
@@ -55,6 +66,7 @@ describe("App auth redirects", () => {
     routeFailures.settings = false;
     mockApi.checkAuth.mockResolvedValue({ authenticated: true });
     mockApi.getSetupStatus.mockResolvedValue({ claimed: true });
+    mockApi.getOnboardingProgress.mockResolvedValue({ status: "complete" });
     window.history.replaceState({}, "", "/");
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,
@@ -132,14 +144,29 @@ describe("App auth redirects", () => {
     expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
   });
 
-  it("enters the authenticated app immediately after owner claim", async () => {
+  it("routes a newly claimed owner into onboarding", async () => {
     mockApi.getSetupStatus.mockResolvedValue({ claimed: false });
 
     render(<App />);
     fireEvent.click(await screen.findByTestId("owner-setup-page"));
 
+    expect(await screen.findByTestId("onboarding-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/onboarding");
+  });
+
+  it("resumes unfinished onboarding after login without blocking direct dashboard access", async () => {
+    mockApi.getOnboardingProgress.mockResolvedValue({ status: "in_progress" });
+    window.history.replaceState({}, "", "/login");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("onboarding-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/onboarding");
+
+    cleanup();
+    window.history.replaceState({}, "", "/");
+    render(<App />);
     expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
-    expect(window.location.pathname).toBe("/");
   });
 
   it("shows a recoverable fallback when Login throws during render", async () => {

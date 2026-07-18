@@ -32,6 +32,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `todoist-oauth.ts` — Todoist OAuth begin/callback/status routes with callback-scoped browser binding
 - `instance-credentials.ts` — authenticated metadata and write-only deployment credential mutations; dispatches allowlisted validation/promotion and Gmail Pub/Sub lifecycle actions to provider-owned managers
 - `capabilities.ts` — authenticated, metadata-only capability status projection with optional explicit refresh
+- `onboarding.ts` — authenticated, allowlisted onboarding progress, finish, and reopen mutations
 
 Tests are not listed; adjacent test files cover their same-named route by convention.
 

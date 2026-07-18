@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import type { ReactElement } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { checkAuth, prefetchCurrentDashboard } from "./api";
+import { getOnboardingProgress } from "./lib/onboardingApi";
 import { getSetupStatus } from "./setupApi";
 import { isDemoMode } from "./demo/config.ts";
 import { resolveRouterBasename } from "./routerBase";
@@ -15,6 +16,7 @@ const Dashboard = lazy(importDashboard);
 const Login = lazy(() => import("./pages/Login"));
 const OwnerSetup = lazy(() => import("./pages/OwnerSetup"));
 const SettingsRoute = lazy(() => import("./pages/SettingsRoute"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 function AuthSpinner(): ReactElement {
   return (
@@ -49,8 +51,8 @@ function SettingsShortcut({ enabled }: SettingsShortcutProps): null {
 
 export default function App(): ReactElement {
   const demoMode = isDemoMode();
-  const [bootstrap, setBootstrap] = useState<{ claimed: boolean; authenticated: boolean } | null>(
-    demoMode ? { claimed: true, authenticated: true } : null,
+  const [bootstrap, setBootstrap] = useState<{ claimed: boolean; authenticated: boolean; onboardingFinished: boolean } | null>(
+    demoMode ? { claimed: true, authenticated: true, onboardingFinished: true } : null,
   );
 
   useEffect(() => {
@@ -59,22 +61,35 @@ export default function App(): ReactElement {
     getSetupStatus()
       .then(async (status) => {
         if (!status.claimed) {
-          setBootstrap({ claimed: false, authenticated: false });
+          setBootstrap({ claimed: false, authenticated: false, onboardingFinished: false });
           return;
         }
         importDashboard().catch(() => {});
         const auth = await checkAuth();
-        setBootstrap({ claimed: true, authenticated: auth.authenticated });
+        const onboardingFinished = auth.authenticated
+          ? (await getOnboardingProgress().catch(() => ({ status: "complete" as const }))).status === "complete"
+          : true;
+        setBootstrap({ claimed: true, authenticated: auth.authenticated, onboardingFinished });
         if (auth.authenticated) prefetchCurrentDashboard();
       })
-      .catch(() => setBootstrap({ claimed: true, authenticated: false }));
+      .catch(() => setBootstrap({ claimed: true, authenticated: false, onboardingFinished: true }));
   }, [demoMode]);
+
+  useEffect(() => {
+    function handleOnboardingChanged(event: Event) {
+      const finished = (event as CustomEvent<{ finished?: unknown }>).detail?.finished;
+      if (typeof finished !== "boolean") return;
+      setBootstrap((current) => current ? { ...current, onboardingFinished: finished } : current);
+    }
+    window.addEventListener("ea-onboarding-changed", handleOnboardingChanged);
+    return () => window.removeEventListener("ea-onboarding-changed", handleOnboardingChanged);
+  }, []);
 
   if (bootstrap === null) {
     return <AuthSpinner />;
   }
 
-  const { claimed, authenticated } = bootstrap;
+  const { claimed, authenticated, onboardingFinished } = bootstrap;
 
   return (
     <ChunkLoadBoundary>
@@ -83,19 +98,23 @@ export default function App(): ReactElement {
         <SettingsShortcut enabled={authenticated === true} />
         <Routes>
           <Route path="/setup" element={
-            claimed ? <Navigate to="/" replace /> : (
+            claimed ? <Navigate to={onboardingFinished ? "/" : "/onboarding"} replace /> : (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
-                  <OwnerSetup onClaimed={() => setBootstrap({ claimed: true, authenticated: true })} />
+                  <OwnerSetup onClaimed={() => setBootstrap({ claimed: true, authenticated: true, onboardingFinished: false })} />
                 </Suspense>
               </RecoverableErrorBoundary>
             )
           } />
           <Route path="/login" element={
-            !claimed ? <Navigate to="/setup" replace /> : authenticated ? <Navigate to="/" replace /> : (
+            !claimed ? <Navigate to="/setup" replace /> : authenticated ? <Navigate to={onboardingFinished ? "/" : "/onboarding"} replace /> : (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
-                  <Login onLogin={() => setBootstrap({ claimed: true, authenticated: true })} />
+                  <Login onLogin={() => {
+                    void getOnboardingProgress()
+                      .then((progress) => setBootstrap({ claimed: true, authenticated: true, onboardingFinished: progress.status === "complete" }))
+                      .catch(() => setBootstrap({ claimed: true, authenticated: true, onboardingFinished: true }));
+                  }} />
                 </Suspense>
               </RecoverableErrorBoundary>
             )
@@ -114,6 +133,15 @@ export default function App(): ReactElement {
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
                   <SettingsRoute />
+                </Suspense>
+              </RecoverableErrorBoundary>
+            ) : <Navigate to="/login" replace />
+          } />
+          <Route path="/onboarding" element={
+            !claimed ? <Navigate to="/setup" replace /> : authenticated ? (
+              <RecoverableErrorBoundary>
+                <Suspense fallback={<AuthSpinner />}>
+                  <Onboarding />
                 </Suspense>
               </RecoverableErrorBoundary>
             ) : <Navigate to="/login" replace />
