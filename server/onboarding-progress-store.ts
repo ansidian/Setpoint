@@ -63,6 +63,8 @@ export function createOnboardingProgressStore(dbClient: Pick<Client, "execute"> 
     else if (mutation.action === "reopen") completedAt = null;
     else if ("stepId" in mutation) {
       steps[mutation.stepId] = mutation.action === "complete" ? "completed" : mutation.action === "skip" ? "skipped" : "reviewed";
+      const allStepsReviewed = ONBOARDING_STEP_IDS.every((stepId) => steps[stepId] === "completed");
+      if (allStepsReviewed) completedAt ??= timestamp;
     }
 
     await dbClient.execute({

@@ -18,12 +18,13 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
       <CapabilityOverviewCard capabilities={capabilities} onRefresh={onRefreshCapabilities} />
       <ConnectedAccountsCard accounts={accounts} setAccounts={setAccounts} />
       <GoogleOAuthCredentialsCard />
-      <Suspense fallback={null}>
+      <Suspense fallback={<div data-settings-content-loading="" aria-hidden="true" />}>
         <GmailRealtimeCard />
       </Suspense>
       <TodoistCard settings={settings} />
       <DiscordRemindersCard settings={settings} />
       <CoreProviderCredentialsCard
+        id="location-provider-credentials"
         title="Location provider credentials"
         icon={<CloudSun size={14} />}
         description="Runtime keys for dashboard forecasts and optional Calendar place suggestions."

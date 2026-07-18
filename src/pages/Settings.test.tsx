@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
@@ -9,6 +10,7 @@ const mockApi = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  targetReadyDelayMs: 0,
   soundSettingsPayload: {
     laneScope: "needs_attention_and_fyi",
     volume: 1,
@@ -45,8 +47,20 @@ vi.mock("@/components/settings/sections/ActualBudgetSettingsSection", () => ({
 
 vi.mock("@/components/settings/sections/EmailAutomationSettingsSection", () => ({
   default: function EmailAutomationSettingsSectionMock({ patch }: { patch: SettingsPatch }) {
+    const [targetReady, setTargetReady] = useState(mockApi.targetReadyDelayMs === 0);
+    useEffect(() => {
+      if (targetReady) return;
+      const timer = window.setTimeout(() => setTargetReady(true), mockApi.targetReadyDelayMs);
+      return () => window.clearTimeout(timer);
+    }, [targetReady]);
     return (
-      <div data-testid="settings-briefing-section">
+      <div
+        id="ai-provider-credentials"
+        tabIndex={-1}
+        aria-busy={!targetReady}
+        data-settings-target-ready={targetReady ? "true" : "false"}
+        data-testid="settings-briefing-section"
+      >
         email automation section
         <button
           type="button"
@@ -86,6 +100,7 @@ beforeEach(() => {
   mockApi.getCapabilities.mockResolvedValue({ generatedAt: "2026-07-18T00:00:00.000Z", capabilities: [] });
   mockApi.getSettings.mockResolvedValue({});
   mockApi.updateSettings.mockResolvedValue({ success: true });
+  mockApi.targetReadyDelayMs = 0;
 });
 
 describe("Settings page", () => {
@@ -96,6 +111,31 @@ describe("Settings page", () => {
 
     expect(await screen.findByTestId("settings-briefing-section")).toBeTruthy();
     expect(screen.queryByTestId("settings-accounts-section")).toBeNull();
+  });
+
+  it("waits for a linked settings card to finish loading, then flashes it after scrolling ends", async () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    mockApi.targetReadyDelayMs = 40;
+    window.history.replaceState({}, "", "/settings?tab=briefing#ai-provider-credentials");
+
+    renderSettings();
+
+    const target = await screen.findByTestId("settings-briefing-section");
+    expect(target.getAttribute("data-settings-target-ready")).toBe("false");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    }));
+    expect(document.activeElement).toBe(target);
+    expect(target.getAttribute("data-settings-target-active")).toBeNull();
+
+    window.dispatchEvent(new Event("scrollend"));
+
+    await waitFor(() => {
+      expect(target.getAttribute("data-settings-target-active")).toBe("true");
+    });
   });
 
   it("renders the shared loading chrome while settings are still loading", () => {

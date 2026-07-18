@@ -24,6 +24,7 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
       <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
       <TriageSoundSettingsCard settings={settings} setSettings={setSettings} patch={patch} />
       <CoreProviderCredentialsCard
+        id="ai-provider-credentials"
         title="AI provider credentials"
         icon={<BrainCircuit size={14} />}
         description="Write-only provider keys used by email triage, bill extraction, search, and Alfred. Model selection stays separate below."

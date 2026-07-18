@@ -127,6 +127,8 @@ export default function TodoistCard({ settings }: Pick<SettingsCardStateProps, "
 
   return (
     <SettingsCard
+      id="todoist-setup"
+      ready={oauthStatus !== null || oauthMessage !== null}
       title="Todoist"
       icon={<SiTodoist size={14} title="" aria-hidden="true" />}
       description="Optional task sync used when email automation creates Todoist follow-ups."

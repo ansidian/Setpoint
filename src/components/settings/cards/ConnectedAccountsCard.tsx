@@ -70,13 +70,14 @@ export default function ConnectedAccountsCard({ accounts, setAccounts }: Setting
 
   return (
     <SettingsCard
+      id="connected-accounts"
       title="Connected Accounts"
       icon={<Mail size={14} />}
       description="Inbox and calendar connections that feed the dashboard and email snapshot pipeline."
     >
       <div className="flex flex-col gap-4">
         {accounts.length > 0 ? (
-          <Suspense fallback={<FieldHint>Loading connected accounts…</FieldHint>}>
+          <Suspense fallback={<div data-settings-content-loading=""><FieldHint>Loading connected accounts…</FieldHint></div>}>
             <AccountsList
               accounts={accounts}
               setAccounts={setAccounts}
