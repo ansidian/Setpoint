@@ -69,6 +69,39 @@ describe("instance credential store", () => {
     expect((await store.get("ai.openai_api_key"))?.activeValueEncrypted).toBe("encrypted-candidate");
   });
 
+  it("stages and promotes a credential group atomically", async () => {
+    const store = createInstanceCredentialStore(db);
+    await store.importActive("google.oauth_client_id", "old-id", 10);
+    await store.importActive("google.oauth_client_secret", "old-secret", 10);
+
+    const pending = await store.stagePendingGroup([
+      { key: "google.oauth_client_id", encryptedValue: "new-id" },
+      { key: "google.oauth_client_secret", encryptedValue: "new-secret" },
+    ], 20);
+    const versions = pending.map((record) => ({
+      key: record.key,
+      expectedVersion: record.version,
+    }));
+
+    await store.stagePending("google.oauth_client_secret", "newer-secret", 25);
+    await expect(store.promotePendingGroup(versions, 30))
+      .rejects.toBeInstanceOf(InstanceCredentialConflictError);
+    expect(await store.get("google.oauth_client_id")).toMatchObject({
+      activeValueEncrypted: "old-id",
+      pendingValueEncrypted: "new-id",
+    });
+
+    const currentSecret = await store.get("google.oauth_client_secret");
+    const promoted = await store.promotePendingGroup([
+      versions[0]!,
+      { key: "google.oauth_client_secret", expectedVersion: currentSecret!.version },
+    ], 40);
+    expect(promoted).toEqual([
+      expect.objectContaining({ activeValueEncrypted: "new-id", pendingValueEncrypted: null }),
+      expect.objectContaining({ activeValueEncrypted: "newer-secret", pendingValueEncrypted: null }),
+    ]);
+  });
+
   it("distinguishes explicit disablement from returning to host-managed resolution", async () => {
     const store = createInstanceCredentialStore(db);
     const disabled = await store.disable("weather.pirate_weather_api_key", 10);

@@ -32,6 +32,12 @@ vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => testState.storedCredentials.current,
   encrypt: (value: string) => value,
 }));
+const googleCredentials = vi.hoisted(() => ({
+  resolveActive: vi.fn(async () => ({ clientId: "runtime-client-id", clientSecret: "runtime-client-secret" })),
+}));
+vi.mock("../google-oauth-credentials.ts", () => ({
+  googleOAuthCredentialManager: googleCredentials,
+}));
 
 const fetchMock = vi.fn<(input: unknown, init?: RequestInit) => Promise<unknown>>();
 vi.stubGlobal("fetch", fetchMock);

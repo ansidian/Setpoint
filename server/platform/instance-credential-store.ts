@@ -105,6 +105,43 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
     return (await get(key))!;
   }
 
+  async function stagePendingGroup(
+    entries: Array<{ key: InstanceCredentialKey; encryptedValue: string }>,
+    now = Date.now(),
+  ): Promise<InstanceCredentialRecord[]> {
+    for (const entry of entries) assertSupportedKey(entry.key);
+    const tx = await dbClient.transaction("write");
+    try {
+      for (const entry of entries) {
+        await tx.execute({
+          sql: `INSERT INTO ea_instance_credentials
+                  (credential_key, pending_value_encrypted, disabled, validation_state, version, updated_at)
+                VALUES (?, ?, 0, 'pending', 1, ?)
+                ON CONFLICT(credential_key) DO UPDATE SET
+                  pending_value_encrypted = excluded.pending_value_encrypted,
+                  validation_state = 'pending',
+                  error_code = NULL,
+                  version = ea_instance_credentials.version + 1,
+                  updated_at = excluded.updated_at`,
+          args: [entry.key, entry.encryptedValue, now],
+        });
+      }
+      const records: InstanceCredentialRecord[] = [];
+      for (const entry of entries) {
+        const selected = await tx.execute({
+          sql: `SELECT ${SELECT_COLUMNS} FROM ea_instance_credentials WHERE credential_key = ?`,
+          args: [entry.key],
+        });
+        records.push(recordFromRow(selected.rows[0]!));
+      }
+      await tx.commit();
+      return records;
+    } catch (error) {
+      await tx.rollback().catch(() => {});
+      throw error;
+    }
+  }
+
   async function importActive(key: InstanceCredentialKey, encryptedValue: string, now = Date.now()): Promise<InstanceCredentialRecord> {
     assertSupportedKey(key);
     await dbClient.execute({
@@ -149,6 +186,46 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
       });
       await tx.commit();
       return recordFromRow(selected.rows[0]!);
+    } catch (error) {
+      await tx.rollback().catch(() => {});
+      throw error;
+    }
+  }
+
+  async function promotePendingGroup(
+    entries: Array<{ key: InstanceCredentialKey; expectedVersion: number }>,
+    now = Date.now(),
+  ): Promise<InstanceCredentialRecord[]> {
+    for (const entry of entries) assertSupportedKey(entry.key);
+    const tx = await dbClient.transaction("write");
+    try {
+      for (const entry of entries) {
+        const result = await tx.execute({
+          sql: `UPDATE ea_instance_credentials SET
+                  active_value_encrypted = pending_value_encrypted,
+                  pending_value_encrypted = NULL,
+                  disabled = 0,
+                  validation_state = 'valid',
+                  last_tested_at = ?,
+                  last_succeeded_at = ?,
+                  error_code = NULL,
+                  version = version + 1,
+                  updated_at = ?
+                WHERE credential_key = ? AND version = ? AND pending_value_encrypted IS NOT NULL`,
+          args: [now, now, now, entry.key, entry.expectedVersion],
+        });
+        if (result.rowsAffected !== 1) throw new InstanceCredentialConflictError();
+      }
+      const records: InstanceCredentialRecord[] = [];
+      for (const entry of entries) {
+        const selected = await tx.execute({
+          sql: `SELECT ${SELECT_COLUMNS} FROM ea_instance_credentials WHERE credential_key = ?`,
+          args: [entry.key],
+        });
+        records.push(recordFromRow(selected.rows[0]!));
+      }
+      await tx.commit();
+      return records;
     } catch (error) {
       await tx.rollback().catch(() => {});
       throw error;
@@ -208,8 +285,10 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
     get,
     list,
     stagePending,
+    stagePendingGroup,
     importActive,
     promotePending,
+    promotePendingGroup,
     recordPendingFailure,
     disable,
     useHostValue,

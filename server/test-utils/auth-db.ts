@@ -15,6 +15,7 @@ const migrationFiles = [
   "031_auth_recovery.sql",
   "032_canonical_url.sql",
   "033_instance_credentials.sql",
+  "034_google_oauth_binding.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>

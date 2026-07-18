@@ -7,6 +7,7 @@ import type {
   GoogleCalendarSource,
   GoogleEventResource,
 } from "../../shared/types/calendar.ts";
+import { googleOAuthCredentialManager } from "../google-oauth-credentials.ts";
 
 export interface StoredCalendarAccount extends CalendarAccount {
   credentials_encrypted?: string | null;
@@ -71,9 +72,6 @@ export const CALENDAR_FULL_SCOPE = "https://www.googleapis.com/auth/calendar";
 
 const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 const CALENDAR_API_TIMEOUT_MS = 30_000;
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 // Google's OAuth token responses normally carry expires_in (seconds), but a
 // malformed/partial response can omit it. Defaulting to this TTL keeps
@@ -148,12 +146,13 @@ export async function getAuthorizedAccount(account: StoredCalendarAccount): Prom
   if (typeof credentials.expires_at !== "number"
     || !Number.isFinite(credentials.expires_at)
     || credentials.expires_at < Date.now() + 5 * 60 * 1000) {
+    const applicationCredentials = await googleOAuthCredentialManager.resolveActive();
     const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID!,
-        client_secret: GOOGLE_CLIENT_SECRET!,
+        client_id: applicationCredentials.clientId,
+        client_secret: applicationCredentials.clientSecret,
         refresh_token: credentials.refresh_token!,
         grant_type: "refresh_token",
       }),

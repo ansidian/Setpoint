@@ -9,6 +9,11 @@ vi.mock("../platform/encryption.ts", () => ({
   }),
   encrypt: (s: string) => s,
 }));
+vi.mock("../google-oauth-credentials.ts", () => ({
+  googleOAuthCredentialManager: {
+    resolveActive: vi.fn(async () => ({ clientId: "client-id", clientSecret: "client-secret" })),
+  },
+}));
 
 // We need to stub global fetch before importing the module
 vi.stubGlobal("fetch", vi.fn());

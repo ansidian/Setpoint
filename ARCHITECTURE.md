@@ -638,7 +638,7 @@ erDiagram
 | `ea_calendar_search_mirror_state` | `011_calendar_search_mirror.sql` |
 | `ea_calendar_search_occurrences` | `011_calendar_search_mirror.sql` |
 | `ea_completed_tasks` | `001_ea_tables.sql`, `014_completed_deadline_occurrences.sql` |
-| `ea_csrf_tokens` | `001_ea_tables.sql` |
+| `ea_csrf_tokens` | `001_ea_tables.sql`, `034_google_oauth_binding.sql` |
 | `ea_current_data_cache` | `001_ea_tables.sql` |
 | `ea_dismissed_emails` | `001_ea_tables.sql` |
 | `ea_email_backfill_state` | `001_ea_tables.sql` |
@@ -819,6 +819,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | PUT | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/test` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/use-host` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |
 | POST | `/api/news/refresh` | `server/routes/news.ts` |

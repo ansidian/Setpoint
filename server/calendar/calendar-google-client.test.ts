@@ -14,6 +14,12 @@ vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify(mocks.credentials),
   encrypt: (value: string) => value,
 }));
+const googleCredentials = vi.hoisted(() => ({
+  resolveActive: vi.fn(async () => ({ clientId: "runtime-client-id", clientSecret: "runtime-client-secret" })),
+}));
+vi.mock("../google-oauth-credentials.ts", () => ({
+  googleOAuthCredentialManager: googleCredentials,
+}));
 
 const fetchMock = vi.fn<(input: string | URL | Request, init?: RequestInit) => Promise<Response>>();
 vi.stubGlobal("fetch", fetchMock);
@@ -86,6 +92,8 @@ describe("OAuth token refresh", () => {
     expect(String(refreshUrl)).toBe("https://oauth2.googleapis.com/token");
     expect(String(refreshInit.body)).toContain("grant_type=refresh_token");
     expect(String(refreshInit.body)).toContain("refresh_token=refresh-1");
+    expect(String(refreshInit.body)).toContain("client_id=runtime-client-id");
+    expect(String(refreshInit.body)).toContain("client_secret=runtime-client-secret");
 
     const [, listInit] = fetchCall(1);
     expect(new Headers(listInit.headers).get("Authorization")).toBe("Bearer token-2");
