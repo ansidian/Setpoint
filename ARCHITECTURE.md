@@ -809,6 +809,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/calendar/places/suggest` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/range` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/search` | `server/routes/calendar.ts` |
+| GET | `/api/capabilities/` | `server/routes/capabilities.ts` |
 | GET | `/api/dashboard/current` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.ts` |

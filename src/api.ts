@@ -114,6 +114,7 @@ import type {
   AlfredStreamOptions,
   AlfredUsageStats,
 } from "../shared/types/alfred.ts";
+import type { CapabilityStatusResponse } from "../shared/types/capabilities.ts";
 
 type ApiId = string | number;
 export type AuthResponse = {
@@ -459,6 +460,9 @@ export const updateAccount = (id: ApiId, data: AccountPatchRequest): Promise<Acc
 export const removeAccount = (id: ApiId): Promise<AccountMutationResponse> => apiFetch(`/api/ea/accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const reorderAccounts = (order: AccountId[]): Promise<AccountMutationResponse> => apiFetch("/api/ea/accounts/reorder", { method: "PATCH", body: JSON.stringify({ order }) });
 export const getSettings = (): Promise<SettingsResponse> => apiFetch("/api/ea/settings");
+export const getCapabilities = (refresh = false): Promise<CapabilityStatusResponse> => (
+  apiFetch(`/api/capabilities${refresh ? "?refresh=1" : ""}`)
+);
 export const updateSettings = (data: SettingsPatchRequest): Promise<SettingsMutationResponse> => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
 export const testDiscordReminderWebhook = (): Promise<DiscordReminderTestResponse> => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
 export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderListOptions = {}): Promise<ReminderListResponse> => {

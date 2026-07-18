@@ -17,6 +17,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `instance-credential-store.ts` — encrypted active/pending persistence, disable tombstones, and atomic candidate promotion
 - `instance-credential-service.ts` — server-only source resolution, env import, metadata projection, and change subscriptions
 - `root-key-health.ts` — non-secret root-key fingerprint and allowlisted ciphertext decryptability audit
+- `capability-projection.ts` — pure provider-neutral capability/source/health projection from injected redacted metadata
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 

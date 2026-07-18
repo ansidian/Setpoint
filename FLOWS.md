@@ -193,3 +193,14 @@ Selection path:
 **Compatibility:** `TODOIST_CLIENT_ID` and `TODOIST_CLIENT_SECRET` remain runtime fallbacks and can be migrated through the explicit authenticated action without returning their values. Legacy encrypted personal and OAuth token rows are assigned an explicit mode by migration 036.
 
 **Presentation:** `GET /api/ea/accounts/todoist/status` returns only mode, source, health, and canonical callback/webhook URLs. Settings keeps the personal token primary and places app registration, env migration, OAuth, and webhook guidance in an advanced disclosure.
+
+## 10. Capability status projection
+
+**Trigger:** authenticated consumers call `GET /api/capabilities`; `refresh=1` bypasses the short metadata cache.
+
+1. `server/capability-status-service.ts` reads only allowlisted per-key registry metadata plus configured booleans, account reauth flags, and existing Actual, Todoist, and Gmail delivery evidence. It does not decrypt credentials or call providers.
+2. `server/platform/capability-projection.ts` converts that injected evidence into independent stable capability states, redacted reason/action identifiers, sources, modes, and timestamps.
+3. `server/routes/capabilities.ts` returns the shared metadata-only contract behind cookie authentication. Registry changes invalidate the cache; other persisted changes become visible through explicit refresh or the five-second TTL.
+4. `src/api.ts:getCapabilities` uses the private endpoint in normal builds and the fictional inert projection in demo builds.
+
+**Separation:** onboarding completion/progress is not part of capability health. Optional Gmail Pub/Sub, Todoist OAuth/webhooks, and Places states cannot degrade their base capabilities.
