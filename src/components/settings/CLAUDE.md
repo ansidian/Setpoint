@@ -43,6 +43,9 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `cards/CanonicalDomainCard.tsx` — recent-auth-gated canonical URL preview/change flow with passkey and provider callback impact
 - `cards/CoreProviderCredentialsCard.tsx` — shared write-only test-and-save rows for AI, weather, and Places instance credentials
 - `cards/GoogleOAuthCredentialsCard.tsx` — pending Google application pair, source migration, callback, and authorization validation entry
+- `cards/CapabilityOverviewCard.tsx` — shared capability-health summary plus the manual setup-checklist entry
+- `cards/GmailRealtimeCard.tsx` — optional Pub/Sub topic, watch test, and one-time callback lifecycle controls
+- `cards/capabilityOverviewModel.ts` — stable capability state/mode to Settings status-label projection
 - `cards/coreCredentialModel.ts` — redacted source, pending-state, timestamp, and stable-error presentation helpers
 
 ### Shared

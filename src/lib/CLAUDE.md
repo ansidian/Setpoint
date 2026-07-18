@@ -13,6 +13,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `dashboard-helpers.ts` — urgency style tokens, greeting pools, Pacific-time epoch helpers
 - `email-links.ts` — builds a Gmail web URL from an email's uid + account
 - `focus-windows.ts` — computes protected/short focus windows around deadlines and events
+- `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `icons.ts` — lucide icon name → component resolver (`resolveIcon`) for briefing/category icon fields
 - `Icon.tsx` — universal icon renderer (lucide name or known emoji); unknown input falls back to Sparkles
 - `open-day-summary.ts` — "what's due/urgent today" summary builder for deadlines

@@ -6,6 +6,7 @@ import type { TriageSoundSettings } from "../../shared/types/settings";
 
 const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
+  getCapabilities: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   soundSettingsPayload: {
@@ -25,6 +26,7 @@ const mockApi = vi.hoisted(() => ({
 
 vi.mock("@/api", () => ({
   getAccounts: mockApi.getAccounts,
+  getCapabilities: mockApi.getCapabilities,
   getSettings: mockApi.getSettings,
   updateSettings: mockApi.updateSettings,
 }));
@@ -81,6 +83,7 @@ afterEach(() => {
 beforeEach(() => {
   window.history.replaceState({}, "", "/settings");
   mockApi.getAccounts.mockResolvedValue([]);
+  mockApi.getCapabilities.mockResolvedValue({ generatedAt: "2026-07-18T00:00:00.000Z", capabilities: [] });
   mockApi.getSettings.mockResolvedValue({});
   mockApi.updateSettings.mockResolvedValue({ success: true });
 });

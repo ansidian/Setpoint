@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
+  getCapabilities: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
 }));
 
 vi.mock("@/api", () => ({
   getAccounts: mockApi.getAccounts,
+  getCapabilities: mockApi.getCapabilities,
   getSettings: mockApi.getSettings,
   updateSettings: mockApi.updateSettings,
 }));
@@ -21,6 +23,7 @@ const wrapper = ({ children }) => <MemoryRouter>{children}</MemoryRouter>;
 beforeEach(() => {
   vi.useFakeTimers();
   mockApi.getAccounts.mockResolvedValue({ accounts: [] });
+  mockApi.getCapabilities.mockResolvedValue({ generatedAt: "2026-07-18T00:00:00.000Z", capabilities: [] });
   mockApi.getSettings.mockResolvedValue({});
   mockApi.updateSettings.mockReset();
 });
@@ -32,6 +35,27 @@ afterEach(() => {
 });
 
 describe("useSettingsPage debounced auto-save", () => {
+  it("loads shared capability truth with settings and accounts", async () => {
+    const { result } = renderHook(() => useSettingsPage(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(mockApi.getCapabilities).toHaveBeenCalledTimes(1);
+    expect(result.current.capabilities).toEqual([]);
+  });
+
+  it("keeps account and preference settings available when capability status fails", async () => {
+    mockApi.getAccounts.mockResolvedValue({ accounts: [{ id: "gmail-1", type: "gmail" }] });
+    mockApi.getSettings.mockResolvedValue({ weather_location: "Pasadena, CA" });
+    mockApi.getCapabilities.mockRejectedValue(new Error("status unavailable"));
+
+    const { result } = renderHook(() => useSettingsPage(), { wrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(result.current.accounts).toHaveLength(1);
+    expect(result.current.settings).toMatchObject({ weather_location: "Pasadena, CA" });
+    expect(result.current.capabilities).toEqual([]);
+  });
+
   it("re-queues a rejected payload so unrelated coalesced fields are not dropped", async () => {
     mockApi.updateSettings
       .mockRejectedValueOnce(new Error("400")) // first flush fails

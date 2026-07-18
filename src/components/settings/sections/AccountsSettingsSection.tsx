@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import ConnectedAccountsCard from "@/components/settings/cards/ConnectedAccountsCard";
 import TodoistCard from "@/components/settings/cards/TodoistCard";
 import DiscordRemindersCard from "@/components/settings/cards/DiscordRemindersCard";
@@ -6,12 +7,20 @@ import CoreProviderCredentialsCard from "@/components/settings/cards/CoreProvide
 import GoogleOAuthCredentialsCard from "@/components/settings/cards/GoogleOAuthCredentialsCard";
 import { CloudSun } from "lucide-react";
 import type { SettingsAccountsProps, SettingsCardStateProps } from "../settingsTypes";
+import type { CapabilityStatus } from "../../../../shared/types/capabilities";
+import CapabilityOverviewCard from "@/components/settings/cards/CapabilityOverviewCard";
 
-export default function AccountsSettingsSection({ accounts, setAccounts, settings, patch }: SettingsAccountsProps & Pick<SettingsCardStateProps, "settings" | "patch">) {
+const GmailRealtimeCard = lazy(() => import("@/components/settings/cards/GmailRealtimeCard"));
+
+export default function AccountsSettingsSection({ accounts, setAccounts, settings, patch, capabilities = [], onRefreshCapabilities = () => {} }: SettingsAccountsProps & Pick<SettingsCardStateProps, "settings" | "patch"> & { capabilities?: CapabilityStatus[]; onRefreshCapabilities?: () => void }) {
   return (
     <>
+      <CapabilityOverviewCard capabilities={capabilities} onRefresh={onRefreshCapabilities} />
       <ConnectedAccountsCard accounts={accounts} setAccounts={setAccounts} />
       <GoogleOAuthCredentialsCard />
+      <Suspense fallback={null}>
+        <GmailRealtimeCard />
+      </Suspense>
       <TodoistCard settings={settings} />
       <DiscordRemindersCard settings={settings} />
       <CoreProviderCredentialsCard
