@@ -487,4 +487,27 @@ describe("database migrations", () => {
     const row = await db.execute("SELECT carryover_count FROM ea_briefing_snapshot_items WHERE email_id = 'msg-1'");
     expect(Number(row.rows[0]!.carryover_count)).toBe(0);
   });
+
+  it("adds the singleton instance credential registry with disablement integrity", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["033_instance_credentials.sql"]);
+
+    await db.execute({
+      sql: `INSERT INTO ea_instance_credentials
+              (credential_key, active_value_encrypted, updated_at)
+            VALUES (?, ?, ?)`,
+      args: ["ai.openai_api_key", "encrypted", 10],
+    });
+    const row = await db.execute(
+      "SELECT disabled, validation_state, version FROM ea_instance_credentials",
+    );
+    expect(row.rows[0]).toMatchObject({ disabled: 0, validation_state: "untested", version: 1 });
+
+    await expect(db.execute({
+      sql: `UPDATE ea_instance_credentials
+            SET disabled = 1
+            WHERE credential_key = ?`,
+      args: ["ai.openai_api_key"],
+    })).rejects.toThrow();
+  });
 });

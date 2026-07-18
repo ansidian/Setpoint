@@ -13,6 +13,10 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist
 - `canonical-url.ts` — canonical-origin normalization, legacy import, persistence, WebAuthn derivation, and provider callback URL projection
+- `instance-credential-registry.ts` — code allowlist and provider-neutral metadata for deployment-wide credentials
+- `instance-credential-store.ts` — encrypted active/pending persistence, disable tombstones, and atomic candidate promotion
+- `instance-credential-service.ts` — server-only source resolution, env import, metadata projection, and change subscriptions
+- `root-key-health.ts` — non-secret root-key fingerprint and allowlisted ciphertext decryptability audit
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
