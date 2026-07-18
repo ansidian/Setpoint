@@ -16,6 +16,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `startup-delays.ts` — staggered startup delay/jitter calculation for background workers
 - `timing.ts` — request/phase timing log helpers
 - `ai-credentials.ts` — OpenAI/Anthropic runtime credential resolution and pending-key validation/promotion
+- `location-credentials.ts` — Pirate Weather/Google Places runtime credential resolution and pending-key validation/promotion
 - `hash-password.ts` — one-shot CLI to bcrypt-hash a password for `EA_PASSWORD_HASH`
 
 ### `auth/` — passkey/WebAuthn and session support

@@ -4,6 +4,7 @@ import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import type { InstanceCredentialService } from "../platform/instance-credential-service.ts";
 import type { AiCredentialManager } from "../ai-credentials.ts";
+import type { LocationCredentialManager } from "../location-credentials.ts";
 
 vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
@@ -16,6 +17,7 @@ const { createInstanceCredentialsRouter } = await import("./instance-credentials
 function createApp(
   serviceOverrides: Partial<InstanceCredentialService> = {},
   aiManagerOverrides: Partial<AiCredentialManager> = {},
+  locationManagerOverrides: Partial<LocationCredentialManager> = {},
 ) {
   const metadata = {
     key: "ai.openai_api_key",
@@ -47,11 +49,15 @@ function createApp(
     testPending: vi.fn(async () => ({ ok: true, code: "VALID", metadata })),
     ...aiManagerOverrides,
   } as unknown as AiCredentialManager;
+  const locationManager = {
+    testPending: vi.fn(async () => ({ ok: true, code: "VALID", metadata })),
+    ...locationManagerOverrides,
+  } as unknown as LocationCredentialManager;
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/instance-credentials", createInstanceCredentialsRouter(service, aiManager));
+  app.use("/api/instance-credentials", createInstanceCredentialsRouter(service, aiManager, locationManager));
   app.use(errorHandler);
-  return { app, service, aiManager };
+  return { app, service, aiManager, locationManager };
 }
 
 describe("instance credential routes", () => {
@@ -137,5 +143,17 @@ describe("instance credential routes", () => {
     expect(response.status).toBe(422);
     expect(response.body).toMatchObject({ ok: false, code: "INVALID_CREDENTIAL" });
     expect(JSON.stringify(response.body)).not.toContain("provider body");
+  });
+
+  it("routes weather and Places tests through their provider-owned workflow", async () => {
+    const { app, aiManager, locationManager } = createApp();
+
+    const response = await request(app)
+      .post("/api/instance-credentials/weather.pirate_weather_api_key/test")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    expect(locationManager.testPending).toHaveBeenCalledWith("weather.pirate_weather_api_key");
+    expect(aiManager.testPending).not.toHaveBeenCalled();
   });
 });
