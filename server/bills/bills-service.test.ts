@@ -100,7 +100,7 @@ const {
   hydrateActualCache,
   resolveBillPaySeed,
   resolveBillPaySample,
-  __resetBillsMirrorRefreshTimersForTests,
+  stopBillsMirrorRefreshWorker,
 } = await import("./bills-service.ts");
 
 function rowResult(rows: Array<Record<string, unknown>> = []) {
@@ -310,7 +310,7 @@ describe("lightweight write reconciliation on sync-push failure", () => {
   }
 
   afterEach(() => {
-    __resetBillsMirrorRefreshTimersForTests();
+    stopBillsMirrorRefreshWorker();
   });
 
   it("sendBill: schedules a mirror refresh and returns partial success instead of throwing", async () => {

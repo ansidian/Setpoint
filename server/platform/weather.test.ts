@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  __resetWeatherCacheForTests,
+  clearWeatherCache,
   fetchWeather,
   geocodeLocation,
   normalizeWeatherPayload,
@@ -83,7 +83,7 @@ describe("fetchWeather caching", () => {
   });
 
   beforeEach(() => {
-    __resetWeatherCacheForTests();
+    clearWeatherCache();
     vi.restoreAllMocks();
     vi.useRealTimers();
   });

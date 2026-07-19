@@ -229,9 +229,3 @@ export function createTodoistOAuthService({
 
 export type TodoistOAuthService = ReturnType<typeof createTodoistOAuthService>;
 export const todoistOAuthService = createTodoistOAuthService();
-
-export const __testing__ = {
-  TODOIST_AUTHORIZATION_URL,
-  TODOIST_TOKEN_URL,
-  TODOIST_SCOPE,
-};

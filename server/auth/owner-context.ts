@@ -33,7 +33,7 @@ export function onOwnerActivated(listener: OwnerActivationListener): () => void 
   return () => activationListeners.delete(listener);
 }
 
-export function __resetOwnerContextForTests(): void {
+export function clearOwnerContext(): void {
   activeOwner = null;
   activationListeners.clear();
 }

@@ -23,8 +23,6 @@ import type {
 import type { RawTodoistDue, RawTodoistItem } from "./todoistMirrorStatements.ts";
 
 const BASE_URL = "https://api.todoist.com/api/v1";
-const TODOIST_DUE_TASKS_QUERY = "!no date";
-
 // Todoist's REST API inverts our UI priority scale: API 4 = urgent, API 1 =
 // natural/no priority. Dashboard uses 1 = urgent, 4 = low, null = none.
 // Note: Todoist can't distinguish "user picked P4 Low" from "no priority" —
@@ -619,11 +617,3 @@ export async function testConnection(userId: string): Promise<{ success: true; p
 export async function getTodoistSyncHealth(userId: string): Promise<TodoistMirrorHealth> {
   return getTodoistMirrorHealth(userId);
 }
-
-// Test-only exports (do not use in production code)
-export const __testing__ = {
-  dedupeTodoistRangeTasks,
-  mapCompletedTodoistTask,
-  mapTodoistTask,
-  TODOIST_DUE_TASKS_QUERY,
-};

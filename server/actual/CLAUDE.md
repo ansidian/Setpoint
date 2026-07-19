@@ -8,6 +8,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-core.ts` — in-process Actual SDK ops: session lifecycle (lock/cache singletons), metadata/bill reads, schedule + transaction writes; orchestrates over actualCoreModel.ts
 - `actualCoreModel.ts` — pure derivation for the SDK path: schedule classification/matching, condition building, date helpers, and the metadata/upcoming-bill projections
 - `actual-lightweight-writes.ts` — fast CRDT-message writes without booting the SDK; thin orchestrator over the four seam modules below
+- `actualWriteModel.ts` — pure strict write-date validation and CRDT sync-cursor selection
 - `scheduleMatchModel.ts` — pure schedule fuzzy/exact match, dedup, and cross-type sign guard; consumes actual-amount-condition.ts
 - `actualCrdtWire.ts` — pure protobuf sync-request encode + drift self-check for the lightweight write path
 - `actualWriteDb.ts` — SQLite/CRDT persistence primitives and resolver reads for the lightweight write path

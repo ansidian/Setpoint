@@ -139,7 +139,7 @@ const accountsRoutes = (await import("./accounts.ts")).default;
 const notesRoutes = (await import("./notes.ts")).default;
 const discordReminders = await import("../reminders/discord-reminders.ts");
 const {
-  __resetCurrentDashboardEventsForTests,
+  clearCurrentDashboardEventSubscribers,
   subscribeCurrentDashboardEvents,
 } = await import("../dashboard/current-events.ts");
 const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../triage/triage-sound-settings.ts");
@@ -286,13 +286,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   testState.db.current = await createMigratedDb();
-  __resetCurrentDashboardEventsForTests();
+  clearCurrentDashboardEventSubscribers();
   vi.clearAllMocks();
 });
 
 afterEach(async () => {
   vi.useRealTimers();
-  __resetCurrentDashboardEventsForTests();
+  clearCurrentDashboardEventSubscribers();
   testState.db.current?.close();
   testState.db.current = null;
 });

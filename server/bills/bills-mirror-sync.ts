@@ -257,14 +257,6 @@ export async function runDueBillsMirrorRefresh(userId: string, {
   return { refreshed: true, payload };
 }
 
-export function __resetBillsMirrorRefreshTimersForTests(): void {
-  for (const timer of BILLS_MIRROR_REFRESH_TIMERS.values()) clearTimeout(timer);
-  BILLS_MIRROR_REFRESH_TIMERS.clear();
-  BILLS_MIRROR_REFRESH_IN_FLIGHT.clear();
-  if (billsMirrorRefreshWorkerTimer) clearInterval(billsMirrorRefreshWorkerTimer);
-  billsMirrorRefreshWorkerTimer = null;
-}
-
 export async function armPendingBillsMirrorRefreshes({
   dbClient = db,
   now = new Date(),

@@ -17,13 +17,13 @@ import {
 } from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  __testing__,
   describeLocalActualCache,
   hydrateLocalActualCache,
   pruneActualBudgetBackups,
   pruneLocalActualBackups,
   readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
+import { syncDownloadedBudget } from "./actualMetadataSync.ts";
 
 let tempDir: string | null = null;
 const originalFetch = global.fetch;
@@ -294,7 +294,7 @@ describe("readLocalActualMetadata", () => {
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    const syncResult = await __testing__.syncDownloadedBudget({
+    const syncResult = await syncDownloadedBudget({
       serverURL: "https://actual.example.test",
       syncId: "sync-123",
     }, "token-1", {

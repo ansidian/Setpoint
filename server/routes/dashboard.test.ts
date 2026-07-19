@@ -41,7 +41,7 @@ vi.mock("../dashboard/current-service.ts", () => ({
 process.env.EA_USER_ID = "u1";
 
 const { default: router } = await import("./dashboard.ts");
-const { __resetCurrentDashboardEventsForTests } = await import("../dashboard/current-events.ts");
+const { clearCurrentDashboardEventSubscribers } = await import("../dashboard/current-events.ts");
 const { __clearSessionValidationCache } = await import("../middleware/auth.ts");
 
 function makeApp(): Express {
@@ -89,7 +89,7 @@ function auth(requestBuilder: Test): Test {
 describe("dashboard routes", () => {
   beforeEach(async () => {
     testState.db.current = await createMigratedDb();
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     // auth.js keeps a module-level, 30s-TTL positive sessionValidationCache keyed
     // by the hashed cookie token. A sibling test that authenticates "cookie-session"
     // leaves a positive entry behind; without this reset a later test could be served
@@ -106,7 +106,7 @@ describe("dashboard routes", () => {
   });
 
   afterEach(async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     await testState.db.current?.close?.();
     testState.db.current = null;
   });

@@ -40,7 +40,8 @@ Composition root and cross-cutting server concerns that don't belong to a single
 ### `db/` — connection and migrations
 - `db/config.ts` — resolves the libsql client config (local file vs. remote URL/token) from env
 - `db/connection.ts` — the shared libsql client instance (default export)
-- `db/migrate.ts` — runs the SQL files under `db/migrations/` in order at startup
+- `db/migrate.ts` — discovers and runs the SQL files under `db/migrations/` in order at startup
+- `db/migration-runner.ts` — applies one migration body and its ledger row atomically
 - `db/migrate-encryption.ts` — one-shot rewrite of legacy CBC-encrypted columns to GCM
 
 ### `scripts/` — one-off/ad-hoc CLI maintenance scripts (not imported by the server)

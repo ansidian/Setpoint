@@ -137,11 +137,6 @@ async function maybePruneBackups(budgetDir: string): Promise<void> {
     console.warn("[EA] Actual local backup pruning failed:", err instanceof Error ? err.message : err);
   });
 }
-
-function resetBackupPruneThrottle(): void {
-  lastBackupPruneAt.clear();
-}
-
 function allowColdActualDownload(): boolean {
   return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD === "1";
 }
@@ -665,9 +660,3 @@ export function createQuickTxn(userId: string, { accountName, amount, payee, typ
     });
   });
 }
-
-export const __testing__ = {
-  mapOpenBillInstances,
-  closeActualSession,
-  resetBackupPruneThrottle,
-};

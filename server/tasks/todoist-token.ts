@@ -279,9 +279,3 @@ export async function getTodoistApiToken(userId: string, {
 
   return stored.accessToken;
 }
-
-export const __testing__ = {
-  TODOIST_OAUTH_TOKEN_URL,
-  expiresAtFromResponse,
-  isFresh,
-};

@@ -45,7 +45,6 @@ import {
 } from "./currentRefreshPlanModel.ts";
 import {
   loadCacheRows,
-  markCacheRowRefreshFailed,
   markRowsRefreshing,
 } from "./currentCacheStore.ts";
 import {
@@ -54,16 +53,10 @@ import {
   refreshMissingRows,
 } from "./currentRefreshRunner.ts";
 export {
-  __resetCurrentDashboardRefreshStateForTests,
-  __waitForCurrentDashboardRefreshesForTests,
+  clearCurrentDashboardRefreshState,
 } from "./currentRefreshRunner.ts";
 
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
-
-export const __currentDashboardInternalsForTests = {
-  markRowsRefreshing,
-  markCacheRowRefreshFailed,
-};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

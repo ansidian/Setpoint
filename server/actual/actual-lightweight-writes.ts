@@ -1,7 +1,6 @@
 import { createClient } from "@libsql/client";
 import type { Client, InStatement, Row } from "@libsql/client";
 import {
-  Timestamp,
   merkle,
   getClock,
 } from "@actual-app/crdt";
@@ -14,11 +13,6 @@ import {
 } from "./actual-local-metadata.ts";
 import type { LocalActualOptions } from "./actual-local-metadata.ts";
 import { withActualClockLock } from "./actual-clock-lock.ts";
-import {
-  serializeValue,
-  encodeSyncRequest,
-  verifyEncodedSyncRequest,
-} from "./actualCrdtWire.ts";
 import {
   serializeConditionsOrActions,
   scheduleConditions,
@@ -48,6 +42,7 @@ import {
   saveBudgetMetadata,
 } from "./actualSyncTransport.ts";
 import type { ActualBudgetMetadata } from "./actualSyncTransport.ts";
+import { actualWriteDateInt, computeActualSyncSince } from "./actualWriteModel.ts";
 import type { ActualConfig, ActualSchedule, ActualScheduleCondition } from "../../shared/types/actual.ts";
 
 type ActualError = Error & { status?: number; code?: string; localWriteApplied?: boolean };
@@ -106,16 +101,6 @@ function unsupported(message: string): ActualError {
   });
 }
 
-function actualDateInt(value: unknown): number {
-  const n = Number(String(value || "").replace(/-/g, ""));
-  // A valid Actual date is a YYYYMMDD integer. Throw on NaN/implausible input so a
-  // bad date can never be serialized (as N:NaN) into a local row or CRDT message.
-  if (!Number.isFinite(n) || n < 10000101 || n > 99991231) {
-    throw Object.assign(new Error(`Invalid Actual date: ${JSON.stringify(value)}`), { status: 400 });
-  }
-  return n;
-}
-
 function todayYmd(now: Date = new Date()): string {
   return now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 }
@@ -129,7 +114,7 @@ function transactionFields({ billData, account, payee, type, now }: { billData: 
     amount: isIncome ? Math.abs(amountCents) : -Math.abs(amountCents),
     description: payee.id,
     notes: billData.notes == null || String(billData.notes).trim() === "" ? "" : String(billData.notes),
-    date: actualDateInt(billData.due_date),
+    date: actualWriteDateInt(billData.due_date),
     category: billData.category_id || undefined,
     cleared: isPastBill ? 0 : 1,
     sort_order: now,
@@ -155,20 +140,6 @@ function resolveWriteMode(billData: LightweightBillData, { now = new Date() }: {
   throw Object.assign(new Error(`Unsupported Actual bill type: ${type}`), { status: 400 });
 }
 
-function normalizeSupportedBillType(billData: LightweightBillData, options: { now?: Date } = {}): BillType {
-  return resolveWriteMode(billData, options).type;
-}
-
-function computeSyncSince(metadata: Partial<ActualBudgetMetadata>): string {
-  // Push everything not known-synced. Falling back to epoch 0 (not a 5-minute
-  // wall-clock window) guarantees no locally-applied-but-unsynced message is
-  // skipped when lastSyncedTimestamp is absent (a freshly-hydrated budget) —
-  // lastPushedTimestamp bounds the window after the first successful push.
-  return metadata.lastSyncedTimestamp
-    || metadata.lastPushedTimestamp
-    || new Timestamp(0, 0, "0").toString();
-}
-
 function scheduleJsonPathsQuery(scheduleId: string, conditions: ActualScheduleCondition[]): InStatement {
   const paths = scheduleJsonPathFields(conditions);
   return {
@@ -189,7 +160,7 @@ function ruleFields(scheduleId: string, conditions: ActualScheduleCondition[]): 
 }
 
 function scheduleNextDateFields(scheduleId: string, dueDate: string, nowMs: number): WriteFields {
-  const nextDate = actualDateInt(dueDate);
+  const nextDate = actualWriteDateInt(dueDate);
   return {
     schedule_id: scheduleId,
     local_next_date: nextDate,
@@ -444,7 +415,7 @@ async function sendBillLightweightInner(userId: string, billData: LightweightBil
     // lastSyncedTimestamp is only advanced after the push — but the write must
     // NOT be retried (locally or via the SDK fallback) or it would duplicate.
     try {
-      const since = computeSyncSince(metadata);
+      const since = computeActualSyncSince(metadata);
       const messages = await readMessagesSince(client, since);
       const token = await loginActual(config);
       const syncResult = await postActualSync(config, token, { metadata, messages });
@@ -486,13 +457,3 @@ export function sendBillLightweight(userId: string, billData: LightweightBillDat
   // reintroduce a private lock here.
   return withActualClockLock(() => sendBillLightweightInner(userId, billData, options));
 }
-
-export const __testing__ = {
-  actualDateInt,
-  computeSyncSince,
-  encodeSyncRequest,
-  findExistingSchedule,
-  normalizeSupportedBillType,
-  serializeValue,
-  verifyEncodedSyncRequest,
-};

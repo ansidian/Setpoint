@@ -331,8 +331,3 @@ export function stopTodoistMirrorSyncWorker() {
   pendingSyncs.clear();
   activeSyncs.clear();
 }
-
-export const __testing__ = {
-  requestStartupSyncIfNeeded,
-  runRequestedSync,
-};

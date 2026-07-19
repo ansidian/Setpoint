@@ -10,6 +10,7 @@ export interface ActualBudgetMetadata {
   groupId: string;
   cloudFileId: string;
   lastSyncedTimestamp?: string;
+  lastPushedTimestamp?: string;
   [key: string]: unknown;
 }
 

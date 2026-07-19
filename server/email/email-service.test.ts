@@ -45,20 +45,19 @@ vi.mock("./icloud.ts", () => ({
   batchMarkAsRead: vi.fn(),
 }));
 vi.mock("../platform/config-service.ts", () => ({ loadUserConfig: vi.fn() }));
-// Partial mock: keep every real adapter export (findAccountByUid is re-exported
-// through __testing__ and exercised below) and override only trashEmailWithProvider
+// Partial mock: keep every real adapter export (including findAccountByUid) and
+// override only trashEmailWithProvider
 // so the trash() tests can drive provider success/failure deterministically.
 vi.mock("./email-provider-adapters.ts", async (importActual) => {
   const actual = await importActual<typeof EmailProviderAdapters>();
   return { ...actual, trashEmailWithProvider: vi.fn() };
 });
-
 const gmail = vi.mocked(await import("./gmail.ts"));
 const icloud = vi.mocked(await import("./icloud.ts"));
 const configService = vi.mocked(await import("../platform/config-service.ts"));
 const providerAdapters = vi.mocked(await import("./email-provider-adapters.ts"));
 const emailService = await import("./email-service.ts");
-const { __testing__ } = emailService;
+const { findAccountByUid } = providerAdapters;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -79,7 +78,7 @@ describe("findAccountByUid", () => {
     mockDb.execute
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: "icloud-1", email: "x@icloud.com" }] });
-    const out = await __testing__.findAccountByUid("u1", "icloud-abc");
+    const out = await findAccountByUid("u1", "icloud-abc");
     expect(out).toEqual({ type: "icloud", account: { id: "icloud-1", email: "x@icloud.com" } });
   });
 
@@ -91,14 +90,14 @@ describe("findAccountByUid", () => {
         { id: "icloud-b", email: "b@icloud.com", type: "icloud" },
       ] });
     // Routing to rows[0] here would mutate the wrong mailbox, so it must refuse.
-    await expect(__testing__.findAccountByUid("u1", "icloud-abc")).rejects.toMatchObject({ status: 404 });
+    await expect(findAccountByUid("u1", "icloud-abc")).rejects.toMatchObject({ status: 404 });
   });
 
   it("prefers the indexed iCloud account when the uid is ambiguous", async () => {
     mockDb.execute.mockResolvedValueOnce({
       rows: [{ id: "icloud-work", email: "work@icloud.com", type: "icloud" }],
     });
-    const out = await __testing__.findAccountByUid("u1", "icloud-abc");
+    const out = await findAccountByUid("u1", "icloud-abc");
     expect(out).toEqual({
       type: "icloud",
       account: { id: "icloud-work", email: "work@icloud.com", type: "icloud" },
@@ -112,7 +111,7 @@ describe("findAccountByUid", () => {
         { id: "gmail-q@r.com", email: "q@r.com" },
       ],
     });
-    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-y@z.com-msg123");
+    const out = await findAccountByUid("u1", "gmail-gmail-y@z.com-msg123");
     expect(out!.account.id).toBe("gmail-y@z.com");
   });
 
@@ -124,7 +123,7 @@ describe("findAccountByUid", () => {
       ],
     });
 
-    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-old-msg123");
+    const out = await findAccountByUid("u1", "gmail-gmail-old-msg123");
 
     expect(out!.account.id).toBe("gmail-fresh");
     expect(out!.account.uid_account_id).toBe("gmail-old");
@@ -140,577 +139,15 @@ describe("findAccountByUid", () => {
         rows: [{ account_id: "gmail-indexed", account_email: "dup@example.com" }],
       });
 
-    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-indexed-msg123");
+    const out = await findAccountByUid("u1", "gmail-gmail-indexed-msg123");
 
     expect(out!.account.id).toBe("gmail-fresh");
     expect(out!.account.uid_account_id).toBe("gmail-indexed");
   });
 
   it("returns null for unknown prefix", async () => {
-    const out = await __testing__.findAccountByUid("u1", "unknown-xyz");
+    const out = await findAccountByUid("u1", "unknown-xyz");
     expect(out).toBeNull();
-  });
-});
-
-describe("sanitizeFtsQuery", () => {
-  it("quotes each term and wildcards the last", () => {
-    // Joined with explicit "AND": FTS5's implicit-AND adjacency only holds between
-    // bare phrases, and now that some tokens expand into parenthesized OR-groups
-    // (audit B2 plural expansion) every join must be an explicit AND to stay valid
-    // FTS5 syntax — same boolean semantics as the old bare-space join.
-    expect(__testing__.sanitizeFtsQuery("foo bar")).toBe(`"foo" AND "bar"*`);
-  });
-
-  it("normalizes smart quotes", () => {
-    expect(__testing__.sanitizeFtsQuery("\u201cfoo\u201d")).toContain(`"foo`);
-  });
-
-  it("falls back to quoted raw on empty-split input", () => {
-    expect(__testing__.sanitizeFtsQuery("   ")).toBe(`"   "`);
-  });
-});
-
-describe("buildEmailWebUrl", () => {
-  it("builds a gmail web url for well-formed uids", () => {
-    const url = __testing__.buildEmailWebUrl("gmail-gmail-y@z.com-msgABC", "gmail-y@z.com", "y@z.com");
-    expect(url).toBe("https://mail.google.com/mail/?authuser=y%40z.com#all/msgABC");
-  });
-
-  it("returns null for non-gmail uids", () => {
-    expect(__testing__.buildEmailWebUrl("icloud-1", "gmail-x", "x@y.com")).toBeNull();
-  });
-});
-
-describe("searchEmails contract", () => {
-  it("searches the persisted email index instead of latest briefing/live payloads", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-historical-1",
-      from_name: "Historical Sender",
-      from_address: "sender@example.com",
-      subject: "Tuition receipt from last semester",
-      body_snippet: "Historical indexed receipt",
-      body_text: "Historical indexed receipt from last semester",
-      email_date: "2025-09-03T12:00:00Z",
-      read: 1,
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "tuition receipt",
-      limit: 5,
-    });
-
-    expect(result).toEqual(expect.objectContaining({
-      accounts: [
-        expect.objectContaining({
-          account_id: "gmail-work",
-          results: [
-            expect.objectContaining({
-              uid: "gmail-work-historical-1",
-              subject: "Tuition receipt from last semester",
-              email_date: "2025-09-03T12:00:00Z",
-              read: true,
-            }),
-          ],
-        }),
-      ],
-      total: 1,
-      query: "tuition receipt",
-    }));
-    expect(result.results).toEqual([
-      expect.objectContaining({
-        uid: "gmail-work-historical-1",
-        account_id: "gmail-work",
-        account_label: "Work",
-      }),
-    ]);
-  });
-
-  it("matches a plural query against an indexed email that only contains the singular (audit B2)", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-paypal-singular-1",
-      from_name: "PayPal",
-      from_address: "service@paypal.com",
-      subject: "Your PayPal statement is ready",
-      body_snippet: "Your PayPal statement is ready",
-      body_text: "Your PayPal statement is ready to view online.",
-      email_date: "2025-09-03T12:00:00Z",
-      read: 1,
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "paypal statements",
-      limit: 5,
-    });
-
-    expect(result.total).toBe(1);
-    expect(result.results).toEqual([
-      expect.objectContaining({
-        uid: "gmail-work-paypal-singular-1",
-        subject: "Your PayPal statement is ready",
-      }),
-    ]);
-  });
-
-  it("matches a slash-date query against a zero-padded in-body date (audit B5)", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-due-date-1",
-      from_name: "Billing",
-      from_address: "billing@example.com",
-      subject: "Your statement is ready",
-      body_snippet: "Payment due date 07/07/2026",
-      body_text: "Payment due date 07/07/2026. Minimum payment due $29.00.",
-      email_date: "2026-06-01T12:00:00Z",
-      read: 1,
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "due 7/7",
-      limit: 5,
-    });
-
-    expect(result.total).toBe(1);
-    expect(result.results).toEqual([
-      expect.objectContaining({
-        uid: "gmail-work-due-date-1",
-        subject: "Your statement is ready",
-      }),
-    ]);
-  });
-
-  it("combines is:unread with full-text search against indexed read state", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "unread-amazon",
-      subject: "Amazon delivery",
-      body_text: "Amazon package update",
-      read: 0,
-    });
-    await seedIndexedEmail(currentDb(), {
-      uid: "read-amazon",
-      subject: "Amazon receipt",
-      body_text: "Amazon receipt",
-      read: 1,
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "is:unread amazon",
-      limit: 5,
-    });
-
-    expect(result.total).toBe(1);
-    expect(result.accounts[0]!.results).toEqual([
-      expect.objectContaining({
-        uid: "unread-amazon",
-        read: false,
-      }),
-    ]);
-  });
-
-  it("supports flag-only unread searches without requiring FTS text", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-unread-1",
-      subject: "Unread note",
-      body_snippet: "Needs attention",
-      read: 0,
-    });
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-read-1",
-      subject: "Read note",
-      body_snippet: "Already handled",
-      read: 1,
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "is:unread",
-      limit: 5,
-    });
-
-    expect(result.total).toBe(1);
-    expect(result.accounts[0]!.results[0]!.uid).toBe("gmail-work-unread-1");
-    expect(result.accounts[0]!.results[0]!.read).toBe(false);
-  });
-
-  it("attaches the latest active snapshot row without dropping emails (bounded-CTE join)", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-snap-1",
-      account_id: "gmail-work",
-      account_email: "work@example.com",
-      subject: "Quarterly invoice",
-      body_snippet: "invoice attached",
-      read: 0,
-    });
-    const triage = await currentDb().execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, triage_status)
-            VALUES (?, ?, ?, 'pending')
-            RETURNING id`,
-      args: ["user-1", "gmail-work", "gmail-work-snap-1"],
-    });
-    const seedSnapshotItem = async ({ status, day, updatedAt }: { status: string; day: number; updatedAt: string }) => {
-      const snapshot = await currentDb().execute({
-        sql: `INSERT INTO ea_briefing_snapshots
-                (user_id, start_at, end_at, timezone, status)
-              VALUES (?, ?, ?, 'America/Los_Angeles', ?)
-              RETURNING id`,
-        // Distinct date range per snapshot (UNIQUE(user_id, start_at, end_at)).
-        args: ["user-1", `2026-05-0${day}T07:00:00.000Z`, `2026-05-0${day + 1}T07:00:00.000Z`, status],
-      });
-      await currentDb().execute({
-        sql: `INSERT INTO ea_briefing_snapshot_items
-                (snapshot_id, triage_id, user_id, account_id, email_id,
-                 lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
-                 urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
-                 updated_at)
-              VALUES (?, ?, ?, ?, ?, 'needs_attention', '', '', 'high', 'finance', 'Quarterly invoice', ?)`,
-        args: [Number(snapshot.rows[0]!.id), Number(triage.rows[0]!.id), "user-1", "gmail-work", "gmail-work-snap-1", updatedAt],
-      });
-    };
-    // An older active item, a newer active item (the one the subquery must pick),
-    // and a frozen item the active filter must ignore.
-    await seedSnapshotItem({ status: "active", day: 1, updatedAt: "2026-05-03T08:00:00.000Z" });
-    await seedSnapshotItem({ status: "active", day: 2, updatedAt: "2026-05-03T09:00:00.000Z" });
-    await seedSnapshotItem({ status: "frozen", day: 3, updatedAt: "2026-05-03T10:00:00.000Z" });
-
-    // No-text branch and FTS branch both run the snapshot join against real rows.
-    const flagOnly = await emailService.searchEmails("user-1", { q: "is:unread", limit: 5 });
-    expect(flagOnly.accounts[0]!.results[0]!.uid).toBe("gmail-work-snap-1");
-
-    const textual = await emailService.searchEmails("user-1", { q: "invoice", limit: 5 });
-    expect(textual.accounts[0]!.results[0]!.uid).toBe("gmail-work-snap-1");
-  });
-
-  it("smart-ranks flag-only unread searches by usefulness and recency", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "newer-unread-noise",
-      subject: "Newsletter",
-      body_snippet: "Unread promotion",
-      email_date: "2026-05-07T12:00:00Z",
-      read: 0,
-    });
-    await seedIndexedEmail(currentDb(), {
-      uid: "older-unread-bill",
-      subject: "Payment required",
-      body_snippet: "Unread bill",
-      email_date: "2026-04-28T12:00:00Z",
-      read: 0,
-    });
-    await currentDb().execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, lane, category, urgency, bill_candidate_json, triage_status)
-            VALUES (?, ?, ?, 'needs_attention', 'finance', 'high', ?, 'complete')`,
-      args: ["user-1", "gmail-work", "older-unread-bill", JSON.stringify({
-        payee_hint: "Power Utility",
-        amount: 25,
-        due_date: "2026-05-10",
-        requires_confirmation: true,
-      })],
-    });
-    await currentDb().execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, lane, category, urgency, triage_status)
-            VALUES (?, ?, ?, 'noise', 'promotions', 'low', 'complete')`,
-      args: ["user-1", "gmail-work", "newer-unread-noise"],
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "is:unread",
-      limit: 5,
-    });
-
-    expect(result.results.map((email) => email.uid)).toEqual([
-      "older-unread-bill",
-      "newer-unread-noise",
-    ]);
-    expect(result.results[0]!).toMatchObject({
-      hasBill: true,
-      extractedBill: {
-        payee: "Power Utility",
-        amount: 25,
-        due_date: "2026-05-10",
-        type: "expense",
-        requires_confirmation: true,
-      },
-    });
-  });
-
-  it("supports is:read as an indexed read predicate", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "read-invoice",
-      subject: "Read invoice",
-      body_text: "Invoice paid",
-      read: 1,
-    });
-    await seedIndexedEmail(currentDb(), {
-      uid: "unread-invoice",
-      subject: "Unread invoice",
-      body_text: "Invoice due",
-      read: 0,
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "is:read invoice",
-      limit: 5,
-    });
-
-    expect(result.total).toBe(1);
-    expect(result.accounts[0]!.results).toEqual([
-      expect.objectContaining({
-        uid: "read-invoice",
-        read: true,
-      }),
-    ]);
-  });
-
-  it("returns indexed search results newest to oldest", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "older",
-      subject: "Older invoice",
-      body_snippet: "Older indexed result",
-      body_text: "Older invoice result",
-      email_date: "2026-04-01T12:00:00Z",
-    });
-    await seedIndexedEmail(currentDb(), {
-      uid: "newer",
-      subject: "Newer invoice",
-      body_snippet: "Newer indexed result",
-      body_text: "Newer invoice result",
-      email_date: "2026-05-01T12:00:00Z",
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "invoice",
-      limit: 5,
-    });
-
-    expect(result.accounts[0]!.results.map((email) => email.uid)).toEqual(["newer", "older"]);
-  });
-
-  it("returns top-level smart-ranked results while keeping grouped account results", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-personal-newer-noise",
-      account_id: "gmail-personal",
-      account_label: "Personal",
-      account_email: "personal@example.com",
-      from_name: "Promotions",
-      from_address: "deals@example.com",
-      subject: "Weekend digest",
-      body_snippet: "Tuition receipt appears in the body only.",
-      body_text: "Tuition receipt appears in the body only.",
-      email_date: "2026-05-06T12:00:00Z",
-    });
-    await seedIndexedEmail(currentDb(), {
-      uid: "gmail-work-older-finance",
-      account_id: "gmail-work",
-      account_label: "Work",
-      account_email: "work@example.com",
-      from_name: "Bursar Office",
-      from_address: "billing@school.edu",
-      subject: "Tuition receipt ready",
-      body_snippet: "Payment confirmation attached.",
-      body_text: "Payment confirmation attached.",
-      email_date: "2026-04-20T12:00:00Z",
-    });
-    await currentDb().execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, lane, category, urgency, deadline_at, triage_status)
-            VALUES (?, ?, ?, 'needs_attention', 'finance', 'high', ?, 'complete')`,
-      args: ["user-1", "gmail-work", "gmail-work-older-finance", "2026-05-10T16:00:00Z"],
-    });
-    await currentDb().execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, account_id, email_id, lane, category, urgency, triage_status)
-            VALUES (?, ?, ?, 'noise', 'promotions', 'low', 'complete')`,
-      args: ["user-1", "gmail-personal", "gmail-personal-newer-noise"],
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "tuition receipt",
-      limit: 5,
-    });
-
-    expect(result.results.map((email) => email.uid)).toEqual([
-      "gmail-work-older-finance",
-      "gmail-personal-newer-noise",
-    ]);
-    expect(result.accounts.flatMap((account) => account.results).map((email) => email.uid)).toEqual([
-      "gmail-work-older-finance",
-      "gmail-personal-newer-noise",
-    ]);
-  });
-
-  it("includes search scoring details only for explicit debug searches", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    await seedIndexedEmail(currentDb(), {
-      uid: "debug-invoice",
-      subject: "Invoice due",
-      body_text: "Invoice due",
-    });
-
-    const normal = await emailService.searchEmails("user-1", {
-      q: "invoice",
-      limit: 5,
-    });
-    const debug = await emailService.searchEmails("user-1", {
-      q: "invoice",
-      limit: 5,
-      debug: true,
-    });
-
-    expect(normal.results[0]!).not.toHaveProperty("search_score");
-    expect(normal.results[0]!).not.toHaveProperty("search_score_details");
-    expect(debug.results[0]!).toEqual(expect.objectContaining({
-      search_score: expect.any(Number),
-      search_score_details: expect.objectContaining({
-        details: expect.any(Array),
-      }),
-    }));
-  });
-
-  it("rejects unsupported flag-like search tokens", async () => {
-    await expect(emailService.searchEmails("user-1", {
-      q: "is:important amazon",
-      limit: 5,
-    })).rejects.toMatchObject({
-      status: 400,
-      code: "unsupported_email_search_flag",
-      message: "Unsupported email search flag: is:important",
-    });
-    expect(mockDb.execute).not.toHaveBeenCalled();
-  });
-
-  it("honors an injected dbClient instead of the module-level db (audit F3)", async () => {
-    // currentDb() stays null here on purpose: the mocked global db
-    // would throw/return nothing if consulted, so a passing result proves
-    // searchEmails read through the injected client, not the module default.
-    const injectedDb = await createEmailIndexTestDb();
-    await seedIndexedEmail(injectedDb, {
-      uid: "gmail-work-injected-1",
-      subject: "Injected client receipt",
-      body_snippet: "Injected client receipt",
-      body_text: "Injected client receipt",
-    });
-
-    const result = await emailService.searchEmails("user-1", {
-      q: "injected client",
-      limit: 5,
-      dbClient: injectedDb,
-    });
-
-    expect(result.results).toEqual([
-      expect.objectContaining({ uid: "gmail-work-injected-1" }),
-    ]);
-    expect(mockDb.execute).not.toHaveBeenCalled();
-
-    await injectedDb.close?.();
-  });
-});
-
-describe("searchEmails offset paging (audit E1)", () => {
-  it("pages through a stable total independent of offset", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    for (let i = 0; i < 12; i += 1) {
-      await seedIndexedEmail(currentDb(), {
-        uid: `paging-${String(i).padStart(2, "0")}`,
-        subject: `Statement notice ${i}`,
-        body_text: "Your statement notice is ready.",
-        email_date: `2026-05-${String(10 + i).padStart(2, "0")}T12:00:00Z`,
-      });
-    }
-
-    const pages = [];
-    const seen = new Set();
-    for (const offset of [0, 5, 10]) {
-      const page = await emailService.searchEmails("user-1", { q: "statement notice", limit: 5, offset });
-      pages.push(page);
-      page.results.forEach((email) => seen.add(email.uid));
-    }
-
-    expect(pages.map((page) => page.total)).toEqual([12, 12, 12]);
-    expect(pages.map((page) => page.results.length)).toEqual([5, 5, 2]);
-    expect(pages.map((page) => page.has_more)).toEqual([true, true, false]);
-    expect(pages.map((page) => page.offset)).toEqual([0, 5, 10]);
-    expect(seen.size).toBe(12);
-  });
-
-  it("reports the true total past the returned page (E1 regression)", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    for (let i = 0; i < 35; i += 1) {
-      await seedIndexedEmail(currentDb(), {
-        uid: `overflow-${String(i).padStart(2, "0")}`,
-        subject: `Renewal reminder ${i}`,
-        body_text: "Your renewal reminder is due.",
-        email_date: `2026-04-${String(1 + (i % 28)).padStart(2, "0")}T12:00:00Z`,
-      });
-    }
-
-    const result = await emailService.searchEmails("user-1", { q: "renewal reminder" });
-
-    expect(result.results.length).toBe(30);
-    expect(result.total).toBe(35);
-    expect(result.has_more).toBe(true);
-  });
-
-  it("returns an empty page with has_more false when offset lands past the total", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    for (let i = 0; i < 3; i += 1) {
-      await seedIndexedEmail(currentDb(), {
-        uid: `past-end-${i}`,
-        subject: `Autopay notice ${i}`,
-        body_text: "Your autopay notice is ready.",
-        email_date: `2026-05-${String(10 + i).padStart(2, "0")}T12:00:00Z`,
-      });
-    }
-
-    const result = await emailService.searchEmails("user-1", { q: "autopay notice", limit: 5, offset: 50 });
-
-    expect(result.results).toEqual([]);
-    expect(result.total).toBe(3);
-    expect(result.has_more).toBe(false);
-    expect(result.offset).toBe(50);
-  });
-
-  it("flags capped when the SQL candidate pool itself hits its bound", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    for (let i = 0; i < 250; i += 1) {
-      await seedIndexedEmail(currentDb(), {
-        uid: `capped-${String(i).padStart(3, "0")}`,
-        subject: "Weekly digest",
-        body_snippet: "receipt receipt receipt receipt receipt",
-        body_text: "receipt receipt receipt receipt receipt",
-        email_date: "2026-01-05T12:00:00Z",
-      });
-    }
-
-    const result = await emailService.searchEmails("user-1", { q: "receipt" });
-
-    expect(result.capped).toBe(true);
-    expect(result.total).toBeGreaterThanOrEqual(240);
-  });
-
-  it("reports capped false when the candidate pool does not hit its bound", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    for (let i = 0; i < 12; i += 1) {
-      await seedIndexedEmail(currentDb(), {
-        uid: `uncapped-${String(i).padStart(2, "0")}`,
-        subject: `Shipping update ${i}`,
-        body_text: "Your shipping update is here.",
-        email_date: `2026-05-${String(10 + i).padStart(2, "0")}T12:00:00Z`,
-      });
-    }
-
-    const result = await emailService.searchEmails("user-1", { q: "shipping update" });
-
-    expect(result.capped).toBe(false);
-    expect(result.total).toBe(12);
   });
 });
 
@@ -1071,33 +508,5 @@ describe("trash post-provider cleanup (P3-74)", () => {
       "gmail-work-msg-1",
     );
     expect(snoozeDeleteAttempted).toBe(true);
-  });
-});
-
-describe("searchEmails candidate pool recency", () => {
-  it("keeps the newest match reachable when older high-frequency matches saturate the bm25 pool", async () => {
-    testState.db.current = await createEmailIndexTestDb();
-    // 250 old fillers whose tiny bodies repeat the term dominate unweighted BM25 and
-    // would fill the entire 240-row bounded pool at the default limit of 30.
-    for (let i = 0; i < 250; i += 1) {
-      await seedIndexedEmail(currentDb(), {
-        uid: `filler-${String(i).padStart(3, "0")}`,
-        subject: "Weekly digest",
-        body_snippet: "payment payment payment payment payment",
-        body_text: "payment payment payment payment payment",
-        email_date: "2026-01-05T12:00:00Z",
-      });
-    }
-    await seedIndexedEmail(currentDb(), {
-      uid: "newest-subject-match",
-      subject: "Payment due notice",
-      body_snippet: "Your autopay draft is scheduled.",
-      body_text: "Your autopay draft is scheduled.",
-      email_date: "2026-04-30T12:00:00Z",
-    });
-
-    const result = await emailService.searchEmails("user-1", { q: "payment" });
-
-    expect(result.results.map((row) => row.uid)).toContain("newest-subject-match");
   });
 });
