@@ -213,7 +213,7 @@ describe("maxSpanLanes", () => {
 });
 
 describe("span lane capacity overflow", () => {
-  it("caps visible segments at maxLanes and routes excess to pinnedOverflowByDate", () => {
+  it("caps visible/reserved lanes while retaining overflowed event ownership", () => {
     const cells = monthCells("2026-04-19", 7);
     const events = Array.from({ length: 5 }, (_, i) => event({
       id: `ad-${i}`,
@@ -234,47 +234,8 @@ describe("span lane capacity overflow", () => {
 
     expect(layout.pinnedOverflowByDate["2026-04-20"]).toBeDefined();
     expect(layout.pinnedOverflowByDate["2026-04-20"]!.size).toBe(5 - maxLanes);
-  });
-
-  it("caps reservedLaneCountByDate at maxLanes", () => {
-    const cells = monthCells("2026-04-19", 7);
-    const events = Array.from({ length: 5 }, (_, i) => event({
-      id: `ad-${i}`,
-      title: `All-day ${i}`,
-      allDay: true,
-      startMs: ms("2026-04-20T07:00:00Z"),
-      endMs: ms("2026-04-21T07:00:00Z"),
-    }));
-
-    const layout = buildCalendarEventSpanLayout({
-      monthCells: cells,
-      events,
-      layout: { tier: "lg", cellHeight: 164 },
-    });
-
-    const maxLanes = maxSpanLanes(164, { tier: "lg" });
     expect(layout.reservedLaneCountByDate["2026-04-20"]).toBe(maxLanes);
-  });
-
-  it("keeps all events in pinnedIds even when overflowed", () => {
-    const cells = monthCells("2026-04-19", 7);
-    const events = Array.from({ length: 5 }, (_, i) => event({
-      id: `ad-${i}`,
-      title: `All-day ${i}`,
-      allDay: true,
-      startMs: ms("2026-04-20T07:00:00Z"),
-      endMs: ms("2026-04-21T07:00:00Z"),
-    }));
-
-    const layout = buildCalendarEventSpanLayout({
-      monthCells: cells,
-      events,
-      layout: { tier: "lg", cellHeight: 164 },
-    });
-
-    for (let i = 0; i < 5; i++) {
-      expect(layout.pinnedIds.has(`ad-${i}`)).toBe(true);
-    }
+    expect([...layout.pinnedIds]).toEqual(expect.arrayContaining(events.map(({ id }) => id)));
   });
 
   it("has no overflow when all spans fit", () => {

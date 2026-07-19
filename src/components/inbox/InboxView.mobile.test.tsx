@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView";
 import type { InboxActiveSnapshotController, InboxViewProps } from "./InboxView";
-import { searchEmails, markEmailAsRead, markEmailAsUnread } from "../../api";
+import { searchEmails, markEmailAsRead } from "../../api";
 import {
   makeActiveSnapshot,
   makeInboxAccounts,

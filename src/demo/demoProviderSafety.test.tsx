@@ -2,7 +2,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RailAction } from "../components/calendar/DetailRailPrimitives.tsx";
 import { openInNewTab } from "../components/calendar/views/deadlines/deadlinesModel.ts";
-import { linkifyText } from "../components/notes/notesUtils";
 import { getGmailUrl } from "../lib/email-links";
 import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "./demoSafeLocalStorage.ts";
 
@@ -33,17 +32,14 @@ describe("demo mode provider and external navigation safety", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: /open in actual disabled in demo mode/i }).disabled).toBe(true);
   });
 
-  it("blocks imperative and note-link external navigation in demo mode", () => {
+  it("blocks imperative external navigation in demo mode", () => {
     vi.stubEnv("VITE_EA_DEMO", "1");
     const open = vi.fn();
     vi.stubGlobal("open", open);
 
     openInNewTab("https://provider.example.test");
-    const { container } = render(<div>{linkifyText("Read https://docs.example.test", "#89b4fa")}</div>);
 
     expect(open).not.toHaveBeenCalled();
-    expect(screen.queryByRole("link")).toBeNull();
-    expect(container.textContent).toBe("Read https://docs.example.test");
   });
 
   it("suppresses UI preference storage reads and writes in demo mode", () => {

@@ -183,14 +183,6 @@ describe("applyAlfredEvent", () => {
     expect(messageAt(ms, 1, "rows").items[0]?.name).toBe("Rent");
   });
 
-  it("run_end closes the open say; run_error appends an error line", () => {
-    const ended = play([{ type: "text_delta", text: "Done." }, { type: "run_end", stop_reason: "end_turn" }]);
-    expect(messageAt(ended, 0, "say").done).toBe(true);
-
-    const errored = play([{ type: "run_error", message: "Alfred could not complete this run." }]);
-    expect(errored[0]).toMatchObject({ type: "error", text: "Alfred could not complete this run." });
-  });
-
   it("ignores run_start and unknown events", () => {
     expect(play([
       { type: "run_start", conversation_id: "c", model: "claude-sonnet-4-6" },

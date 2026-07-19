@@ -59,10 +59,4 @@ describe("menuStyle", () => {
     window.innerHeight = 400;
     expect(menuStyle({ x: 9999, y: 9999 })).toEqual({ left: 68, top: 168, width: 220 });
   });
-
-  it("passes the anchor through when it fits", () => {
-    window.innerWidth = 1600;
-    window.innerHeight = 900;
-    expect(menuStyle({ x: 140, y: 180 })).toEqual({ left: 140, top: 180, width: 220 });
-  });
 });

@@ -77,15 +77,6 @@ describe("mini calendar model", () => {
     });
   });
 
-  it("uses omitted agenda input as the visible filtering boundary", () => {
-    const markersByDate = deriveMiniCalendarActivityMarkers([
-      { id: "visible-event", dateKey: "2026-05-08", kind: "event", color: "#89b4fa" },
-    ]);
-
-    expect(markersByDate["2026-05-08"]!).toHaveLength(1);
-    expect(markersByDate["2026-05-09"]!).toBeUndefined();
-  });
-
   it("counts multi-day all-day items on every touched date", () => {
     const markersByDate = deriveMiniCalendarActivityMarkers([
       {

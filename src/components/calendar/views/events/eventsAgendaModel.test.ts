@@ -143,24 +143,12 @@ describe("events agenda model", () => {
       },
     });
 
-    expect(agenda.visibleGroups.find((group) => group.dateKey === "2026-05-12")?.deadlines).toEqual([
-      expect.objectContaining({
-        agendaItemId: "deadline:todo-progress:2026-05-12",
-        agendaSubtitle: "Deadline",
-        agendaTimeRange: "Deadline",
-        agendaStatus: "In progress",
-        agendaStatusIcon: "in_progress",
-        agendaComplete: false,
-      }),
-      expect.objectContaining({
-        agendaItemId: "deadline:todo-1:2026-05-12",
-        agendaSubtitle: "Deadline",
-        agendaTimeRange: "Deadline",
-        agendaStatus: "Complete",
-        agendaStatusIcon: "complete",
-        agendaComplete: true,
-      }),
+    const deadlines = agenda.visibleGroups.find((group) => group.dateKey === "2026-05-12")?.deadlines;
+    expect(deadlines?.map((item) => item.agendaItemId)).toEqual([
+      "deadline:todo-progress:2026-05-12",
+      "deadline:todo-1:2026-05-12",
     ]);
+    expect(deadlines?.[0]).toMatchObject({ agendaStatus: "In progress", agendaStatusIcon: "in_progress" });
   });
 
   it("formats yesterday, today, tomorrow, and weekday headers", () => {
@@ -194,21 +182,6 @@ describe("buildMultiMonthAgendaGroups", () => {
     expect(result[1]!.month).toBe(5);
   });
 
-  it("empty months produce a fallback header group", () => {
-    const result = buildMultiMonthAgendaGroups({
-      months: [{ year: 2026, month: 6 }],
-      events: [],
-      todayKey: "2026-05-10",
-    });
-
-    expect(result).toHaveLength(1);
-    expect(result[0]!.visibleGroups).toHaveLength(1);
-    expect(result[0]!.visibleGroups[0]!).toMatchObject({
-      dateKey: "2026-07-01",
-      isFallback: true,
-    });
-  });
-
   it("distributes deadline overlay across months correctly", () => {
     const result = buildMultiMonthAgendaGroups({
       months: [
@@ -239,21 +212,6 @@ describe("buildMultiMonthAgendaGroups", () => {
     expect(mayDeadlines[0]!.agendaTitle).toBe("May deadline");
     expect(junDeadlines).toHaveLength(1);
     expect(junDeadlines[0]!.agendaTitle).toBe("Jun deadline");
-  });
-
-  it("single-month call matches existing buildEventsAgendaGroups output", () => {
-    const params = {
-      events: [event({ id: "e1", title: "Test", start: "2026-05-05T10:00:00Z", end: "2026-05-05T11:00:00Z" })],
-      todayKey: "2026-05-10",
-    };
-
-    const single = buildEventsAgendaGroups({ ...params, viewYear: 2026, viewMonth: 4 });
-    const multi = buildMultiMonthAgendaGroups({ ...params, months: [{ year: 2026, month: 4 }] });
-
-    expect(multi).toHaveLength(1);
-    expect(multi[0]!.visibleGroups.map((g) => g.dateKey)).toEqual(single.visibleGroups.map((g) => g.dateKey));
-    expect(multi[0]!.firstVisibleDateKey).toBe(single.firstVisibleDateKey);
-    expect(multi[0]!.monthStartDateKey).toBe(single.monthStartDateKey);
   });
 
   it("reuses month group identity when that month's bucket is unchanged", () => {

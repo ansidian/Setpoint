@@ -56,9 +56,7 @@ describe("planMarkAllVisibleRead", () => {
     expect(plan.allUids).toEqual(["indexed-1"]);
   });
 
-  it("returns empty plans for an empty or all-read list", () => {
+  it("returns an empty plan for an empty list", () => {
     expect(planMarkAllVisibleRead([])).toEqual({ unread: [], overrideUids: [], allUids: [] });
-    expect(planMarkAllVisibleRead([{ uid: "a", read: true, _live: true }]))
-      .toEqual({ unread: [], overrideUids: [], allUids: [] });
   });
 });

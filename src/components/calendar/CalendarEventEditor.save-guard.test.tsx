@@ -23,11 +23,13 @@ describe("CalendarEventEditor save re-entrancy guard", () => {
     await screen.findByTestId("calendar-event-editor-rail");
 
     await typeTitle("Team lunch");
-    // Let the 120ms title debounce flush so save() does not take its
-    // debounce-flush branch (titleDebounceRef must be null) and instead reaches
-    // the real save path on the first press.
+    // The first press deliberately flushes the pending title composer and
+    // bounces the save. Once React applies that synchronous flush, the next two
+    // presses exercise the real save re-entrancy guard without waiting on the
+    // composer's 120ms wall-clock debounce.
+    fireEvent.keyDown(document, { metaKey: true, key: "Enter" });
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 160));
+      await Promise.resolve();
     });
 
     fireEvent.keyDown(document, { metaKey: true, key: "Enter" });

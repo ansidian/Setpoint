@@ -52,6 +52,26 @@ describe("deadlinesModel range navigation", () => {
     expect(result.itemsByDate["2026-05-10"]!.completedItems.map((item) => item.id)).toEqual(["done"]);
   });
 
+  it("keeps adjacent-month deadlines addressable only by their full date", () => {
+    const result = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        upcoming: [{
+          id: "deadline-apr-30",
+          title: "Essay",
+          due_date: "2026-04-30",
+          status: "incomplete",
+        }],
+      },
+    });
+
+    expect(result.itemsByDay[30]).toBeUndefined();
+    expect(result.itemsByDate["2026-04-30"]!.items).toEqual([
+      expect.objectContaining({ title: "Essay" }),
+    ]);
+  });
+
   it("uses deadline occurrence identity for every deadline row", () => {
     expect(getDeadlineSelectionId({
       id: "repeat-1",

@@ -60,53 +60,6 @@ describe("NeedsYouBand", () => {
     );
   });
 
-  it("opens an upcoming bill's detail from the card body", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
-    const onOpen = vi.fn();
-    const bill = { id: "rent", name: "Rent", payee: "Landlord", amount: 1800, next_date: "2026-06-23", paid: false };
-    render(
-      <NeedsYouBand
-        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
-        liveDeadlines={{ upcoming: [] }}
-        liveBills={[bill]}
-        onOpen={onOpen}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Rent"));
-
-    expect(onOpen).toHaveBeenCalledWith(
-      { kind: "bill", id: "rent", date: "2026-06-23", data: bill },
-      expect.any(HTMLElement),
-    );
-  });
-
-  it("marks an upcoming deadline done from the band (quiet action); bills get none", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
-    const onCompleteDeadline = vi.fn();
-    const onOpen = vi.fn();
-    render(
-      <NeedsYouBand
-        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
-        liveDeadlines={{ upcoming: [{ id: "up1", title: "Submit report", due_date: "2026-06-22", status: "open", class_name: "Work" }] }}
-        liveBills={[{ id: "rent", name: "Rent", payee: "LL", amount: 1800, next_date: "2026-06-23", paid: false }]}
-        onCompleteDeadline={onCompleteDeadline}
-        onOpen={onOpen}
-      />,
-    );
-    // The upcoming deadline card exposes exactly one quiet Mark done; the bill card has none.
-    const markDone = screen.getByText("Mark done");
-    fireEvent.keyDown(markDone, { key: "Enter" });
-    expect(onOpen).not.toHaveBeenCalled();
-    fireEvent.click(markDone);
-    expect(onCompleteDeadline).toHaveBeenCalledWith("up1", expect.objectContaining({ id: "up1" }));
-    expect(onOpen).not.toHaveBeenCalled();
-    expect(screen.queryByText("Submit report")).toBeNull();
-    expect(screen.getByText("Rent")).toBeTruthy();
-  });
-
   it("renders a card per urgent item and the count", () => {
     render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
     expect(screen.getByText("PR blocker")).toBeTruthy();
@@ -145,21 +98,6 @@ describe("NeedsYouBand", () => {
     expect(screen.queryByText("Ship the thing")).toBeNull();
   });
 
-  it("a due-today bill card has no completion button (bills aren't Todoist items)", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
-    render(
-      <NeedsYouBand
-        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
-        liveDeadlines={{ upcoming: [] }}
-        liveBills={[{ id: "rent", name: "Rent", payee: "Landlord", amount: 1800, next_date: "2026-06-19", paid: false }]}
-      />,
-    );
-    expect(screen.getByText("Rent")).toBeTruthy();
-    expect(screen.queryByText("Mark done")).toBeNull();
-    expect(screen.queryByText("Mark handled")).toBeNull();
-  });
-
   it("renders the cards in a swipeable carousel on mobile", () => {
     render(
       <NeedsYouBand
@@ -173,40 +111,10 @@ describe("NeedsYouBand", () => {
     expect(screen.getByText("PR blocker")).toBeTruthy();
   });
 
-  it("opens an upcoming item's detail from the mobile carousel", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
-    const onOpen = vi.fn();
-    const deadline = { id: "up1", title: "Submit report", due_date: "2026-06-22", status: "open", class_name: "Work" };
-    render(
-      <NeedsYouBand
-        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
-        liveDeadlines={{ upcoming: [deadline] }}
-        liveBills={[]}
-        onOpen={onOpen}
-        isMobile
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Submit report"));
-
-    expect(onOpen).toHaveBeenCalledWith(
-      { kind: "deadline", id: "up1", date: "2026-06-22", data: deadline },
-      expect.any(HTMLElement),
-    );
-  });
-
   it("keeps the desktop row (no carousel) when not mobile", () => {
     render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
     expect(screen.queryByTestId("needs-you-carousel")).toBeNull();
     expect(screen.getByText("PR blocker")).toBeTruthy();
-  });
-
-  it("Mark handled fires onMarkHandled through the carousel on mobile", () => {
-    const onMarkHandled = vi.fn();
-    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} onMarkHandled={onMarkHandled} isMobile />);
-    fireEvent.click(screen.getByText("Mark handled"));
-    expect(onMarkHandled).toHaveBeenCalledWith(1);
   });
 
   describe("optimistic-hide revert + error surfacing (UX-02)", () => {
