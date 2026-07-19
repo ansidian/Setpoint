@@ -1,5 +1,4 @@
 // server/news/news-preview.test.js
-// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { previewNewsFeed } from "./news-preview.ts";
 import type { FeedFetchResponse } from "./news-poller.ts";

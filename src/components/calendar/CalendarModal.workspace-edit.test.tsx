@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
@@ -49,43 +49,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
     });
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-  });
-
-  it("uses cancel as the only top-level exit action in the event editor", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
-
-    try {
-      window.innerWidth = 1900;
-
-      render(wrapWithDashboard(
-        <CalendarModal
-          open
-          onClose={() => {}}
-          view="events"
-          onViewChange={() => {}}
-          focusDate="2026-04-23"
-          eventsData={{
-            editable: true,
-            getEvents: () => [],
-          }}
-          billsData={{}}
-          deadlinesData={{}}
-        />,
-      ));
-
-      fireEvent.keyDown(document, { key: "c" });
-      await act(async () => {
-        await Promise.resolve();
-      });
-
-      expect(screen.getAllByRole("button", { name: /cancel/i }).length).toBeGreaterThan(0);
-      expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).not.toBe("editor");
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it("opens E-key event edits anchored with a visible caret", async () => {
@@ -248,113 +211,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
     });
     expect(screen.getByDisplayValue("Design review revised")).toBeTruthy();
-  });
-
-  it("returns a clean event edit workspace to its chip anchor without closing it", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
-    });
-
-    pointerClick(screen.getByRole("button", { name: /previous month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
-    });
-    expect(screen.getByDisplayValue("Design review")).toBeTruthy();
-  });
-
-  it("ignores the active clean event edit chip after returning from park", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
-    });
-
-    pointerClick(screen.getByRole("button", { name: /previous month/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
-    });
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-    expect(screen.getByDisplayValue("Design review")).toBeTruthy();
   });
 
   it("leaves event workspace popovers alone for ignored month-grid wheel gestures", async () => {

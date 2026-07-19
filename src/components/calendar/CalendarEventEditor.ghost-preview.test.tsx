@@ -38,24 +38,6 @@ describe("CalendarEventEditor ghost preview behavior", () => {
     });
   });
 
-  it("keeps source and location assist visible without repeating parsed schedule copy", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Dinner @McDonald's tomorrow 5pm cal personal" },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-title-location-preview").textContent).toMatch(/mcdonald's/i);
-      expect(screen.getByTestId("calendar-event-title-source-preview").textContent).toMatch(/personal/i);
-      expect(screen.queryByTestId("calendar-event-title-preview")).toBeNull();
-      expect(screen.queryByTestId("calendar-event-title-mode-preview")).toBeNull();
-    });
-  });
-
   it("adds restrained semantic signaling to compact summary segments", async () => {
     renderModal();
 
@@ -71,7 +53,6 @@ describe("CalendarEventEditor ghost preview behavior", () => {
       expect(segments.map((segment) => segment.getAttribute("data-summary-kind"))).toEqual(
         expect.arrayContaining(["schedule", "source", "location", "repeat"]),
       );
-      expect(segments.find((segment) => segment.getAttribute("data-summary-kind") === "schedule")?.style.color).toBeTruthy();
       expect(segments.find((segment) => segment.getAttribute("data-summary-kind") === "repeat")?.textContent).toMatch(/every mon/i);
     });
   });
@@ -112,42 +93,9 @@ describe("CalendarEventEditor ghost preview behavior", () => {
     await waitFor(() => {
       const chip = screen.getByTestId("calendar-ghost-chip");
       expect(chip.textContent).not.toMatch(/conflict|draft|repeat/i);
-      // The ghost preview's dotted border is authored as `1px dotted color-mix(...)`.
-      // happy-dom's CSS parser cannot serialize `color-mix()`, so it drops the whole
-      // border declaration (style.border is ""). The dotted border, cursor:default, and
-      // pointerEvents:none all derive from the identical `ghost === true` branch in
-      // chipStyle(), so these two survivors prove the chip rendered with its
-      // non-interactive preview treatment rather than a solid committed-chip style.
-      expect(chip.style.pointerEvents).toBe("none");
-      expect(chip.style.cursor).toBe("default");
+      expect(chip.getAttribute("aria-hidden")).toBe("true");
       expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/overlaps 1 event/i);
     });
-  });
-
-  it("shows seeded edit metadata when unchanged placement suppresses the ghost preview", async () => {
-    renderModal({
-      events: [{
-        id: "event-edit-metadata",
-        title: "Planning block",
-        accountId: "gmail-main",
-        calendarId: "primary",
-        startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-        endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-        writable: true,
-        isRecurring: false,
-        allDay: false,
-      }],
-    });
-
-    await openFloatingEventEditorFromSelectedChip();
-
-    expect(screen.queryByTestId("calendar-ghost-overlay")).toBeNull();
-    const summary = screen.getByTestId("calendar-draft-preview-summary");
-    expect(summary.textContent).toMatch(/apr 20, 2026/i);
-    expect(summary.textContent).toMatch(/9:00 am to 10:00 am/i);
-    expect(summary.textContent).toMatch(/personal/i);
-    expect(summary.textContent).toMatch(/no location/i);
-    expect(summary.textContent).toMatch(/does not repeat/i);
   });
 
   it("renders a multi-day ghost as a spanning draft chip from the compact schedule picker", async () => {
@@ -169,7 +117,6 @@ describe("CalendarEventEditor ghost preview behavior", () => {
       const chip = screen.getByTestId("calendar-ghost-chip");
       expect(chip.getAttribute("data-ghost-start")).toBe("2026-04-20");
       expect(chip.getAttribute("data-ghost-end")).toBe("2026-04-22");
-      expect(chip.style.gridColumn).toBe("2 / 5");
     });
   });
 

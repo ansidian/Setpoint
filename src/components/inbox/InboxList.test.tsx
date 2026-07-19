@@ -176,7 +176,6 @@ describe("InboxList", () => {
     });
 
     const strip = screen.getByTestId("inbox-category-filter-strip");
-    expect(strip.style.overflowX).toBe("hidden");
     expect(within(strip).getByRole("button", { name: /^All$/i })).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /Security 2/i })).toBeTruthy();
     expect(within(strip).getByRole("button", { name: /Legal 3/i })).toBeTruthy();

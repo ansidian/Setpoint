@@ -1,12 +1,24 @@
-import { mkdtemp, writeFile } from "fs/promises";
-import { tmpdir } from "os";
+import { writeFile } from "fs/promises";
 import { join } from "path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import {
   buildTriageEvalReport,
   parseLabeledTriageExamples,
   runTriageEval,
 } from "./triage-eval.ts";
+
+const tempDirs: string[] = [];
+
+async function createEvalTempDir(): Promise<string> {
+  const dir = await createTestTempDir("triage-eval-");
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  for (const dir of tempDirs.splice(0)) await removeTempDir(dir);
+});
 
 describe("triage eval fixtures", () => {
   it("parses manually labeled examples from the local seed shape", () => {
@@ -162,7 +174,7 @@ describe("triage eval metrics", () => {
 
 describe("triage eval runner", () => {
   it("runs labeled fixtures with deterministic mocked model output by default", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "triage-eval-"));
+    const dir = await createEvalTempDir();
     const fixturePath = join(dir, "labeled.json");
     await writeFile(fixturePath, JSON.stringify({
       eval_seed: [
@@ -219,7 +231,7 @@ describe("triage eval runner", () => {
   });
 
   it("reports weak-security grace expectations without requiring model output", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "triage-eval-"));
+    const dir = await createEvalTempDir();
     const fixturePath = join(dir, "labeled.json");
     await writeFile(fixturePath, JSON.stringify({
       eval_seed: [

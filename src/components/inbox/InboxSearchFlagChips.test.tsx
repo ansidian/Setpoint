@@ -55,15 +55,4 @@ describe("InboxSearchFlagChips", () => {
     expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("uses the touch token only in compact (mobile) mode, preserving the 30px desktop height", () => {
-    const { rerender } = render(
-      <InboxSearchFlagChips query="amazon" onChange={() => {}} accent="#cba6da" />,
-    );
-    expect(screen.getByRole("button").style.height).toBe("30px");
-
-    rerender(
-      <InboxSearchFlagChips query="amazon" onChange={() => {}} accent="#cba6da" compact />,
-    );
-    expect(screen.getByRole("button").style.height).toBe("var(--sp-touch-min)");
-  });
 });

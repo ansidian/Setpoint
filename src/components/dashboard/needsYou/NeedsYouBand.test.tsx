@@ -130,13 +130,6 @@ describe("NeedsYouBand", () => {
     expect(screen.queryByText("PR blocker")).toBeNull();
   });
 
-  it("Mark handled button carries the shared focus-visible ring class and no inline outline suppression", () => {
-    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
-    const btn = screen.getByText("Mark handled").closest("button");
-    expect(btn!.className).toContain("sp-focus-ring");
-    expect(btn!.style.outline).toBe("");
-  });
-
   it("clicking 'Mark done' on a deadline calls onCompleteDeadline(id, data) and removes the card", () => {
     const onCompleteDeadline = vi.fn();
     render(

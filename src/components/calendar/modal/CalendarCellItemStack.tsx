@@ -3,8 +3,10 @@ import { getVisibleCellItemCount } from "./calendarCellItemMetrics";
 import { ItemChip, MoreButton } from "./CalendarCellItemChip";
 import { getChipLeadingColumnWidth } from "./CalendarCellItemChipModel";
 import {
+  calendarCellItemMatchesSelected,
   getMeasuredCellItemStackPlan,
   getReservedCellItemLaneHeight,
+  getSelectedHiddenCellItemKey,
   splitVisibleCellItems,
 } from "./CalendarCellItemStackModel";
 import type { CalendarCellStackMetrics } from "./CalendarCellItemStackModel";
@@ -217,17 +219,7 @@ export default function CalendarCellItemStack({
     firstChip?.focus?.();
   }, [hiddenCount, inlineOverflowAutoFocus, inlineOverflowOpen, onCloseInlineOverflow]);
 
-  const itemMatchesSelected = (item: CalendarChipItem): boolean => {
-    if (String(item.id) === String(selectedItemId)) return true;
-    if (item.selectionId != null && String(item.selectionId) === String(selectedItemId)) return true;
-    return (item.matchItemIds || []).some((id) => String(id) === String(selectedItemId));
-  };
-  const selectedHiddenItem = selectedItemId == null
-    ? null
-    : hiddenItems.find((item) => itemMatchesSelected(item)) || null;
-  const selectedHiddenKey = selectedHiddenItem
-    ? `${dateKey || ""}:${selectedHiddenItem.selectionId ?? selectedHiddenItem.id}`
-    : null;
+  const selectedHiddenKey = getSelectedHiddenCellItemKey({ hiddenItems, selectedItemId, dateKey });
   useLayoutEffect(() => {
     if (!selectedHiddenKey) {
       lastAutoOpenedHiddenKeyRef.current = null;
@@ -280,7 +272,7 @@ export default function CalendarCellItemStack({
       }}
     >
       {visibleItems.map((item) => {
-        const selected = itemMatchesSelected(item);
+        const selected = calendarCellItemMatchesSelected(item, selectedItemId);
         return (
           <ItemChip
             key={item.renderKey || item.id}
@@ -342,7 +334,7 @@ export default function CalendarCellItemStack({
           }}
         >
           {hiddenItems.map((item) => {
-            const selected = itemMatchesSelected(item);
+            const selected = calendarCellItemMatchesSelected(item, selectedItemId);
             return (
               <ItemChip
                 key={item.renderKey || item.id}

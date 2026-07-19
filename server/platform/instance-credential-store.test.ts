@@ -1,10 +1,8 @@
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
-import { mkdtemp } from "fs/promises";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import {
   createInstanceCredentialStore,
   InstanceCredentialConflictError,
@@ -20,7 +18,7 @@ describe("instance credential store", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "setpoint-credentials-"));
+    tempDir = await createTestTempDir("credential-store-");
     db = createClient({ url: `file:${path.join(tempDir, "test.db")}` });
     await db.executeMultiple(migrationSql);
   });

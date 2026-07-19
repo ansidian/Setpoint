@@ -1,4 +1,4 @@
-import { formatEventDuration } from "../../../../lib/shell-helpers";
+import { formatEventDuration, getEventSelectionId } from "../../../../lib/shell-helpers";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { parseYmd } from "../../calendarDateUtils.ts";
 import {
@@ -7,6 +7,7 @@ import {
   isGoogleSpecialDateEvent,
 } from "../../googleSpecialDateModel.ts";
 import type { CalendarItemLike } from "../calendarViewTypes";
+import { isDeadlinePlanningItem, orderPlanningItems } from "./eventsPlanningModel.ts";
 
 // Pure event-detail transforms shared by EventSelectedCard, the events detail
 // rail, and the dashboard glance sheet. No React here — leaf model so nothing
@@ -24,6 +25,19 @@ const FULL_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "long",
   day: "numeric",
 });
+
+export function orderDetailEvents(items: CalendarItemLike[] = []): CalendarItemLike[] {
+  if (items.some(isDeadlinePlanningItem)) return orderPlanningItems([...items]);
+  return [...items].sort((a, b) => {
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    return (a.startMs || 0) - (b.startMs || 0);
+  });
+}
+
+export function getDefaultSelectedItemId(items: CalendarItemLike[] | { items?: CalendarItemLike[] } = []): string | null {
+  const ordered = orderDetailEvents(Array.isArray(items) ? items : items?.items || []);
+  return ordered[0] ? getEventSelectionId(ordered[0]) : null;
+}
 
 export function pacificTime(ms: number): string {
   return PACIFIC_TIME_FORMATTER.format(new Date(ms));

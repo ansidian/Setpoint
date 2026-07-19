@@ -1,10 +1,8 @@
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
-import { mkdtemp } from "fs/promises";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import { createEncryption } from "./encryption.ts";
 import { createInstanceCredentialService } from "./instance-credential-service.ts";
 import { createInstanceCredentialStore } from "./instance-credential-store.ts";
@@ -20,7 +18,7 @@ describe("instance credential service", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "setpoint-credential-service-"));
+    tempDir = await createTestTempDir("credential-service-");
     db = createClient({ url: `file:${path.join(tempDir, "test.db")}` });
     await db.executeMultiple(migrationSql);
   });

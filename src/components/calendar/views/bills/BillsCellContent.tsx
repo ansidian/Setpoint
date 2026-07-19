@@ -2,7 +2,7 @@
 import { memo, useMemo } from "react";
 import type { ComponentProps, ComponentType } from "react";
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack";
-import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics";
+import { createCalendarCellMetricsResolver, getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics";
 import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
 import { getDayState, relativeDateLabel } from "./billsModel.ts";
 import { FINANCE_SOURCE_COLORS, transactionDirectionColor } from "./financeSourceColors.ts";
@@ -50,19 +50,7 @@ function computeBillChipMetrics(layout?: { tier?: string } | null): CalendarCell
   };
 }
 
-// `layout` objects are frozen per-tier singletons (see calendarLayout.ts), so a
-// WeakMap keyed on the layout object identity gives every cell/render the same
-// metrics object for the same tier.
-const billChipMetricsCache = new WeakMap<object, CalendarCellStackMetrics>();
-
-export function resolveBillChipMetrics(layout?: { tier?: string } | null): CalendarCellStackMetrics {
-  if (!layout || typeof layout !== "object") return computeBillChipMetrics(layout);
-  const cached = billChipMetricsCache.get(layout);
-  if (cached) return cached;
-  const metrics = computeBillChipMetrics(layout);
-  billChipMetricsCache.set(layout, metrics);
-  return metrics;
-}
+export const resolveBillChipMetrics = createCalendarCellMetricsResolver(computeBillChipMetrics);
 
 export function toBillDescriptor(bill: FinanceItem): CalendarChipItem {
   const days = daysUntil(bill.next_date);

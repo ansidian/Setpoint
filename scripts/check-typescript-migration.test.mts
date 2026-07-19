@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { createTestTempDirSync, removeTempDirSync } from "../server/test-utils/temp-dir.ts";
 import { checkTypescriptMigration } from "./check-typescript-migration.mts";
 
 const fixtureRoots: string[] = [];
@@ -15,7 +15,7 @@ function writeFixtureFile(root: string, path: string, contents = "export {};\n")
 }
 
 function createFixtureRepository() {
-  const root = mkdtempSync(join(tmpdir(), "setpoint-typescript-migration-"));
+  const root = createTestTempDirSync("typescript-migration-");
   fixtureRoots.push(root);
   execFileSync("git", ["init", "--quiet"], { cwd: root });
 
@@ -34,7 +34,7 @@ function createFixtureRepository() {
 }
 
 afterEach(() => {
-  for (const root of fixtureRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of fixtureRoots.splice(0)) removeTempDirSync(root);
 });
 
 describe("checkTypescriptMigration", () => {

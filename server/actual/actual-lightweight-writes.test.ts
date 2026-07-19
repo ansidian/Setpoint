@@ -1,6 +1,5 @@
-import { mkdtemp, mkdir, writeFile } from "fs/promises";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
-import os from "os";
+import { mkdir, writeFile } from "fs/promises";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
 import {
@@ -58,7 +57,7 @@ function mockActualRequests(count = 1): void {
 }
 
 async function createBudgetDb() {
-  tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-lightweight-"));
+  tempDir = await createTestTempDir("actual-lightweight-");
   const budgetDir = path.join(tempDir, "My-Finances-d8e502a");
   await mkdir(budgetDir, { recursive: true });
   await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({

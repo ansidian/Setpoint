@@ -1,7 +1,5 @@
 import { createClient, type Client } from "@libsql/client";
-import { mkdtemp } from "fs/promises";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
-import os from "os";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -34,7 +32,7 @@ describe("runMigration atomicity (P1-8)", () => {
   });
 
   async function freshClient() {
-    dir = await mkdtemp(path.join(os.tmpdir(), "setpoint-migrate-"));
+    dir = await createTestTempDir("migrate-atomicity-");
     return createClient({ url: `file:${path.join(dir, "test.db")}` });
   }
 
@@ -95,7 +93,7 @@ describe("runMigration ALTER replay (P2-21/22)", () => {
   let tempDir: string | null = null;
 
   async function seedDb() {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-migrate-"));
+    tempDir = await createTestTempDir("migrate-replay-");
     const db = createClient({ url: `file:${path.join(tempDir, "test.db")}` });
     await db.executeMultiple(`
       CREATE TABLE migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, executed_at DATETIME DEFAULT CURRENT_TIMESTAMP);

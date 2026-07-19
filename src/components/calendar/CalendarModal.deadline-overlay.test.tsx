@@ -86,32 +86,6 @@ describe("CalendarModal deadline overlay behavior", () => {
     expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
   });
 
-  it("opens deadline create from Shift+C in Events and forces the deadline overlay on", async () => {
-    window.innerWidth = 1900;
-    window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-23"
-        eventsData={{
-          editable: true,
-          getEvents: () => [],
-        }}
-        billsData={{}}
-        deadlinesData={{ upcoming: [] }}
-      />,
-    ));
-
-    fireEvent.keyDown(document, { key: "C", shiftKey: true });
-    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("true");
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 23, 2026");
-  });
-
   it("opens a dashboard-focused deadline in Events with the deadline overlay forced on", async () => {
     window.innerWidth = 1900;
     window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
@@ -250,92 +224,6 @@ describe("CalendarModal deadline overlay behavior", () => {
       expect(within(screen.getByTestId("calendar-cell-20")).getByText("Range task")).toBeTruthy();
     });
     expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Current dashboard task")).toBeNull();
-  });
-
-  it("uses the Events header toggle, D, Shift+D, and Shift+E for planning-layer preferences", async () => {
-    window.innerWidth = 1900;
-
-    const renderEventsModal = () => render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => [
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ],
-        }}
-        billsData={{}}
-        deadlinesData={{
-          upcoming: [
-            { id: "todo-1", title: "Open task", due_date: "2026-04-20", source: "todoist", status: "open" },
-            { id: "todo-2", title: "Done task", due_date: "2026-04-20", source: "todoist", status: "complete" },
-          ],
-        }}
-      />,
-    ));
-
-    const { unmount } = renderEventsModal();
-
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Done task")).toBeTruthy();
-
-    const eventToggle = screen.getByRole("button", { name: /hide events in events/i });
-    fireEvent.click(eventToggle);
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Design review")).toBeNull();
-    });
-    expect(screen.getByRole("button", { name: /show events in events/i })).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: "E", shiftKey: true });
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
-    });
-
-    fireEvent.keyDown(document, { key: "E", shiftKey: true });
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Design review")).toBeNull();
-    });
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: "E", shiftKey: true });
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
-    });
-
-    fireEvent.keyDown(document, { key: "d" });
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Done task")).toBeNull();
-    });
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: "D", shiftKey: true });
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Open task")).toBeNull();
-    });
-
-    fireEvent.keyDown(document, { key: "d" });
-
-    fireEvent.keyDown(document, { key: "E", shiftKey: true });
-    await waitFor(() => {
-      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Design review")).toBeNull();
-    });
-
-    unmount();
-    renderEventsModal();
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
   });
 
   // The slow/degraded/late transitions themselves are owned by

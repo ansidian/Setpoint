@@ -45,6 +45,12 @@ vi.mock("@/lib/todoistSetupApi", () => ({
   getTodoistConnectionStatus: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("@/components/settings/cards/GmailRealtimeCard", () => ({
+  default: function GmailRealtimeCardMock() {
+    return <div data-testid="gmail-realtime-card" />;
+  },
+}));
+
 const { default: AccountsSettingsSection } = await import("./AccountsSettingsSection");
 
 afterEach(() => {
@@ -73,6 +79,8 @@ describe("AccountsSettingsSection", () => {
         patch={patch}
       />,
     );
+
+    expect(await screen.findByTestId("gmail-realtime-card")).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText("El Monte, CA"), {
       target: { value: "Los Angeles" },

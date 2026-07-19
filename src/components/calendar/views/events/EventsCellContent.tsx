@@ -2,7 +2,11 @@
 import { memo, useMemo } from "react";
 import type { ComponentProps, ComponentType } from "react";
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack";
-import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics";
+import {
+  createCalendarCellMetricsResolver,
+  getCalendarCellCapacity,
+  getVisibleCellItemCount,
+} from "../../modal/calendarCellItemMetrics";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { dueDateToMs, getEventSelectionId } from "../../../../lib/shell-helpers";
 import {
@@ -93,20 +97,9 @@ function computeEventChipMetrics(layout?: EventCellLayout | null): CalendarCellS
   };
 }
 
-// `layout` objects are frozen per-tier singletons (see calendarLayout.ts), so a
-// WeakMap keyed on the layout object identity gives every cell/render the same
-// metrics object for the same tier — required for the descriptor-array memo
-// below (and downstream chip memoization) to see a stable `metrics` identity.
-const eventChipMetricsCache = new WeakMap<object, CalendarCellStackMetrics>();
-
-export function resolveEventChipMetrics(layout?: EventCellLayout | null): CalendarCellStackMetrics {
-  if (!layout || typeof layout !== "object") return computeEventChipMetrics(layout);
-  const cached = eventChipMetricsCache.get(layout);
-  if (cached) return cached;
-  const metrics = computeEventChipMetrics(layout);
-  eventChipMetricsCache.set(layout, metrics);
-  return metrics;
-}
+// Layouts are frozen per-tier singletons. Stable metric identity lets the
+// descriptor-array and downstream chip memoization share the same boundary.
+export const resolveEventChipMetrics = createCalendarCellMetricsResolver(computeEventChipMetrics);
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 

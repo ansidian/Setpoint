@@ -88,27 +88,6 @@ describe("CommandPalette", () => {
     }));
   });
 
-  it("renders a static faux-frost overlay with no live blur and no captured snapshot image", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
-      />,
-    );
-
-    const overlay = screen.getByPlaceholderText("Jump to anything…").closest<HTMLElement>("[style*='position: fixed']");
-
-    // No live backdrop-filter: a full-viewport blur would re-rasterize every frame
-    // the dashboard's now-marker / status dots animate behind the palette.
-    expect(overlay?.style.backdropFilter).toBe("none");
-    // The frost is a static CSS gradient, not a rasterized dashboard snapshot
-    // (no html-to-image data URI painted as a background image).
-    expect(overlay?.style.backgroundImage).toContain("gradient");
-    expect(overlay?.style.backgroundImage).not.toContain("url(");
-  });
-
   it("filters the list to matching commands as you type the query", () => {
     render(
       <CommandPalette

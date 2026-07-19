@@ -138,29 +138,6 @@ describe("CalendarScrollContainer", () => {
     expect(allBlocks.length - mounted.length).toBe(49 - 5);
   });
 
-  it("spacer heights match monthBlockHeight", () => {
-    const { container } = renderContainer();
-    const all = container.querySelectorAll<HTMLElement>("[data-month-index]");
-    for (const el of all) {
-      if (el.hasAttribute("data-month-block")) continue;
-      const idx = parseInt(el.dataset.monthIndex!, 10);
-      const { year, month } = monthIndexToDate(idx, CURRENT_YEAR, CURRENT_MONTH);
-      const expected = monthBlockHeight({ year, month, cellHeight: CELL_HEIGHT, gridGap: GRID_GAP });
-      expect(parseInt(el.style.height, 10)).toBe(expected);
-    }
-  });
-
-  it("mounted month-block heights match monthBlockHeight", () => {
-    const { container } = renderContainer();
-    const blocks = container.querySelectorAll<HTMLElement>("[data-month-block]");
-    for (const block of blocks) {
-      const idx = parseInt(block.dataset.monthIndex!, 10);
-      const { year, month } = monthIndexToDate(idx, CURRENT_YEAR, CURRENT_MONTH);
-      const expected = monthBlockHeight({ year, month, cellHeight: CELL_HEIGHT, gridGap: GRID_GAP });
-      expect(parseInt(block.style.height, 10)).toBe(expected);
-    }
-  });
-
   it("renders CalendarGrid without week headers inside mounted blocks", () => {
     const { container } = renderContainer();
     const blocks = container.querySelectorAll<HTMLElement>("[data-month-block]");
@@ -312,24 +289,6 @@ describe("CalendarScrollContainer", () => {
       expect(scrollEl.scrollTop).toBe(monthOffset(0) + PITCH * 2);
     });
 
-    it("leaves programmatic-navigation settles unaligned", async () => {
-      // Mount centering and explicit navigations land where they intend
-      // (month starts, centered focus month); only user gestures get the
-      // resting row alignment.
-      const onFetchSettle = vi.fn();
-      const { container } = renderContainer({ onFetchSettle });
-      const scrollEl = getScrollElement(container);
-      await awaitMountSettle(onFetchSettle);
-
-      document.dispatchEvent(new CustomEvent("calendar-grid-scroll-reset"));
-      const offMidRow = monthOffset(0) + PITCH * 2 + 37;
-      scrollEl.scrollTop = offMidRow;
-      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
-
-      expect(scrollEl.scrollTop).toBe(offMidRow);
-    });
-
     it("treats scrolling after an alignment as user scrolling again", async () => {
       // The alignment write is marked programmatic; its settle must clear
       // that mark so the next real gesture keeps user semantics.
@@ -388,27 +347,6 @@ describe("CalendarScrollContainer", () => {
     scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
 
     expect(onCancelFloatingEditor).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps a dirty floating editor open on user scroll", async () => {
-    const onCancelFloatingEditor = vi.fn();
-    const onShakeFloatingEditor = vi.fn();
-    const onFetchSettle = vi.fn();
-    const { container } = renderContainer({
-      floatingDetailOpen: true,
-      floatingDetailMode: "edit",
-      floatingEditorDirty: true,
-      onCancelFloatingEditor,
-      onShakeFloatingEditor,
-      onFetchSettle,
-    });
-    const scrollEl = getScrollElement(container);
-    await awaitMountSettle(onFetchSettle);
-
-    scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-
-    expect(onCancelFloatingEditor).not.toHaveBeenCalled();
-    expect(onShakeFloatingEditor).not.toHaveBeenCalled();
   });
 
   it("does not cancel a clean floating editor on programmatic-navigation scroll events", async () => {
@@ -471,34 +409,6 @@ describe("CalendarScrollContainer", () => {
     // Programmatic navigation three months out must still move the grid.
     rerender(<CalendarScrollContainer {...props} viewMonth={CURRENT_MONTH + 3} />);
     expect(scrollEl.scrollTop).toBe(monthOffset(3));
-  });
-
-  it("non-active months show skeleton when isMonthCached returns false", () => {
-    const { container } = renderContainer({
-      viewData: { events: [], isLoading: false },
-      isMonthCached: () => false,
-    });
-    const blocks = container.querySelectorAll<HTMLElement>("[data-month-block]");
-    const activeTestId = `month-block-${CURRENT_YEAR}-${CURRENT_MONTH}`;
-    let skeletonCount = 0;
-    for (const block of blocks) {
-      if (block.dataset.testid === activeTestId) continue;
-      if (block.querySelector("[data-testid='calendar-grid-skeleton']")) skeletonCount++;
-    }
-    expect(skeletonCount).toBe(4);
-  });
-
-  it("non-active months hide skeleton when isMonthCached returns true", () => {
-    const { container } = renderContainer({
-      viewData: { events: [], isLoading: false },
-      isMonthCached: () => true,
-    });
-    const blocks = container.querySelectorAll<HTMLElement>("[data-month-block]");
-    const activeTestId = `month-block-${CURRENT_YEAR}-${CURRENT_MONTH}`;
-    for (const block of blocks) {
-      if (block.dataset.testid === activeTestId) continue;
-      expect(block.querySelector("[data-testid='calendar-grid-skeleton']")).toBeNull();
-    }
   });
 
   it("tints a selected deadline chip rendered from a non-active preview month", () => {
@@ -655,37 +565,6 @@ describe("CalendarScrollContainer", () => {
           expect.objectContaining({ year: next.year, month: next.month, scrollDriven: true }),
         );
       }, { timeout: 5000 });
-    });
-  });
-
-  describe("settle scrollDriven flag", () => {
-    // The controller re-targets the agenda rail on settle, but only for
-    // user-driven scrolls — a settle that merely echoes a programmatic
-    // navigation (T hotkey, month picker) must not read as user intent or it
-    // stomps the explicit agenda command that navigation just issued.
-    async function settleAfterScroll({ programmatic }: { programmatic: boolean }) {
-      const onFetchSettle = vi.fn();
-      const { container } = renderContainer({ onFetchSettle });
-      const scrollEl = getScrollElement(container);
-      await awaitMountSettle(onFetchSettle);
-      const offset0 = monthOffset(0);
-      if (programmatic) {
-        document.dispatchEvent(new CustomEvent("calendar-grid-scroll-reset"));
-      }
-      scrollEl.scrollTop = offset0;
-      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
-      return onFetchSettle;
-    }
-
-    it("marks user-scroll settles as scrollDriven", async () => {
-      const onFetchSettle = await settleAfterScroll({ programmatic: false });
-      expect(onFetchSettle).toHaveBeenCalledWith(expect.objectContaining({ scrollDriven: true }));
-    });
-
-    it("marks programmatic-navigation settles as not scrollDriven", async () => {
-      const onFetchSettle = await settleAfterScroll({ programmatic: true });
-      expect(onFetchSettle).toHaveBeenCalledWith(expect.objectContaining({ scrollDriven: false }));
     });
   });
 

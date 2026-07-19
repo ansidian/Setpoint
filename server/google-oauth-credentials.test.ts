@@ -1,10 +1,8 @@
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
-import { mkdtemp } from "fs/promises";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { removeTempDir } from "./test-utils/temp-dir.ts";
+import { createTestTempDir, removeTempDir } from "./test-utils/temp-dir.ts";
 import { createEncryption } from "./platform/encryption.ts";
 import { createInstanceCredentialService } from "./platform/instance-credential-service.ts";
 import { createInstanceCredentialStore } from "./platform/instance-credential-store.ts";
@@ -21,7 +19,7 @@ describe("Google OAuth credential manager", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "setpoint-google-oauth-"));
+    tempDir = await createTestTempDir("google-oauth-");
     db = createClient({ url: `file:${path.join(tempDir, "test.db")}` });
     await db.executeMultiple(migrationSql);
   });

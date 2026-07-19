@@ -6,7 +6,6 @@
 export function StatusChip({ label, tone, glyph = null, compact = false }: StatusChipProps) {
   return (
     <span
-      data-testid="status-chip"
       style={{
         display: "inline-flex",
         alignItems: "center",

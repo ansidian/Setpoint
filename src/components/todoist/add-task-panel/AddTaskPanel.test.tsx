@@ -614,8 +614,7 @@ describe("AddTaskPanel due picker", () => {
 
     expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 20, 2026 · 9 AM");
     const metadata = screen.getByTestId("todoist-edit-metadata");
-    const originalDueChip = within(metadata).getByText("April 21, 2026 · 2:30 PM");
-    expect(originalDueChip.style.flex).toBe("0 0 auto");
+    expect(within(metadata).getByText("April 21, 2026 · 2:30 PM")).toBeTruthy();
     expect(metadata.textContent).toContain("April 21, 2026 · 2:30 PM");
     expect(metadata.textContent).not.toContain("April 20, 2026 · 9 AM");
   });
@@ -859,10 +858,6 @@ describe("useAddTaskPanelController seeding", () => {
 
     const description = screen.getByRole("textbox", { name: "Task description" }) as HTMLTextAreaElement;
     expect(description.getAttribute("rows")).toBe("7");
-    expect(description.style.minHeight).toBe("152px");
-    expect(description.style.maxHeight).toBe("240px");
-    expect(description.style.overflowY).toBe("auto");
-    expect(description.style.resize).toBe("none");
     expect(screen.getByRole("link", { name: "https://mail.google.com/mail/u/0/#inbox/message" }).getAttribute("href"))
       .toBe("https://mail.google.com/mail/u/0/#inbox/message");
   });

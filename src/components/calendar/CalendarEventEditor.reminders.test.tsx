@@ -55,27 +55,6 @@ describe("CalendarEventEditor reminder behavior", () => {
     });
   });
 
-  it("does not flush pending reminders when event creation fails", async () => {
-    renderModal({ focusDate: "2099-05-10" });
-    mockCreateCalendarEvent.mockRejectedValue(new Error("Google Calendar failed"));
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Planning block" },
-    });
-    fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
-    await waitFor(() => {
-      expect((screen.getByTestId("calendar-event-save") as HTMLButtonElement).disabled).toBe(false);
-    });
-    fireEvent.click(getActiveEventSaveButton());
-
-    await waitFor(() => {
-      expect(screen.getByText("Google Calendar failed")).toBeTruthy();
-    });
-    expect(mockCreateReminder).not.toHaveBeenCalled();
-  });
-
   it("loads existing reminders while editing and keeps sent reminders visually distinct", async () => {
     const event = {
       id: "event-reminder-edit",

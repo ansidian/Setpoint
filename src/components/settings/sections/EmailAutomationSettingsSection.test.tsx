@@ -21,6 +21,12 @@ vi.mock("@/components/settings/cards/TriageSoundSettingsCard", () => ({
   },
 }));
 
+vi.mock("@/components/settings/cards/CoreProviderCredentialsCard", () => ({
+  default: function CoreProviderCredentialsCardMock() {
+    return <div data-testid="core-provider-credentials-card" />;
+  },
+}));
+
 vi.mock("@/components/settings/cards/BillExtractionAiCard", () => ({
   default: function BillExtractionAiCardMock() {
     return <div data-testid="bill-extraction-card" />;
@@ -69,6 +75,7 @@ describe("EmailAutomationSettingsSection", () => {
 
     expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
     expect(screen.getByTestId("triage-sound-settings-card")).toBeTruthy();
+    expect(screen.getByTestId("core-provider-credentials-card")).toBeTruthy();
     expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
     expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
     expect(screen.getByText("Email Lookback")).toBeTruthy();

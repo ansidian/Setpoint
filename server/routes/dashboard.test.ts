@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import cookieParser from "cookie-parser";

@@ -2,10 +2,16 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { checkSizeBaseline, isSizeCheckedSource } from './lib/component-sizes.mts'
+import {
+  checkSizeBaseline,
+  isSizeCheckedSource,
+  isSizeCheckedTest,
+} from './lib/component-sizes.mts'
+import { findForbiddenSourcePatterns } from './lib/design-policy.mts'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
+const testSizeBaselinePath = 'scripts/lib/test-size-baseline.json'
 
 const failures: string[] = []
 const warnings: string[] = []
@@ -134,12 +140,12 @@ async function checkImportBoundariesAcrossDomains() {
   warnings.push(...result.warnings)
 }
 
-async function readComponentSizeBaseline() {
+async function readSizeBaseline(baselinePath: string) {
   let raw
   try {
-    raw = await readText(componentSizeBaselinePath)
+    raw = await readText(baselinePath)
   } catch {
-    failures.push(`${componentSizeBaselinePath} is missing; regenerate it with { "threshold": 600, "files": {} } plus any grandfathered files`)
+    failures.push(`${baselinePath} is missing; regenerate it with { "threshold": 600, "files": {} } plus any grandfathered files`)
     return null
   }
 
@@ -147,12 +153,12 @@ async function readComponentSizeBaseline() {
   try {
     baseline = JSON.parse(raw)
   } catch {
-    failures.push(`${componentSizeBaselinePath} is not valid JSON`)
+    failures.push(`${baselinePath} is not valid JSON`)
     return null
   }
 
   if (typeof baseline.threshold !== 'number' || typeof baseline.files !== 'object' || baseline.files === null) {
-    failures.push(`${componentSizeBaselinePath} must have a numeric "threshold" and a "files" object`)
+    failures.push(`${baselinePath} must have a numeric "threshold" and a "files" object`)
     return null
   }
 
@@ -160,7 +166,7 @@ async function readComponentSizeBaseline() {
 }
 
 async function checkSourceFileSizes() {
-  const baseline = await readComponentSizeBaseline()
+  const baseline = await readSizeBaseline(componentSizeBaselinePath)
   if (!baseline) return
 
   // Govern every non-test source file under src/ AND server/ — not just .tsx under
@@ -183,12 +189,80 @@ async function checkSourceFileSizes() {
   warnings.push(...result.warnings)
 }
 
+async function checkTestFileSizes() {
+  const baseline = await readSizeBaseline(testSizeBaselinePath)
+  if (!baseline) return
+
+  const testFiles = [
+    ...await collectFiles('src', isSizeCheckedTest),
+    ...await collectFiles('server', isSizeCheckedTest),
+    ...await collectFiles('scripts', isSizeCheckedTest),
+  ]
+  const files = []
+  for (const file of testFiles) {
+    const text = await readText(file)
+    const lineCount = text.split(/\r?\n/).length - (text.endsWith('\n') ? 1 : 0)
+    files.push({ path: file, lineCount })
+  }
+
+  const result = checkSizeBaseline({
+    files,
+    baseline,
+    baselineName: 'test-size',
+    debtName: 'test-file',
+  })
+  failures.push(...result.failures)
+  warnings.push(...result.warnings)
+}
+
+async function checkStaticDesignPolicies() {
+  const componentPaths = await collectFiles('src', (relativePath) =>
+    /\.(?:jsx|tsx)$/.test(relativePath) && !relativePath.includes('.test.'),
+  )
+  const componentFiles = await Promise.all(
+    componentPaths.map(async (relativePath) => ({
+      path: relativePath,
+      source: await readText(relativePath),
+    })),
+  )
+  failures.push(...findForbiddenSourcePatterns({
+    files: componentFiles,
+    rules: [{
+      name: 'retired design utility',
+      pattern: /(?<![\w-])(?:bg|text|border|ring|fill|stroke|shadow)-(?:surface-hover|surface|elevated|modal)(?![\w-])/,
+    }],
+  }))
+
+  // These shared controls must follow the owner-selected accent token. A frozen
+  // lavender literal here would make user accent changes stop propagating.
+  const accentTokenPaths = [
+    'src/components/ui/button.tsx',
+    'src/components/ui/switch.tsx',
+    'src/components/shared/EmptyStateSplash.tsx',
+  ]
+  const accentTokenFiles = await Promise.all(
+    accentTokenPaths.map(async (relativePath) => ({
+      path: relativePath,
+      source: await readText(relativePath),
+    })),
+  )
+  failures.push(...findForbiddenSourcePatterns({
+    files: accentTokenFiles,
+    rules: [
+      { name: 'frozen accent literal', pattern: /#cba6da/i },
+      { name: 'frozen accent literal', pattern: /203,\s*166,\s*218/ },
+    ],
+  }))
+}
+
 await checkIgnoredKnowledge()
 await checkAgentsMap()
 await checkHistoricalDocsCleanup()
 await checkAreaMaps()
 await checkImportBoundariesAcrossDomains()
 await checkSourceFileSizes()
+await checkTestFileSizes()
+await checkStaticDesignPolicies()
 
 for (const warning of warnings) {
   console.warn(`Warning: ${warning}`)
