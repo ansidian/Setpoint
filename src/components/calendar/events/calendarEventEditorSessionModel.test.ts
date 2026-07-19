@@ -31,6 +31,32 @@ describe("projectCalendarEventEditorValidation", () => {
       canSave: false,
     });
   });
+
+  it("hides an untouched required-title error until save is attempted", () => {
+    const base = {
+      draft: defaultDraft("2026-07-14"),
+      effectiveTitle: "",
+      intentMode: "single",
+      batchDrafts: [],
+      recurrenceDraft: null,
+      isEditing: false,
+      isEditingRecurring: false,
+      recurringEditScope: null,
+      touchedTitle: false,
+      editable: true,
+      saving: false,
+      deleting: false,
+    };
+
+    expect(projectCalendarEventEditorValidation({ ...base, saveAttempted: false })).toMatchObject({
+      validationMessage: "Title is required.",
+      visibleValidationMessage: null,
+      canSave: false,
+    });
+    expect(projectCalendarEventEditorValidation({ ...base, saveAttempted: true })).toMatchObject({
+      visibleValidationMessage: "Title is required.",
+    });
+  });
 });
 
 describe("updateCalendarEventBatchDraft", () => {

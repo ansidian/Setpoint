@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -94,24 +93,5 @@ describe("MobileTriageBar", () => {
     );
 
     expect(screen.queryByTestId("inbox-mobile-triage-bar")).toBeNull();
-  });
-
-  it("uses the canonical 44px touch-target token for every action", () => {
-    render(
-      <MobileTriageBar
-        actions={{
-          canHandle: true,
-          canMoveToFyi: true,
-          canMoveToNoise: true,
-          showDestructiveActions: true,
-        }}
-        onAction={() => {}}
-        onSnooze={() => {}}
-      />,
-    );
-
-    for (const button of screen.getAllByRole("button")) {
-      expect(button.style.minHeight).toBe("var(--sp-touch-min)");
-    }
   });
 });

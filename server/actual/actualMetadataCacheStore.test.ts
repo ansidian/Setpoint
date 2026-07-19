@@ -1,8 +1,7 @@
-import { mkdtemp, mkdir, readdir, writeFile, utimes } from "fs/promises";
-import os from "os";
+import { mkdir, readdir, writeFile, utimes } from "fs/promises";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import {
   actualDataDir,
   describeLocalActualBudget,
@@ -32,7 +31,7 @@ describe("actualDataDir", () => {
 
 describe("findLocalBudgetDir", () => {
   it("locates the budget folder whose metadata matches the sync id", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     await writeBudget(path.join(tempDir, "Budget-1"), { groupId: "sync-123" });
     await writeBudget(path.join(tempDir, "Budget-Other"), { id: "Other", groupId: "sync-other" });
 
@@ -43,7 +42,7 @@ describe("findLocalBudgetDir", () => {
   });
 
   it("returns null when no budget matches and tolerates a missing data dir", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     await expect(findLocalBudgetDir("missing", { dataDir: tempDir })).resolves.toBeNull();
     await expect(findLocalBudgetDir("missing", { dataDir: path.join(tempDir, "nope") })).resolves.toBeNull();
   });
@@ -51,7 +50,7 @@ describe("findLocalBudgetDir", () => {
 
 describe("pruneActualBudgetBackups", () => {
   it("keeps only the newest zip backup and ignores non-zip files", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     const backupDir = path.join(tempDir, "Budget-1", "backups");
     await mkdir(backupDir, { recursive: true });
     await writeFile(path.join(backupDir, "old.zip"), "old");
@@ -70,14 +69,14 @@ describe("pruneActualBudgetBackups", () => {
   });
 
   it("returns a zero result when there is no backups directory", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     await expect(pruneActualBudgetBackups(path.join(tempDir, "Budget-1"))).resolves.toEqual({ removed: 0, kept: 0 });
   });
 });
 
 describe("pruneLocalActualBackups", () => {
   it("prunes backups across budget folders and skips non-budget directories", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     const budgetDir = path.join(tempDir, "My-Finances");
     const backupDir = path.join(budgetDir, "backups");
     await writeBudget(budgetDir);
@@ -97,7 +96,7 @@ describe("pruneLocalActualBackups", () => {
 
 describe("describeLocalActualBudget", () => {
   it("summarizes db size, backups, and metadata-derived ids", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     const budgetDir = path.join(tempDir, "Budget-1");
     const backupDir = path.join(budgetDir, "backups");
     await writeBudget(budgetDir, { id: "Budget-1", cloudFileId: "file-1", groupId: "sync-123" });
@@ -120,7 +119,7 @@ describe("describeLocalActualBudget", () => {
   });
 
   it("falls back to the directory basename when metadata is unreadable", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-store-"));
+    tempDir = await createTestTempDir("actual-store-");
     const budgetDir = path.join(tempDir, "Orphan-Budget");
     await mkdir(budgetDir, { recursive: true });
 

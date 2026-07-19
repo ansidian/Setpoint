@@ -1,8 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { readFileSync } from "fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-const appCss = readFileSync("src/index.css", "utf8");
 
 const agendaContentSpy = vi.hoisted(() => vi.fn());
 
@@ -74,15 +71,6 @@ describe("CalendarMobileAgenda", () => {
     expect(props.handlers.navigateMonth).toHaveBeenCalledWith(1);
     fireEvent.click(screen.getByRole("tab", { name: "Bills" }));
     expect(props.handlers.onViewChange).toHaveBeenCalledWith("bills");
-    expect(screen.getByRole("tab", { name: "Events" }).classList.contains("sp-mobile-agenda-control")).toBe(true);
-    expect(screen.getByRole("tab", { name: "Bills" }).classList.contains("sp-mobile-agenda-control")).toBe(true);
-  });
-
-  it("keeps agenda touch sizing and interaction states mobile-scoped", () => {
-    expect(appCss).toMatch(/@media \(max-width: 639px\)[\s\S]*?\.sp-agenda-touch\s*\{\s*min-height:\s*var\(--sp-touch-min\)\s*!important;\s*\}/);
-    expect(appCss).toMatch(/@media \(max-width: 639px\)[\s\S]*?\.sp-mobile-agenda-control:hover,[\s\S]*?\.sp-mobile-agenda-control:focus-visible/);
-    expect(appCss).toMatch(/\.sp-mobile-agenda-control:active\s*\{[\s\S]*?scale\(0\.98\)/);
-    expect(appCss).toMatch(/@media \(max-width: 639px\) and \(prefers-reduced-motion: reduce\)[\s\S]*?\.sp-mobile-agenda-control[\s\S]*?transition:\s*none/);
   });
 
   it("opens the detail BottomSheet when a floatingDetail is open", () => {
@@ -112,7 +100,6 @@ describe("CalendarMobileAgenda", () => {
     });
     rerender(<CalendarMobileAgenda {...offMonth} />);
     const todayButton = screen.getByRole("button", { name: "Jump to today" });
-    expect(todayButton.style.minHeight).toBe("var(--sp-touch-min)");
     fireEvent.click(todayButton);
     expect(offMonth.handlers.navigateToToday).toHaveBeenCalledTimes(1);
   });

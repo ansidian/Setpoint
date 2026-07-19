@@ -104,6 +104,9 @@ describe("TimelineRow", () => {
 
     render(<TimelineRow accent="#cba6da" {...timelineRowProps(deadline, now)} />);
 
+    // The exact input color is a domain-data contract: lower-priority Todoist
+    // deadlines must preserve their source color instead of falling back to the
+    // owner accent. This checks value propagation, not browser layout.
     expect((screen.getByTestId("timeline-row-dot").firstElementChild as HTMLElement | null)?.style.background).toBe("#e44332");
   });
 
@@ -156,10 +159,6 @@ describe("TimelineRow", () => {
     expect(row.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
     expect(row.textContent).toContain("Maya's birthday");
     expect(row.textContent).not.toContain("All day");
-    const titleStyle = (row.querySelector("[data-dashboard-timeline-title='true']") as HTMLElement | null)?.style as
-      | (CSSStyleDeclaration & { WebkitLineClamp?: string })
-      | undefined;
-    expect(titleStyle?.WebkitLineClamp).toBe("2");
   });
 
   it("renders a bounded in-card now marker only for the live event row", () => {

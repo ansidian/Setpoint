@@ -2,7 +2,7 @@
 import { memo, useMemo } from "react";
 import type { ComponentProps } from "react";
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack";
-import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics";
+import { createCalendarCellMetricsResolver, getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics";
 import { minutesFromDisplayTime } from "../../ghostPreview.ts";
 import { dueDateToMs } from "../../../../lib/shell-helpers";
 import {
@@ -72,19 +72,7 @@ function computeDeadlineChipMetrics(layout?: { tier?: string } | null): Calendar
   };
 }
 
-// `layout` objects are frozen per-tier singletons (see calendarLayout.ts), so a
-// WeakMap keyed on the layout object identity gives every cell/render the same
-// metrics object for the same tier.
-const deadlineChipMetricsCache = new WeakMap<object, CalendarCellStackMetrics>();
-
-export function resolveDeadlineChipMetrics(layout?: { tier?: string } | null): CalendarCellStackMetrics {
-  if (!layout || typeof layout !== "object") return computeDeadlineChipMetrics(layout);
-  const cached = deadlineChipMetricsCache.get(layout);
-  if (cached) return cached;
-  const metrics = computeDeadlineChipMetrics(layout);
-  deadlineChipMetricsCache.set(layout, metrics);
-  return metrics;
-}
+export const resolveDeadlineChipMetrics = createCalendarCellMetricsResolver(computeDeadlineChipMetrics);
 
 function toDeadlineDescriptor(task: DeadlineItem): DeadlineDescriptor {
   const accent = deadlineAccentFor(task, DEADLINE_COLOR);

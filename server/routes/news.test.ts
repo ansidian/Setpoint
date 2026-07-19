@@ -1,5 +1,4 @@
 // server/routes/news.test.js
-// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import type { Express, NextFunction, Request, Response } from "express";

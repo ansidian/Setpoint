@@ -88,13 +88,4 @@ describe("ShellTabs WAI-ARIA tabs pattern", () => {
 
     expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Inbox/ }));
   });
-
-  it("applies sp-focus-ring class to all tab buttons for shared focus-ring styling", () => {
-    renderTabs();
-
-    const tabs = screen.getAllByRole("tab");
-    for (const tab of tabs) {
-      expect(tab.classList.contains("sp-focus-ring")).toBe(true);
-    }
-  });
 });

@@ -43,30 +43,6 @@ describe("SearchableDropdown", () => {
     expect(screen.getByText("Refund Review")).toBeTruthy();
   });
 
-  it("renders the open surface with a live floating-panel token, not the retired bg-elevated/shadow-modal aliases", async () => {
-    render(
-      <SearchableDropdown
-        options={[{ id: "rent", name: "Rent" }]}
-        value=""
-        onChange={vi.fn()}
-        placeholder="Select account..."
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /select account/i }));
-    await screen.findByPlaceholderText("Search...");
-
-    const surface = document.querySelector<HTMLElement>('[data-slot="popover-content"]');
-    expect(surface).toBeTruthy();
-    if (!surface) throw new Error("Expected popover surface");
-    // Scope-B retired --color-elevated/shadow-modal; these utilities now generate
-    // no rule, leaving the dropdown surface transparent. Guard against their return.
-    expect(surface.className).not.toContain("bg-elevated");
-    expect(surface.className).not.toContain("shadow-modal");
-    // The surface must use the app-wide floating-panel token (matches every other popover).
-    expect(surface.className).toContain("bg-[var(--sp-panel)]");
-  });
-
   it("still allows creating a new option when enabled", async () => {
     const onCreateNew = vi.fn();
 

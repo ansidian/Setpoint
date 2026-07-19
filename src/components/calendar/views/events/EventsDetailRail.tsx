@@ -13,7 +13,6 @@ import { formatReminderSummary } from "../../reminderDisplay.ts";
 import {
   getPlanningItemId,
   isDeadlinePlanningItem,
-  orderPlanningItems,
 } from "./eventsPlanningModel.ts";
 import { deadlineAccentFor, normalizeStatus, statusLabel } from "../deadlines/deadlinesModel.ts";
 import {
@@ -28,6 +27,7 @@ import {
   eventSubtitle,
   formatFullDate,
   isEditableEvent,
+  orderDetailEvents,
   pacificTime,
   sanitizeEventDisplayTitle,
   specialEventLabel,
@@ -68,24 +68,6 @@ const TimelineDetailRailCompat = TimelineDetailRail as ComponentType<TimelineDet
 const RailActionCompat = RailAction as ComponentType<RailActionProps>;
 const eventSelectionId = getEventSelectionId as unknown as (event: CalendarItemLike) => string | null;
 const deadlineAccent = deadlineAccentFor as unknown as (task: CalendarItemLike) => string;
-
-export function orderDetailEvents(items: CalendarItemLike[] = []): CalendarItemLike[] {
-  // When any deadline planning item is present, defer the whole list to
-  // orderPlanningItems once: calling it per-pair inside .sort() is non-antisymmetric
-  // and non-transitive (it re-buckets a 2-item slice), which can disagree with the
-  // agenda/cell ordering on full ties. orderPlanningItems already buckets
-  // deadline-vs-event, sorts by time, and breaks full ties stably by title.
-  if (items.some(isDeadlinePlanningItem)) return orderPlanningItems([...items]);
-  return [...items].sort((a, b) => {
-    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-    return (a.startMs || 0) - (b.startMs || 0);
-  });
-}
-
-export function getDefaultSelectedItemId(items: CalendarItemLike[] | { items?: CalendarItemLike[] } = []): string | null {
-  const ordered = orderDetailEvents(Array.isArray(items) ? items : items?.items || []);
-  return ordered[0] ? eventSelectionId(ordered[0]) : null;
-}
 
 function DeadlineTimelineStatus({ task, compact = false }: { task: CalendarItemLike; compact?: boolean }) {
   const status = normalizeStatus(task?.status);

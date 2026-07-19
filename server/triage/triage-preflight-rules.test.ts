@@ -1,16 +1,16 @@
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
+import { writeFileSync } from "fs";
 import { join } from "path";
 import { afterAll, describe, expect, it } from "vitest";
+import { createTestTempDirSync, removeTempDirSync } from "../test-utils/temp-dir.ts";
 import {
   DEFAULT_PREFLIGHT_RULES,
   loadDefaultPreflightRules,
 } from "./triage-preflight.ts";
 
-const tempDir = mkdtempSync(join(tmpdir(), "triage-preflight-rules-"));
+const tempDir = createTestTempDirSync("triage-preflight-rules-");
 
 afterAll(() => {
-  rmSync(tempDir, { recursive: true, force: true });
+  removeTempDirSync(tempDir);
 });
 
 function writeCatalog(name: string, value: unknown) {

@@ -211,22 +211,6 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     });
   });
 
-  it("keeps the create composer mounted while recurring NLP parsing resolves", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    const composerBody = await screen.findByTestId("calendar-event-editor-mode-create");
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Work at 3am to 8am every monday" },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
-      expect(screen.getByTestId("calendar-event-editor-mode-create")).toBe(composerBody);
-    });
-  });
-
   it("keeps the create composer mounted while batch NLP parsing resolves", async () => {
     renderModal();
 

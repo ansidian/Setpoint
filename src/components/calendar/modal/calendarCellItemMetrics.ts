@@ -9,6 +9,20 @@ export interface CalendarCellCapacityInput extends Partial<CalendarCellCapacity>
   fallback?: number;
 }
 
+export function createCalendarCellMetricsResolver<TLayout extends object, TMetrics>(
+  compute: (layout?: TLayout | null) => TMetrics,
+): (layout?: TLayout | null) => TMetrics {
+  const cache = new WeakMap<TLayout, TMetrics>();
+
+  return (layout) => {
+    if (!layout || typeof layout !== "object") return compute(layout);
+    if (cache.has(layout)) return cache.get(layout) as TMetrics;
+    const metrics = compute(layout);
+    cache.set(layout, metrics);
+    return metrics;
+  };
+}
+
 const CELL_CAPACITY_BY_TIER: Record<CalendarLayoutTier, CalendarCellCapacity> = {
   uhd: {
     fullVisibleCount: 11,

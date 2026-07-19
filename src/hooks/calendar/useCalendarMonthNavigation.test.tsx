@@ -66,6 +66,40 @@ describe("useCalendarMonthNavigation", () => {
     expect(result.current.navigateMonthRef.current).toBe(result.current.navigateMonth);
   });
 
+  it.each([
+    ["floating create", { floatingDetailRef: { current: { open: true, mode: "create" } } }],
+    ["floating edit", { floatingDetailRef: { current: { open: true, mode: "edit" } } }],
+    ["inline event edit", { eventEditorRef: { current: { isEditorOpen: true } } }],
+    ["deadline create", { deadlineEditor: { mode: "create" } }],
+    ["deadline edit", { deadlineEditor: { mode: "edit" } }],
+  ])("preserves selection and editor state across month navigation for %s", (_label, editorOverrides) => {
+    const { result, props, setters, sync } = setup(editorOverrides);
+
+    act(() => result.current.navigateMonth(1));
+
+    expect(props.closeEventEditor).not.toHaveBeenCalled();
+    expect(setters.setSelectedDay).not.toHaveBeenCalled();
+    expect(setters.setSelectedDateKey).not.toHaveBeenCalled();
+    expect(setters.setSelectedItemId).not.toHaveBeenCalled();
+    expect(setters.setDeadlineEditor).not.toHaveBeenCalled();
+    expect(setters.setDeadlineDraftPreview).not.toHaveBeenCalled();
+    expect(setters.setViewDate).toHaveBeenCalledWith({ year: 2027, month: 0 });
+    expect(sync.syncAgendaToMonth).toHaveBeenCalledWith(2027, 0);
+  });
+
+  it("keeps floating editors isolated from free-scroll month crossings and settles", () => {
+    const floatingDetailRef = { current: { open: true, mode: "edit" } };
+    const { result, setters, sync } = setup({ floatingDetailRef });
+
+    act(() => result.current.onDisplayMonthChange({ year: 2027, month: 0 }));
+    act(() => result.current.onFetchSettle({ year: 2027, month: 0, scrollDriven: true }));
+
+    expect(setters.setViewDate).not.toHaveBeenCalled();
+    expect(setters.setFetchAnchor).toHaveBeenCalledWith({ year: 2027, month: 0 });
+    expect(sync.onGridScrollCrossing).not.toHaveBeenCalled();
+    expect(sync.onGridScrollSettle).not.toHaveBeenCalled();
+  });
+
   it("tracks scroll direction and preserves the settle's scroll-driven verdict only for anchor moves", () => {
     vi.useFakeTimers();
     const { result, props, setters, sync, rerender } = setup();

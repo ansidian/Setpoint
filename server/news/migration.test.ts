@@ -1,5 +1,4 @@
 // server/news/migration.test.js
-// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
 

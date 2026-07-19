@@ -38,8 +38,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Test fast suite
+        run: npm run test:fast
+
+      - name: Test slow integrations
+        run: npm run test:slow
 
       - name: Check agent harness
         run: npm run check:harness

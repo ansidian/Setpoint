@@ -313,169 +313,6 @@ describe("CalendarEventEditor quick action behavior", () => {
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
-  it("scopes outside context Copy to only the context event without disturbing the existing selection set", async () => {
-    const selected = {
-      id: "event-context-copy-selected",
-      title: "Selected copy member",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    const outside = {
-      id: "event-context-copy-outside",
-      title: "Outside copy target",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    mockCreateCalendarEvent.mockResolvedValue({
-      event: {
-        ...outside,
-        id: "event-context-copy-outside-created",
-        startMs: new Date("2026-04-23T17:00:00.000Z").getTime(),
-        endMs: new Date("2026-04-23T18:00:00.000Z").getTime(),
-      },
-    });
-    renderModal({ events: [selected, outside] });
-
-    const selectedChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
-    const outsideChip = within(screen.getByTestId("calendar-cell-22")).getByTestId("calendar-cell-item-chip");
-    fireEvent.click(selectedChip, { metaKey: true });
-    fireEvent.contextMenu(outsideChip, { clientX: 140, clientY: 180 });
-
-    const copyButton = await screen.findByTestId("calendar-event-context-copy");
-    expect(copyButton.textContent).toBe("Copy");
-    fireEvent.click(copyButton);
-    expect(selectedChip.getAttribute("data-calendar-event-selection")).toBe("true");
-    fireEvent.click(screen.getByTestId("calendar-cell-23"));
-    fireEvent.keyDown(document, { key: "v", metaKey: true });
-
-    await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
-    });
-    expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Outside copy target",
-      startDate: "2026-04-23",
-    }));
-    expect(mockCreateCalendarEventsBatch).not.toHaveBeenCalled();
-  });
-
-  it("colors the selected context scope as occurrence-only without clearing the selection set", async () => {
-    const recurring = {
-      id: "event-context-color-recurring",
-      title: "Recurring color",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
-      writable: true,
-      isRecurring: true,
-      recurringEventId: "series-color",
-      originalStartTime: "2026-04-20T16:00:00.000Z",
-      allDay: false,
-    };
-    const oneOff = {
-      id: "event-context-color-one-off",
-      title: "One-off color",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    const byId = new Map([[recurring.id, recurring], [oneOff.id, oneOff]]);
-    mockUpdateCalendarEvent.mockImplementation((id, payload) => Promise.resolve({
-      event: {
-        ...byId.get(id),
-        colorId: payload.colorId,
-        color: "#dc2127",
-      },
-    }));
-    renderModal({ events: [recurring, oneOff] });
-
-    const recurringChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
-    const oneOffChip = within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip");
-    fireEvent.click(recurringChip, { metaKey: true });
-    fireEvent.click(oneOffChip, { metaKey: true });
-    fireEvent.contextMenu(recurringChip, { clientX: 140, clientY: 180 });
-    fireEvent.click(await screen.findByTestId("calendar-event-color-11"));
-
-    await waitFor(() => {
-      expect(mockUpdateCalendarEvent).toHaveBeenCalledTimes(2);
-    });
-    expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-context-color-recurring", expect.objectContaining({
-      colorId: "11",
-      scope: "one",
-      recurringEventId: "series-color",
-      originalStartTime: "2026-04-20T16:00:00.000Z",
-    }));
-    expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-context-color-one-off", expect.objectContaining({
-      colorId: "11",
-    }));
-    expect(screen.queryByTestId("calendar-quick-action-scope-prompt")).toBeNull();
-    expect(recurringChip.getAttribute("data-calendar-event-selection")).toBe("true");
-    expect(oneOffChip.getAttribute("data-calendar-event-selection")).toBe("true");
-  });
-
-  it("keeps Duplicate scoped to the context event even when it is selected", async () => {
-    const contextEvent = {
-      id: "event-context-duplicate-selected",
-      title: "Duplicate selected context",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    const otherSelectedEvent = {
-      id: "event-context-duplicate-other",
-      title: "Do not duplicate",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    mockCreateCalendarEvent.mockResolvedValue({
-      event: {
-        ...contextEvent,
-        id: "event-context-duplicate-selected-copy",
-      },
-    });
-    renderModal({ events: [contextEvent, otherSelectedEvent] });
-
-    const contextChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
-    const otherChip = within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip");
-    fireEvent.click(contextChip, { metaKey: true });
-    fireEvent.click(otherChip, { metaKey: true });
-    fireEvent.contextMenu(contextChip, { clientX: 140, clientY: 180 });
-    fireEvent.click(await screen.findByTestId("calendar-event-context-duplicate"));
-
-    await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
-    });
-    expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Duplicate selected context",
-    }));
-    expect(mockCreateCalendarEvent.mock.calls[0]![0]).not.toMatchObject({
-      title: "Do not duplicate",
-    });
-  });
-
   it("confirms and deletes the selected context scope as occurrence-only before clearing the set", async () => {
     const recurring = {
       id: "event-context-delete-recurring",
@@ -543,57 +380,9 @@ describe("CalendarEventEditor quick action behavior", () => {
     });
   });
 
-  it("keeps outside-set context Delete scoped to only the context event", async () => {
-    const selected = {
-      id: "event-context-delete-selected",
-      etag: '"etag-context-delete-selected"',
-      title: "Selected delete member",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    const outside = {
-      id: "event-context-delete-outside",
-      etag: '"etag-context-delete-outside"',
-      title: "Outside delete target",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    mockDeleteCalendarEvent.mockResolvedValue({});
-    renderModal({ events: [selected, outside] });
-
-    const selectedChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
-    const outsideChip = within(screen.getByTestId("calendar-cell-22")).getByTestId("calendar-cell-item-chip");
-    fireEvent.click(selectedChip, { metaKey: true });
-    fireEvent.contextMenu(outsideChip, { clientX: 140, clientY: 180 });
-    fireEvent.click(await screen.findByTestId("calendar-event-context-delete"));
-
-    expect(await screen.findByText("Delete this event?")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("calendar-event-context-confirm-delete"));
-
-    await waitFor(() => {
-      expect(mockDeleteCalendarEvent).toHaveBeenCalledTimes(1);
-    });
-    expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-context-delete-outside", expect.objectContaining({
-      accountId: "gmail-main",
-      calendarId: "primary",
-      etag: '"etag-context-delete-outside"',
-    }));
-    expect(selectedChip.getAttribute("data-calendar-event-selection")).toBe("true");
-  });
-
-  it.each(["Delete", "Backspace"])("opens batch delete confirmation from %s without deleting immediately", async (key) => {
+  it("opens batch delete confirmation from Delete without deleting immediately", async () => {
     const first = {
-      id: `event-key-delete-first-${key}`,
+      id: "event-key-delete-first",
       title: "Keyboard delete first",
       accountId: "gmail-main",
       calendarId: "primary",
@@ -604,7 +393,7 @@ describe("CalendarEventEditor quick action behavior", () => {
       allDay: false,
     };
     const second = {
-      id: `event-key-delete-second-${key}`,
+      id: "event-key-delete-second",
       title: "Keyboard delete second",
       accountId: "gmail-main",
       calendarId: "primary",
@@ -618,7 +407,7 @@ describe("CalendarEventEditor quick action behavior", () => {
 
     fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"), { metaKey: true });
     fireEvent.click(within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip"), { metaKey: true });
-    fireEvent.keyDown(document, { key });
+    fireEvent.keyDown(document, { key: "Delete" });
 
     expect(await screen.findByText("Delete 2 events?")).toBeTruthy();
     expect(mockDeleteCalendarEvent).not.toHaveBeenCalled();

@@ -74,6 +74,8 @@ describe("NeedsYouCarousel", () => {
       />,
     );
     const carousel = screen.getByTestId("needs-you-carousel");
+    // This exact touch-action value is a gesture compatibility contract: both
+    // horizontal carousel movement and vertical page scrolling must remain native.
     expect(carousel.style.touchAction).toBe("pan-x pan-y");
   });
 

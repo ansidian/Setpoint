@@ -193,26 +193,6 @@ describe("NotesTab", () => {
     });
   });
 
-  it("ViewToggle button has sp-focus-ring class for shared focus ring styling", async () => {
-    render(<NotesTab accent="#cba6da" />);
-    await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
-
-    const viewToggle = screen.getByRole("button", { name: /^Active/ });
-    expect(viewToggle.classList.contains("sp-focus-ring")).toBe(true);
-  });
-
-  it("tag chip buttons have sp-focus-ring class for shared focus ring styling", async () => {
-    vi.mocked(getNotes).mockResolvedValue([
-      { id: 1, user_id: "test", content: "note with #tag", sort_order: 0, created_at: "2026-06-18 10:00:00", archived_at: null },
-    ]);
-    render(<NotesTab accent="#cba6da" />);
-    await waitFor(() => expect(screen.getByTestId("note-editor")).toBeTruthy());
-
-    const tagChips = screen.getAllByRole("button", { name: /^#/ });
-    expect(tagChips.length).toBeGreaterThan(0);
-    expect(tagChips[0]!.classList.contains("sp-focus-ring")).toBe(true);
-  });
-
   it("search input has accessible label via aria-label", async () => {
     render(<NotesTab accent="#cba6da" />);
     await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());

@@ -225,6 +225,20 @@ Frontend: `http://localhost:5173` — proxies `/api/*` to Express on port 3001.
 
 By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → System when you intentionally want real local triage or need to pause triage job draining.
 
+### Tests
+
+```bash
+npm run test:fast  # local feedback without real filesystem/libsql/Actual integrations
+npm run test:slow  # real filesystem, file-backed libsql, and Actual compatibility tests
+npm test           # complete required non-Playwright suite (fast + slow)
+```
+
+CI requires both the fast and slow commands and reports them as separate steps.
+Playwright remains opt-in through the `test:e2e*` commands.
+Filesystem fixtures are contained under the `setpoint-tests` child of the OS
+temp directory. Windows-locked residue is retained for a 24-hour safety window,
+then later test processes remove at most 100 stale entries per sweep.
+
 ### Production
 
 ```bash

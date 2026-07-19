@@ -231,6 +231,7 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
 
 describe("settings error messages do not leak internals (P3-54)", () => {
   it("returns a fixed geocode failure string, not the raw error message", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(geocodeLocation).mockRejectedValueOnce(new Error("ENOTFOUND api.pirateweather.net secret-key=abc123"));
 
     const res = await request(makeApp()).get("/api/ea/geocode?q=Berlin");
@@ -238,9 +239,15 @@ describe("settings error messages do not leak internals (P3-54)", () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Failed to geocode location");
     expect(JSON.stringify(res.body)).not.toContain("secret-key");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Error geocoding location:",
+      "ENOTFOUND api.pirateweather.net secret-key=abc123",
+    );
+    consoleError.mockRestore();
   });
 
   it("returns a fixed important-senders failure string, not the raw DB error", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const realExecute = currentDb().execute.bind(currentDb());
     currentDb().execute = vi.fn((statement: InStatement) => {
       if (typeof statement !== "string" && statement.sql.includes("important_senders_json")) {
@@ -254,6 +261,11 @@ describe("settings error messages do not leak internals (P3-54)", () => {
     expect(res.status).toBe(500);
     expect(res.body.message).toBe("Failed to fetch important senders");
     expect(JSON.stringify(res.body)).not.toContain("secret_internal_detail");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Error fetching important senders:",
+      "SQLITE_ERROR: no such column secret_internal_detail",
+    );
+    consoleError.mockRestore();
   });
 });
 

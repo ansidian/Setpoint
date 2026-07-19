@@ -11,6 +11,7 @@
   },
   "include": [
     "scripts/**/*",
+    "server/test-utils/temp-dir.ts",
     "server/scripts/clean-notification-mp3.test.ts",
     "e2e/**/*",
     "eslint.config.ts",

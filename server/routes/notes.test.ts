@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@libsql/client";
 import type { Client, Row } from "@libsql/client";

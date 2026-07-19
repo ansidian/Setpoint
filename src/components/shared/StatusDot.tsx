@@ -33,11 +33,11 @@ export function StatusDot({ tone, state = "solid" }: StatusDotProps) {
         <style>{`
           @keyframes sp-dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
           @media (prefers-reduced-motion: reduce) {
-            [data-testid="status-dot"] { animation: none !important; }
+            [data-status-dot="true"] { animation: none !important; }
           }
         `}</style>
       )}
-      <span data-testid="status-dot" style={{ ...base, ...variant }} />
+      <span data-status-dot="true" style={{ ...base, ...variant }} />
     </>
   );
 }

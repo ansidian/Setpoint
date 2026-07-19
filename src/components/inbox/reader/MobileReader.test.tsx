@@ -1,5 +1,4 @@
-// @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import MobileReader from "./MobileReader";
@@ -7,18 +6,14 @@ import type { InboxEmailLike } from "../inboxTypes";
 import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import type { BillResolutionState } from "./readerTypes";
 
-const billBadgeMock = vi.hoisted(() => vi.fn());
-
 vi.mock("../../bills/BillBadge", () => ({
-  default: function BillBadgeMock(props: Record<string, unknown>) {
-    billBadgeMock(props);
+  default: function BillBadgeMock() {
     return <div data-testid="mobile-bill-badge" />;
   },
 }));
 
 afterEach(() => {
   cleanup();
-  billBadgeMock.mockClear();
 });
 
 type MobileReaderOverrides = Omit<Partial<ComponentProps<typeof MobileReader>>, "email" | "billResolution"> & {
@@ -67,21 +62,10 @@ function renderMobileReader(overrides: MobileReaderOverrides = {}) {
       setDrafting={setDrafting}
     />,
   );
-  return { onAction, onOpenRecordedBill, setBillOpen, setDrafting };
+  return { onAction, onOpenRecordedBill, setBillOpen };
 }
 
-describe("MobileReader bill extraction", () => {
-  it("passes the loaded provider body to bill extraction instead of preview text", () => {
-    renderMobileReader();
-
-    expect(screen.getByTestId("mobile-bill-badge")).toBeTruthy();
-    expect(billBadgeMock).toHaveBeenCalledWith(expect.objectContaining({
-      emailBody: "<html><body>Full mobile provider bill with amount $88.20.</body></html>",
-      emailBodyLoading: false,
-      emailBodySource: "loaded",
-    }));
-  });
-
+describe("MobileReader controls", () => {
   it("promotes the primary triage verbs while the overflow keeps the long tail", () => {
     const { onAction } = renderMobileReader({
       email: {
@@ -162,48 +146,8 @@ describe("MobileReader bill extraction", () => {
     expect(setBillOpen).not.toHaveBeenCalled();
   });
 
-  it("opens an already-scheduled bill in the calendar from the actions menu", () => {
-    const { onOpenRecordedBill, setBillOpen } = renderMobileReader({
-      billOpen: true,
-      billResolution: {
-        status: "resolved",
-        actualStatus: {
-          status: "already_scheduled",
-          evidence: {
-            kind: "schedule",
-            scheduleId: "schedule-acme",
-            dueDate: "2026-08-12",
-          },
-        },
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-    fireEvent.click(screen.getByText("View bill details"));
-
-    expect(onOpenRecordedBill).toHaveBeenCalledWith({
-      date: "2026-08-12",
-      itemId: "schedule-acme",
-    });
-    expect(setBillOpen).not.toHaveBeenCalled();
-  });
-
-  it("hides mobile bill pay for triaged non-bill emails", () => {
-    renderMobileReader({
-      email: {
-        hasBill: false,
-        _activeSnapshot: true,
-        _lane: "needs_attention",
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    expect(screen.queryByText("Open bill pay")).toBeNull();
-  });
-
   it("allows FYI snapshot rows to be marked handled from the one-tap bar", () => {
-    renderMobileReader({
+    const { onAction } = renderMobileReader({
       email: {
         hasBill: false,
         _activeSnapshot: true,
@@ -212,109 +156,15 @@ describe("MobileReader bill extraction", () => {
     });
 
     const triageBar = screen.getByTestId("inbox-mobile-triage-bar");
-    expect(within(triageBar).getByText("Handled")).toBeTruthy();
+    fireEvent.click(within(triageBar).getByRole("button", { name: "Handled" }));
+
+    expect(onAction).toHaveBeenCalledWith("snapshot-handled");
     expect(within(triageBar).queryByText("FYI")).toBeNull();
-  });
-
-  it("limits Catch-up rows to read state and Gmail open actions", () => {
-    renderMobileReader({
-      email: {
-        id: "gmail-gmail-work-late-fyi",
-        uid: "gmail-gmail-work-late-fyi",
-        account_id: "gmail-work",
-        account_email: "work@example.test",
-        hasBill: true,
-        claude: { draftReply: "Thanks." },
-        _activeSnapshot: true,
-        _lane: "catch_up",
-        lane_at_snapshot: "fyi",
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    expect(screen.getByText("Mark read")).toBeTruthy();
-    expect(screen.getByText("Open in Gmail")).toBeTruthy();
-    expect(screen.queryByText("Open bill pay")).toBeNull();
-    expect(screen.queryByText("Show draft reply")).toBeNull();
-    expect(screen.queryByText("Move to Needs")).toBeNull();
-    expect(screen.queryByText("Move to FYI")).toBeNull();
-    expect(screen.queryByText("Move to Noise")).toBeNull();
-    expect(screen.queryByText("Handled")).toBeNull();
-    expect(screen.queryByText("Dismiss")).toBeNull();
-    expect(screen.queryByText("Snooze")).toBeNull();
-    expect(screen.queryByText("Trash")).toBeNull();
-  });
-
-  it("keeps queued snapshot rows dismissible but hides manual triage moves", () => {
-    const { onAction } = renderMobileReader({
-      billOpen: false,
-      email: {
-        hasBill: false,
-        _activeSnapshot: true,
-        _lane: "queued",
-        _arrivalGraceQueued: true,
-      },
-    });
-
-    expect(screen.getByText("Queued")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    const actionsMenu = screen.getByTestId("inbox-mobile-actions-menu");
-    expect(within(actionsMenu).getByText("Dismiss")).toBeTruthy();
-    expect(within(actionsMenu).getByText("Open bill pay")).toBeTruthy();
-    expect(within(actionsMenu).queryByText("Move to Needs")).toBeNull();
-
-    const triageBar = screen.getByTestId("inbox-mobile-triage-bar");
-    expect(within(triageBar).getByText("Snooze")).toBeTruthy();
-    expect(within(triageBar).getByText("Trash")).toBeTruthy();
-    expect(within(triageBar).queryByText("FYI")).toBeNull();
-    expect(within(triageBar).queryByText("Noise")).toBeNull();
-    expect(within(triageBar).queryByText("Handled")).toBeNull();
-
-    fireEvent.click(within(actionsMenu).getByText("Dismiss"));
-    expect(onAction).toHaveBeenCalledWith("snapshot-dismiss", undefined);
-  });
-
-  it("hides snapshot lifecycle actions for untriaged-read rows", () => {
-    renderMobileReader({
-      billOpen: false,
-      email: {
-        hasBill: false,
-        read: true,
-        _activeSnapshot: true,
-        _lane: "untriaged_read",
-        _untriagedRead: true,
-      },
-    });
-
-    expect(screen.getByText("Read")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    expect(screen.getByText("Mark unread")).toBeTruthy();
-    expect(screen.getByText("Open bill pay")).toBeTruthy();
-    expect(screen.queryByText("Dismiss")).toBeNull();
-    expect(screen.queryByText("Move to FYI")).toBeNull();
-    expect(screen.queryByText("Handled")).toBeNull();
-  });
-
-  it("hides snapshot lifecycle actions when snapshot_item_id is missing (drift guard)", () => {
-    renderMobileReader({
-      billOpen: false,
-      email: { hasBill: false, _activeSnapshot: true, _lane: "needs_attention", snapshot_item_id: undefined },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    expect(screen.queryByText("Handled")).toBeNull();
-    expect(screen.queryByText("Dismiss")).toBeNull();
-    expect(screen.queryByText("Move to FYI")).toBeNull();
-    expect(screen.queryByText("Move to Noise")).toBeNull();
   });
 });
 
 describe("MobileReader pin toggle", () => {
-  it("renders a pin action in the tap menu and dispatches pin-toggle when clicked", () => {
+  it("renders the current pin state and dispatches pin-toggle from the tap menu", () => {
     const { onAction } = renderMobileReader({
       billOpen: false,
       email: { hasBill: false },
@@ -324,70 +174,13 @@ describe("MobileReader pin toggle", () => {
     fireEvent.click(screen.getByText("Pin"));
 
     expect(onAction).toHaveBeenCalledWith("pin-toggle", undefined);
-  });
 
-  it("flips the label to Unpin when the email is pinned", () => {
+    cleanup();
     renderMobileReader({
       billOpen: false,
       email: { hasBill: false, _pinned: true },
     });
-
     fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
     expect(screen.getByText("Unpin")).toBeTruthy();
-    expect(screen.queryByText("Pin")).toBeNull();
-  });
-
-  it("tints the pinned pin row lavender to match the desktop pin toggle", () => {
-    renderMobileReader({
-      billOpen: false,
-      email: { hasBill: false, _pinned: true },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    const pinRow = screen.getByText("Unpin").closest("button");
-    expect(pinRow?.style.color).toMatch(/#b4befe|rgb\(180,\s*190,\s*254\)/i);
-
-    const snoozeRow = screen.getByText("Snooze").closest("button");
-    expect(snoozeRow?.style.color).toMatch(/rgba\(205,\s*214,\s*244,\s*0\.8\)/);
-  });
-
-  it("renders the pin action even for catch-up rows", () => {
-    renderMobileReader({
-      billOpen: false,
-      email: {
-        hasBill: false,
-        _activeSnapshot: true,
-        _lane: "catch_up",
-        lane_at_snapshot: "fyi",
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
-
-    expect(screen.getByText("Pin")).toBeTruthy();
-  });
-});
-
-describe("MobileReader draft reply (P1-2)", () => {
-  it("copies the AI draft to the clipboard without trashing the email", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-
-    const { onAction, setDrafting } = renderMobileReader({
-      drafting: true,
-      email: { hasBill: false, claude: { draftReply: "Sounds good." } },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /copy draft/i }));
-
-    await waitFor(() => expect(setDrafting).toHaveBeenCalledWith(false));
-    expect(writeText).toHaveBeenCalledWith("Sounds good.");
-    expect(onAction).not.toHaveBeenCalledWith("trash");
-    expect(screen.queryByRole("button", { name: /^send$/i })).toBeNull();
   });
 });

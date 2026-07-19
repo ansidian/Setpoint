@@ -64,6 +64,14 @@ Prefer a layered Vitest structure. New behavior should usually start at the lowe
 
 When a broad test gets harder to maintain, extract the underlying rule into a named model/helper module before adding more cases. Good recent examples include `calendarModalInteractionModel`, `inboxCommandModel`, `dashboardShellModel`, `calendarRangeModel`, `currentDashboardModel`, `dashboardTaskProjection`, `inboxWorkItems`, and `snapshot-lifecycle`.
 
+### Test Suite Governance
+
+- Put new behavior at the lowest test layer that can express it; do not repeat shared policy as desktop, mobile, and page-level branch matrices.
+- Exact style or source-literal assertions require an adjacent explanation of the public compatibility contract they protect.
+- Every Vitest file must belong to exactly one project in `test-environment-partitions.mts`; pure tests use Node and DOM environments are explicit exceptions.
+- Test files above 600 lines require decomposition or a documented exception in `test-size-baseline.json`; grandfathered files may not grow past their allowance.
+- `npm run test:slow` remains required in CI and `npm test` remains the complete non-Playwright suite.
+
 ## Mechanical Checks
 
 - `npm run lint` - ESLint.

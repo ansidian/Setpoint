@@ -1,6 +1,5 @@
-import { mkdtemp, mkdir, writeFile } from "fs/promises";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
-import os from "os";
+import { mkdir, writeFile } from "fs/promises";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -58,7 +57,7 @@ async function writeFixture(budgetDir: string): Promise<void> {
 }
 
 async function fixture() {
-  tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-txn-read-"));
+  tempDir = await createTestTempDir("actual-transactions-");
   await writeFixture(path.join(tempDir, "Budget-1"));
 }
 
