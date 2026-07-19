@@ -272,6 +272,7 @@ describe("requestTodoistMirrorSync", () => {
   });
 
   it("publishes a degraded refetch hint when requested sync fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.useFakeTimers();
     const listener = vi.fn();
     const syncFn = vi.fn(async () => {

@@ -158,6 +158,7 @@ describe("alfred routes", () => {
   });
 
   it("emits run_error when the run loop throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.run.mockRejectedValue(new Error("api down"));
     const res = await auth(request(buildApp()).post("/api/alfred/run")).send({ message: "hi" });
     expect(res.text).toContain("event: run_error");

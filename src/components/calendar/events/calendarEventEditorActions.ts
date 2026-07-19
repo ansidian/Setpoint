@@ -54,7 +54,7 @@ export interface CalendarEditorActionClient {
 }
 
 interface CalendarEditorErrorLike { code?: string | null; message?: string | null }
-type CalendarEditorRecurrenceScope = CalendarRecurrenceScope | "future";
+type CalendarEditorRecurrenceScope = CalendarRecurrenceScope;
 
 interface CalendarEventRemindersDraft {
   items: EventReminderLike[];
@@ -67,7 +67,7 @@ export interface SaveCalendarEventActionOptions {
   recurrenceDraft?: CalendarRecurrenceDraftInput | null;
   editingEvent?: CalendarEditorActionEvent | null;
   isEditingRecurring?: boolean;
-  recurringEditScope?: CalendarRecurrenceScope | "future" | null;
+  recurringEditScope?: CalendarRecurrenceScope | null;
   intentMode?: "single" | "batch" | "recurring";
   batchDrafts?: CalendarBatchDraft[];
   eventReminders?: CalendarEventRemindersDraft;

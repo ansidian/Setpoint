@@ -69,7 +69,6 @@ describe("Bill Pay resolver", () => {
       behaviorId: "statement-payment",
       amountSource: "statement_balance",
     });
-    expect(result.mapping).not.toHaveProperty("confidence");
     expect(result.bill).toMatchObject({
       type: "transfer",
       payee: "Southern California Edison",

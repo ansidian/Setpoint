@@ -135,6 +135,7 @@ describe("hydrateRecurringTombstones", () => {
   });
 
   it("gracefully skips rows with malformed snapshot_json", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     await seedCompletedTask(testState.db.current, {
       todoist_id: "bad",
       due_date: "2099-01-01",

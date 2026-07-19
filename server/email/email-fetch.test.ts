@@ -18,6 +18,7 @@ afterEach(() => {
 
 describe("fetchAllEmails", () => {
   it("degrades a single iCloud decrypt failure without sinking the other accounts (P2-38)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     fetchGmailEmailsMock.mockResolvedValue([{ uid: "gmail-1" }] as never);
     // decrypt throws (corrupt/rotated key) for the iCloud account.
     decryptMock.mockImplementation(() => { throw new Error("bad encryption key"); });

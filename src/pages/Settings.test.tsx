@@ -92,6 +92,7 @@ function renderSettings() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 beforeEach(() => {
@@ -116,6 +117,10 @@ describe("Settings page", () => {
   it("waits for a linked settings card to finish loading, then flashes it after scrolling ends", async () => {
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(performance.now());
+      return 1;
+    });
     mockApi.targetReadyDelayMs = 40;
     window.history.replaceState({}, "", "/settings?tab=briefing#ai-provider-credentials");
 

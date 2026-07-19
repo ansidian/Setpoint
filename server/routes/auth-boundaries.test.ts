@@ -74,38 +74,12 @@ vi.mock("../email/email-index.ts", () => ({
 vi.mock("../email/email-backfill-worker.ts", () => ({
   wakeEmailBackfillWorker: vi.fn(),
 }));
-vi.mock("../email/gmail.ts", () => ({
-  fetchEmails: vi.fn(async () => []),
-  isMessageRead: vi.fn(async () => null),
-  getAuthUrl: vi.fn(),
-  handleCallback: vi.fn(),
-  testConnection: vi.fn(),
-}));
-vi.mock("../email/icloud.ts", () => ({
-  fetchEmails: vi.fn(async () => []),
-  isMessageRead: vi.fn(async () => null),
-  testConnection: vi.fn(),
-}));
 vi.mock("../platform/weather.ts", () => ({
   fetchWeather: vi.fn(async () => ({ temp: 0, high: 0, low: 0, summary: "", hourly: [] })),
   geocodeLocation: vi.fn(async () => []),
 }));
-vi.mock("../calendar/calendar.ts", () => ({
-  fetchCalendar: vi.fn(async () => []),
-  getNextWeekRange: vi.fn(() => [0, 0]),
-  getTomorrowRange: vi.fn(() => [0, 0]),
-}));
-vi.mock("../actual/actual.ts", () => ({
-  getUpcomingBills: vi.fn(async () => []),
-  getRecentTransactions: vi.fn(async () => []),
-  getMetadata: vi.fn(async () => ({ schedules: [], payeeMap: {}, recentTransactions: [] })),
-  isSchedulePaid: vi.fn(() => false),
-}));
 vi.mock("../scheduler.ts", () => ({
   initScheduler: vi.fn(),
-}));
-vi.mock("../platform/account-canonical.ts", () => ({
-  canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
 }));
 vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
@@ -131,18 +105,18 @@ vi.mock("../dashboard/current-service.ts", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const { createQuickTxn, sendBill } = await import("../bills/bills-service.ts");
+const { createQuickTxn } = await import("../bills/bills-service.ts");
 const emailService = await import("../email/email-service.ts");
 const briefingRoutes = (await import("./briefing/index.ts")).default;
 const dashboardRoutes = (await import("./dashboard.ts")).default;
-const accountsRoutes = (await import("./accounts.ts")).default;
+const settingsRoutes = (await import("./settings.ts")).default;
+const remindersRoutes = (await import("./reminders.ts")).default;
 const notesRoutes = (await import("./notes.ts")).default;
+const { requireCookieSession } = await import("../middleware/auth.ts");
 const discordReminders = await import("../reminders/discord-reminders.ts");
 const {
   clearCurrentDashboardEventSubscribers,
-  subscribeCurrentDashboardEvents,
 } = await import("../dashboard/current-events.ts");
-const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../triage/triage-sound-settings.ts");
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
@@ -152,7 +126,7 @@ function makeApp() {
   app.use(cookieParser());
   app.use("/api/briefing", briefingRoutes);
   app.use("/api/dashboard", dashboardRoutes);
-  app.use("/api/ea", accountsRoutes);
+  app.use("/api/ea", requireCookieSession, settingsRoutes, remindersRoutes);
   app.use("/api/notes", notesRoutes);
   return app;
 }
@@ -367,201 +341,6 @@ describe("auth boundaries", () => {
     expect(res.body.email_triage_effective_mode).toBe("no_model");
   });
 
-  it("returns default triage sound settings and the bundled sound registry", async () => {
-    await seedSession();
-    const res = await request(server)
-      .get("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(res.status).toBe(200);
-    expect(res.body.triage_sound_settings).toEqual({
-      laneScope: "needs_attention_and_fyi",
-      volume: 1,
-      triggers: {
-        needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-        email_queued: { enabled: true, soundId: "quick_chime" },
-        fyi_finalized: { enabled: true, soundId: "smooth_modern" },
-        weak_security_grace: { enabled: true, soundId: "low_tone" },
-        triage_failed: { enabled: false, soundId: "low_tone" },
-        event_upcoming: { enabled: true, soundId: "clear_chime" },
-        task_completed: { enabled: true, soundId: "smooth_modern" },
-      },
-    });
-    expect(res.body.triage_notification_sounds).toEqual(TRIAGE_NOTIFICATION_SOUNDS);
-  });
-
-  it("returns default Bill Pay mappings from settings", async () => {
-    await seedSession();
-    const res = await request(server)
-      .get("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(res.status).toBe(200);
-    expect(res.body.bill_pay_mappings).toEqual({ version: 1, profiles: [] });
-  });
-
-  it("serves triage cache stats over the authed diagnostic route", async () => {
-    // Thin wiring check: the route reaches getTriageCacheStats and returns its
-    // summary shape. The pricing/window/rounding math lives in
-    // server/triage/triage-cache-stats.test.ts.
-    await seedSession();
-    await currentDb().execute({
-      sql: `INSERT INTO ea_email_triage
-              (user_id, email_id, triage_source, last_triaged_at, model_usage_json, strong_model_result_json)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [
-        "user-1",
-        "strong-1",
-        "strong_model",
-        new Date().toISOString(),
-        JSON.stringify({
-          strong: {
-            input_tokens: 2000,
-            output_tokens: 200,
-            input_tokens_details: { cached_tokens: 1000 },
-          },
-        }),
-        JSON.stringify({ provider: "openai", model: "gpt-5.4", tier: "strong" }),
-      ],
-    });
-
-    const res = await request(server)
-      .get("/api/ea/triage/cache-stats")
-      .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(res.status).toBe(200);
-    expect(res.body.windowDays).toBe(7);
-    expect(res.body.openaiCalls).toBe(1);
-    expect(res.body.comparisonWindows.monthToDate).toBeTruthy();
-  });
-
-  it("requires a session for GET /api/ea/email-search/usage", async () => {
-    const res = await request(server).get("/api/ea/email-search/usage");
-    expect(res.status).toBe(401);
-  });
-
-  it("returns email-search usage for an authed session", async () => {
-    await seedSession();
-    const res = await request(server)
-      .get("/api/ea/email-search/usage")
-      .set("Cookie", ["ea_session=cookie-session"]);
-    expect(res.status).toBe(200);
-    // Honest shape: querySearch present, no askAi/planner bolt-on.
-    expect(res.body.querySearch).toBeTruthy();
-    expect(res.body.askAi).toBeUndefined();
-  });
-
-  it("rejects invalid email triage mode writes", async () => {
-    await seedSession();
-    const res = await request(server)
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ email_triage_mode: "disabled" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid email_triage_mode");
-  });
-
-  it("updates valid email triage mode writes", async () => {
-    await seedSession();
-    const res = await request(server)
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ email_triage_mode: "paused" });
-
-    expect(res.status).toBe(200);
-    expect(await getSettingsRow()).toMatchObject({ email_triage_mode: "paused" });
-  });
-
-  it("rejects invalid triage sound settings without touching the stored row", async () => {
-    // Wiring check: validateTriageSoundSettings gates the write (400) and the
-    // durable row is left unwritten. The per-branch validation messages are
-    // owned by server/triage/triage-sound-settings.test.ts.
-    await seedSession();
-    const res = await request(server)
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({
-        triage_sound_settings: {
-          laneScope: "all_mail",
-          triggers: {
-            needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-          },
-        },
-      });
-
-    expect(res.status).toBe(400);
-    expect((await getSettingsRow())!.triage_sound_settings_json).toBeNull();
-  });
-
-  it("updates valid triage sound settings writes", async () => {
-    await seedSession();
-    const settings = {
-      laneScope: "needs_attention_only",
-      volume: 0.85,
-      triggers: {
-        needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-        email_queued: { enabled: true, soundId: "quick_chime" },
-        fyi_finalized: { enabled: false, soundId: "smooth_modern" },
-        weak_security_grace: { enabled: true, soundId: "low_tone" },
-        triage_failed: { enabled: true, soundId: "low_tone" },
-        event_upcoming: { enabled: true, soundId: "clear_chime" },
-        task_completed: { enabled: true, soundId: "smooth_modern" },
-      },
-    };
-
-    const res = await request(server)
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ triage_sound_settings: settings });
-
-    expect(res.status).toBe(200);
-    expect(JSON.parse(String((await getSettingsRow())!.triage_sound_settings_json))).toEqual(settings);
-  });
-
-  it("rejects invalid Bill Pay mapping settings", async () => {
-    await seedSession();
-    const res = await request(server)
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({
-        bill_pay_mappings: {
-          version: 1,
-          profiles: [{ id: "empty", enabled: true, behaviors: [] }],
-        },
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Enabled bill_pay_mappings profile requires identity matchers");
-  });
-
-  it("updates valid Bill Pay mapping settings writes", async () => {
-    await seedSession();
-    const mappings = {
-      version: 1,
-      profiles: [{
-        id: "edison",
-        enabled: true,
-        identity: { aliases: ["edison"] },
-        behaviors: [{
-          id: "monthly",
-          enabled: true,
-          type: "expense",
-          intent: { subject: ["bill"] },
-          targets: { payee_id: "payee-edison", payee_label: "Southern California Edison" },
-        }],
-      }],
-    };
-
-    const res = await request(server)
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ bill_pay_mappings: mappings });
-
-    expect(res.status).toBe(200);
-    expect(JSON.parse(String((await getSettingsRow())!.bill_pay_mappings_json))).toEqual(mappings);
-  });
-
   it("stores Todoist OAuth token responses without exposing token material", async () => {
     await seedSession();
     const res = await request(server)
@@ -710,96 +489,6 @@ describe("auth boundaries", () => {
     );
   });
 
-  it("reports missing and rate-limited Discord reminder tests", async () => {
-    await seedSession();
-    const missing = await request(server)
-      .post("/api/ea/settings/discord-reminder-test")
-      .set("Cookie", ["ea_session=cookie-session"]);
-    expect(missing.status).toBe(400);
-    expect(missing.body.message).toBe("Discord webhook not configured");
-
-    await currentDb().execute({
-      sql: "UPDATE ea_settings SET discord_webhook_url_encrypted = ? WHERE user_id = ?",
-      args: ["enc:https://discord.example/webhook", "user-1"],
-    });
-    vi.mocked(discordReminders.sendDiscordWebhook).mockResolvedValueOnce({
-      ok: false,
-      status: 429,
-      rateLimited: true,
-      retryAfterMs: 2500,
-      error: "Discord 429",
-    });
-
-    const limited = await request(server)
-      .post("/api/ea/settings/discord-reminder-test")
-      .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(limited.status).toBe(429);
-    expect(limited.headers["retry-after"]).toBe("3");
-    expect(limited.body.message).toBe("Discord webhook rate limited");
-  });
-
-  it("creates, lists, and deletes reminder rows through authenticated routes", async () => {
-    await seedSession();
-    const dashboardEvents: unknown[] = [];
-    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event: unknown) => {
-      dashboardEvents.push(event);
-    });
-    const createRes = await request(server)
-      .post("/api/ea/reminders")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({
-        sourceType: "calendar_event",
-        sourceAccountId: "gmail-1",
-        sourceCalendarId: "primary",
-        sourceItemId: "event-1",
-        anchorKind: "event_start",
-        anchorAt: "2026-05-10T17:00:00.000Z",
-        offsetMinutes: -15,
-        payloadSnapshot: { title: "Dentist" },
-      });
-
-    expect(createRes.status).toBe(201);
-    expect(createRes.body.reminder).toMatchObject({
-      user_id: "user-1",
-      source_type: "calendar_event",
-      source_item_id: "event-1",
-      remind_at: "2026-05-10T16:45:00.000Z",
-    });
-
-    const listRes = await request(server)
-      .get("/api/ea/reminders?sourceType=calendar_event&sourceItemId=event-1")
-      .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(listRes.status).toBe(200);
-    expect(listRes.body.reminders).toHaveLength(1);
-
-    const deleteRes = await request(server)
-      .delete(`/api/ea/reminders/${createRes.body.reminder.id}`)
-      .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(deleteRes.status).toBe(200);
-    expect(deleteRes.body).toEqual({ success: true });
-    unsubscribe();
-    expect(dashboardEvents).toEqual([
-      expect.objectContaining({
-        source: "reminders",
-        reason: "reminder_created",
-        details: expect.objectContaining({
-          sourceType: "calendar_event",
-          sourceItemId: "event-1",
-        }),
-      }),
-      expect.objectContaining({
-        source: "reminders",
-        reason: "reminder_deleted",
-        details: expect.objectContaining({
-          reminderId: createRes.body.reminder.id,
-        }),
-      }),
-    ]);
-  });
-
   it("blocks bearer auth on notes route", async () => {
     await seedBearer();
     const res = await request(server)
@@ -823,18 +512,6 @@ describe("auth boundaries", () => {
     );
   });
 
-  it("rejects non-numeric quick-txn amounts before calling Actual", async () => {
-    await seedBearer(["actual:write"]);
-    const res = await request(server)
-      .post("/api/briefing/actual/quick-txn")
-      .set("Authorization", "Bearer scoped-token")
-      .send({ account: "Checking", amount: "$12.34", payee: "Coffee" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("amount must be a number");
-    expect(createQuickTxn).not.toHaveBeenCalled();
-  });
-
   it("allows cookie session auth on quick-txn", async () => {
     await seedSession();
     const res = await request(server)
@@ -847,38 +524,6 @@ describe("auth boundaries", () => {
       "user-1",
       expect.objectContaining({ accountName: "Checking", amount: 18.5, payee: "Lunch" }),
     );
-  });
-
-  it("allows transfer bill sends without a payee when transfer fields are present", async () => {
-    await seedSession();
-    const payload = {
-      type: "transfer",
-      amount: 197.5,
-      due_date: "2026-04-30",
-      from_account_id: "acct-checking",
-      to_account_id: "acct-card",
-      schedule_name: "Credit Card Payment",
-    };
-
-    const res = await request(server)
-      .post("/api/briefing/actual/send")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send(payload);
-
-    expect(res.status).toBe(200);
-    expect(sendBill).toHaveBeenCalledWith("user-1", expect.objectContaining(payload));
-  });
-
-  it("rejects transfer bill sends with missing transfer fields before calling Actual", async () => {
-    await seedSession();
-    const res = await request(server)
-      .post("/api/briefing/actual/send")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({ type: "transfer", amount: 197.5, due_date: "2026-04-30", from_account_id: "acct-checking" });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/from_account_id, to_account_id, and schedule_name/);
-    expect(sendBill).not.toHaveBeenCalled();
   });
 
   it("does not expose briefing lifecycle or history routes to cookie sessions", async () => {

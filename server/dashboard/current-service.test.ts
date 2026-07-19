@@ -333,6 +333,7 @@ describe("GET /api/dashboard/current", () => {
   });
 
   it("degrades one failed provider without failing the current response", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.fetchWeather.mockRejectedValueOnce(new Error("weather down"));
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-ok" }]);
     testState.fetchTodoistTasks.mockResolvedValueOnce([]);
@@ -366,6 +367,7 @@ describe("GET /api/dashboard/current", () => {
   });
 
   it("returns a fallback within the deadline instead of hanging when a cold-cache provider stalls (P1-6)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.EA_DASHBOARD_PROVIDER_FETCH_TIMEOUT_MS = "20";
     // Cold cache (no seedCache) + a weather provider fetch that never resolves.
     testState.fetchWeather.mockReset().mockReturnValueOnce(new Promise(() => {}));

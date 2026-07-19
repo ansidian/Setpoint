@@ -63,6 +63,7 @@ describe("Todoist OAuth routes", () => {
   });
 
   it("returns a fixed callback failure without reflecting provider or secret detail", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const { app } = makeApp({
       completeAuthorization: vi.fn(async () => {
         throw new Error("provider body contained secret-value");

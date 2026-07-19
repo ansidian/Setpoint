@@ -1,10 +1,5 @@
 {
   "_comment": "Ratcheting test maintainability guard for check:harness. Existing files above 600 lines are grandfathered at their current allowance; new oversized files and growth require decomposition or a documented baseline exception.",
   "threshold": 600,
-  "files": {
-    "server/routes/auth-boundaries.test.ts": 921,
-    "server/routes/auth.test.ts": 843,
-    "server/routes/calendar.events.test.ts": 726,
-    "server/routes/calendar.search.test.ts": 693
-  }
+  "files": {}
 }

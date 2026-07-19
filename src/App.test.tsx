@@ -86,6 +86,7 @@ describe("App auth redirects", () => {
   });
 
   it("replaces /login in history when redirecting an authenticated user", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     window.history.pushState({}, "", "/from-here");
     window.history.pushState({}, "", "/login");
 
@@ -170,6 +171,7 @@ describe("App auth redirects", () => {
   });
 
   it("shows a recoverable fallback when Login throws during render", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     routeFailures.login = true;
     mockApi.checkAuth.mockResolvedValue({ authenticated: false });
     window.history.replaceState({}, "", "/login");
@@ -181,6 +183,7 @@ describe("App auth redirects", () => {
   });
 
   it("shows a recoverable fallback when Settings throws during render", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     routeFailures.settings = true;
     window.history.replaceState({}, "", "/settings");
 

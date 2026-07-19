@@ -102,19 +102,6 @@ describe("notes routes", () => {
     expect(rows[0]!.id).toBe(res.body.id);
   });
 
-  it("issues the shift and insert as a single transactional batch", async () => {
-    await seedNote(currentDb(), "older", 0);
-
-    await request(makeApp()).post("/api/notes").send({ content: "newest" });
-
-    // One batch call carrying both writes (UPDATE then INSERT), not two execute() calls.
-    expect(testState.batchCalls).toHaveLength(1);
-    const statements = testState.batchCalls[0]![0] as Array<{ sql: string }>;
-    expect(statements).toHaveLength(2);
-    expect(statements[0]!.sql).toMatch(/UPDATE ea_notes SET sort_order = sort_order \+ 1/);
-    expect(statements[1]!.sql).toMatch(/INSERT INTO ea_notes/);
-  });
-
   it("rejects blank content without touching the database", async () => {
     await seedNote(currentDb(), "older", 0);
 

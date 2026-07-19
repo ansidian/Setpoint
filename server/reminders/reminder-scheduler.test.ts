@@ -198,6 +198,7 @@ describe("reminder scheduler", () => {
   });
 
   it("does not abort the batch when recording a delivery failure itself throws (P1-10)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     await createReminder({
       userId: "u1",
       sourceType: "todoist_task",
