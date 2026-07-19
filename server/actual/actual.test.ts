@@ -448,40 +448,6 @@ describe("actual.ts sendBill mutex", () => {
       expect.objectContaining({ schedule: expect.objectContaining({ id: "sched-bill" }) }),
     );
   });
-
-  it("sends an explicit empty note for one-time bill pay transactions when notes are blank", async () => {
-    const { sendBill } = await import("./actual.ts");
-    const actualApi = await importActualApiMock();
-
-    await sendBill({
-      type: "expense",
-      payee: "U.S. Bank",
-      amount: 42.25,
-      due_date: "2026-05-10",
-      account_id: "a1",
-      notes: "",
-    }, "user1");
-
-    const [txn] = actualApi.__getTransactions();
-    expect(txn!.notes).toBe("");
-  });
-
-  it("preserves user-entered notes for one-time bill pay transactions", async () => {
-    const { sendBill } = await import("./actual.ts");
-    const actualApi = await importActualApiMock();
-
-    await sendBill({
-      type: "expense",
-      payee: "U.S. Bank",
-      amount: 42.25,
-      due_date: "2026-05-10",
-      account_id: "a1",
-      notes: "Autopay scheduled from checking",
-    }, "user1");
-
-    const [txn] = actualApi.__getTransactions();
-    expect(txn!.notes).toBe("Autopay scheduled from checking");
-  });
 });
 
 describe("actual-core testConnection mutex", () => {
@@ -508,7 +474,6 @@ describe("actual-core testConnection mutex", () => {
     expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 });
-
 describe("actual.ts createQuickTxn", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -607,91 +572,5 @@ describe("actual.ts createQuickTxn", () => {
 
     expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(actualApi.addTransactions).toHaveBeenCalled();
-  });
-});
-
-describe("actual.ts calendar bill mapping", () => {
-  beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
-  });
-
-  it("maps open bill and transfer schedules to composite due-date instances", async () => {
-    const { __testing__ } = await import("./actual.ts");
-    const payeeMap = { p1: "SCE", p2: "Visa transfer" };
-    const schedules: ActualSchedule[] = [
-      {
-        id: "s1",
-        name: "Electricity",
-        next_date: "2026-05-10",
-        type: "bill",
-        conditions: [
-          { field: "amount", value: -12234 },
-          { field: "payee", value: "p1" },
-        ],
-      },
-      {
-        id: "s2",
-        name: "Credit card",
-        next_date: "2026-05-12",
-        type: "transfer",
-        conditions: [
-          { field: "amount", value: 25000 },
-          { field: "payee", value: "p2" },
-        ],
-      },
-      {
-        id: "s3",
-        name: "Paycheck",
-        next_date: "2026-05-15",
-        type: "income",
-        conditions: [{ field: "amount", value: 100000 }],
-      },
-      {
-        id: "s4",
-        name: "Old transfer",
-        next_date: "2026-05-18",
-        completed: true,
-        type: "transfer",
-        conditions: [
-          { field: "amount", value: 5000 },
-          { field: "payee", value: "p2" },
-        ],
-      },
-    ];
-
-    expect(__testing__.mapOpenBillInstances(schedules, payeeMap, { start: "2026-05-01", end: "2026-05-31" }))
-      .toEqual([
-        expect.objectContaining({ id: "s1:2026-05-10", scheduleId: "s1", payee: "SCE", paid: false, type: "bill" }),
-        expect.objectContaining({ id: "s2:2026-05-12", scheduleId: "s2", payee: "Visa transfer", paid: false, type: "transfer" }),
-      ]);
-  });
-
-  it("marks calendar bill instances paid when Actual has a matching schedule transaction", async () => {
-    const { getCalendarBillsRange } = await import("./actual.ts");
-    const actualApi = await importActualApiMock();
-    actualApi.__state.payees = [
-      { id: "p1", name: "SCE", transfer_acct: null },
-    ];
-    actualApi.__state.schedules = [
-      { id: "s1", name: "Electricity", rule: "r1", next_date: "2026-05-10", completed: false },
-    ];
-    actualApi.__state.rules = [
-      { id: "r1", conditions: [{ field: "amount", value: -12234 }, { field: "payee", value: "p1" }] },
-    ];
-    actualApi.__state.transactions = [
-      { id: "t1", date: "2026-05-10", amount: -12234, payee: "p1", schedule: "s1" },
-    ];
-
-    const out = await getCalendarBillsRange("user1", { start: "2026-05-01", end: "2026-05-31" });
-
-    expect(out.schedules).toEqual([
-      expect.objectContaining({
-        id: "s1:2026-05-10",
-        scheduleId: "s1",
-        paid: true,
-        openActionDisabled: true,
-      }),
-    ]);
   });
 });

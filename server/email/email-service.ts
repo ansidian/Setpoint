@@ -19,7 +19,6 @@ import { loadUserConfig } from "../platform/config-service.ts";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import {
   fetchEmailBodyForUid,
-  findAccountByUid,
   markEmailReadWithProvider,
   markEmailUnreadWithProvider,
   trashEmailWithProvider,
@@ -648,11 +647,3 @@ export async function settleArrivalGrace(userId: string): Promise<{ settled: num
 }
 
 export { pin, unpin } from "./pinned-emails.ts";
-
-// Exposed for unit testing only
-export const __testing__ = {
-  findAccountByUid,
-  buildEmailWebUrl,
-  sanitizeFtsQuery,
-  parseEmailSearchQuery,
-};

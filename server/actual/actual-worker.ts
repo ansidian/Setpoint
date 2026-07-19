@@ -312,7 +312,7 @@ export function getActualWorkerHealth(): ActualWorkerHealth {
   return { ...health };
 }
 
-export function shutdownActualWorkerForTests(): void {
+export function shutdownActualWorker(): void {
   clearIdleShutdownTimer();
   if (worker) {
     worker.kill("SIGTERM");
@@ -327,8 +327,3 @@ export function shutdownActualWorkerForTests(): void {
   workerStderr = "";
   health = { ...INITIAL_HEALTH };
 }
-
-export const __testing__ = {
-  workerExitError,
-  appendBounded,
-};

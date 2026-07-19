@@ -3,7 +3,6 @@ import { createClient, type Client } from "@libsql/client";
 import crypto from "crypto";
 
 const {
-  __testing__,
   cleanupTodoistWebhookDeliveries,
   handleTodoistWebhookDelivery,
   requestTodoistMirrorSync,
@@ -11,7 +10,7 @@ const {
   startTodoistMirrorSyncWorker,
 } = await import("./todoist-webhook.ts");
 const {
-  __resetCurrentDashboardEventsForTests,
+  clearCurrentDashboardEventSubscribers,
   subscribeCurrentDashboardEvents,
 } = await import("../dashboard/current-events.ts");
 
@@ -58,7 +57,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   stopTodoistMirrorSyncWorker();
-  __resetCurrentDashboardEventsForTests();
+  clearCurrentDashboardEventSubscribers();
   vi.useRealTimers();
   await testDb?.close?.();
   testDb = null as unknown as Client;

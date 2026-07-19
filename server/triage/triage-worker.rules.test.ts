@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
+import { clearCurrentDashboardEventSubscribers, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 
@@ -323,7 +323,7 @@ describe("email triage worker rule finalization", () => {
     });
 
   it("stores preflight reason metadata for no-model rule finalization", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       from_name: "USPS Informed Delivery",

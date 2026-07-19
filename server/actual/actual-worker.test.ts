@@ -18,7 +18,7 @@ vi.mock("child_process", () => ({
 const {
   getActualWorkerHealth,
   runActualWorkerOperation,
-  shutdownActualWorkerForTests,
+  shutdownActualWorker,
 } = await import("./actual-worker.ts");
 
 function createChild(): TestChild {
@@ -32,12 +32,12 @@ function createChild(): TestChild {
 
 describe("Actual worker runner", () => {
   beforeEach(() => {
-    shutdownActualWorkerForTests();
+    shutdownActualWorker();
     forkMock.mockReset();
   });
 
   afterEach(() => {
-    shutdownActualWorkerForTests();
+    shutdownActualWorker();
     vi.useRealTimers();
     delete process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS;
     delete process.env.EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB;

@@ -2,7 +2,6 @@ import { runActualWorkerOperation } from "./actual-worker.ts";
 import { testActualConnectionHttp } from "./actual-connection-test.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
 import { sendBillLightweight } from "./actual-lightweight-writes.ts";
-import { buildBillOccurrencesFromSchedules } from "./actual-bill-occurrences.ts";
 import type { ActualWorkerOperation, ActualWorkerOptions } from "./actual-worker-protocol.ts";
 import type {
   ActualAccount,
@@ -12,7 +11,6 @@ import type {
   ActualMetadata,
   ActualPayee,
   ActualRecentTransaction,
-  ActualSchedule,
 } from "../../shared/types/actual.ts";
 
 export interface ActualBillWriteInput {
@@ -59,14 +57,6 @@ const WRITE_OPERATION_WORKER_OPTIONS = {
   shutdownAfterOperation: true,
 };
 let metadataCache: { data: ActualMetadata | null; ts: number } = { data: null, ts: 0 };
-
-function mapOpenBillInstances(schedules: ActualSchedule[], payeeMap: Record<string, string>, range: ActualDateRange): ActualBillOccurrence[] {
-  return buildBillOccurrencesFromSchedules(schedules, {
-    payeeMap,
-    recentTransactions: range.recentTransactions || [],
-    range,
-  });
-}
 
 function shouldUseInProcessActual(): boolean {
   return process.env.NODE_ENV === "test" || process.env.EA_ACTUAL_WORKER_DISABLED === "1";
@@ -210,7 +200,3 @@ export async function createQuickTxn(userId: string, payload: ActualQuickTransac
   clearMetadataCache();
   return result;
 }
-
-export const __testing__ = {
-  mapOpenBillInstances,
-};

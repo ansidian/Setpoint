@@ -45,7 +45,6 @@ export { extractBill } from "./bill-extraction-service.ts";
 export { shouldScheduleImmediateBillsRefresh } from "./bills-mirror-refresh-policy.ts";
 export {
   BILLS_MIRROR_MAINTENANCE_TTL_MS,
-  __resetBillsMirrorRefreshTimersForTests,
   armPendingBillsMirrorRefreshes,
   billMirrorRefreshRange,
   clearPendingBillsMirrorRefresh,

@@ -3,7 +3,7 @@ import type { Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReminder } from "./reminder-service.ts";
 import {
-  __resetCurrentDashboardEventsForTests,
+  clearCurrentDashboardEventSubscribers,
   subscribeCurrentDashboardEvents,
 } from "../dashboard/current-events.ts";
 import { processDueReminderBatch } from "./reminder-scheduler.ts";
@@ -12,7 +12,7 @@ describe("reminder scheduler", () => {
   let db: Client;
 
   beforeEach(async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     db = createClient({ url: "file::memory:" });
     await db.executeMultiple(`
       CREATE TABLE ea_settings (
@@ -50,7 +50,7 @@ describe("reminder scheduler", () => {
   });
 
   afterEach(async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     await db?.close?.();
   });
 

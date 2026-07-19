@@ -22,7 +22,7 @@ vi.mock("../db/connection.ts", () => ({
 }));
 
 const { createAlfredRouter } = await import("./alfred.ts");
-const { _clearAlfredConversationsForTest } = await import("../alfred/alfred-conversations.ts");
+const { clearAlfredConversations } = await import("../alfred/alfred-conversations.ts");
 
 function hashSessionToken(raw: string): string {
   return `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
@@ -64,7 +64,7 @@ describe("alfred routes", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     testState.db.current = await createMigratedDb();
     testState.run.mockReset();
-    _clearAlfredConversationsForTest();
+    clearAlfredConversations();
   });
 
   afterEach(async () => {

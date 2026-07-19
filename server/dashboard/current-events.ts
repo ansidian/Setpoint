@@ -65,6 +65,6 @@ export function formatCurrentDashboardSse(event: CurrentDashboardEvent): string 
   return `event: dashboard-current-changed\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-export function __resetCurrentDashboardEventsForTests() {
+export function clearCurrentDashboardEventSubscribers() {
   subscribersByUser.clear();
 }

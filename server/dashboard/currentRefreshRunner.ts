@@ -12,8 +12,8 @@ import type { CurrentRefreshRunnerOptions } from "./current-types.ts";
 // Async refresh orchestration lifted from current-service.ts: the per-provider
 // fetch-timeout race (P1-6), the synchronous row refresh that writes through the
 // cache store, the background in-flight dedup map, and the missing-row refresh.
-// The single BACKGROUND_REFRESH_IN_FLIGHT map + its two test helpers live here so
-// they share one identity (current-service.ts re-exports the helpers).
+// The single BACKGROUND_REFRESH_IN_FLIGHT map and its lifecycle operation live
+// here so they share one identity (current-service.ts re-exports the operation).
 
 // Per-provider deadline for a single fetchFresh on the cold-cache / force path,
 // so /current can never block indefinitely on the slowest external call (P1-6).
@@ -21,12 +21,8 @@ import type { CurrentRefreshRunnerOptions } from "./current-types.ts";
 const PROVIDER_FETCH_TIMEOUT_MS = 4_000;
 const BACKGROUND_REFRESH_IN_FLIGHT = new Map<string, Promise<unknown>>();
 
-export function __resetCurrentDashboardRefreshStateForTests() {
+export function clearCurrentDashboardRefreshState() {
   BACKGROUND_REFRESH_IN_FLIGHT.clear();
-}
-
-export async function __waitForCurrentDashboardRefreshesForTests() {
-  await Promise.allSettled([...BACKGROUND_REFRESH_IN_FLIGHT.values()]);
 }
 
 function providerFetchTimeoutMs() {

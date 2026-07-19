@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import express from "express";
 import request from "supertest";
-import { activateOwner, __resetOwnerContextForTests } from "../auth/owner-context.ts";
+import { activateOwner, clearOwnerContext } from "../auth/owner-context.ts";
 import { requireClaimedInstance } from "./owner-gate.ts";
 
 function makeApp() {
@@ -13,7 +13,7 @@ function makeApp() {
 }
 
 describe("claimed-instance API gate", () => {
-  afterEach(() => __resetOwnerContextForTests());
+  afterEach(() => clearOwnerContext());
 
   it("keeps public setup status reachable before claim", async () => {
     const res = await request(makeApp()).get("/api/auth/setup/status");

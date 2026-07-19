@@ -174,7 +174,7 @@ let weatherCache: { data: WeatherPayload | null; ts: number; key: string } = {
 let weatherRefresh: { key: string; promise: Promise<WeatherPayload> } | null = null;
 const CACHE_TTL = 30 * 60 * 1000;
 
-export function __resetWeatherCacheForTests() {
+export function clearWeatherCache() {
   weatherCache = { data: null, ts: 0, key: "" };
   weatherRefresh = null;
 }

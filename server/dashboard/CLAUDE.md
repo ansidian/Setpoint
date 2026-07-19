@@ -18,7 +18,7 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 ## Local patterns
 
 - The entrypoints stay thin coordinators: pure decisions live in the `*Model` files, persistence in `currentCacheStore.ts`, async/timeout/dedup in `currentRefreshRunner.ts`.
-- The `BACKGROUND_REFRESH_IN_FLIGHT` map + its two `__*ForTests` helpers live only in `currentRefreshRunner.ts`; `current-service.ts` re-exports the helpers so tests resolve them from the `current-service.ts` entry point.
+- The `BACKGROUND_REFRESH_IN_FLIGHT` map and its lifecycle clear operation live only in `currentRefreshRunner.ts`; `current-service.ts` re-exports that operation so callers share one runtime identity.
 
 ## Related
 

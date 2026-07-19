@@ -6,7 +6,6 @@ import {
   projectActualMetadata,
   actualDateInt,
   ymdFromActualDate,
-  normalizeRuleConditions,
 } from "./actualMetadataModel.ts";
 import {
   actualDataDir,
@@ -303,9 +302,3 @@ export async function readLocalActualMetadata(userId: string, options: LocalActu
     await client.close();
   }
 }
-
-export const __testing__ = {
-  normalizeRuleConditions,
-  findLocalBudgetDir,
-  syncDownloadedBudget,
-};
