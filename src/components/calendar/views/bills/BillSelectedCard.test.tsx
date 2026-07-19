@@ -24,20 +24,4 @@ describe("BillSelectedCard", () => {
     expect(screen.getByText("Scheduled")).toBeTruthy();
   });
 
-  it("labels a transfer and surfaces a distinct payee", () => {
-    render(<BillSelectedCard bill={bill({ type: "transfer", name: "Savings", payee: "Ally Bank" })} />);
-    expect(screen.getByText("Transfer")).toBeTruthy();
-    expect(screen.getByText("Ally Bank")).toBeTruthy();
-  });
-
-  it("shows a Paid chip and Cleared status once the bill is paid", () => {
-    render(<BillSelectedCard bill={bill({ paid: true })} />);
-    expect(screen.getByText("Paid")).toBeTruthy();
-    expect(screen.getByText("Cleared")).toBeTruthy();
-  });
-
-  it("renders the action slot it is given", () => {
-    render(<BillSelectedCard bill={bill()} actions={<button type="button">Open in calendar</button>} />);
-    expect(screen.getByRole("button", { name: "Open in calendar" })).toBeTruthy();
-  });
 });

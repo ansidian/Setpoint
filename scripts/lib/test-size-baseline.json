@@ -21,13 +21,6 @@
     "server/snapshots/snapshot-service.test.ts": 1133,
     "server/tasks/todoist-mirror.test.ts": 1346,
     "server/tasks/todoist.test.ts": 654,
-    "server/triage/triage-worker.model-routing.test.ts": 689,
-    "src/components/calendar/CalendarModal.bills.test.tsx": 647,
-    "src/components/calendar/CalendarModal.events.test.tsx": 777,
-    "src/components/calendar/modal/CalendarFloatingDetailPanel.test.tsx": 1131,
-    "src/components/calendar/modal/CalendarSearchRail.test.tsx": 1020,
-    "src/components/calendar/views/agenda/AgendaRailShell.test.tsx": 1082,
-    "src/components/inbox/InboxView.mobile.test.tsx": 653,
-    "src/components/inbox/InboxView.session.test.tsx": 1041
+    "server/triage/triage-worker.model-routing.test.ts": 689
   }
 }

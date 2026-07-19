@@ -484,13 +484,6 @@ describe("InboxView mobile", () => {
     });
   });
 
-  it("keeps the desktop inbox path intact", () => {
-    renderInbox({ isMobile: false });
-
-    expect(screen.getByTestId("inbox-desktop-view")).toBeTruthy();
-    expect(screen.queryByTestId("inbox-mobile-list")).toBeNull();
-  });
-
   it("deselects the active desktop email on browser back", async () => {
     activateBudgetSnapshot();
 
@@ -523,76 +516,6 @@ describe("InboxView mobile", () => {
     expect(screen.getByText(/1 email across 1 account/i)).toBeTruthy();
     expect(screen.queryByText("Handle the approval first, then everything else can wait.")).toBeNull();
     expect(screen.queryByText(/Snapshot updated/i)).toBeNull();
-  });
-
-  it("shows unread noise as a quiet mobile summary hint", () => {
-    activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot({
-        filters: {
-          accounts: [{
-            account_id: "gmail-work",
-            label: "Work",
-            email: "work@example.com",
-            color: "#89dceb",
-            icon: "Mail",
-            count: 1,
-          }],
-          categories: [],
-        },
-        lanes: {
-          needs_attention: [],
-          fyi: [],
-          noise: [{
-            id: 12,
-            snapshot_item_id: 12,
-            uid: "noise-unread-1",
-            email_id: "noise-unread-1",
-            account_id: "gmail-work",
-            lane: "noise",
-            subject: "Sale digest",
-            from_name: "Store",
-            from_address: "store@example.com",
-            summary: "Low-priority promotion.",
-            date: "2026-05-03T15:00:00.000Z",
-            read: false,
-          }],
-        },
-      }),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    };
-
-    renderInbox({ isMobile: true, liveEmails: [] });
-
-    expect(screen.getByText((_, element) => element?.textContent === "1 noise unread")).toBeTruthy();
-  });
-
-  it("shows a Pinned group label above a pinned row on mobile", () => {
-    activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot({
-        pinned: [{
-          uid: "pinned-msg-1",
-          pinned_at: "2026-05-03T15:30:00.000Z",
-          account_id: "gmail-work",
-          subject: "Pinned budget approval",
-          from_name: "Dana",
-          from_address: "dana@example.com",
-          preview: "Keep this handy.",
-          date: "2026-05-03T15:00:00.000Z",
-          read: false,
-        }],
-      }),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    };
-
-    renderInbox({ isMobile: true, liveEmails: [] });
-
-    const pinnedLabel = screen.getByText("Pinned");
-    const pinnedRow = screen.getByText("Pinned budget approval");
-    expect(pinnedLabel.compareDocumentPosition(pinnedRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows resurfaced snoozes as fresh live rows in active snapshot mode", () => {

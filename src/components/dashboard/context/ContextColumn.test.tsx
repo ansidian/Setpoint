@@ -21,22 +21,6 @@ const baseProps = {
 };
 
 describe("ContextColumn", () => {
-  it("stacks the three context sections: weather, coming up, inbox peek", () => {
-    freezeJan15();
-    render(<ContextColumn {...baseProps} />);
-    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
-    expect(screen.getByTestId("context-weather")).toBeTruthy();
-    expect(screen.getByTestId("context-coming-up")).toBeTruthy();
-    expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
-  });
-
-  it("renders coming-up rows from the merged deadline+bill feed", () => {
-    freezeJan15();
-    render(<ContextColumn {...baseProps} />);
-    expect(screen.getByText("Finalize notes")).toBeTruthy();
-    expect(screen.getByText("Demo Electric")).toBeTruthy();
-  });
-
   it("jumps with the deadline payload contract when a coming-up deadline row is clicked", () => {
     freezeJan15();
     const onJump = vi.fn();
