@@ -201,7 +201,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
             <div className="min-w-0">
               <Link
                 to="/"
-                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground/75 transition-colors no-underline hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-foreground"
+                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground/75 transition-colors no-underline hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-white/[0.06] motion-reduce:transition-none"
               >
                 <ChevronLeft size={14} />
                 Dashboard
@@ -213,7 +213,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
                 Settings
               </h1>
               <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground/75">
-                Manage the accounts, automation, and AI behavior that power your daily dashboard.
+                Manage external connections, automation, finance behavior, and owner security.
               </p>
             </div>
             <div className="shrink-0">
@@ -236,7 +236,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
                 {TABS.map((tab) => {
                   const isSelected = activeTab === tab.id;
                   const className = cn(
-                    "rounded-lg border px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap transition-all",
+                    "rounded-lg border px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none",
                     isSelected
                       ? "border-primary/20 bg-primary/[0.12] text-primary shadow-[0_0_8px_rgba(203,166,218,0.18)]"
                       : "border-transparent text-muted-foreground hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-foreground"

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getAccounts, getCapabilities, getInstanceCredentials, getSettings, updateSettings } from "@/api";
 import {
   normalizeSettingsTab,
@@ -74,7 +74,9 @@ function useSettingsAutoSave() {
 }
 
 export default function useSettingsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [settings, setSettings] = useState<Partial<SettingsResponse> | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilityStatus[]>([]);
@@ -85,13 +87,15 @@ export default function useSettingsPage() {
 
   const setTab = useCallback((nextTab: SettingsTab) => {
     const resolvedTab = normalizeSettingsTab(nextTab);
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      if (resolvedTab === "accounts") next.delete("tab");
-      else next.set("tab", resolvedTab);
-      return next;
+    const next = new URLSearchParams(searchParams);
+    if (resolvedTab === "connections") next.delete("tab");
+    else next.set("tab", resolvedTab);
+    navigate({
+      pathname: location.pathname,
+      search: next.toString() ? `?${next}` : "",
+      hash: "",
     });
-  }, [setSearchParams]);
+  }, [location.pathname, navigate, searchParams]);
 
   useEffect(() => {
     Promise.all([
