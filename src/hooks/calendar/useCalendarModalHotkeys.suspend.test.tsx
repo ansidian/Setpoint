@@ -127,6 +127,98 @@ describe("useCalendarModalHotkeys full suspension", () => {
     dispatchEscape(document.body);
     expect(setFloatingDetail).toHaveBeenCalledWith(null);
   });
+
+  it("ignores all calendar hotkeys while a blocking shell overlay is present", () => {
+    const { cycleView, setViewDate } = setupRouting();
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-suspend-calendar-hotkeys", "blocking");
+    document.body.appendChild(overlay);
+
+    for (const key of ["3", "t"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      document.body.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+
+    expect(cycleView).not.toHaveBeenCalled();
+    expect(setViewDate).not.toHaveBeenCalled();
+  });
+
+  it("does not cycle when the key originates inside a suspended hotkey target", () => {
+    const { cycleView } = setupRouting();
+    const rail = document.createElement("div");
+    rail.setAttribute("data-suspend-calendar-hotkeys", "true");
+    const input = document.createElement("input");
+    rail.appendChild(input);
+    document.body.appendChild(rail);
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "3", bubbles: true, cancelable: true }));
+
+    expect(cycleView).not.toHaveBeenCalled();
+  });
+});
+
+describe("useCalendarModalHotkeys shell-tab routing", () => {
+  it("cycles and consumes the calendar's plain 3 hotkey", () => {
+    const { cycleView } = setupRouting();
+    const event = new KeyboardEvent("keydown", { key: "3", bubbles: true, cancelable: true });
+
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(cycleView).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves browser-modified 3 shortcuts untouched", () => {
+    const { cycleView } = setupRouting();
+
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      const event = new KeyboardEvent("keydown", {
+        key: "3",
+        ...modifier,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.body.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+
+    expect(cycleView).not.toHaveBeenCalled();
+  });
+
+  it("leaves retired and other shell-tab keys untouched", () => {
+    const { cycleView } = setupRouting();
+
+    for (const init of [
+      { key: "v" },
+      { key: "V", shiftKey: true },
+    ]) {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", {
+        ...init,
+        bubbles: true,
+        cancelable: true,
+      }));
+    }
+
+    for (const init of [
+      { key: "1" },
+      { key: "1", metaKey: true },
+      { key: "1", ctrlKey: true },
+      { key: "2" },
+      { key: "4" },
+      { key: "5" },
+    ]) {
+      const event = new KeyboardEvent("keydown", {
+        ...init,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.body.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+
+    expect(cycleView).not.toHaveBeenCalled();
+  });
 });
 
 describe("useCalendarModalHotkeys month navigation", () => {

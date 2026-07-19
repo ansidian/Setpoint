@@ -1,7 +1,7 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mockCreateCalendarEvent } from "./CalendarEventEditor.test-setup.ts";
-import { renderModal, typeTitle } from "./CalendarEventEditor.test-utils.tsx";
+import { renderEventEditor, typeTitle } from "./events/CalendarEventEditor.test-utils.tsx";
 
 // Guards P1-1: the Cmd/Ctrl+Enter save hotkey is a document-level listener that
 // bypasses the Save button's disabled-while-saving state. Without a synchronous
@@ -18,8 +18,7 @@ describe("CalendarEventEditor save re-entrancy guard", () => {
       }),
     );
 
-    renderModal();
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
     await screen.findByTestId("calendar-event-editor-rail");
 
     await typeTitle("Team lunch");

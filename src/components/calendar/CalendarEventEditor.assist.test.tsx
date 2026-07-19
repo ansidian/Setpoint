@@ -1,7 +1,14 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mockGetCalendarSources, mockCreateCalendarEvent, mockUpdateCalendarEvent, mockGetCalendarPlaceSuggestions, mockGetCalendarPlaceDetails } from "./CalendarEventEditor.test-setup.ts";
-import { renderModal, openFloatingEventEditorFromSelectedChip, getActiveEventSourceTrigger, getActiveEventSaveButton, setCompactSchedulePickerTime } from "./CalendarEventEditor.test-utils.tsx";
+import { renderModal } from "./CalendarEventEditor.test-utils.tsx";
+import {
+  commitTitleWithoutWallClock,
+  getActiveEventSaveButton,
+  getActiveEventSourceTrigger,
+  renderEventEditor,
+  setCompactSchedulePickerTime,
+} from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor source and location assist behavior", () => {
   it("opens the create editor before calendar sources finish loading", async () => {
@@ -9,9 +16,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     mockGetCalendarSources.mockReturnValue(new Promise((resolve) => {
       resolveSources = resolve;
     }));
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
 
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     expect((screen.getByTestId("calendar-event-source") as HTMLInputElement).value).toBe("");
@@ -92,23 +97,19 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       },
     });
 
-    const { upsertEvents } = renderModal({
-      events: [
-        {
-          id: "event-move",
-          etag: '"etag-move"',
-          title: "Planning",
-          accountId: "gmail-main",
-          calendarId: "primary",
-          startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
-          endMs: new Date("2026-04-21T16:30:00.000Z").getTime(),
-          writable: true,
-          allDay: false,
-        },
-      ],
-    });
-
-    await openFloatingEventEditorFromSelectedChip();
+    const event = {
+      id: "event-move",
+      etag: '"etag-move"',
+      title: "Planning",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T16:30:00.000Z").getTime(),
+      writable: true,
+      allDay: false,
+    };
+    const { upsertEvents } = renderEventEditor({ event });
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(getActiveEventSourceTrigger());
     expect(await screen.findByRole("dialog", { name: /calendar source picker/i })).toBeTruthy();
@@ -126,7 +127,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("shows location suggestions and resolves a selected place into the location field", async () => {
-    renderModal();
+    renderEventEditor();
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
       places: [
         {
@@ -138,7 +139,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       ],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.focus(screen.getByTestId("calendar-event-location"));
@@ -157,7 +157,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("lets the user arrow through location suggestions and press enter to commit one", async () => {
-    renderModal();
+    renderEventEditor();
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
       places: [
         {
@@ -183,7 +183,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     const locationInput = screen.getByTestId("calendar-event-location");
@@ -203,9 +202,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("edits date ranges, all-day state, and overnight times from the compact schedule picker", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("calendar-event-start-date"));
@@ -247,7 +244,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("routes parsed title locations through the place suggestions flow", async () => {
-    renderModal();
+    renderEventEditor();
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
       places: [
         {
@@ -273,11 +270,10 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     const titleInput = screen.getByTestId("calendar-event-title");
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+    fireEvent.input(titleInput, {
       target: { value: "Dinner 5pm @McDonald's" },
     });
 
@@ -300,7 +296,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("resolves an unconsumed @location token through Places when the event is saved directly", async () => {
-    renderModal();
+    renderEventEditor();
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
       places: [
         {
@@ -321,12 +317,8 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     });
     mockCreateCalendarEvent.mockResolvedValue({ event: { id: "new-place-event" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Body shop visit 5pm @C&C Collision alhambra" },
-    });
+    commitTitleWithoutWallClock("Body shop visit 5pm @C&C Collision alhambra");
 
     await waitFor(() => {
       expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("C&C Collision alhambra");
@@ -346,7 +338,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("keeps the resolved place when details arrive slower than the title debounce", async () => {
-    renderModal();
+    renderEventEditor();
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
       places: [
         {
@@ -374,7 +366,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
         },
       };
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     const titleInput = screen.getByTestId("calendar-event-title");
@@ -430,15 +421,11 @@ describe("CalendarEventEditor source and location assist behavior", () => {
         },
       ],
     });
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     const titleInput = screen.getByTestId("calendar-event-title");
-    fireEvent.input(titleInput, {
-      target: { value: "Dinner 2pm cal school" },
-    });
+    commitTitleWithoutWallClock("Dinner 2pm cal school");
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-event-title-source-preview").textContent).toMatch(/school/i);
@@ -456,7 +443,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("saves with mod+enter", async () => {
-    const { upsertEvents } = renderModal();
+    const { upsertEvents } = renderEventEditor();
     const savedEvent = {
       id: "event-hotkey",
       title: "Planning block",
@@ -471,12 +458,8 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       event: savedEvent,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Planning block" },
-    });
+    commitTitleWithoutWallClock("Planning block");
 
     fireEvent.keyDown(document, { key: "Enter", metaKey: true });
 

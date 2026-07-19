@@ -1,56 +1,43 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import "../CalendarModal.test-setup.ts";
-import CalendarModal from "../CalendarModal.tsx";
-import { wrapWithDashboard } from "../CalendarModal.test-utils.tsx";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import CalendarModalHeader from "./CalendarModalHeader.tsx";
 
-// billsRangeData with ensureRange makes availableCalendarViews = ["events", "bills"]
-const billsRangeData = {
-  ensureRange: vi.fn().mockResolvedValue(undefined),
-  data: {
-    schedules: [],
-    recentTransactions: [],
-    payeeMap: {},
-  },
-};
+afterEach(cleanup);
 
-function renderWithBills(view = "events", onViewChange = vi.fn()) {
-  window.innerWidth = 1900;
-  render(wrapWithDashboard(
-    <CalendarModal
-      open
-      onClose={() => {}}
+function renderHeader({
+  view = "events",
+  onViewChange = vi.fn<(view: string) => void>(),
+  availableCalendarViews = ["events", "bills"],
+}: {
+  view?: string;
+  onViewChange?: (view: string) => void;
+  availableCalendarViews?: string[];
+} = {}) {
+  render(
+    <CalendarModalHeader
       view={view}
+      monthName="April"
+      monthYear={2026}
+      layout={{ tier: "xl", shellPadding: 24, contentGap: 12 }}
+      canGoPrev
+      navigateMonth={vi.fn()}
+      jumpToMonth={vi.fn()}
+      currentYear={2026}
+      currentMonth={3}
       onViewChange={onViewChange}
-      focusDate="2026-04-20"
-      eventsData={{ getEvents: () => [] }}
-      billsData={{}}
-      billsRangeData={billsRangeData}
-      deadlinesData={{}}
+      availableCalendarViews={availableCalendarViews}
+      eventEditor={{} as never}
+      viewYear={2026}
+      viewMonth={3}
+      setDeadlineEditor={vi.fn()}
+      viewLabel="Events"
     />,
-  ));
-}
-
-function renderEventsOnly(onViewChange = vi.fn()) {
-  window.innerWidth = 1900;
-  render(wrapWithDashboard(
-    <CalendarModal
-      open
-      onClose={() => {}}
-      view="events"
-      onViewChange={onViewChange}
-      focusDate="2026-04-20"
-      eventsData={{ getEvents: () => [] }}
-      billsData={{}}
-      // no billsRangeData → availableCalendarViews = ["events"]
-      deadlinesData={{}}
-    />,
-  ));
+  );
 }
 
 describe("CalendarModalHeader tablist", () => {
   it("exposes a tablist with Events and Bills tabs and a 3 hint when bills is available", () => {
-    renderWithBills("events");
+    renderHeader();
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     const tabs = within(list).getAllByRole("tab");
@@ -65,7 +52,7 @@ describe("CalendarModalHeader tablist", () => {
   });
 
   it("marks the active view tab as selected and inactive as not selected", () => {
-    renderWithBills("events");
+    renderHeader();
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     const tabs = within(list).getAllByRole("tab");
@@ -78,7 +65,7 @@ describe("CalendarModalHeader tablist", () => {
 
   it("calls onViewChange when clicking the inactive tab", () => {
     const onViewChange = vi.fn();
-    renderWithBills("events", onViewChange);
+    renderHeader({ onViewChange });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     const billsTab = within(list).getAllByRole("tab").find((t) => /bills/i.test(t.textContent));
@@ -89,7 +76,7 @@ describe("CalendarModalHeader tablist", () => {
 
   it("ArrowRight on a focused tab moves selection via onViewChange", () => {
     const onViewChange = vi.fn();
-    renderWithBills("events", onViewChange);
+    renderHeader({ onViewChange });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "ArrowRight" });
@@ -99,7 +86,7 @@ describe("CalendarModalHeader tablist", () => {
 
   it("ArrowLeft on a focused tab moves selection via onViewChange", () => {
     const onViewChange = vi.fn();
-    renderWithBills("bills", onViewChange);
+    renderHeader({ view: "bills", onViewChange });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "ArrowLeft" });
@@ -109,7 +96,7 @@ describe("CalendarModalHeader tablist", () => {
 
   it("Home key moves to first view when not already first", () => {
     const onViewChange = vi.fn();
-    renderWithBills("bills", onViewChange);
+    renderHeader({ view: "bills", onViewChange });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "Home" });
@@ -118,7 +105,7 @@ describe("CalendarModalHeader tablist", () => {
 
   it("End key moves to last view when not already last", () => {
     const onViewChange = vi.fn();
-    renderWithBills("events", onViewChange);
+    renderHeader({ onViewChange });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "End" });
@@ -126,7 +113,7 @@ describe("CalendarModalHeader tablist", () => {
   });
 
   it("does NOT render a tablist when only events view is available", () => {
-    renderEventsOnly();
+    renderHeader({ availableCalendarViews: ["events"] });
 
     expect(screen.queryByRole("tablist", { name: /calendar view/i })).toBeNull();
   });

@@ -58,4 +58,48 @@ describe("CalendarDraftPreviewPanel", () => {
     expect(screen.getByText("Recurring event")).toBeTruthy();
     expect(screen.queryByText("Does not repeat")).toBeNull();
   });
+
+  it("renders the compact schedule as restrained semantic segments", () => {
+    render(
+      <CalendarDraftPreviewPanel
+        ghostPreview={{
+          ghosts: [{
+            id: "event-ghost",
+            title: "Work",
+            startDate: "2026-04-21",
+            endDate: "2026-04-21",
+            startTime: "03:00",
+            endTime: "08:00",
+          }],
+          totalConflictCount: 0,
+        }}
+        draft={{
+          startDate: "2026-04-21",
+          endDate: "2026-04-21",
+          startTime: "03:00",
+          endTime: "08:00",
+          location: "",
+        }}
+        selectedSource={{ summary: "Personal", color: "#89b4fa" }}
+        recurrenceDraft={{
+          frequency: "weekly",
+          interval: 1,
+          weekdays: ["MO"],
+          ends: { type: "never" },
+        }}
+      />,
+    );
+
+    const summary = screen.getByTestId("calendar-draft-preview-summary");
+    expect(summary.textContent).toMatch(/apr 21, 2026/i);
+    expect(summary.textContent).toMatch(/3:00 am to 8:00 am/i);
+
+    const segments = screen.getAllByTestId("calendar-draft-preview-segment");
+    expect(segments.map((segment) => segment.getAttribute("data-summary-kind"))).toEqual(
+      expect.arrayContaining(["schedule", "source", "location", "repeat"]),
+    );
+    expect(
+      segments.find((segment) => segment.getAttribute("data-summary-kind") === "repeat")?.textContent,
+    ).toMatch(/every mon/i);
+  });
 });
