@@ -1,13 +1,14 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import "./CalendarEventEditor.test-setup.ts";
-import { renderModal, setCompactSchedulePickerTime } from "./CalendarEventEditor.test-utils.tsx";
+import {
+  renderEventEditor,
+  setCompactSchedulePickerTime,
+} from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor compact schedule behavior", () => {
   it("uses the custom time picker inside the compact schedule popover", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("calendar-event-start-time"));

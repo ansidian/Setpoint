@@ -3,6 +3,7 @@ import * as ts from "typescript"
 export type TestSourcePolicyViolationKind =
   | "exclusive-or-disabled-test"
   | "fixed-duration-sleep"
+  | "full-calendar-test-harness"
 
 export interface TestSourcePolicyViolation {
   kind: TestSourcePolicyViolationKind
@@ -13,6 +14,42 @@ export interface TestSourcePolicyViolation {
 
 const vitestCaseFactories = new Set(["bench", "describe", "it", "suite", "test"])
 const forbiddenCaseModifiers = new Set(["only", "skip", "todo"])
+const reviewedFullCalendarTestOwners = new Set([
+  "src/components/calendar/CalendarDeadlineQuickActions.test.tsx",
+  "src/components/calendar/CalendarEventEditor.assist.test.tsx",
+  "src/components/calendar/CalendarEventEditor.ghost-preview.test.tsx",
+  "src/components/calendar/CalendarEventEditor.quick-actions.test.tsx",
+  "src/components/calendar/CalendarEventEditor.test.tsx",
+  "src/components/calendar/CalendarModal.agenda-rail.test.tsx",
+  "src/components/calendar/CalendarModal.agenda-scroll.test.tsx",
+  "src/components/calendar/CalendarModal.agenda-today.test.tsx",
+  "src/components/calendar/CalendarModal.bills.test.tsx",
+  "src/components/calendar/CalendarModal.dashboard-focus.test.tsx",
+  "src/components/calendar/CalendarModal.deadline-overlay.test.tsx",
+  "src/components/calendar/CalendarModal.events.test.tsx",
+  "src/components/calendar/CalendarModal.layout.test.tsx",
+  "src/components/calendar/CalendarModal.mini-calendar.test.tsx",
+  "src/components/calendar/CalendarModal.todoist-deadlines.test.tsx",
+  "src/components/calendar/CalendarModal.todoist-editor.test.tsx",
+  "src/components/calendar/CalendarModal.workspace-create.test.tsx",
+  "src/components/calendar/CalendarModal.workspace-edit.test.tsx",
+  "src/components/calendar/CalendarModal.workspace-parking.test.tsx",
+  "src/hooks/calendar/useCalendarModalHotkeys.test.tsx",
+])
+
+function normalizeFilePath(filePath: string): string {
+  return filePath.replaceAll("\\", "/")
+}
+
+function isFullCalendarTestHarnessImport(node: ts.ImportDeclaration): boolean {
+  if (!ts.isStringLiteral(node.moduleSpecifier)) return false
+  const modulePath = node.moduleSpecifier.text.replaceAll("\\", "/")
+  return /(?:^|\/)CalendarModal(?:\.tsx)?$/.test(modulePath)
+    || (
+      /(?:^|\/)CalendarEventEditor\.test-utils(?:\.tsx)?$/.test(modulePath)
+      && !/(?:^|\/)events\/CalendarEventEditor\.test-utils(?:\.tsx)?$/.test(modulePath)
+    )
+}
 
 function propertyName(expression: ts.Expression): string | null {
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text
@@ -149,6 +186,18 @@ export function findTestSourcePolicyViolations(
   }
 
   function visit(node: ts.Node): void {
+    if (
+      ts.isImportDeclaration(node)
+      && isFullCalendarTestHarnessImport(node)
+      && !reviewedFullCalendarTestOwners.has(normalizeFilePath(filePath))
+    ) {
+      report(
+        node,
+        "full-calendar-test-harness",
+        "new tests must use a direct model, hook, or component owner instead of mounting the full CalendarModal workspace",
+      )
+    }
+
     if (ts.isCallExpression(node)) {
       const modifier = propertyName(node.expression)
       const rootName = rootIdentifierName(node.expression)

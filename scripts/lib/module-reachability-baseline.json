@@ -38,6 +38,7 @@
     "server/triage/triage-worker.test-utils.ts": "Shared migrated triage-worker database fixture with multiple active worker-suite consumers",
     "src/components/calendar/CalendarEventEditor.test-setup.ts": "Shared event-editor provider mock setup used across the editor integration suites",
     "src/components/calendar/CalendarEventEditor.test-utils.tsx": "Shared event-editor render and interaction helpers used across the editor integration suites",
+    "src/components/calendar/events/CalendarEventEditor.test-utils.tsx": "Focused real-hook and editor-rail test harness used across event-editor behavior suites",
     "src/components/calendar/CalendarModal.test-setup.ts": "Shared calendar source and Todoist mock setup used across calendar integration suites",
     "src/components/calendar/CalendarModal.test-utils.tsx": "Shared calendar DashboardProvider, interaction, and animation-frame helpers with multiple active consumers",
     "src/components/inbox/test-utils/inboxFixtures.ts": "Shared inbox email and snapshot factories with multiple active model and component consumers",
