@@ -123,6 +123,15 @@ export default function useSettingsPage() {
       .catch(() => {});
   }, []);
 
+  const refreshConnections = useCallback(async () => {
+    const [settingsResult, capabilityResult] = await Promise.all([
+      getSettings(),
+      getCapabilities(true),
+    ]);
+    setSettings(settingsResult);
+    setCapabilities(capabilityResult.capabilities);
+  }, []);
+
   const refreshInstanceCredentials = useCallback(async () => {
     try {
       const result = await getInstanceCredentials();
@@ -160,6 +169,7 @@ export default function useSettingsPage() {
     connections,
     credentialMetadata,
     refreshCapabilities,
+    refreshConnections,
     refreshInstanceCredentials,
     updateInstanceCredentialMetadata,
     setSettings,

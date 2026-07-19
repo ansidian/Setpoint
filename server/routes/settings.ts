@@ -34,7 +34,6 @@ import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import {
-  validateActualBudgetUrl,
   validateDiscordWebhookUrl,
   validateEmailInterests,
   validateImportantSenders,
@@ -200,8 +199,11 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
   const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
-    if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
-      return res.status(400).json({ message: "Provide either todoist_api_token or todoist_oauth_token_response, not both" });
+    if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
+      return res.status(400).json({ message: "Use the Actual Budget Save & verify connection endpoint" });
+    }
+    if (todoist_api_token !== undefined) {
+      return res.status(400).json({ message: "Use the Todoist Save & verify connection endpoint" });
     }
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
     const updates: string[] = [];
@@ -237,23 +239,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       updates.push("weather_lng = ?"); args.push(weather_lng);
     }
     if (weather_location !== undefined) { updates.push("weather_location = ?"); args.push(weather_location); }
-    if (actual_budget_url !== undefined) {
-      if (typeof actual_budget_url !== "string") {
-        return res.status(400).json({ message: "actual_budget_url must be a string" });
-      }
-      const validation = validateActualBudgetUrl(actual_budget_url);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.message! });
-      }
-      updates.push("actual_budget_url = ?"); args.push(validation.value!);
-    }
-    if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
-    if (actual_budget_sync_id !== undefined) {
-      if (typeof actual_budget_sync_id !== "string") {
-        return res.status(400).json({ message: "actual_budget_sync_id must be a string" });
-      }
-      updates.push("actual_budget_sync_id = ?"); args.push(actual_budget_sync_id);
-    }
     if (email_ai_provider !== undefined || email_ai_model !== undefined) {
       const resolved = resolveEmailAiModelConfig({
         provider: email_ai_provider,
@@ -274,17 +259,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
       updates.push("email_interests_json = ?");
       args.push(JSON.stringify(validation.value));
-    }
-    if (todoist_api_token !== undefined) {
-      updates.push("todoist_api_token_encrypted = ?");
-      args.push(todoist_api_token ? encrypt(todoist_api_token) : null);
-      updates.push("todoist_oauth_refresh_token_encrypted = NULL");
-      updates.push("todoist_oauth_access_token_expires_at = NULL");
-      updates.push("todoist_oauth_scope = NULL");
-      updates.push("todoist_oauth_token_type = NULL");
-      updates.push(todoist_api_token
-        ? "todoist_connection_mode = 'personal_token'"
-        : "todoist_connection_mode = NULL");
     }
     if (email_triage_mode !== undefined) {
       if (!isAllowedStoredEmailTriageMode(email_triage_mode)) {
@@ -344,13 +318,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       args.push(userId);
       await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
     }
-    if (todoist_api_token !== undefined && todoist_api_token) {
-      try {
-        await clearTodoistNeedsReauth(userId);
-      } catch (clearErr) {
-        console.error("[Settings] Failed to clear todoist_needs_reauth:", errorMessage(clearErr));
-      }
-    }
     if (todoist_oauth_token_response !== undefined) {
       const response = typeof todoist_oauth_token_response === "string"
         ? JSON.parse(todoist_oauth_token_response)
@@ -363,12 +330,9 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
     }
 
-    // Purge completed-task snapshots on disconnect. Current runtime reads domain data.
-    if (todoist_api_token !== undefined && !todoist_api_token) {
-      await db.execute({
-        sql: "DELETE FROM ea_completed_tasks WHERE user_id = ?",
-        args: [userId],
-      });
+    if (discord_webhook_url !== undefined || discord_user_id !== undefined) {
+      const { capabilityStatusService } = await import("../capability-status-service.ts");
+      capabilityStatusService.invalidate();
     }
 
     // Hot-reload cron jobs when schedules change (no server restart needed)

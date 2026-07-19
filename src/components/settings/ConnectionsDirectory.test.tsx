@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BrowserRouter } from "react-router-dom";
@@ -96,5 +97,36 @@ describe("ConnectionsDirectory", () => {
     fireEvent.click(trigger);
     expect(window.location.hash).toBe("");
     expect(screen.queryByTestId("panel-actual-budget")).toBeNull();
+  });
+
+  it("unmounts a closed panel so unsaved credential candidates are discarded", () => {
+    function CandidatePanel() {
+      const [candidate, setCandidate] = useState("");
+      return (
+        <input
+          aria-label="Credential candidate"
+          type="password"
+          value={candidate}
+          onChange={(event) => setCandidate(event.target.value)}
+        />
+      );
+    }
+
+    render(
+      <BrowserRouter>
+        <ConnectionsDirectory
+          groups={CONNECTION_GROUPS}
+          rows={rows}
+          renderPanel={() => <CandidatePanel />}
+        />
+      </BrowserRouter>,
+    );
+    const trigger = screen.getByRole("button", { name: /Todoist/i });
+    fireEvent.click(trigger);
+    fireEvent.change(screen.getByLabelText("Credential candidate"), { target: { value: "plaintext" } });
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+
+    expect((screen.getByLabelText("Credential candidate") as HTMLInputElement).value).toBe("");
   });
 });

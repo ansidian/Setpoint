@@ -61,6 +61,7 @@ function renderConnection(id: ConnectionId) {
       credentialMetadata={[]}
       onCredentialMetadataChange={vi.fn()}
       onRefreshCredentialMetadata={vi.fn()}
+      onRefreshConnections={vi.fn()}
     />,
   );
 }
@@ -107,5 +108,29 @@ describe("ConnectionPanelContent ownership", () => {
   ] as const)("routes %s to its existing lifecycle controls", (id, testId) => {
     renderConnection(id);
     expect(screen.getByTestId(testId)).toBeTruthy();
+  });
+
+  it("normalizes stored settings sources and keeps verification evidence visible", () => {
+    const row = {
+      ...connection("actual-budget"),
+      source: "settings" as const,
+      lastSucceededAt: "2026-07-19T18:00:00.000Z",
+    };
+    render(
+      <ConnectionPanelContent
+        connection={row}
+        accounts={[]}
+        setAccounts={vi.fn()}
+        settings={{}}
+        patch={vi.fn()}
+        credentialMetadata={[]}
+        onCredentialMetadataChange={vi.fn()}
+        onRefreshCredentialMetadata={vi.fn()}
+        onRefreshConnections={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Source: Saved in Setpoint")).toBeTruthy();
+    expect(screen.getByText(/last verified/i)).toBeTruthy();
   });
 });

@@ -760,6 +760,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/actual/cache/hydrate` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/cache/status` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/categories` | `server/routes/briefing/bills.ts` |
+| DELETE | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
+| POST | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/metadata` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/payees` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/send` | `server/routes/briefing/bills.ts` |
@@ -817,6 +819,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
 | GET | `/api/ea/accounts/todoist/auth` | `server/routes/todoist-oauth.ts` |
 | GET | `/api/ea/accounts/todoist/callback` | `server/routes/todoist-oauth.ts` |
+| DELETE | `/api/ea/accounts/todoist/connection` | `server/routes/todoist-oauth.ts` |
+| POST | `/api/ea/accounts/todoist/personal-token` | `server/routes/todoist-oauth.ts` |
 | GET | `/api/ea/accounts/todoist/status` | `server/routes/todoist-oauth.ts` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.ts` |
 | GET | `/api/instance-credentials/` | `server/routes/instance-credentials.ts` |

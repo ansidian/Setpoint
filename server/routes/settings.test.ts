@@ -26,6 +26,9 @@ vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
+vi.mock("../capability-status-service.ts", () => ({
+  capabilityStatusService: { invalidate: vi.fn() },
+}));
 vi.mock("../platform/weather.ts", () => ({
   geocodeLocation: vi.fn(async () => []),
 }));
@@ -153,8 +156,8 @@ describe("GET /settings todoist_needs_reauth", () => {
   });
 });
 
-describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)", () => {
-  it("clears todoist_needs_reauth when a non-empty token is saved (manual reconnect)", async () => {
+describe("PUT /settings rejects direct Todoist credential writes", () => {
+  it("requires the provider-specific Save & verify endpoint for replacements", async () => {
     await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
@@ -164,14 +167,15 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
       .put("/api/ea/settings")
       .send({ todoist_api_token: "a-fresh-valid-token" });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Todoist Save & verify/i);
     expect(await getSettingsRow()).toMatchObject({
-      todoist_needs_reauth: 0,
-      todoist_connection_mode: "personal_token",
+      todoist_needs_reauth: 1,
+      todoist_connection_mode: null,
     });
   });
 
-  it("does not clear todoist_needs_reauth when disconnecting (empty token)", async () => {
+  it("requires the provider-specific disconnect endpoint for removal", async () => {
     await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
@@ -181,7 +185,7 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
       .put("/api/ea/settings")
       .send({ todoist_api_token: "" });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     expect(await getSettingsRow()).toMatchObject({
       todoist_needs_reauth: 1,
       todoist_connection_mode: null,
@@ -277,13 +281,14 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     expect((await getSettingsRow()).actual_budget_url).toBeNull();
   });
 
-  it("accepts a loopback actual_budget_url (self-hosted Actual server, SEC-05)", async () => {
+  it("routes even valid Actual settings through the provider-specific endpoint", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .send({ actual_budget_url: "http://localhost:5006" });
 
-    expect(res.status).toBe(200);
-    expect((await getSettingsRow()).actual_budget_url).toBe("http://localhost:5006");
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Actual Budget Save & verify/i);
+    expect((await getSettingsRow()).actual_budget_url).toBeNull();
   });
 
   it("rejects a non-Discord discord_webhook_url and does not encrypt/persist (SEC-05)", async () => {
@@ -295,15 +300,13 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
   });
 
-  it("accepts valid scalar settings and persists them", async () => {
+  it("accepts unrelated valid scalar settings and persists them", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .send({
         email_lookback_hours: 24,
         weather_lat: 40.7128,
         weather_lng: -74.006,
-        actual_budget_url: "https://actual.example.com",
-        actual_budget_sync_id: "sync-123",
       });
 
     expect(res.status).toBe(200);
@@ -311,7 +314,7 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     expect(row.email_lookback_hours).toBe(24);
     expect(row.weather_lat).toBe(40.7128);
     expect(row.weather_lng).toBe(-74.006);
-    expect(row.actual_budget_url).toBe("https://actual.example.com");
-    expect(row.actual_budget_sync_id).toBe("sync-123");
+    expect(row.actual_budget_url).toBeNull();
+    expect(row.actual_budget_sync_id).toBeNull();
   });
 });

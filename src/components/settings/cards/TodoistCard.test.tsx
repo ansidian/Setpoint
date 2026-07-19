@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
-  updateSettings: vi.fn(),
+  saveTodoistPersonalToken: vi.fn(),
+  disconnectTodoistConnection: vi.fn(),
   getTodoistConnectionStatus: vi.fn(),
   stageTodoistOAuthApplication: vi.fn(),
   importTodoistOAuthEnvironment: vi.fn(),
@@ -33,6 +34,11 @@ const disconnectedStatus = {
 describe("TodoistCard", () => {
   beforeEach(() => {
     mockApi.getTodoistConnectionStatus.mockResolvedValue(disconnectedStatus);
+    mockApi.saveTodoistPersonalToken.mockResolvedValue({
+      success: true,
+      verifiedAt: "2026-07-19T18:00:00.000Z",
+    });
+    mockApi.disconnectTodoistConnection.mockResolvedValue({ success: true });
   });
 
   it("shows Connected and a masked placeholder when already configured", () => {
@@ -42,20 +48,19 @@ describe("TodoistCard", () => {
   });
 
   it("saves a freshly entered token and clears the input", async () => {
-    mockApi.updateSettings.mockResolvedValue({ success: true });
     render(<TodoistCard settings={{}} />);
     const input = screen.getByPlaceholderText("Todoist API token");
     fireEvent.change(input, { target: { value: "tok-123" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
     await waitFor(() => {
-      expect(mockApi.updateSettings).toHaveBeenCalledWith({ todoist_api_token: "tok-123" });
+      expect(mockApi.saveTodoistPersonalToken).toHaveBeenCalledWith("tok-123");
     });
     expect(await screen.findByText("Connected")).toBeTruthy();
   });
 
   it("keeps Save disabled until the token is edited", () => {
     render(<TodoistCard settings={{}} />);
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save & verify" }).disabled).toBe(true);
   });
 
   it("shows a warning pill and Reconnect action when todoist_needs_reauth is true", () => {
@@ -71,16 +76,16 @@ describe("TodoistCard", () => {
     expect(screen.queryByText(/reconnect needed/i)).toBeNull();
   });
 
-  it("disconnects explicitly by saving an empty personal token", async () => {
-    mockApi.updateSettings.mockResolvedValue({ success: true });
-    render(<TodoistCard settings={{ todoist_configured: true }} />);
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  it("keeps a rejected candidate in the write-only field without claiming a replacement", async () => {
+    mockApi.saveTodoistPersonalToken.mockRejectedValueOnce(new Error("Todoist personal token could not be verified"));
+    render(<TodoistCard settings={{ todoist_configured: true, todoist_connection_mode: "oauth" }} />);
+    const input = screen.getByLabelText("Personal API token");
+    fireEvent.change(input, { target: { value: "bad-token" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
 
-    await waitFor(() => {
-      expect(mockApi.updateSettings).toHaveBeenCalledWith({ todoist_api_token: "" });
-    });
-    expect(screen.queryByText("Connected")).toBeNull();
+    expect(await screen.findByText(/could not be verified/i)).toBeTruthy();
+    expect((input as HTMLInputElement).value).toBe("bad-token");
+    expect(mockApi.getTodoistConnectionStatus).toHaveBeenCalledTimes(1);
   });
 
   it("stages advanced application credentials write-only while keeping personal tokens primary", async () => {
@@ -101,5 +106,17 @@ describe("TodoistCard", () => {
     expect((screen.getByLabelText("Client ID") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Client secret") as HTMLInputElement).value).toBe("");
     expect(screen.getByText(/personal token stays active until authorization succeeds/i)).toBeTruthy();
+  });
+
+  it("confirms Todoist impact before disconnecting and refreshes shared state", async () => {
+    const onRefreshConnections = vi.fn(async () => {});
+    render(<TodoistCard settings={{ todoist_configured: true }} onRefreshConnections={onRefreshConnections} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Todoist" }));
+    expect(screen.getByText(/task and deadline sync will stop/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm disconnect Todoist" }));
+
+    await waitFor(() => expect(mockApi.disconnectTodoistConnection).toHaveBeenCalledTimes(1));
+    expect(onRefreshConnections).toHaveBeenCalledTimes(1);
   });
 });

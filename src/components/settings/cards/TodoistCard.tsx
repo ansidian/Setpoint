@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { SiTodoist } from "@icons-pack/react-simple-icons";
-import { updateSettings } from "@/api";
+import { disconnectTodoistConnection, saveTodoistPersonalToken } from "@/api";
 import {
   beginTodoistOAuth,
   getTodoistConnectionStatus,
@@ -19,19 +19,25 @@ import {
   SETTINGS_PRIMARY_BUTTON_CLASS,
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
-import type { SettingsCardStateProps } from "../settingsTypes";
+import type { SettingsCardStateProps, SettingsConnectionRefreshProps } from "../settingsTypes";
 import type { TodoistConnectionStatus } from "../../../../shared/types/tasks";
 import { cn } from "@/lib/utils";
 
 const BUTTON_MOTION_CLASS =
   "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
 
-export default function TodoistCard({ settings }: Pick<SettingsCardStateProps, "settings">) {
+export default function TodoistCard({
+  settings,
+  onRefreshConnections = async () => {},
+}: Pick<SettingsCardStateProps, "settings"> & SettingsConnectionRefreshProps) {
   const needsReauth = !!settings?.todoist_needs_reauth;
   const [todoistToken, setTodoistToken] = useState("");
   const [todoistConfigured, setTodoistConfigured] = useState(false);
   const [todoistDirty, setTodoistDirty] = useState(false);
   const [todoistSavingSecret, setTodoistSavingSecret] = useState(false);
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [todoistMessage, setTodoistMessage] = useState<string | null>(null);
   const [oauthStatus, setOauthStatus] = useState<TodoistConnectionStatus | null>(null);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -60,19 +66,51 @@ export default function TodoistCard({ settings }: Pick<SettingsCardStateProps, "
 
   async function handleSaveTodoistSecret() {
     setTodoistSavingSecret(true);
+    setTodoistMessage(null);
     try {
-      await updateSettings({ todoist_api_token: todoistToken });
+      await saveTodoistPersonalToken(todoistToken);
       sessionStorage.setItem("ea_settings_changed", "1");
-      setTodoistConfigured(Boolean(todoistToken));
+      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+      setTodoistConfigured(true);
       setTodoistDirty(false);
       setTodoistToken("");
+      await onRefreshConnections().catch(() => {});
       try {
         setOauthStatus(await getTodoistConnectionStatus());
       } catch {
         // The personal-token mutation succeeded; advanced status can recover on the next load.
       }
+    } catch {
+      setTodoistMessage("Todoist personal token could not be verified. The working connection was not changed.");
     } finally {
       setTodoistSavingSecret(false);
+    }
+  }
+
+  async function handleDisconnectTodoist() {
+    setDisconnecting(true);
+    setTodoistMessage(null);
+    try {
+      await disconnectTodoistConnection();
+      sessionStorage.setItem("ea_settings_changed", "1");
+      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+      setTodoistConfigured(false);
+      setTodoistDirty(false);
+      setTodoistToken("");
+      setConfirmingDisconnect(false);
+      setOauthStatus((current) => current ? {
+        ...current,
+        mode: "disconnected",
+        configured: false,
+        oauthRefreshable: false,
+        needsReauth: false,
+        deliveryMode: "periodic",
+      } : current);
+      await onRefreshConnections().catch(() => {});
+    } catch {
+      setTodoistMessage("Todoist could not be disconnected.");
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -148,6 +186,7 @@ export default function TodoistCard({ settings }: Pick<SettingsCardStateProps, "
             onChange={(event) => {
               setTodoistToken(event.target.value);
               setTodoistDirty(true);
+              setTodoistMessage(null);
             }}
           />
           <FieldHint className="mt-1">
@@ -176,7 +215,7 @@ export default function TodoistCard({ settings }: Pick<SettingsCardStateProps, "
               disabled={!todoistDirty || todoistSavingSecret}
               size="sm"
             >
-              {todoistSavingSecret ? "Saving…" : "Save"}
+              {todoistSavingSecret ? "Saving & verifying…" : "Save & verify"}
             </Button>
           )}
           {todoistConfigured && !todoistDirty ? (
@@ -188,18 +227,45 @@ export default function TodoistCard({ settings }: Pick<SettingsCardStateProps, "
               )}
               <button
                 type="button"
-                onClick={() => {
-                  setTodoistToken("");
-                  setTodoistDirty(true);
-                  setTodoistConfigured(false);
-                }}
-                className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+                onClick={() => setConfirmingDisconnect(true)}
+                className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
               >
-                Disconnect
+                Disconnect Todoist
               </button>
             </>
           ) : null}
+          {todoistMessage ? <StatusPill tone="danger">{todoistMessage}</StatusPill> : null}
         </div>
+
+        {confirmingDisconnect ? (
+          <div className="rounded-md border border-danger/20 bg-danger/[0.06] p-3">
+            <FieldHint>
+              Task and deadline sync will stop. Mirrored tasks and automation settings stay available for review.
+            </FieldHint>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={disconnecting}
+                onClick={handleDisconnectTodoist}
+                className={BUTTON_MOTION_CLASS}
+              >
+                {disconnecting ? "Disconnecting…" : "Confirm disconnect Todoist"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={disconnecting}
+                onClick={() => setConfirmingDisconnect(false)}
+                className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <details className="border-t border-white/[0.06] pt-4">
           <summary className="-mx-1 cursor-pointer rounded-md px-1 py-1 text-[11px] font-semibold text-muted-foreground transition-[color,background-color] duration-200 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">

@@ -36,7 +36,9 @@ function rowMetadata(row: ConnectionRowView) {
   const parts: string[] = [];
   const mode = readableMode(row.mode);
   if (mode) parts.push(mode);
-  if (row.source && row.source !== "absent") parts.push(row.source === "stored" ? "Saved in Setpoint" : row.source);
+  if (row.source && row.source !== "absent") {
+    parts.push(row.source === "stored" || row.source === "settings" ? "Saved in Setpoint" : row.source);
+  }
   if (row.identities.length === 1) parts.push(row.identities[0]!);
   if (row.identities.length > 1) parts.push(`${row.identities.length} connected accounts`);
   return parts.join(" · ");

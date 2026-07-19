@@ -1,20 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { SiActualbudget } from "@icons-pack/react-simple-icons";
-import { getActualCacheStatus, hydrateActualBudgetCache, testActualBudget, updateSettings } from "@/api";
+import { getActualCacheStatus, hydrateActualBudgetCache, removeActualBudgetConnection, saveActualBudgetConnection, testActualBudget } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   SectionLabel,
   SettingsCard,
   StatusPill,
+  FieldHint,
 } from "@/components/settings/settings-ui";
 import {
   SETTINGS_PRIMARY_BUTTON_CLASS,
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
-import type { SettingsCardStateProps } from "../settingsTypes";
+import type { SettingsCardStateProps, SettingsConnectionRefreshProps } from "../settingsTypes";
 import type { ActualCacheHydrationResponse, ActualCacheStatusResponse } from "../../../../shared/types/bills";
-import type { SettingsPatchRequest } from "../../../../shared/types/settings";
 
 type TestStatus = "testing" | "ok" | "fail" | null;
 type HydrateStatus = "checking" | "hydrating" | "ok" | "missing" | "fail" | null;
@@ -65,11 +65,16 @@ function hydrateStatusLabel(status: HydrateStatus, message: string | null) {
   return null;
 }
 
-export default function ActualBudgetConnectionCard({ settings }: Pick<SettingsCardStateProps, "settings">) {
+export default function ActualBudgetConnectionCard({
+  settings,
+  onRefreshConnections = async () => {},
+}: Pick<SettingsCardStateProps, "settings"> & SettingsConnectionRefreshProps) {
   const [actualForm, setActualForm] = useState({ serverUrl: "", password: "", syncId: "" });
   const [actualConfigured, setActualConfigured] = useState(false);
   const [actualDirty, setActualDirty] = useState(false);
   const [actualSavingSecret, setActualSavingSecret] = useState(false);
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [testStatus, setTestStatus] = useState<TestStatus>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [hydrateStatus, setHydrateStatus] = useState<HydrateStatus>(null);
@@ -134,22 +139,53 @@ export default function ActualBudgetConnectionCard({ settings }: Pick<SettingsCa
 
   async function handleSaveActualSecret() {
     setActualSavingSecret(true);
+    setTestStatus("testing");
+    setTestMsg(null);
     try {
-      const payload: SettingsPatchRequest = {
-        actual_budget_url: actualForm.serverUrl,
-        actual_budget_sync_id: actualForm.syncId,
+      const candidate = {
+        serverURL: actualForm.serverUrl,
+        syncId: actualForm.syncId,
+        ...(actualForm.password ? { password: actualForm.password } : {}),
       };
-      if (actualForm.password) payload.actual_budget_password = actualForm.password;
-      await updateSettings(payload);
+      await saveActualBudgetConnection(candidate);
       sessionStorage.setItem("ea_settings_changed", "1");
       window.dispatchEvent(new CustomEvent("ea-settings-changed"));
       setActualConfigured(true);
       setActualDirty(false);
       setActualForm((current) => ({ ...current, password: "" }));
+      setTestStatus("ok");
       setHydrateStatus(null);
       setHydrateResult(null);
+      await onRefreshConnections().catch(() => {});
+    } catch (error) {
+      setTestStatus("fail");
+      setTestMsg(errorMessage(error, "Connection could not be saved"));
     } finally {
       setActualSavingSecret(false);
+    }
+  }
+
+  async function handleRemoveActualConnection() {
+    setRemoving(true);
+    setTestMsg(null);
+    try {
+      await removeActualBudgetConnection();
+      sessionStorage.setItem("ea_settings_changed", "1");
+      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+      setActualConfigured(false);
+      setActualDirty(false);
+      setActualForm({ serverUrl: "", password: "", syncId: "" });
+      setConfirmingRemoval(false);
+      setTestStatus(null);
+      setHydrateStatus(null);
+      setHydrateMsg(null);
+      setHydrateResult(null);
+      await onRefreshConnections().catch(() => {});
+    } catch (error) {
+      setTestStatus("fail");
+      setTestMsg(errorMessage(error, "Actual credentials could not be removed"));
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -249,7 +285,7 @@ export default function ActualBudgetConnectionCard({ settings }: Pick<SettingsCa
             disabled={!actualDirty || actualSavingSecret}
             size="sm"
           >
-            {actualSavingSecret ? "Saving…" : "Save"}
+            {actualSavingSecret ? "Saving & verifying…" : "Save & verify"}
           </Button>
           <Button
             variant="secondary"
@@ -258,7 +294,7 @@ export default function ActualBudgetConnectionCard({ settings }: Pick<SettingsCa
             onClick={handleTestActual}
             disabled={testStatus === "testing"}
           >
-            {testStatus === "testing" ? "Testing…" : "Test Connection"}
+            {testStatus === "testing" ? "Checking…" : "Check connection"}
           </Button>
           <Button
             variant="secondary"
@@ -290,6 +326,47 @@ export default function ActualBudgetConnectionCard({ settings }: Pick<SettingsCa
           <p className="text-[11px] leading-4 text-muted-foreground/75">
             {hydrateMsg}
           </p>
+        ) : null}
+        {actualConfigured && !actualDirty ? (
+          <div className="border-t border-white/[0.06] pt-4">
+            {confirmingRemoval ? (
+              <div className="flex flex-col gap-3">
+                <FieldHint>
+                  Finance sync and transaction actions will stop. Bill-pay mappings and utility links stay saved.
+                </FieldHint>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={removing}
+                    onClick={handleRemoveActualConnection}
+                    className="transition-[transform,background-color] duration-200 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+                  >
+                    {removing ? "Removing…" : "Confirm remove Actual credentials"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={removing}
+                    onClick={() => setConfirmingRemoval(false)}
+                    className={SETTINGS_SECONDARY_BUTTON_CLASS}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingRemoval(true)}
+                className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+              >
+                Remove Actual credentials
+              </button>
+            )}
+          </div>
         ) : null}
       </div>
     </SettingsCard>
