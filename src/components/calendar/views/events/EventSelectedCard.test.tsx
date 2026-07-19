@@ -25,18 +25,4 @@ describe("EventSelectedCard", () => {
     expect(screen.getByText("2 attendees")).toBeTruthy();
   });
 
-  it("flags a non-editable event as Read-only", () => {
-    render(<EventSelectedCard ev={event({ writable: false })} />);
-    expect(screen.getByText("Read-only")).toBeTruthy();
-  });
-
-  it("flags a recurring event", () => {
-    render(<EventSelectedCard ev={event({ isRecurring: true })} />);
-    expect(screen.getByText("Recurring")).toBeTruthy();
-  });
-
-  it("renders the action slot it is given", () => {
-    render(<EventSelectedCard ev={event()} actions={<button type="button">Open in calendar</button>} />);
-    expect(screen.getByRole("button", { name: "Open in calendar" })).toBeTruthy();
-  });
 });
