@@ -15,7 +15,7 @@ import {
   ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.ts";
 import useCalendarEventSelectionSet from "./useCalendarEventSelectionSet";
-import useCalendarFloatingDetail, { type CalendarFloatingDetail } from "./useCalendarFloatingDetail";
+import useCalendarFloatingDetail from "./useCalendarFloatingDetail";
 import useDashboardDetailFocus, { type PendingDashboardDetailFocus } from "./useDashboardDetailFocus";
 import useDeadlineOverlayState from "./useDeadlineOverlayState";
 import useFloatingEditorRouting, { type FloatingEditorItem } from "./useFloatingEditorRouting";

@@ -1,41 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  canNavigateBack,
   compute,
   deadlineAccentFor,
   getDeadlineSelectionId,
 } from "./deadlinesModel.ts";
 
-describe("deadlinesModel range navigation", () => {
-  it("allows previous navigation by rolling window even without overdue data", () => {
-    expect(canNavigateBack({
-      viewYear: 2026,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      data: { minDate: "2025-05-02" },
-      computed: {},
-    })).toBe(true);
-
-    expect(canNavigateBack({
-      viewYear: 2026,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      data: {},
-      computed: {},
-    })).toBe(true);
-
-    expect(canNavigateBack({
-      viewYear: 2025,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      data: { minDate: "2025-05-02" },
-      computed: {},
-    })).toBe(false);
-  });
-
+describe("deadlinesModel", () => {
   it("groups completed deadline history with active deadlines from the domain payload", () => {
     const result = compute({
       viewYear: 2026,

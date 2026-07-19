@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
+import type { RefObject } from "react";
 import type {
   DeadlineMutationRequest,
   TodoistLabel,
@@ -8,7 +8,6 @@ import type {
 } from "../../../../shared/types/tasks";
 import type {
   CreateReminderRequest,
-  Reminder,
   ReminderDateTimeSelection,
   ReminderStatus,
 } from "../../../../shared/types/reminders";
@@ -209,7 +208,4 @@ export interface SubmitAddTaskFlowOptions {
   isChronoReady: () => boolean;
 }
 
-export type TodoistReminder = Reminder | TodoistReminderEntry;
 export type CustomReminder = ReminderDateTimeSelection;
-export type StateSetter<T> = Dispatch<SetStateAction<T>>;
-export type ElementRef<T extends HTMLElement> = MutableRefObject<T | null>;

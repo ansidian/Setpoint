@@ -14,10 +14,6 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-export function parseBooleanEnv(value: unknown) {
-  return ["1", "true", "yes", "on"].includes(clean(value).toLowerCase());
-}
-
 export function resolveDatabaseClientConfig(
   env: DatabaseEnvironment = process.env,
 ): DatabaseClientConfig {

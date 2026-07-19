@@ -219,14 +219,6 @@ export interface TriageBatchContext {
   getModelClient(userId: string): Promise<TriageModelClient>;
 }
 
-export interface TriageDashboardEvent extends Record<string, unknown> {
-  source: "email_triage";
-  reason: string;
-  state: "current";
-  occurredAt: string;
-  details: Record<string, unknown>;
-}
-
 export type TriageError = Error & {
   status?: number;
   retryable?: boolean;

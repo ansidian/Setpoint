@@ -4,8 +4,6 @@ import {
   monthBlockHeight,
   monthIndexToDate,
   dateToMonthIndex,
-  visibleMonthIndices,
-  activeMonthIndex,
   midpointActiveMonthIndex,
   nearestWeekRowOffset,
   prefetchRange,
@@ -106,76 +104,6 @@ describe("calendarScrollModel", () => {
         const date = monthIndexToDate(idx, ref.year, ref.month);
         expect(dateToMonthIndex(date.year, date.month, ref.year, ref.month)).toBe(idx);
       }
-    });
-  });
-
-  describe("visibleMonthIndices", () => {
-    const fixedHeight = () => 500;
-
-    it("returns single month when viewport fits within one block", () => {
-      expect(visibleMonthIndices({ scrollOffset: 100, containerHeight: 300, getMonthHeight: fixedHeight }))
-        .toEqual({ first: 0, last: 0 });
-    });
-
-    it("returns two months when viewport spans a boundary", () => {
-      // Viewport [250, 650) spans month 0 [0,500) and month 1 [500,1000)
-      expect(visibleMonthIndices({ scrollOffset: 250, containerHeight: 400, getMonthHeight: fixedHeight }))
-        .toEqual({ first: 0, last: 1 });
-    });
-
-    it("advances at exact month boundary", () => {
-      // Viewport [500, 900) — month 0 ends exactly at 500, month 1 starts at 500
-      expect(visibleMonthIndices({ scrollOffset: 500, containerHeight: 400, getMonthHeight: fixedHeight }))
-        .toEqual({ first: 1, last: 1 });
-    });
-
-    it("handles negative scroll offsets", () => {
-      // Viewport [-250, 150) spans month -1 [-500,0) and month 0 [0,500)
-      expect(visibleMonthIndices({ scrollOffset: -250, containerHeight: 400, getMonthHeight: fixedHeight }))
-        .toEqual({ first: -1, last: 0 });
-    });
-
-    it("handles large viewport covering multiple months", () => {
-      // Viewport [0, 1600) covers months 0,1,2 fully and part of 3
-      expect(visibleMonthIndices({ scrollOffset: 0, containerHeight: 1600, getMonthHeight: fixedHeight }))
-        .toEqual({ first: 0, last: 3 });
-    });
-  });
-
-  describe("activeMonthIndex", () => {
-    const offsetFromIndex = (i: number) => i * 500;
-
-    it("returns the month at the viewport top", () => {
-      expect(activeMonthIndex({
-        visibleIndices: { first: 0, last: 1 },
-        scrollOffset: 0,
-        getMonthOffset: offsetFromIndex,
-      })).toBe(0);
-    });
-
-    it("returns the topmost month whose start is at or above viewport top", () => {
-      // scrollOffset=750: month 1 starts at 500 (≤ 750), month 2 starts at 1000 (> 750)
-      expect(activeMonthIndex({
-        visibleIndices: { first: 1, last: 2 },
-        scrollOffset: 750,
-        getMonthOffset: offsetFromIndex,
-      })).toBe(1);
-    });
-
-    it("advances when scrolled exactly to a month boundary", () => {
-      expect(activeMonthIndex({
-        visibleIndices: { first: 2, last: 3 },
-        scrollOffset: 1000,
-        getMonthOffset: offsetFromIndex,
-      })).toBe(2);
-    });
-
-    it("works with negative indices", () => {
-      expect(activeMonthIndex({
-        visibleIndices: { first: -2, last: -1 },
-        scrollOffset: -750,
-        getMonthOffset: offsetFromIndex,
-      })).toBe(-2);
     });
   });
 

@@ -114,20 +114,8 @@ export interface CompleteDeadlineOccurrenceResult {
   occurrenceDate: string;
 }
 
-export interface TodoistMutationResponse {
-  success: true;
-}
-
 export interface DeadlineDeleteResponse {
   ok: true;
-}
-
-export interface TodoistWebhookDelta {
-  eventName: string;
-  eventData: Record<string, unknown>;
-  userId?: string | null;
-  initiatedFrom?: string | null;
-  version?: string | null;
 }
 
 export type TodoistConnectionMode = "disconnected" | "personal_token" | "oauth";

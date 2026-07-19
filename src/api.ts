@@ -11,7 +11,6 @@ import type {
   AccountId,
   AccountMutationResponse,
   AccountPatchRequest,
-  AccountSummary,
   AccountsResponse,
   ApiTokenMetadata,
   PasskeyDeleteResponse,

@@ -86,7 +86,7 @@ describe("mobile dashboard 3-tier layout", () => {
     expect(document.querySelector('[data-sect="bills"]')).toBeNull();
   });
 
-  it("renders the fixed desktop 3-tier layout with the 344px context column", () => {
+  it("renders the fixed desktop 3-tier layout", () => {
     renderDashboardBody({ isMobile: false });
     expect(document.querySelector('[data-layout-mode="desktop"]')).toBeTruthy();
     expect(screen.getByTestId("needs-you-band")).toBeTruthy();

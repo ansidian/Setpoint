@@ -18,7 +18,6 @@ vi.mock("../db/connection.ts", () => ({
 }));
 
 const emailIndex = await import("./email-index.ts");
-const { EMAIL_INDEX_BODY_TEXT_MAX_CHARS } = emailIndex;
 
 beforeEach(async () => {
   testState.db.current = await createEmailIndexTestDb();

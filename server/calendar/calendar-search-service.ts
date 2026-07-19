@@ -7,7 +7,6 @@ import {
 } from "./calendar-search.ts";
 import { addMonthsIso } from "./calendar-range-model.ts";
 import type {
-  CalendarMirrorHealth,
   CalendarSearchCandidate,
 } from "../../shared/types/calendar.ts";
 import type { DeadlinePayload } from "../../shared/types/tasks.ts";

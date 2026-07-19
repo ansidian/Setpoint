@@ -43,14 +43,13 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `bills/financeSourceColors.ts` — canonical income/outflow/transfer source colors for every Bills-view surface
 
 ### deadlines
-- `deadlines/DeadlinesCellContent.tsx` — compact task chips for grid cells
+- `deadlines/DeadlinesCellContent.tsx` — deadline ghost descriptors reused by Events cells
 - `deadlines/DeadlinesDetailRail.tsx` — task detail panel: status, reminders, actions
 - `deadlines/DeadlineDetailCard.tsx` — task card with metadata and reminders
 - `deadlines/DeadlineDetailActions.tsx` — mark-complete, edit, delete, link menu
 - `deadlines/DeadlineQuickActionLayer.tsx` — context menu for quick actions
 - `deadlines/DeadlineStatusIndicator.tsx` — status badge icon
 - `deadlines/deadlineDetailModel.ts` — task formatting, priority/context labels, compression
-- `deadlines/deadlinesAgendaModel.ts` — task → agenda conversion, status/accent mapping
 - `deadlines/deadlinesModel.ts` — status normalization, priority colors, source resolution
 - `deadlines/calendarDeadlineRescheduleModel.ts` — pure drag-reschedule target resolution + day-only payload (re-supplies `due_time`) + drag-eligibility gate
 - `deadlines/useDeadlineQuickActions.ts` — quick-action menu building and handlers, plus the day-only drag-reschedule slice

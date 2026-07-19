@@ -1,7 +1,7 @@
 // Helpers shared across the dashboard shell, hero, timeline, rails, and inbox.
 // Kept small and pure so they can be unit-tested without a React tree.
 
-import { greetingPools, epochFromLa } from "./dashboard-helpers";
+import { epochFromLa } from "./dashboard-helpers";
 
 export interface TimelineEvent {
   startMs?: number | null;
@@ -111,32 +111,9 @@ export function briefingPhaseLabel(ts: string | number | Date | null | undefined
   return SNAPSHOT_PHASE_PHRASES[phaseIndex(new Date(ts))]!;
 }
 
-function stableIndex(date: Date, len: number): number {
-  const day = date.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const key = `${day}-${phaseIndex(date)}`;
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  return Math.abs(h) % len;
-}
-
-const PHASE_LABELS = ["Late night", "Good morning", "Good afternoon", "Good evening", "Tonight"];
-
-export function greetingFor(date = new Date(), _name = ""): { label: string; text: string } {
-  const idx = phaseIndex(date);
-  const pool = greetingPools[idx] ?? greetingPools[0];
-  const text = pool.greetings[stableIndex(date, pool.greetings.length)]!;
-  return { label: PHASE_LABELS[idx]!, text };
-}
-
 export function pacificClock(date = new Date()): string {
   return date.toLocaleTimeString("en-US", {
     timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit",
-  });
-}
-
-export function pacificDate(date = new Date()): string {
-  return date.toLocaleDateString("en-US", {
-    timeZone: "America/Los_Angeles", weekday: "long", month: "long", day: "numeric",
   });
 }
 
@@ -153,13 +130,6 @@ export function formatEventDuration(startMs: number | null | undefined, endMs: n
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
-export function formatDuration(durationMin: number): string {
-  if (durationMin < 60) return `${durationMin} min`;
-  const hours = Math.floor(durationMin / 60);
-  const mins = durationMin % 60;
-  return mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
 }
 
 // Classify an event relative to now: past | live | future
@@ -327,10 +297,4 @@ export function deriveLane(email: LaneEmail | null | undefined): string {
   // Snapshot emails (DashboardBody) only carry a coarse `triage` lane.
   if (email.triage === "action") return "needs_attention";
   return "fyi";
-}
-
-export function hexOpacity(hex: string, alpha: number): string {
-  // Append a 2-digit alpha suffix to a #RRGGBB color.
-  const clamped = Math.max(0, Math.min(255, Math.round(alpha * 255)));
-  return `${hex}${clamped.toString(16).padStart(2, "0")}`;
 }

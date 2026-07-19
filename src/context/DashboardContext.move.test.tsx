@@ -1,7 +1,6 @@
 import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider, useDashboard } from "./DashboardContext";
-import type { DashboardContextValue } from "./DashboardContext";
 import type { DashboardDeadline } from "./dashboardTaskProjection";
 import { completeDeadlineOccurrence, updateDeadline } from "../api";
 import type { CompleteDeadlineOccurrenceResult, TodoistTask } from "../../shared/types/tasks";

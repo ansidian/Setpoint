@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { phaseIndex, briefingPhaseLabel, greetingFor, dueDateToMs, buildTimeline, deriveLane, formatChipDateTime } from "./shell-helpers";
-import { greetingPools } from "./dashboard-helpers";
+import { phaseIndex, briefingPhaseLabel, dueDateToMs, buildTimeline, deriveLane, formatChipDateTime } from "./shell-helpers";
 
 const iso = (ms: number | null) => new Date(ms!).toISOString();
 
@@ -78,28 +77,6 @@ describe("briefingPhaseLabel", () => {
   it("night snapshot → 'Since tonight's snapshot'", () => {
     expect(briefingPhaseLabel(atHourPacific(22).getTime())).toBe("Since tonight's snapshot");
   });
-});
-
-describe("greetingFor — personable pools", () => {
-  it("returns a phrase from the correct pool for the hour", () => {
-    const { text } = greetingFor(atHourPacific(8));
-    expect(greetingPools[1].greetings).toContain(text); // morning pool
-  });
-
-  it("returns the right label for each phase", () => {
-    expect(greetingFor(atHourPacific(2)).label).toBe("Late night");
-    expect(greetingFor(atHourPacific(8)).label).toBe("Good morning");
-    expect(greetingFor(atHourPacific(14)).label).toBe("Good afternoon");
-    expect(greetingFor(atHourPacific(19)).label).toBe("Good evening");
-    expect(greetingFor(atHourPacific(22)).label).toBe("Tonight");
-  });
-
-  it("is stable for the same phase on the same day", () => {
-    const a = greetingFor(atHourPacific(8));
-    const b = greetingFor(atHourPacific(10));
-    expect(a.text).toBe(b.text);
-  });
-
 });
 
 // These absolute instants own Pacific wall-clock parsing across PST/PDT and

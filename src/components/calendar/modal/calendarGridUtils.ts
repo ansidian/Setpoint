@@ -95,21 +95,11 @@ export function isCalendarInlineOverflowTarget(target: EventTarget | null): bool
     && !!target.closest("[data-calendar-inline-overflow-layer='true']");
 }
 
-export function isCalendarOverflowTriggerTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement
-    && !!target.closest("[data-calendar-overflow-trigger='true']");
-}
-
 export function isCalendarEventSpanTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement
     && !!target.closest(
       "[data-testid='calendar-event-span-segment'], [data-testid='calendar-event-span-overlay']",
     );
-}
-
-export function canUseInlineOverflow({ triggerElement, layout }: { triggerElement?: Element | null; layout?: { stacked?: boolean } | null }): boolean {
-  if (layout?.stacked || !triggerElement?.isConnected) return false;
-  return true;
 }
 
 export function resolveInlineOverflowAnchor(triggerElement?: Element | null, containerElement?: Element | null): CalendarInlineOverflowAnchor | null {

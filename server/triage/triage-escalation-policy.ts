@@ -21,7 +21,3 @@ export function cheapEscalationReason(decision: CheapEscalationDecision): string
   }
   return null;
 }
-
-export function shouldEscalateCheap(decision: CheapEscalationDecision): boolean {
-  return cheapEscalationReason(decision) !== null;
-}

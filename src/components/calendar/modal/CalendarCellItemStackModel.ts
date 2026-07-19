@@ -80,10 +80,6 @@ export function getReservedCellItemLaneHeight(count: number, metrics?: CalendarC
   return count * (itemHeight + gap);
 }
 
-export function getMeasuredVisibleCellItemCount<T extends CalendarCellStackItem>(items: T[], availableHeight: number = Number.NaN, metrics?: CalendarCellStackMetrics): number {
-  return getMeasuredCellItemStackPlan(items, availableHeight, metrics).visibleCount;
-}
-
 export function getMeasuredCellItemStackPlan<T extends CalendarCellStackItem>(items: T[], availableHeight: number = Number.NaN, metrics?: CalendarCellStackMetrics): { visibleCount: number; overflowVisible: boolean } {
   const itemCount = items.length;
   if (itemCount <= 0) return { visibleCount: 0, overflowVisible: false };

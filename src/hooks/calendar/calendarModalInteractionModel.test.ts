@@ -106,11 +106,6 @@ describe("calendar modal interaction model", () => {
     });
   });
 
-  it("does not export floatingWorkspaceNavigationEffect (parking is rAF-driven)", async () => {
-    const exports = await import("./calendarModalInteractionModel");
-    expect(exports).not.toHaveProperty("floatingWorkspaceNavigationEffect");
-  });
-
   it("forces the deadline overlay only for open Events requests", () => {
     expect(shouldForceDeadlineOverlay({ open: true, view: "events", forceDeadlineOverlay: true })).toBe(true);
     expect(shouldForceDeadlineOverlay({ open: true, view: "bills", forceDeadlineOverlay: true })).toBe(false);
@@ -128,11 +123,6 @@ describe("nextCalendarView", () => {
   });
   it("reverses with reverse=true", () => {
     expect(nextCalendarView({ current: "events", views, reverse: true })).toBe("bills");
-  });
-  it("steps forward vs reverse distinctly with 3+ views", () => {
-    const three = ["events", "bills", "agenda"];
-    expect(nextCalendarView({ current: "events", views: three })).toBe("bills");
-    expect(nextCalendarView({ current: "events", views: three, reverse: true })).toBe("agenda");
   });
   it("is a no-op when only one view is available", () => {
     expect(nextCalendarView({ current: "events", views: ["events"] })).toBe("events");

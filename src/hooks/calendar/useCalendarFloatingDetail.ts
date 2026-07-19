@@ -283,5 +283,3 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     setFloatingEditorSaveRequest,
   };
 }
-
-export type CalendarFloatingDetailController = ReturnType<typeof useCalendarFloatingDetail>;

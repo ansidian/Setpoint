@@ -50,10 +50,6 @@ export function ymdFromView({ viewYear, viewMonth, selectedDay }: {
   return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
 }
 
-export function isSameViewDate(a: CalendarViewDate | null | undefined, b: CalendarViewDate | null | undefined): boolean {
-  return a?.month === b?.month && a?.year === b?.year;
-}
-
 export function isDateVisibleInMonthGrid(date: Date | null | undefined, viewDate: CalendarViewDate | null | undefined): boolean {
   if (!date || !viewDate) return false;
   const firstOfMonth = new Date(viewDate.year, viewDate.month, 1);

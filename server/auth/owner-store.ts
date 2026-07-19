@@ -109,6 +109,5 @@ export function createOwnerStore(dbClient: OwnerStoreDb = db) {
 
 export const ownerStore = createOwnerStore();
 export const getOwner = ownerStore.getOwner;
-export const claimOwner = ownerStore.claimOwner;
 export const setOwnerAuthMode = ownerStore.setAuthMode;
 export const updateOwnerPasswordHash = ownerStore.updatePasswordHash;

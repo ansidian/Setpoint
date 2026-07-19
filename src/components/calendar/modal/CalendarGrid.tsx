@@ -8,7 +8,6 @@ import {
 import { getEventSelectionId } from "../../../lib/shell-helpers";
 import CalendarGridCells from "./CalendarGridCells";
 import CalendarGridLayers from "./CalendarGridLayers";
-import CalendarGridSkeleton from "./CalendarGridSkeleton";
 import CalendarGridWeekHeader from "./CalendarGridWeekHeader";
 import useCalendarGridEffects from "./useCalendarGridEffects";
 import useCalendarGridOverflow from "./useCalendarGridOverflow";

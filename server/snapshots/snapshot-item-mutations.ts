@@ -9,7 +9,7 @@
 
 import db from "../db/connection.ts";
 import type { InStatement } from "@libsql/client";
-import type { SnapshotItem, SnapshotTriageLane } from "../../shared/types/snapshots.ts";
+import type { SnapshotItem } from "../../shared/types/snapshots.ts";
 import { normalizeSnapshotItem, type SnapshotItemRow } from "./snapshot-lifecycle.ts";
 import {
   TRIAGE_LANES,

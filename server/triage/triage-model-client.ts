@@ -420,17 +420,3 @@ export function createTriageModelClient({
     },
   };
 }
-
-export function createAnthropicTriageModelClient({
-  fetchImpl = fetch,
-  cheapModel = DEFAULT_CHEAP_MODEL,
-  strongModel = DEFAULT_STRONG_MODEL,
-}: { fetchImpl?: unknown; cheapModel?: string; strongModel?: string } = {}): TriageModelClient {
-  return createTriageModelClient({
-    fetchImpl,
-    config: {
-      cheap: { provider: "anthropic", model: cheapModel },
-      strong: { provider: "anthropic", model: strongModel },
-    },
-  });
-}

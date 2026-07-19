@@ -369,5 +369,3 @@ export default function useFloatingEditorRouting({
     openFloatingEventEdit,
   };
 }
-
-export type FloatingEditorRoutingController = ReturnType<typeof useFloatingEditorRouting>;

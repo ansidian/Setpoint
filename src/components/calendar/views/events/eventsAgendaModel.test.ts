@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agendaHasSelectedHiddenAllDay, buildEventsAgendaGroups, buildMultiMonthAgendaGroups, formatAgendaHeaderLabel, reuseMultiMonthAgendaGroups } from "./eventsAgendaModel.ts";
+import { agendaHasSelectedHiddenAllDay, buildEventsAgendaGroups, formatAgendaHeaderLabel, reuseMultiMonthAgendaGroups } from "./eventsAgendaModel.ts";
 import type { CalendarItemLike } from "../calendarViewTypes";
 
 describe("agendaHasSelectedHiddenAllDay", () => {
@@ -159,36 +159,14 @@ describe("events agenda model", () => {
   });
 });
 
-describe("buildMultiMonthAgendaGroups", () => {
-  it("builds groups for multiple months in order", () => {
-    const result = buildMultiMonthAgendaGroups({
-      months: [
-        { year: 2026, month: 4 },
-        { year: 2026, month: 5 },
-      ],
-      events: [
-        event({ id: "may", title: "May event", start: "2026-05-10T16:00:00Z", end: "2026-05-10T17:00:00Z" }),
-        event({ id: "jun", title: "Jun event", start: "2026-06-15T16:00:00Z", end: "2026-06-15T17:00:00Z" }),
-      ],
-      todayKey: "2026-05-10",
-    });
-
-    expect(result).toHaveLength(2);
-    expect(result[0]!.monthKey).toBe("2026-05");
-    expect(result[1]!.monthKey).toBe("2026-06");
-    expect(result[0]!.year).toBe(2026);
-    expect(result[0]!.month).toBe(4);
-    expect(result[1]!.year).toBe(2026);
-    expect(result[1]!.month).toBe(5);
-  });
-
+describe("reuseMultiMonthAgendaGroups", () => {
   it("distributes deadline overlay across months correctly", () => {
-    const result = buildMultiMonthAgendaGroups({
+    const result = reuseMultiMonthAgendaGroups({
       months: [
         { year: 2026, month: 4 },
         { year: 2026, month: 5 },
       ],
-      events: [],
+      getMonthEvents: () => [],
       deadlineOverlay: {
         showCompleted: true,
         data: {
@@ -199,7 +177,7 @@ describe("buildMultiMonthAgendaGroups", () => {
         },
       },
       todayKey: "2026-05-10",
-    });
+    }).list;
 
     const mayDeadlines = result[0]!.visibleGroups
       .filter((g) => g.hasDeadlines)
@@ -249,15 +227,15 @@ describe("buildMultiMonthAgendaGroups", () => {
   });
 
   it("applies forceVisibleDateKey only to the containing month", () => {
-    const result = buildMultiMonthAgendaGroups({
+    const result = reuseMultiMonthAgendaGroups({
       months: [
         { year: 2026, month: 4 },
         { year: 2026, month: 5 },
       ],
-      events: [],
+      getMonthEvents: () => [],
       todayKey: "2026-04-01",
       forceVisibleDateKey: "2026-06-20",
-    });
+    }).list;
 
     const mayDates = result[0]!.visibleGroups.map((g) => g.dateKey);
     const junDates = result[1]!.visibleGroups.map((g) => g.dateKey);

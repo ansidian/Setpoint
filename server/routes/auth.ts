@@ -520,7 +520,7 @@ router.post("/logout", async (req, res) => {
 
 // --- API tokens (for iOS Shortcuts etc.) ---
 
-router.get("/api-tokens", requireCookieSession, async (req, res) => {
+router.get("/api-tokens", requireCookieSession, async (_req, res) => {
   try {
     const result = await db.execute({
       sql: "SELECT id, label, scopes, created_at, last_used_at, expires_at FROM ea_api_tokens ORDER BY created_at DESC",

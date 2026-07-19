@@ -145,6 +145,5 @@ const challengeStore = createWebAuthnChallengeStore();
 
 export const createChallenge = challengeStore.createChallenge;
 export const consumeChallenge = challengeStore.consumeChallenge;
-export const deleteExpiredChallenges = challengeStore.deleteExpired;
 export const clearChallenges = challengeStore.clearChallenges;
 export const deleteChallengesForPendingAuth = challengeStore.deleteChallengesForPendingAuth;

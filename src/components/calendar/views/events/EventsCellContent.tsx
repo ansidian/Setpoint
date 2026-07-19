@@ -24,7 +24,7 @@ import {
   deadlinePlanningDescriptor,
   isDeadlinePlanningItem,
 } from "./eventsPlanningModel.ts";
-import type { CalendarChipItem, CalendarItemQuickActions } from "../../modal/CalendarCellItemChip";
+import type { CalendarChipItem } from "../../modal/CalendarCellItemChip";
 import type { CalendarCellStackMetrics } from "../../modal/CalendarCellItemStackModel";
 import type { CalendarGridLayout } from "../../modal/CalendarGrid";
 import type { CalendarItemLike } from "../calendarViewTypes";

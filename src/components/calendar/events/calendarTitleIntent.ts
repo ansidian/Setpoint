@@ -469,18 +469,6 @@ const FREQUENCY_KEYWORDS: Record<string, "daily" | "weekly" | "monthly" | "yearl
   annually: "yearly",
 };
 
-const ORDINAL_MAP = {
-  first: 1,
-  "1st": 1,
-  second: 2,
-  "2nd": 2,
-  third: 3,
-  "3rd": 3,
-  fourth: 4,
-  "4th": 4,
-  last: -1,
-};
-
 function weekdayCodeFromDate(dateStr: string): CalendarWeekdayCode {
   const parts = parseYmd(dateStr);
   if (!parts) return "MO";

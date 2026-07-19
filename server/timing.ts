@@ -2,7 +2,6 @@ import * as sharedTiming from "../shared/timing.ts";
 import type { RequestHandler } from "express";
 import type { TimingFields } from "../shared/timing.ts";
 
-export const formatTimingLog = sharedTiming.formatTimingLog;
 export const logTiming = sharedTiming.logTiming;
 
 export function getElapsedMs(startedAt: number): number {

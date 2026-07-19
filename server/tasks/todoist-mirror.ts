@@ -283,22 +283,6 @@ export async function listTodoistMirrorCompletedTasks(userId: string, {
   return (result.rows as unknown as TodoistMirrorItemRow[]).map(mirrorItemToTodoistTask);
 }
 
-export async function listTodoistMirrorActiveTaskIds(userId: string, {
-  dbClient = db,
-}: { dbClient?: TodoistMirrorDb } = {}): Promise<Set<string>> {
-  const result = await dbClient.execute({
-    sql: `SELECT item_id
-          FROM ea_todoist_items
-          WHERE user_id = ?
-            AND checked = 0
-            AND is_deleted = 0
-            AND due_date IS NOT NULL
-          ORDER BY item_id ASC`,
-    args: [userId],
-  });
-  return new Set(result.rows.map((row) => String(row.item_id)));
-}
-
 export async function listTodoistMirrorDueTaskIds(userId: string, {
   dbClient = db,
 }: { dbClient?: TodoistMirrorDb } = {}): Promise<Set<string>> {

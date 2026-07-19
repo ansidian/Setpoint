@@ -160,5 +160,3 @@ export default function useCalendarScrollSync({
 
   return { onAgendaScroll, onGridScrollCrossing, onGridScrollSettle, syncAgendaToMonth, navigateToDate, navigateToMonth, navigateToToday, isAgendaDriven };
 }
-
-export type CalendarScrollSyncController = ReturnType<typeof useCalendarScrollSync>;

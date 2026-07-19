@@ -1,4 +1,4 @@
-import type { Reminder, UpcomingReminderState } from "./reminders.ts";
+import type { UpcomingReminderState } from "./reminders.ts";
 
 export type CalendarId = string;
 export type CalendarEventId = string;
@@ -310,10 +310,6 @@ export interface CalendarSourcesResponse {
     accountEmail: string;
     calendars: GoogleCalendarSource[];
   }>;
-}
-
-export interface CalendarReminderHydration {
-  reminders: Reminder[];
 }
 
 export interface CalendarPlaceSuggestion {

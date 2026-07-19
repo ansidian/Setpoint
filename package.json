@@ -26,6 +26,8 @@
     "typecheck:tools": "tsc -p tsconfig.tools.json --pretty false",
     "typecheck": "tsc -b --pretty false",
     "check:harness": "node scripts/check-agent-harness.mts",
+    "check:reachability": "node scripts/check-module-reachability.mts",
+    "check:exports": "node scripts/audit-test-only-exports.mts",
     "check:typescript-migration": "node scripts/check-typescript-migration.mts",
     "test": "node --no-experimental-webstorage node_modules/vitest/vitest.mjs run",
     "test:fast": "node --no-experimental-webstorage node_modules/vitest/vitest.mjs run --project node --project happy-dom --project jsdom",

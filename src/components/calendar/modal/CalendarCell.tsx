@@ -5,7 +5,7 @@ import { CELL_HEADER_HEIGHT, buildCellAriaLabel, formatCellDate, formatCellDateK
 import { resolveIcon } from "../../../lib/icons";
 import { isEventSelectionModifier } from "../events/calendarEventSelectionModel";
 import type { CalendarGhostLike } from "./calendarGridUtils";
-import type { CalendarChipItem, CalendarItemQuickActions } from "./CalendarCellItemChip";
+import type { CalendarItemQuickActions } from "./CalendarCellItemChip";
 import type { CalendarOverflowComposition } from "./useCalendarGridOverflow";
 
 export interface CalendarCellWeather {

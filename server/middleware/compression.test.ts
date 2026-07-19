@@ -15,7 +15,7 @@ function makeApp(options: { threshold?: number } = {}) {
 describe("responseCompression", () => {
   it("gzip-compresses a large JSON body when the client accepts gzip", async () => {
     const app = makeApp();
-    app.get("/big", (req, res) => res.json({ data: BIG }));
+    app.get("/big", (_req, res) => res.json({ data: BIG }));
     const res = await request(app).get("/big").set("Accept-Encoding", "gzip");
     expect(res.headers["content-encoding"]).toBe("gzip");
     expect(res.headers["vary"]).toMatch(/Accept-Encoding/i);
@@ -25,7 +25,7 @@ describe("responseCompression", () => {
 
   it("leaves the body uncompressed when the client does not accept gzip", async () => {
     const app = makeApp();
-    app.get("/big", (req, res) => res.json({ data: BIG }));
+    app.get("/big", (_req, res) => res.json({ data: BIG }));
     const res = await request(app).get("/big").set("Accept-Encoding", "identity");
     expect(res.headers["content-encoding"]).toBeUndefined();
     expect(res.body.data).toBe(BIG);
@@ -33,7 +33,7 @@ describe("responseCompression", () => {
 
   it("skips bodies below the size threshold", async () => {
     const app = makeApp();
-    app.get("/small", (req, res) => res.json({ ok: true }));
+    app.get("/small", (_req, res) => res.json({ ok: true }));
     const res = await request(app).get("/small").set("Accept-Encoding", "gzip");
     expect(res.headers["content-encoding"]).toBeUndefined();
     expect(res.body.ok).toBe(true);
@@ -41,7 +41,7 @@ describe("responseCompression", () => {
 
   it("never compresses server-sent event streams (would break streaming)", async () => {
     const app = makeApp();
-    app.get("/sse", (req, res) => {
+    app.get("/sse", (_req, res) => {
       res.setHeader("Content-Type", "text/event-stream");
       res.write(`data: ${BIG}\n\n`);
       res.end();
@@ -53,7 +53,7 @@ describe("responseCompression", () => {
 
   it("does not re-compress a response that is already gzip-encoded", async () => {
     const app = makeApp();
-    app.get("/pre", (req, res) => {
+    app.get("/pre", (_req, res) => {
       const gz = zlib.gzipSync(Buffer.from(BIG));
       res.setHeader("Content-Type", "text/plain");
       res.setHeader("Content-Encoding", "gzip");
@@ -68,7 +68,7 @@ describe("responseCompression", () => {
 
   it("does not compress binary asset types like png", async () => {
     const app = makeApp();
-    app.get("/img", (req, res) => {
+    app.get("/img", (_req, res) => {
       res.setHeader("Content-Type", "image/png");
       res.end(Buffer.alloc(5000, 1));
     });

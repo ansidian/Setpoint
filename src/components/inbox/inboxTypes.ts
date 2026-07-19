@@ -1,13 +1,11 @@
-import type { EmailAccountSummary, EmailSearchResult, PinnedEmailEntry } from "../../../shared/types/email";
-import type { SnapshotItem, SnapshotLane } from "../../../shared/types/snapshots";
+import type { EmailAccountSummary, PinnedEmailEntry } from "../../../shared/types/email";
+import type { SnapshotLane } from "../../../shared/types/snapshots";
 
 export type InboxId = string | number;
 export type InboxSelectionId = InboxId | null;
 // Provider/search rows can carry a not-yet-normalized lane string at the UI
 // trust boundary; snapshot-backed rows narrow to SnapshotLane after projection.
 export type InboxLane = SnapshotLane | "action" | "carryover" | (string & {}) | null;
-export type InboxAccountId = string;
-export type InboxCategory = string;
 export type InboxReadOverrides =
   | ReadonlyMap<string, boolean | null | undefined>
   | Readonly<Record<string, boolean | null | undefined>>
@@ -129,21 +127,6 @@ export interface NormalizedInboxRow extends InboxEmailLike {
   _resurfaced: boolean;
   _resurfacedAt: number | null;
 }
-
-export type LiveInboxWorkItem = NormalizedInboxRow & { _live: true; _activeSnapshot: false };
-export type SnapshotInboxWorkItem = NormalizedInboxRow & { _activeSnapshot: true };
-export type ResurfacedInboxWorkItem = LiveInboxWorkItem & { _resurfaced: true };
-export type IndexedSearchInboxWorkItem = NormalizedInboxRow & { _indexedSearch: true };
-export type InboxWorkItem =
-  | LiveInboxWorkItem
-  | SnapshotInboxWorkItem
-  | ResurfacedInboxWorkItem
-  | IndexedSearchInboxWorkItem
-  | NormalizedInboxRow;
-
-export type InboxSearchSource = EmailSearchResult;
-export type InboxSnapshotSource = SnapshotItem;
-export type InboxPinnedSource = PinnedEmailEntry;
 
 export interface InboxCategoryFilter {
   category: string;

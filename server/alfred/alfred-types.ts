@@ -5,7 +5,6 @@ import type { ActualBillOccurrence } from "../../shared/types/actual.ts";
 import type { TransactionQueryResult, TransactionSummaryResult } from "../../shared/types/transactions.ts";
 import type {
   AlfredItem,
-  AlfredItemKind,
   AlfredModelId,
   AlfredRunEvent,
 } from "../../shared/types/alfred.ts";
@@ -138,11 +137,6 @@ export interface AlfredToolContext {
   conversation: AlfredConversation;
   deps: AlfredDependencies;
   emit: AlfredEmit;
-}
-
-export interface AlfredCachedItems<K extends AlfredItemKind = AlfredItemKind> {
-  found: AlfredItem[];
-  missing: string[];
 }
 
 export interface AnthropicTurn {

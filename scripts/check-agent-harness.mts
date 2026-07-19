@@ -190,6 +190,32 @@ async function checkSourceFileSizes() {
   warnings.push(...result.warnings)
 }
 
+function checkModuleReachability() {
+  try {
+    execFileSync(process.execPath, ["scripts/check-module-reachability.mts"], {
+      cwd: root,
+      encoding: "utf8",
+    })
+  } catch (error) {
+    const result = error as { stdout?: string; stderr?: string }
+    const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
+    failures.push(`module reachability check failed${detail ? `:\n${detail}` : ""}`)
+  }
+}
+
+function checkExportReachability() {
+  try {
+    execFileSync(process.execPath, ["scripts/audit-test-only-exports.mts"], {
+      cwd: root,
+      encoding: "utf8",
+    })
+  } catch (error) {
+    const result = error as { stdout?: string; stderr?: string }
+    const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
+    failures.push(`export reachability check failed${detail ? `:\n${detail}` : ""}`)
+  }
+}
+
 async function checkTestFileSizes() {
   const baseline = await readSizeBaseline(testSizeBaselinePath)
   if (!baseline) return
@@ -278,6 +304,8 @@ await checkAgentsMap()
 await checkHistoricalDocsCleanup()
 await checkAreaMaps()
 await checkImportBoundariesAcrossDomains()
+checkModuleReachability()
+checkExportReachability()
 await checkSourceFileSizes()
 await checkTestFileSizes()
 await checkTestSourcePolicies()

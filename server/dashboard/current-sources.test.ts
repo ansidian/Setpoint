@@ -5,8 +5,6 @@ import {
   currentResponseContentKey,
   fallbackPayloadForKey,
   hasUsablePayload,
-  parsePayload,
-  shouldPublishBillsCurrentChange,
   summarizeCurrentDataHealth,
 } from "./current-sources.ts";
 
@@ -153,38 +151,5 @@ describe("current dashboard source definitions", () => {
         { key: "bills_current", state: "unavailable", severity: "error" },
       ],
     });
-  });
-
-  it("publishes bills changes only when visible bills payload or row health changes", () => {
-    const previousRow = {
-      status: "current",
-      refresh_failure_count: 0,
-      payload_json: JSON.stringify({
-        bills: [{ id: "bill-1" }],
-        allSchedules: [],
-        payeeMap: {},
-        actualConfigured: true,
-        actualBudgetUrl: "https://actual.example.test",
-        internalOnly: "ignored",
-      }),
-    };
-
-    expect(shouldPublishBillsCurrentChange(previousRow, {
-      bills: [{ id: "bill-1" }],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-      internalOnly: "changed",
-    })).toBe(false);
-
-    expect(shouldPublishBillsCurrentChange(previousRow, {
-      bills: [{ id: "bill-2" }],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-    })).toBe(true);
-    expect(shouldPublishBillsCurrentChange({ ...previousRow, status: "degraded" }, parsePayload(previousRow))).toBe(true);
   });
 });

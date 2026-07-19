@@ -26,14 +26,6 @@ export type CurrentDashboardHealthState =
   | "unconfigured"
   | "needs_reauth";
 export type CurrentDashboardSeverity = "none" | "info" | "warning" | "error";
-export type CurrentDashboardEventSource =
-  | "unknown"
-  | "bills"
-  | "deadlines"
-  | "email_triage"
-  | "todoist"
-  | "reminders";
-
 export interface CurrentDashboardCacheRow extends Record<string, unknown> {
   user_id?: string;
   cache_key?: CurrentDashboardCacheKey;

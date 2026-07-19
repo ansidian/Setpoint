@@ -30,6 +30,7 @@ const happyDomTypescriptTests = [
   "src/components/calendar/events/useCalendarQuickActions.cloneRaces.test.ts",
   "src/components/calendar/events/useCalendarQuickActions.pasteRaces.test.ts",
   "src/components/calendar/events/useCalendarQuickActions.selectionIdentity.test.ts",
+  "src/components/calendar/modal/CalendarCellOverflowPopover.position.test.ts",
   "src/components/calendar/modal/calendarGridUtils.test.ts",
   "src/components/calendar/views/deadlines/useDeadlineQuickActions.test.ts",
   "src/components/inbox/inboxHotkeys.test.ts",

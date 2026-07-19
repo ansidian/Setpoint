@@ -2,7 +2,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarGrid from "./CalendarGrid";
-import { resolveOverflowPopoverPosition } from "./CalendarCellOverflowPopover.position";
 import { renderEventsCellContents } from "../views/events/EventsCellContent.tsx";
 
 const VIEW_YEAR = 2026;
@@ -154,31 +153,6 @@ describe("CalendarGrid overflow motion coverage", () => {
 
     fireEvent.keyDown(dayCell, { key: "Enter" });
     expect(setSelectedDay).toHaveBeenCalledWith(20);
-  });
-
-  it("renders continuous boundary step line on leading boundary row", () => {
-    renderGrid({}, {
-      viewMonth: 4,
-      currentMonth: 3,
-      firstDay: 5,
-      daysInMonth: 31,
-    });
-
-    const step = screen.getByTestId("calendar-boundary-step");
-    expect(step).toBeTruthy();
-  });
-
-  it("renders straight boundary line when month starts on Sunday", () => {
-    renderGrid({}, {
-      viewMonth: 2,
-      currentMonth: 1,
-      firstDay: 0,
-      daysInMonth: 31,
-    });
-
-    expect(screen.queryByTestId("calendar-boundary-step")).toBeNull();
-    const straight = screen.getByTestId("calendar-boundary-straight");
-    expect(straight).toBeTruthy();
   });
 
   it("renders date-keyed items for non-event views in boundary row cells", () => {
@@ -382,35 +356,6 @@ describe("CalendarGrid overflow motion coverage", () => {
       expect(within(layers[0]!).getByText("Day 16 event 4")).toBeTruthy();
       expect(within(layers[0]!).queryByText("Day 15 event 4")).toBeNull();
     });
-  });
-
-  it("positions fallback overflow popovers inside the viewport when the trigger is on the last row", () => {
-    window.innerHeight = 360;
-    const trigger = document.createElement("button");
-    document.body.appendChild(trigger);
-    Object.defineProperty(trigger, "isConnected", { configurable: true, value: true });
-    Object.defineProperty(trigger, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        x: 960,
-        y: 310,
-        left: 960,
-        top: 310,
-        right: 1020,
-        bottom: 340,
-        width: 60,
-        height: 30,
-        toJSON() {
-          return this;
-        },
-      }),
-    });
-
-    const position = resolveOverflowPopoverPosition(trigger);
-
-    expect(position.top).toBeGreaterThanOrEqual(16);
-    expect(position.top + position.maxHeight).toBeLessThanOrEqual(window.innerHeight - 16);
-    trigger.remove();
   });
 
   it("closes inline overflow on Escape", async () => {

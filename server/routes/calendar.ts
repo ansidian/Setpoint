@@ -40,7 +40,6 @@ import {
 } from "../calendar/calendar-search-mirror.ts";
 import { readCalendarBillsRange } from "./calendar-bills-range.ts";
 import type {
-  CalendarEventMutationInput,
   CalendarRecurrenceScope,
   NormalizedCalendarEvent,
 } from "../../shared/types/calendar.ts";

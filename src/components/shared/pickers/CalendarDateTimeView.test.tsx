@@ -1,24 +1,25 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CustomDateTimeView } from "./SnoozePicker";
-import { epochFromLa } from "./helpers";
+import CalendarDateTimeView from "./CalendarDateTimeView";
+import { epochFromLa } from "@/components/inbox/helpers";
 
 afterEach(() => {
   cleanup();
 });
 
-describe("CustomDateTimeView", () => {
+describe("CalendarDateTimeView", () => {
   it("supports keyboard AM/PM selection from a single tab stop", () => {
     const onSelect = vi.fn();
     const initialEpoch = epochFromLa(2026, 3, 19, 9, 15);
     const nowTick = epochFromLa(2026, 3, 19, 9, 14);
 
     render(
-      <CustomDateTimeView
+      <CalendarDateTimeView
         nowTick={nowTick}
         initialEpoch={initialEpoch}
         onSelect={onSelect}
         onBack={() => {}}
+        confirmLabel="Snooze"
       />,
     );
 
@@ -46,11 +47,12 @@ describe("CustomDateTimeView", () => {
     const nowTick = epochFromLa(2026, 3, 19, 9, 14);
 
     render(
-      <CustomDateTimeView
+      <CalendarDateTimeView
         nowTick={nowTick}
         initialEpoch={initialEpoch}
         onSelect={onSelect}
         onBack={() => {}}
+        confirmLabel="Snooze"
       />,
     );
 
@@ -69,11 +71,12 @@ describe("CustomDateTimeView", () => {
     const nowTick = epochFromLa(2026, 3, 19, 9, 14);
 
     render(
-      <CustomDateTimeView
+      <CalendarDateTimeView
         nowTick={nowTick}
         initialEpoch={initialEpoch}
         onSelect={onSelect}
         onBack={() => {}}
+        confirmLabel="Snooze"
       />,
     );
 

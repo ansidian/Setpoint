@@ -247,5 +247,3 @@ export default function useCalendarModalViewModel({
     trailingEmpty,
   };
 }
-
-export type CalendarModalViewModel = ReturnType<typeof useCalendarModalViewModel>;

@@ -274,22 +274,6 @@ export async function fetchEmailBody(email: string, password: string, uid: strin
   }
 }
 
-export async function isMessageRead(email: string, password: string, uid: string): Promise<boolean | null> {
-  const imapUid = parseInt(uid.replace("icloud-", ""), 10);
-  const client = await getPooledClient(email, password);
-  const lock = await client.getMailboxLock("INBOX");
-
-  try {
-    const msg = await client.fetchOne(String(imapUid), { flags: true }, { uid: true });
-    if (!msg) return null;
-    return msg.flags?.has("\\Seen") || false;
-  } catch {
-    return null;
-  } finally {
-    lock.release();
-  }
-}
-
 // --- Email actions ---
 
 export async function markAsRead(email: string, password: string, uid: string): Promise<void> {
