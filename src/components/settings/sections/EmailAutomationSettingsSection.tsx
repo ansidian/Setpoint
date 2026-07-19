@@ -58,10 +58,10 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
           <Input
             type="number"
             min="1"
-            max="72"
+            max="168"
             value={settings?.email_lookback_hours ?? 16}
             onChange={(event) => {
-              const value = Math.max(1, Math.min(72, parseInt(event.target.value, 10) || 16));
+              const value = Math.max(1, Math.min(168, parseInt(event.target.value, 10) || 16));
               setSettings((current) => ({ ...(current || {}), email_lookback_hours: value }));
               patch({ email_lookback_hours: value });
             }}

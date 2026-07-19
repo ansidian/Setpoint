@@ -82,12 +82,12 @@ describe("EmailAutomationSettingsSection", () => {
       expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 1 });
     });
 
-    it("clamps an above-maximum lookback down to 72 hours", () => {
+    it("clamps an above-maximum lookback down to 168 hours", () => {
       const { patch, input } = renderLookback();
 
       fireEvent.change(input, { target: { value: "999" } });
 
-      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 72 });
+      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 168 });
     });
 
     it("passes an in-range lookback through unchanged", () => {
