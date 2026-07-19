@@ -81,6 +81,7 @@ describe("testActualConnectionHttp", () => {
   });
 
   it("does not reflect the remote error reason in the thrown message (SEC-05)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     settingsRow();
     global.fetch = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ status: "error", reason: "internal-banner-xyz" })) as unknown as typeof fetch;

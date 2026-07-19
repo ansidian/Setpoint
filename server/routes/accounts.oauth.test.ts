@@ -213,6 +213,7 @@ describe("accounts Gmail OAuth binding", () => {
   });
 
   it("returns a generic message on callback failure without leaking the internal error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     gmailApi.handleCallback.mockRejectedValueOnce(
       new Error("invalid_grant: token exchange failed at https://oauth.internal/secret"),
     );
@@ -234,6 +235,7 @@ describe("accounts Gmail OAuth binding", () => {
   });
 
   it("rejects a stale bound candidate before exchanging the authorization code", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     googleOAuthApi.resolveCandidate.mockRejectedValueOnce(
       Object.assign(new Error("changed"), { code: "INSTANCE_CREDENTIAL_CONFLICT" }),
     );
@@ -250,6 +252,7 @@ describe("accounts Gmail OAuth binding", () => {
   });
 
   it("redacts provider error query details", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const res = await request(makeApp())
       .get("/api/ea/accounts/gmail/callback?error=access_denied_secret_detail&state=state-1");
 

@@ -66,6 +66,7 @@ describe("Actual worker call options", () => {
   });
 
   it("refuses SDK fallback for unsupported production bill-pay writes by default", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     lightweightWritesMock.sendBillLightweight.mockRejectedValueOnce(Object.assign(new Error("future schedule"), {
       status: 503,
       code: "ACTUAL_LIGHTWEIGHT_UNSUPPORTED",
@@ -79,6 +80,7 @@ describe("Actual worker call options", () => {
   });
 
   it("can opt into SDK fallback for unsupported production bill-pay writes", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = "1";
     lightweightWritesMock.sendBillLightweight.mockRejectedValueOnce(Object.assign(new Error("future schedule"), {
       status: 503,

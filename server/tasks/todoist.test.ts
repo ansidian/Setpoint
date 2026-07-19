@@ -487,6 +487,7 @@ describe("Todoist mirror-backed facade", () => {
   });
 
   it("falls back to empty mirror data when bootstrap sync fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.mirror.getTodoistMirrorHealth
       .mockResolvedValueOnce({
         state: "unavailable",

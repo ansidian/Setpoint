@@ -159,6 +159,7 @@ describe("extractBill (Anthropic)", () => {
   });
 
   it("returns 502-shaped error when Anthropic response lacks tool_use", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     mockSettings("anthropic", "claude-haiku-4-5");
     mockActual.getMetadata.mockResolvedValueOnce({ accounts: [], payees: [], categories: [] });
     global.fetch = vi.fn().mockResolvedValue({

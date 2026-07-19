@@ -12,7 +12,13 @@ export default defineConfig({
     },
   },
   test: {
+    // Running all four projects at the host's full 16-worker parallelism starves
+    // happy-dom timers and animation frames under the complete suite. A bounded
+    // shared pool keeps DOM polling deterministic without serializing test files.
+    maxWorkers: 4,
     testTimeout: 10000,
+    setupFiles: ["./scripts/vitest-guardrails.ts"],
+    dangerouslyIgnoreUnhandledErrors: false,
     projects: testEnvironmentPartitions.map(({ name, environment, include, exclude }) => ({
       extends: true,
       test: {

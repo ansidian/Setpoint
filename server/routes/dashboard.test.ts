@@ -152,6 +152,7 @@ describe("dashboard routes", () => {
   });
 
   it("translates current-dashboard service failures to route errors", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.getCurrentDashboard.mockRejectedValueOnce(new Error("service down"));
 
     const res = await auth(request(makeApp()).get("/api/dashboard/current"));

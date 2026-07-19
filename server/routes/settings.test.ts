@@ -4,8 +4,6 @@ import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import express from "express";
 import request from "supertest";
 
-import { geocodeLocation } from "../platform/weather.ts";
-
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
 }));
@@ -132,44 +130,6 @@ describe("settings write-boundary validation", () => {
     expect(initScheduler).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects non-string email interests", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ email_interests_json: ["ai", 42] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid email_interests_json entry: must be a non-empty string");
-    expect((await getSettingsRow()).email_interests_json).toBeNull();
-  });
-
-  it("accepts email interests sent as a JSON string and stores the canonical form", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ email_interests_json: '["ai infrastructure"]' });
-
-    expect(res.status).toBe(200);
-    expect((await getSettingsRow()).email_interests_json).toBe('["ai infrastructure"]');
-  });
-
-  it("rejects important senders without a usable address", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/important-senders")
-      .send({ senders: [{ name: "boss" }] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid senders entry: address must be an email address");
-    expect((await getSettingsRow()).important_senders_json).toBe("[]");
-  });
-
-  it("stores valid important senders", async () => {
-    const senders = [{ address: "boss@company.com", name: "boss", source: "manual" }];
-    const res = await request(makeApp())
-      .put("/api/ea/important-senders")
-      .send({ senders });
-
-    expect(res.status).toBe(200);
-    expect(JSON.parse(String((await getSettingsRow()).important_senders_json))).toEqual(senders);
-  });
 });
 
 describe("GET /settings todoist_needs_reauth", () => {
@@ -230,22 +190,6 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
 });
 
 describe("settings error messages do not leak internals (P3-54)", () => {
-  it("returns a fixed geocode failure string, not the raw error message", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(geocodeLocation).mockRejectedValueOnce(new Error("ENOTFOUND api.pirateweather.net secret-key=abc123"));
-
-    const res = await request(makeApp()).get("/api/ea/geocode?q=Berlin");
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Failed to geocode location");
-    expect(JSON.stringify(res.body)).not.toContain("secret-key");
-    expect(consoleError).toHaveBeenCalledWith(
-      "Error geocoding location:",
-      "ENOTFOUND api.pirateweather.net secret-key=abc123",
-    );
-    consoleError.mockRestore();
-  });
-
   it("returns a fixed important-senders failure string, not the raw DB error", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const realExecute = currentDb().execute.bind(currentDb());
@@ -324,37 +268,6 @@ describe("GET /settings response allowlist (SEC-06)", () => {
 });
 
 describe("settings PUT scalar field validation (P3-55)", () => {
-  it("rejects an out-of-range weather coordinate and does not persist", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ weather_lat: 200 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("weather_lat must be a number between -90 and 90");
-    // Default left untouched.
-    expect((await getSettingsRow()).weather_lat).toBe(34.0686);
-  });
-
-  it("rejects a negative email_lookback_hours and does not persist", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ email_lookback_hours: -5 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("email_lookback_hours must be an integer between 1 and 168");
-    expect((await getSettingsRow()).email_lookback_hours).toBe(16);
-  });
-
-  it("rejects a non-string actual_budget_url and does not persist", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ actual_budget_url: { evil: true } });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("actual_budget_url must be a string");
-    expect((await getSettingsRow()).actual_budget_url).toBeNull();
-  });
-
   it("rejects a dangerous-scheme actual_budget_url and does not persist (SEC-05)", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")

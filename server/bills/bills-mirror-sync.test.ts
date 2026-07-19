@@ -280,6 +280,7 @@ describe("Bills mirror", () => {
   });
 
   it("returns old mirror rows with degraded health when lightweight refresh fails without spawning the Actual worker", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata
       .mockRejectedValueOnce(new Error("Actual local file unavailable"))
       .mockRejectedValueOnce(new Error("Actual download timed out"));

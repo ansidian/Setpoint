@@ -120,6 +120,7 @@ describe("refreshActualMetadataProjection", () => {
   });
 
   it("falls back to the worker when both cached and fresh local reads fail", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata
       .mockRejectedValueOnce(new Error("no cache"))
       .mockRejectedValueOnce(new Error("lightweight failed"));
@@ -135,6 +136,7 @@ describe("refreshActualMetadataProjection", () => {
   });
 
   it("throws instead of touching the worker when allowWorkerFallback is false", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight failed"));
     await expect(loadActualMetadataForProjection("user-1", { allowWorkerFallback: false }))
       .rejects.toThrow("lightweight failed");
@@ -142,6 +144,7 @@ describe("refreshActualMetadataProjection", () => {
   });
 
   it("records a degraded marker and rethrows when metadata cannot be loaded", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("no cache"));
     mockActual.getMetadata.mockRejectedValue(new Error("worker down"));
     await expect(refreshActualMetadataProjection("user-1", { now: NOW }))

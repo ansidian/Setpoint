@@ -392,6 +392,7 @@ describe("sendBillLightweight", () => {
   });
 
   it("flags a mid-sync failure as locally applied and leaves a recoverable state", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const budgetDir = await createBudgetDb();
     fetchMock = vi.fn()
       .mockResolvedValueOnce({

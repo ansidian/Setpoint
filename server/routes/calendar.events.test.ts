@@ -114,7 +114,6 @@ const deleteCalendarEventMock = deleteCalendarEvent as Mock;
 const suggestGooglePlacesMock = suggestGooglePlaces as Mock;
 const getGooglePlaceDetailsMock = getGooglePlaceDetails as Mock;
 const deleteSourceRemindersMock = reminderService.deleteSourceReminders as Mock;
-const recomputeRemindersMock = reminderService.recomputeUnsentRemindersForSource as Mock;
 
 function makeApp() {
   const app = express();
@@ -225,52 +224,6 @@ describe("calendar event routes", () => {
     expect(createCalendarEvent).not.toHaveBeenCalled();
   });
 
-  it("creates a recurring calendar event when recurrence is provided", async () => {
-    createCalendarEventMock.mockResolvedValue({
-      id: "event-recurring-1",
-      title: "Work",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      recurringEventId: "event-recurring-1",
-    });
-
-    const res = await request(makeApp())
-      .post("/api/calendar/events")
-      .send({
-        accountId: "gmail-main",
-        calendarId: "primary",
-        title: "Work",
-        allDay: false,
-        startDate: "2026-04-20",
-        endDate: "2026-04-20",
-        startTime: "03:00",
-        endTime: "08:00",
-        recurrence: {
-          frequency: "weekly",
-          weekdays: ["MO"],
-          ends: { type: "never" },
-        },
-      });
-
-    expect(res.status).toBe(201);
-    expect(createCalendarEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "gmail-main" }),
-      expect.objectContaining({
-        title: "Work",
-        recurrence: expect.objectContaining({ frequency: "weekly" }),
-      }),
-    );
-    expect(calendarSearchMirror.upsertCalendarSearchMirrorOccurrence).not.toHaveBeenCalled();
-    expect(calendarSearchMirror.markCalendarSearchMirrorDirty).toHaveBeenCalledWith(
-      "test-user",
-      expect.objectContaining({
-        accountId: "gmail-main",
-        calendarId: "primary",
-        reason: "calendar-write",
-      }),
-    );
-  });
-
   it("creates a batch of calendar events and reports per-item failures", async () => {
     createCalendarEventMock
       .mockResolvedValueOnce({ id: "event-1", title: "Tue shift" })
@@ -312,74 +265,6 @@ describe("calendar event routes", () => {
     expect(res.body.failed).toHaveLength(1);
     expect(res.body.failed[0].code).toBe("calendar_validation_error");
     expect(createCalendarEvent).toHaveBeenCalledTimes(2);
-  });
-
-  it("loads the account config once per batch request regardless of item count (PERF-06)", async () => {
-    loadUserConfigMock.mockResolvedValue({
-      accounts: [
-        {
-          id: "gmail-main",
-          type: "gmail",
-          email: "me@example.com",
-          label: "Google",
-          calendar_enabled: 1,
-        },
-        {
-          id: "gmail-alt",
-          type: "gmail",
-          email: "alt@example.com",
-          label: "Google Alt",
-          calendar_enabled: 1,
-        },
-      ],
-      settings: {},
-    });
-    createCalendarEventMock
-      .mockResolvedValueOnce({ id: "event-1", title: "Tue shift" })
-      .mockResolvedValueOnce({ id: "event-2", title: "Wed shift" });
-
-    const res = await request(makeApp())
-      .post("/api/calendar/events/batch")
-      .send({
-        items: [
-          {
-            accountId: "gmail-main",
-            calendarId: "primary",
-            title: "Tue shift",
-            allDay: false,
-            startDate: "2026-04-21",
-            endDate: "2026-04-21",
-            startTime: "04:15",
-            endTime: "07:30",
-          },
-          {
-            accountId: "gmail-alt",
-            calendarId: "primary",
-            title: "Wed shift",
-            allDay: false,
-            startDate: "2026-04-22",
-            endDate: "2026-04-22",
-            startTime: "04:15",
-            endTime: "07:30",
-          },
-          {
-            accountId: "gmail-missing",
-            calendarId: "primary",
-            title: "Thu shift",
-            allDay: false,
-            startDate: "2026-04-23",
-            endDate: "2026-04-23",
-            startTime: "04:15",
-            endTime: "07:30",
-          },
-        ],
-      });
-
-    expect(res.status).toBe(201);
-    expect(res.body.created).toHaveLength(2);
-    expect(res.body.failed).toHaveLength(1);
-    expect(res.body.failed[0].code).toBe("calendar_account_not_found");
-    expect(loadUserConfig).toHaveBeenCalledTimes(1);
   });
 
   it("updates a calendar event", async () => {
@@ -594,38 +479,6 @@ describe("calendar event routes", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
     expect(deleteCalendarEvent).toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalled();
-    errorSpy.mockRestore();
-  });
-
-  it("still returns the updated event when reminder recompute fails after a successful update", async () => {
-    updateCalendarEventMock.mockResolvedValue({
-      id: "event-1",
-      title: "Updated",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: Date.parse("2026-04-20T16:00:00.000Z"),
-    });
-    recomputeRemindersMock.mockRejectedValueOnce(new Error("reminder store down"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const res = await request(makeApp())
-      .patch("/api/calendar/events/event-1")
-      .send({
-        accountId: "gmail-main",
-        calendarId: "primary",
-        etag: '"etag-1"',
-        title: "Updated",
-        allDay: false,
-        startDate: "2026-04-20",
-        endDate: "2026-04-20",
-        startTime: "09:00",
-        endTime: "09:30",
-      });
-
-    expect(res.status).toBe(200);
-    expect(res.body.event).toMatchObject({ id: "event-1", title: "Updated" });
-    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });

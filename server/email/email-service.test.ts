@@ -411,6 +411,7 @@ describe("markAllRead", () => {
 
 describe("snooze atomicity (P3-60)", () => {
   it("rolls back the committed snooze row when the pending-triage defer fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.db.current = await createEmailIndexTestDb();
     await seedEmailAccount(currentDb(), {
       id: "gmail-work",
@@ -469,6 +470,7 @@ describe("snooze atomicity (P3-60)", () => {
 
 describe("trash post-provider cleanup (P3-74)", () => {
   it("does not throw or report trash failed when a post-provider local write fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.db.current = await createEmailIndexTestDb();
     providerAdapters.trashEmailWithProvider.mockResolvedValue({
       type: "gmail",

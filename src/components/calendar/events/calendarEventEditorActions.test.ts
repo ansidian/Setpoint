@@ -523,7 +523,7 @@ describe("calendarEventEditorActions", () => {
       effectiveTitle: "Work",
       editingEvent,
       isEditingRecurring: true,
-      recurringEditScope: "future",
+      recurringEditScope: "following",
       recurrenceDraft: {
         frequency: "weekly",
         interval: 2,
@@ -538,7 +538,7 @@ describe("calendarEventEditorActions", () => {
       sourceAccountId: "gmail-main",
       sourceCalendarId: "primary",
       etag: '"etag-1"',
-      scope: "future",
+      scope: "following",
       recurringEventId: "series-1",
       originalStartTime: "2026-05-05T16:00:00.000Z",
       recurrence: {

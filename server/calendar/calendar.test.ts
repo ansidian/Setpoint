@@ -149,6 +149,7 @@ describe("fetchCalendar fan-out", () => {
   });
 
   it("degrades gracefully when one calendar fetch fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     clientMocks.getAuthorizedAccount.mockResolvedValue({ accessToken: "t" });
     clientMocks.listCalendarsForAccount.mockResolvedValue([
       { id: "primary", summary: "Primary" },

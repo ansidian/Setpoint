@@ -137,6 +137,7 @@ describe("snapshot routes", () => {
   });
 
   it("maps snapshot detail service errors to HTTP responses", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const error = new Error("Snapshot not found") as HttpError;
     error.status = 404;
     vi.mocked(snapshotService.getSnapshotViewById).mockRejectedValueOnce(error);
@@ -160,6 +161,7 @@ describe("snapshot routes", () => {
   });
 
   it("reports invalid snapshot item lane input as a bad request", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await request(makeApp())
       .patch("/api/briefing/snapshot/items/42/lane")
       .set("Cookie", authCookie())
