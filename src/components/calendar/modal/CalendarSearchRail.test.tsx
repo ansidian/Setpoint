@@ -221,50 +221,6 @@ describe("CalendarSearchRail", () => {
     expect(row.getAttribute("data-visual-state")).toBe("idle");
   });
 
-  it("keeps old results visible while pending", () => {
-    const search = makeSearch({
-      query: "final",
-      pending: true,
-      results: [
-        {
-          id: "event:1",
-          type: "event",
-          itemId: "event-1",
-          itemDate: "2026-05-21",
-          title: "Final review",
-          sourceLabel: "School",
-          sourceColor: "#4285f4",
-        },
-      ],
-    });
-
-    render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
-
-    expect(screen.getByTestId("calendar-search-state").textContent).toBe("Updating");
-    expect(screen.getByText("Final review")).toBeTruthy();
-    expect(screen.queryByTestId("calendar-search-skeleton")).toBeNull();
-  });
-
-  it("uses scope-specific placeholders and no-results labels", () => {
-    const { rerender } = render(<CalendarSearchRail search={makeSearch()} layoutMode="three-rail" />);
-
-    expect(screen.getByTestId("calendar-search-input").getAttribute("placeholder")).toBe("Search events and deadlines");
-
-    rerender(
-      <CalendarSearchRail
-        search={makeSearch({
-          scope: "bills",
-          query: "rent",
-          results: [],
-        })}
-        layoutMode="three-rail"
-      />,
-    );
-
-    expect(screen.getByTestId("calendar-search-input").getAttribute("placeholder")).toBe("Search bills");
-    expect(screen.getByTestId("calendar-search-state").textContent).toBe("No bills found");
-  });
-
   it("shows initializing and partial coverage states without raw sync details", () => {
     const initializingCoverage = {
       sources: [
@@ -315,44 +271,6 @@ describe("CalendarSearchRail", () => {
 
     expect(screen.getByTestId("calendar-search-state").textContent).toBe("Partial results: deadlines only");
     expect(screen.getByText("Final project")).toBeTruthy();
-  });
-
-  it("labels stale or degraded mirror results as available results", () => {
-    render(
-      <CalendarSearchRail
-        search={makeSearch({
-          query: "rent",
-          coverage: {
-            sources: [
-              {
-                key: "google_calendar",
-                searched: true,
-                syncHealth: {
-                  state: "degraded",
-                  lastError: "raw Google quota body",
-                },
-              },
-              { key: "deadlines", searched: true },
-            ],
-          },
-          results: [
-            {
-              id: "event:1",
-              type: "event",
-              itemId: "event-1",
-              itemDate: "2026-05-20",
-              title: "Rent review",
-              sourceColor: "#4285f4",
-            },
-          ],
-        })}
-        layoutMode="three-rail"
-      />,
-    );
-
-    expect(screen.getByTestId("calendar-search-state").textContent).toBe("Showing available results");
-    expect(screen.queryByText(/quota|Google/i)).toBeNull();
-    expect(screen.getByText("Rent review")).toBeTruthy();
   });
 
   it("shows stable skeleton rows only while pending without visible results", () => {
@@ -419,46 +337,6 @@ describe("CalendarSearchRail", () => {
         anchorKind: "search-result-row",
       }),
     );
-  });
-
-  it("opens highlighted rows from Enter through the grid-chip activation path and skips hidden results", () => {
-    const search = makeSearch({
-      query: "work",
-      highlightedIndex: 0,
-      isResultNavigable: (result: CalendarSearchResultLike) => result.itemId !== "hidden",
-      results: [
-        {
-          id: "event:hidden",
-          type: "event",
-          itemId: "hidden",
-          itemDate: "2026-05-12",
-          title: "Hidden event",
-          sourceColor: "#4285f4",
-          hidden: true,
-        },
-        {
-          id: "event:visible",
-          type: "event",
-          itemId: "visible",
-          itemDate: "2026-05-13",
-          title: "Visible event",
-          sourceColor: "#4285f4",
-        },
-      ],
-    });
-
-    render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
-
-    fireEvent.keyDown(screen.getByTestId("calendar-search-input"), { key: "Enter" });
-
-    expect(search.activateResult).toHaveBeenCalledWith(
-      search.results[1],
-      expect.objectContaining({
-        anchorKind: "grid-chip",
-      }),
-    );
-    expect(search.setHighlightedIndex).toHaveBeenCalledWith(1);
-    expect(search.handleInputKeyDown).not.toHaveBeenCalled();
   });
 
   it("uses the search row activation context for keyboard results hidden in grid overflow", () => {

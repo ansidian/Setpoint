@@ -14,7 +14,6 @@ describe("getMultiMonthGridRange", () => {
     const range = getMultiMonthGridRange(2026, 4, 2);
     expect(range.start).toBe(getVisibleGridRange(2026, 2).start); // March grid start
     expect(range.end).toBe(getVisibleGridRange(2026, 6).end); // July grid end
-    expect(range.start < range.end).toBe(true);
   });
 
   it("crosses year boundaries when the radius underflows/overflows the month", () => {
@@ -22,6 +21,5 @@ describe("getMultiMonthGridRange", () => {
     const range = getMultiMonthGridRange(2026, 0, 3);
     expect(range.start).toBe(getVisibleGridRange(2025, 9).start); // Oct 2025 grid start
     expect(range.end).toBe(getVisibleGridRange(2026, 3).end); // Apr 2026 grid end
-    expect(range.start.startsWith("2025-")).toBe(true);
   });
 });

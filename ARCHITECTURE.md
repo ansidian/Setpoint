@@ -269,7 +269,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useCurrentDashboard` | `src/hooks/useCurrentDashboard.ts` |
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
-| `useKeyHold` | `src/hooks/useKeyHold.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
 | `useNews` | `src/hooks/useNews.ts` |
 | `useNotifications` | `src/hooks/useNotifications.ts` |

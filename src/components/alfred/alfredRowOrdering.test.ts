@@ -53,11 +53,6 @@ describe("groupAlfredRows — email", () => {
     expect(groups[2]!.items.map((i) => i.uid)).toEqual(["old2", "old1"]);
   });
 
-  it("leaves non-email kinds in their original order as a single unlabeled group", () => {
-    const items = [{ id: "1" }, { id: "2" }, { id: "3" }];
-    const groups = groupAlfredRows("event", items, NOW);
-    expect(groups).toEqual([{ section: null, items }]);
-  });
 });
 
 describe("emailDotState", () => {

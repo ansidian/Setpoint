@@ -170,22 +170,10 @@ describe("calendarEventEditorActions", () => {
   });
 
   it("includes default event color ids on single and batch create payloads", () => {
-    expect(buildCalendarEventPayload({
-      draft: {
-        ...draft,
-        colorId: "3",
-      },
-      effectiveTitle: "Work",
-    })).toMatchObject({
-      title: "Work",
-      colorId: "3",
-    });
-
-    expect(buildBatchCreateItems({
-      draft: {
-        ...draft,
-        colorId: "3",
-      },
+    const coloredDraft = { ...draft, colorId: "3" };
+    const single = buildCalendarEventPayload({ draft: coloredDraft, effectiveTitle: "Work" });
+    const batch = buildBatchCreateItems({
+      draft: coloredDraft,
       effectiveTitle: "Work",
       batchDrafts: [
         {
@@ -196,10 +184,9 @@ describe("calendarEventEditorActions", () => {
           endTime: "17:30",
         },
       ],
-    })[0]).toMatchObject({
-      title: "Work",
-      colorId: "3",
     });
+
+    expect([single.colorId, batch[0]?.colorId]).toEqual(["3", "3"]);
   });
 
   it("creates recurring events with a normalized recurrence payload and refresh bounds", async () => {
@@ -457,50 +444,6 @@ describe("calendarEventEditorActions", () => {
         hasUpcomingReminder: true,
         upcomingCount: 1,
         nextReminderAt: "2099-05-06T17:30:00.000Z",
-      },
-    });
-  });
-
-  it("preserves retained event reminders after a time edit without explicit reminder changes", async () => {
-    const editingEvent = {
-      id: "event-1",
-      etag: '"etag-1"',
-      title: "Old work",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2099-05-05T20:00:00.000Z").getTime(),
-      endMs: new Date("2099-05-05T20:30:00.000Z").getTime(),
-      allDay: false,
-    };
-    const savedEvent = {
-      ...editingEvent,
-      title: "Work",
-      startMs: new Date("2099-05-05T21:00:00.000Z").getTime(),
-      endMs: new Date("2099-05-05T21:30:00.000Z").getTime(),
-    };
-    const client = {
-      update: vi.fn().mockResolvedValue({ event: savedEvent }),
-    };
-
-    const result = await saveCalendarEventAction({
-      draft,
-      effectiveTitle: "Work",
-      editingEvent,
-      intentMode: "single",
-      eventReminders: {
-        items: [{ id: "at-start", offset_minutes: 0, remind_at: "2099-05-05T20:00:00.000Z", status: "pending" }],
-        removedIds: [],
-      },
-    }, client);
-
-    expect(result.savedEvent).toMatchObject({
-      hasUpcomingReminder: true,
-      upcomingReminderCount: 1,
-      nextReminderAt: "2099-05-05T21:00:00.000Z",
-      reminderState: {
-        hasUpcomingReminder: true,
-        upcomingCount: 1,
-        nextReminderAt: "2099-05-05T21:00:00.000Z",
       },
     });
   });

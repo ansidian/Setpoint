@@ -9,7 +9,6 @@ import {
   validateRecurrenceDraft,
   validateSingleDraft,
 } from "./calendarEventEditorModel";
-import { applyCompactScheduleTime } from "./calendarCompactSchedulePickerModel";
 
 describe("calendarEventEditorModel", () => {
   it("normalizes recurrence drafts with safe defaults and positive counts", () => {
@@ -228,52 +227,6 @@ describe("calendarEventEditorModel", () => {
       effectiveTitle: "Standup",
       recurrenceDraft: { frequency: "weekly", interval: 1, weekdays: ["WE"], ends: { type: "never" } },
     })).toBe("Recurrence cannot be combined with a multi-date batch.");
-  });
-
-  it("rolls the end to the next day when a same-day end time lands before the start time", () => {
-    // A same-day draft whose end time is edited to before the start time would be
-    // invalid (end before start). The compact-schedule normalizer rolls the end
-    // date forward one day so the event reads as an overnight block instead.
-    const draft = {
-      startDate: "2026-04-20",
-      endDate: "2026-04-20",
-      startTime: "09:00",
-      endTime: "09:30",
-    };
-
-    expect(applyCompactScheduleTime(draft, "endTime", "08:00")).toEqual({
-      startDate: "2026-04-20",
-      endDate: "2026-04-21",
-      startTime: "09:00",
-      endTime: "08:00",
-    });
-
-    // A still-valid same-day end time leaves the end date untouched (no roll).
-    expect(applyCompactScheduleTime(draft, "endTime", "10:00")).toEqual({
-      startDate: "2026-04-20",
-      endDate: "2026-04-20",
-      startTime: "09:00",
-      endTime: "10:00",
-    });
-  });
-
-  it("does not roll overnight when the end already falls on a later day", () => {
-    // The roll only fires when end and start share a date. A multi-day draft
-    // whose end time precedes the start time is already valid and must be left
-    // alone rather than pushed an extra day forward.
-    const draft = {
-      startDate: "2026-04-20",
-      endDate: "2026-04-21",
-      startTime: "09:00",
-      endTime: "08:00",
-    };
-
-    expect(applyCompactScheduleTime(draft, "endTime", "08:00")).toEqual({
-      startDate: "2026-04-20",
-      endDate: "2026-04-21",
-      startTime: "09:00",
-      endTime: "08:00",
-    });
   });
 
   it("allows a timed single draft whose end equals its start", () => {

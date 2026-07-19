@@ -8,6 +8,7 @@ import {
   isSizeCheckedTest,
 } from './lib/component-sizes.mts'
 import { findForbiddenSourcePatterns } from './lib/design-policy.mts'
+import { findTestSourcePolicyViolations } from './lib/test-source-policy.mts'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
@@ -215,6 +216,23 @@ async function checkTestFileSizes() {
   warnings.push(...result.warnings)
 }
 
+async function checkTestSourcePolicies() {
+  const testFiles = [
+    ...await collectFiles('src', isSizeCheckedTest),
+    ...await collectFiles('server', isSizeCheckedTest),
+    ...await collectFiles('scripts', isSizeCheckedTest),
+  ]
+
+  for (const file of testFiles) {
+    const source = await readText(file)
+    for (const violation of findTestSourcePolicyViolations(source, file)) {
+      failures.push(
+        `${file}:${violation.line}:${violation.column} ${violation.message}`,
+      )
+    }
+  }
+}
+
 async function checkStaticDesignPolicies() {
   const componentPaths = await collectFiles('src', (relativePath) =>
     /\.(?:jsx|tsx)$/.test(relativePath) && !relativePath.includes('.test.'),
@@ -262,6 +280,7 @@ await checkAreaMaps()
 await checkImportBoundariesAcrossDomains()
 await checkSourceFileSizes()
 await checkTestFileSizes()
+await checkTestSourcePolicies()
 await checkStaticDesignPolicies()
 
 for (const warning of warnings) {

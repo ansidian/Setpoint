@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
 import type { ReactNode, Ref } from "react";
 import AgendaMonthScrollContainer from "./AgendaMonthScrollContainer.tsx";
@@ -23,8 +23,11 @@ type ContainerTestProps = Omit<AgendaMonthScrollContainerProps, "months" | "rend
 };
 const asRect = (value: Omit<DOMRect, "x" | "y" | "toJSON">): DOMRect => value as DOMRect;
 
+beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] }));
+
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 const GROUPS = [
@@ -75,6 +78,12 @@ async function flushRailEffects(): Promise<void> {
     await new Promise<void>((resolve) => {
       window.requestAnimationFrame(() => resolve());
     });
+  });
+}
+
+async function advanceRailTime(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
   });
 }
 
@@ -163,9 +172,7 @@ describe("AgendaRailShell", () => {
       />,
     );
     await flushRailEffects();
-    await act(async () => {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-    });
+    await advanceRailTime(500);
 
     const rail = screen.getByTestId("agenda-shell");
     rail.getBoundingClientRect = () => asRect({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
@@ -269,9 +276,7 @@ describe("AgendaRailShell", () => {
     expect(rail.scrollTop).toBe(620);
     const entryScrollCalls = scrollTo.mock.calls.length;
 
-    await act(async () => {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 760));
-    });
+    await advanceRailTime(760);
 
     expect(scrollTo).toHaveBeenCalledTimes(entryScrollCalls);
 
@@ -631,9 +636,7 @@ describe("AgendaRailShell", () => {
       }, renderHeader, renderGroup),
     );
     await flushRailEffects();
-    await act(async () => {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-    });
+    await advanceRailTime(500);
 
     const rail = screen.getByTestId("agenda-shell");
     const firstSection = rail.querySelector("section[data-date-key='2026-05-01']")!;
@@ -661,9 +664,7 @@ describe("AgendaRailShell", () => {
 
     expect(onTopmostDateChange).not.toHaveBeenCalledWith("2026-05-02");
 
-    await act(async () => {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-    });
+    await advanceRailTime(500);
 
     fireEvent.scroll(rail);
     await flushRailEffects();
@@ -823,9 +824,7 @@ describe("AgendaRailShell", () => {
       }, renderHeader, () => null),
     );
     await flushRailEffects();
-    await act(async () => {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-    });
+    await advanceRailTime(500);
 
     const rail = screen.getByTestId("agenda-shell");
     const firstHeader = screen.getByTestId("header-2026-05-01");

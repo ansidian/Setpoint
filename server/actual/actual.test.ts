@@ -59,6 +59,17 @@ async function importActualApiMock(): Promise<MockActualApi> {
   return (await import("@actual-app/api")).default as unknown as MockActualApi;
 }
 
+function holdFirstCall(mock: ReturnType<typeof vi.fn>) {
+  let release!: () => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  mock.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    release = resolve;
+    markStarted();
+  }));
+  return { started, release: () => release() };
+}
+
 const actualApiState = vi.hoisted<ActualApiState>(() => ({
   accounts: [],
   payees: [],
@@ -181,23 +192,18 @@ describe("actual-core mutex (withLock)", () => {
     const { testConnection } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     // Launch two calls without awaiting the first — simulates concurrent access
     const p1 = testConnection("user1");
     const p2 = testConnection("user1");
 
+    await firstInit.started;
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    // Verify sequential: first call must complete before second starts
-    expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
+    expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 
   it("a rejected call does not block the next caller", async () => {
@@ -388,14 +394,7 @@ describe("actual.ts sendBill mutex", () => {
     const { getMetadata, sendBill } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     const billData = {
       type: "expense",
@@ -408,9 +407,11 @@ describe("actual.ts sendBill mutex", () => {
     const p1 = getMetadata("user1");
     const p2 = sendBill(billData, "user1");
 
+    await firstInit.started;
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    expect(order).toEqual(["init-1-start", "init-1-end"]);
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(actualApi.addTransactions).toHaveBeenCalled();
   });
 
@@ -494,22 +495,17 @@ describe("actual-core testConnection mutex", () => {
     const { getMetadata, testConnection } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     const p1 = getMetadata("user1");
     const p2 = testConnection("user1");
 
+    await firstInit.started;
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    // Both inits sequential
-    expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
+    expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -595,14 +591,7 @@ describe("actual.ts createQuickTxn", () => {
     const { getMetadata, createQuickTxn } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     const p1 = getMetadata("user1");
     const p2 = createQuickTxn("user1", {
@@ -612,9 +601,11 @@ describe("actual.ts createQuickTxn", () => {
       date: "2026-04-16",
     });
 
+    await firstInit.started;
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    expect(order).toEqual(["init-1-start", "init-1-end"]);
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(actualApi.addTransactions).toHaveBeenCalled();
   });
 });

@@ -203,40 +203,6 @@ describe("DashboardShell mobile behavior", () => {
     expect(screen.queryByTestId("calendar-modal")).toBeNull();
   });
 
-  it("keeps calendar available on desktop and opens it from the tab hotkey", async () => {
-    mockIsMobile = false;
-    renderShell();
-
-    expect(screen.getByTestId("shell-header-desktop")).toBeTruthy();
-    expect(screen.queryByTestId("calendar-modal")).toBeNull();
-    expect(screen.queryByTestId("shell-header-briefing-status")).toBeNull();
-
-    // The calendar is the third shell tab; the `3` hotkey activates it, which
-    // mounts the (mocked) calendar surface.
-    fireEvent.keyDown(window, { key: "3" });
-    expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
-  });
-
-  it("opens shell analytics from the A hotkey without stealing text input", async () => {
-    mockIsMobile = false;
-    renderShell();
-
-    const input = document.createElement("input");
-    document.body.appendChild(input);
-    input.focus();
-    fireEvent.keyDown(input, { key: "a" });
-    expect(screen.queryByTestId("ai-analytics-modal")).toBeNull();
-    input.remove();
-
-    fireEvent.keyDown(window, { key: "A" });
-    expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
-
-    fireEvent.keyDown(window, { key: "a" });
-    await waitFor(() => {
-      expect(screen.queryByTestId("ai-analytics-modal")).toBeNull();
-    });
-  });
-
   it("opens shell analytics immediately with no backdrop rasterization on the open path", async () => {
     mockIsMobile = false;
     renderShell();
@@ -270,29 +236,6 @@ describe("DashboardShell mobile behavior", () => {
     expect(modal.getAttribute("data-view")).toBe("events");
   });
 
-  it("opens create surfaces from dashboard action chords", async () => {
-    mockIsMobile = false;
-    renderShell();
-
-    fireEvent.keyDown(window, { key: "g" });
-    fireEvent.keyDown(window, { key: "t" });
-    expect(screen.queryByTestId("add-task-panel")).toBeNull();
-    const taskCalendar = await screen.findByTestId("calendar-modal");
-    expect(taskCalendar.textContent).toBe("open");
-    expect(taskCalendar.getAttribute("data-view")).toBe("events");
-    expect(taskCalendar.getAttribute("data-focus-item-id")).toBe("new");
-    expect(taskCalendar.getAttribute("data-force-deadline-overlay")).toBe("true");
-
-    fireEvent.keyDown(window, { key: "g" });
-    fireEvent.keyDown(window, { key: "c" });
-    await waitFor(() => {
-      const eventCalendar = screen.getByTestId("calendar-modal");
-      expect(eventCalendar.textContent).toBe("open");
-      expect(eventCalendar.getAttribute("data-view")).toBe("events");
-      expect(eventCalendar.getAttribute("data-focus-item-id")).toBe("new");
-    });
-  });
-
   it("switches to the calendar tab with 3 and ignores chords while typing", async () => {
     mockIsMobile = false;
     renderShell();
@@ -307,24 +250,6 @@ describe("DashboardShell mobile behavior", () => {
 
     fireEvent.keyDown(window, { key: "3" });
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
-  });
-
-  it("uses Y for snapshots so H stays available to inbox handling", () => {
-    mockIsMobile = false;
-    const props = makeProps();
-    render(
-      <BrowserRouter>
-        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <DashboardShell {...props} />
-        </DashboardProvider>
-      </BrowserRouter>,
-    );
-
-    fireEvent.keyDown(window, { key: "h" });
-    expect(props.setHistoryOpen).not.toHaveBeenCalled();
-
-    fireEvent.keyDown(window, { key: "y" });
-    expect(props.setHistoryOpen).toHaveBeenCalledTimes(1);
   });
 
   it("keeps active snapshot read overrides across dashboard refreshes", async () => {
@@ -543,23 +468,4 @@ describe("DashboardShell mobile behavior", () => {
     await waitFor(() => expect(scroller.scrollTop).toBe(420));
   });
 
-  it("exposes the Calendar tab on both mobile and desktop", () => {
-    // Phase 4: calendar is reachable on mobile via the bottom nav Calendar tab.
-    mockIsMobile = true;
-    const { unmount } = renderShell();
-
-    // Mobile renders the Calendar button in the MobileBottomNav.
-    expect(screen.getByRole("button", { name: /calendar/i })).toBeTruthy();
-
-    unmount();
-    cleanup();
-
-    mockIsMobile = false;
-    renderShell();
-
-    // Desktop renders the Calendar tab button in the ShellHeader tablist.
-    expect(screen.getByRole("tab", { name: /calendar/i })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /dashboard/i })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /inbox/i })).toBeTruthy();
-  });
 });

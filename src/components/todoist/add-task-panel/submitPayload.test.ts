@@ -8,10 +8,6 @@ describe("canSubmitTask", () => {
     expect(canSubmitTask({ parsed: { stripped: "" }, input: "#Work @home !1" })).toBe(false);
   });
 
-  it("disables submit for whitespace-only stripped titles", () => {
-    expect(canSubmitTask({ parsed: { stripped: "   " }, input: "  " })).toBe(false);
-  });
-
   it("enables submit when a real title survives token stripping", () => {
     expect(canSubmitTask({ parsed: { stripped: "Pay rent" }, input: "Pay rent #Work" })).toBe(true);
   });

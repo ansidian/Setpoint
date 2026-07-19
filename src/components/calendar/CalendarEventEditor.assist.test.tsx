@@ -391,7 +391,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     await waitFor(() => {
       expect(mockGetCalendarPlaceDetails).toHaveBeenCalled();
     });
-    await new Promise((resolve) => setTimeout(resolve, 150));
     resolvePlaceDetails?.(placeDetails);
 
     await waitFor(() => {

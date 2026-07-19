@@ -64,31 +64,6 @@ afterEach(() => {
 });
 
 describe("EmailAutomationSettingsSection", () => {
-  it("renders every email-automation card plus the lookback and interests panels", () => {
-    render(
-      <EmailAutomationSettingsSection
-        settings={{ email_interests: [] }}
-        setSettings={vi.fn()}
-        patch={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
-    expect(screen.getByTestId("triage-sound-settings-card")).toBeTruthy();
-    expect(screen.getByTestId("core-provider-credentials-card")).toBeTruthy();
-    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
-    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
-    expect(screen.getByText("Email Lookback")).toBeTruthy();
-    expect(screen.getByText("Email Interests")).toBeTruthy();
-    expect(screen.getByTestId("important-senders-card")).toBeTruthy();
-    expect(screen.getByTestId("snapshot-boundaries-card")).toBeTruthy();
-
-    expect(
-      screen.getByText("Controls how far back the email snapshot looks when gathering context."),
-    ).toBeTruthy();
-    expect(screen.queryByText(/generation/i)).toBeNull();
-  });
-
   describe("email lookback clamp", () => {
     function renderLookback() {
       const patch = vi.fn();

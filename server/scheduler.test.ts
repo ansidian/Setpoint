@@ -465,6 +465,7 @@ describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(triageCalls).toBe(11);
     const reminderRun = runReminderSchedulerWorker();
+    vi.useFakeTimers();
     requestEmailTriageDrainAt(new Date(Date.now() + 20));
 
     const stopPromise = stopScheduler();
@@ -486,8 +487,9 @@ describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
     resolveBatch?.({ processed: 0, sent: 0, missed: 0, failed: 0 });
     await Promise.all([stopPromise, reminderRun, snapshotRun]);
     expect(stopResolved).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await vi.advanceTimersByTimeAsync(30);
     expect(triageCalls).toBe(11);
+    vi.useRealTimers();
     logSpy.mockRestore();
   });
 });

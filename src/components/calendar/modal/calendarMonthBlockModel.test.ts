@@ -12,13 +12,11 @@ const base = {
 };
 
 describe("resolveMonthBlockState", () => {
-  it("flags the active month and uses the active skeleton flag for it", () => {
-    const result = resolveMonthBlockState({
-      ...base, year: 2026, month: 4, showGridSkeleton: true,
-    });
+  it.each([true, false])("uses the active skeleton flag %s for the active month", (showGridSkeleton) => {
+    const result = resolveMonthBlockState({ ...base, month: 4, showGridSkeleton });
     expect(result.isActive).toBe(true);
     expect(result.hasFullData).toBe(true);
-    expect(result.blockSkeleton).toBe(true); // active month follows showGridSkeleton
+    expect(result.blockSkeleton).toBe(showGridSkeleton);
   });
 
   it("never marks the active month as cached, even if its key matches a cached entry", () => {
@@ -28,15 +26,6 @@ describe("resolveMonthBlockState", () => {
     });
     expect(result.isActive).toBe(true);
     expect(result.isCached).toBe(false);
-  });
-
-  it("uses the active skeleton flag (not a forced true) for the active month", () => {
-    // Pins the active branch of `isActive ? showGridSkeleton : !monthCached`.
-    const result = resolveMonthBlockState({
-      ...base, year: 2026, month: 4, showGridSkeleton: false, monthCached: false,
-    });
-    expect(result.isActive).toBe(true);
-    expect(result.blockSkeleton).toBe(false);
   });
 
   it("flags the previously-active month as cached (full data, no skeleton from monthCached)", () => {
@@ -70,14 +59,5 @@ describe("resolveMonthBlockState", () => {
     expect(shared.blockSkeleton).toBe(false);
     // Events (no shared map) still skeleton an uncached non-active month.
     expect(resolveMonthBlockState({ ...base, monthCached: false, shareItemsByDate: false }).blockSkeleton).toBe(true);
-  });
-
-  it("keeps isCached/hasFullData falsy (the raw operand, not coerced) when there is no cached entry", () => {
-    // `!isActive && cached && ...` short-circuits to the falsy `cached` (null);
-    // `isActive || isCached` then yields null too. The render reads both only in
-    // boolean context, so the falsy operand is preserved rather than coerced.
-    const result = resolveMonthBlockState({ ...base, cached: null });
-    expect(result.isCached).toBeFalsy();
-    expect(result.hasFullData).toBeFalsy();
   });
 });

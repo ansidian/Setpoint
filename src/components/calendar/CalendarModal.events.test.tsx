@@ -737,8 +737,8 @@ describe("CalendarModal event grid behavior", () => {
       ));
 
       const scrollEl = await screen.findByTestId("calendar-scroll-container");
-      // Wait out the mount-centering settle so its suppression window closes.
-      await act(async () => { await new Promise((r) => setTimeout(r, 250)); });
+      await waitFor(() => expect(onEventsVisibleRangeChange).toHaveBeenCalled());
+      onEventsVisibleRangeChange.mockClear();
 
       // Chevron navigation to June opens the 900ms grid↔agenda suppression
       // window (the same window agenda-driven scrolling opens).

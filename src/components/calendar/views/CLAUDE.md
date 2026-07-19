@@ -43,11 +43,8 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `bills/financeSourceColors.ts` — canonical income/outflow/transfer source colors for every Bills-view surface
 
 ### deadlines
-- `deadlines/DeadlinesAgendaRail.tsx` — task timeline grouped by due date with status
 - `deadlines/DeadlinesCellContent.tsx` — compact task chips for grid cells
 - `deadlines/DeadlinesDetailRail.tsx` — task detail panel: status, reminders, actions
-- `deadlines/DeadlinesFooter.tsx` — month summary: totals, due today/this week
-- `deadlines/DeadlinesHeaderExtras.tsx` — new-task button for the selected date
 - `deadlines/DeadlineDetailCard.tsx` — task card with metadata and reminders
 - `deadlines/DeadlineDetailActions.tsx` — mark-complete, edit, delete, link menu
 - `deadlines/DeadlineQuickActionLayer.tsx` — context menu for quick actions

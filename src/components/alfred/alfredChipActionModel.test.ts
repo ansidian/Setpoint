@@ -72,7 +72,6 @@ describe("resolveAlfredChipAction", () => {
     expect(resolveAlfredChipAction("event", { title: "no id" })).toBeNull();
     expect(resolveAlfredChipAction("deadline", {})).toBeNull();
     expect(resolveAlfredChipAction("bill", {})).toBeNull();
-    expect(resolveAlfredChipAction("transaction", { id: "x" })).toBeNull();
   });
 
   it("transactions are non-interactive (no chip action)", () => {

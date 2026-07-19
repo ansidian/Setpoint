@@ -32,13 +32,6 @@ describe("samePlacement", () => {
   it("distinguishes a caret side flip even at the same coordinates", () => {
     expect(samePlacement(placement({ caretSide: "left" }), placement({ caretSide: "right" }))).toBe(false);
   });
-
-  it("is falsy when either side is missing", () => {
-    // Mirrors the original `a && b && ...`: returns the falsy operand, used in a
-    // boolean context by the caller — not coerced to a strict `false`.
-    expect(samePlacement(null, placement())).toBeFalsy();
-    expect(samePlacement(placement(), null)).toBeFalsy();
-  });
 });
 
 describe("resolveAnchoredPlacement", () => {

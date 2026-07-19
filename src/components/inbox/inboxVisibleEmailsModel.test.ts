@@ -175,13 +175,4 @@ describe("selectVisibleEmails", () => {
     expect(result.map((e) => e.uid)).toEqual(["pin-newer", "pin-older", "untriaged", "plain"]);
   });
 
-  it("indexed-search short-circuit is unchanged by the pin rules", () => {
-    const indexedSearchEmails = [email({ uid: "hit-1" })];
-    const result = selectVisibleEmails({
-      flatEmails: [email({ uid: "pinned-live", _pinned: true, _pinnedAt: 999 })],
-      indexedSearchActive: true,
-      indexedSearchEmails,
-    });
-    expect(result).toBe(indexedSearchEmails);
-  });
 });

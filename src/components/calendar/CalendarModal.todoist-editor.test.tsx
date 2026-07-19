@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { flushAnimationFrame, getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
+import { getVisibleGridRange } from "./calendarDateUtils.ts";
 
 describe("CalendarModal Todoist editor behavior", () => {
   it("switches from an event create to the Todoist create workspace without ghosts or losing the panel", async () => {
@@ -96,6 +97,7 @@ describe("CalendarModal Todoist editor behavior", () => {
 
     try {
       window.innerWidth = 1900;
+      const onEventsVisibleRangeChange = vi.fn();
 
       render(wrapWithDashboard(
         <CalendarModal
@@ -106,7 +108,12 @@ describe("CalendarModal Todoist editor behavior", () => {
           onViewChange={() => {}}
           focusDate="2026-04-30"
           focusItemId="new"
-          eventsData={{ getEvents: () => [] }}
+          eventsData={{
+            getEvents: () => [],
+            ensureRange: vi.fn().mockResolvedValue([]),
+            revision: 0,
+          }}
+          onEventsVisibleRangeChange={onEventsVisibleRangeChange}
           billsData={{}}
           deadlinesData={{ upcoming: [] }}
         />,
@@ -123,8 +130,9 @@ describe("CalendarModal Todoist editor behavior", () => {
         expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
       }, { timeout: 1500 });
 
-      await act(async () => {
-        await new Promise((resolve) => window.setTimeout(resolve, 850));
+      await waitFor(() => {
+        const { start, end } = getVisibleGridRange(2027, 4);
+        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
       });
 
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);

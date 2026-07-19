@@ -46,8 +46,7 @@ describe("MobileReader mobile-sheet menus", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Email actions" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Snooze" }));
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-    const snoozeDialog = screen.getByRole("dialog", { name: "Snooze" });
+    const snoozeDialog = await screen.findByRole("dialog", { name: "Snooze" });
     const snoozeMenu = within(snoozeDialog).getByRole("menu", { name: "Snooze until" });
     const snoozeActions = within(snoozeMenu).getAllByRole("menuitem");
     expect(snoozeActions).toHaveLength(6);

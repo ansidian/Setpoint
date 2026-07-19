@@ -7,7 +7,6 @@ import {
   collectResurfaced,
   makeSynthAccount,
   mergePinnedIntoFlat,
-  mergeReadState,
   pinnedEntryFromSnapshot,
 } from "./inboxWorkItems";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures";
@@ -94,6 +93,110 @@ describe("inbox work items", () => {
     ]);
   });
 
+  it("projects resurfaced and pending-security snapshot sources as untriaged metadata", () => {
+    const snapshot = makeActiveSnapshot({
+      lanes: {
+        needs_attention: [
+          {
+            id: 11,
+            snapshot_item_id: 11,
+            uid: "snapshot-resurfaced",
+            account_id: "gmail-work",
+            lane: "needs_attention",
+            source: "resurfaced_snooze",
+            source_at: "2026-05-04T17:30:00.000Z",
+            resurfaced_at: 1777915800000,
+          },
+          {
+            id: 12,
+            snapshot_item_id: 12,
+            uid: "security-pending",
+            account_id: "gmail-work",
+            lane: "needs_attention",
+            source: "pending_security_grace",
+            source_at: "2026-05-03T16:05:00.000Z",
+          },
+        ],
+        fyi: [],
+        noise: [],
+      },
+      carryover: [],
+    });
+
+    const rows = collectActiveSnapshotEmails(snapshot);
+
+    expect(rows[0]).toMatchObject({
+      uid: "snapshot-resurfaced",
+      _untriaged: true,
+      _live: false,
+      _activeSnapshot: true,
+      _resurfaced: true,
+      _resurfacedAt: 1777915800000,
+      _lane: null,
+    });
+    expect(rows[1]).toMatchObject({
+      uid: "security-pending",
+      _untriaged: true,
+      _live: false,
+      _activeSnapshot: true,
+      _lane: null,
+      _pendingSecurityGrace: true,
+      _pendingSecurityGraceAt: Date.parse("2026-05-03T16:05:00.000Z"),
+    });
+    expect(rows[1]!._pendingSecurityGraceLabel).toBeUndefined();
+  });
+
+  it("projects handled and catch-up rows while read overrides only change read state", () => {
+    const snapshot = makeActiveSnapshot({
+      lanes: {
+        needs_attention: [],
+        catch_up: [{
+          id: "catch_up:14",
+          snapshot_item_id: 14,
+          uid: "late-fyi",
+          account_id: "gmail-work",
+          lane: "catch_up",
+          lane_at_snapshot: "fyi",
+          read: false,
+          source: "catch_up",
+        }],
+        fyi: [],
+        handled: [{
+          id: 13,
+          snapshot_item_id: 13,
+          uid: "handled-thread",
+          account_id: "gmail-work",
+          lane: "needs_attention",
+          handled_at: "2026-05-03T16:10:00.000Z",
+          read: true,
+        }],
+        noise: [],
+      },
+      carryover: [],
+    });
+
+    const rows = collectActiveSnapshotEmails(snapshot, { "late-fyi": true });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        uid: "late-fyi",
+        _activeSnapshot: true,
+        _lane: "catch_up",
+        lane: "catch_up",
+        lane_at_snapshot: "fyi",
+        read: true,
+        _catchUp: true,
+      }),
+      expect.objectContaining({
+        uid: "handled-thread",
+        _activeSnapshot: true,
+        _untriaged: false,
+        _lane: "handled",
+        handled_at: "2026-05-03T16:10:00.000Z",
+      }),
+    ]);
+  });
+
   it("normalizes live and resurfaced rows through the same account seam", () => {
     const synthAccount = makeSynthAccount([{ id: "work", name: "Work", color: "#fff", icon: "Mail" }]);
     const liveRows = collectLiveEmails(
@@ -130,12 +233,6 @@ describe("inbox work items", () => {
       _resurfaced: true,
       _resurfacedAt: 456,
     });
-  });
-
-  it("honors object and Map read overrides", () => {
-    expect(mergeReadState(false, "uid-1", { "uid-1": true })).toBe(true);
-    expect(mergeReadState(true, "uid-1", new Map([["uid-1", false]]))).toBe(false);
-    expect(mergeReadState(false, "uid-2", { "uid-1": true })).toBe(false);
   });
 
   describe("collectPinned", () => {

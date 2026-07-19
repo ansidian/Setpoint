@@ -155,14 +155,13 @@ describe("CalendarModal Mini Calendar activation", () => {
 
       const agendaRail = await screen.findByTestId("events-agenda-rail");
       await flushAnimationFrame();
-      await act(async () => {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-      });
+      const performanceNow = vi.spyOn(performance, "now").mockReturnValue(Number.MAX_SAFE_INTEGER);
       scrollTo.mockClear();
 
       fireEvent.wheel(agendaRail, { deltaY: 320 });
       fireEvent.scroll(agendaRail);
       await flushAnimationFrame();
+      performanceNow.mockRestore();
 
       await waitFor(() => {
         expect(miniDate(/Wednesday, May 20, selected/i).getAttribute("data-date-fill")).toBe("selected");

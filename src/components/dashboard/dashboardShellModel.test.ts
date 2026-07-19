@@ -75,10 +75,6 @@ describe("dashboard shell model", () => {
     expect(resolveDashboardShellHotkey({ key: "y" })).toEqual({ action: "toggle-history" });
   });
 
-  it("no longer maps 'c' to open-calendar", () => {
-    expect(resolveDashboardShellHotkey({ key: "c" }).action).toBe("ignore");
-  });
-
   it("builds dashboard deadline and bill calendar requests through stable shell commands", () => {
     expect(dashboardDeadlineCalendarRequest({
       id: "todo-42",
@@ -144,15 +140,6 @@ describe("dashboard shell model", () => {
     });
   });
 
-  it("forwards the cache stamp so modal memos invalidate when event content changes", () => {
-    expect(buildDashboardEventsData({ cacheStamp: 7 }).cacheStamp).toBe(7);
-  });
-
-  it("forwards markStale so failed mutations can re-converge the month cache", () => {
-    const markStale = () => {};
-    expect(buildDashboardEventsData({ markStale }).markStale).toBe(markStale);
-  });
-
   describe("blocking-overlay gating (P3-26 / P3-27)", () => {
     it("suppresses single-key shell commands behind a blocking overlay that isn't their target (e.g. Customize)", () => {
       // analyticsOpen/historyOpen are false here, modelling a Customize panel open:
@@ -206,29 +193,17 @@ describe("dashboard shell model", () => {
         .toEqual({ action: "ignore" });
     });
 
-    it("resolves 1/2/3 tab switches only when no blocking overlay is open", () => {
-      expect(resolveShellTabHotkey({ key: "1" })).toBe("dashboard");
-      expect(resolveShellTabHotkey({ key: "2" })).toBe("inbox");
-      expect(resolveShellTabHotkey({ key: "1", anyBlockingOverlayOpen: true })).toBeNull();
-      expect(resolveShellTabHotkey({ key: "2", anyBlockingOverlayOpen: true })).toBeNull();
+    it("maps unmodified 1-5 keys to their tabs", () => {
+      expect(["1", "2", "3", "4", "5"].map((key) => resolveShellTabHotkey({ key })))
+        .toEqual(["dashboard", "inbox", "calendar", "notes", "news"]);
+    });
+
+    it("suppresses tab switches from overlays, editable targets, and modified keys", () => {
+      for (const key of ["1", "2", "3", "4", "5"]) {
+        expect(resolveShellTabHotkey({ key, anyBlockingOverlayOpen: true })).toBeNull();
+      }
       expect(resolveShellTabHotkey({ key: "1", editableTarget: true })).toBeNull();
       expect(resolveShellTabHotkey({ key: "1", metaKey: true })).toBeNull();
-    });
-
-    it("maps '3' to calendar", () => {
-      expect(resolveShellTabHotkey({ key: "3" })).toBe("calendar");
-    });
-
-    it("suppresses '3' while a blocking overlay is open", () => {
-      expect(resolveShellTabHotkey({ key: "3", anyBlockingOverlayOpen: true })).toBeNull();
-    });
-
-    it("maps '4' to notes", () => {
-      expect(resolveShellTabHotkey({ key: "4" })).toBe("notes");
-    });
-
-    it("resolves hotkey 5 to the news tab", () => {
-      expect(resolveShellTabHotkey({ key: "5" })).toBe("news");
     });
   });
 

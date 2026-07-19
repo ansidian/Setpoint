@@ -17,7 +17,6 @@ The Notes tab: a fourth shell tab for quick markdown jots with search, `#tag` fi
 ### Rendering + model (pure)
 - `renderNoteMarkdown.tsx` — read-view markdown renderer for list rows (bold/italic/code/heading/`#tag` chips/bare links/`[label](url)` links/checkboxes); links suppressed under demo mode. Markdown-link URLs are restricted to `http(s)` so `[x](javascript:…)` can never render as a live `<a>`.
 - `notesModel.ts` — `parseTags`, `collectTags`, `selectVisibleNotes` (takes a `view: "active"|"archived"`; search/tag filters apply within the view), `splitNoteForTask`, `parseNoteDate`, `formatNoteAge`, `noteEditedAge` (created-vs-updated, Date-compared across formats), `stripTags` (remove anchored tags from a body, line-count-stable so checkbox indices hold).
-- `notesUtils.tsx` — `linkifyText` (URL-only linkify; superseded in the tab by `renderNoteMarkdown`, retained for any other caller).
 - `NoteContextMenu.tsx` — portal action menu (Edit / Add to Todoist / Archive **or** Unarchive / Delete) positioned at the cursor, viewport-clamped. Renders Archive when given `onArchive`, Unarchive when given `onUnarchive`. A `count > 1` suffixes the action labels ("Archive 3", "Delete 3") for the bulk menu (the bulk caller omits Edit/Promote).
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)

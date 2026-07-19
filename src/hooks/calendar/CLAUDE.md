@@ -11,7 +11,6 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarScrollSyncModel.ts` — pure decisions for grid↔agenda scroll sync
 - `calendarGridRowModel.ts` — fixed week-row heights and per-month row layout math
 - `agendaFetchModel.ts` — agenda month fetch planning: initial months, scroll prefetch
-- `agendaScrollModel.ts` — agenda scroll math (no runtime consumers yet; covered by its tests)
 - `calendarPlanningSessionModel.ts` — planning state transitions (idle/loading/slow/degraded)
 - `calendarFloatingDetailModel.ts` — floating detail predicates, anchor logic, reanchoring rules
 - `calendarModalInteractionModel.ts` — storage keys, view normalization, deadline-create logic
