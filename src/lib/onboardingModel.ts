@@ -10,8 +10,24 @@ export interface OnboardingStepDefinition {
   title: string;
   description: string;
   capabilityIds: CapabilityId[];
-  settingsHref: string;
-  actionLabel: string;
+  targets: OnboardingConnectionTarget[];
+}
+
+export type OnboardingConnectionId =
+  | "google-workspace"
+  | "icloud-mail"
+  | "todoist"
+  | "actual-budget"
+  | "openai"
+  | "anthropic"
+  | "discord-reminders"
+  | "pirate-weather"
+  | "google-places";
+
+export interface OnboardingConnectionTarget {
+  connectionId: OnboardingConnectionId;
+  label: string;
+  href: string;
 }
 
 export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
@@ -20,56 +36,67 @@ export const ONBOARDING_STEPS: OnboardingStepDefinition[] = [
     title: "Connect email and calendar",
     description: "Authorize Google once for Gmail and Calendar, or add an iCloud inbox.",
     capabilityIds: ["email_calendar"],
-    settingsHref: "/settings?tab=accounts#connected-accounts",
-    actionLabel: "Open account connections",
+    targets: [
+      { connectionId: "google-workspace", label: "Google Workspace", href: "/settings?tab=connections#google-workspace" },
+      { connectionId: "icloud-mail", label: "iCloud Mail", href: "/settings?tab=connections#icloud-mail" },
+    ],
   },
   {
     id: "ai",
     title: "Enable AI features",
-    description: "Add OpenAI, Anthropic, or both. Triage and extraction model choices stay in advanced Settings.",
+    description: "Add OpenAI, Anthropic, or both. Triage and extraction model choices stay in Automation.",
     capabilityIds: ["ai"],
-    settingsHref: "/settings?tab=briefing#ai-provider-credentials",
-    actionLabel: "Open AI credentials",
+    targets: [
+      { connectionId: "openai", label: "OpenAI", href: "/settings?tab=connections#openai" },
+      { connectionId: "anthropic", label: "Anthropic", href: "/settings?tab=connections#anthropic" },
+    ],
   },
   {
     id: "tasks",
     title: "Add tasks",
     description: "Start with a Todoist personal token. OAuth and webhooks remain optional advanced setup.",
     capabilityIds: ["tasks"],
-    settingsHref: "/settings?tab=accounts#todoist-setup",
-    actionLabel: "Open Todoist setup",
+    targets: [
+      { connectionId: "todoist", label: "Todoist", href: "/settings?tab=connections#todoist" },
+    ],
   },
   {
     id: "weather",
     title: "Add weather",
     description: "Choose a location and add Pirate Weather. Location search itself does not need a key.",
     capabilityIds: ["weather"],
-    settingsHref: "/settings?tab=accounts#location-provider-credentials",
-    actionLabel: "Open weather setup",
+    targets: [
+      { connectionId: "pirate-weather", label: "Pirate Weather", href: "/settings?tab=connections#pirate-weather" },
+    ],
   },
   {
     id: "finances",
     title: "Connect finances",
     description: "Connect your existing Actual Budget server when you want bills and transactions in Setpoint.",
     capabilityIds: ["finances"],
-    settingsHref: "/settings?tab=actual#actual-budget-connection",
-    actionLabel: "Open Actual Budget setup",
+    targets: [
+      { connectionId: "actual-budget", label: "Actual Budget", href: "/settings?tab=connections#actual-budget" },
+    ],
   },
   {
     id: "notifications",
     title: "Configure notifications",
     description: "Add a private Discord reminder destination, or leave notifications off for now.",
     capabilityIds: ["notifications"],
-    settingsHref: "/settings?tab=accounts#discord-reminders",
-    actionLabel: "Open notification setup",
+    targets: [
+      { connectionId: "discord-reminders", label: "Discord Reminders", href: "/settings?tab=connections#discord-reminders" },
+    ],
   },
   {
     id: "advanced_delivery",
     title: "Optional delivery enhancements",
     description: "Real-time Gmail, Todoist OAuth/webhooks, and Calendar places are independent advanced options.",
     capabilityIds: ["gmail_realtime", "todoist_advanced", "calendar_places"],
-    settingsHref: "/settings?tab=accounts#gmail-realtime-delivery",
-    actionLabel: "Open advanced setup",
+    targets: [
+      { connectionId: "google-workspace", label: "Gmail realtime", href: "/settings?tab=connections&setup=gmail-realtime#google-workspace" },
+      { connectionId: "todoist", label: "Todoist advanced", href: "/settings?tab=connections&setup=todoist-advanced#todoist" },
+      { connectionId: "google-places", label: "Google Places", href: "/settings?tab=connections#google-places" },
+    ],
   },
 ];
 
@@ -86,4 +113,10 @@ export function projectOnboardingChecklist(progress: OnboardingProgress) {
     completedCount: steps.filter((step) => step.state === "completed").length,
     finished: progress.status === "complete",
   };
+}
+
+export function onboardingContinueHref(progress: OnboardingProgress): string | null {
+  if (progress.status === "complete") return null;
+  const inProgressStep = ONBOARDING_STEPS.find((step) => progress.steps[step.id] === "reviewed");
+  return inProgressStep ? `/onboarding?step=${inProgressStep.id}` : null;
 }

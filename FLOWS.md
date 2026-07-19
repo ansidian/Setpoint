@@ -213,8 +213,12 @@ Selection path:
 2. `server/onboarding-progress-store.ts` — reads and allowlist-updates reviewed/completed/skipped step state separately from `completed_at`; finish and reopen change only the checklist lifecycle.
 3. `server/routes/onboarding.ts` — exposes authenticated `GET` and allowlisted `PATCH` mutations without accepting provider values or returning secrets.
 4. `src/lib/onboardingApi.ts` — uses the authenticated API normally and an in-memory, network-free projection in demo builds.
-5. `src/lib/onboardingModel.ts` — owns the locked capability order and selects the first unfinished step without consulting capability health.
-6. `src/pages/Onboarding.tsx` — renders the resumable checklist, reads live `/api/capabilities` metadata, and routes configuration into the existing Settings controls so tests, OAuth, and write-only credential behavior are shared.
-7. `src/App.tsx` — keeps dashboard access available while unfinished, resumes the checklist from login, and observes finish/reopen events so an explicit finish is immediately non-blocking.
+5. `src/lib/onboardingModel.ts` — owns the locked capability order, allowlisted provider-specific Connections targets, first-unfinished projection, and the first persisted `reviewed` step eligible for **Continue setup**; none of these consult capability health.
+6. `src/pages/Onboarding.tsx` — renders the resumable checklist, reads live `/api/capabilities` metadata, resumes an allowlisted `?step=`, and renders one explicit Connections action per provider so tests, OAuth, and write-only credential behavior are shared.
+7. `src/pages/Settings.tsx` → `src/components/settings/ConnectionsDirectory.tsx` — fetches onboarding progress once at the page boundary; the directory shows **Continue setup** only for unfinished persisted `reviewed` work and never derives it from broken or disconnected services.
+8. `src/components/settings/sections/ConnectionsSettingsSection.tsx` → `ConnectionPanelContent.tsx` — canonical connection hashes open the owning row; allowlisted `setup=gmail-realtime|todoist-advanced` query targets reveal and focus only that service's Advanced setup disclosure.
+9. `src/App.tsx` — keeps dashboard access available while unfinished, resumes the checklist from login, and observes finish/reopen events so an explicit finish is immediately non-blocking.
 
-**Separation:** capability degradation never reopens onboarding or changes persisted presentation progress. Finishing is permitted with every integration pending, and demo onboarding never calls setup, provider, or onboarding endpoints.
+**Deep links:** base services use `/settings?tab=connections#<connection-id>`. Gmail realtime and Todoist advanced retain the owning connection hash and add an allowlisted `setup` query; deterministic legacy tab/card pairs are canonicalized, while ambiguous combined-card hashes are not guessed.
+
+**Separation:** capability degradation never reopens onboarding or changes persisted presentation progress. Untouched or skipped optional services do not produce **Continue setup**. Finishing is permitted with every integration pending, and demo onboarding/Settings use the in-memory progress adapter without calling setup, provider, or onboarding endpoints.

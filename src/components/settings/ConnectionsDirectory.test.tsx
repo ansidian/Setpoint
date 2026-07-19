@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { CONNECTIONS, CONNECTION_GROUPS } from "./connectionModel";
 import type { ConnectionRowView, ConnectionState } from "./connectionModel";
 import ConnectionsDirectory from "./ConnectionsDirectory";
+import type { OnboardingProgress } from "../../../shared/types/onboarding";
 
 const states: Record<string, ConnectionState> = {
   "google-workspace": "connected",
@@ -30,12 +31,13 @@ const rows: ConnectionRowView[] = CONNECTIONS.map((definition) => ({
   lastFailedAt: null,
 }));
 
-function renderDirectory() {
+function renderDirectory(onboardingProgress?: OnboardingProgress | null, connectionRows = rows) {
   return render(
     <BrowserRouter>
       <ConnectionsDirectory
         groups={CONNECTION_GROUPS}
-        rows={rows}
+        rows={connectionRows}
+        onboardingProgress={onboardingProgress}
         renderPanel={(connection) => <div data-testid={`panel-${connection.id}`}>{connection.label} controls</div>}
       />
     </BrowserRouter>,
@@ -99,6 +101,17 @@ describe("ConnectionsDirectory", () => {
     expect(screen.queryByTestId("panel-actual-budget")).toBeNull();
   });
 
+  it("canonicalizes a deterministic legacy tab and card hash", async () => {
+    window.history.replaceState({}, "", "/settings?tab=actual#actual-budget-connection");
+    renderDirectory();
+
+    expect(await screen.findByTestId("panel-actual-budget")).toBeTruthy();
+    await waitFor(() => {
+      expect(window.location.search).toBe("?tab=connections");
+      expect(window.location.hash).toBe("#actual-budget");
+    });
+  });
+
   it("unmounts a closed panel so unsaved credential candidates are discarded", () => {
     function CandidatePanel() {
       const [candidate, setCandidate] = useState("");
@@ -128,5 +141,47 @@ describe("ConnectionsDirectory", () => {
     fireEvent.click(trigger);
 
     expect((screen.getByLabelText("Credential candidate") as HTMLInputElement).value).toBe("");
+  });
+
+  it("offers to continue only persisted in-progress onboarding work", () => {
+    const inProgress: OnboardingProgress = {
+      version: 1,
+      status: "in_progress",
+      steps: { ai: "reviewed" },
+      completedAt: null,
+      updatedAt: 1,
+    };
+    const { rerender } = renderDirectory(inProgress);
+
+    expect(screen.getByRole("link", { name: "Continue setup" }).getAttribute("href"))
+      .toBe("/onboarding?step=ai");
+
+    rerender(
+      <BrowserRouter>
+        <ConnectionsDirectory
+          groups={CONNECTION_GROUPS}
+          rows={rows}
+          onboardingProgress={{ ...inProgress, steps: { advanced_delivery: "skipped" } }}
+          renderPanel={() => null}
+        />
+      </BrowserRouter>,
+    );
+    expect(screen.queryByRole("link", { name: "Continue setup" })).toBeNull();
+  });
+
+  it("does not reopen finished onboarding when a connection later breaks", () => {
+    renderDirectory({
+      version: 1,
+      status: "complete",
+      steps: { email_calendar: "reviewed" },
+      completedAt: 2,
+      updatedAt: 2,
+    }, rows.map((row) => row.id === "google-workspace" ? {
+      ...row,
+      state: "needs_attention",
+      statusLabel: "Needs attention",
+    } : row));
+
+    expect(screen.queryByRole("link", { name: "Continue setup" })).toBeNull();
   });
 });

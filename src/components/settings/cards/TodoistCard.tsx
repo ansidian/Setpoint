@@ -24,12 +24,15 @@ import type { TodoistConnectionStatus } from "../../../../shared/types/tasks";
 import { cn } from "@/lib/utils";
 
 const BUTTON_MOTION_CLASS =
-  "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
+  "min-h-11 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0 sm:min-h-8";
 
 export default function TodoistCard({
   settings,
   onRefreshConnections = async () => {},
-}: Pick<SettingsCardStateProps, "settings"> & SettingsConnectionRefreshProps) {
+  openAdvancedSetup = false,
+}: Pick<SettingsCardStateProps, "settings"> & SettingsConnectionRefreshProps & {
+  openAdvancedSetup?: boolean;
+}) {
   const needsReauth = !!settings?.todoist_needs_reauth;
   const [todoistToken, setTodoistToken] = useState("");
   const [todoistConfigured, setTodoistConfigured] = useState(false);
@@ -43,6 +46,7 @@ export default function TodoistCard({
   const [clientSecret, setClientSecret] = useState("");
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthMessage, setOauthMessage] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(openAdvancedSetup);
 
   useEffect(() => {
     if (settings?.todoist_configured) {
@@ -63,6 +67,10 @@ export default function TodoistCard({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (openAdvancedSetup) setAdvancedOpen(true);
+  }, [openAdvancedSetup]);
 
   async function handleSaveTodoistSecret() {
     setTodoistSavingSecret(true);
@@ -228,7 +236,7 @@ export default function TodoistCard({
               <button
                 type="button"
                 onClick={() => setConfirmingDisconnect(true)}
-                className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+                className="min-h-11 rounded-md px-2 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none sm:min-h-0"
               >
                 Disconnect Todoist
               </button>
@@ -267,8 +275,12 @@ export default function TodoistCard({
           </div>
         ) : null}
 
-        <details className="border-t border-white/[0.06] pt-4">
-          <summary className="-mx-1 cursor-pointer rounded-md px-1 py-1 text-[11px] font-semibold text-muted-foreground transition-[color,background-color] duration-200 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
+        <details
+          open={advancedOpen}
+          onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+          className="border-t border-white/[0.06] pt-4"
+        >
+          <summary id="todoist-advanced-setup" className="-mx-1 min-h-11 cursor-pointer rounded-md px-1 py-3 text-[11px] font-semibold text-muted-foreground transition-[color,background-color] duration-200 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-white/[0.06] motion-reduce:transition-none sm:min-h-8 sm:py-2">
             Advanced OAuth and webhooks
           </summary>
           <div className="mt-4 flex flex-col gap-4">

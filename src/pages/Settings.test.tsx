@@ -4,11 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import type { SettingsPatch } from "@/components/settings/settingsTypes";
 import type { TriageSoundSettings } from "../../shared/types/settings";
+import type { OnboardingProgress } from "../../shared/types/onboarding";
 
 const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
   getCapabilities: vi.fn(),
   getInstanceCredentials: vi.fn(),
+  getOnboardingProgress: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   targetReadyDelayMs: 0,
@@ -35,8 +37,12 @@ vi.mock("@/api", () => ({
   updateSettings: mockApi.updateSettings,
 }));
 
+vi.mock("@/lib/onboardingApi", () => ({
+  getOnboardingProgress: mockApi.getOnboardingProgress,
+}));
+
 vi.mock("@/components/settings/sections/ConnectionsSettingsSection", () => ({
-  default: function ConnectionsSettingsSectionMock() {
+  default: function ConnectionsSettingsSectionMock({ onboardingProgress }: { onboardingProgress: OnboardingProgress | null }) {
     const [targetReady, setTargetReady] = useState(mockApi.targetReadyDelayMs === 0);
     useEffect(() => {
       if (targetReady) return;
@@ -49,9 +55,13 @@ vi.mock("@/components/settings/sections/ConnectionsSettingsSection", () => ({
         tabIndex={-1}
         aria-busy={!targetReady}
         data-settings-target-ready={targetReady ? "true" : "false"}
+        data-onboarding-status={onboardingProgress?.status ?? "loading"}
         data-testid="settings-connections-section"
       >
         connections section
+        <details open>
+          <summary id="todoist-advanced-setup">Advanced OAuth and webhooks</summary>
+        </details>
       </div>
     );
   },
@@ -106,6 +116,13 @@ beforeEach(() => {
   mockApi.getAccounts.mockResolvedValue([]);
   mockApi.getCapabilities.mockResolvedValue({ generatedAt: "2026-07-18T00:00:00.000Z", capabilities: [] });
   mockApi.getInstanceCredentials.mockResolvedValue({ credentials: [] });
+  mockApi.getOnboardingProgress.mockResolvedValue({
+    version: 1,
+    status: "in_progress",
+    steps: { ai: "reviewed" },
+    completedAt: null,
+    updatedAt: 1,
+  });
   mockApi.getSettings.mockResolvedValue({});
   mockApi.updateSettings.mockResolvedValue({ success: true });
   mockApi.targetReadyDelayMs = 0;
@@ -119,6 +136,14 @@ describe("Settings page", () => {
 
     expect(await screen.findByTestId("settings-automation-section")).toBeTruthy();
     expect(screen.queryByTestId("settings-connections-section")).toBeNull();
+  });
+
+  it("coordinates onboarding progress once for the Connections header", async () => {
+    renderSettings();
+
+    const section = await screen.findByTestId("settings-connections-section");
+    await waitFor(() => expect(section.getAttribute("data-onboarding-status")).toBe("in_progress"));
+    expect(mockApi.getOnboardingProgress).toHaveBeenCalledTimes(1);
   });
 
   it("waits for a linked settings card to finish loading, then flashes it after scrolling ends", async () => {
@@ -148,6 +173,25 @@ describe("Settings page", () => {
     await waitFor(() => {
       expect(target.getAttribute("data-settings-target-active")).toBe("true");
     });
+  });
+
+  it("focuses the requested Advanced setup disclosure instead of the service row", async () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(performance.now());
+      return 1;
+    });
+    window.history.replaceState({}, "", "/settings?tab=connections&setup=todoist-advanced#todoist");
+
+    renderSettings();
+
+    const advancedSummary = await screen.findByText("Advanced OAuth and webhooks");
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    }));
+    expect(document.activeElement).toBe(advancedSummary);
   });
 
   it("renders the shared loading chrome while settings are still loading", () => {

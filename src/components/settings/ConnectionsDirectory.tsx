@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Circle, CircleDashed } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Circle, CircleDashed } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { onboardingContinueHref } from "@/lib/onboardingModel";
+import type { OnboardingProgress } from "../../../shared/types/onboarding";
 import type {
   ConnectionGroupDefinition,
   ConnectionRowView,
@@ -44,15 +46,17 @@ function rowMetadata(row: ConnectionRowView) {
   return parts.join(" · ");
 }
 
-export default function ConnectionsDirectory({ groups, rows, renderPanel }: {
+export default function ConnectionsDirectory({ groups, rows, onboardingProgress, renderPanel }: {
   groups: readonly ConnectionGroupDefinition[];
   rows: readonly ConnectionRowView[];
+  onboardingProgress?: OnboardingProgress | null;
   renderPanel: (connection: ConnectionRowView) => ReactNode;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
   const openId = connectionIdFromHash(location.hash);
   const summary = connectionSummary(rows);
+  const continueSetupHref = onboardingProgress ? onboardingContinueHref(onboardingProgress) : null;
 
   useEffect(() => {
     if (!openId) return;
@@ -85,10 +89,20 @@ export default function ConnectionsDirectory({ groups, rows, renderPanel }: {
             Connect, verify, and repair the external services Setpoint uses.
           </p>
         </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground" aria-label="Connection summary">
-          <span><strong className="font-semibold text-[var(--sp-green)]">{summary.connected}</strong> connected</span>
-          <span><strong className="font-semibold text-primary">{summary.setup}</strong> setup</span>
-          <span><strong className="font-semibold text-[var(--sp-cream)]">{summary.attention}</strong> attention</span>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground" aria-label="Connection summary">
+            <span><strong className="font-semibold text-[var(--sp-green)]">{summary.connected}</strong> connected</span>
+            <span><strong className="font-semibold text-primary">{summary.setup}</strong> setup</span>
+            <span><strong className="font-semibold text-[var(--sp-cream)]">{summary.attention}</strong> attention</span>
+          </div>
+          {continueSetupHref ? (
+            <Link
+              to={continueSetupHref}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.1] px-3 text-[11px] font-semibold text-primary transition-[background-color,border-color,color,transform] duration-200 hover:-translate-y-px hover:border-primary/30 hover:bg-primary/[0.15] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none sm:min-h-8"
+            >
+              Continue setup <ArrowRight aria-hidden="true" size={13} />
+            </Link>
+          ) : null}
         </div>
       </div>
 

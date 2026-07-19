@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ONBOARDING_STEPS, projectOnboardingChecklist } from "./onboardingModel";
+import {
+  ONBOARDING_STEPS,
+  onboardingContinueHref,
+  projectOnboardingChecklist,
+} from "./onboardingModel";
 import type { OnboardingProgress } from "../../shared/types/onboarding";
 
 const progress: OnboardingProgress = {
@@ -56,15 +60,48 @@ describe("onboarding model", () => {
     expect(checklist.activeStepId).toBe("tasks");
   });
 
-  it("routes every setup action to its exact settings card", () => {
-    expect(Object.fromEntries(ONBOARDING_STEPS.map((step) => [step.id, step.settingsHref]))).toEqual({
-      email_calendar: "/settings?tab=accounts#connected-accounts",
-      ai: "/settings?tab=briefing#ai-provider-credentials",
-      tasks: "/settings?tab=accounts#todoist-setup",
-      weather: "/settings?tab=accounts#location-provider-credentials",
-      finances: "/settings?tab=actual#actual-budget-connection",
-      notifications: "/settings?tab=accounts#discord-reminders",
-      advanced_delivery: "/settings?tab=accounts#gmail-realtime-delivery",
+  it("routes every setup action to its exact provider-owned connection panel", () => {
+    expect(Object.fromEntries(ONBOARDING_STEPS.map((step) => [step.id, step.targets]))).toEqual({
+      email_calendar: [
+        { connectionId: "google-workspace", label: "Google Workspace", href: "/settings?tab=connections#google-workspace" },
+        { connectionId: "icloud-mail", label: "iCloud Mail", href: "/settings?tab=connections#icloud-mail" },
+      ],
+      ai: [
+        { connectionId: "openai", label: "OpenAI", href: "/settings?tab=connections#openai" },
+        { connectionId: "anthropic", label: "Anthropic", href: "/settings?tab=connections#anthropic" },
+      ],
+      tasks: [
+        { connectionId: "todoist", label: "Todoist", href: "/settings?tab=connections#todoist" },
+      ],
+      weather: [
+        { connectionId: "pirate-weather", label: "Pirate Weather", href: "/settings?tab=connections#pirate-weather" },
+      ],
+      finances: [
+        { connectionId: "actual-budget", label: "Actual Budget", href: "/settings?tab=connections#actual-budget" },
+      ],
+      notifications: [
+        { connectionId: "discord-reminders", label: "Discord Reminders", href: "/settings?tab=connections#discord-reminders" },
+      ],
+      advanced_delivery: [
+        { connectionId: "google-workspace", label: "Gmail realtime", href: "/settings?tab=connections&setup=gmail-realtime#google-workspace" },
+        { connectionId: "todoist", label: "Todoist advanced", href: "/settings?tab=connections&setup=todoist-advanced#todoist" },
+        { connectionId: "google-places", label: "Google Places", href: "/settings?tab=connections#google-places" },
+      ],
     });
+  });
+
+  it("continues only persisted in-progress onboarding work", () => {
+    expect(onboardingContinueHref({
+      ...progress,
+      steps: { email_calendar: "reviewed", ai: "reviewed" },
+    })).toBe("/onboarding?step=email_calendar");
+    expect(onboardingContinueHref({ ...progress, steps: {} })).toBeNull();
+    expect(onboardingContinueHref({ ...progress, steps: { advanced_delivery: "skipped" } })).toBeNull();
+    expect(onboardingContinueHref({
+      ...progress,
+      status: "complete",
+      steps: { email_calendar: "reviewed" },
+      completedAt: 200,
+    })).toBeNull();
   });
 });

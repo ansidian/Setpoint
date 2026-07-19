@@ -19,13 +19,17 @@ vi.mock("@/components/settings/cards/ICloudMailAccountsPanel", () => ({
   default: () => <div data-testid="icloud-account-controls" />,
 }));
 vi.mock("@/components/settings/cards/TodoistCard", () => ({
-  default: () => <div data-testid="todoist-controls" />,
+  default: ({ openAdvancedSetup }: { openAdvancedSetup?: boolean }) => (
+    <div data-testid="todoist-controls" data-advanced-open={String(Boolean(openAdvancedSetup))} />
+  ),
 }));
 vi.mock("@/components/settings/cards/WeatherLocationCard", () => ({
   default: () => <div data-testid="weather-location-controls" />,
 }));
 vi.mock("@/components/settings/cards/GmailRealtimeCard", () => ({
-  default: () => <div data-testid="gmail-realtime-controls" />,
+  default: ({ openAdvancedSetup }: { openAdvancedSetup?: boolean }) => (
+    <div data-testid="gmail-realtime-controls" data-advanced-open={String(Boolean(openAdvancedSetup))} />
+  ),
 }));
 vi.mock("@/components/settings/cards/CoreProviderCredentialsCard", () => ({
   default: ({ credentials }: { credentials: Array<{ key: string }> }) => (
@@ -50,10 +54,11 @@ function connection(id: ConnectionId): ConnectionRowView {
   };
 }
 
-function renderConnection(id: ConnectionId) {
+function renderConnection(id: ConnectionId, setupTarget: "gmail-realtime" | "todoist-advanced" | null = null) {
   return render(
     <ConnectionPanelContent
       connection={connection(id)}
+      setupTarget={setupTarget}
       accounts={[]}
       setAccounts={vi.fn()}
       settings={{}}
@@ -76,6 +81,19 @@ describe("ConnectionPanelContent ownership", () => {
     expect(screen.getByTestId("google-account-controls")).toBeTruthy();
     expect(await screen.findByTestId("gmail-realtime-controls")).toBeTruthy();
     expect(screen.queryByTestId("icloud-account-controls")).toBeNull();
+  });
+
+  it("reveals only the advanced subsection owned by the targeted service", async () => {
+    renderConnection("google-workspace", "gmail-realtime");
+    expect((await screen.findByTestId("gmail-realtime-controls")).getAttribute("data-advanced-open")).toBe("true");
+
+    cleanup();
+    renderConnection("todoist", "gmail-realtime");
+    expect(screen.getByTestId("todoist-controls").getAttribute("data-advanced-open")).toBe("false");
+
+    cleanup();
+    renderConnection("todoist", "todoist-advanced");
+    expect(screen.getByTestId("todoist-controls").getAttribute("data-advanced-open")).toBe("true");
   });
 
   it("gives iCloud Mail only its account lifecycle", () => {

@@ -39,12 +39,29 @@ describe("Onboarding", () => {
     }));
   });
 
-  it("renders the capability-led sequence and uses the existing Settings workflow", async () => {
+  it("renders explicit provider actions for multi-provider steps", async () => {
     render(<MemoryRouter><Onboarding /></MemoryRouter>);
 
     expect(await screen.findByRole("heading", { name: "Connect email and calendar" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open account connections" }).getAttribute("href")).toBe("/settings?tab=accounts#connected-accounts");
-    expect(screen.getByRole("button", { name: /Enable AI features/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set up Google Workspace" }).getAttribute("href")).toBe("/settings?tab=connections#google-workspace");
+    expect(screen.getByRole("link", { name: "Set up iCloud Mail" }).getAttribute("href")).toBe("/settings?tab=connections#icloud-mail");
+
+    fireEvent.click(screen.getByRole("button", { name: /Enable AI features/ }));
+    expect(await screen.findByRole("heading", { name: "Enable AI features" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set up OpenAI" }).getAttribute("href")).toBe("/settings?tab=connections#openai");
+    expect(screen.getByRole("link", { name: "Set up Anthropic" }).getAttribute("href")).toBe("/settings?tab=connections#anthropic");
+  });
+
+  it("opens a requested onboarding step and exposes each advanced destination", async () => {
+    render(<MemoryRouter initialEntries={["/onboarding?step=advanced_delivery"]}><Onboarding /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set up Gmail realtime" }).getAttribute("href"))
+      .toBe("/settings?tab=connections&setup=gmail-realtime#google-workspace");
+    expect(screen.getByRole("link", { name: "Set up Todoist advanced" }).getAttribute("href"))
+      .toBe("/settings?tab=connections&setup=todoist-advanced#todoist");
+    expect(screen.getByRole("link", { name: "Set up Google Places" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#google-places");
   });
 
   it("persists skip state and advances without requiring a provider", async () => {

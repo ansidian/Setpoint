@@ -19,7 +19,7 @@ afterEach(() => {
 describe("Settings demo mode", () => {
   // The dynamic Settings import chain is slow under full-suite worker load;
   // the default 10s test timeout flakes even though the test passes in ~4s alone.
-  it("renders the Email Automation tab with demo data and no real fetch", async () => {
+  it("maps the legacy Briefing URL to Automation with demo data and no real fetch", async () => {
     const { default: Settings } = await importDemoSettingsPage();
 
     render(

@@ -14,7 +14,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `icons.ts` — lucide icon name → component resolver (`resolveIcon`) for briefing/category icon fields
 - `Icon.tsx` — universal icon renderer (lucide name or known emoji); unknown input falls back to Sparkles
-- `onboardingModel.ts` — locked capability-led onboarding sequence and pure persisted-progress projection
+- `onboardingModel.ts` — locked capability-led sequence, allowlisted provider targets, persisted-progress projection, and continue-setup selection
 - `onboardingApi.ts` — authenticated onboarding progress calls plus demo-only in-memory behavior
 - `scrollLock.ts` — ref-counted scroll lock (`acquireScrollLock`) shared by BottomSheet and the AddTaskPanel mobile placement so nested opens/closes can never strand or prematurely release the lock
 - `shell-helpers.ts` — shared dashboard/hero/timeline/rail helpers (day bucketing, due-date-to-ms, duration formatting), kept pure and React-free
