@@ -14,7 +14,7 @@ import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
 import { isDemoMode } from "@/demo/config";
-import type { SettingsCardStateProps } from "../settingsTypes";
+import type { SettingsCardStateProps, SettingsConnectionRefreshProps } from "../settingsTypes";
 import type { SettingsPatchRequest } from "../../../../shared/types/settings";
 
 type DiscordTestStatus = "save-failed" | "sent" | "failed" | null;
@@ -28,8 +28,12 @@ interface DiscordFormState {
   testStatus: DiscordTestStatus;
 }
 
-export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStateProps, "settings">) {
+export default function DiscordRemindersCard({
+  settings,
+  onRefreshConnections = async () => {},
+}: Pick<SettingsCardStateProps, "settings"> & SettingsConnectionRefreshProps) {
   const demoMode = isDemoMode();
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [discordForm, setDiscordForm] = useState<DiscordFormState>({
     webhookUrl: "",
     userId: "",
@@ -69,6 +73,7 @@ export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStat
         dirty: false,
         saving: false,
       }));
+      await onRefreshConnections().catch(() => {});
     } catch {
       setDiscordForm((current) => ({ ...current, saving: false, testStatus: "save-failed" }));
     }
@@ -89,6 +94,8 @@ export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStat
         testing: false,
         testStatus: null,
       });
+      setConfirmingRemoval(false);
+      await onRefreshConnections().catch(() => {});
     } catch {
       setDiscordForm((current) => ({ ...current, saving: false, testStatus: "save-failed" }));
     }
@@ -161,6 +168,9 @@ export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStat
             </FieldHint>
           </div>
         </div>
+        <FieldHint>
+          Saving does not send a message or prove delivery. Use Send test reminder when you are ready for a real Discord message.
+        </FieldHint>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -180,17 +190,17 @@ export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStat
             size="sm"
           >
             <Send size={13} />
-            {discordForm.testing ? "Sending…" : "Send test"}
+            {discordForm.testing ? "Sending reminder…" : "Send test reminder"}
           </Button>
           {discordForm.configured && !discordForm.dirty ? (
             <>
               <StatusPill tone="success">Saved</StatusPill>
               <button
                 type="button"
-                onClick={handleClearDiscordSettings}
-                className="text-[11px] font-medium text-muted-foreground/75 transition-colors hover:text-danger"
+                onClick={() => setConfirmingRemoval(true)}
+                className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
               >
-                Clear
+                Remove Discord webhook
               </button>
             </>
           ) : null}
@@ -200,6 +210,35 @@ export default function DiscordRemindersCard({ settings }: Pick<SettingsCardStat
           {discordForm.testStatus === "save-failed" ? <StatusPill tone="danger">Save failed</StatusPill> : null}
           {demoMode ? <StatusPill tone="neutral">Test not available in demo</StatusPill> : null}
         </div>
+        {confirmingRemoval ? (
+          <div className="rounded-md border border-danger/20 bg-danger/[0.06] p-3">
+            <FieldHint>
+              Discord reminder delivery will stop. Reminder schedules remain saved.
+            </FieldHint>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={discordForm.saving}
+                onClick={handleClearDiscordSettings}
+                className="transition-transform duration-200 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
+              >
+                {discordForm.saving ? "Removing…" : "Confirm remove Discord webhook"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={discordForm.saving}
+                onClick={() => setConfirmingRemoval(false)}
+                className={SETTINGS_SECONDARY_BUTTON_CLASS}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </SettingsCard>
   );

@@ -18,6 +18,8 @@ const mockBillsService = vi.hoisted(() => ({
   listPayees: vi.fn(),
   listCategories: vi.fn(),
   testConnection: vi.fn(),
+  saveActualConnection: vi.fn(),
+  removeActualConnection: vi.fn(),
   hydrateActualCache: vi.fn(),
   getActualCacheStatus: vi.fn(),
 }));
@@ -205,6 +207,42 @@ describe("Bill Pay routes", () => {
 
     expect(res.status).toBe(400);
     expect(mockBillsService.testConnection).not.toHaveBeenCalled();
+  });
+
+  it("validates and saves an Actual connection candidate in one provider-owned request", async () => {
+    mockBillsService.saveActualConnection.mockResolvedValueOnce({
+      success: true,
+      budgetCount: 1,
+      budgetFound: true,
+    });
+
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/connection")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        serverURL: "https://actual.example.test",
+        password: "candidate-password",
+        syncId: "candidate-sync",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, budgetCount: 1, budgetFound: true });
+    expect(mockBillsService.saveActualConnection).toHaveBeenCalledWith("user-1", {
+      serverURL: "https://actual.example.test",
+      password: "candidate-password",
+      syncId: "candidate-sync",
+    });
+  });
+
+  it("removes the Actual connection through an effect-specific endpoint", async () => {
+    mockBillsService.removeActualConnection.mockResolvedValueOnce({ success: true });
+    const res = await request(makeApp())
+      .delete("/api/briefing/actual/connection")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(mockBillsService.removeActualConnection).toHaveBeenCalledWith("user-1");
   });
 
   it("validates the local Actual cache through briefing cookie auth", async () => {

@@ -31,7 +31,7 @@ describe("collectModuleSpecifiers", () => {
   it("ignores comments, ordinary strings, non-literal dynamic imports, and import.meta", () => {
     const source = [
       '// import "./commented"',
-      'const text = "import(\\\"./string\\\")"',
+      'const text = "import(\\"./string\\")"',
       "const dynamic = import(variable)",
       "const url = import.meta.url",
     ].join("\n")

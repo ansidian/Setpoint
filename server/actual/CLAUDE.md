@@ -25,6 +25,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-bill-occurrences.ts` — expands Actual schedules into dated bill occurrences with paid status
 - `actual-amount-condition.ts` — single source of truth for interpreting an Actual `amount` schedule condition (scalar cents vs `isbetween` range)
 - `actual-connection-test.ts` — HTTP-level reachability test for the Actual server
+- `actual-connection-settings.ts` — verify-before-swap persistence for Actual connection candidates
 - `actual-transactions-read.ts` — low-level on-disk transaction reader: queries `db.sqlite` directly via `@libsql/client` without booting the SDK
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)

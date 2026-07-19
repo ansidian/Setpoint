@@ -227,6 +227,47 @@ router.post("/actual/test", async (req, res) => {
   }
 });
 
+router.post("/actual/connection", async (req, res) => {
+  const { serverURL, password, syncId } = req.body || {};
+  if (typeof serverURL !== "string" || typeof syncId !== "string") {
+    return res.status(400).json({ message: "Actual Budget server URL and sync ID are required" });
+  }
+  if (password !== undefined && typeof password !== "string") {
+    return res.status(400).json({ message: "Actual Budget password must be a string" });
+  }
+  const validation = validateActualBudgetUrl(serverURL);
+  if (!validation.valid) {
+    return res.status(400).json({ message: validation.message, success: false });
+  }
+  if (!syncId.trim()) {
+    return res.status(400).json({ message: "Actual Budget sync ID is required", success: false });
+  }
+  try {
+    return res.json(await billsService.saveActualConnection(ownerUserId(), {
+      serverURL: validation.value!,
+      password,
+      syncId: syncId.trim(),
+    }));
+  } catch (error: unknown) {
+    const err = error as HttpError;
+    console.error("Actual Budget connection save failed:", err.message);
+    return res.status(err.status || 400).json({
+      message: err.message || "Actual Budget connection could not be saved",
+      success: false,
+    });
+  }
+});
+
+router.delete("/actual/connection", async (_req, res) => {
+  try {
+    return res.json(await billsService.removeActualConnection(ownerUserId()));
+  } catch (error: unknown) {
+    const err = error as HttpError;
+    console.error("Actual Budget connection removal failed:", err.message);
+    return res.status(err.status || 500).json({ message: "Actual Budget credentials could not be removed" });
+  }
+});
+
 router.post("/actual/cache/hydrate", async (_req, res) => {
   try {
     res.json(await billsService.hydrateActualCache(ownerUserId()));

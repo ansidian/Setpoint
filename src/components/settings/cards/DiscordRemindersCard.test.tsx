@@ -19,6 +19,7 @@ describe("DiscordRemindersCard", () => {
   it("reflects a saved configuration from settings", () => {
     render(<DiscordRemindersCard settings={{ discord_webhook_configured: true, discord_user_id: "123" }} />);
     expect(screen.getByText("Saved")).toBeTruthy();
+    expect(screen.getByText(/saving does not send a message or prove delivery/i)).toBeTruthy();
   });
 
   it("saves the webhook + user id and emits the settings-changed event", async () => {
@@ -35,13 +36,17 @@ describe("DiscordRemindersCard", () => {
         discord_user_id: "987",
       });
     });
+    expect(screen.queryByText("Test sent")).toBeNull();
   });
 
   it("clears the saved configuration and drops the Saved pill", async () => {
     mockApi.updateSettings.mockResolvedValue({ success: true });
-    render(<DiscordRemindersCard settings={{ discord_webhook_configured: true, discord_user_id: "123" }} />);
+    const onRefreshConnections = vi.fn(async () => {});
+    render(<DiscordRemindersCard settings={{ discord_webhook_configured: true, discord_user_id: "123" }} onRefreshConnections={onRefreshConnections} />);
     expect(screen.getByText("Saved")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Discord webhook" }));
+    expect(screen.getByText(/discord reminder delivery will stop/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove Discord webhook" }));
     await waitFor(() => {
       expect(mockApi.updateSettings).toHaveBeenCalledWith({
         discord_webhook_url: "",
@@ -51,12 +56,13 @@ describe("DiscordRemindersCard", () => {
     await waitFor(() => {
       expect(screen.queryByText("Saved")).toBeNull();
     });
+    expect(onRefreshConnections).toHaveBeenCalledTimes(1);
   });
 
   it("sends a test webhook and surfaces the Test sent status", async () => {
     mockApi.testDiscordReminderWebhook.mockResolvedValue({ success: true });
     render(<DiscordRemindersCard settings={{ discord_webhook_configured: true, discord_user_id: "123" }} />);
-    fireEvent.click(screen.getByRole("button", { name: /send test/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send test reminder/i }));
     await waitFor(() => {
       expect(mockApi.testDiscordReminderWebhook).toHaveBeenCalledTimes(1);
     });

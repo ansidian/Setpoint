@@ -13,13 +13,14 @@ import type { ConnectionRowView, ConnectionState } from "./connectionModel";
 import type {
   SettingsAccountsProps,
   SettingsCredentialMetadataProps,
+  SettingsConnectionRefreshProps,
   SettingsState,
   SettingsPatch,
 } from "./settingsTypes";
 
 const GmailRealtimeCard = lazy(() => import("@/components/settings/cards/GmailRealtimeCard"));
 
-type ConnectionPanelContentProps = SettingsAccountsProps & SettingsCredentialMetadataProps & {
+type ConnectionPanelContentProps = SettingsAccountsProps & SettingsCredentialMetadataProps & SettingsConnectionRefreshProps & {
   connection: ConnectionRowView;
   settings: SettingsState | null;
   patch: SettingsPatch;
@@ -38,6 +39,14 @@ function formatEvidenceTimestamp(value: string | null) {
   return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
 }
 
+function formatConnectionSource(source: ConnectionRowView["source"]) {
+  if (source === "stored" || source === "settings") return "Saved in Setpoint";
+  if (source === "environment") return "Environment";
+  if (source === "disabled") return "Disabled";
+  if (source === "mixed") return "Mixed";
+  return "Not configured";
+}
+
 export default function ConnectionPanelContent({
   connection,
   accounts,
@@ -47,6 +56,7 @@ export default function ConnectionPanelContent({
   credentialMetadata,
   onCredentialMetadataChange,
   onRefreshCredentialMetadata,
+  onRefreshConnections,
 }: ConnectionPanelContentProps) {
   const lastVerified = formatEvidenceTimestamp(connection.lastSucceededAt ?? connection.lastTestedAt);
   const credentialProps = {
@@ -72,10 +82,10 @@ export default function ConnectionPanelContent({
       controls = <ICloudMailAccountsPanel accounts={accounts} setAccounts={setAccounts} />;
       break;
     case "todoist":
-      controls = <TodoistCard settings={settings} />;
+      controls = <TodoistCard settings={settings} onRefreshConnections={onRefreshConnections} />;
       break;
     case "actual-budget":
-      controls = <ActualBudgetConnectionCard settings={settings} />;
+      controls = <ActualBudgetConnectionCard settings={settings} onRefreshConnections={onRefreshConnections} />;
       break;
     case "openai":
       controls = (
@@ -112,7 +122,7 @@ export default function ConnectionPanelContent({
       );
       break;
     case "discord-reminders":
-      controls = <DiscordRemindersCard settings={settings} />;
+      controls = <DiscordRemindersCard settings={settings} onRefreshConnections={onRefreshConnections} />;
       break;
     case "pirate-weather":
       controls = (
@@ -164,6 +174,7 @@ export default function ConnectionPanelContent({
             ) : null}
           </div>
           {lastVerified ? <FieldHint className="mt-1">Last verified {lastVerified}</FieldHint> : null}
+          <FieldHint className="mt-1">Source: {formatConnectionSource(connection.source)}</FieldHint>
         </div>
       </div>
       {controls}

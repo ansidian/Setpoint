@@ -23,3 +23,7 @@ export interface SettingsCredentialMetadataProps {
   onCredentialMetadataChange: (metadata: InstanceCredentialMetadata | InstanceCredentialMetadata[]) => void;
   onRefreshCredentialMetadata: () => Promise<void>;
 }
+
+export interface SettingsConnectionRefreshProps {
+  onRefreshConnections?: () => Promise<void>;
+}

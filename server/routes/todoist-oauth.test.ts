@@ -12,17 +12,23 @@ vi.mock("../middleware/auth.ts", () => ({
 
 const { createTodoistOAuthRouter } = await import("./todoist-oauth.ts");
 
-function makeApp(serviceOverrides: Partial<TodoistOAuthService> = {}) {
+function makeApp(serviceOverrides: Partial<TodoistOAuthService> = {}, personalTokenOverrides = {}) {
   const service = {
     beginAuthorization: vi.fn(async () => ({ url: "https://app.todoist.com/oauth/authorize?state=opaque" })),
     completeAuthorization: vi.fn(async () => ({ connected: true as const })),
     getStatus: vi.fn(async () => ({ mode: "personal_token", configured: true })),
     ...serviceOverrides,
   } as unknown as TodoistOAuthService;
+  const personalTokenService = {
+    saveCandidate: vi.fn(async () => ({ success: true as const, verifiedAt: "2026-07-19T18:00:00.000Z" })),
+    disconnect: vi.fn(async () => ({ success: true as const })),
+    ...personalTokenOverrides,
+  };
   const app = express();
+  app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/ea", createTodoistOAuthRouter(service, () => "browser-bind"));
-  return { app, service };
+  app.use("/api/ea", createTodoistOAuthRouter(service, () => "browser-bind", personalTokenService));
+  return { app, service, personalTokenService };
 }
 
 describe("Todoist OAuth routes", () => {
@@ -90,5 +96,29 @@ describe("Todoist OAuth routes", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ mode: "personal_token", configured: true });
     expect(service.getStatus).toHaveBeenCalledWith("owner-1");
+  });
+
+  it("validates and saves a personal-token candidate without returning the token", async () => {
+    const { app, personalTokenService } = makeApp();
+    const response = await request(app)
+      .post("/api/ea/accounts/todoist/personal-token")
+      .set("Cookie", "ea_session=valid")
+      .send({ token: "candidate-token" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true, verifiedAt: "2026-07-19T18:00:00.000Z" });
+    expect(response.text).not.toContain("candidate-token");
+    expect(personalTokenService.saveCandidate).toHaveBeenCalledWith("owner-1", "candidate-token");
+  });
+
+  it("disconnects the active Todoist mode through an effect-specific endpoint", async () => {
+    const { app, personalTokenService } = makeApp();
+    const response = await request(app)
+      .delete("/api/ea/accounts/todoist/connection")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true });
+    expect(personalTokenService.disconnect).toHaveBeenCalledWith("owner-1");
   });
 });

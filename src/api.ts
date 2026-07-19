@@ -437,6 +437,11 @@ export const deleteCalendarEvent = (eventId: ApiId, data: CalendarEventMutationI
 // Todoist
 export const getTodoistProjects = (): Promise<TodoistProject[]> => apiFetch("/api/briefing/todoist/projects");
 export const getTodoistLabels = (): Promise<TodoistLabel[]> => apiFetch("/api/briefing/todoist/labels");
+export const saveTodoistPersonalToken = (token: string): Promise<{ success: true; verifiedAt: string }> => apiFetch("/api/ea/accounts/todoist/personal-token", {
+  method: "POST",
+  body: JSON.stringify({ token }),
+});
+export const disconnectTodoistConnection = (): Promise<{ success: true }> => apiFetch("/api/ea/accounts/todoist/connection", { method: "DELETE" });
 export const createTodoistTask = (data: DeadlineMutationRequest): Promise<TodoistTask> => apiFetch("/api/briefing/todoist/tasks", { method: "POST", body: JSON.stringify(data) });
 export const updateTodoistTask = (id: ApiId, data: DeadlineMutationRequest): Promise<TodoistTask> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(data) });
 export const deleteTodoistTask = (id: ApiId): Promise<DeadlineDeleteResponse> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -452,6 +457,11 @@ export const getActualPayees = (): Promise<ActualPayee[]> => apiFetch("/api/brie
 export const getActualCategories = (): Promise<ActualCategoryGroup[]> => apiFetch("/api/briefing/actual/categories");
 export const getActualMetadata = (): Promise<ActualMetadataResponse> => apiFetch("/api/briefing/actual/metadata");
 export const testActualBudget = (overrides: ActualConnectionOverrides | null): Promise<ActualConnectionResponse> => apiFetch("/api/briefing/actual/test", { method: "POST", body: JSON.stringify(overrides || {}) });
+export const saveActualBudgetConnection = (candidate: ActualConnectionOverrides): Promise<ActualConnectionResponse> => apiFetch("/api/briefing/actual/connection", {
+  method: "POST",
+  body: JSON.stringify(candidate),
+});
+export const removeActualBudgetConnection = (): Promise<{ success: true }> => apiFetch("/api/briefing/actual/connection", { method: "DELETE" });
 export const getActualCacheStatus = (): Promise<ActualCacheStatusResponse> => apiFetch("/api/briefing/actual/cache/status");
 export const hydrateActualBudgetCache = (): Promise<ActualCacheHydrationResponse> => apiFetch("/api/briefing/actual/cache/hydrate", { method: "POST" });
 

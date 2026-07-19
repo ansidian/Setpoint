@@ -7,6 +7,19 @@ import type {
   ActualMetadata,
 } from "../../shared/types/actual.ts";
 
+export type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
+import type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
+
+export async function saveActualConnectionCandidate(userId: string, candidate: ActualConnectionCandidate) {
+  const service = await import("./actual-connection-settings.ts");
+  return service.saveActualConnectionCandidate(userId, candidate);
+}
+
+export async function removeActualConnection(userId: string) {
+  const service = await import("./actual-connection-settings.ts");
+  return service.removeActualConnection(userId);
+}
+
 export interface ActualBillWriteInput {
   amount: number;
   due_date: string;

@@ -6,15 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockApi = vi.hoisted(() => ({
   getActualCacheStatus: vi.fn(),
   hydrateActualBudgetCache: vi.fn(),
+  removeActualBudgetConnection: vi.fn(),
+  saveActualBudgetConnection: vi.fn(),
   testActualBudget: vi.fn(),
-  updateSettings: vi.fn(),
 }));
 
 vi.mock("@/api", () => ({
   getActualCacheStatus: mockApi.getActualCacheStatus,
   hydrateActualBudgetCache: mockApi.hydrateActualBudgetCache,
+  removeActualBudgetConnection: mockApi.removeActualBudgetConnection,
+  saveActualBudgetConnection: mockApi.saveActualBudgetConnection,
   testActualBudget: mockApi.testActualBudget,
-  updateSettings: mockApi.updateSettings,
 }));
 
 const { default: ActualBudgetConnectionCard } = await import("./ActualBudgetConnectionCard");
@@ -29,10 +31,10 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function renderCard(initialSettings: SettingsState) {
+function renderCard(initialSettings: SettingsState, onRefreshConnections = vi.fn(async () => {})) {
   let currentSettings = initialSettings;
   function Harness({ settings }: { settings: SettingsState }) {
-    return <ActualBudgetConnectionCard settings={settings} />;
+    return <ActualBudgetConnectionCard settings={settings} onRefreshConnections={onRefreshConnections} />;
   }
   const utils = render(<Harness settings={currentSettings} />);
   return {
@@ -50,12 +52,13 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  mockApi.saveActualBudgetConnection.mockResolvedValue({ success: true, budgetFound: true });
+  mockApi.removeActualBudgetConnection.mockResolvedValue({ success: true });
   mockApi.testActualBudget.mockResolvedValue({ success: true });
-  mockApi.updateSettings.mockResolvedValue({});
 });
 
 describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
-  it("preserves the existing explicit save and connection-test actions", async () => {
+  it("saves and verifies a candidate atomically while keeping connection checks explicit", async () => {
     mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
     renderCard({
       actual_budget_url: "https://actual.example.com",
@@ -64,14 +67,48 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     });
 
     fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(mockApi.updateSettings).toHaveBeenCalledWith({
-      actual_budget_url: "https://actual.example.com",
-      actual_budget_sync_id: "sync-2",
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
+    await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledWith({
+      serverURL: "https://actual.example.com",
+      syncId: "sync-2",
     }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Test Connection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check connection" }));
     await waitFor(() => expect(mockApi.testActualBudget).toHaveBeenCalled());
+  });
+
+  it("leaves a blank write-only password unchanged when saving other fields", async () => {
+    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
+    renderCard({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-1",
+      actual_budget_configured: true,
+    });
+
+    fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
+
+    await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledWith({
+      serverURL: "https://actual.example.com",
+      syncId: "sync-2",
+    }));
+  });
+
+  it("keeps a failed candidate available for correction without replacing the saved state", async () => {
+    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
+    mockApi.saveActualBudgetConnection.mockRejectedValueOnce(new Error("Candidate rejected"));
+    renderCard({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-1",
+      actual_budget_configured: true,
+    });
+
+    fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "bad-sync" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
+
+    expect(await screen.findByText(/candidate rejected/i)).toBeTruthy();
+    expect((screen.getByDisplayValue("bad-sync") as HTMLInputElement).value).toBe("bad-sync");
+    expect(screen.getByRole("button", { name: "Save & verify" })).toBeTruthy();
   });
 
   it("keeps cache hydration explicit after relocation into Connections", async () => {
@@ -87,6 +124,23 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hydrate Cache" }));
     await waitFor(() => expect(mockApi.hydrateActualBudgetCache).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Cache ready")).toBeTruthy();
+  });
+
+  it("names the destructive effect, confirms impact, and refreshes shared state", async () => {
+    const onRefreshConnections = vi.fn(async () => {});
+    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
+    renderCard({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-1",
+      actual_budget_configured: true,
+    }, onRefreshConnections);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Actual credentials" }));
+    expect(screen.getByText(/finance sync and transaction actions will stop/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove Actual credentials" }));
+
+    await waitFor(() => expect(mockApi.removeActualBudgetConnection).toHaveBeenCalledTimes(1));
+    expect(onRefreshConnections).toHaveBeenCalledTimes(1);
   });
 
   it("does not let a late hydrate resolution clobber a newer cache-status check", async () => {

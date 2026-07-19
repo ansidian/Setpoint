@@ -4,6 +4,7 @@ import type { ConnectionGroupDefinition, ConnectionRowView } from "@/components/
 import type {
   SettingsAccountsProps,
   SettingsCredentialMetadataProps,
+  SettingsConnectionRefreshProps,
   SettingsState,
   SettingsPatch,
 } from "../settingsTypes";
@@ -18,7 +19,8 @@ export default function ConnectionsSettingsSection({
   credentialMetadata,
   onCredentialMetadataChange,
   onRefreshCredentialMetadata,
-}: SettingsAccountsProps & SettingsCredentialMetadataProps & {
+  onRefreshConnections,
+}: SettingsAccountsProps & SettingsCredentialMetadataProps & SettingsConnectionRefreshProps & {
   settings: SettingsState | null;
   patch: SettingsPatch;
   connectionGroups: readonly ConnectionGroupDefinition[];
@@ -38,6 +40,7 @@ export default function ConnectionsSettingsSection({
           credentialMetadata={credentialMetadata}
           onCredentialMetadataChange={onCredentialMetadataChange}
           onRefreshCredentialMetadata={onRefreshCredentialMetadata}
+          onRefreshConnections={onRefreshConnections}
         />
       )}
     />

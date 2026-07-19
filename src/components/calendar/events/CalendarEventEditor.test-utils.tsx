@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Test helpers intentionally co-locate a private harness with non-component exports. */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 import { expect, vi } from "vitest";
@@ -60,7 +61,13 @@ function EditorHarness({
     onDeleted,
   });
   const startedRef = useRef(false);
-  editorRef.current = editor;
+
+  useEffect(() => {
+    editorRef.current = editor;
+    return () => {
+      editorRef.current = null;
+    };
+  }, [editor, editorRef]);
 
   useEffect(() => {
     if (startedRef.current) return;

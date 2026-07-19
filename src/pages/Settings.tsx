@@ -21,6 +21,7 @@ export default function Settings() {
     connections,
     credentialMetadata,
     refreshInstanceCredentials,
+    refreshConnections,
     updateInstanceCredentialMetadata,
     setSettings,
     loading,
@@ -154,6 +155,7 @@ export default function Settings() {
           credentialMetadata={credentialMetadata}
           onCredentialMetadataChange={updateInstanceCredentialMetadata}
           onRefreshCredentialMetadata={refreshInstanceCredentials}
+          onRefreshConnections={refreshConnections}
         />
       );
     } else if (tab === "finance") {

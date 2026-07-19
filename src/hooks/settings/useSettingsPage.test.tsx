@@ -112,6 +112,24 @@ describe("useSettingsPage debounced auto-save", () => {
     expect(mockApi.getCapabilities).toHaveBeenCalledTimes(1);
   });
 
+  it("refreshes connection settings and capability evidence without running provider tests", async () => {
+    const { result } = renderHook(() => useSettingsPage(), { wrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    mockApi.getSettings.mockResolvedValueOnce({ actual_budget_configured: true });
+    mockApi.getCapabilities.mockResolvedValueOnce({
+      generatedAt: "2026-07-19T18:00:00.000Z",
+      capabilities: [{ id: "finances", state: "ready" }],
+    });
+
+    await act(async () => { await result.current.refreshConnections(); });
+
+    expect(mockApi.getSettings).toHaveBeenCalledTimes(2);
+    expect(mockApi.getCapabilities).toHaveBeenLastCalledWith(true);
+    expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(1);
+    expect(result.current.settings).toMatchObject({ actual_budget_configured: true });
+    expect(result.current.capabilities).toEqual([{ id: "finances", state: "ready" }]);
+  });
+
   it("re-queues a rejected payload so unrelated coalesced fields are not dropped", async () => {
     mockApi.updateSettings
       .mockRejectedValueOnce(new Error("400")) // first flush fails

@@ -85,6 +85,9 @@ vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
+vi.mock("../capability-status-service.ts", () => ({
+  capabilityStatusService: { invalidate: vi.fn() },
+}));
 vi.mock("../reminders/discord-reminders.ts", () => ({
   formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "Setpoint reminder test" }] })),
   sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
@@ -377,7 +380,7 @@ describe("auth boundaries", () => {
     expect(getRes.body).not.toHaveProperty("todoist_oauth_refresh_token_encrypted");
   });
 
-  it("clears Todoist OAuth metadata when replacing with a personal token", async () => {
+  it("rejects generic Todoist replacement so OAuth metadata cannot be bypassed", async () => {
     await seedSession();
     await currentDb().execute({
       sql: `UPDATE ea_settings
@@ -402,15 +405,13 @@ describe("auth boundaries", () => {
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ todoist_api_token: "personal-token" });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     expect(await getSettingsRow()).toMatchObject({
-      todoist_api_token_encrypted: "enc:personal-token",
-      todoist_oauth_refresh_token_encrypted: null,
-      todoist_oauth_access_token_expires_at: null,
-      todoist_oauth_scope: null,
-      todoist_oauth_token_type: null,
-      todoist_connection_mode: "personal_token",
-      todoist_needs_reauth: 0,
+      todoist_api_token_encrypted: "enc:access-1",
+      todoist_oauth_refresh_token_encrypted: "enc:refresh-1",
+      todoist_oauth_access_token_expires_at: "2026-05-04T21:00:00.000Z",
+      todoist_oauth_scope: "data:read_write",
+      todoist_oauth_token_type: "Bearer",
     });
   });
 
