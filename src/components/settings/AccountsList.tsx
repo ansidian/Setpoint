@@ -19,6 +19,7 @@ interface AccountsListProps {
   onRemove: (id: string) => Promise<unknown> | unknown;
   onReconnectGmail?: () => unknown;
   onReconnectICloud?: (email: string) => unknown;
+  accountType?: AccountSummary["type"];
 }
 interface AccountRowProps extends AccountsListProps { acc: AccountSummary }
 
@@ -38,9 +39,11 @@ const COLOR_OPTIONS = [
 const FIELD_LABEL_CLASS =
   "mb-1.5 block text-[11px] tracking-[1.5px] uppercase text-muted-foreground font-medium";
 const SETTINGS_PRIMARY_BUTTON_CLASS =
-  "border border-primary/20 bg-primary/[0.12] text-primary hover:bg-primary/[0.16] hover:border-primary/28 hover:-translate-y-px active:translate-y-0";
+  "border border-primary/20 bg-primary/[0.12] text-primary hover:bg-primary/[0.16] hover:border-primary/28 hover:-translate-y-px active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none";
 const SETTINGS_GHOST_BUTTON_CLASS =
-  "border border-white/[0.08] bg-white/[0.03] text-foreground hover:bg-white/[0.05] hover:border-white/[0.14]";
+  "border border-white/[0.08] bg-white/[0.03] text-foreground hover:bg-white/[0.05] hover:border-white/[0.14] active:bg-white/[0.07] motion-reduce:transition-none motion-reduce:transform-none";
+const NATIVE_BUTTON_INTERACTION =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none";
 
 function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, onReconnectICloud }: AccountRowProps) {
   const [editing, setEditing] = useState(false);
@@ -99,14 +102,14 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
               {...attributes}
               {...listeners}
               aria-label={`Reorder ${label}`}
-              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground/35 transition-colors hover:bg-white/[0.04] hover:text-muted-foreground/70"
+              className={cn("inline-flex size-7 items-center justify-center rounded-md text-muted-foreground/35 transition-colors hover:bg-white/[0.04] hover:text-muted-foreground/70", NATIVE_BUTTON_INTERACTION)}
             >
               <GripVertical size={14} />
             </button>
             <button
               type="button"
               onClick={() => setEditing((v) => !v)}
-              className="flex size-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] transition-colors hover:border-white/[0.12] hover:bg-white/[0.05]"
+              className={cn("flex size-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] transition-colors hover:border-white/[0.12] hover:bg-white/[0.05]", NATIVE_BUTTON_INTERACTION)}
               style={{ color }}
               title="Edit"
             >
@@ -147,7 +150,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
                   onReconnectGmail?.();
                 }
               }}
-              className="border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 text-[var(--sp-cream)] hover:bg-[var(--sp-cream)]/16 hover:border-[var(--sp-cream)]/28"
+              className="border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 text-[var(--sp-cream)] hover:bg-[var(--sp-cream)]/16 hover:border-[var(--sp-cream)]/28 motion-reduce:transition-none motion-reduce:transform-none"
             >
               Reconnect
             </Button>
@@ -166,6 +169,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
               aria-label={acc.calendar_enabled ? "Disable calendar sync" : "Enable calendar sync"}
               className={cn(
                 "inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-all",
+                NATIVE_BUTTON_INTERACTION,
                 acc.calendar_enabled
                   ? "border-primary/20 bg-primary/[0.1] text-primary"
                   : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:border-white/[0.14] hover:bg-white/[0.05]"
@@ -181,7 +185,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
               <Button
                 variant="destructive"
                 size="xs"
-                className="border border-destructive/20 bg-destructive/10"
+                className="border border-destructive/20 bg-destructive/10 motion-reduce:transition-none motion-reduce:transform-none"
                 onClick={handleConfirmRemove}
               >
                 Confirm remove
@@ -208,7 +212,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
               <Button
                 variant="destructive"
                 size="xs"
-                className="border border-destructive/20 bg-destructive/10"
+                className="border border-destructive/20 bg-destructive/10 motion-reduce:transition-none motion-reduce:transform-none"
                 onClick={() => setConfirmingRemove(true)}
               >
                 Remove
@@ -238,6 +242,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
                     onClick={() => setIcon(entry)}
                     className={cn(
                       "flex h-9 w-9 items-center justify-center rounded-lg border transition-all",
+                      NATIVE_BUTTON_INTERACTION,
                       icon === entry
                         ? "border-primary/20 bg-primary/[0.12] text-primary"
                         : "border-white/[0.08] bg-white/[0.03] hover:border-white/[0.12] hover:bg-white/[0.05]"
@@ -257,7 +262,7 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
                   <button
                     key={entry}
                     onClick={() => setColor(entry)}
-                    className="size-6 rounded-full border-2 transition-all"
+                    className={cn("size-6 rounded-full border-2 transition-all", NATIVE_BUTTON_INTERACTION)}
                     style={{
                       background: entry,
                       borderColor: color === entry ? "#fff" : "transparent",
@@ -302,24 +307,30 @@ function AccountRow({ acc, accounts, setAccounts, onRemove, onReconnectGmail, on
   );
 }
 
-export default function AccountsList({ accounts, setAccounts, onRemove, onReconnectGmail, onReconnectICloud }: AccountsListProps) {
+export default function AccountsList({ accounts, setAccounts, onRemove, onReconnectGmail, onReconnectICloud, accountType }: AccountsListProps) {
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const visibleAccounts = accountType ? accounts.filter((account) => account.type === accountType) : accounts;
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = accounts.findIndex((a) => a.id === active.id);
-    const newIndex = accounts.findIndex((a) => a.id === over.id);
-    const reordered = arrayMove(accounts, oldIndex, newIndex);
-    setAccounts(reordered);
-    await reorderAccounts(reordered.map((a) => a.id));
+    const oldIndex = visibleAccounts.findIndex((a) => a.id === active.id);
+    const newIndex = visibleAccounts.findIndex((a) => a.id === over.id);
+    const reorderedVisible = arrayMove(visibleAccounts, oldIndex, newIndex);
+    const visibleIds = new Set(visibleAccounts.map(({ id }) => id));
+    let nextVisibleIndex = 0;
+    const reorderedAccounts = accounts.map((account) => (
+      visibleIds.has(account.id) ? reorderedVisible[nextVisibleIndex++]! : account
+    ));
+    setAccounts(reorderedAccounts);
+    await reorderAccounts(reorderedAccounts.map((a) => a.id));
   }
 
   return (
     <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={accounts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={visibleAccounts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-2">
-          {accounts.map((acc) => (
+          {visibleAccounts.map((acc) => (
             <AccountRow
               key={acc.id}
               acc={acc}

@@ -59,9 +59,6 @@ function Harness({ initialSettings = { email_interests: [] }, patch }: {
       settings={settings}
       setSettings={setSettings}
       patch={patch}
-      credentialMetadata={[]}
-      onCredentialMetadataChange={() => {}}
-      onRefreshCredentialMetadata={async () => {}}
     />
   );
 }
@@ -71,6 +68,14 @@ afterEach(() => {
 });
 
 describe("EmailAutomationSettingsSection", () => {
+  it("keeps provider credential forms out of Automation while retaining model controls", () => {
+    render(<Harness patch={vi.fn()} />);
+
+    expect(screen.queryByTestId("core-provider-credentials-card")).toBeNull();
+    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
+    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+  });
+
   describe("email lookback clamp", () => {
     function renderLookback() {
       const patch = vi.fn();

@@ -7,18 +7,6 @@ const OPTIONAL_CAPABILITIES = new Set<CapabilityId>([
   "calendar_places",
 ]);
 
-export const CAPABILITY_LABELS: Record<CapabilityId, string> = {
-  email_calendar: "Email & calendar",
-  ai: "AI features",
-  tasks: "Tasks",
-  weather: "Weather",
-  finances: "Finances",
-  notifications: "Notifications",
-  gmail_realtime: "Gmail real-time delivery",
-  todoist_advanced: "Todoist OAuth & webhooks",
-  calendar_places: "Calendar places",
-};
-
 export interface CapabilityStatusView {
   label: string;
   tone: StatusTone;

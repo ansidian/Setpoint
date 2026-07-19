@@ -55,6 +55,40 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
+  it("preserves the existing explicit save and connection-test actions", async () => {
+    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
+    renderCard({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-1",
+      actual_budget_configured: true,
+    });
+
+    fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.updateSettings).toHaveBeenCalledWith({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-2",
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Test Connection" }));
+    await waitFor(() => expect(mockApi.testActualBudget).toHaveBeenCalled());
+  });
+
+  it("keeps cache hydration explicit after relocation into Connections", async () => {
+    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false, message: "Cache missing" });
+    mockApi.hydrateActualBudgetCache.mockResolvedValue({ budgetId: "budget-1" });
+    renderCard({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-1",
+      actual_budget_configured: true,
+    });
+
+    expect((await screen.findAllByText("Cache missing")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Hydrate Cache" }));
+    await waitFor(() => expect(mockApi.hydrateActualBudgetCache).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Cache ready")).toBeTruthy();
+  });
+
   it("does not let a late hydrate resolution clobber a newer cache-status check", async () => {
     const configured = {
       actual_budget_url: "https://actual.example.com",

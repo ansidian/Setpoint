@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import AccountsSettingsSection from "@/components/settings/sections/AccountsSettingsSection";
+import ConnectionsSettingsSection from "@/components/settings/sections/ConnectionsSettingsSection";
 import ActualBudgetSettingsSection from "@/components/settings/sections/ActualBudgetSettingsSection";
 import EmailAutomationSettingsSection from "@/components/settings/sections/EmailAutomationSettingsSection";
 import SystemSettingsSection from "@/components/settings/sections/SystemSettingsSection";
@@ -17,9 +17,9 @@ export default function Settings() {
     accounts,
     setAccounts,
     settings,
-    capabilities,
+    connectionGroups,
+    connections,
     credentialMetadata,
-    refreshCapabilities,
     refreshInstanceCredentials,
     updateInstanceCredentialMetadata,
     setSettings,
@@ -142,21 +142,21 @@ export default function Settings() {
   );
 
   if (!loading) {
-    if (tab === "accounts") {
+    if (tab === "connections") {
       content = (
-        <AccountsSettingsSection
+        <ConnectionsSettingsSection
           accounts={accounts}
           setAccounts={setAccounts}
           settings={settings}
           patch={patch}
-          capabilities={capabilities}
-          onRefreshCapabilities={refreshCapabilities}
+          connectionGroups={connectionGroups}
+          connections={connections}
           credentialMetadata={credentialMetadata}
           onCredentialMetadataChange={updateInstanceCredentialMetadata}
           onRefreshCredentialMetadata={refreshInstanceCredentials}
         />
       );
-    } else if (tab === "actual") {
+    } else if (tab === "finance") {
       content = (
         <ActualBudgetSettingsSection
           settings={settings}
@@ -164,15 +164,12 @@ export default function Settings() {
           patch={patch}
         />
       );
-    } else if (tab === "briefing") {
+    } else if (tab === "automation") {
       content = (
         <EmailAutomationSettingsSection
           settings={settings}
           setSettings={setSettings}
           patch={patch}
-          credentialMetadata={credentialMetadata}
-          onCredentialMetadataChange={updateInstanceCredentialMetadata}
-          onRefreshCredentialMetadata={refreshInstanceCredentials}
         />
       );
     } else {
