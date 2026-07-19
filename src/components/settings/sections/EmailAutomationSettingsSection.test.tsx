@@ -55,7 +55,14 @@ function Harness({ initialSettings = { email_interests: [] }, patch }: {
 }) {
   const [settings, setSettings] = useState<SettingsState | null>(initialSettings);
   return (
-    <EmailAutomationSettingsSection settings={settings} setSettings={setSettings} patch={patch} />
+    <EmailAutomationSettingsSection
+      settings={settings}
+      setSettings={setSettings}
+      patch={patch}
+      credentialMetadata={[]}
+      onCredentialMetadataChange={() => {}}
+      onRefreshCredentialMetadata={async () => {}}
+    />
   );
 }
 

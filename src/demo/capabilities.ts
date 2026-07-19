@@ -1,4 +1,5 @@
 import type { CapabilityStatusResponse } from "../../shared/types/capabilities.ts";
+import type { InstanceCredentialMetadataResponse } from "../../shared/types/instance-credentials.ts";
 
 export function getDemoCapabilityStatus(): CapabilityStatusResponse {
   const base = {
@@ -23,5 +24,55 @@ export function getDemoCapabilityStatus(): CapabilityStatusResponse {
       { ...base, id: "todoist_advanced", state: "not_configured", mode: "periodic", guidanceRef: "setup.todoist_advanced" },
       { ...base, id: "calendar_places", state: "not_configured", guidanceRef: "setup.calendar_places" },
     ],
+  };
+}
+
+export function getDemoInstanceCredentialMetadata(): InstanceCredentialMetadataResponse {
+  const activeKeys = new Set([
+    "ai.openai_api_key",
+    "google.oauth_client_id",
+    "google.oauth_client_secret",
+    "weather.pirate_weather_api_key",
+  ]);
+  const nonSecretKeys = new Set([
+    "gmail.pubsub_topic",
+    "google.oauth_client_id",
+    "tasks.todoist_client_id",
+  ]);
+  const keys = [
+    "ai.anthropic_api_key",
+    "ai.openai_api_key",
+    "calendar.google_places_api_key",
+    "gmail.pubsub_topic",
+    "google.oauth_client_id",
+    "google.oauth_client_secret",
+    "tasks.todoist_client_id",
+    "tasks.todoist_client_secret",
+    "weather.pirate_weather_api_key",
+  ];
+  return {
+    credentials: keys.map((key) => {
+      const activeConfigured = activeKeys.has(key);
+      return {
+        key,
+        handling: nonSecretKeys.has(key) ? "non_secret" as const : "secret" as const,
+        capabilities: [],
+        source: activeConfigured ? "stored" as const : "absent" as const,
+        activeConfigured,
+        pendingConfigured: false,
+        validationState: activeConfigured ? "valid" as const : "untested" as const,
+        lastTestedAt: null,
+        lastSucceededAt: null,
+        lastFailedAt: null,
+        errorCode: null,
+        version: activeConfigured ? 1 : null,
+      };
+    }),
+    rootKey: {
+      configured: true,
+      valid: true,
+      fingerprint: "demo-fictional",
+      decryptability: "ok",
+    },
   };
 }

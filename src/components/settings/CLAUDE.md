@@ -9,6 +9,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `settings-core.ts` — button class constants, tab definitions, tab-from-URL routing
 - `settings-ui.tsx` — StatusPill, SaveStatus, SettingsCard, SkeletonCard, SettingsLayout
 - `settingsTypes.ts` — shared Settings card state, patch, and account prop contracts
+- `connectionModel.ts` — fixed connection definitions plus pure service-level status projection
 - `AccountsList.tsx` — draggable, editable account rows with icon/color pickers
 
 ### Sections (one per tab)

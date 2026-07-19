@@ -13,10 +13,10 @@ import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCa
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
 import CoreProviderCredentialsCard from "@/components/settings/cards/CoreProviderCredentialsCard";
-import type { SettingsCardStateProps } from "../settingsTypes";
+import type { SettingsCardStateProps, SettingsCredentialMetadataProps } from "../settingsTypes";
 import type { FormEvent } from "react";
 
-export default function EmailAutomationSettingsSection({ settings, setSettings, patch }: SettingsCardStateProps) {
+export default function EmailAutomationSettingsSection({ settings, setSettings, patch, credentialMetadata, onCredentialMetadataChange, onRefreshCredentialMetadata }: SettingsCardStateProps & SettingsCredentialMetadataProps) {
   const emailInterests = settings?.email_interests || [];
 
   return (
@@ -44,6 +44,9 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
             help: "Enables Anthropic-backed triage, bill extraction, Alfred, and configured fallbacks.",
           },
         ]}
+        credentialMetadata={credentialMetadata}
+        onCredentialMetadataChange={onCredentialMetadataChange}
+        onRefreshCredentialMetadata={onRefreshCredentialMetadata}
       />
       <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />
       <BillExtractionAiCard settings={settings} setSettings={setSettings} patch={patch} />

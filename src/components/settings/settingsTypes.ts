@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { AccountSummary } from "../../../shared/types/accounts";
 import type { SettingsPatchRequest, SettingsResponse } from "../../../shared/types/settings";
+import type { InstanceCredentialMetadata } from "../../../shared/types/instance-credentials";
 
 export type SettingsState = Partial<SettingsResponse>;
 export type SettingsStateSetter = Dispatch<SetStateAction<SettingsState | null>>;
@@ -15,4 +16,10 @@ export interface SettingsCardStateProps {
 export interface SettingsAccountsProps {
   accounts: AccountSummary[];
   setAccounts: Dispatch<SetStateAction<AccountSummary[]>>;
+}
+
+export interface SettingsCredentialMetadataProps {
+  credentialMetadata: InstanceCredentialMetadata[] | null;
+  onCredentialMetadataChange: (metadata: InstanceCredentialMetadata | InstanceCredentialMetadata[]) => void;
+  onRefreshCredentialMetadata: () => Promise<void>;
 }

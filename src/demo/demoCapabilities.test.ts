@@ -20,4 +20,18 @@ describe("demo capability status", () => {
     expect(response.capabilities.find(({ id }) => id === "gmail_realtime")?.state).toBe("not_configured");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("returns inert instance credential metadata without reaching private credential APIs", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_EA_DEMO", "1");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { getInstanceCredentials } = await import("../api.ts");
+
+    const response = await getInstanceCredentials();
+
+    expect(response.credentials.map(({ key }) => key)).toContain("ai.openai_api_key");
+    expect(response.credentials.every(({ pendingConfigured }) => !pendingConfigured)).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

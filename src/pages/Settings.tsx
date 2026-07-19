@@ -18,7 +18,10 @@ export default function Settings() {
     setAccounts,
     settings,
     capabilities,
+    credentialMetadata,
     refreshCapabilities,
+    refreshInstanceCredentials,
+    updateInstanceCredentialMetadata,
     setSettings,
     loading,
     tab,
@@ -148,6 +151,9 @@ export default function Settings() {
           patch={patch}
           capabilities={capabilities}
           onRefreshCapabilities={refreshCapabilities}
+          credentialMetadata={credentialMetadata}
+          onCredentialMetadataChange={updateInstanceCredentialMetadata}
+          onRefreshCredentialMetadata={refreshInstanceCredentials}
         />
       );
     } else if (tab === "actual") {
@@ -164,6 +170,9 @@ export default function Settings() {
           settings={settings}
           setSettings={setSettings}
           patch={patch}
+          credentialMetadata={credentialMetadata}
+          onCredentialMetadataChange={updateInstanceCredentialMetadata}
+          onRefreshCredentialMetadata={refreshInstanceCredentials}
         />
       );
     } else {
