@@ -21,7 +21,6 @@ const INTENTIONALLY_UNHANDLED_NAMES = [
   "deletePasskeyCredential",
   "extractBillFromEmail",
   "getGmailAuthUrl",
-  "getInstanceCredentials",
   "getPasskeyAuthenticationOptions",
   "getPasskeyRegistrationOptions",
   "hydrateActualBudgetCache",

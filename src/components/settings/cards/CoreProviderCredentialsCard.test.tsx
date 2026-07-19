@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 
 const mockApi = vi.hoisted(() => ({
@@ -31,20 +32,39 @@ const metadata = (overrides: Partial<InstanceCredentialMetadata> = {}): Instance
   ...overrides,
 });
 
-function renderCard() {
+function renderCard(initialMetadata = [metadata()]) {
+  function Harness() {
+    const [credentialMetadata, setCredentialMetadata] = useState(initialMetadata);
+    async function refreshCredentialMetadata() {
+      const result = await mockApi.getInstanceCredentials();
+      setCredentialMetadata(result.credentials);
+    }
+    function updateCredentialMetadata(updated: InstanceCredentialMetadata | InstanceCredentialMetadata[]) {
+      const updates = Array.isArray(updated) ? updated : [updated];
+      setCredentialMetadata((current) => current.map((item) => (
+        updates.find(({ key }) => key === item.key) ?? item
+      )));
+    }
+    return (
+      <CoreProviderCredentialsCard
+        title="AI provider credentials"
+        icon={<span aria-hidden="true" />}
+        description="Provider keys"
+        credentials={[{
+          key: "ai.openai_api_key",
+          label: "OpenAI",
+          inputLabel: "OpenAI API key",
+          placeholder: "Enter a new API key",
+          help: "OpenAI help",
+        }]}
+        credentialMetadata={credentialMetadata}
+        onCredentialMetadataChange={updateCredentialMetadata}
+        onRefreshCredentialMetadata={refreshCredentialMetadata}
+      />
+    );
+  }
   return render(
-    <CoreProviderCredentialsCard
-      title="AI provider credentials"
-      icon={<span aria-hidden="true" />}
-      description="Provider keys"
-      credentials={[{
-        key: "ai.openai_api_key",
-        label: "OpenAI",
-        inputLabel: "OpenAI API key",
-        placeholder: "Enter a new API key",
-        help: "OpenAI help",
-      }]}
-    />,
+    <Harness />,
   );
 }
 
@@ -58,6 +78,13 @@ beforeEach(() => {
 });
 
 describe("CoreProviderCredentialsCard", () => {
+  it("uses coordinator metadata without issuing an initial page-load read", async () => {
+    renderCard();
+
+    expect(await screen.findByLabelText("OpenAI API key")).toBeTruthy();
+    expect(mockApi.getInstanceCredentials).not.toHaveBeenCalled();
+  });
+
   it("tests and activates a new write-only value, then empties the field", async () => {
     const pending = metadata({ pendingConfigured: true, validationState: "pending", version: 1 });
     const active = metadata({
@@ -71,7 +98,7 @@ describe("CoreProviderCredentialsCard", () => {
     mockApi.stageInstanceCredential.mockResolvedValue(pending);
     mockApi.testInstanceCredential.mockResolvedValue({ ok: true, code: "VALID", metadata: active });
 
-    renderCard();
+    renderCard([metadata()]);
     const input = await screen.findByLabelText("OpenAI API key") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "sk-private-value" } });
     fireEvent.click(screen.getByRole("button", { name: "Test and save" }));
@@ -93,13 +120,11 @@ describe("CoreProviderCredentialsCard", () => {
       errorCode: "INVALID_CREDENTIAL",
       version: 6,
     });
-    mockApi.getInstanceCredentials
-      .mockResolvedValueOnce({ credentials: [active], rootKey: {} })
-      .mockResolvedValueOnce({ credentials: [failed], rootKey: {} });
+    mockApi.getInstanceCredentials.mockResolvedValueOnce({ credentials: [failed], rootKey: {} });
     mockApi.stageInstanceCredential.mockResolvedValue(pending);
     mockApi.testInstanceCredential.mockRejectedValue(Object.assign(new Error("redacted"), { code: "INVALID_CREDENTIAL" }));
 
-    renderCard();
+    renderCard([active]);
     const input = await screen.findByLabelText("OpenAI API key") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "bad-private-value" } });
     fireEvent.click(screen.getByRole("button", { name: "Test replacement" }));
@@ -113,10 +138,9 @@ describe("CoreProviderCredentialsCard", () => {
   it("moves an environment value server-side without reading it into the field", async () => {
     const environment = metadata({ source: "environment", activeConfigured: true });
     const stored = metadata({ source: "stored", activeConfigured: true });
-    mockApi.getInstanceCredentials.mockResolvedValue({ credentials: [environment], rootKey: {} });
     mockApi.importInstanceCredentialEnvironment.mockResolvedValue(stored);
 
-    renderCard();
+    renderCard([environment]);
     const input = await screen.findByLabelText("OpenAI API key") as HTMLInputElement;
     fireEvent.click(screen.getByRole("button", { name: "Move into Setpoint" }));
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
   getCapabilities: vi.fn(),
+  getInstanceCredentials: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
 }));
@@ -12,6 +13,7 @@ const mockApi = vi.hoisted(() => ({
 vi.mock("@/api", () => ({
   getAccounts: mockApi.getAccounts,
   getCapabilities: mockApi.getCapabilities,
+  getInstanceCredentials: mockApi.getInstanceCredentials,
   getSettings: mockApi.getSettings,
   updateSettings: mockApi.updateSettings,
 }));
@@ -24,6 +26,10 @@ beforeEach(() => {
   vi.useFakeTimers();
   mockApi.getAccounts.mockResolvedValue({ accounts: [] });
   mockApi.getCapabilities.mockResolvedValue({ generatedAt: "2026-07-18T00:00:00.000Z", capabilities: [] });
+  mockApi.getInstanceCredentials.mockResolvedValue({
+    credentials: [],
+    rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" },
+  });
   mockApi.getSettings.mockResolvedValue({});
   mockApi.updateSettings.mockReset();
 });
@@ -43,6 +49,33 @@ describe("useSettingsPage debounced auto-save", () => {
     expect(result.current.capabilities).toEqual([]);
   });
 
+  it("loads instance credential metadata once with the other Settings evidence", async () => {
+    mockApi.getInstanceCredentials.mockResolvedValue({
+      credentials: [{
+        key: "ai.openai_api_key",
+        handling: "secret",
+        capabilities: ["email_triage"],
+        source: "stored",
+        activeConfigured: true,
+        pendingConfigured: false,
+        validationState: "valid",
+        lastTestedAt: null,
+        lastSucceededAt: null,
+        lastFailedAt: null,
+        errorCode: null,
+        version: 1,
+      }],
+      rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" },
+    });
+
+    const { result } = renderHook(() => useSettingsPage(), { wrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(1);
+    expect(result.current.credentialMetadata).toHaveLength(1);
+    expect(result.current.connections.find(({ id }) => id === "openai")?.state).toBe("connected");
+  });
+
   it("keeps account and preference settings available when capability status fails", async () => {
     mockApi.getAccounts.mockResolvedValue({ accounts: [{ id: "gmail-1", type: "gmail" }] });
     mockApi.getSettings.mockResolvedValue({ weather_location: "Pasadena, CA" });
@@ -54,6 +87,29 @@ describe("useSettingsPage debounced auto-save", () => {
     expect(result.current.accounts).toHaveLength(1);
     expect(result.current.settings).toMatchObject({ weather_location: "Pasadena, CA" });
     expect(result.current.capabilities).toEqual([]);
+  });
+
+  it("degrades credential-backed row detail when metadata fails without blocking Settings", async () => {
+    mockApi.getSettings.mockResolvedValue({ weather_location: "Pasadena, CA" });
+    mockApi.getInstanceCredentials.mockRejectedValue(new Error("metadata unavailable"));
+
+    const { result } = renderHook(() => useSettingsPage(), { wrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.settings).toMatchObject({ weather_location: "Pasadena, CA" });
+    expect(result.current.credentialMetadata).toBeNull();
+    expect(result.current.connections.find(({ id }) => id === "openai")?.state).toBeNull();
+  });
+
+  it("refreshes shared metadata internally without refreshing provider health", async () => {
+    const { result } = renderHook(() => useSettingsPage(), { wrapper });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    await act(async () => { await result.current.refreshInstanceCredentials(); });
+
+    expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(2);
+    expect(mockApi.getCapabilities).toHaveBeenCalledTimes(1);
   });
 
   it("re-queues a rejected payload so unrelated coalesced fields are not dropped", async () => {

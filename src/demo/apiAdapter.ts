@@ -4,7 +4,7 @@ import { buildDemoCalendarBillsRange } from "./financeData.ts";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.ts";
 import { allSnapshotRows, findSnapshotRow, mutateSnapshotRows } from "./snapshotRows.ts";
 import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.ts";
-import { getDemoCapabilityStatus } from "./capabilities.ts";
+import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
 import type { DemoSeed } from "./store.ts";
 import type { NewsSource } from "../../shared/types/news.ts";
 type DemoSnapshot = DemoSeed["activeSnapshot"];
@@ -754,13 +754,13 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   if (pathname === "/api/calendar/deadlines/range") {
     return filterDeadlines(seed.deadlines, url.searchParams.get("start") ?? "", url.searchParams.get("end") ?? "");
   }
-
   if (pathname === "/api/calendar/bills/range") {
     return buildDemoCalendarBillsRange(seed, url);
   }
   if (pathname === "/api/ea/accounts") return clone(seed.accounts);
   if (pathname === "/api/ea/settings") return clone(seed.settings);
   if (pathname === "/api/capabilities") return getDemoCapabilityStatus();
+  if (pathname === "/api/instance-credentials") return getDemoInstanceCredentialMetadata();
   if (pathname === "/api/briefing/actual/metadata") return clone(seed.actualMetadata);
   if (pathname === "/api/briefing/actual/cache/status") {
     return {

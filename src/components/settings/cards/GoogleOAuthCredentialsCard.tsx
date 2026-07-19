@@ -4,7 +4,6 @@ import { KeyRound } from "lucide-react";
 import {
   disableInstanceCredential,
   getGmailAuthUrl,
-  getInstanceCredentials,
   importInstanceCredentialEnvironment,
   stageGoogleOAuthApplication,
   useHostInstanceCredential as restoreHostInstanceCredential,
@@ -21,6 +20,7 @@ import {
 } from "@/components/settings/settings-core";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 import { formatCredentialTimestamp } from "./coreCredentialModel";
+import type { SettingsCredentialMetadataProps } from "../settingsTypes";
 
 const CLIENT_ID_KEY = "google.oauth_client_id";
 const CLIENT_SECRET_KEY = "google.oauth_client_secret";
@@ -37,9 +37,12 @@ function sourceLabel(items: InstanceCredentialMetadata[]): string {
   }
 }
 
-export default function GoogleOAuthCredentialsCard() {
+export default function GoogleOAuthCredentialsCard({
+  credentialMetadata,
+  onCredentialMetadataChange,
+  onRefreshCredentialMetadata,
+}: SettingsCredentialMetadataProps) {
   const demo = isDemoMode();
-  const [credentials, setCredentials] = useState<InstanceCredentialMetadata[]>([]);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
@@ -52,21 +55,20 @@ export default function GoogleOAuthCredentialsCard() {
     requestAnimationFrame(() => clientIdRef.current?.focus());
   }
 
-  async function refresh() {
-    const result = await getInstanceCredentials();
-    setCredentials(result.credentials.filter((item) => item.key === CLIENT_ID_KEY || item.key === CLIENT_SECRET_KEY));
-  }
+  const metadataUnavailable = credentialMetadata === null;
+  const credentials = (credentialMetadata ?? []).filter((item) => (
+    item.key === CLIENT_ID_KEY || item.key === CLIENT_SECRET_KEY
+  ));
 
   useEffect(() => {
     let active = true;
     if (demo) return;
-    Promise.all([getInstanceCredentials(), getCanonicalOriginStatus()])
-      .then(([metadata, canonical]) => {
+    getCanonicalOriginStatus()
+      .then((canonical) => {
         if (!active) return;
-        setCredentials(metadata.credentials.filter((item) => item.key === CLIENT_ID_KEY || item.key === CLIENT_SECRET_KEY));
         setCallbackUrl(canonical.callbacks.find((item) => item.provider === "Google OAuth")?.nextUrl ?? null);
       })
-      .catch(() => { if (active) setError("Google application status is unavailable."); });
+      .catch(() => { if (active) setError("Google callback status is unavailable."); });
     return () => { active = false; };
   }, [demo]);
 
@@ -77,12 +79,12 @@ export default function GoogleOAuthCredentialsCard() {
     try {
       const result = await stageGoogleOAuthApplication(clientId, clientSecret);
       setClientId(""); setClientSecret("");
-      setCredentials(result.credentials);
+      onCredentialMetadataChange(result.credentials);
       setMessage("Pending application saved. Connect Google to validate it; the active application remains in use until authorization succeeds.");
     } catch {
       setClientId(""); setClientSecret("");
       setError("The Google application candidate could not be saved.");
-      await refresh().catch(() => {});
+      await onRefreshCredentialMetadata().catch(() => {});
     } finally { setBusy(null); restoreFormFocus(); }
   }
 
@@ -95,7 +97,7 @@ export default function GoogleOAuthCredentialsCard() {
         : action === "disable"
           ? disableInstanceCredential(key)
           : restoreHostInstanceCredential(key)));
-      await refresh();
+      await onRefreshCredentialMetadata();
       setMessage(action === "import"
         ? "Host-managed Google application credentials moved into encrypted Setpoint storage."
         : action === "disable"
@@ -103,7 +105,7 @@ export default function GoogleOAuthCredentialsCard() {
           : "Host-managed Google application credentials are active again.");
     } catch {
       setError("The Google application source could not be changed. No credential values were exposed.");
-      await refresh().catch(() => {});
+      await onRefreshCredentialMetadata().catch(() => {});
     } finally { setBusy(null); restoreFormFocus(); }
   }
 
@@ -115,14 +117,14 @@ export default function GoogleOAuthCredentialsCard() {
     } catch {
       setError("Google authorization could not be started. The active application is unchanged.");
       setBusy(null);
-      await refresh().catch(() => {});
+      await onRefreshCredentialMetadata().catch(() => {});
       restoreFormFocus();
     }
   }
 
   const configured = credentials.length === 2 && credentials.every((item) => item.activeConfigured);
   const pending = credentials.some((item) => item.pendingConfigured);
-  const source = sourceLabel(credentials);
+  const source = metadataUnavailable ? "Status unavailable" : sourceLabel(credentials);
   const sourceValue = credentials[0]?.source;
   const allEnvironment = credentials.length === 2 && credentials.every((item) => item.source === "environment");
   const allDisabled = credentials.length === 2 && credentials.every((item) => item.source === "disabled");
@@ -130,6 +132,7 @@ export default function GoogleOAuthCredentialsCard() {
   const lastTestedAt = Math.max(0, ...credentials.map((item) => item.lastTestedAt ?? 0));
   const lastSucceededAt = Math.max(0, ...credentials.map((item) => item.lastSucceededAt ?? 0));
   const lastFailedAt = Math.max(0, ...credentials.map((item) => item.lastFailedAt ?? 0));
+  const visibleError = error ?? (metadataUnavailable ? "Google application status is unavailable." : null);
 
   return (
     <SettingsCard
@@ -197,7 +200,7 @@ export default function GoogleOAuthCredentialsCard() {
             </FieldHint>
           ) : null}
           {message ? <div role="status"><FieldHint className="text-[var(--sp-green)]">{message}</FieldHint></div> : null}
-          {error ? <div role="alert"><FieldHint className="text-danger">{error}</FieldHint></div> : null}
+          {visibleError ? <div role="alert"><FieldHint className="text-danger">{visibleError}</FieldHint></div> : null}
         </div>
       )}
     </SettingsCard>

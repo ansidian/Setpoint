@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   disableInstanceCredential,
-  getInstanceCredentials,
   importInstanceCredentialEnvironment,
   stageInstanceCredential,
   testInstanceCredential,
@@ -28,6 +27,7 @@ import {
   formatCredentialTimestamp,
 } from "./coreCredentialModel";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
+import type { SettingsCredentialMetadataProps } from "../settingsTypes";
 
 export type CoreCredentialDefinition = {
   key: string;
@@ -244,43 +244,24 @@ export default function CoreProviderCredentialsCard({
   icon,
   description,
   credentials,
+  credentialMetadata,
+  onCredentialMetadataChange,
+  onRefreshCredentialMetadata,
 }: {
   id?: string;
   title: string;
   icon: ReactNode;
   description: string;
   credentials: CoreCredentialDefinition[];
-}) {
+} & SettingsCredentialMetadataProps) {
   const demo = isDemoMode();
-  const [metadata, setMetadata] = useState<InstanceCredentialMetadata[]>([]);
-  const [loading, setLoading] = useState(!demo);
-  const [loadError, setLoadError] = useState(false);
-
-  const refresh = useCallback(async () => {
-    if (demo) return;
-    const result = await getInstanceCredentials();
-    setMetadata(result.credentials);
-    setLoadError(false);
-  }, [demo]);
-
-  useEffect(() => {
-    let active = true;
-    if (demo) return;
-    getInstanceCredentials()
-      .then((result) => { if (active) setMetadata(result.credentials); })
-      .catch(() => { if (active) setLoadError(true); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [demo]);
-
-  function updateMetadata(updated: InstanceCredentialMetadata) {
-    setMetadata((current) => current.map((item) => item.key === updated.key ? updated : item));
-  }
+  const metadata = credentialMetadata ?? [];
+  const loadError = credentialMetadata === null;
 
   return (
     <SettingsCard
       id={id}
-      ready={demo || !loading}
+      ready
       title={title}
       icon={icon}
       description={description}
@@ -288,8 +269,6 @@ export default function CoreProviderCredentialsCard({
     >
       {demo ? (
         <FieldHint>Credential actions are disabled in the fictional demo workspace.</FieldHint>
-      ) : loading ? (
-        <FieldHint>Loading credential status…</FieldHint>
       ) : loadError ? (
         <div role="alert"><FieldHint className="text-danger">Credential status is unavailable.</FieldHint></div>
       ) : (
@@ -301,8 +280,8 @@ export default function CoreProviderCredentialsCard({
                 key={definition.key}
                 definition={definition}
                 metadata={item}
-                onMetadata={updateMetadata}
-                onRefresh={refresh}
+                onMetadata={onCredentialMetadataChange}
+                onRefresh={onRefreshCredentialMetadata}
               />
             ) : null;
           })}

@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getAccounts, getCapabilities, getSettings, updateSettings } from "@/api";
+import { getAccounts, getCapabilities, getInstanceCredentials, getSettings, updateSettings } from "@/api";
 import {
   normalizeSettingsTab,
   readTabFromSearchParams,
 } from "@/components/settings/settings-core";
+import { CONNECTION_GROUPS, projectConnectionRows } from "@/components/settings/connectionModel";
 import type { AccountSummary } from "../../../shared/types/accounts";
 import type { SettingsPatchRequest, SettingsResponse } from "../../../shared/types/settings";
 import type { SettingsTab } from "@/components/settings/settings-core";
 import type { CapabilityStatus } from "../../../shared/types/capabilities";
+import type { InstanceCredentialMetadata } from "../../../shared/types/instance-credentials";
 
 export type SettingsSaveStatus = "idle" | "saving" | "saved" | "error";
 type PendingSettingsPatch = Partial<SettingsPatchRequest>;
@@ -76,6 +78,7 @@ export default function useSettingsPage() {
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [settings, setSettings] = useState<Partial<SettingsResponse> | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilityStatus[]>([]);
+  const [credentialMetadata, setCredentialMetadata] = useState<InstanceCredentialMetadata[] | null>(null);
   const [loading, setLoading] = useState(true);
   const { patch, status: saveStatus } = useSettingsAutoSave();
   const tab = readTabFromSearchParams(searchParams);
@@ -95,11 +98,13 @@ export default function useSettingsPage() {
       getAccounts(),
       getSettings(),
       getCapabilities().catch(() => ({ generatedAt: "", capabilities: [] })),
+      getInstanceCredentials().catch(() => null),
     ])
-      .then(([accountsResult, settingsResult, capabilityResult]) => {
+      .then(([accountsResult, settingsResult, capabilityResult, credentialResult]) => {
         setAccounts(Array.isArray(accountsResult) ? accountsResult : accountsResult.accounts);
         setSettings(settingsResult);
         setCapabilities(capabilityResult.capabilities);
+        setCredentialMetadata(credentialResult?.credentials ?? null);
       })
       .catch(() => {
         setAccounts([]);
@@ -114,12 +119,45 @@ export default function useSettingsPage() {
       .catch(() => {});
   }, []);
 
+  const refreshInstanceCredentials = useCallback(async () => {
+    try {
+      const result = await getInstanceCredentials();
+      setCredentialMetadata(result.credentials);
+    } catch (error) {
+      setCredentialMetadata(null);
+      throw error;
+    }
+  }, []);
+
+  const updateInstanceCredentialMetadata = useCallback((updates: InstanceCredentialMetadata | InstanceCredentialMetadata[]) => {
+    const nextUpdates = Array.isArray(updates) ? updates : [updates];
+    setCredentialMetadata((current) => {
+      if (current === null) return nextUpdates;
+      const nextByKey = new Map(nextUpdates.map((metadata) => [metadata.key, metadata]));
+      const merged = current.map((metadata) => nextByKey.get(metadata.key) ?? metadata);
+      const currentKeys = new Set(current.map(({ key }) => key));
+      return [...merged, ...nextUpdates.filter(({ key }) => !currentKeys.has(key))];
+    });
+  }, []);
+
+  const connections = useMemo(() => projectConnectionRows({
+    accounts,
+    settings,
+    capabilities,
+    credentialMetadata,
+  }), [accounts, settings, capabilities, credentialMetadata]);
+
   return {
     accounts,
     setAccounts,
     settings,
     capabilities,
+    connectionGroups: CONNECTION_GROUPS,
+    connections,
+    credentialMetadata,
     refreshCapabilities,
+    refreshInstanceCredentials,
+    updateInstanceCredentialMetadata,
     setSettings,
     loading,
     tab,
