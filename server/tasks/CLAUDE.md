@@ -6,7 +6,7 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 
 - `tasks-service.ts` — Todoist task complete/delete/projects/labels service wrappers
 - `deadlines-read.ts` — reads current/range deadlines: Todoist merge, tombstones, reminders
-- `deadline-helpers.ts` — task reconciliation: active filters, stats (covered by `carry-forward.test.ts`)
+- `deadline-helpers.ts` — task reconciliation: active filters and stats
 - `todoist.ts` — Todoist facade: fetch tasks, sync health
 - `todoist-api.ts` — Todoist REST client
 - `todoist-mirror.ts` — syncs tasks into the local Todoist mirror tables (thin IO orchestrator over the two pure modules below)

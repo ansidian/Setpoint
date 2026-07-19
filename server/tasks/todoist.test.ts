@@ -392,27 +392,6 @@ describe("Todoist mirror-backed facade", () => {
     vi.useRealTimers();
   });
 
-  it("derives mapped tasks and active id set from one mirror task read", async () => {
-    testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
-      {
-        id: "t1",
-        content: "Submit lab",
-        project_id: "p1",
-        due: { date: "2026-05-05" },
-        priority: 1,
-        labels: [],
-      },
-    ]);
-    const { fetchTodoistTasksAndIdSet } = await import("./todoist.ts");
-
-    const result = await fetchTodoistTasksAndIdSet("u1");
-
-    expect(testState.mirror.listTodoistMirrorActiveTasks).toHaveBeenCalledTimes(1);
-    expect(testState.mirror.listTodoistMirrorActiveTaskIds).not.toHaveBeenCalled();
-    expect(result.tasks.map((task) => task.id)).toEqual(["t1"]);
-    expect(result.idSet).toEqual(new Set(["t1"]));
-  });
-
   it("reads non-deleted due Todoist ids for tombstone orphan pruning", async () => {
     testState.mirror.listTodoistMirrorDueTaskIds.mockResolvedValueOnce(new Set(["active-1", "completed-1"]));
     const { fetchTodoistDueTaskIdSet } = await import("./todoist.ts");

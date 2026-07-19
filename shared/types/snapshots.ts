@@ -15,7 +15,6 @@ export type SnapshotTriageLane = "needs_attention" | "fyi" | "noise";
 export type SnapshotStatus = "active" | "frozen";
 export type SnapshotProviderRemovedState = "archived" | "trashed";
 export type SnapshotJobType = "email_triage" | "gmail_history_sync";
-export type SnapshotJobStatus = "queued" | "running";
 
 export interface SnapshotWindow {
   start_at: string;
@@ -171,8 +170,4 @@ export interface SnapshotHistoryResponse {
 export interface SnapshotBoundaryResult {
   snapshot: SnapshotRecord | null;
   schedule_label: string | null;
-}
-
-export interface SnapshotMutationResult {
-  updated: number;
 }

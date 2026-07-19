@@ -6,7 +6,6 @@ import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellIt
 import { spanLaneMetrics, spanSegmentDisplay } from "./calendarEventSpanLayout";
 import type {
   CalendarSpanGhost,
-  CalendarSpanItem,
   CalendarSpanLayoutMetrics,
   CalendarSpanSegment,
 } from "./calendarEventSpanLayout";

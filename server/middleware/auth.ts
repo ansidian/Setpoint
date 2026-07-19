@@ -223,30 +223,6 @@ export const requireRecentAuth: RequestHandler = async (req, res, next) => {
   }
 };
 
-export function requireApiTokenScope(requiredScope: string): RequestHandler {
-  return async function requireScopedApiToken(req, res, next) {
-    try {
-      const raw = getBearerToken(req);
-      if (!raw) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const ctx = await validateBearer(raw);
-      if (!ctx) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-      if (!ctx.scopes.includes(requiredScope)) {
-        return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
-      }
-
-      (req as RequestWithApiToken).apiToken = ctx;
-      return next();
-    } catch (err) {
-      return next(err); // forward DB faults instead of hanging (P1-12)
-    }
-  };
-}
-
 export function requireCookieSessionOrApiTokenScope(requiredScope: string): RequestHandler {
   return async function requireCookieOrScopedToken(req, res, next) {
     try {

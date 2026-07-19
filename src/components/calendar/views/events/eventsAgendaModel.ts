@@ -300,43 +300,7 @@ export function buildEventsMiniCalendarActivityItems({
   return [...eventItems, ...deadlineItems];
 }
 
-export function buildMultiMonthAgendaGroups({
-  months = [],
-  events = [],
-  deadlineOverlay = null,
-  weatherData = null,
-  todayKey = pacificYMD(Date.now()),
-  forceVisibleDateKey = null,
-}: {
-  months?: AgendaMonth[];
-  events?: CalendarItemLike[];
-  deadlineOverlay?: CalendarDeadlineOverlay | null;
-  weatherData?: CalendarWeatherData | null;
-  todayKey?: string;
-  forceVisibleDateKey?: string | null;
-}): EventsAgendaMonthResult[] {
-  return months.map(({ year, month }) => {
-    const mk = `${year}-${String(month + 1).padStart(2, "0")}`;
-    const forceKey = forceVisibleDateKey?.startsWith(mk) ? forceVisibleDateKey : null;
-    const result = buildEventsAgendaGroups({
-      events,
-      deadlineOverlay,
-      viewYear: year,
-      viewMonth: month,
-      weatherData,
-      todayKey,
-      forceVisibleDateKey: forceKey,
-    });
-    return {
-      monthKey: mk,
-      year,
-      month,
-      ...result,
-    };
-  });
-}
-
-// Per-month variant of buildMultiMonthAgendaGroups: each month's groups are
+// Each month's groups are
 // built from that month's cache bucket (getMonthEvents) and the previous
 // value is reused by identity when the month's inputs are unchanged, so a
 // batch landing mid-scroll rebuilds only the months it actually touched.

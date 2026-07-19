@@ -1,7 +1,6 @@
 import { epochFromLa } from "../../inbox/helpers";
 import type { CreateReminderRequest, ReminderAnchorKind } from "../../../../shared/types/reminders";
 import type {
-  TodoistReminderBlockReason,
   TodoistReminderChip,
   TodoistReminderDraftResult,
   TodoistReminderEntry,

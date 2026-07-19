@@ -299,7 +299,7 @@ function sensitivityFor(rule: TriageRule, match: TriageRuleMatch): string {
   return String(match.sensitivity || rule.sensitivity || "normal");
 }
 
-function canFinalizeLane(rule: TriageRule, match: TriageRuleMatch, parts: EmailTextParts, lane: TriageLane | null, sensitivity: string): boolean {
+function canFinalizeLane(match: TriageRuleMatch, parts: EmailTextParts, lane: TriageLane | null, sensitivity: string): boolean {
   if (lane === "needs_attention") return true;
   if (match.any_includes?.length && !isScopedRule(match) && !match.allow_legacy_any_finalize) return false;
   if (sensitivity === "critical" && lane === "noise" && !isScopedRule(match)) return false;
@@ -499,7 +499,7 @@ export function evaluateTriagePreflight(email: Partial<TriageEmail>, {
         modelSaved: false,
       };
     }
-    if (action === "finalize" && !canFinalizeLane(rule, match, parts, result.lane, result.sensitivity)) {
+    if (action === "finalize" && !canFinalizeLane(match, parts, result.lane, result.sensitivity)) {
       return {
         ...result,
         action: "route_model",

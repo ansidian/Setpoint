@@ -1,8 +1,3 @@
-export const dashboardSectionTransition = {
-  duration: 0.2,
-  ease: [0.16, 1, 0.3, 1],
-} as const;
-
 export const dashboardFadeTransition = {
   duration: 0.24,
   ease: [0.16, 1, 0.3, 1],

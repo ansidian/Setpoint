@@ -1,4 +1,3 @@
-import React from "react";
 import type { SetStateAction } from "react";
 import type { SettingsState } from "../settingsTypes";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";

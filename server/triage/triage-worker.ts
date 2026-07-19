@@ -345,9 +345,7 @@ export async function processNextEmailTriageJob({
       decision = weakSecurityReadDecision();
       modelCalls = [];
     } else if (mode.effective_email_triage_mode === "no_model") {
-      // Dev-only heuristic classifier (sender/subject/body bands -> lane). Replaces
-      // the constant-needs_attention noModelDecision, which remains in
-      // triage-decision-normalize.ts as a labeled legacy fallback (no longer the default path).
+      // Dev-only heuristic classifier (sender/subject/body bands -> lane).
       decision = heuristicNoModelDecision(email);
       modelCalls = [];
     } else {

@@ -173,36 +173,6 @@ export function RailFactTile({
   );
 }
 
-export function RailActionDock({
-  accent = "var(--ea-accent)",
-  compact = false,
-  children,
-}: { accent?: string; compact?: boolean; children?: ReactNode }) {
-  if (!children) return null;
-
-  return (
-    <div
-      data-testid="timeline-detail-action-dock"
-      style={{
-        flexShrink: 0,
-        padding: compact ? "8px" : "9px",
-        borderRadius: 14,
-        border: `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.06))`,
-        background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 8%, rgba(255,255,255,0.028)), rgba(255,255,255,0.018))`,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: compact ? 6 : 8,
-        flexWrap: "wrap",
-        minWidth: 0,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function RailActionGroup({ align = "start", children }: { align?: "start" | "end"; children?: ReactNode }) {
   if (!children) return null;
 

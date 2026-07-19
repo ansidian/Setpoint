@@ -5,7 +5,7 @@ import type { ActiveSnapshotView } from "../../shared/types/snapshots";
 import {
   calendarContentSignature,
   currentToBriefing,
-  currentToLiveData,
+  currentToLiveDataBulk,
   deadlineContentSignature,
   hasActiveRefreshWork,
   mergeActiveSnapshotIntoCurrent,
@@ -59,7 +59,7 @@ describe("current dashboard model", () => {
 
   it("projects the current dashboard envelope into domain-shaped live data", () => {
     const refreshNow = vi.fn();
-    expect(currentToLiveData(asCurrentDashboard({
+    expect(currentToLiveDataBulk(asCurrentDashboard({
       calendar: [{ id: "event-1" }],
       deadlines: {
         upcoming: [{ id: "deadline-1" }],
@@ -75,7 +75,7 @@ describe("current dashboard model", () => {
       billsSyncHealth: { state: "current" },
       providerHealth: { currentData: { state: "current" } },
       systemStatus: { state: "current" },
-    }), { refreshNow, isPolling: false })).toMatchObject({
+    }), { refreshNow })).toMatchObject({
       liveEmails: [],
       liveCalendar: [{ id: "event-1" }],
       liveDeadlines: {
@@ -87,7 +87,6 @@ describe("current dashboard model", () => {
       allSchedules: [{ id: "schedule-1" }],
       payeeMap: { payee: "Payee" },
       lastFetched: "2026-05-07T12:00:00.000Z",
-      billsLoading: false,
       actualConfigured: true,
       actualBudgetUrl: "https://actual.example.test",
       billsSyncHealth: { state: "current" },

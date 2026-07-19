@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   calendarCellItemMatchesSelected,
   getMeasuredCellItemStackPlan,
-  getMeasuredVisibleCellItemCount,
   getReservedCellItemLaneHeight,
   getSelectedHiddenCellItemKey,
   splitVisibleCellItems,
@@ -25,8 +24,8 @@ describe("CalendarCellItemStack model", () => {
       { id: "fourth" },
     ];
 
-    expect(getMeasuredVisibleCellItemCount(items, 130, metrics)).toBe(3);
-    expect(getMeasuredVisibleCellItemCount(items, 100, metrics)).toBe(2);
+    expect(getMeasuredCellItemStackPlan(items, 130, metrics).visibleCount).toBe(3);
+    expect(getMeasuredCellItemStackPlan(items, 100, metrics).visibleCount).toBe(2);
   });
 
   it("reserves span lanes plus a trailing gap before deciding normal chip capacity", () => {
@@ -40,11 +39,11 @@ describe("CalendarCellItemStack model", () => {
     expect(reservedHeight).toBe(34);
     expect(getReservedCellItemLaneHeight(2, metrics)).toBe(68);
     expect(getReservedCellItemLaneHeight(0, metrics)).toBe(0);
-    expect(getMeasuredVisibleCellItemCount(
+    expect(getMeasuredCellItemStackPlan(
       items,
       90,
       { ...metrics, reservedHeight },
-    )).toBe(0);
+    ).visibleCount).toBe(0);
   });
 
   it("only exposes overflow when the +more trigger fully fits after reserved span lanes", () => {

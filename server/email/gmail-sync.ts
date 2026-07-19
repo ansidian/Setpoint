@@ -47,7 +47,6 @@ import type { Client } from "@libsql/client";
 import type { NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
 import type { EmailWriteDb } from "./email-persistence-types.ts";
-import type { GmailPubSubNotification } from "./gmailPubSubNotification.ts";
 import type {
   EmailFetch,
   GmailHistoryPage,

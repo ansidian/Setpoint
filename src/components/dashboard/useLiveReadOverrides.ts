@@ -3,7 +3,6 @@ import {
   collectActiveReadOverrideKeys,
   computeInboxUnreadSignalCount,
 } from "./inboxBadgeModel";
-import type { CurrentDashboardHookResult } from "../../hooks/useCurrentDashboard";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
 

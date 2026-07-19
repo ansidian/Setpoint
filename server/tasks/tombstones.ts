@@ -1,5 +1,5 @@
 import db from "../db/connection.ts";
-import type { InValue, Row } from "@libsql/client";
+import type { InValue } from "@libsql/client";
 import type { TodoistTask } from "../../shared/types/tasks.ts";
 
 interface SnapshotTaskInput extends Record<string, unknown> {
@@ -76,18 +76,6 @@ export function buildSnapshot(task: SnapshotTaskInput): CompletedTodoistSnapshot
     source: "todoist",
     is_recurring: !!task.is_recurring,
   };
-}
-
-// Partition DB rows into live (due_date >= today) and expired (due_date < today).
-// Rows with null due_date are defensively treated as expired.
-export function partitionByExpiry<T extends { due_date?: string | null }>(rows: T[], today: string): { live: T[]; expired: T[] } {
-  const live: T[] = [];
-  const expired: T[] = [];
-  for (const r of rows) {
-    if (r.due_date && r.due_date >= today) live.push(r);
-    else expired.push(r);
-  }
-  return { live, expired };
 }
 
 // Read all completed occurrence rows for a user and hydrate the rows visible

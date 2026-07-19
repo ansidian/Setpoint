@@ -8,7 +8,6 @@ import { createEmailIndexTestDb, seedIndexedEmail } from "../test-utils/email-in
 import { retrieveInboxAiSearch } from "./email-search-retrieval.ts";
 import type { recordEmailSearchAiUsage } from "./email-search-cost-stats.ts";
 import type { EmailSearchEmbeddingSourceRow } from "./email-search-embeddings.ts";
-import type { EmailSearchRankingRow } from "./email-search-ranking.ts";
 
 type RetrievalTestDb = Awaited<ReturnType<typeof createRetrievalTestDb>>;
 type SeedIndexedEmailRow = Awaited<ReturnType<typeof seedIndexedEmail>>;

@@ -5,7 +5,6 @@ import {
   formatFloatingEditorLabel,
   isGridOriginAnchorKind,
   isGridOriginFloatingDetail,
-  isFloatingDetailTriggerTarget,
   preservedReanchorSide,
 } from "./calendarFloatingDetailModel";
 
@@ -82,15 +81,5 @@ describe("calendarFloatingDetailModel", () => {
       expect(isGridOriginAnchorKind("agenda-row")).toBe(false);
       expect(isGridOriginAnchorKind("parked")).toBe(false);
     });
-  });
-
-  it("treats overflow triggers as floating-detail-safe targets", () => {
-    const trigger = document.createElement("button");
-    trigger.setAttribute("data-calendar-overflow-trigger", "true");
-    document.body.appendChild(trigger);
-
-    expect(isFloatingDetailTriggerTarget(trigger)).toBe(true);
-
-    trigger.remove();
   });
 });

@@ -19,7 +19,7 @@ vi.mock("../google-oauth-credentials.ts", () => ({
 vi.stubGlobal("fetch", vi.fn());
 const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
 
-const { chunkArray, fetchMessages, fetchEmailsInRange, archiveMessage, unarchiveMessage } = await import("./gmail.ts");
+const { chunkArray, fetchMessages, fetchEmailsInRange } = await import("./gmail.ts");
 
 describe("gmail", () => {
   describe("chunkArray", () => {
@@ -108,43 +108,6 @@ describe("gmail", () => {
       expect(results[0]!.id).toBe("msg0");
       expect(results[11]!.id).toBe("msg11");
     });
-  });
-});
-
-describe("archiveMessage / unarchiveMessage", () => {
-  const fakeAccount = {
-    id: "acc-1",
-    type: "gmail" as const,
-    email: "andy@example.com",
-    label: "Personal",
-    color: "#123456",
-    credentials_encrypted: "stub", // decrypt is mocked above
-  };
-
-  beforeEach(() => {
-    vi.resetAllMocks();
-  });
-
-  it("archiveMessage POSTs /modify with removeLabelIds INBOX", async () => {
-    fetchMock.mockResolvedValue({ ok: true });
-    await archiveMessage(fakeAccount, "18c4e7ab1234");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toMatch(/\/messages\/18c4e7ab1234\/modify$/);
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ removeLabelIds: ["INBOX"] });
-  });
-
-  it("unarchiveMessage POSTs /modify with addLabelIds INBOX", async () => {
-    fetchMock.mockResolvedValue({ ok: true });
-    await unarchiveMessage(fakeAccount, "18c4e7ab1234");
-    const [, init] = fetchMock.mock.calls[0]!;
-    expect(JSON.parse(init.body)).toEqual({ addLabelIds: ["INBOX"] });
-  });
-
-  it("archiveMessage throws when Gmail returns non-OK", async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 403 });
-    await expect(archiveMessage(fakeAccount, "18c4e7ab1234")).rejects.toThrow(/Gmail archive failed: 403/);
   });
 });
 

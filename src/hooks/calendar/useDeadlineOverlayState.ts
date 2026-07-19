@@ -194,5 +194,3 @@ export default function useDeadlineOverlayState({
     setDeadlineOverlayVisible: setDeadlineOverlayVisiblePersisted,
   };
 }
-
-export type DeadlineOverlayStateController = ReturnType<typeof useDeadlineOverlayState>;

@@ -319,5 +319,3 @@ export default function useCalendarEventSelectionSet({
     addSelectedCalendarEventToSelectionSet,
   };
 }
-
-export type CalendarEventSelectionSetController = ReturnType<typeof useCalendarEventSelectionSet>;

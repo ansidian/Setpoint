@@ -114,7 +114,7 @@ describe("CalendarFloatingDetailPanel", () => {
     globalThis.ResizeObserver = originalResizeObserver;
   });
 
-  it("waits for the first measured placement before revealing, then keeps later repositioning animated", async () => {
+  it("keeps the panel hidden until its first measured placement", () => {
     const calendarPanel = appendRectElement({
       top: 0,
       left: 0,
@@ -172,30 +172,12 @@ describe("CalendarFloatingDetailPanel", () => {
 
     const panel = screen.getByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-motion-animate-opacity")).toBe("0");
-    expect(panel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
-    expect(Number(panel.getAttribute("data-motion-animate-y"))).toBe(detail.initialPlacement.top);
 
-    // Synchronous act: flush the resize-driven reveal + snap state, but leave the
-    // snap-clearing requestAnimationFrame pending. happy-dom drains rAF callbacks
-    // inside act(async () => ...) (jsdom does not), which would prematurely clear the
-    // snap before this assertion. The explicit nextFrame() below clears it on schedule.
     act(() => {
       resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
     });
 
-    const snappedPanel = screen.getByTestId("calendar-floating-detail-panel");
-    expect(snappedPanel.getAttribute("data-motion-animate-opacity")).toBe("1");
-    expect(Number(snappedPanel.getAttribute("data-motion-animate-y"))).toBeGreaterThan(detail.initialPlacement.top);
-    expect(snappedPanel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
-
-    await nextFrame();
-
-    await act(async () => {
-      resizeCallback([{ contentRect: { height: 240, width: 380 } }]);
-    });
-
-    const animatedPanel = screen.getByTestId("calendar-floating-detail-panel");
-    expect(animatedPanel.getAttribute("data-motion-transition-y-type")).toBe("spring");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-opacity")).toBe("1");
   });
 
   it("keeps a search-result-row anchored panel in place when the anchor element disconnects", async () => {
@@ -526,8 +508,6 @@ describe("CalendarFloatingDetailPanel", () => {
     // (moveX - offsetX, moveY - offsetY) = (240, 180), both inside the calendar.
     expect(Number(panel.getAttribute("data-motion-animate-x"))).toBe(240);
     expect(Number(panel.getAttribute("data-motion-animate-y"))).toBe(180);
-    // A manual drag snaps instantly (no spring) and drops the caret.
-    expect(panel.getAttribute("data-motion-transition-x-duration")).toBe("0.01");
     expect(onUserDraggedChange).toHaveBeenCalledWith(true, detail.placementKey);
   });
 

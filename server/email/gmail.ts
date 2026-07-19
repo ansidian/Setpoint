@@ -453,10 +453,8 @@ function extractMessageId(account: ConfiguredEmailAccount, uid: string): string 
   return uid.startsWith(prefix) ? uid.slice(prefix.length) : uid;
 }
 
-// Returns `true` if the message currently has no UNREAD label, `false` if it
-// still does, or `null` on any error (caller treats null as "don't know, leave
-// the cached read state alone"). Metadata-only fetch — no body/headers —
-// keeps this cheap enough to run per resurfaced row on every live poll.
+// Metadata-only provider read used by incremental sync to reconcile cached
+// read state without fetching message bodies.
 export async function isMessageRead(account: ConfiguredEmailAccount, uid: string): Promise<boolean | null> {
   try {
     const messageId = extractMessageId(account, uid);
@@ -512,34 +510,6 @@ export async function trashMessage(account: ConfiguredEmailAccount, uid: string)
     },
   );
   if (!res.ok) throw new Error(`Gmail trash failed: ${res.status}`);
-}
-
-export async function archiveMessage(account: ConfiguredEmailAccount, uid: string): Promise<void> {
-  const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
-  const res = await fetch(
-    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ removeLabelIds: ["INBOX"] }),
-    },
-  );
-  if (!res.ok) throw new Error(`Gmail archive failed: ${res.status}`);
-}
-
-export async function unarchiveMessage(account: ConfiguredEmailAccount, uid: string): Promise<void> {
-  const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
-  const res = await fetch(
-    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ addLabelIds: ["INBOX"] }),
-    },
-  );
-  if (!res.ok) throw new Error(`Gmail unarchive failed: ${res.status}`);
 }
 
 // --- EA/Snoozed label (used for native-parity snooze) ---

@@ -1,10 +1,8 @@
 import type {
-  ActualAccount,
   ActualBillOccurrence,
   ActualCategory,
   ActualCategoryGroup,
   ActualMetadata,
-  ActualPayee,
 } from "./actual.ts";
 import type { TransactionRecord } from "./transactions.ts";
 
@@ -186,10 +184,6 @@ export interface BillExtractionRequest {
   content: string;
 }
 
-export interface BillExtractionResult extends BillCandidate {
-  usage?: unknown;
-}
-
 export interface BillExtractionProviderResult {
   fields: BillCandidate;
   usage: Record<string, unknown>;
@@ -199,12 +193,6 @@ export interface BillExtractionProvider {
   id?: string;
   envVar?: string;
   extract(input: BillExtractionRequest): Promise<BillExtractionProviderResult>;
-}
-
-export interface ActualListsResponse {
-  accounts?: ActualAccount[];
-  payees?: ActualPayee[];
-  categories?: ActualCategoryGroup[];
 }
 
 export interface BillMutationResponse {

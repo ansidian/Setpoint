@@ -1,6 +1,5 @@
 import {
   getTodoistMirrorHealth,
-  listTodoistMirrorActiveTaskIds,
   listTodoistMirrorActiveTasks,
   listTodoistMirrorCompletedTasks,
   listTodoistMirrorDueTaskIds,
@@ -466,21 +465,10 @@ export async function fetchTodoistTasksRange(userId: string, { start, end, refre
 // Set of id strings for every non-deleted, non-checked task with a due date.
 // Returns null when Todoist isn't configured; callers must treat null as
 // "can't verify" and skip pruning rather than wiping every tombstone.
-export async function fetchTodoistTaskIdSet(userId: string, options: { refresh?: boolean } = {}): Promise<Set<string> | null> {
-  const health = await prepareTodoistMirrorRead(userId, options);
-  if (!health.configured) return null;
-  return listTodoistMirrorActiveTaskIds(userId);
-}
-
 export async function fetchTodoistDueTaskIdSet(userId: string, options: { refresh?: boolean } = {}): Promise<Set<string> | null> {
   const health = await prepareTodoistMirrorRead(userId, options);
   if (!health.configured) return null;
   return listTodoistMirrorDueTaskIds(userId);
-}
-
-export async function fetchTodoistTasksAndIdSet(userId: string, options: TodoistReadOptions = {}): Promise<{ tasks: TodoistTask[]; idSet: Set<string> | null }> {
-  const { tasks, idSet } = await fetchMirrorMappedTasks(userId, options);
-  return { tasks, idSet };
 }
 
 export async function completeTodoistTask(userId: string, taskId: string): Promise<void> {
@@ -605,13 +593,6 @@ export async function updateTodoistTask(userId: string, taskId: string, { conten
     labels: task.labels || [],
     is_recurring: !!task.due?.is_recurring,
   };
-}
-
-export async function testConnection(userId: string): Promise<{ success: true; projectCount: number }> {
-  const token = await getToken(userId);
-  if (!token) throw new Error("Todoist API token not configured");
-  const data = await todoistFetch<ProjectListResponse | NonNullable<ProjectListResponse["results"]>>(token, "/projects?limit=1");
-  return { success: true, projectCount: (Array.isArray(data) ? data : data.results || []).length };
 }
 
 export async function getTodoistSyncHealth(userId: string): Promise<TodoistMirrorHealth> {

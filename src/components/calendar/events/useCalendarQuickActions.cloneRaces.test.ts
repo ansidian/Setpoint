@@ -1,6 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CalendarQuickActionEvent } from "./calendarQuickActionModel";
 
 vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),

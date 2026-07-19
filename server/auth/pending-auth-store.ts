@@ -135,6 +135,4 @@ export const createPendingAuth = pendingAuthStore.createPendingAuth;
 export const readPendingAuth = pendingAuthStore.readPendingAuth;
 export const consumePendingAuth = pendingAuthStore.consumePendingAuth;
 export const deletePendingAuth = pendingAuthStore.deletePendingAuth;
-export const deletePendingAuthForUser = pendingAuthStore.deletePendingAuthForUser;
-export const deleteExpiredPendingAuth = pendingAuthStore.deleteExpired;
 export const clearPendingAuth = pendingAuthStore.clearPendingAuth;

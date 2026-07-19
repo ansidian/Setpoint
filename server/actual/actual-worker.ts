@@ -308,10 +308,8 @@ export function runActualWorkerOperation<T = unknown>(operation: ActualWorkerOpe
   return result;
 }
 
-export function getActualWorkerHealth(): ActualWorkerHealth {
-  return { ...health };
-}
-
+// Test teardown seam: the worker runner owns process-global child and queue
+// state that must be reset between isolated runner cases.
 export function shutdownActualWorker(): void {
   clearIdleShutdownTimer();
   if (worker) {

@@ -380,5 +380,3 @@ export default function useCalendarScrollViewport({
 
   return { containerRef, refYear, refMonth, wFirst, wLast, getHeight };
 }
-
-export type CalendarScrollViewportController = ReturnType<typeof useCalendarScrollViewport>;

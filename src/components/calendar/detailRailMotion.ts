@@ -5,11 +5,6 @@ export const EDITOR_ENTRANCE_TRANSITION = {
   ease: [0.22, 1, 0.36, 1],
 };
 
-export const EDITOR_POSITION_TRANSITION = {
-  duration: 0.2,
-  ease: [0.16, 1, 0.3, 1],
-};
-
 const DETAIL_RAIL_LAYOUT_TRANSITION = {
   duration: 0.18,
   ease: [0.16, 1, 0.3, 1],

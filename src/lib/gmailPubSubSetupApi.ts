@@ -14,6 +14,5 @@ export const setGmailPubSubTopic = (value: string): Promise<unknown> => apiFetch
 });
 export const generateGmailPubSubCallback = (): Promise<GmailPubSubCallbackResponse> => apiFetch(`${BASE}/generate-callback`, { method: "POST" });
 export const importGmailPubSubEnvironmentToken = (): Promise<GmailPubSubStatus> => apiFetch(`${BASE}/import-environment-token`, { method: "POST" });
-export const useHostGmailPubSubToken = (): Promise<GmailPubSubStatus> => apiFetch(`${BASE}/use-host-token`, { method: "POST" });
 export const revokeGmailPubSubToken = (): Promise<GmailPubSubStatus> => apiFetch(`${BASE}/revoke-token`, { method: "POST" });
 export const testGmailPubSubWatches = (): Promise<GmailPubSubWatchTestResponse> => apiFetch(`${BASE}/test-watches`, { method: "POST" });

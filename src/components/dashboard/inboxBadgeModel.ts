@@ -1,5 +1,5 @@
 import { collectActiveSnapshotEmails, mergeReadState } from "../inbox/helpers";
-import type { ActiveSnapshotView, SnapshotItem } from "../../../shared/types/snapshots";
+import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
 import type { InboxEmailLike } from "../inbox/inboxTypes";
 
 type ReadOverrideMap = Record<string, boolean>;

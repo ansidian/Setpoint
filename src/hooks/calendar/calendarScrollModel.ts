@@ -59,57 +59,6 @@ export function clampCalendarMonthTarget({
   return monthIndexToDate(clampedIndex, currentYear, currentMonth);
 }
 
-export function visibleMonthIndices({ scrollOffset, containerHeight, getMonthHeight }: {
-  scrollOffset: number;
-  containerHeight: number;
-  getMonthHeight: MonthMetric;
-}): CalendarVisibleMonthIndices {
-  const viewportEnd = scrollOffset + containerHeight;
-  let first, last;
-
-  if (scrollOffset >= 0) {
-    let offset = 0;
-    let i = 0;
-    while (offset + getMonthHeight(i) <= scrollOffset) {
-      offset += getMonthHeight(i);
-      i++;
-    }
-    first = i;
-    while (offset < viewportEnd) {
-      last = i;
-      offset += getMonthHeight(i);
-      i++;
-    }
-  } else {
-    let offset = 0;
-    let i = -1;
-    while (offset > scrollOffset) {
-      offset -= getMonthHeight(i);
-      i--;
-    }
-    first = i + 1;
-    let fwdOffset = offset;
-    for (let j = first; fwdOffset < viewportEnd; j++) {
-      last = j;
-      fwdOffset += getMonthHeight(j);
-    }
-  }
-
-  return { first: first!, last: last! };
-}
-
-export function activeMonthIndex({ visibleIndices, scrollOffset, getMonthOffset }: {
-  visibleIndices: CalendarVisibleMonthIndices;
-  scrollOffset: number;
-  getMonthOffset: MonthMetric;
-}): number {
-  let active = visibleIndices.first;
-  for (let i = visibleIndices.first; i <= visibleIndices.last; i++) {
-    if (getMonthOffset(i) <= scrollOffset) active = i;
-  }
-  return active;
-}
-
 export const LABEL_MONTH_THRESHOLD = 1 / 3;
 
 // Quiet window after the last scroll event before the grid announces where it

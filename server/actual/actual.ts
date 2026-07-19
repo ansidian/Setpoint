@@ -4,13 +4,7 @@ import { readLocalActualMetadata } from "./actual-local-metadata.ts";
 import { sendBillLightweight } from "./actual-lightweight-writes.ts";
 import type { ActualWorkerOperation, ActualWorkerOptions } from "./actual-worker-protocol.ts";
 import type {
-  ActualAccount,
-  ActualBillOccurrence,
-  ActualCategoryGroup,
-  ActualDateRange,
   ActualMetadata,
-  ActualPayee,
-  ActualRecentTransaction,
 } from "../../shared/types/actual.ts";
 
 export interface ActualBillWriteInput {
@@ -38,13 +32,6 @@ export interface ActualQuickTransactionResult {
   type: string;
   date: string;
   category: string | null;
-}
-
-export interface ActualCalendarBillsRangeResult {
-  schedules: ActualBillOccurrence[];
-  recentTransactions: ActualRecentTransaction[];
-  payeeMap: Record<string, string>;
-  actualBudgetUrl: string;
 }
 
 export { isSchedulePaid } from "./actual-bill-occurrences.ts";
@@ -125,34 +112,6 @@ export async function getMetadata(userId: string, { forceWorker = false, forceRe
   );
   metadataCache = { data, ts: Date.now() };
   return data;
-}
-
-export async function getAccounts(userId: string): Promise<ActualAccount[]> {
-  const { accounts } = await getMetadata(userId);
-  return accounts;
-}
-
-export async function getRecentTransactions(userId: string): Promise<ActualRecentTransaction[]> {
-  const { recentTransactions } = await getMetadata(userId);
-  return recentTransactions;
-}
-
-export async function getPayees(userId: string): Promise<ActualPayee[]> {
-  const { payees } = await getMetadata(userId);
-  return payees;
-}
-
-export async function getCategories(userId: string): Promise<ActualCategoryGroup[]> {
-  const { categories } = await getMetadata(userId);
-  return categories;
-}
-
-export function getUpcomingBills(userId: string): Promise<unknown> {
-  return callActual<unknown>("getUpcomingBills", [userId]);
-}
-
-export function getCalendarBillsRange(userId: string, range: ActualDateRange): Promise<ActualCalendarBillsRangeResult> {
-  return callActual<ActualCalendarBillsRangeResult>("getCalendarBillsRange", [userId, range]);
 }
 
 export async function markBillPaid(scheduleId: string, userId: string): Promise<unknown> {

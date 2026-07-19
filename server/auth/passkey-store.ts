@@ -225,4 +225,3 @@ export const getPasskeyByCredentialId = passkeyStore.getPasskeyByCredentialId;
 export const createPasskey = passkeyStore.createPasskey;
 export const updatePasskeyUsage = passkeyStore.updatePasskeyUsage;
 export const deletePasskey = passkeyStore.deletePasskey;
-export const clearPasskeys = passkeyStore.clearPasskeys;

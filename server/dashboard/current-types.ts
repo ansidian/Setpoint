@@ -1,5 +1,5 @@
 import type { Client } from "@libsql/client";
-import type { BillsMirrorHealth, BillsMirrorPayload } from "../../shared/types/bills.ts";
+import type { BillsMirrorHealth } from "../../shared/types/bills.ts";
 import type { TodoistMirrorHealth } from "../../shared/types/tasks.ts";
 import type {
   CurrentDashboardCacheKey,
@@ -60,8 +60,6 @@ export interface DeadlinesPayload extends Record<string, unknown> {
   upcoming: Array<Record<string, unknown>>;
   stats: unknown;
 }
-
-export type BillsCurrentPayload = BillsMirrorPayload & Record<string, unknown>;
 
 export interface CurrentDashboardServiceOptions {
   dbClient?: Client;

@@ -68,8 +68,6 @@ export interface BillsComputed {
   monthTotal: number;
 }
 
-export const MAX_PILLS = 2;
-
 export const TRACKED_UTILITIES = [
   { key: "sce", label: "Electricity", match: "sce" },
   { key: "water", label: "Water", match: "sgv water" },

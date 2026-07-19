@@ -43,7 +43,7 @@ import {
 } from "./actualSyncTransport.ts";
 import type { ActualBudgetMetadata } from "./actualSyncTransport.ts";
 import { actualWriteDateInt, computeActualSyncSince } from "./actualWriteModel.ts";
-import type { ActualConfig, ActualSchedule, ActualScheduleCondition } from "../../shared/types/actual.ts";
+import type { ActualSchedule, ActualScheduleCondition } from "../../shared/types/actual.ts";
 
 type ActualError = Error & { status?: number; code?: string; localWriteApplied?: boolean };
 type BillType = "expense" | "income" | "bill" | "transfer";
@@ -91,8 +91,6 @@ interface LightweightResult {
   scheduleId?: string;
   transactionId?: string;
 }
-
-const TRANSACTION_SORT_INCREMENT = 65_536;
 
 function unsupported(message: string): ActualError {
   return Object.assign(new Error(message), {

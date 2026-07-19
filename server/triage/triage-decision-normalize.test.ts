@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   createTriageDecision,
   fallbackDecision,
-  noModelDecision,
   normalizeModelDecision,
   triageDecisionFromPreflight,
 } from "./triage-decision-normalize.ts";
@@ -39,17 +38,16 @@ function finalizingPreflight() {
 }
 
 describe("triage decision normalization", () => {
-  it("converges model, fallback, no-model, and preflight paths on one shape", () => {
+  it("converges model, failure fallback, and preflight paths on one shape", () => {
     const model = normalizeModelDecision({
       decision: { lane: "fyi", category: "updates", confidence: 0.9 },
       usage: { input_tokens: 10 },
     }, "cheap");
     const fallback = fallbackDecision(email, new Error("model unavailable"));
-    const noModel = noModelDecision(email);
     const preflight = triageDecisionFromPreflight(finalizingPreflight());
 
     expect(preflight).not.toBeNull();
-    for (const decision of [model, fallback, noModel, preflight]) {
+    for (const decision of [model, fallback, preflight]) {
       expect(Object.keys(decision!).sort()).toEqual(CANONICAL_KEYS);
     }
   });
@@ -125,22 +123,6 @@ describe("triage decision normalization", () => {
       last_decision_reason: "failure_fallback",
       error: "model unavailable",
     });
-  });
-
-  it("keeps noModelDecision as a labeled legacy fallback distinct from the heuristic path", () => {
-    const decision = noModelDecision(email);
-
-    expect(decision).toMatchObject({
-      lane: "needs_attention",
-      urgency: "normal",
-      escalation_badge: "Needs Review",
-      triage_source: "no_model_fallback",
-      last_decision_reason: "no_model_legacy_fallback",
-      confidence: null,
-    });
-    // Legacy fallback must never share the heuristic scorer's source label, or
-    // the two no_model paths would be indistinguishable in stored decisions.
-    expect(decision.triage_source).not.toBe("no_model_heuristic");
   });
 
   it("converts finalizing preflight results and rejects routing results", () => {

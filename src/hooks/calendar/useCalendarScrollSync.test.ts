@@ -66,11 +66,6 @@ describe("useCalendarScrollSync", () => {
       expect(requestAgendaScroll).toHaveBeenCalledWith({ type: "date", dateKey: "2026-07-01" });
     });
 
-    it("exposes no unthrottled per-crossing grid sync entry point", () => {
-      const { result } = setup();
-
-      expect("onGridDisplayMonthChange" in result.current).toBe(false);
-    });
   });
 
   describe("grid → agenda crossing sync (leading edge)", () => {

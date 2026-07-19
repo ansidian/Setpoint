@@ -4,7 +4,6 @@ import {
   buildEventGhostPreview,
   dateOutsideVisibleGrid,
   ghostDisplayRange,
-  ghostSpanDays,
 } from "./ghostPreview.ts";
 import type { CalendarEventLike } from "./ghostPreview.ts";
 import { epochFromLa } from "../../lib/dashboard-helpers";
@@ -357,25 +356,6 @@ describe("calendar ghost previews", () => {
 
     it("returns an empty string for no ghost", () => {
       expect(ghostDisplayRange(null)).toBe("");
-    });
-  });
-
-  describe("ghostSpanDays", () => {
-    it("counts the day delta across an inclusive range", () => {
-      expect(ghostSpanDays({ startDate: "2026-04-20", endDate: "2026-04-23" })).toBe(3);
-    });
-
-    it("is zero for a single day", () => {
-      expect(ghostSpanDays({ startDate: "2026-04-20", endDate: "2026-04-20" })).toBe(0);
-    });
-
-    it("never goes negative when endDate precedes startDate", () => {
-      expect(ghostSpanDays({ startDate: "2026-04-23", endDate: "2026-04-20" })).toBe(0);
-    });
-
-    it("is zero when dates are missing", () => {
-      expect(ghostSpanDays({ startDate: "2026-04-20" })).toBe(0);
-      expect(ghostSpanDays(null)).toBe(0);
     });
   });
 

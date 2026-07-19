@@ -3,15 +3,10 @@ import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { CalendarClock } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
-import type { CalendarDateTimeViewProps } from "@/components/shared/pickers/CalendarDateTimeView";
 import {
   buildSnoozePresets,
   DASHBOARD_TZ,
 } from "./helpers";
-
-export function CustomDateTimeView(props: Omit<CalendarDateTimeViewProps, "confirmLabel">) {
-  return <CalendarDateTimeView confirmLabel="Snooze" {...props} />;
-}
 
 // Floating picker anchored to the Snooze button. Follows the project's
 // "Floating Panel Pattern" — portal, fixed positioning, isolated stacking,

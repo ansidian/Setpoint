@@ -100,7 +100,7 @@ export function createAlfredRouter({
     return undefined;
   });
 
-  router.get("/usage", async (req, res) => {
+  router.get("/usage", async (_req, res) => {
     try {
       res.json(await getAlfredUsageStats(process.env.EA_USER_ID as string));
     } catch (err) {

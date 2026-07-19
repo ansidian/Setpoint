@@ -328,7 +328,7 @@ describe("useCalendarRange", () => {
     const event = { id: "april-event", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "April" };
     const controllerA = new AbortController();
     const controllerB = new AbortController();
-    getCalendarRange.mockImplementation((start, end, opts) => {
+    getCalendarRange.mockImplementation((_start, _end, opts) => {
       const signal = opts?.signal;
       if (signal === controllerA.signal) {
         return new Promise((_resolve, reject) => {
@@ -365,7 +365,7 @@ describe("useCalendarRange", () => {
 
   it("returns cached-only data when its own signal aborted", async () => {
     const controller = new AbortController();
-    getCalendarRange.mockImplementation((start, end, opts) => (
+    getCalendarRange.mockImplementation((_start, _end, opts) => (
       new Promise((_resolve, reject) => {
         opts?.signal?.addEventListener("abort", () => {
           reject(new DOMException("Aborted", "AbortError"));

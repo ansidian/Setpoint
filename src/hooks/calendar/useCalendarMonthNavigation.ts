@@ -207,5 +207,3 @@ export default function useCalendarMonthNavigation({
     onFetchSettle,
   };
 }
-
-export type CalendarMonthNavigationController = ReturnType<typeof useCalendarMonthNavigation>;

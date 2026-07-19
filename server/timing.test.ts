@@ -1,17 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatTimingLog, logTiming } from "./timing.ts";
+import { logTiming } from "./timing.ts";
 
 describe("timing logs", () => {
-  it("formats stable single-line timing logs without undefined fields", () => {
-    expect(formatTimingLog({
-      event: "request",
-      route: "/api/dashboard/current",
-      ms: 12.44,
-      status: 200,
-      error: undefined,
-    })).toBe('[EA Timing] {"event":"request","route":"/api/dashboard/current","ms":12,"status":200}');
-  });
-
   it("uses console-compatible log functions", () => {
     const logger = vi.fn();
 

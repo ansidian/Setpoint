@@ -354,7 +354,7 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
   });
 
-  it("uses the event-style font treatment for the selected deadline title", async () => {
+  it("opens deadline detail from an Events agenda row", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(

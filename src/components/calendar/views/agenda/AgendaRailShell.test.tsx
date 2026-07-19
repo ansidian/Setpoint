@@ -7,8 +7,6 @@ import AgendaRailShell from "./AgendaRailShell.tsx";
 import type {
   AgendaMonthScrollContainerProps,
   AgendaMonthScrollHandle,
-  AgendaRegistrationCallbacks,
-  AgendaScrollMonth,
 } from "./AgendaMonthScrollContainer";
 import type { AgendaRailGroup, AgendaRailShellProps } from "./AgendaRailShell";
 
@@ -31,44 +29,6 @@ afterEach(() => {
 const GROUPS = [
   { dateKey: "2026-05-01" },
   { dateKey: "2026-05-02" },
-];
-
-const MAY_WINDOW_MONTHS = [
-  {
-    monthKey: "2026-03",
-    year: 2026,
-    month: 2,
-    firstVisibleDateKey: "2026-03-01",
-    visibleGroups: [{ dateKey: "2026-03-01" }],
-  },
-  {
-    monthKey: "2026-04",
-    year: 2026,
-    month: 3,
-    firstVisibleDateKey: "2026-04-01",
-    visibleGroups: [{ dateKey: "2026-04-01" }],
-  },
-  {
-    monthKey: "2026-05",
-    year: 2026,
-    month: 4,
-    firstVisibleDateKey: "2026-05-25",
-    visibleGroups: [{ dateKey: "2026-05-25" }],
-  },
-  {
-    monthKey: "2026-06",
-    year: 2026,
-    month: 5,
-    firstVisibleDateKey: "2026-06-07",
-    visibleGroups: [{ dateKey: "2026-06-07" }],
-  },
-  {
-    monthKey: "2026-07",
-    year: 2026,
-    month: 6,
-    firstVisibleDateKey: "2026-07-01",
-    visibleGroups: [{ dateKey: "2026-07-01" }],
-  },
 ];
 
 async function flushRailEffects(): Promise<void> {

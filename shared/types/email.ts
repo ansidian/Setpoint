@@ -135,11 +135,6 @@ export interface EmailRangeResult {
   cursor?: string | null;
 }
 
-export interface EmailProviderMutationResult {
-  provider: EmailProvider;
-  accountId: string;
-}
-
 export interface PinnedEmailSnapshot extends Record<string, unknown> {
   account_id?: string | null;
   subject?: string;

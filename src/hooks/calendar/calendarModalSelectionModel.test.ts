@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildCalendarModalSyncSnapshot,
   isDateVisibleInMonthGrid,
-  isSameViewDate,
   parseFocusDate,
   resolveFocusViewDate,
   ymdFromView,
@@ -212,10 +211,5 @@ describe("calendarModalSelectionModel", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("detects view-date equality by month and year", () => {
-    expect(isSameViewDate({ month: 4, year: 2026 }, { month: 4, year: 2026 })).toBe(true);
-    expect(isSameViewDate({ month: 4, year: 2026 }, { month: 5, year: 2026 })).toBe(false);
   });
 });

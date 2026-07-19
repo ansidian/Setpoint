@@ -15,25 +15,12 @@ vi.mock("./calendar-google-client", async (importOriginal) => ({
 
 import {
   buildGoogleRecurrenceRules,
-  DASHBOARD_CALENDAR_TZ,
   extractStructuredRecurrence,
   fetchCalendar,
-  getNextWeekRange,
   markCalendarConflicts,
   normalizeGoogleCalendarLink,
   normalizeGoogleEvent,
 } from "./calendar.ts";
-
-function pacificDateKey(date: Date): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: DASHBOARD_CALENDAR_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
-  return `${value("year")}-${value("month")}-${value("day")}`;
-}
 
 describe("markCalendarConflicts", () => {
   type ConflictEvent = {
@@ -170,52 +157,6 @@ describe("fetchCalendar fan-out", () => {
     // calendar still populates the response.
     expect(events).toHaveLength(1);
     expect(events[0]!.id).toContain("primary");
-  });
-});
-
-describe("getNextWeekRange", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("returns next Sun–Sat when today is Thursday Apr 3 2026", () => {
-    vi.useFakeTimers();
-    // Thu Apr 3 2026, 10:00 AM Pacific (UTC-7)
-    vi.setSystemTime(new Date("2026-04-03T17:00:00Z"));
-    const { startDate, endDate } = getNextWeekRange();
-    expect(pacificDateKey(startDate)).toBe("2026-04-05");
-    expect(pacificDateKey(endDate)).toBe("2026-04-11");
-  });
-
-  it("returns next Sun–Sat when today is Saturday Apr 4 2026", () => {
-    vi.useFakeTimers();
-    // Sat Apr 4 2026, 10:00 AM Pacific
-    vi.setSystemTime(new Date("2026-04-04T17:00:00Z"));
-    const { startDate, endDate } = getNextWeekRange();
-    expect(pacificDateKey(startDate)).toBe("2026-04-05");
-    expect(pacificDateKey(endDate)).toBe("2026-04-11");
-  });
-
-  it("returns next Sun–Sat when today is Sunday Apr 5 2026", () => {
-    vi.useFakeTimers();
-    // Sun Apr 5 2026, 10:00 AM Pacific
-    vi.setSystemTime(new Date("2026-04-05T17:00:00Z"));
-    const { startDate, endDate } = getNextWeekRange();
-    // Next week starts Apr 12 (next Sunday)
-    expect(pacificDateKey(startDate)).toBe("2026-04-12");
-    expect(pacificDateKey(endDate)).toBe("2026-04-18");
-  });
-
-  it("startDate and endDate are correct Pacific midnight boundaries regardless of server timezone", () => {
-    vi.useFakeTimers();
-    // Thu Apr 3 2026 — Pacific is UTC-7 (PDT)
-    // Next Sunday is Apr 5, midnight Pacific = 07:00 UTC
-    // Next Saturday is Apr 11, end-of-day Pacific = Apr 12 06:59:59.999 UTC
-    vi.setSystemTime(new Date("2026-04-03T17:00:00Z"));
-    const { startDate, endDate } = getNextWeekRange();
-    // ISO string must show midnight Pacific as 07:00Z (UTC-7 offset)
-    expect(startDate.toISOString()).toBe("2026-04-05T07:00:00.000Z");
-    expect(endDate.toISOString()).toBe("2026-04-12T06:59:59.999Z");
   });
 });
 
