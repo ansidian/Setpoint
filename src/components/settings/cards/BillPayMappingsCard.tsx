@@ -50,6 +50,7 @@ interface BehaviorEditorProps {
   accounts: StoredActualOption[];
   payees: StoredActualOption[];
   categories: StoredActualOption[];
+  liveMetadataAvailable: boolean;
   onChange: (behavior: NormalizedBillPayBehavior) => void;
   onDelete: () => void;
   onMove: (direction: number) => void;
@@ -62,6 +63,7 @@ function BehaviorEditor({
   accounts,
   payees,
   categories,
+  liveMetadataAvailable,
   onChange,
   onDelete,
   onMove,
@@ -155,6 +157,7 @@ function BehaviorEditor({
                 storedLabel={behavior.targets.payee_label}
                 missingLabel="Payee"
                 placeholder="Select payee..."
+                disabled={!liveMetadataAvailable}
                 onChange={(id, name) => updateTargets((targets) => ({
                   ...targets,
                   payee_id: id || undefined,
@@ -168,6 +171,7 @@ function BehaviorEditor({
                 storedLabel={behavior.targets.account_label}
                 missingLabel="Account"
                 placeholder="Select account..."
+                disabled={!liveMetadataAvailable}
                 onChange={(id, name) => updateTargets((targets) => ({
                   ...targets,
                   account_id: id || undefined,
@@ -181,6 +185,7 @@ function BehaviorEditor({
                 storedLabel={behavior.targets.category_label}
                 missingLabel="Category"
                 placeholder="Select category..."
+                disabled={!liveMetadataAvailable}
                 onChange={(id, name) => updateTargets((targets) => ({
                   ...targets,
                   category_id: id || undefined,
@@ -197,6 +202,7 @@ function BehaviorEditor({
                 storedLabel={behavior.targets.from_account_label}
                 missingLabel="From account"
                 placeholder="Payment source..."
+                disabled={!liveMetadataAvailable}
                 onChange={(id, name) => updateTargets((targets) => ({
                   ...targets,
                   from_account_id: id || undefined,
@@ -210,6 +216,7 @@ function BehaviorEditor({
                 storedLabel={behavior.targets.to_account_label}
                 missingLabel="To account"
                 placeholder="Credit card..."
+                disabled={!liveMetadataAvailable}
                 onChange={(id, name) => updateTargets((targets) => ({
                   ...targets,
                   to_account_id: id || undefined,
@@ -250,6 +257,7 @@ interface ProfileEditorProps {
   accounts: StoredActualOption[];
   payees: StoredActualOption[];
   categories: StoredActualOption[];
+  liveMetadataAvailable: boolean;
   onToggleCollapsed: () => void;
   onChange: (profile: NormalizedBillPayProfile) => void;
   onDelete: () => void;
@@ -264,6 +272,7 @@ function ProfileEditor({
   accounts,
   payees,
   categories,
+  liveMetadataAvailable,
   onToggleCollapsed,
   onChange,
   onDelete,
@@ -392,6 +401,7 @@ function ProfileEditor({
                   accounts={accounts}
                   payees={payees}
                   categories={categories}
+                  liveMetadataAvailable={liveMetadataAvailable}
                   onChange={(nextBehavior) => updateBehavior(behaviorIndex, () => nextBehavior)}
                   onDelete={() => onChange({ ...profile, behaviors: removeAt(profile.behaviors, behaviorIndex) })}
                   onMove={(direction) => onChange({
@@ -416,11 +426,13 @@ export default function BillPayMappingsCard({
   metadataLoading,
   metadataError,
   onRequestMetadata,
+  liveMetadataAvailable = true,
 }: SettingsCardStateProps & {
   metadata?: ActualMetadataResponse | null;
   metadataLoading?: boolean;
   metadataError?: string;
   onRequestMetadata?: () => unknown;
+  liveMetadataAvailable?: boolean;
 }) {
   const mappings = normalizeMappings(settings?.bill_pay_mappings);
   const [expandedProfileIds, setExpandedProfileIds] = useState<Set<string>>(() => new Set());
@@ -441,7 +453,7 @@ export default function BillPayMappingsCard({
   }
 
   function toggleProfile(profileId: string) {
-    if (!expandedProfileIds.has(profileId)) onRequestMetadata?.();
+    if (liveMetadataAvailable && !expandedProfileIds.has(profileId)) onRequestMetadata?.();
     setExpandedProfileIds((current) => {
       const next = new Set(current);
       if (next.has(profileId)) next.delete(profileId);
@@ -452,7 +464,7 @@ export default function BillPayMappingsCard({
 
   function addProfile() {
     const profile = createProfile();
-    onRequestMetadata?.();
+    if (liveMetadataAvailable) onRequestMetadata?.();
     setExpandedProfileIds((current) => new Set([...current, profile.id]));
     applyMappings({ ...mappings, profiles: [...mappings.profiles, profile] });
   }
@@ -502,6 +514,7 @@ export default function BillPayMappingsCard({
                 accounts={accounts}
                 payees={payees}
                 categories={categories}
+                liveMetadataAvailable={liveMetadataAvailable}
                 onToggleCollapsed={() => toggleProfile(profile.id)}
                 onChange={(nextProfile) => updateProfile(profileIndex, () => nextProfile)}
                 onDelete={() => applyMappings({

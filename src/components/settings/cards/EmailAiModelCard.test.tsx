@@ -2,6 +2,7 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
+import type { ConnectionId, ConnectionRowView, ConnectionState } from "../connectionModel";
 
 const mockApi = vi.hoisted(() => ({
   getModels: vi.fn(),
@@ -15,16 +16,43 @@ vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils"
 
 const { default: EmailAiModelCard } = await import("./EmailAiModelCard");
 
-function renderCard({ initialSettings, patch = vi.fn() }: {
+function connection(id: ConnectionId, state: ConnectionState): ConnectionRowView {
+  return {
+    id,
+    group: "ai_providers",
+    label: id === "openai" ? "OpenAI" : "Anthropic",
+    description: "",
+    minimumViable: "",
+    hash: id,
+    state,
+    statusLabel: state,
+    source: "stored",
+    mode: "api_key",
+    identities: [],
+    lastTestedAt: null,
+    lastSucceededAt: null,
+    lastFailedAt: null,
+  };
+}
+
+function renderCard({ initialSettings, patch = vi.fn(), connections }: {
   initialSettings?: SettingsState;
   patch?: SettingsPatch;
+  connections?: ConnectionRowView[];
 } = {}) {
   function Harness() {
     const [settings, setSettings] = useState<SettingsState | null>(initialSettings || {
       email_ai_provider: "anthropic",
       email_ai_model: "claude-sonnet-4-6",
     });
-    return <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />;
+    return (
+      <EmailAiModelCard
+        settings={settings}
+        setSettings={setSettings}
+        patch={patch}
+        connections={connections}
+      />
+    );
   }
 
   return {
@@ -94,5 +122,31 @@ describe("EmailAiModelCard", () => {
         email_ai_model: "gpt-5.5",
       });
     });
+  });
+
+  it("keeps a saved unhealthy provider selected and links to repair without patching a fallback", async () => {
+    const patch = vi.fn();
+    renderCard({
+      initialSettings: {
+        email_ai_provider: "openai",
+        email_ai_model: "gpt-5.4",
+      },
+      patch,
+      connections: [
+        connection("anthropic", "connected"),
+        connection("openai", "needs_attention"),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(mockApi.getModels).toHaveBeenCalled();
+    });
+
+    expect(screen.getByLabelText<HTMLSelectElement>("Inbox triage provider").value).toBe("openai");
+    expect(screen.getByRole<HTMLOptionElement>("option", { name: "OpenAI (unavailable)" }).disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLSelectElement>("Inbox triage model").disabled).toBe(true);
+    expect(screen.getByRole("link", { name: "Repair OpenAI" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#openai");
+    expect(patch).not.toHaveBeenCalled();
   });
 });

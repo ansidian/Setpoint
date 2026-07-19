@@ -3,9 +3,11 @@ import { Receipt } from "lucide-react";
 import { getBillExtractModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
+import { projectAiProviderSelection } from "@/components/settings/featureDependencyModel";
 import { isDemoMode } from "@/demo/config";
 import type { ProviderModelAvailability } from "../../../../shared/types/settings";
 import type { SettingsCardStateProps } from "../settingsTypes";
+import type { ConnectionRowView } from "../connectionModel";
 
 const FALLBACK_PROVIDERS: ProviderModelAvailability[] = [
   {
@@ -40,7 +42,16 @@ const DEMO_PROVIDERS: ProviderModelAvailability[] = [
   },
 ];
 
-export default function BillExtractionAiCard({ settings, setSettings, patch }: SettingsCardStateProps) {
+export default function BillExtractionAiCard({
+  settings,
+  setSettings,
+  patch,
+  connections,
+  showRepairLink = true,
+}: SettingsCardStateProps & {
+  connections?: readonly ConnectionRowView[];
+  showRepairLink?: boolean;
+}) {
   const demoMode = isDemoMode();
   const [providers, setProviders] = useState(demoMode ? DEMO_PROVIDERS : FALLBACK_PROVIDERS);
   const [loading, setLoading] = useState(true);
@@ -62,10 +73,25 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }: S
   const selectedProvider = demoMode ? "demo" : settings?.bill_extract_provider || "anthropic";
   const selectedModel = demoMode ? "demo-bill-extract-model" : settings?.bill_extract_model || "claude-haiku-4-5";
 
-  const providerEntry = providers.find((p) => p.provider === selectedProvider) || providers[0];
+  const selection = connections
+    ? projectAiProviderSelection({
+      providers,
+      connections,
+      selectedProvider,
+      selectedModel,
+    })
+    : {
+      providers,
+      provider: selectedProvider,
+      model: selectedModel,
+      repairConnectionId: null,
+    };
+  const providerEntry = selection.providers.find((entry) => entry.provider === selection.provider)
+    || selection.providers[0];
 
   function applyChange(nextProvider: string, nextModel: string) {
-    const next = providers.find((p) => p.provider === nextProvider) || providers[0];
+    const next = selection.providers.find((p) => p.provider === nextProvider) || selection.providers[0];
+    if (!next) return;
     const model = next!.models.some((m) => m.id === nextModel) ? nextModel : next!.defaultModel;
     setSettings((current) => ({
       ...(current || {}),
@@ -83,9 +109,9 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }: S
     >
       <div className="flex flex-col gap-3">
         <ProviderModelSelect
-          providers={providers}
-          provider={selectedProvider}
-          model={selectedModel}
+          providers={selection.providers}
+          provider={selection.provider}
+          model={selection.model}
           onChange={applyChange}
           providerAriaLabel="Bill extraction provider"
           modelAriaLabel="Bill extraction model"
@@ -94,6 +120,17 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }: S
         <div className="flex items-center gap-2">
           {demoMode ? (
             <StatusPill tone="neutral">Demo-only model</StatusPill>
+          ) : selection.repairConnectionId ? (
+            showRepairLink ? (
+              <a
+                href={`/settings?tab=connections#${selection.repairConnectionId}`}
+                className="rounded-md text-[11px] font-medium text-warning underline decoration-warning/40 underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none"
+              >
+                Repair {providerEntry?.label || selectedProvider}
+              </a>
+            ) : (
+              <StatusPill tone="warning">{providerEntry?.label || selectedProvider} unavailable</StatusPill>
+            )
           ) : providerEntry?.available ? (
             <StatusPill tone="success">{providerEntry.label} key configured</StatusPill>
           ) : (

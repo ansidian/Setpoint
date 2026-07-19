@@ -30,11 +30,13 @@ export default function UtilityPayLinksCard({
   metadataLoading,
   metadataError,
   onRequestMetadata,
+  liveMetadataAvailable = true,
 }: SettingsCardStateProps & {
   metadata?: ActualMetadataResponse | null;
   metadataLoading?: boolean;
   metadataError?: string;
   onRequestMetadata?: () => unknown;
+  liveMetadataAvailable?: boolean;
 }) {
   // Lazy metadata load (mirrors BillPayMappingsCard): the section must NOT spin
   // up the Actual worker on mount, so we request schedules only on first user
@@ -83,21 +85,32 @@ export default function UtilityPayLinksCard({
             <div key={index} className={cn(SURFACE_ROW_CLASS, "flex flex-col gap-3 p-3")}>
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <SearchableDropdown
-                    ariaLabel="Schedule for pay link"
-                    options={scheduleOptions}
-                    value={link.scheduleId || ""}
-                    placeholder={metadataLoading && !schedules.length ? "Loading schedules…" : "Select a bill…"}
-                    onOpen={() => onRequestMetadata?.()}
-                    onChange={(scheduleId) => {
-                      const schedule = schedules.find((s) => s.id === scheduleId);
-                      updateLink(index, (current) => ({
-                        ...current,
-                        scheduleId,
-                        label: scheduleLabel(schedule, payeeMap),
-                      }));
-                    }}
-                  />
+                  {liveMetadataAvailable ? (
+                    <SearchableDropdown
+                      ariaLabel="Schedule for pay link"
+                      options={scheduleOptions}
+                      value={link.scheduleId || ""}
+                      placeholder={metadataLoading && !schedules.length ? "Loading schedules…" : "Select a bill…"}
+                      onOpen={() => onRequestMetadata?.()}
+                      onChange={(scheduleId) => {
+                        const schedule = schedules.find((s) => s.id === scheduleId);
+                        updateLink(index, (current) => ({
+                          ...current,
+                          scheduleId,
+                          label: scheduleLabel(schedule, payeeMap),
+                        }));
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      aria-label="Schedule for pay link"
+                      className="flex w-full items-center rounded bg-input-bg px-2.5 py-1.5 text-left text-[13px] font-medium text-muted-foreground/70 disabled:cursor-not-allowed"
+                    >
+                      {link.label || link.scheduleId || "Repair Actual Budget to choose a bill"}
+                    </button>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -127,11 +140,12 @@ export default function UtilityPayLinksCard({
 
         <button
           type="button"
+          disabled={!liveMetadataAvailable}
           onClick={() => {
             onRequestMetadata?.();
             applyLinks([...links, { scheduleId: "", label: "", url: "" }]);
           }}
-          className="rounded-lg border border-dashed border-white/[0.1] bg-transparent px-3.5 py-2 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:border-white/[0.2] hover:text-foreground focus-visible:border-white/[0.2] focus-visible:text-foreground"
+          className="rounded-lg border border-dashed border-white/[0.1] bg-transparent px-3.5 py-2 text-left text-[12px] font-medium text-muted-foreground transition-[border-color,color,transform] duration-200 hover:-translate-y-px hover:border-white/[0.2] hover:text-foreground focus-visible:border-white/[0.2] focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
         >
           + Add pay link
         </button>
