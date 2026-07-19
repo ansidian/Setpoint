@@ -13,6 +13,8 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `connectionDirectoryModel.ts` — canonical/legacy connection hash parsing plus directory summary/action projection
 - `ConnectionsDirectory.tsx` — grouped, one-open disclosure directory synchronized to the URL hash
 - `ConnectionPanelContent.tsx` — service-to-existing-control ownership mapping and expanded state evidence
+- `ConnectionDependencyPrompt.tsx` — concise setup/repair prerequisite prompt with canonical Connections deep links
+- `featureDependencyModel.ts` — pure Automation/Finance visibility and AI provider-selection projection
 - `AccountsList.tsx` — draggable, editable provider-filtered account rows with icon/color pickers
 
 ### Sections (one per tab)

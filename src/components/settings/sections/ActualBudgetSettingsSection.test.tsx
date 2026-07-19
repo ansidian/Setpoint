@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import type { SearchableDropdownProps } from "@/components/shared/SearchableDropdown";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
+import type { ConnectionRowView, ConnectionState } from "../connectionModel";
 
 const mockApi = vi.hoisted(() => ({
   getActualMetadata: vi.fn(),
@@ -44,10 +45,30 @@ vi.mock("@/components/shared/SearchableDropdown", () => ({
 
 const { default: ActualBudgetSettingsSection } = await import("./ActualBudgetSettingsSection");
 
-function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict = false }: {
+function actualConnection(state: ConnectionState): ConnectionRowView {
+  return {
+    id: "actual-budget",
+    group: "data_sources",
+    label: "Actual Budget",
+    description: "",
+    minimumViable: "",
+    hash: "actual-budget",
+    state,
+    statusLabel: state,
+    source: "settings",
+    mode: "actual_budget",
+    identities: [],
+    lastTestedAt: null,
+    lastSucceededAt: null,
+    lastFailedAt: null,
+  };
+}
+
+function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict = false, state = "connected" }: {
   initialSettings?: SettingsState;
   patch?: Mock<SettingsPatch>;
   strict?: boolean;
+  state?: ConnectionState;
 } = {}) {
   function Harness() {
     const [settings, setSettings] = useState<SettingsState | null>(initialSettings || {
@@ -62,6 +83,7 @@ function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict
         settings={settings}
         setSettings={setSettings}
         patch={patch}
+        connections={[actualConnection(state)]}
       />
     );
   }
@@ -126,6 +148,54 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetSettingsSection", () => {
+  it("shows one Actual setup prompt and hides Finance customization when disconnected", () => {
+    renderSection({ state: "not_connected" });
+
+    expect(screen.getByText("Connect Actual Budget")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set up Actual Budget" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#actual-budget");
+    expect(screen.queryByText("Bill Pay Mappings")).toBeNull();
+    expect(screen.queryByText("Mapping Test")).toBeNull();
+    expect(screen.queryByText("Utility Pay Links")).toBeNull();
+  });
+
+  it("shows full Finance controls when Actual is connected", () => {
+    renderSection({ state: "connected" });
+
+    expect(screen.getByText("Bill Pay Mappings")).toBeTruthy();
+    expect(screen.getByText("Mapping Test")).toBeTruthy();
+    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
+    expect(screen.queryByText("Actual Budget needs attention")).toBeNull();
+  });
+
+  it("retains Finance settings but disables live operations while Actual needs attention", () => {
+    renderSection({
+      state: "needs_attention",
+      initialSettings: {
+        bill_pay_mappings: { version: 1, profiles: [] },
+        utility_pay_links: [{
+          scheduleId: "schedule-electric",
+          label: "Electric",
+          url: "https://utility.example.test",
+        }],
+      },
+    });
+
+    expect(screen.getByText("Actual Budget needs attention")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Repair connection" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#actual-budget");
+    expect(screen.getByText("Bill Pay Mappings")).toBeTruthy();
+    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Run Test" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Schedule for pay link" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "+ Add pay link" }).disabled).toBe(true);
+    expect(screen.getByDisplayValue<HTMLInputElement>("https://utility.example.test").disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /profile/i }));
+    expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Payee" }).disabled).toBe(true);
+  });
+
   it("keeps Actual connection controls out of Finance while retaining mapping controls", async () => {
     renderSection();
 

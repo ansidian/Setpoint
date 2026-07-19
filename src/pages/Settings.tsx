@@ -162,6 +162,7 @@ export default function Settings() {
           settings={settings}
           setSettings={setSettings}
           patch={patch}
+          connections={connections}
         />
       );
     } else if (tab === "automation") {
@@ -170,6 +171,7 @@ export default function Settings() {
           settings={settings}
           setSettings={setSettings}
           patch={patch}
+          connections={connections}
         />
       );
     } else {
