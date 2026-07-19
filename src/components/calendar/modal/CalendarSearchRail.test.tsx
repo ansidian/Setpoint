@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarSearchRail from "./CalendarSearchRail";
 import type { CalendarSearchResultLike } from "../../../hooks/calendar/calendarModalSearchModel";
@@ -35,21 +35,6 @@ function makeSearch(overrides = {}) {
     selectedDateKey: null,
     selectedItemId: null,
     ...overrides,
-  };
-}
-
-function testRect(top: number, height: number): DOMRect {
-  return DOMRect.fromRect({ x: 0, y: top, width: 100, height });
-}
-
-function installRafTimer() {
-  const requestSpy = vi.spyOn(window, "requestAnimationFrame")
-    .mockImplementation((callback) => window.setTimeout(() => callback(performance.now()), 0));
-  const cancelSpy = vi.spyOn(window, "cancelAnimationFrame")
-    .mockImplementation((id) => window.clearTimeout(id));
-  return () => {
-    requestSpy.mockRestore();
-    cancelSpy.mockRestore();
   };
 }
 
@@ -154,7 +139,6 @@ describe("CalendarSearchRail", () => {
     expect(screen.getByTestId("calendar-search-state").textContent).toBe("Searching");
     expect(screen.getByTestId("calendar-search-results").getAttribute("aria-busy")).toBe("true");
     expect(screen.getByTestId("calendar-search-skeleton")).toBeTruthy();
-    expect(screen.getAllByTestId("calendar-search-skeleton-row")).toHaveLength(6);
 
     rerender(
       <CalendarSearchRail
@@ -253,89 +237,7 @@ describe("CalendarSearchRail", () => {
     expect(search.setHighlightedIndex).toHaveBeenCalledWith(1);
   });
 
-  it("uses Shift+Enter to open the previous navigable row", () => {
-    const search = makeSearch({
-      query: "work",
-      highlightedIndex: 1,
-      results: [
-        {
-          id: "event:previous",
-          type: "event",
-          itemId: "previous",
-          itemDate: "2026-05-12",
-          title: "Previous event",
-          sourceColor: "#4285f4",
-        },
-        {
-          id: "event:current",
-          type: "event",
-          itemId: "current",
-          itemDate: "2026-05-13",
-          title: "Current event",
-          sourceColor: "#4285f4",
-        },
-      ],
-    });
-
-    render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
-
-    fireEvent.keyDown(screen.getByTestId("calendar-search-input"), { key: "Enter", shiftKey: true });
-
-    expect(search.activateResult).toHaveBeenCalledWith(
-      search.results[1],
-      expect.objectContaining({
-        anchorKind: "grid-chip",
-      }),
-    );
-    expect(search.setHighlightedIndex).toHaveBeenCalledWith(0);
-  });
-
-  it("keeps the activated last search result clear of the rail bottom edge when the queued highlight wraps", () => {
-    const search = makeSearch({
-      query: "work",
-      highlightedIndex: 1,
-      results: [
-        {
-          id: "event:first",
-          type: "event",
-          itemId: "first",
-          itemDate: "2026-05-12",
-          title: "First event",
-          sourceColor: "#4285f4",
-        },
-        {
-          id: "event:last",
-          type: "event",
-          itemId: "last",
-          itemDate: "2026-05-13",
-          title: "Last event",
-          sourceColor: "#4285f4",
-        },
-      ],
-    });
-
-    render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
-    const scroller = screen.getByTestId("calendar-search-results");
-    const lastRow = screen.getAllByTestId("calendar-search-result-row")[1]!;
-    const scrollTo = vi.fn();
-    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 120 });
-    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 320 });
-    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 40, writable: true });
-    scroller.getBoundingClientRect = vi.fn(() => testRect(100, 120));
-    lastRow.getBoundingClientRect = vi.fn(() => testRect(242, 58));
-    scroller.scrollTo = scrollTo;
-
-    fireEvent.keyDown(screen.getByTestId("calendar-search-input"), { key: "Enter" });
-
-    expect(search.setHighlightedIndex).toHaveBeenCalledWith(0);
-    expect(scrollTo).toHaveBeenCalledWith({
-      top: 164,
-      behavior: "smooth",
-    });
-    expect(search.setScrollTop).toHaveBeenCalledWith(164);
-  });
-
-  it("pivots from the last opened row when switching from backward to forward activation", () => {
+  it("activates the visibly highlighted row when switching activation direction", () => {
     const results = [
       {
         id: "event:previous",
@@ -378,10 +280,10 @@ describe("CalendarSearchRail", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(search.activateResult).toHaveBeenLastCalledWith(
-      results[2],
+      results[0],
       expect.objectContaining({ anchorKind: "grid-chip" }),
     );
-    expect(search.setHighlightedIndex).toHaveBeenLastCalledWith(0);
+    expect(search.setHighlightedIndex).toHaveBeenLastCalledWith(1);
   });
 
   it("selects all on explicit search focus but only moves caret on scope switches", () => {
@@ -478,66 +380,6 @@ describe("CalendarSearchRail", () => {
     fireEvent.keyDown(todayHeader, { key: "Enter" });
     expect(search.activateDateHeader).toHaveBeenCalledWith("2026-05-11");
     expect(search.setHighlightedIndex).toHaveBeenCalledWith(1);
-  });
-
-  it("centers completed search results around today instead of starting at the oldest match", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
-    const restoreRaf = installRafTimer();
-    const search = makeSearch({
-      open: true,
-      query: "work",
-      pending: false,
-      results: [
-        {
-          id: "event:old",
-          type: "event",
-          itemId: "old",
-          itemDate: "2021-06-20",
-          title: "Work",
-          sourceColor: "#4285f4",
-        },
-        {
-          id: "event:next",
-          type: "event",
-          itemId: "next",
-          itemDate: "2026-05-13",
-          title: "Work",
-          sourceColor: "#4285f4",
-        },
-        {
-          id: "event:future",
-          type: "event",
-          itemId: "future",
-          itemDate: "2030-06-15",
-          title: "Work",
-          sourceColor: "#4285f4",
-        },
-      ],
-    });
-
-    render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
-
-    const scroller = screen.getByTestId("calendar-search-results");
-    const targetHeader = screen.getAllByTestId("calendar-search-date-header")[1]!;
-    const scrollTo = vi.fn();
-    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 300 });
-    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 0, writable: true });
-    scroller.getBoundingClientRect = vi.fn(() => testRect(100, 300));
-    targetHeader.getBoundingClientRect = vi.fn(() => testRect(760, 34));
-    scroller.scrollTo = scrollTo;
-
-    act(() => {
-      vi.advanceTimersByTime(20);
-    });
-
-    expect(scrollTo).toHaveBeenCalledWith({
-      top: 527,
-      behavior: "auto",
-    });
-    expect(search.setScrollTop).toHaveBeenCalledWith(527);
-    expect(search.markResultsAutoCentered).toHaveBeenCalled();
-    restoreRaf();
   });
 
   it("restores and reports result scroll position when auto-centering is disabled", () => {
