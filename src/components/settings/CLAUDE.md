@@ -10,15 +10,15 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `settings-ui.tsx` — StatusPill, SaveStatus, SettingsCard, SkeletonCard, SettingsLayout
 - `settingsTypes.ts` — shared Settings card state, patch, and account prop contracts
 - `connectionModel.ts` — fixed connection definitions plus pure service-level status projection
-- `connectionDirectoryModel.ts` — canonical/legacy connection hash parsing plus directory summary/action projection
-- `ConnectionsDirectory.tsx` — grouped, one-open disclosure directory synchronized to the URL hash
-- `ConnectionPanelContent.tsx` — service-to-existing-control ownership mapping and expanded state evidence
+- `connectionDirectoryModel.ts` — canonical/legacy connection hash parsing, allowlisted advanced targets, and directory summary/action projection
+- `ConnectionsDirectory.tsx` — grouped, one-open disclosure directory synchronized to the URL hash, with progress-gated onboarding continuation
+- `ConnectionPanelContent.tsx` — service-to-existing-control ownership mapping, expanded state evidence, and targeted Advanced setup routing
 - `ConnectionDependencyPrompt.tsx` — concise setup/repair prerequisite prompt with canonical Connections deep links
 - `featureDependencyModel.ts` — pure Automation/Finance visibility and AI provider-selection projection
 - `AccountsList.tsx` — draggable, editable provider-filtered account rows with icon/color pickers
 
 ### Sections (one per tab)
-- `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows to connection panels
+- `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
 - `sections/ActualBudgetSettingsSection.tsx` — Finance behavior: bill-pay mappings, mapping tests, and utility links
 - `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, lookback
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens

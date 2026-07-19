@@ -1,6 +1,9 @@
+import { useLocation } from "react-router-dom";
 import ConnectionPanelContent from "@/components/settings/ConnectionPanelContent";
 import ConnectionsDirectory from "@/components/settings/ConnectionsDirectory";
+import { connectionSetupTargetFromSearch } from "@/components/settings/connectionDirectoryModel";
 import type { ConnectionGroupDefinition, ConnectionRowView } from "@/components/settings/connectionModel";
+import type { OnboardingProgress } from "../../../../shared/types/onboarding";
 import type {
   SettingsAccountsProps,
   SettingsCredentialMetadataProps,
@@ -16,6 +19,7 @@ export default function ConnectionsSettingsSection({
   patch,
   connectionGroups,
   connections,
+  onboardingProgress,
   credentialMetadata,
   onCredentialMetadataChange,
   onRefreshCredentialMetadata,
@@ -25,14 +29,20 @@ export default function ConnectionsSettingsSection({
   patch: SettingsPatch;
   connectionGroups: readonly ConnectionGroupDefinition[];
   connections: readonly ConnectionRowView[];
+  onboardingProgress: OnboardingProgress | null;
 }) {
+  const location = useLocation();
+  const setupTarget = connectionSetupTargetFromSearch(location.search);
+
   return (
     <ConnectionsDirectory
       groups={connectionGroups}
       rows={connections}
+      onboardingProgress={onboardingProgress}
       renderPanel={(connection) => (
         <ConnectionPanelContent
           connection={connection}
+          setupTarget={setupTarget}
           accounts={accounts}
           setAccounts={setAccounts}
           settings={settings}

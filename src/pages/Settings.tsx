@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import ConnectionsSettingsSection from "@/components/settings/sections/ConnectionsSettingsSection";
 import ActualBudgetSettingsSection from "@/components/settings/sections/ActualBudgetSettingsSection";
@@ -10,9 +10,13 @@ import {
   SkeletonCard,
 } from "@/components/settings/settings-ui";
 import useSettingsPage from "@/hooks/settings/useSettingsPage";
+import { getOnboardingProgress } from "@/lib/onboardingApi";
+import { connectionSetupTargetFromSearch } from "@/components/settings/connectionDirectoryModel";
+import type { OnboardingProgress } from "../../shared/types/onboarding";
 
 export default function Settings() {
   const location = useLocation();
+  const [onboardingProgress, setOnboardingProgress] = useState<OnboardingProgress | null>(null);
   const {
     accounts,
     setAccounts,
@@ -32,8 +36,27 @@ export default function Settings() {
   } = useSettingsPage();
 
   useEffect(() => {
+    let active = true;
+    getOnboardingProgress()
+      .then((progress) => {
+        if (active) setOnboardingProgress(progress);
+      })
+      .catch(() => {
+        if (active) setOnboardingProgress(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (loading || !location.hash) return;
-    const targetId = location.hash.slice(1);
+    const setupTarget = connectionSetupTargetFromSearch(location.search);
+    const targetId = setupTarget === "gmail-realtime"
+      ? "gmail-realtime-advanced-setup"
+      : setupTarget === "todoist-advanced"
+        ? "todoist-advanced-setup"
+        : location.hash.slice(1);
     let target: HTMLElement | null = null;
     let settleTimer: number | null = null;
     let scrollFallbackTimer: number | null = null;
@@ -132,7 +155,7 @@ export default function Settings() {
       clearScrollWait();
       if (target) delete target.dataset.settingsTargetActive;
     };
-  }, [loading, location.hash, tab]);
+  }, [loading, location.hash, location.search, tab]);
 
   let content = (
     <>
@@ -152,6 +175,7 @@ export default function Settings() {
           patch={patch}
           connectionGroups={connectionGroups}
           connections={connections}
+          onboardingProgress={onboardingProgress}
           credentialMetadata={credentialMetadata}
           onCredentialMetadataChange={updateInstanceCredentialMetadata}
           onRefreshCredentialMetadata={refreshInstanceCredentials}

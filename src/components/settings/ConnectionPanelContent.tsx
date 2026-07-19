@@ -10,6 +10,7 @@ import TodoistCard from "@/components/settings/cards/TodoistCard";
 import WeatherLocationCard from "@/components/settings/cards/WeatherLocationCard";
 import { FieldHint, StatusPill } from "@/components/settings/settings-ui";
 import type { ConnectionRowView, ConnectionState } from "./connectionModel";
+import type { ConnectionSetupTarget } from "./connectionDirectoryModel";
 import type {
   SettingsAccountsProps,
   SettingsCredentialMetadataProps,
@@ -22,6 +23,7 @@ const GmailRealtimeCard = lazy(() => import("@/components/settings/cards/GmailRe
 
 type ConnectionPanelContentProps = SettingsAccountsProps & SettingsCredentialMetadataProps & SettingsConnectionRefreshProps & {
   connection: ConnectionRowView;
+  setupTarget?: ConnectionSetupTarget | null;
   settings: SettingsState | null;
   patch: SettingsPatch;
 };
@@ -49,6 +51,7 @@ function formatConnectionSource(source: ConnectionRowView["source"]) {
 
 export default function ConnectionPanelContent({
   connection,
+  setupTarget = null,
   accounts,
   setAccounts,
   settings,
@@ -73,7 +76,7 @@ export default function ConnectionPanelContent({
           <GoogleOAuthCredentialsCard {...credentialProps} />
           <GoogleWorkspaceAccountsPanel accounts={accounts} setAccounts={setAccounts} />
           <Suspense fallback={<div data-settings-content-loading="" aria-hidden="true" />}>
-            <GmailRealtimeCard />
+            <GmailRealtimeCard openAdvancedSetup={setupTarget === "gmail-realtime"} />
           </Suspense>
         </>
       );
@@ -82,7 +85,13 @@ export default function ConnectionPanelContent({
       controls = <ICloudMailAccountsPanel accounts={accounts} setAccounts={setAccounts} />;
       break;
     case "todoist":
-      controls = <TodoistCard settings={settings} onRefreshConnections={onRefreshConnections} />;
+      controls = (
+        <TodoistCard
+          settings={settings}
+          onRefreshConnections={onRefreshConnections}
+          openAdvancedSetup={setupTarget === "todoist-advanced"}
+        />
+      );
       break;
     case "actual-budget":
       controls = <ActualBudgetConnectionCard settings={settings} onRefreshConnections={onRefreshConnections} />;

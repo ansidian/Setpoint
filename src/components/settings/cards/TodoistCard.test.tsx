@@ -108,6 +108,13 @@ describe("TodoistCard", () => {
     expect(screen.getByText(/personal token stays active until authorization succeeds/i)).toBeTruthy();
   });
 
+  it("opens only its advanced disclosure when targeted by a deep link", () => {
+    render(<TodoistCard settings={{}} openAdvancedSetup />);
+
+    const disclosure = screen.getByText("Advanced OAuth and webhooks").closest("details") as HTMLDetailsElement;
+    expect(disclosure.open).toBe(true);
+  });
+
   it("confirms Todoist impact before disconnecting and refreshes shared state", async () => {
     const onRefreshConnections = vi.fn(async () => {});
     render(<TodoistCard settings={{ todoist_configured: true }} onRefreshConnections={onRefreshConnections} />);

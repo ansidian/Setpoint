@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
   Check,
@@ -22,9 +22,10 @@ import type {
   OnboardingProgressMutation,
   OnboardingStepId,
 } from "../../shared/types/onboarding";
+import { isOnboardingStepId } from "../../shared/types/onboarding";
 import { cn } from "@/lib/utils";
 
-const SECONDARY_BUTTON = "motion-reduce:transition-none motion-reduce:transform-none";
+const SECONDARY_BUTTON = "min-h-11 sm:min-h-8 motion-reduce:transition-none motion-reduce:transform-none";
 
 function progressLabel(state: "pending" | "reviewed" | "completed" | "skipped") {
   if (state === "completed") return { label: "Reviewed", tone: "success" as const };
@@ -34,6 +35,7 @@ function progressLabel(state: "pending" | "reviewed" | "completed" | "skipped") 
 }
 
 export default function Onboarding(): ReactElement {
+  const [searchParams] = useSearchParams();
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilityStatus[]>([]);
   const [activeId, setActiveId] = useState<OnboardingStepId>(ONBOARDING_STEPS[0]!.id);
@@ -50,7 +52,10 @@ export default function Onboarding(): ReactElement {
       ]);
       setProgress(nextProgress);
       setCapabilities(status.capabilities);
-      setActiveId(projectOnboardingChecklist(nextProgress).activeStepId);
+      const requestedStep = searchParams.get("step");
+      setActiveId(isOnboardingStepId(requestedStep)
+        ? requestedStep
+        : projectOnboardingChecklist(nextProgress).activeStepId);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load onboarding");
     }
@@ -142,7 +147,7 @@ export default function Onboarding(): ReactElement {
       <div className="mx-auto max-w-[1040px]">
         <header className="mb-6 flex flex-col gap-4 border-b border-white/[0.06] pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link to="/" className="mb-3 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-muted-foreground transition-[background-color,color,transform] hover:-translate-y-px hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none">
+            <Link to="/" className="mb-3 inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-muted-foreground transition-[background-color,color,transform] hover:-translate-y-px hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none sm:min-h-0">
               <ChevronLeft aria-hidden="true" size={14} /> Dashboard
             </Link>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[2px] text-muted-foreground">
@@ -170,7 +175,7 @@ export default function Onboarding(): ReactElement {
                       type="button"
                       aria-current={selected ? "step" : undefined}
                       onClick={() => selectStep(step.id)}
-                      className={`flex min-h-12 w-full items-center gap-3 px-2 py-2.5 text-left text-[12px] transition-[background-color,color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none ${selected ? "bg-primary/[0.1] text-foreground" : "text-muted-foreground hover:bg-white/[0.035] hover:text-foreground"}`}
+                      className={`flex min-h-12 w-full items-center gap-3 px-2 py-2.5 text-left text-[12px] transition-[background-color,color,transform] hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none ${selected ? "bg-primary/[0.1] text-foreground hover:bg-primary/[0.14]" : "text-muted-foreground hover:bg-white/[0.035] hover:text-foreground"}`}
                     >
                       {step.state === "completed" ? <Check aria-hidden="true" size={14} className="text-[var(--sp-green)]" />
                         : step.state === "skipped" ? <SkipForward aria-hidden="true" size={14} className="text-[var(--sp-cream)]" />
@@ -210,7 +215,15 @@ export default function Onboarding(): ReactElement {
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <Link to={active.settingsHref} className={cn(buttonVariants(), SECONDARY_BUTTON)}>{active.actionLabel}<ArrowRight aria-hidden="true" /></Link>
+                {active.targets.map((target) => (
+                  <Link
+                    key={`${target.connectionId}-${target.href}`}
+                    to={target.href}
+                    className={cn(buttonVariants({ variant: "secondary" }), SECONDARY_BUTTON)}
+                  >
+                    Set up {target.label}<ArrowRight aria-hidden="true" />
+                  </Link>
+                ))}
                 <Button variant="secondary" className={SECONDARY_BUTTON} disabled={busy} onClick={() => void mutate({ action: "complete", stepId: active.id })}>Mark reviewed</Button>
                 <Button variant="ghost" className={SECONDARY_BUTTON} disabled={busy} onClick={() => void mutate({ action: "skip", stepId: active.id })}>Skip for now</Button>
               </div>

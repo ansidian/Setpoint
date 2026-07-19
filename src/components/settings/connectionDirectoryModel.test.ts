@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   connectionIdFromHash,
+  connectionSetupTargetFromSearch,
   connectionSummary,
 } from "./connectionDirectoryModel";
 
@@ -30,5 +31,15 @@ describe("connection directory routing", () => {
       { state: "not_connected" },
       { state: null },
     ])).toEqual({ connected: 2, setup: 1, attention: 1 });
+  });
+
+  it.each([
+    ["?tab=connections&setup=gmail-realtime", "gmail-realtime"],
+    ["?setup=todoist-advanced", "todoist-advanced"],
+    ["?setup=google-places", null],
+    ["?setup=unknown", null],
+    ["", null],
+  ] as const)("allowlists advanced setup target %s", (search, expected) => {
+    expect(connectionSetupTargetFromSearch(search)).toBe(expected);
   });
 });

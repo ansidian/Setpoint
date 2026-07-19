@@ -167,8 +167,8 @@ The default setup is a personal API token entered in Settings. It supports full
 Todoist read/write behavior and uses periodic reconciliation; OAuth is not
 required.
 
-For optional OAuth refresh and real-time webhooks, open Todoist's advanced
-Settings section and enter the client ID and client secret from your deployment's
+For optional OAuth refresh and real-time webhooks, open **Settings → Connections
+→ Todoist**, expand **Advanced OAuth and webhooks**, and enter the client ID and client secret from your deployment's
 Todoist Developer app. Set the OAuth callback and webhook URLs in Todoist to the
 canonical URLs shown there, then choose **Connect with OAuth**. Setpoint binds the
 callback to the initiating browser, exchanges the code server-side, encrypts the
@@ -223,7 +223,7 @@ npm run dev        # runs both Vite (frontend) and Express (backend) concurrentl
 
 Frontend: `http://localhost:5173` — proxies `/api/*` to Express on port 3001.
 
-By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → System when you intentionally want real local triage or need to pause triage job draining.
+By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → Automation when you intentionally want real local triage or need to pause triage job draining.
 
 ### Tests
 

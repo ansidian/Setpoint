@@ -2,6 +2,9 @@ import { CONNECTIONS } from "./connectionModel";
 import type { ConnectionId, ConnectionState } from "./connectionModel";
 
 const CONNECTION_IDS = new Set<ConnectionId>(CONNECTIONS.map(({ id }) => id));
+const CONNECTION_SETUP_TARGETS = ["gmail-realtime", "todoist-advanced"] as const;
+
+export type ConnectionSetupTarget = typeof CONNECTION_SETUP_TARGETS[number];
 
 const LEGACY_HASH_ALIASES: Readonly<Record<string, ConnectionId>> = {
   "todoist-setup": "todoist",
@@ -14,6 +17,13 @@ export function connectionIdFromHash(hash: string): ConnectionId | null {
   const value = decodeURIComponent(hash.replace(/^#/, ""));
   if (CONNECTION_IDS.has(value as ConnectionId)) return value as ConnectionId;
   return LEGACY_HASH_ALIASES[value] ?? null;
+}
+
+export function connectionSetupTargetFromSearch(search: string): ConnectionSetupTarget | null {
+  const value = new URLSearchParams(search).get("setup");
+  return CONNECTION_SETUP_TARGETS.includes(value as ConnectionSetupTarget)
+    ? value as ConnectionSetupTarget
+    : null;
 }
 
 export function connectionSummary(rows: ReadonlyArray<{ state: ConnectionState | null }>) {

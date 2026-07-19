@@ -15,9 +15,9 @@ import type { GmailPubSubStatus } from "../../../../shared/types/email";
 import { SETTINGS_PRIMARY_BUTTON_CLASS, SETTINGS_SECONDARY_BUTTON_CLASS } from "../settings-core";
 import { FieldHint, SectionLabel, SettingsCard, StatusPill } from "../settings-ui";
 
-const BUTTON_MOTION = "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
+const BUTTON_MOTION = "min-h-11 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0 sm:min-h-8";
 
-export default function GmailRealtimeCard() {
+export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openAdvancedSetup?: boolean }) {
   const demo = isDemoMode();
   const [status, setStatus] = useState<GmailPubSubStatus | null>(null);
   const [topic, setTopic] = useState("");
@@ -25,6 +25,7 @@ export default function GmailRealtimeCard() {
   const [message, setMessage] = useState<string | null>(null);
   const [revealedCallback, setRevealedCallback] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(openAdvancedSetup);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -39,6 +40,10 @@ export default function GmailRealtimeCard() {
   useEffect(() => {
     if (revealedCallback) closeRef.current?.focus();
   }, [revealedCallback]);
+
+  useEffect(() => {
+    if (openAdvancedSetup) setAdvancedOpen(true);
+  }, [openAdvancedSetup]);
 
   async function run(action: () => Promise<GmailPubSubStatus>, success: string) {
     setBusy(true);
@@ -86,8 +91,12 @@ export default function GmailRealtimeCard() {
           {demo ? <FieldHint>Demo preview — controls are inert.</FieldHint> : null}
         </div>
         {!demo ? (
-          <details className="border-t border-white/[0.06] pt-4">
-            <summary className="-mx-1 cursor-pointer rounded-md px-1 py-1 text-[11px] font-semibold text-muted-foreground transition-[color,background-color] duration-200 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
+          <details
+            open={advancedOpen}
+            onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+            className="border-t border-white/[0.06] pt-4"
+          >
+            <summary id="gmail-realtime-advanced-setup" className="-mx-1 min-h-11 cursor-pointer rounded-md px-1 py-3 text-[11px] font-semibold text-muted-foreground transition-[color,background-color] duration-200 hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-white/[0.06] motion-reduce:transition-none sm:min-h-8 sm:py-2">
               Advanced Pub/Sub setup
             </summary>
             <div className="mt-4 flex flex-col gap-4">
@@ -137,7 +146,7 @@ export default function GmailRealtimeCard() {
               <div className="text-[12px] font-semibold text-foreground">Copy this callback now</div>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">It includes a one-time-visible token and cannot be retrieved after this panel closes.</p>
             </div>
-            <button ref={closeRef} type="button" aria-label="Close callback" onClick={() => { setRevealedCallback(null); setCopyMessage(null); }} className="rounded-md p-1 text-muted-foreground transition-[background-color,color,transform] hover:-translate-y-px hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"><X size={14} /></button>
+            <button ref={closeRef} type="button" aria-label="Close callback" onClick={() => { setRevealedCallback(null); setCopyMessage(null); }} className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 text-muted-foreground transition-[background-color,color,transform] hover:-translate-y-px hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none sm:min-h-8 sm:min-w-8"><X size={14} /></button>
           </div>
           <code className="mt-2 block break-all rounded-md bg-black/20 p-2 font-mono text-[10px] text-foreground">{revealedCallback}</code>
           <div className="mt-2 flex items-center gap-2">
