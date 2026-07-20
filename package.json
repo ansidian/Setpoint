@@ -20,6 +20,7 @@
     "start": "NODE_ENV=production node server/index.ts",
     "db:init": "node server/db/migrate.ts",
     "auth:reset-passkeys": "node server/scripts/reset-passkeys.ts",
+    "security:rotate-encryption-key": "node server/scripts/rotate-encryption-key.ts",
     "lint": "eslint .",
     "typecheck:client": "tsc -p tsconfig.client.json --pretty false",
     "typecheck:server": "tsc -p tsconfig.server.json --pretty false",
