@@ -82,6 +82,9 @@ export function createTodoistOAuthService({
     source: string;
     activeConfigured: boolean;
     pendingConfigured: boolean;
+    pendingStagedAt?: number | null;
+    pendingExpiresAt?: number | null;
+    version?: number | null;
   }>;
   fetchFn?: FetchFunction<OAuthFetchResponse>;
   storeTokenResponse?: (userId: string, response: TodoistTokenResponse) => Promise<unknown>;
@@ -208,6 +211,15 @@ export function createTodoistOAuthService({
         : "disconnected";
     const applicationConfigured = clientId.activeConfigured && clientSecret.activeConfigured;
     const source = clientId.source === clientSecret.source ? clientId.source : "mixed";
+    const candidateVersions = clientId.pendingConfigured && clientSecret.pendingConfigured
+      && Number.isInteger(clientId.version) && Number.isInteger(clientSecret.version)
+      ? { clientId: clientId.version!, clientSecret: clientSecret.version! }
+      : null;
+    const pairTimestampsMatch = candidateVersions !== null
+      && typeof clientId.pendingStagedAt === "number"
+      && clientId.pendingStagedAt === clientSecret.pendingStagedAt
+      && typeof clientId.pendingExpiresAt === "number"
+      && clientId.pendingExpiresAt === clientSecret.pendingExpiresAt;
     return {
       mode,
       configured,
@@ -217,6 +229,9 @@ export function createTodoistOAuthService({
         configured: applicationConfigured,
         source,
         pendingConfigured: clientId.pendingConfigured || clientSecret.pendingConfigured,
+        pendingStagedAt: pairTimestampsMatch ? clientId.pendingStagedAt! : null,
+        pendingExpiresAt: pairTimestampsMatch ? clientId.pendingExpiresAt! : null,
+        candidateVersions,
       },
       callbackUrl,
       webhookUrl,

@@ -3,6 +3,7 @@ import { SiTodoist } from "@icons-pack/react-simple-icons";
 import { disconnectTodoistConnection, saveTodoistPersonalToken } from "@/api";
 import {
   beginTodoistOAuth,
+  discardTodoistOAuthPending,
   getTodoistConnectionStatus,
   importTodoistOAuthEnvironment,
   stageTodoistOAuthApplication,
@@ -29,6 +30,7 @@ import {
   isPasswordStepUpRequired,
   useSensitiveActionStepUp,
 } from "../sensitiveActionStepUpModel";
+import { formatCredentialTimestamp } from "./coreCredentialModel";
 
 const BUTTON_MOTION_CLASS =
   "min-h-11 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0 sm:min-h-8";
@@ -52,6 +54,7 @@ export default function TodoistCard({
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthDiscarding, setOauthDiscarding] = useState(false);
   const [oauthMessage, setOauthMessage] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(openAdvancedSetup);
   const stepUp = useSensitiveActionStepUp();
@@ -180,6 +183,32 @@ export default function TodoistCard({
         setOauthBusy(false);
       }
     }, "copying the Todoist OAuth credentials into Setpoint");
+  }
+
+  async function handleDiscardOAuthApplication() {
+    const candidateVersions = oauthStatus?.application.candidateVersions;
+    if (!candidateVersions) return;
+    await stepUp.run(async () => {
+      setOauthBusy(true);
+      setOauthDiscarding(true);
+      setOauthMessage(null);
+      try {
+        await discardTodoistOAuthPending(candidateVersions);
+        setOauthStatus(await getTodoistConnectionStatus());
+        setOauthMessage("Pending application discarded. The active Todoist connection is unchanged.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setOauthMessage("The pending Todoist application could not be discarded. The active connection is unchanged.");
+        try {
+          setOauthStatus(await getTodoistConnectionStatus());
+        } catch {
+          // Preserve the last redacted status when the refresh is also unavailable.
+        }
+      } finally {
+        setOauthDiscarding(false);
+        setOauthBusy(false);
+      }
+    }, "discarding the pending Todoist application");
   }
 
   async function handleBeginOAuth() {
@@ -320,10 +349,15 @@ export default function TodoistCard({
               delivery to periodic sync.
             </p>
             {oauthStatus ? (
-              <FieldHint>
-                Mode: {oauthStatus.mode.replace("_", " ")} · App credentials: {oauthStatus.application.source}
-                {oauthStatus.application.pendingConfigured ? " (pending validation)" : ""} · Delivery: {oauthStatus.deliveryMode.replace("_", " ")}
-              </FieldHint>
+              <div className="space-y-1">
+                <FieldHint>
+                  Mode: {oauthStatus.mode.replace("_", " ")} · App credentials: {oauthStatus.application.source}
+                  {oauthStatus.application.pendingConfigured ? " (pending validation)" : ""} · Delivery: {oauthStatus.deliveryMode.replace("_", " ")}
+                </FieldHint>
+                {oauthStatus.application.pendingConfigured && oauthStatus.application.pendingExpiresAt !== null ? (
+                  <FieldHint>Pending candidate expires {formatCredentialTimestamp(oauthStatus.application.pendingExpiresAt)}</FieldHint>
+                ) : null}
+              </div>
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -369,6 +403,18 @@ export default function TodoistCard({
               >
                 Connect with OAuth
               </Button>
+              {oauthStatus?.application.pendingConfigured ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
+                  disabled={oauthBusy || credentialActionLocked || !oauthStatus.application.candidateVersions}
+                  onClick={handleDiscardOAuthApplication}
+                >
+                  {oauthDiscarding ? "Discarding…" : "Discard pending"}
+                </Button>
+              ) : null}
               {oauthStatus?.application.source === "environment" ? (
                 <Button
                   size="sm"

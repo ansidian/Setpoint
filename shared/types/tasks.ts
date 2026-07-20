@@ -129,6 +129,9 @@ export interface TodoistConnectionStatus {
     configured: boolean;
     source: "stored" | "environment" | "disabled" | "absent" | "mixed";
     pendingConfigured: boolean;
+    pendingStagedAt: number | null;
+    pendingExpiresAt: number | null;
+    candidateVersions: { clientId: number; clientSecret: number } | null;
   };
   callbackUrl: string;
   webhookUrl: string;

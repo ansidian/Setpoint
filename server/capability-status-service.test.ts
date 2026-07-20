@@ -8,6 +8,8 @@ const metadata = [{
     source: "stored" as const,
     activeConfigured: true,
     pendingConfigured: false,
+    pendingStagedAt: null,
+    pendingExpiresAt: null,
     validationState: "valid" as const,
     lastTestedAt: 100,
     lastSucceededAt: 100,

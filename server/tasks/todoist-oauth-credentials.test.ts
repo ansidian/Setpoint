@@ -9,10 +9,9 @@ import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import { createTodoistOAuthCredentialManager } from "./todoist-oauth-credentials.ts";
 
 const ROOT_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-const migrationSql = readFileSync(
-  path.join(process.cwd(), "server/db/migrations/033_instance_credentials.sql"),
-  "utf8",
-);
+const migrationSql = ["033_instance_credentials.sql", "040_pending_credential_lifecycle.sql"]
+  .map((file) => readFileSync(path.join(process.cwd(), "server/db/migrations", file), "utf8"))
+  .join("\n");
 
 describe("Todoist OAuth credential manager", () => {
   let db: Client;
@@ -95,6 +94,21 @@ describe("Todoist OAuth credential manager", () => {
     expect(await service.resolve("tasks.todoist_client_secret")).toMatchObject({
       source: "stored",
       value: "env-client-secret",
+    });
+  });
+
+  it("discards the Todoist candidate pair at matching versions", async () => {
+    const { manager: todoist } = manager({
+      TODOIST_CLIENT_ID: "env-client-id",
+      TODOIST_CLIENT_SECRET: "env-client-secret",
+    });
+    const staged = await todoist.stageCandidate({ clientId: "candidate-id", clientSecret: "candidate-secret" });
+
+    await todoist.discardCandidate(staged.candidateVersions);
+
+    await expect(todoist.selectForAuthorization()).resolves.toMatchObject({
+      credentials: { clientId: "env-client-id", clientSecret: "env-client-secret" },
+      candidateVersions: null,
     });
   });
 });

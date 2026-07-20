@@ -19,6 +19,8 @@ const INTENTIONALLY_UNHANDLED_NAMES = [
   "createApiToken",
   "disableGoogleOAuthApplication",
   "disableInstanceCredential",
+  "discardGoogleOAuthPending",
+  "discardInstanceCredentialPending",
   "deletePasskeyCredential",
   "disconnectTodoistConnection",
   "extractBillFromEmail",

@@ -14,6 +14,12 @@ export const stageTodoistOAuthApplication = (data: TodoistOAuthApplicationReques
     body: JSON.stringify(data),
   });
 
+export const discardTodoistOAuthPending = (candidateVersions: { clientId: number; clientSecret: number }): Promise<unknown> =>
+  apiFetch("/api/instance-credentials/todoist-oauth/pending", {
+    method: "DELETE",
+    body: JSON.stringify({ candidateVersions }),
+  });
+
 export const importTodoistOAuthEnvironment = (): Promise<unknown> =>
   apiFetch("/api/instance-credentials/todoist-oauth/import-environment", { method: "POST" });
 

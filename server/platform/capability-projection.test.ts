@@ -13,6 +13,8 @@ function credential(
     source: "absent",
     activeConfigured: false,
     pendingConfigured: false,
+    pendingStagedAt: null,
+    pendingExpiresAt: null,
     validationState: "untested",
     lastTestedAt: null,
     lastSucceededAt: null,

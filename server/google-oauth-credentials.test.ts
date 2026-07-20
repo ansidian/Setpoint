@@ -9,10 +9,9 @@ import { createInstanceCredentialStore } from "./platform/instance-credential-st
 import { createGoogleOAuthCredentialManager } from "./google-oauth-credentials.ts";
 
 const ROOT_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-const migrationSql = readFileSync(
-  path.join(process.cwd(), "server/db/migrations/033_instance_credentials.sql"),
-  "utf8",
-);
+const migrationSql = ["033_instance_credentials.sql", "040_pending_credential_lifecycle.sql"]
+  .map((file) => readFileSync(path.join(process.cwd(), "server/db/migrations", file), "utf8"))
+  .join("\n");
 
 describe("Google OAuth credential manager", () => {
   let db: Client;
@@ -129,5 +128,22 @@ describe("Google OAuth credential manager", () => {
     });
     await expect(service.getCredentialMetadata("google.oauth_client_id")).resolves.toMatchObject({ source: "disabled" });
     await expect(service.getCredentialMetadata("google.oauth_client_secret")).resolves.toMatchObject({ source: "disabled" });
+  });
+
+  it("discards the Google candidate pair at matching versions", async () => {
+    const { manager: google, service } = manager({
+      GOOGLE_CLIENT_ID: "env-client-id",
+      GOOGLE_CLIENT_SECRET: "env-client-secret",
+    });
+    const staged = await google.stageCandidate({ clientId: "candidate-id", clientSecret: "candidate-secret" });
+
+    await google.discardCandidate(staged.candidateVersions);
+
+    await expect(google.selectForAuthorization()).resolves.toMatchObject({
+      credentials: { clientId: "env-client-id", clientSecret: "env-client-secret" },
+      candidateVersions: null,
+    });
+    await expect(service.getCredentialMetadata("google.oauth_client_id"))
+      .resolves.toMatchObject({ pendingConfigured: false });
   });
 });

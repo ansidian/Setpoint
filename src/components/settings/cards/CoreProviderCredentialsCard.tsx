@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   disableInstanceCredential,
+  discardInstanceCredentialPending,
   importInstanceCredentialEnvironment,
   stageInstanceCredential,
   testInstanceCredential,
@@ -25,6 +26,7 @@ import {
   credentialErrorMessage,
   credentialStatusView,
   formatCredentialTimestamp,
+  pendingCredentialExpiryLabel,
 } from "./coreCredentialModel";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 import type { SettingsCredentialMetadataProps } from "../settingsTypes";
@@ -170,9 +172,31 @@ function CredentialRow({
         : `restoring the host-managed ${definition.label} credential`);
   }
 
+  async function discardPending() {
+    if (metadata.version === null) return;
+    const expectedVersion = metadata.version;
+    await stepUp.run(async () => {
+      setBusy("discard");
+      setMessage(null);
+      setError(null);
+      try {
+        await discardInstanceCredentialPending(definition.key, expectedVersion);
+        await onRefresh();
+        setMessage("Pending candidate discarded. The active credential is unchanged.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setError("The pending candidate could not be discarded. The active credential is unchanged.");
+        await onRefresh().catch(() => {});
+      } finally {
+        setBusy(null);
+      }
+    }, `discarding the pending ${definition.label} credential`);
+  }
+
   const lastTest = formatCredentialTimestamp(metadata.lastTestedAt);
   const lastSuccess = formatCredentialTimestamp(metadata.lastSucceededAt);
   const lastFailure = formatCredentialTimestamp(metadata.lastFailedAt);
+  const pendingExpiry = pendingCredentialExpiryLabel(metadata);
   return (
     <div className="border-t border-white/[0.05] py-4 first:border-t-0 first:pt-0 last:pb-0">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -216,16 +240,28 @@ function CredentialRow({
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {metadata.pendingConfigured ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
-            disabled={Boolean(busy) || credentialActionLocked}
-            onClick={testPending}
-          >
-            {busy === "test" ? "Testing…" : "Retest pending"}
-          </Button>
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
+              disabled={Boolean(busy) || credentialActionLocked}
+              onClick={testPending}
+            >
+              {busy === "test" ? "Testing…" : "Retest pending"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
+              disabled={Boolean(busy) || credentialActionLocked || metadata.version === null}
+              onClick={discardPending}
+            >
+              {busy === "discard" ? "Discarding…" : "Discard pending"}
+            </Button>
+          </>
         ) : null}
         {metadata.source === "environment" ? (
           <Button
@@ -294,6 +330,7 @@ function CredentialRow({
         </div>
       ) : null}
       <SensitiveActionStepUp state={stepUp} className="mt-3" />
+      {pendingExpiry ? <FieldHint className="mt-2">{pendingExpiry}</FieldHint> : null}
       {lastTest || lastSuccess || lastFailure ? (
         <FieldHint className="mt-2">
           {[

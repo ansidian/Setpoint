@@ -5,6 +5,7 @@ import type { InstanceCredentialMetadata } from "../../../../shared/types/instan
 
 const mockApi = vi.hoisted(() => ({
   disableGoogleOAuthApplication: vi.fn(),
+  discardGoogleOAuthPending: vi.fn(),
   getGmailAuthUrl: vi.fn(),
   getInstanceCredentials: vi.fn(),
   importGoogleOAuthEnvironment: vi.fn(),
@@ -35,6 +36,8 @@ function credential(key: string, overrides: Partial<InstanceCredentialMetadata> 
     lastFailedAt: null,
     errorCode: null,
     version: null,
+    pendingStagedAt: null,
+    pendingExpiresAt: null,
     ...overrides,
   };
 }
@@ -178,5 +181,29 @@ describe("GoogleOAuthCredentialsCard", () => {
     expect(mockSecurity.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
     await waitFor(() => expect(clientId.value).toBe(""));
     expect(clientSecret.value).toBe("");
+  });
+
+  it("shows pair expiry and atomically discards the pending pair after step-up", async () => {
+    const expiresAt = Date.UTC(2026, 6, 21, 18);
+    const active = absent.map((item) => ({ ...item, source: "stored" as const, activeConfigured: true, validationState: "valid" as const, version: item.key.endsWith("client_id") ? 10 : 11 }));
+    const pending = active.map((item) => ({ ...item, pendingConfigured: true, validationState: "pending" as const, pendingStagedAt: expiresAt - 86_400_000, pendingExpiresAt: expiresAt }));
+    mockApi.discardGoogleOAuthPending
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), { code: "PASSWORD_STEP_UP_REQUIRED", status: 403 }))
+      .mockResolvedValueOnce({ credentials: active });
+    mockApi.getInstanceCredentials.mockResolvedValueOnce({ credentials: active, rootKey: {} });
+
+    renderCard(pending);
+    expect(await screen.findByText(/Pending candidate expires/)).toBeTruthy();
+    expect(screen.getByText("Setpoint")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard pending" }));
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.discardGoogleOAuthPending).toHaveBeenCalledTimes(2));
+    expect(mockApi.discardGoogleOAuthPending).toHaveBeenLastCalledWith({ clientId: 10, clientSecret: 11 });
+    await waitFor(() => expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Discard pending" })).toBeNull();
+    expect(screen.getByText("Setpoint")).toBeTruthy();
   });
 });

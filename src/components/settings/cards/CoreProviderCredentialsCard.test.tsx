@@ -5,6 +5,7 @@ import type { InstanceCredentialMetadata } from "../../../../shared/types/instan
 
 const mockApi = vi.hoisted(() => ({
   disableInstanceCredential: vi.fn(),
+  discardInstanceCredentialPending: vi.fn(),
   getInstanceCredentials: vi.fn(),
   importInstanceCredentialEnvironment: vi.fn(),
   stageInstanceCredential: vi.fn(),
@@ -33,6 +34,8 @@ const metadata = (overrides: Partial<InstanceCredentialMetadata> = {}): Instance
   lastFailedAt: null,
   errorCode: null,
   version: null,
+  pendingStagedAt: null,
+  pendingExpiresAt: null,
   ...overrides,
 });
 
@@ -138,6 +141,30 @@ describe("CoreProviderCredentialsCard", () => {
     expect(screen.getByText("Setpoint")).toBeTruthy();
     expect(screen.getByText(/check the value/i)).toBeTruthy();
     expect(input.value).toBe("");
+  });
+
+  it("shows pending expiry and discards only the candidate after password step-up", async () => {
+    const expiresAt = Date.UTC(2026, 6, 21, 18);
+    const pending = metadata({ source: "stored", activeConfigured: true, pendingConfigured: true, pendingStagedAt: expiresAt - 86_400_000, pendingExpiresAt: expiresAt, validationState: "pending", version: 7 });
+    const active = metadata({ source: "stored", activeConfigured: true, validationState: "valid", version: 8 });
+    mockApi.discardInstanceCredentialPending
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), { code: "PASSWORD_STEP_UP_REQUIRED", status: 403 }))
+      .mockResolvedValueOnce(active);
+    mockApi.getInstanceCredentials.mockResolvedValueOnce({ credentials: [active], rootKey: {} });
+
+    renderCard([pending]);
+    expect(await screen.findByText(/Pending candidate expires/)).toBeTruthy();
+    expect(screen.getByText("Setpoint")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard pending" }));
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.discardInstanceCredentialPending).toHaveBeenCalledTimes(2));
+    expect(mockApi.discardInstanceCredentialPending).toHaveBeenLastCalledWith("ai.openai_api_key", 7);
+    await waitFor(() => expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Discard pending" })).toBeNull();
+    expect(screen.getByText("Setpoint")).toBeTruthy();
   });
 
   it("copies an environment value server-side and explains the Render cleanup boundary", async () => {

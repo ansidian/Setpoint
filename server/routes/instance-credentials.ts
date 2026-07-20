@@ -36,6 +36,18 @@ function candidateValue(value: unknown): string | null {
   return value;
 }
 
+function expectedVersion(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function candidateVersions(value: unknown): { clientId: number; clientSecret: number } | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+  const clientId = expectedVersion(input.clientId);
+  const clientSecret = expectedVersion(input.clientSecret);
+  return clientId !== null && clientSecret !== null ? { clientId, clientSecret } : null;
+}
+
 const PROVIDER_OWNED_GROUP_KEYS = new Set([
   "google.oauth_client_id",
   "google.oauth_client_secret",
@@ -76,6 +88,12 @@ export function createInstanceCredentialsRouter(
     return res.json(await googleOAuthManager.stageCandidate({ clientId, clientSecret }));
   });
 
+  router.delete("/google-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
+    const versions = candidateVersions(req.body?.candidateVersions);
+    if (!versions) return res.status(400).json({ message: "Expected Google candidate versions are required" });
+    return res.json({ credentials: await googleOAuthManager.discardCandidate(versions) });
+  });
+
   router.post("/google-oauth/import-environment", requireRecentPasswordAuth, async (_req, res) => {
     return res.json({ credentials: await googleOAuthManager.importEnvironment() });
   });
@@ -95,6 +113,12 @@ export function createInstanceCredentialsRouter(
       return res.status(400).json({ message: "Todoist client ID and client secret are required" });
     }
     return res.json(await todoistOAuthManager.stageCandidate({ clientId, clientSecret }));
+  });
+
+  router.delete("/todoist-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
+    const versions = candidateVersions(req.body?.candidateVersions);
+    if (!versions) return res.status(400).json({ message: "Expected Todoist candidate versions are required" });
+    return res.json({ credentials: await todoistOAuthManager.discardCandidate(versions) });
   });
 
   router.post("/todoist-oauth/import-environment", requireRecentPasswordAuth, async (_req, res) => {
@@ -137,6 +161,13 @@ export function createInstanceCredentialsRouter(
     const value = candidateValue(req.body?.value);
     if (value === null) return res.status(400).json({ message: "Credential value is required" });
     return res.json(await service.stagePending(req.params.key!, value));
+  });
+
+  router.delete("/:key/pending", requireRecentPasswordAuth, async (req, res) => {
+    if (rejectGenericGroupMutation(req.params.key!, res)) return;
+    const version = expectedVersion(req.body?.expectedVersion);
+    if (version === null) return res.status(400).json({ message: "Expected credential version is required" });
+    return res.json(await service.discardPending(req.params.key!, version));
   });
 
   router.post("/:key/test", requireRecentPasswordAuth, async (req, res) => {

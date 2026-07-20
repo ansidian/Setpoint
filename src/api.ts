@@ -482,6 +482,11 @@ export const stageInstanceCredential = (key: string, value: string): Promise<Ins
     method: "PUT",
     body: JSON.stringify({ value }),
   });
+export const discardInstanceCredentialPending = (key: string, expectedVersion: number): Promise<InstanceCredentialMetadata> =>
+  apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/pending`, {
+    method: "DELETE",
+    body: JSON.stringify({ expectedVersion }),
+  });
 export const testInstanceCredential = (key: string): Promise<{
   ok: boolean;
   code: string;
@@ -499,6 +504,12 @@ export const stageGoogleOAuthApplication = (clientId: string, clientSecret: stri
 }> => apiFetch("/api/instance-credentials/google-oauth/pending", {
   method: "PUT",
   body: JSON.stringify({ clientId, clientSecret }),
+});
+export const discardGoogleOAuthPending = (candidateVersions: { clientId: number; clientSecret: number }): Promise<{
+  credentials: InstanceCredentialMetadata[];
+}> => apiFetch("/api/instance-credentials/google-oauth/pending", {
+  method: "DELETE",
+  body: JSON.stringify({ candidateVersions }),
 });
 export const importGoogleOAuthEnvironment = (): Promise<{ credentials: InstanceCredentialMetadata[] }> => apiFetch("/api/instance-credentials/google-oauth/import-environment", { method: "POST" });
 export const disableGoogleOAuthApplication = (): Promise<{ credentials: InstanceCredentialMetadata[] }> => apiFetch("/api/instance-credentials/google-oauth/disable", { method: "POST" });

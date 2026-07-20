@@ -3,6 +3,7 @@ import {
   credentialErrorMessage,
   credentialStatusView,
   formatCredentialTimestamp,
+  pendingCredentialExpiryLabel,
 } from "./coreCredentialModel";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 
@@ -19,6 +20,8 @@ const base: InstanceCredentialMetadata = {
   lastFailedAt: null,
   errorCode: null,
   version: 3,
+  pendingStagedAt: null,
+  pendingExpiresAt: null,
 };
 
 describe("core credential presentation model", () => {
@@ -56,5 +59,15 @@ describe("core credential presentation model", () => {
   it("formats metadata timestamps without exposing credential material", () => {
     expect(formatCredentialTimestamp(base.lastSucceededAt)).toContain("2026");
     expect(formatCredentialTimestamp(null)).toBeNull();
+  });
+
+  it("describes when a pending candidate expires without exposing its value", () => {
+    const expiresAt = Date.UTC(2026, 6, 21, 18);
+    expect(pendingCredentialExpiryLabel({
+      ...base,
+      pendingConfigured: true,
+      pendingExpiresAt: expiresAt,
+    })).toBe(`Pending candidate expires ${formatCredentialTimestamp(expiresAt)}`);
+    expect(pendingCredentialExpiryLabel({ ...base, pendingExpiresAt: expiresAt })).toBeNull();
   });
 });

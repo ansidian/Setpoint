@@ -60,6 +60,8 @@ export function getDemoInstanceCredentialMetadata(): InstanceCredentialMetadataR
         source: activeConfigured ? "stored" as const : "absent" as const,
         activeConfigured,
         pendingConfigured: false,
+        pendingStagedAt: null,
+        pendingExpiresAt: null,
         validationState: activeConfigured ? "valid" as const : "untested" as const,
         lastTestedAt: null,
         lastSucceededAt: null,
