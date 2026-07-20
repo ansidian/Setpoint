@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createAuthTestDb, seedSession } from "../test-utils/auth-db.ts";
+import { createAuthTestDb, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import { createPasskeyStore } from "../auth/passkey-store.ts";
 import { createPendingAuthStore } from "../auth/pending-auth-store.ts";
 import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.ts";
@@ -51,10 +51,14 @@ describe("reset passkeys script", () => {
     await expect(tableCount(db, "ea_pending_auth")).resolves.toBe(0);
     await expect(tableCount(db, "ea_webauthn_challenges")).resolves.toBe(0);
     await expect(tableCount(db, "ea_sessions")).resolves.toBe(0);
+    expect((await db.execute("SELECT auth_mode, security_generation FROM ea_owner")).rows)
+      .toEqual([{ auth_mode: "password_or_passkey", security_generation: 2 }]);
   });
 });
 
 async function seedResetRows(db: Client) {
+  await seedOwner(db, { passwordHash: "hash" });
+  await db.execute("UPDATE ea_owner SET auth_mode = 'password_plus_passkey'");
   await createPasskeyStore(db).createPasskey({
     userId: "user-1",
     credentialId: "credential-1",
@@ -64,11 +68,13 @@ async function seedResetRows(db: Client) {
   await createPendingAuthStore(db).createPendingAuth({
     userId: "user-1",
     token: "pending-token",
+    securityGeneration: 1,
   });
   await createWebAuthnChallengeStore(db).createChallenge({
     userId: "user-1",
     challengeType: "authentication",
     challenge: "challenge",
+    securityGeneration: 1,
   });
   await seedSession(db, "cookie-session");
 }

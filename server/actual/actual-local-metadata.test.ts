@@ -288,10 +288,7 @@ describe("readLocalActualMetadata", () => {
       { timestamp: new Timestamp(2004, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "schedule", value: "S:sched-1" },
       { timestamp: new Timestamp(2005, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "tombstone", value: "N:0" },
     ];
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () => syncResponseBuffer(remoteMessages),
-    });
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(syncResponseBuffer(remoteMessages)));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const syncResult = await syncDownloadedBudget({

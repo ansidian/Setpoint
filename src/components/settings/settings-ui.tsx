@@ -25,7 +25,7 @@ export function StatusPill({ tone = "neutral", className, children }: { tone?: S
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[1.5px] uppercase",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[1.5px] uppercase",
         STATUS_TONE_CLASSES[tone],
         className
       )}
@@ -107,7 +107,7 @@ export function SettingsCard({ id, ready = true, title, icon, description, child
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
             <div className="min-w-0">
               <div id={id ? `${id}-title` : undefined} className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 {title}
@@ -118,7 +118,11 @@ export function SettingsCard({ id, ready = true, title, icon, description, child
                 </p>
               ) : null}
             </div>
-            {headerAction}
+            {headerAction ? (
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                {headerAction}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

@@ -25,6 +25,7 @@ import {
 import { writeFile } from "fs/promises";
 import path from "path";
 import { withActualClockLock } from "./actual-clock-lock.ts";
+import { MAX_ACTUAL_ARCHIVE_BYTES } from "./actual-budget-archive.ts";
 import type { ActualConfig } from "../../shared/types/actual.ts";
 
 interface FetchActualOptions {
@@ -56,6 +57,9 @@ interface DecodedSyncResponse {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_ACTUAL_JSON_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_ACTUAL_SYNC_RESPONSE_BYTES = 64 * 1024 * 1024;
+const MAX_ACTUAL_ERROR_RESPONSE_BYTES = 64 * 1024;
 
 function timeoutMs(): number {
   const value = Number(process.env.EA_ACTUAL_LIGHTWEIGHT_TIMEOUT_MS);
@@ -77,8 +81,9 @@ export async function fetchActualJson<T = unknown>(url: string, { token = null, 
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    text = await response.text();
+    text = (await readBoundedResponseBody(response, MAX_ACTUAL_JSON_RESPONSE_BYTES)).toString("utf8");
   } catch (err: unknown) {
+    if (typeof err === "object" && err !== null && "status" in err) throw err;
     throw Object.assign(new Error(err instanceof Error && err.name === "AbortError"
       ? "Actual Budget lightweight metadata request timed out"
       : "Actual Budget server is unreachable"), { status: 502 });
@@ -105,15 +110,50 @@ export async function fetchActualBuffer(url: string, { token, fileId }: { token:
       },
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const body = await readBoundedResponseBody(response, MAX_ACTUAL_ERROR_RESPONSE_BYTES);
+      const text = body.toString("utf8", 0, 120);
       throw Object.assign(new Error(`Actual Budget file download failed: ${text.slice(0, 120) || response.status}`), {
         status: response.status >= 500 ? 502 : 400,
       });
     }
-    return Buffer.from(await response.arrayBuffer());
+    return readBoundedResponseBody(response, MAX_ACTUAL_ARCHIVE_BYTES);
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<Buffer> {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength && /^\d+$/.test(declaredLength) && Number(declaredLength) > maxBytes) {
+    throw Object.assign(new Error(`Actual Budget file download exceeded the ${maxBytes}-byte limit`), { status: 502 });
+  }
+
+  if (!response.body) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > maxBytes) {
+      throw Object.assign(new Error(`Actual Budget file download exceeded the ${maxBytes}-byte limit`), { status: 502 });
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw Object.assign(new Error(`Actual Budget file download exceeded the ${maxBytes}-byte limit`), { status: 502 });
+      }
+      chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, totalBytes);
 }
 
 export async function loginActual(config: ActualConfig): Promise<string> {
@@ -208,12 +248,13 @@ async function postActualSync(config: ActualConfig, token: string, { metadata, s
       body: buffer,
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => "");
+      const body = await readBoundedResponseBody(response, MAX_ACTUAL_ERROR_RESPONSE_BYTES);
+      const text = body.toString("utf8", 0, 120);
       throw Object.assign(new Error(`Actual Budget lightweight sync failed: ${text.slice(0, 120) || response.status}`), {
         status: response.status >= 500 ? 502 : 400,
       });
     }
-    return decodeSyncResponse(await response.arrayBuffer());
+    return decodeSyncResponse(await readBoundedResponseBody(response, MAX_ACTUAL_SYNC_RESPONSE_BYTES));
   } catch (err: unknown) {
     if (typeof err === "object" && err !== null && "status" in err) throw err;
     throw Object.assign(new Error(err instanceof Error && err.name === "AbortError"

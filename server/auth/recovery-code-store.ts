@@ -62,6 +62,4 @@ export function createRecoveryCodeStore(database: Client = db) {
 }
 
 const recoveryCodeStore = createRecoveryCodeStore();
-export const replaceRecoveryCodes = recoveryCodeStore.replaceRecoveryCodes;
-export const consumeRecoveryCode = recoveryCodeStore.consumeRecoveryCode;
 export const getRecoveryCodeStatus = recoveryCodeStore.getRecoveryCodeStatus;

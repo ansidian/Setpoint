@@ -70,4 +70,18 @@ describe("passkey store", () => {
     await expect(store.deletePasskey("credential-1", "user-1")).resolves.toBe(1);
     await expect(store.countPasskeys("user-1")).resolves.toBe(0);
   });
+
+  it("never regresses an authenticator sign counter", async () => {
+    await store.createPasskey({
+      userId: "user-1",
+      credentialId: "credential-1",
+      label: "Security Key",
+      publicKey: "public-key",
+      signCount: 8,
+    });
+
+    await store.updatePasskeyUsage("credential-1", { signCount: 7 });
+
+    await expect(store.getPasskeyByCredentialId("credential-1")).resolves.toMatchObject({ signCount: 8 });
+  });
 });

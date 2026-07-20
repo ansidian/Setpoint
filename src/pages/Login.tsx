@@ -82,6 +82,10 @@ export default function Login({ onLogin }: LoginProps): ReactElement {
     if (loading || locked) return;
     if (phase === "recovery") {
       if (!recoveryCode || !password) return;
+      if (password.length < 12) {
+        setError("New password must be at least 12 characters");
+        return;
+      }
       if (password !== confirmation) {
         setError("Passwords do not match");
         return;
@@ -233,6 +237,7 @@ export default function Login({ onLogin }: LoginProps): ReactElement {
                         id="recovery-password"
                         type="password"
                         autoComplete="new-password"
+                        minLength={12}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                         disabled={loading}
@@ -246,11 +251,13 @@ export default function Login({ onLogin }: LoginProps): ReactElement {
                         id="recovery-password-confirmation"
                         type="password"
                         autoComplete="new-password"
+                        minLength={12}
                         value={confirmation}
                         onChange={(event) => setConfirmation(event.target.value)}
                         disabled={loading}
                       />
                     </div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground/75">Use at least 12 characters.</p>
                   </div>
                 ) : (
                   <div className="space-y-3 text-left">

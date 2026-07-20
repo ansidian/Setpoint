@@ -8,6 +8,7 @@ import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import {
   createAuthTestDb,
   seedGmailAccount,
+  seedOwner,
   seedSession,
 } from "../test-utils/auth-db.ts";
 import type { AccountSummary } from "../../shared/types/accounts.ts";
@@ -104,6 +105,7 @@ describe("accounts Gmail OAuth binding", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     testState.db.current = await createAuthTestDb();
+    await seedOwner(currentDb(), { passwordHash: "unused-test-hash" });
     await seedSession(currentDb(), "cookie-session");
   });
 
@@ -266,6 +268,7 @@ describe("GET /accounts needs_reauth", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     testState.db.current = await createAuthTestDb();
+    await seedOwner(currentDb(), { passwordHash: "unused-test-hash" });
     await seedSession(currentDb(), "cookie-session");
   });
 

@@ -20,3 +20,5 @@ services:
         sync: false
       - key: EA_ENCRYPTION_KEY
         generateValue: true
+      - key: EA_SETUP_TOKEN
+        generateValue: true

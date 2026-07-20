@@ -57,7 +57,13 @@ beforeEach(() => {
   mockDb.execute.mockImplementation(async ({ sql, args }) => {
     if (sql.includes("FROM ea_sessions")) {
       return args[0] === cookieSessionHash
-        ? { rows: [{ expires_at: Date.now() + 60_000 }] }
+        ? { rows: [{
+            expires_at: Date.now() + 60_000,
+            authenticated_at: 0,
+            password_authenticated_at: 0,
+            security_generation: 1,
+            auth_method: "legacy",
+          }] }
         : { rows: [] };
     }
     return { rows: [] };

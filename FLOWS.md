@@ -156,11 +156,11 @@ Selection path:
 
 **Trigger:** the SPA reads `GET /api/auth/setup/status` before normal session auth. A missing `ea_owner` singleton routes the browser to `/setup`.
 
-1. `src/pages/OwnerSetup.tsx` — prefills the visible browser origin, requires explicit canonical-URL confirmation, confirms the password locally, and sends both to `POST /api/auth/setup/claim`.
-2. `server/auth/owner-claim-service.ts:claimInitialOwner` — rate-limited route work generates a stable UUID and bcrypt hash.
+1. `src/pages/OwnerSetup.tsx` — prefills the visible browser origin, requires the out-of-band deployment setup token, explicit canonical-URL confirmation, and a matching password of at least 12 characters, then sends them to `POST /api/auth/setup/claim`.
+2. `server/routes/auth.ts` — rate-limits the claim and constant-time verifies `EA_SETUP_TOKEN` before any owner write; the token is never persisted or returned. `server/auth/owner-claim-service.ts:claimInitialOwner` then generates a stable UUID and bcrypt hash.
 3. `server/auth/owner-store.ts:claimOwner` — one write transaction uses `INSERT OR IGNORE` against singleton key `1` and persists the confirmed origin in separate `ea_instance_metadata`; the uniqueness invariant admits one concurrent claimant and all others receive the fixed conflict.
 4. `server/auth/recovery-code-store.ts:replaceRecoveryCodes` — generates eight high-entropy offline recovery codes, persists only SHA-256 hashes, and returns plaintext only in the successful claim response.
-5. `server/middleware/auth.ts:createSession` — persists only the hashed session token plus its recent-auth timestamp; the successful browser receives the raw token in an HttpOnly cookie.
+5. `server/middleware/auth.ts:createSession` — persists only the hashed session token plus authentication method, password-proof timestamp, and owner security generation; insertion succeeds only while that generation is current. The successful browser receives the raw token in an HttpOnly cookie.
 6. `server/auth/owner-context.ts:activateOwner` — exposes the claimed ID to remaining single-owner runtime modules and notifies startup gating.
 7. `server/auth/owner-runtime.ts:createOwnerRuntimeGate` — starts schedulers and provider workers once, only after a stored or newly claimed owner exists.
 
@@ -168,15 +168,19 @@ Selection path:
 
 **Canonical origin:** `server/platform/canonical-url.ts` imports compatible legacy WebAuthn/Google callback values only when they identify one origin. Persisted state then drives WebAuthn RP values and Google, Todoist, Gmail Pub/Sub, and webhook callback projections. Security Settings previews affected passkeys and callback registrations before a recent-auth-gated change; request headers never write canonical state.
 
-**Pre-claim boundary:** `server/middleware/owner-gate.ts` returns a fixed setup-required response for non-setup APIs. `GET /healthz` remains successful and reports only readiness plus the non-secret claimed boolean. Demo mode resolves setup as already claimed and rejects claim mutations locally without a network call.
+**Pre-claim boundary:** `server/middleware/owner-gate.ts` returns a fixed setup-required response for non-setup APIs. `GET /healthz` remains successful and reports readiness only; `GET /api/auth/setup/status` is the explicit setup-state endpoint. Demo mode resolves setup as already claimed and rejects claim mutations locally without a network call.
 
 ## 8. Owner sign-in, step-up, and offline recovery
 
 **Normal mode:** `ea_owner.auth_mode = password_or_passkey`. A valid password issues a session directly. Passkey options may instead create a short-lived `ea_pending_auth` binding, and successful WebAuthn verification consumes its challenge before issuing the same session type. Registering a passkey does not change this mode.
 
-**Strict mode:** the owner explicitly changes `auth_mode` to `password_plus_passkey` through a recent-auth-protected Security action. Password login then creates pending auth and WebAuthn completes the session. Mode, password, passkey, recovery-code, and powerful API-token mutations require `ea_sessions.authenticated_at` to be within ten minutes.
+**Strict mode:** the owner explicitly changes `auth_mode` to `password_plus_passkey` through a recent-password-protected Security action. Password login then creates generation-bound pending auth and WebAuthn completes the session. Mode, password, passkey, recovery-code, canonical-origin, and powerful API-token mutations require `ea_sessions.password_authenticated_at` to be within ten minutes. A passkey-only session cannot cross that boundary; password confirmation failures are counted and blocked in the durable session row.
 
-**Recovery:** `POST /api/auth/recovery` rate-limits and atomically consumes one unused recovery-code hash. Success replaces the password, returns mode to password-or-passkey, clears passkeys, pending auth, WebAuthn challenges, and prior sessions, issues a fresh session, and returns a newly generated recovery-code set exactly once.
+**Security transitions:** each sensitive mutation compare-and-swaps `ea_owner.security_generation` inside the same write transaction as the credential change, then clears every browser session plus owner pending-auth and WebAuthn state. The initiating browser receives a new generation-bound session after commit. Atomic `DELETE ... RETURNING` consumption prevents concurrent reuse of a challenge or pending-auth token.
+
+**Security Settings unlock:** the System section never treats the server's remaining recent-auth window as permission to reopen sensitive password, passkey, recovery, or auth-mode controls. `PasskeysCard` starts locally locked on every mount, so switching Settings sections, navigating away and back, or refreshing requires the dashboard password again. A `pagehide` lock also clears sensitive drafts and one-time recovery-code display before a browser back/forward-cache restore. The ten-minute server window remains the request-authorization boundary only while the current section visit is open.
+
+**Recovery:** `POST /api/auth/recovery` rate-limits and atomically consumes one unused recovery-code hash. Success replaces the password, returns mode to password-or-passkey, clears passkeys, pending auth, WebAuthn challenges, prior sessions, and API tokens in one security transition, issues a fresh non-password-provenance session, and returns a newly generated recovery-code set exactly once.
 
 ## 9. Todoist personal token → optional OAuth and webhooks
 

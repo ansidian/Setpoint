@@ -67,18 +67,32 @@ export default function PasskeysCard() {
 
   useEffect(() => {
     let cancelled = false;
+    function lockForPageLeave() {
+      setRecentAuth(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordConfirmation("");
+      setRevealedCodes(null);
+      setConfirmingCredentialId(null);
+      setActionError(null);
+      setBusyAction(null);
+    }
+
+    window.addEventListener("pagehide", lockForPageLeave);
     listPasskeys()
       .then((result) => {
         if (cancelled) return;
         setPasskeys(result.passkeys || []);
         setAuthMode(result.authMode || "password_or_passkey");
-        setRecentAuth(Boolean(result.recentAuth));
         setRecovery(result.recovery || emptyRecovery);
       })
       .catch((error) => {
         if (!cancelled) setLoadError(errorMessage(error, "Failed to load sign-in settings"));
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pagehide", lockForPageLeave);
+    };
   }, []);
 
   async function handleUnlock(event: FormEvent<HTMLFormElement>) {
@@ -134,10 +148,8 @@ export default function PasskeysCard() {
     }
   }
 
-  async function handleModeChange() {
-    const nextMode: OwnerAuthMode = authMode === "password_plus_passkey"
-      ? "password_or_passkey"
-      : "password_plus_passkey";
+  async function handleModeChange(nextMode: OwnerAuthMode) {
+    if (nextMode === authMode || busyAction) return;
     setBusyAction("mode");
     setActionError(null);
     try {
@@ -154,6 +166,10 @@ export default function PasskeysCard() {
   async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!newPassword || busyAction) return;
+    if (newPassword.length < 12) {
+      setActionError("New password must be at least 12 characters");
+      return;
+    }
     if (newPassword !== passwordConfirmation) {
       setActionError("New passwords do not match");
       return;
@@ -189,17 +205,13 @@ export default function PasskeysCard() {
   const loadedPasskeys = passkeys || [];
   const hasPasskeys = loadedPasskeys.length > 0;
   const strictMode = authMode === "password_plus_passkey";
+  const modeBusy = busyAction === "mode";
 
   return (
     <SettingsCard
       title="Sign-in & recovery"
       icon={<Fingerprint size={14} />}
-      description="Choose password-or-passkey access, or explicitly require both. Security changes need recent password confirmation."
-      headerAction={(
-        <StatusPill tone={strictMode ? "success" : "neutral"}>
-          {strictMode ? "Password + passkey" : "Password or passkey"}
-        </StatusPill>
-      )}
+      description="Choose password-or-passkey access, or explicitly require both. Confirm your password each time you open this section."
     >
       <div className="flex flex-col gap-4">
         <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-3">
@@ -214,6 +226,78 @@ export default function PasskeysCard() {
             </div>
           </div>
         </div>
+
+        {passkeys !== null && !loadError ? (
+          <fieldset className="rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-3">
+            <legend className="px-1 text-[12px] font-medium text-foreground">Sign-in mode</legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <label className={cn(
+                "flex min-h-11 items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-[background-color,border-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-primary/30 motion-reduce:transition-none",
+                !strictMode
+                  ? "border-primary/25 bg-primary/[0.08]"
+                  : "border-white/[0.08] bg-white/[0.02]",
+                recentAuth && !modeBusy
+                  ? "cursor-pointer hover:border-white/[0.14] hover:bg-white/[0.04] active:bg-white/[0.06]"
+                  : "cursor-not-allowed",
+              )}>
+                <input
+                  type="radio"
+                  name="owner-auth-mode"
+                  value="password_or_passkey"
+                  checked={!strictMode}
+                  disabled={!recentAuth || modeBusy}
+                  aria-describedby="sign-in-mode-help"
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--sp-accent)]"
+                  onChange={() => handleModeChange("password_or_passkey")}
+                />
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-medium text-foreground">Password or passkey</span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground/75">Either method can sign you in.</span>
+                </span>
+              </label>
+
+              <label className={cn(
+                "flex min-h-11 items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-[background-color,border-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-primary/30 motion-reduce:transition-none",
+                strictMode
+                  ? "border-primary/25 bg-primary/[0.08]"
+                  : "border-white/[0.08] bg-white/[0.02]",
+                recentAuth && hasPasskeys && !modeBusy
+                  ? "cursor-pointer hover:border-white/[0.14] hover:bg-white/[0.04] active:bg-white/[0.06]"
+                  : "cursor-not-allowed",
+                !hasPasskeys && "opacity-60",
+              )}>
+                <input
+                  type="radio"
+                  name="owner-auth-mode"
+                  value="password_plus_passkey"
+                  checked={strictMode}
+                  disabled={!recentAuth || !hasPasskeys || modeBusy}
+                  aria-describedby="sign-in-mode-help"
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--sp-accent)]"
+                  onChange={() => handleModeChange("password_plus_passkey")}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
+                    <ShieldCheck size={12} className="shrink-0 text-primary/75" />
+                    Password + passkey
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground/75">Require both at every login.</span>
+                </span>
+              </label>
+            </div>
+            <div id="sign-in-mode-help">
+              <FieldHint className="mt-2">
+                {!recentAuth
+                  ? "Confirm your password below to change this mode."
+                  : !hasPasskeys
+                    ? "Add at least one passkey before requiring both factors."
+                    : modeBusy
+                      ? "Saving sign-in mode…"
+                      : "Changes apply to future sign-ins."}
+              </FieldHint>
+            </div>
+          </fieldset>
+        ) : null}
 
         {loadError ? (
           <FieldHint className="text-danger">{loadError}</FieldHint>
@@ -237,25 +321,10 @@ export default function PasskeysCard() {
                 {busyAction === "unlock" ? "Unlocking…" : "Unlock security changes"}
               </Button>
             </div>
-            <FieldHint className="mt-2">Confirmation stays valid for ten minutes.</FieldHint>
+            <FieldHint className="mt-2">Unlocked until you leave the System section.</FieldHint>
           </form>
         ) : (
           <>
-            {hasPasskeys ? (
-              <div className={cn(SURFACE_ROW_CLASS, "flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center")}>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-medium text-foreground">Sign-in mode</div>
-                  <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground/75">
-                    {strictMode ? "Both factors are required at every login." : "Either your password or any registered passkey can sign you in."}
-                  </div>
-                </div>
-                <Button size="sm" variant="secondary" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)} disabled={busyAction === "mode"} onClick={handleModeChange}>
-                  <ShieldCheck size={12} />
-                  {strictMode ? "Allow password or passkey" : "Require password + passkey"}
-                </Button>
-              </div>
-            ) : null}
-
             <form onSubmit={handleRegister} className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <SectionLabel htmlFor="new-passkey-label">New passkey label</SectionLabel>
@@ -320,13 +389,30 @@ export default function PasskeysCard() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <SectionLabel htmlFor="new-owner-password">New password</SectionLabel>
-                  <Input id="new-owner-password" type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={busyAction === "password"} />
+                  <Input
+                    id="new-owner-password"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    disabled={busyAction === "password"}
+                  />
                 </div>
                 <div>
                   <SectionLabel htmlFor="confirm-owner-password">Confirm new password</SectionLabel>
-                  <Input id="confirm-owner-password" type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} disabled={busyAction === "password"} />
+                  <Input
+                    id="confirm-owner-password"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    value={passwordConfirmation}
+                    onChange={(event) => setPasswordConfirmation(event.target.value)}
+                    disabled={busyAction === "password"}
+                  />
                 </div>
               </div>
+              <FieldHint className="mt-2">Use at least 12 characters.</FieldHint>
               <Button type="submit" size="sm" className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION_CLASS, "mt-3")} disabled={!newPassword || !passwordConfirmation || busyAction === "password"}>
                 {busyAction === "password" ? "Changing…" : "Change password"}
               </Button>

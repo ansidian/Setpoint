@@ -12,7 +12,7 @@ describe("owner store", () => {
 
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
-    for (const migration of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "031_auth_recovery.sql", "032_canonical_url.sql"]) {
+    for (const migration of ["001_ea_tables.sql", "012_passkey_auth.sql", "030_owner_bootstrap.sql", "031_auth_recovery.sql", "032_canonical_url.sql", "038_auth_security_generation.sql"]) {
       await db.executeMultiple(readFileSync(join(__dirname, `../db/migrations/${migration}`), "utf8"));
     }
   });
@@ -26,6 +26,7 @@ describe("owner store", () => {
     await expect(store.getOwner()).resolves.toMatchObject({
       authMode: "password_plus_passkey",
       passwordHash: "hash-b",
+      securityGeneration: 1,
     });
   });
 

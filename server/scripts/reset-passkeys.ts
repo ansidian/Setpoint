@@ -24,7 +24,7 @@ export function parseArgs(args: string[] = process.argv.slice(2)): Required<Rese
 }
 
 export async function runPasskeyReset(
-  database: Pick<Client, "execute"> = db,
+  database: Pick<Client, "execute" | "transaction"> = db,
   options: ResetOptions = parseArgs(),
 ) {
   if (!options.dryRun && !options.confirm) {
@@ -41,8 +41,21 @@ export async function runPasskeyReset(
     return { dryRun: true, counts };
   }
 
-  for (const table of PASSKEY_RESET_TABLES) {
-    await database.execute(`DELETE FROM ${table}`);
+  const tx = await database.transaction("write");
+  try {
+    await tx.execute(`UPDATE ea_owner
+                         SET auth_mode = 'password_or_passkey',
+                             security_generation = security_generation + 1
+                       WHERE singleton_id = 1`);
+    for (const table of PASSKEY_RESET_TABLES) {
+      await tx.execute(`DELETE FROM ${table}`);
+    }
+    await tx.commit();
+  } catch (error) {
+    if (!tx.closed) await tx.rollback().catch(() => {});
+    throw error;
+  } finally {
+    tx.close();
   }
 
   return { dryRun: false, counts };

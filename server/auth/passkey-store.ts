@@ -17,6 +17,7 @@ export type StoredPasskeyCredential = {
 };
 
 export type PasskeyMetadata = Omit<StoredPasskeyCredential, "publicKey">;
+type PasskeyDb = Pick<Client, "execute">;
 
 type CreatePasskeyInput = Partial<{
   userId: string;
@@ -86,7 +87,7 @@ export function toPasskeyMetadata(credential: StoredPasskeyCredential | null): P
   return metadata;
 }
 
-export function createPasskeyStore(database: Client = db) {
+export function createPasskeyStore(database: PasskeyDb = db) {
   async function countPasskeys(userId: string) {
     const result = await database.execute({
       sql: "SELECT COUNT(*) AS count FROM ea_passkey_credentials WHERE user_id = ?",
@@ -166,7 +167,7 @@ export function createPasskeyStore(database: Client = db) {
     const assignments = ["last_used_at = ?"];
     const args: Value[] = [lastUsedAt];
     if (signCount !== undefined) {
-      assignments.push("sign_count = ?");
+      assignments.push("sign_count = MAX(sign_count, ?)");
       args.push(Number(signCount));
     }
     if (transports !== undefined) {
@@ -222,6 +223,4 @@ export const countPasskeys = passkeyStore.countPasskeys;
 export const listPasskeys = passkeyStore.listPasskeys;
 export const listPasskeyMetadata = passkeyStore.listPasskeyMetadata;
 export const getPasskeyByCredentialId = passkeyStore.getPasskeyByCredentialId;
-export const createPasskey = passkeyStore.createPasskey;
 export const updatePasskeyUsage = passkeyStore.updatePasskeyUsage;
-export const deletePasskey = passkeyStore.deletePasskey;

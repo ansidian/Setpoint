@@ -14,7 +14,13 @@ describe("owner bootstrap", () => {
 
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
-    for (const migration of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "031_auth_recovery.sql"]) {
+    for (const migration of [
+      "001_ea_tables.sql",
+      "012_passkey_auth.sql",
+      "030_owner_bootstrap.sql",
+      "031_auth_recovery.sql",
+      "038_auth_security_generation.sql",
+    ]) {
       await db.executeMultiple(readFileSync(join(__dirname, `../db/migrations/${migration}`), "utf8"));
     }
   });

@@ -56,6 +56,7 @@ vi.mock("../db/connection.ts", () => ({
       statements: Parameters<Client["batch"]>[0],
       mode?: TransactionMode,
     ) => currentDb().batch(statements, mode),
+    transaction: (mode?: TransactionMode) => currentDb().transaction(mode),
   },
 }));
 vi.mock("@simplewebauthn/server", () => webAuthnMocks);
@@ -64,8 +65,9 @@ const authPasswordHash = bcrypt.hashSync("correct-password", 4);
 process.env.NODE_ENV = "test";
 process.env.EA_USER_ID = "user-1";
 process.env.EA_PASSWORD_HASH = authPasswordHash;
+process.env.EA_SETUP_TOKEN = "test-setup-token-with-at-least-32-characters";
 const authRoutes = (await import("./auth.ts")).default;
-const { requireCookieSession, __clearSessionValidationCache } = await import("../middleware/auth.ts");
+const { requireCookieSession } = await import("../middleware/auth.ts");
 
 function makeApp() {
   const app = express();
@@ -86,10 +88,6 @@ describe("auth routes", () => {
   beforeEach(async () => {
     testState.db.current = await createAuthTestDb();
     await seedOwner(currentDb(), { passwordHash: authPasswordHash });
-    // P2-27: validateSession now memoizes positive results in a module-level cache;
-    // clear it between tests so each starts from a clean DB-backed state (otherwise
-    // a prior test's cached "cookie-session" masks this test's DB-error path).
-    __clearSessionValidationCache();
     // Full reset (not mockClear) so any sibling-leaked implementation/return on
     // these shared webAuthn fns is wiped, then reinstate this file's defaults.
     // mockClear only resets call history and would carry a leaked mockResolvedValue
@@ -108,6 +106,7 @@ describe("auth routes", () => {
     process.env.NODE_ENV = "test";
     process.env.EA_USER_ID = "user-1";
     process.env.EA_PASSWORD_HASH = authPasswordHash;
+    process.env.EA_SETUP_TOKEN = "test-setup-token-with-at-least-32-characters";
   });
 
   it("exposes only whether public setup is still available", async () => {
@@ -124,7 +123,7 @@ describe("auth routes", () => {
 
     const res = await request(makeApp())
       .post("/api/auth/setup/claim")
-      .send({ password: "new-owner-password", canonicalOrigin: "https://setpoint.example.com" });
+      .send({ setupToken: process.env.EA_SETUP_TOKEN, password: "new-owner-password", canonicalOrigin: "https://setpoint.example.com" });
     const ownerResult = await currentDb().execute(
       "SELECT user_id, password_hash, claimed_at FROM ea_owner",
     );
@@ -151,7 +150,7 @@ describe("auth routes", () => {
 
     const res = await request(makeApp())
       .post("/api/auth/setup/claim")
-      .send({ password: "new-owner-password", canonicalOrigin: "http://attacker.example.com/path" });
+      .send({ setupToken: process.env.EA_SETUP_TOKEN, password: "new-owner-password", canonicalOrigin: "http://attacker.example.com/path" });
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "Canonical URL is invalid" });
@@ -164,7 +163,7 @@ describe("auth routes", () => {
 
     const res = await request(makeApp())
       .post("/api/auth/setup/claim")
-      .send({ password: "replacement-password", canonicalOrigin: "https://setpoint.example.com" });
+      .send({ setupToken: process.env.EA_SETUP_TOKEN, password: "replacement-password", canonicalOrigin: "https://setpoint.example.com" });
     const after = await currentDb().execute("SELECT * FROM ea_owner");
 
     expect(res.status).toBe(409);
@@ -177,8 +176,8 @@ describe("auth routes", () => {
     const app = makeApp();
 
     const responses = await Promise.all([
-      request(app).post("/api/auth/setup/claim").send({ password: "first-owner-password", canonicalOrigin: "https://first.example.com" }),
-      request(app).post("/api/auth/setup/claim").send({ password: "second-owner-password", canonicalOrigin: "https://second.example.com" }),
+      request(app).post("/api/auth/setup/claim").send({ setupToken: process.env.EA_SETUP_TOKEN, password: "first-owner-password", canonicalOrigin: "https://first.example.com" }),
+      request(app).post("/api/auth/setup/claim").send({ setupToken: process.env.EA_SETUP_TOKEN, password: "second-owner-password", canonicalOrigin: "https://second.example.com" }),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
@@ -248,6 +247,38 @@ describe("auth routes", () => {
     expect(res.body.token).toMatch(/^eatk_/);
     expect(tokens.rows).toHaveLength(1);
     expect(tokens.rows[0]!.label).toBe("Phone");
+  });
+
+  it("does not allow a fresh instance to be claimed without the deployment setup secret", async () => {
+    await currentDb().execute("DELETE FROM ea_owner");
+
+    const res = await request(makeApp())
+      .post("/api/auth/setup/claim")
+      .send({
+        setupToken: "wrong-setup-token-with-at-least-32-characters",
+        password: "new-owner-password",
+        canonicalOrigin: "https://setpoint.example.com",
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ message: "Setup token is invalid" });
+    expect((await currentDb().execute("SELECT * FROM ea_owner")).rows).toEqual([]);
+  });
+
+  it("does not authorize security mutations from a recent passkey-only session", async () => {
+    await seedSession(currentDb(), "passkey-session", Date.now() + 60_000, Date.now(), {
+      authMethod: "passkey",
+      passwordAuthenticatedAt: 0,
+    });
+
+    const res = await request(makeApp())
+      .post("/api/auth/api-tokens")
+      .set("Cookie", ["ea_session=passkey-session"])
+      .send({ label: "Persistence", scopes: ["actual:write"] });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ code: "PASSWORD_STEP_UP_REQUIRED" });
+    expect((await currentDb().execute("SELECT * FROM ea_api_tokens")).rows).toEqual([]);
   });
 
   it("creates a session and recommends setup when no passkeys exist", async () => {
@@ -330,7 +361,7 @@ describe("auth routes", () => {
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ authMode: "password_plus_passkey" });
     expect(blocked.status).toBe(403);
-    expect(blocked.body).toMatchObject({ code: "STEP_UP_REQUIRED" });
+    expect(blocked.body).toMatchObject({ code: "PASSWORD_STEP_UP_REQUIRED" });
 
     const stepUp = await request(makeApp())
       .post("/api/auth/security/step-up/password")
@@ -346,6 +377,31 @@ describe("auth routes", () => {
     expect(enabled.body).toMatchObject({ authMode: "password_plus_passkey" });
     const owner = await currentDb().execute("SELECT auth_mode FROM ea_owner");
     expect(owner.rows[0]!.auth_mode).toBe("password_plus_passkey");
+  });
+
+  it("persistently throttles repeated password step-up failures for the session", async () => {
+    await seedSession(currentDb(), "cookie-session");
+    const app = makeApp();
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const failed = await request(app)
+        .post("/api/auth/security/step-up/password")
+        .set("Cookie", ["ea_session=cookie-session"])
+        .send({ password: "wrong-password" });
+      expect(failed.status).toBe(401);
+    }
+
+    const blocked = await request(app)
+      .post("/api/auth/security/step-up/password")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ password: "wrong-password" });
+    expect(blocked.status).toBe(429);
+
+    const stillBlocked = await request(app)
+      .post("/api/auth/security/step-up/password")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ password: "correct-password" });
+    expect(stillBlocked.status).toBe(429);
   });
 
   it("changes the owner password only with recent auth and rotates prior sessions", async () => {
@@ -399,9 +455,13 @@ describe("auth routes", () => {
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ canonicalOrigin: "https://new.example.com" });
     expect(blocked.status).toBe(403);
-    expect(blocked.body).toMatchObject({ code: "STEP_UP_REQUIRED" });
+    expect(blocked.body).toMatchObject({ code: "PASSWORD_STEP_UP_REQUIRED" });
 
-    await currentDb().execute("UPDATE ea_sessions SET authenticated_at = ?", [Date.now()]);
+    const stepUp = await request(makeApp())
+      .post("/api/auth/security/step-up/password")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ password: "correct-password" });
+    expect(stepUp.status).toBe(200);
     const changed = await request(makeApp())
       .patch("/api/auth/security/canonical-origin")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -418,7 +478,16 @@ describe("auth routes", () => {
     await seedSession(currentDb(), "old-session", Date.now() + 60_000, Date.now());
     await seedPasskey();
     await currentDb().execute("UPDATE ea_owner SET auth_mode = 'password_plus_passkey'");
-    await createPendingAuthStore(currentDb()).createPendingAuth({ userId: "user-1", token: "pending-token" });
+    await createPendingAuthStore(currentDb()).createPendingAuth({
+      userId: "user-1",
+      token: "pending-token",
+      securityGeneration: 1,
+    });
+    await currentDb().execute({
+      sql: `INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at)
+            VALUES (?, 'Phone', '["actual:write"]', 1, 9999999999999)`,
+      args: [hashApiToken("surviving-token")],
+    });
 
     const recovered = await request(makeApp())
       .post("/api/auth/recovery")
@@ -439,6 +508,7 @@ describe("auth routes", () => {
       sql: "SELECT * FROM ea_sessions WHERE token = ?",
       args: [hashSessionToken("old-session")],
     })).rows).toEqual([]);
+    expect((await currentDb().execute("SELECT * FROM ea_api_tokens")).rows).toEqual([]);
 
     const replay = await request(makeApp())
       .post("/api/auth/recovery")

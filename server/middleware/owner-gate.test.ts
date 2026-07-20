@@ -34,6 +34,7 @@ describe("claimed-instance API gate", () => {
       userId: "owner-1",
       passwordHash: "not-exposed",
       authMode: "password_or_passkey",
+      securityGeneration: 1,
       claimedAt: 1,
     });
 
