@@ -37,6 +37,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **Trigger:** Gmail Pub/Sub push (POST `/api/gmail/push` → `server/routes/gmail-push.ts`) durably enqueues a history sync via `server/email/gmail-sync.ts:enqueueHistorySyncFromPubSub`, acknowledges the webhook, then requests an immediate coalesced drain via `server/scheduler.ts:requestGmailHistorySyncDrain`; the per-minute cron remains the reliability fallback.
 
+0. `server/email/gmail-pubsub.ts:verifyToken` — performs one narrow shared-database hash/tombstone read for every delivery, hashes the candidate, and compares fixed-length hashes with `timingSafeEqual`; no TTL cache is used, so rotation/revocation is immediate across processes and restarts. Database failure returns a retryable `503` without queueing work or logging token material.
 1. `server/email/gmail-sync.ts:processNextGmailHistorySyncJob` — claims a queued job, loads the account
 2. `server/email/gmail-sync.ts:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state
 3. `server/email/email-index.ts:indexEmails` — parses and writes emails into `ea_email_index`
@@ -181,6 +182,8 @@ Selection path:
 **Security Settings unlock:** the System section never treats the server's remaining recent-auth window as permission to reopen sensitive password, passkey, recovery, or auth-mode controls. `PasskeysCard` starts locally locked on every mount, so switching Settings sections, navigating away and back, or refreshing requires the dashboard password again. A `pagehide` lock also clears sensitive drafts and one-time recovery-code display before a browser back/forward-cache restore. The ten-minute server window remains the request-authorization boundary only while the current section visit is open.
 
 **Recovery:** `POST /api/auth/recovery` rate-limits and atomically consumes one unused recovery-code hash. Success replaces the password, returns mode to password-or-passkey, clears passkeys, pending auth, WebAuthn challenges, prior sessions, and API tokens in one security transition, issues a fresh non-password-provenance session, and returns a newly generated recovery-code set exactly once.
+
+**Pending provider credentials:** write-only candidates expire 24 hours after staging. Registry reads lazily prune stale values, while tests, promotions, and OAuth callbacks compare the exact candidate version and require its expiry to remain in the future. Google and Todoist app pairs are one atomic candidate: either both values remain current or both expire/discard together. Recent-password-protected discard endpoints are version-bound and remove only the pending candidate, preserving the active stored or environment-backed connection and returning metadata only.
 
 ## 9. Todoist personal token → optional OAuth and webhooks
 

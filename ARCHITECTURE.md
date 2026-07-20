@@ -113,8 +113,7 @@ src/
 │   ├── email/
 │   └── settings/
 ├── lib/
-├── pages/
-└── test/
+└── pages/
 
 server/
 ├── actual/
@@ -416,6 +415,14 @@ Production WebAuthn configuration prefers the persisted canonical HTTPS origin, 
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
 
+### Gmail Pub/Sub callback threat model
+
+The callback credential is a 256-bit random bearer token whose lifetime lasts until the owner generates, imports, revokes, or switches away from it. Setpoint persists only its SHA-256 hash (or an explicit disabled tombstone); the one-time generated callback URL is the only response that contains a newly generated plaintext token. Callback verification hashes the candidate in-process and uses a fixed-length `timingSafeEqual` comparison against the stored hash.
+
+Every callback performs one narrow authoritative read of `push_token_hash` and `token_disabled` from the shared database. There is intentionally no TTL or process-local verification cache: a cache would delay revocation and rotation, let application instances disagree, and repopulate inconsistently after restart. Consequently, generation, environment-token import, revocation, and switching to the host token take effect on the next callback across all instances and survive restarts without a local invalidation protocol. A database read failure fails closed with a retryable `503`; callback logs and database query arguments contain neither plaintext tokens nor ciphertext.
+
+Generating or importing a token invalidates the previous Setpoint credential immediately, but Google Pub/Sub subscription configuration is external. Until the subscription's push endpoint is updated to the newly returned callback URL, deliveries using the old URL fail authorization and rely on Pub/Sub retry plus the periodic Gmail reconciliation path. Operators should therefore rotate the external subscription promptly and treat the one-time callback URL as a secret.
+
 ## Current Dashboard Pipeline
 
 Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
@@ -665,7 +672,7 @@ erDiagram
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
 | `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
-| `ea_instance_credentials` | `033_instance_credentials.sql` |
+| `ea_instance_credentials` | `033_instance_credentials.sql`, `040_pending_credential_lifecycle.sql` |
 | `ea_instance_metadata` | `032_canonical_url.sql` |
 | `ea_news_items` | `026_news.sql` |
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
@@ -702,7 +709,15 @@ The active dashboard is served from current snapshot, triage, cache, and provide
 
 ### Encryption at Rest
 
-All stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY`. Format: `gcm:iv:ciphertext:authTag`.
+All new stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY` and the explicit format `gcm:v2:iv:ciphertext:authTag`. GCM additional authenticated data binds each value to its table, logical field, and primary-key identity, so ciphertext moved to another credential record or field fails authentication. Instance-credential active and pending slots intentionally share the same logical credential-key context because promotion atomically moves the encrypted candidate between those slots. Existing unversioned `gcm:iv:ciphertext:authTag` values remain read-only compatible until an operator completes root-key rotation; every normal write and rotation output emits v2.
+
+`npm run security:rotate-encryption-key` is the dry-run-first offline rotation tool. It inventories and verifies every encrypted field without writing by default. `--apply --confirm-offline` re-encrypts the complete inventory inside one write transaction using `EA_ENCRYPTION_KEY_NEXT`, verifies every replacement before commit, and rolls back on any error or concurrent row change. Runtime decryption remains single-key and fail-closed; there is no old-key fallback that could conceal a partial rotation.
+
+### Pending Credential Lifecycle
+
+Write-only credential candidates expire 24 hours after staging. Dedicated `pending_staged_at` and `pending_expires_at` fields keep candidate lifetime separate from connection history; metadata responses expose only those timestamps and opaque versions, never values. Reads prune expired candidates transactionally, and promotion, provider tests, and OAuth callbacks require the exact unexpired version that initiated the operation. Google and Todoist application credential pairs expire, discard, test, and promote atomically.
+
+Settings provides an explicit recent-password-protected discard action. Discard is version-bound so a stale browser cannot remove a newer candidate, preserves the active stored or environment-backed credential, and leaves historical success/failure timestamps intact. Migration 040 gives already-pending candidates the same bounded lifetime using their last recorded update as the compatibility anchor.
 
 ### Graceful Degradation
 
@@ -837,6 +852,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/instance-credentials/` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/disable` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/import-environment` | `server/routes/instance-credentials.ts` |
+| DELETE | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/test` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/:key/use-host` | `server/routes/instance-credentials.ts` |
@@ -849,9 +865,11 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/instance-credentials/gmail-pubsub/use-host-token` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/google-oauth/disable` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/google-oauth/import-environment` | `server/routes/instance-credentials.ts` |
+| DELETE | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/google-oauth/use-host` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/todoist-oauth/import-environment` | `server/routes/instance-credentials.ts` |
+| DELETE | `/api/instance-credentials/todoist-oauth/pending` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/todoist-oauth/pending` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |
@@ -991,7 +1009,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-dom
 | GET | `/api/briefing/actual/categories` | Category tree |
 | POST | `/api/briefing/actual/test` | Test connection |
 
-Remote cache hydration streams the archive through a 128 MiB download cap, validates its central directory, entry count, compression methods, and declared expanded sizes before `adm-zip` sees it, and accepts only a path-safe local budget identifier. The in-process SDK loads that validated on-disk budget and does not receive a remote ZIP directly.
+Remote cache hydration streams the archive through a 128 MiB download cap, then uses the bounded Node reader in `actual-budget-archive.ts` to validate its central and local headers, entry count, stored/deflate methods, actual expanded sizes, and CRCs before returning only `db.sqlite` and `metadata.json`. It accepts only a path-safe local budget identifier. The in-process SDK loads that validated on-disk budget and does not receive a remote ZIP directly.
 
 ### Accounts & Settings
 
