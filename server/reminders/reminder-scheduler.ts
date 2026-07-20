@@ -2,6 +2,7 @@ import db from "../db/connection.ts";
 import type { Client } from "@libsql/client";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import { formatDiscordReminderPayload, sendDiscordWebhook } from "./discord-reminders.ts";
 import type { DiscordWebhookPayload } from "./discord-reminders.ts";
 import { computeReminderState } from "./reminder-model.ts";
@@ -97,7 +98,7 @@ export async function processDueReminderBatch({
   now = new Date(),
   limit = 10,
   dbClient = db,
-  decryptFn = decrypt,
+  decryptFn,
   sendFn = null,
 }: ProcessDueReminderBatchOptions = {}): Promise<ReminderBatchResult> {
   const nowIso = new Date(now).toISOString();
@@ -119,7 +120,9 @@ export async function processDueReminderBatch({
   };
   const getDiscordWebhookUrl = (userId: string, encrypted: string): string => {
     if (webhookByUser.has(userId)) return webhookByUser.get(userId)!;
-    const url = decryptFn(encrypted);
+    const url = decryptFn
+      ? decryptFn(encrypted)
+      : decrypt(encrypted, settingsCredentialContext(userId, "discord_webhook_url_encrypted"));
     webhookByUser.set(userId, url);
     return url;
   };

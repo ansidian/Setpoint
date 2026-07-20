@@ -8,6 +8,7 @@ import {
   createEncryption,
   getRootKeyHealth,
 } from "./encryption.ts";
+import { instanceCredentialContext } from "./credential-encryption-context.ts";
 import {
   getInstanceCredentialDefinition,
   listInstanceCredentialDefinitions,
@@ -96,7 +97,7 @@ export function createInstanceCredentialService({
     const key = requireKey(inputKey);
     const record = await store.get(key);
     if (record?.activeValueEncrypted) {
-      return { key, source: "stored", value: encryption.decrypt(record.activeValueEncrypted) };
+      return { key, source: "stored", value: encryption.decrypt(record.activeValueEncrypted, instanceCredentialContext(key)) };
     }
     if (record?.disabled) return { key, source: "disabled", value: null };
     const fallback = environmentValue(key, environment);
@@ -108,7 +109,7 @@ export function createInstanceCredentialService({
     const key = requireKey(inputKey);
     const record = await store.get(key);
     if (!record?.pendingValueEncrypted) return null;
-    return { value: encryption.decrypt(record.pendingValueEncrypted), version: record.version };
+    return { value: encryption.decrypt(record.pendingValueEncrypted, instanceCredentialContext(key)), version: record.version };
   }
 
   function metadataFor(
@@ -142,8 +143,9 @@ export function createInstanceCredentialService({
     if (!health.valid) return { ...health, decryptability: "unavailable" };
     try {
       for (const record of records) {
-        if (record.activeValueEncrypted) encryption.decrypt(record.activeValueEncrypted);
-        if (record.pendingValueEncrypted) encryption.decrypt(record.pendingValueEncrypted);
+        const context = instanceCredentialContext(record.key);
+        if (record.activeValueEncrypted) encryption.decrypt(record.activeValueEncrypted, context);
+        if (record.pendingValueEncrypted) encryption.decrypt(record.pendingValueEncrypted, context);
       }
       return { ...health, decryptability: "ok" };
     } catch {
@@ -171,7 +173,7 @@ export function createInstanceCredentialService({
 
   async function stagePending(inputKey: string, value: string): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
-    const record = await store.stagePending(key, encryption.encrypt(value));
+    const record = await store.stagePending(key, encryption.encrypt(value, instanceCredentialContext(key)));
     publish({ key, reason: "pending_staged" });
     return metadataFor(key, record);
   }
@@ -181,7 +183,7 @@ export function createInstanceCredentialService({
   ): Promise<InstanceCredentialMetadata[]> {
     const supported = entries.map((entry) => ({
       key: requireKey(entry.key),
-      encryptedValue: encryption.encrypt(entry.value),
+      encryptedValue: encryption.encrypt(entry.value, instanceCredentialContext(requireKey(entry.key))),
     }));
     const records = await store.stagePendingGroup(supported);
     for (const record of records) publish({ key: record.key, reason: "pending_staged" });
@@ -252,7 +254,7 @@ export function createInstanceCredentialService({
     const key = requireKey(inputKey);
     const value = environmentValue(key, environment);
     if (value === null) throw new HostCredentialUnavailableError();
-    const record = await store.importActive(key, encryption.encrypt(value));
+    const record = await store.importActive(key, encryption.encrypt(value, instanceCredentialContext(key)));
     publish({ key, reason: "environment_imported" });
     return metadataFor(key, record);
   }
@@ -262,7 +264,7 @@ export function createInstanceCredentialService({
       const key = requireKey(inputKey);
       const value = environmentValue(key, environment);
       if (value === null) throw new HostCredentialUnavailableError();
-      return { key, encryptedValue: encryption.encrypt(value) };
+      return { key, encryptedValue: encryption.encrypt(value, instanceCredentialContext(key)) };
     });
     const records = await store.importActiveGroup(entries);
     for (const record of records) publish({ key: record.key, reason: "environment_imported" });

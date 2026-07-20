@@ -3,6 +3,7 @@ import type { RequestHandler } from "express";
 import type { Value } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import { geocodeLocation } from "../platform/weather.ts";
 import { initScheduler } from "../scheduler.ts";
 import {
@@ -304,7 +305,12 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
         return res.status(400).json({ message: validation.message! });
       }
       updates.push("discord_webhook_url_encrypted = ?");
-      args.push(validation.value ? encrypt(validation.value) : null);
+      args.push(validation.value
+        ? encrypt(
+            validation.value,
+            settingsCredentialContext(userId, "discord_webhook_url_encrypted"),
+          )
+        : null);
     }
     if (discord_user_id !== undefined) {
       const trimmedUserId = String(discord_user_id || "").trim();

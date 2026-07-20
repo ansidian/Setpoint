@@ -1,6 +1,7 @@
 import { simpleParser } from "mailparser";
 import db from "../db/connection.ts";
 import { encrypt, decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { htmlToPlainText } from "./html-to-text.ts";
 import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
@@ -172,7 +173,7 @@ export async function handleCallback(
       userId,
       email,
       canonical?.label || email,
-      encrypt(JSON.stringify(credentials)),
+      encrypt(JSON.stringify(credentials), accountCredentialContext(targetAccountId)),
       nextSort,
     ],
   });
@@ -181,8 +182,10 @@ export async function handleCallback(
 }
 
 async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
-  const credentials = JSON.parse(decrypt(account.credentials_encrypted)) as GmailCredentials;
   const canonicalAccountId = account.canonical_id || account.id;
+  const credentials = JSON.parse(
+    decrypt(account.credentials_encrypted, accountCredentialContext(canonicalAccountId)),
+  ) as GmailCredentials;
 
   // Refresh if the token expires within 5 minutes. Treat a non-finite/null
   // expires_at as already-expired so a malformed stored credential forces a
@@ -221,7 +224,10 @@ async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
 
     await db.execute({
       sql: `UPDATE ea_accounts SET credentials_encrypted = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [encrypt(JSON.stringify(credentials)), canonicalAccountId],
+      args: [
+        encrypt(JSON.stringify(credentials), accountCredentialContext(canonicalAccountId)),
+        canonicalAccountId,
+      ],
     });
 
     if (account.needs_reauth) {

@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { fetchEmailsInRange as fetchGmailEmailsInRange } from "./gmail.ts";
 import { fetchEmailsInRange as fetchIcloudEmailsInRange } from "./icloud.ts";
 import { indexEmails, queueEmailIndexBackfill } from "./email-index.ts";
@@ -196,7 +197,7 @@ async function fetchProviderWindow(account: ConfiguredEmailAccount, _state: Back
     // unbounded array into memory (P3-46).
     return fetchIcloudEmailsInRange(
       account,
-      decrypt(account.credentials_encrypted),
+      decrypt(account.credentials_encrypted, accountCredentialContext(account.id)),
       {
         start: window.start!,
         end: window.end!,

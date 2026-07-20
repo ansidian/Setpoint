@@ -1,5 +1,9 @@
 import db from "../db/connection.ts";
 import { decrypt, encrypt } from "../platform/encryption.ts";
+import {
+  settingsCredentialContext,
+  type EncryptedSettingsField,
+} from "../platform/credential-encryption-context.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { isInvalidGrantError, markTodoistNeedsReauth, clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import type { Client } from "@libsql/client";
@@ -60,12 +64,20 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function encrypted(value: string | null | undefined): string | null {
-  return value ? encrypt(value) : null;
+function encrypted(
+  value: string | null | undefined,
+  userId: string,
+  field: EncryptedSettingsField,
+): string | null {
+  return value ? encrypt(value, settingsCredentialContext(userId, field)) : null;
 }
 
-function decrypted(value: string | null | undefined): string | null {
-  return value ? decrypt(value) : null;
+function decrypted(
+  value: string | null | undefined,
+  userId: string,
+  field: EncryptedSettingsField,
+): string | null {
+  return value ? decrypt(value, settingsCredentialContext(userId, field)) : null;
 }
 
 function expiresAtFromResponse(response: TodoistOAuthTokenResponse, now: Date): string | null {
@@ -166,7 +178,7 @@ async function persistTodoistOAuthTokenResponse(userId: string, response: Todois
 }): Promise<{ accessToken: string; expiresAt: string | null }> {
   const expiresAt = expiresAtFromResponse(response, now);
   const refreshTokenEncrypted = response.refresh_token
-    ? encrypted(response.refresh_token)
+    ? encrypted(response.refresh_token, userId, "todoist_oauth_refresh_token_encrypted")
     : existingRefreshTokenEncrypted;
 
   await dbClient.execute({
@@ -179,7 +191,7 @@ async function persistTodoistOAuthTokenResponse(userId: string, response: Todois
               todoist_connection_mode = 'oauth'
           WHERE user_id = ?`,
     args: [
-      encrypted(response.access_token),
+      encrypted(response.access_token, userId, "todoist_api_token_encrypted"),
       refreshTokenEncrypted,
       expiresAt,
       response.scope || null,
@@ -228,7 +240,11 @@ export async function getTodoistApiToken(userId: string, {
 } = {}): Promise<string | null> {
   const settings = await loadTodoistTokenSettings(userId, dbClient);
   if (!settings) return null;
-  const accessToken = decrypted(settings?.todoist_api_token_encrypted);
+  const accessToken = decrypted(
+    settings?.todoist_api_token_encrypted,
+    userId,
+    "todoist_api_token_encrypted",
+  );
   if (!accessToken) return null;
 
   const refreshTokenEncrypted = settings?.todoist_oauth_refresh_token_encrypted || null;
@@ -249,7 +265,11 @@ export async function getTodoistApiToken(userId: string, {
           }
         : await todoistOAuthCredentialManager.resolveActive();
     response = await refreshTodoistOAuthToken({
-      refreshToken: decrypted(refreshTokenEncrypted),
+      refreshToken: decrypted(
+        refreshTokenEncrypted,
+        userId,
+        "todoist_oauth_refresh_token_encrypted",
+      ),
       credentials,
       fetchFn,
     });

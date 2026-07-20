@@ -9,6 +9,30 @@ export type RootKeyHealth = {
   fingerprint: string | null;
 };
 
+export type CredentialEncryptionContext = Readonly<{
+  table: string;
+  field: string;
+  recordId: string;
+}>;
+
+export function credentialEncryptionContext(
+  table: string,
+  field: string,
+  recordId: string,
+): CredentialEncryptionContext {
+  return { table, field, recordId };
+}
+
+function aadFor(context: CredentialEncryptionContext): Buffer {
+  return Buffer.from(JSON.stringify([
+    "setpoint-credential",
+    2,
+    context.table,
+    context.field,
+    context.recordId,
+  ]), "utf8");
+}
+
 export function parseRootEncryptionKey(value: string | undefined): Buffer {
   if (!value) throw new Error("EA_ENCRYPTION_KEY not set");
   if (/^[a-fA-F0-9]{64}$/.test(value)) return Buffer.from(value, "hex");
@@ -43,16 +67,17 @@ export function createEncryption(
     return parseRootEncryptionKey(getRootKey());
   }
 
-  function encryptValue(plaintext: string) {
+  function encryptValue(plaintext: string, context: CredentialEncryptionContext) {
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv("aes-256-gcm", key(), iv);
+    cipher.setAAD(aadFor(context));
     let encrypted = cipher.update(plaintext, "utf8", "hex");
     encrypted += cipher.final("hex");
     const authTag = cipher.getAuthTag();
-    return "gcm:" + iv.toString("hex") + ":" + encrypted + ":" + authTag.toString("hex");
+    return "gcm:v2:" + iv.toString("hex") + ":" + encrypted + ":" + authTag.toString("hex");
   }
 
-  function decryptValue(ciphertext: string) {
+  function decryptValue(ciphertext: string, context: CredentialEncryptionContext) {
     const rootKey = key();
     if (!ciphertext.startsWith("gcm:")) {
       throw new Error(
@@ -61,8 +86,14 @@ export function createEncryption(
     }
     try {
       const parts = ciphertext.split(":");
-      if (parts.length !== 4) throw new Error(DECRYPTION_ERROR_MESSAGE);
-      const [, ivHex, encryptedHex, authTagHex] = parts;
+      const versioned = parts[1] === "v2";
+      if ((!versioned && parts.length !== 4) || (versioned && parts.length !== 5)) {
+        throw new Error(DECRYPTION_ERROR_MESSAGE);
+      }
+      const [, maybeVersion, maybeIv, maybeEncrypted, maybeTag] = parts;
+      const ivHex = versioned ? maybeIv : maybeVersion;
+      const encryptedHex = versioned ? maybeEncrypted : maybeIv;
+      const authTagHex = versioned ? maybeTag : maybeEncrypted;
       if (!/^[a-f0-9]{24}$/i.test(ivHex!) || !/^[a-f0-9]*$/i.test(encryptedHex!) || !/^[a-f0-9]{32}$/i.test(authTagHex!)) {
         throw new Error(DECRYPTION_ERROR_MESSAGE);
       }
@@ -71,6 +102,7 @@ export function createEncryption(
         rootKey,
         Buffer.from(ivHex!, "hex"),
       );
+      if (versioned) decipher.setAAD(aadFor(context));
       decipher.setAuthTag(Buffer.from(authTagHex!, "hex"));
       let decrypted = decipher.update(encryptedHex!, "hex", "utf8");
       decrypted += decipher.final("utf8");

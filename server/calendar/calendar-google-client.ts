@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { decrypt, encrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.ts";
 import type {
@@ -125,7 +126,9 @@ async function getAccountCredentials(account: StoredCalendarAccount): Promise<Ca
     throwCalendarError(400, "calendar_auth_missing", "Calendar credentials are missing for this account");
   }
   try {
-    return JSON.parse(decrypt(account.credentials_encrypted)) as CalendarCredentials;
+    return JSON.parse(
+      decrypt(account.credentials_encrypted, accountCredentialContext(account.id)),
+    ) as CalendarCredentials;
   } catch {
     throwCalendarError(500, "calendar_auth_invalid", "Calendar credentials could not be read");
   }
@@ -136,7 +139,7 @@ async function persistCredentials(accountId: string, credentials: CalendarCreden
     sql: `UPDATE ea_accounts
           SET credentials_encrypted = ?, updated_at = datetime('now')
           WHERE id = ?`,
-    args: [encrypt(JSON.stringify(credentials)), accountId],
+    args: [encrypt(JSON.stringify(credentials), accountCredentialContext(accountId)), accountId],
   });
 }
 

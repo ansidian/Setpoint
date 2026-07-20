@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import {
   formatGenericDiscordTestPayload,
   sendDiscordWebhook,
@@ -67,7 +68,10 @@ router.post("/settings/discord-reminder-test", async (_req: Request, res: Respon
       discordUserId: settings.discord_user_id == null ? null : String(settings.discord_user_id),
     });
     const delivery = await sendDiscordWebhook(
-      decrypt(String(settings.discord_webhook_url_encrypted)),
+      decrypt(
+        String(settings.discord_webhook_url_encrypted),
+        settingsCredentialContext(userId, "discord_webhook_url_encrypted"),
+      ),
       payload,
     );
     if (delivery.ok) {

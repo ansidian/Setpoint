@@ -1,6 +1,7 @@
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import { fetchTodoistSyncResources } from "./todoist-api.ts";
 
 type TodoistPersonalTokenValidator = (token: string) => Promise<unknown>;
@@ -27,7 +28,10 @@ export async function saveTodoistPersonalTokenCandidate(
   tokenValue: string,
   {
     dbClient = db,
-    encryptValue = encrypt,
+    encryptValue = (value) => encrypt(
+      value,
+      settingsCredentialContext(userId, "todoist_api_token_encrypted"),
+    ),
     validateToken = validateTodoistPersonalToken,
     now = new Date(),
   }: {

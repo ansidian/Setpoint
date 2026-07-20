@@ -11,14 +11,16 @@ describe("root key health", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.executeMultiple(`
-      CREATE TABLE ea_accounts (credentials_encrypted TEXT);
+      CREATE TABLE ea_accounts (id TEXT PRIMARY KEY, credentials_encrypted TEXT);
       CREATE TABLE ea_settings (
+        user_id TEXT PRIMARY KEY,
         actual_budget_password_encrypted TEXT,
         todoist_api_token_encrypted TEXT,
         todoist_oauth_refresh_token_encrypted TEXT,
         discord_webhook_url_encrypted TEXT
       );
       CREATE TABLE ea_instance_credentials (
+        credential_key TEXT PRIMARY KEY,
         active_value_encrypted TEXT,
         pending_value_encrypted TEXT
       );
@@ -28,7 +30,7 @@ describe("root key health", () => {
   afterEach(() => db.close());
 
   it("fails closed with a fixed error when existing ciphertext is not decryptable", async () => {
-    await db.execute("INSERT INTO ea_accounts (credentials_encrypted) VALUES ('gcm:bad')");
+    await db.execute("INSERT INTO ea_accounts (id, credentials_encrypted) VALUES ('account-1', 'gcm:bad')");
     const service = createRootKeyHealthService({
       dbClient: db,
       environment: { EA_ENCRYPTION_KEY: ROOT_KEY },

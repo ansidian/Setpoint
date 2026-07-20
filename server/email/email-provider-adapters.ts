@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import {
   fetchEmailBody as fetchGmailBody,
   markAsRead as gmailMarkAsRead,
@@ -132,7 +133,10 @@ async function resolveProviderAdapter(
   const found = await findAccountByUid(userId, uid);
   if (!found?.account) throw notFoundError(uid);
   if (found.type === "icloud") {
-    const password = decrypt(found.account.credentials_encrypted);
+    const password = decrypt(
+      found.account.credentials_encrypted,
+      accountCredentialContext(found.account.id),
+    );
     return {
       type: "icloud",
       account: found.account,

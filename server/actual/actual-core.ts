@@ -1,5 +1,6 @@
 import actualApi from "@actual-app/api";
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import { filterBillSchedulesForRange } from "./actual-bill-occurrences.ts";
 import {
   actualDataDir,
@@ -115,7 +116,10 @@ async function getActualConfig(userId: string): Promise<ActualConfig> {
   return {
     serverURL: String(settings.actual_budget_url).replace(/\/+$/, ""),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(String(settings.actual_budget_password_encrypted))
+      ? decrypt(
+          String(settings.actual_budget_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+        )
       : null,
     syncId: String(settings.actual_budget_sync_id),
   };
