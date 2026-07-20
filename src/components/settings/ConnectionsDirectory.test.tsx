@@ -143,7 +143,7 @@ describe("ConnectionsDirectory", () => {
     expect((screen.getByLabelText("Credential candidate") as HTMLInputElement).value).toBe("");
   });
 
-  it("offers to continue only persisted in-progress onboarding work", () => {
+  it("keeps a return to onboarding available until the checklist is finished", () => {
     const inProgress: OnboardingProgress = {
       version: 1,
       status: "in_progress",
@@ -166,7 +166,8 @@ describe("ConnectionsDirectory", () => {
         />
       </BrowserRouter>,
     );
-    expect(screen.queryByRole("link", { name: "Continue setup" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Continue setup" }).getAttribute("href"))
+      .toBe("/onboarding?step=email_calendar");
   });
 
   it("does not reopen finished onboarding when a connection later breaks", () => {

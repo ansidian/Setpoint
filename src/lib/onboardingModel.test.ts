@@ -90,13 +90,16 @@ describe("onboarding model", () => {
     });
   });
 
-  it("continues only persisted in-progress onboarding work", () => {
+  it("always offers a return to the active step while onboarding is unfinished", () => {
     expect(onboardingContinueHref({
       ...progress,
       steps: { email_calendar: "reviewed", ai: "reviewed" },
     })).toBe("/onboarding?step=email_calendar");
-    expect(onboardingContinueHref({ ...progress, steps: {} })).toBeNull();
-    expect(onboardingContinueHref({ ...progress, steps: { advanced_delivery: "skipped" } })).toBeNull();
+    expect(onboardingContinueHref({ ...progress, steps: {} })).toBe("/onboarding?step=email_calendar");
+    expect(onboardingContinueHref({ ...progress, steps: { email_calendar: "completed" } }))
+      .toBe("/onboarding?step=ai");
+    expect(onboardingContinueHref({ ...progress, steps: { advanced_delivery: "skipped" } }))
+      .toBe("/onboarding?step=email_calendar");
     expect(onboardingContinueHref({
       ...progress,
       status: "complete",

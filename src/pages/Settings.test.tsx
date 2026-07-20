@@ -50,18 +50,20 @@ vi.mock("@/components/settings/sections/ConnectionsSettingsSection", () => ({
       return () => window.clearTimeout(timer);
     }, [targetReady]);
     return (
-      <div
-        id="todoist"
-        tabIndex={-1}
-        aria-busy={!targetReady}
-        data-settings-target-ready={targetReady ? "true" : "false"}
-        data-onboarding-status={onboardingProgress?.status ?? "loading"}
-        data-testid="settings-connections-section"
-      >
-        connections section
-        <details open>
-          <summary id="todoist-advanced-setup">Advanced OAuth and webhooks</summary>
-        </details>
+      <div data-settings-flash-container data-testid="settings-connection-card">
+        <div
+          id="todoist"
+          tabIndex={-1}
+          aria-busy={!targetReady}
+          data-settings-target-ready={targetReady ? "true" : "false"}
+          data-onboarding-status={onboardingProgress?.status ?? "loading"}
+          data-testid="settings-connections-section"
+        >
+          connections section
+          <details open>
+            <summary id="todoist-advanced-setup">Advanced OAuth and webhooks</summary>
+          </details>
+        </div>
       </div>
     );
   },
@@ -171,8 +173,9 @@ describe("Settings page", () => {
     window.dispatchEvent(new Event("scrollend"));
 
     await waitFor(() => {
-      expect(target.getAttribute("data-settings-target-active")).toBe("true");
+      expect(screen.getByTestId("settings-connection-card").getAttribute("data-settings-target-active")).toBe("true");
     });
+    expect(target.getAttribute("data-settings-target-active")).toBeNull();
   });
 
   it("focuses the requested Advanced setup disclosure instead of the service row", async () => {
