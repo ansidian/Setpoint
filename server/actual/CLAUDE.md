@@ -21,7 +21,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actualMetadataModel.ts` — pure derivation: Actual date coercion, rule-condition normalization, schedule classification, and the metadata projection
 - `actualMetadataCacheStore.ts` — filesystem cache ops: locate the budget dir by sync id, prune zip backups, summarize disk usage
 - `actualMetadataSync.ts` — lightweight metadata sync engine: HTTP login/download, protobuf sync POST, and CRDT-message apply under the clock lock
-- `actual-budget-archive.ts` — hostile-archive boundary for lightweight downloads: compressed/expanded size, entry-count, structure, encryption, compression-method, and path-safe budget-ID checks before `adm-zip` parsing or filesystem writes
+- `actual-budget-archive.ts` — bounded native stored/deflate reader for lightweight downloads: validates compressed/expanded size, entry count, local/central structure, encryption, CRC, and path-safe budget IDs, and returns only `db.sqlite` plus `metadata.json`
 - `actual-metadata-projection.ts` — DB projection of Actual metadata with TTL for fast reads
 - `actual-bill-occurrences.ts` — expands Actual schedules into dated bill occurrences with paid status
 - `actual-amount-condition.ts` — single source of truth for interpreting an Actual `amount` schedule condition (scalar cents vs `isbetween` range)

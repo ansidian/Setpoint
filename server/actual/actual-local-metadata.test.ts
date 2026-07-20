@@ -1,4 +1,5 @@
 import { mkdir, readFile, readdir, utimes, writeFile } from "fs/promises";
+import { crc32 } from "node:zlib";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
@@ -24,9 +25,53 @@ import {
   readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
 import { syncDownloadedBudget } from "./actualMetadataSync.ts";
+import { encrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 
 let tempDir: string | null = null;
 const originalFetch = global.fetch;
+const originalEncryptionKey = process.env.EA_ENCRYPTION_KEY;
+
+function storedZip(entries: Array<{ name: string; data: Buffer; checksum?: number }>): Buffer {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let localOffset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name);
+    const checksum = entry.checksum ?? crc32(entry.data);
+    const local = Buffer.alloc(30 + name.length + entry.data.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(entry.data.length, 18);
+    local.writeUInt32LE(entry.data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    name.copy(local, 30);
+    entry.data.copy(local, 30 + name.length);
+
+    const central = Buffer.alloc(46 + name.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(entry.data.length, 20);
+    central.writeUInt32LE(entry.data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(localOffset, 42);
+    name.copy(central, 46);
+    localParts.push(local);
+    centralParts.push(central);
+    localOffset += local.length;
+  }
+  const centralDirectory = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(localOffset, 16);
+  return Buffer.concat([...localParts, centralDirectory, end]);
+}
 
 function settingsDbClient({ encryptedPassword = null }: { encryptedPassword?: string | null } = {}) {
   return {
@@ -203,6 +248,8 @@ beforeEach(() => {
 afterEach(async () => {
   vi.useRealTimers();
   global.fetch = originalFetch;
+  if (originalEncryptionKey === undefined) delete process.env.EA_ENCRYPTION_KEY;
+  else process.env.EA_ENCRYPTION_KEY = originalEncryptionKey;
   if (tempDir) await removeTempDir(tempDir);
   tempDir = null;
 });
@@ -451,6 +498,39 @@ describe("readLocalActualMetadata", () => {
       backupPrune: { removed: 2, kept: 1 },
     });
     expect(result.dbSizeBytes).toBeGreaterThan(0);
+  });
+
+  it("does not write hydration files when the downloaded archive fails validation", async () => {
+    tempDir = await createTestTempDir("actual-local-");
+    process.env.EA_ENCRYPTION_KEY = "11".repeat(32);
+    const encryptedPassword = encrypt(
+      "password-1",
+      settingsCredentialContext("u1", "actual_budget_password_encrypted"),
+    );
+    const archive = storedZip([
+      { name: "db.sqlite", data: Buffer.from("corrupt"), checksum: 123 },
+      { name: "metadata.json", data: Buffer.from('{"id":"Budget-Remote"}') },
+    ]);
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/account/login")) return Response.json({ data: { token: "token-1" } });
+      if (url.endsWith("/sync/list-user-files")) {
+        return Response.json({ data: [{ groupId: "sync-123", fileId: "file-1" }] });
+      }
+      if (url.endsWith("/sync/get-user-file-info")) {
+        return Response.json({ status: "ok", data: { encryptMeta: false } });
+      }
+      if (url.endsWith("/sync/download-user-file")) return new Response(archive);
+      throw new Error(`Unexpected Actual request: ${url}`);
+    }) as typeof fetch;
+
+    await expect(hydrateLocalActualCache("u1", {
+      dbClient: settingsDbClient({ encryptedPassword }),
+      dataDir: tempDir,
+      forceDownload: true,
+    })).rejects.toThrow(/CRC/);
+
+    await expect(readdir(tempDir)).resolves.toEqual([]);
   });
 
   it("keeps only the newest local Actual zip backup for a budget", async () => {
