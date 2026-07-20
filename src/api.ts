@@ -476,8 +476,7 @@ export const getSettings = (): Promise<SettingsResponse> => apiFetch("/api/ea/se
 export const getCapabilities = (refresh = false): Promise<CapabilityStatusResponse> => (
   apiFetch(`/api/capabilities${refresh ? "?refresh=1" : ""}`)
 );
-export const getInstanceCredentials = (): Promise<InstanceCredentialMetadataResponse> =>
-  apiFetch("/api/instance-credentials");
+export const getInstanceCredentials = (): Promise<InstanceCredentialMetadataResponse> => apiFetch("/api/instance-credentials");
 export const stageInstanceCredential = (key: string, value: string): Promise<InstanceCredentialMetadata> =>
   apiFetch(`/api/instance-credentials/${encodeURIComponent(key)}/pending`, {
     method: "PUT",
@@ -501,6 +500,9 @@ export const stageGoogleOAuthApplication = (clientId: string, clientSecret: stri
   method: "PUT",
   body: JSON.stringify({ clientId, clientSecret }),
 });
+export const importGoogleOAuthEnvironment = (): Promise<{ credentials: InstanceCredentialMetadata[] }> => apiFetch("/api/instance-credentials/google-oauth/import-environment", { method: "POST" });
+export const disableGoogleOAuthApplication = (): Promise<{ credentials: InstanceCredentialMetadata[] }> => apiFetch("/api/instance-credentials/google-oauth/disable", { method: "POST" });
+export const useHostGoogleOAuthApplication = (): Promise<{ credentials: InstanceCredentialMetadata[] }> => apiFetch("/api/instance-credentials/google-oauth/use-host", { method: "POST" });
 export const updateSettings = (data: SettingsPatchRequest): Promise<SettingsMutationResponse> => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
 export const testDiscordReminderWebhook = (): Promise<DiscordReminderTestResponse> => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
 export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderListOptions = {}): Promise<ReminderListResponse> => {

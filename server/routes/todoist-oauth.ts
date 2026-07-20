@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { Router } from "express";
 import type { CookieOptions, Response } from "express";
-import { hashToken, requireCookieSession } from "../middleware/auth.ts";
+import { hashToken, requireCookieSession, requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import {
   disconnectTodoistConnection,
@@ -77,7 +77,7 @@ export function createTodoistOAuthRouter(
     }
   });
 
-  router.get("/accounts/todoist/auth", requireCookieSession, async (_req, res) => {
+  router.get("/accounts/todoist/auth", requireRecentPasswordAuth, async (_req, res) => {
     const browserBind = randomBind();
     const result = await service.beginAuthorization(process.env.EA_USER_ID!, hashToken(browserBind));
     res.cookie(BIND_COOKIE, browserBind, bindCookieOptions());
@@ -88,7 +88,7 @@ export function createTodoistOAuthRouter(
     return res.json(await service.getStatus(process.env.EA_USER_ID!));
   });
 
-  router.post("/accounts/todoist/personal-token", requireCookieSession, async (req, res) => {
+  router.post("/accounts/todoist/personal-token", requireRecentPasswordAuth, async (req, res) => {
     const token = typeof req.body?.token === "string" ? req.body.token : "";
     if (!token.trim()) {
       return res.status(400).json({ message: "Todoist personal token is required" });
@@ -103,7 +103,7 @@ export function createTodoistOAuthRouter(
     }
   });
 
-  router.delete("/accounts/todoist/connection", requireCookieSession, async (_req, res) => {
+  router.delete("/accounts/todoist/connection", requireRecentPasswordAuth, async (_req, res) => {
     try {
       return res.json(await personalTokens.disconnect(process.env.EA_USER_ID!));
     } catch {

@@ -10,6 +10,9 @@ const mockApi = vi.hoisted(() => ({
   saveActualBudgetConnection: vi.fn(),
   testActualBudget: vi.fn(),
 }));
+const mockSecurity = vi.hoisted(() => ({
+  stepUpWithPassword: vi.fn(),
+}));
 
 vi.mock("@/api", () => ({
   getActualCacheStatus: mockApi.getActualCacheStatus,
@@ -18,6 +21,7 @@ vi.mock("@/api", () => ({
   saveActualBudgetConnection: mockApi.saveActualBudgetConnection,
   testActualBudget: mockApi.testActualBudget,
 }));
+vi.mock("@/auth/securityApi", () => mockSecurity);
 
 const { default: ActualBudgetConnectionCard } = await import("./ActualBudgetConnectionCard");
 
@@ -55,6 +59,7 @@ beforeEach(() => {
   mockApi.saveActualBudgetConnection.mockResolvedValue({ success: true, budgetFound: true });
   mockApi.removeActualBudgetConnection.mockResolvedValue({ success: true });
   mockApi.testActualBudget.mockResolvedValue({ success: true });
+  mockSecurity.stepUpWithPassword.mockResolvedValue({ recentAuth: true });
 });
 
 describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
@@ -109,6 +114,42 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     expect(await screen.findByText(/candidate rejected/i)).toBeTruthy();
     expect((screen.getByDisplayValue("bad-sync") as HTMLInputElement).value).toBe("bad-sync");
     expect(screen.getByRole("button", { name: "Save & verify" })).toBeTruthy();
+  });
+
+  it("preserves the full candidate while password step-up retries the save", async () => {
+    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
+    mockApi.saveActualBudgetConnection
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), {
+        code: "PASSWORD_STEP_UP_REQUIRED",
+        status: 403,
+      }))
+      .mockResolvedValueOnce({ success: true, budgetFound: true });
+    renderCard({
+      actual_budget_url: "https://actual.example.com",
+      actual_budget_sync_id: "sync-1",
+      actual_budget_configured: true,
+    });
+
+    const syncId = await screen.findByDisplayValue("sync-1") as HTMLInputElement;
+    fireEvent.change(syncId, { target: { value: "sync-2" } });
+    const password = screen.getByPlaceholderText("Actual Budget password") as HTMLInputElement;
+    fireEvent.change(password, { target: { value: "actual-private-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
+
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    expect(syncId.value).toBe("sync-2");
+    expect(password.value).toBe("actual-private-password");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledTimes(2));
+    expect(mockApi.saveActualBudgetConnection).toHaveBeenLastCalledWith({
+      serverURL: "https://actual.example.com",
+      syncId: "sync-2",
+      password: "actual-private-password",
+    });
+    expect(mockSecurity.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
+    await waitFor(() => expect(password.value).toBe(""));
   });
 
   it("keeps cache hydration explicit after relocation into Connections", async () => {

@@ -7,7 +7,15 @@ import type { TodoistOAuthService } from "../tasks/todoist-oauth.ts";
 vi.mock("../middleware/auth.ts", () => ({
   hashToken: (value: string) => `hash:${value}`,
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
-    req.cookies?.ea_session === "valid" ? next() : res.status(401).json({ message: "Not authenticated" }),
+    req.cookies?.ea_session === "valid" || req.cookies?.ea_session === "stale"
+      ? next()
+      : res.status(401).json({ message: "Not authenticated" }),
+  requireRecentPasswordAuth: (req: express.Request, res: express.Response, next: express.NextFunction) =>
+    req.cookies?.ea_session === "valid"
+      ? next()
+      : req.cookies?.ea_session === "stale"
+        ? res.status(403).json({ code: "PASSWORD_STEP_UP_REQUIRED", message: "Confirm your password" })
+        : res.status(401).json({ message: "Not authenticated" }),
 }));
 
 const { createTodoistOAuthRouter } = await import("./todoist-oauth.ts");
@@ -96,6 +104,27 @@ describe("Todoist OAuth routes", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ mode: "personal_token", configured: true });
     expect(service.getStatus).toHaveBeenCalledWith("owner-1");
+  });
+
+  it("allows stale sessions to read status but rejects every credential-changing action", async () => {
+    const { app, service, personalTokenService } = makeApp();
+
+    expect((await request(app)
+      .get("/api/ea/accounts/todoist/status")
+      .set("Cookie", "ea_session=stale")).status).toBe(200);
+    expect((await request(app)
+      .get("/api/ea/accounts/todoist/auth")
+      .set("Cookie", "ea_session=stale")).status).toBe(403);
+    expect((await request(app)
+      .post("/api/ea/accounts/todoist/personal-token")
+      .set("Cookie", "ea_session=stale")
+      .send({ token: "candidate-token" })).status).toBe(403);
+    expect((await request(app)
+      .delete("/api/ea/accounts/todoist/connection")
+      .set("Cookie", "ea_session=stale")).status).toBe(403);
+    expect(service.beginAuthorization).not.toHaveBeenCalled();
+    expect(personalTokenService.saveCandidate).not.toHaveBeenCalled();
+    expect(personalTokenService.disconnect).not.toHaveBeenCalled();
   });
 
   it("validates and saves a personal-token candidate without returning the token", async () => {

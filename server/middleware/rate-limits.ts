@@ -53,7 +53,18 @@ export function makePlacesLimiter() {
   });
 }
 
+export function makeActualConnectionLimiter() {
+  return rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 10,
+    message: { message: "Too many Actual connection requests, try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+}
+
 export const billExtractLimiter = makeBillExtractLimiter();
 export const alfredRunLimiter = makeAlfredRunLimiter();
 export const emailSearchLimiter = makeEmailSearchLimiter();
 export const placesLimiter = makePlacesLimiter();
+export const actualConnectionLimiter = makeActualConnectionLimiter();

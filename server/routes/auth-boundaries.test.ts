@@ -252,6 +252,16 @@ async function seedSession(expiresAt = Date.now() + 60_000) {
   });
 }
 
+async function seedRecentPasswordSession() {
+  const now = Date.now();
+  await currentDb().execute({
+    sql: `INSERT INTO ea_sessions
+            (token, expires_at, authenticated_at, password_authenticated_at, auth_method)
+          VALUES (?, ?, ?, ?, 'password')`,
+    args: [sessionHash, now + 60_000, now, now],
+  });
+}
+
 async function seedBearer(scopes: string[] = ["actual:write"]) {
   // Mirror production token creation (server/routes/auth.ts) with a live
   // expires_at; validateBearer now fails closed on NULL/expired rows.
@@ -438,7 +448,7 @@ describe("auth boundaries", () => {
   });
 
   it("stores Discord webhook settings encrypted without exposing the raw webhook", async () => {
-    await seedSession();
+    await seedRecentPasswordSession();
     const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -466,7 +476,7 @@ describe("auth boundaries", () => {
   });
 
   it("clears Discord webhook settings", async () => {
-    await seedSession();
+    await seedRecentPasswordSession();
     await currentDb().execute({
       sql: `UPDATE ea_settings
             SET discord_webhook_url_encrypted = ?,

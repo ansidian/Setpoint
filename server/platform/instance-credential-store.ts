@@ -312,12 +312,68 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
     return (await get(key))!;
   }
 
+  async function disableGroup(
+    keys: InstanceCredentialKey[],
+    now = Date.now(),
+  ): Promise<InstanceCredentialRecord[]> {
+    for (const key of keys) assertSupportedKey(key);
+    const tx = await dbClient.transaction("write");
+    try {
+      for (const key of keys) {
+        await tx.execute({
+          sql: `INSERT INTO ea_instance_credentials
+                  (credential_key, disabled, validation_state, version, updated_at)
+                VALUES (?, 1, 'disabled', 1, ?)
+                ON CONFLICT(credential_key) DO UPDATE SET
+                  active_value_encrypted = NULL,
+                  pending_value_encrypted = NULL,
+                  disabled = 1,
+                  validation_state = 'disabled',
+                  error_code = NULL,
+                  version = ea_instance_credentials.version + 1,
+                  updated_at = excluded.updated_at`,
+          args: [key, now],
+        });
+      }
+      const records: InstanceCredentialRecord[] = [];
+      for (const key of keys) {
+        const selected = await tx.execute({
+          sql: `SELECT ${SELECT_COLUMNS} FROM ea_instance_credentials WHERE credential_key = ?`,
+          args: [key],
+        });
+        records.push(recordFromRow(selected.rows[0]!));
+      }
+      await tx.commit();
+      return records;
+    } catch (error) {
+      await tx.rollback().catch(() => {});
+      throw error;
+    }
+  }
+
   async function useHostValue(key: InstanceCredentialKey): Promise<void> {
     assertSupportedKey(key);
     await dbClient.execute({
       sql: "DELETE FROM ea_instance_credentials WHERE credential_key = ?",
       args: [key],
     });
+  }
+
+  async function useHostValueGroup(keys: InstanceCredentialKey[]): Promise<void> {
+    for (const key of keys) assertSupportedKey(key);
+    const tx = await dbClient.transaction("write");
+    try {
+      for (const key of keys) {
+        await tx.execute({
+          sql: "DELETE FROM ea_instance_credentials WHERE credential_key = ?",
+          args: [key],
+        });
+      }
+      await tx.commit();
+    } catch (error) {
+      await tx.rollback().catch(() => {});
+      throw error;
+    }
   }
 
   return {
@@ -331,7 +387,9 @@ export function createInstanceCredentialStore(dbClient: InstanceCredentialDb = d
     promotePendingGroup,
     recordPendingFailure,
     disable,
+    disableGroup,
     useHostValue,
+    useHostValueGroup,
   };
 }
 

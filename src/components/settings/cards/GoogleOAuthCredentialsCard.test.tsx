@@ -4,14 +4,17 @@ import { useState } from "react";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 
 const mockApi = vi.hoisted(() => ({
-  disableInstanceCredential: vi.fn(),
+  disableGoogleOAuthApplication: vi.fn(),
   getGmailAuthUrl: vi.fn(),
   getInstanceCredentials: vi.fn(),
-  importInstanceCredentialEnvironment: vi.fn(),
+  importGoogleOAuthEnvironment: vi.fn(),
   stageGoogleOAuthApplication: vi.fn(),
-  useHostInstanceCredential: vi.fn(),
+  useHostGoogleOAuthApplication: vi.fn(),
 }));
-const mockSecurity = vi.hoisted(() => ({ getCanonicalOriginStatus: vi.fn() }));
+const mockSecurity = vi.hoisted(() => ({
+  getCanonicalOriginStatus: vi.fn(),
+  stepUpWithPassword: vi.fn(),
+}));
 
 vi.mock("@/api", () => mockApi);
 vi.mock("@/auth/securityApi", () => mockSecurity);
@@ -75,6 +78,7 @@ beforeEach(() => {
   mockSecurity.getCanonicalOriginStatus.mockResolvedValue({
     callbacks: [{ provider: "Google OAuth", nextUrl: "https://setpoint.example/api/ea/accounts/gmail/callback" }],
   });
+  mockSecurity.stepUpWithPassword.mockResolvedValue({ recentAuth: true });
 });
 
 describe("GoogleOAuthCredentialsCard", () => {
@@ -112,20 +116,67 @@ describe("GoogleOAuthCredentialsCard", () => {
     expect(screen.getByText(/active application remains in use/i)).toBeTruthy();
   });
 
-  it("migrates both environment values without placing either value in browser state", async () => {
+  it("copies both environment values atomically and explains the Render cleanup boundary", async () => {
     const environment = absent.map((item) => ({ ...item, source: "environment" as const, activeConfigured: true }));
     const stored = environment.map((item) => ({ ...item, source: "stored" as const }));
-    mockApi.getInstanceCredentials.mockResolvedValueOnce({ credentials: stored, rootKey: {} });
-    mockApi.importInstanceCredentialEnvironment.mockResolvedValue(stored[0]);
+    mockApi.importGoogleOAuthEnvironment.mockResolvedValue({ credentials: stored });
 
     renderCard(environment);
     await screen.findByText("Host environment");
-    fireEvent.click(screen.getByRole("button", { name: "Move into Setpoint" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy into Setpoint" }));
 
-    await waitFor(() => expect(mockApi.importInstanceCredentialEnvironment).toHaveBeenCalledTimes(2));
-    expect(mockApi.importInstanceCredentialEnvironment).toHaveBeenCalledWith("google.oauth_client_id");
-    expect(mockApi.importInstanceCredentialEnvironment).toHaveBeenCalledWith("google.oauth_client_secret");
+    await waitFor(() => expect(mockApi.importGoogleOAuthEnvironment).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/render variables still remain/i)).toBeTruthy();
     expect((screen.getByLabelText("Client ID") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Client secret") as HTMLInputElement).value).toBe("");
+  });
+
+  it("requires inline confirmation before atomically disabling the pair", async () => {
+    const stored = absent.map((item) => ({ ...item, source: "stored" as const, activeConfigured: true }));
+    const disabled = stored.map((item) => ({ ...item, source: "disabled" as const, activeConfigured: false }));
+    mockApi.disableGoogleOAuthApplication.mockResolvedValue({ credentials: disabled });
+
+    renderCard(stored);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove and disable" }));
+
+    expect(mockApi.disableGoogleOAuthApplication).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove Google credentials" }));
+    await waitFor(() => expect(mockApi.disableGoogleOAuthApplication).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps the candidate in place while password step-up retries the save", async () => {
+    const pending = absent.map((item, index) => ({
+      ...item,
+      pendingConfigured: true,
+      validationState: "pending" as const,
+      version: index + 1,
+    }));
+    mockApi.stageGoogleOAuthApplication
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), {
+        code: "PASSWORD_STEP_UP_REQUIRED",
+        status: 403,
+      }))
+      .mockResolvedValueOnce({
+        credentials: pending,
+        candidateVersions: { clientId: 1, clientSecret: 2 },
+      });
+
+    renderCard();
+    const clientId = await screen.findByLabelText("Client ID") as HTMLInputElement;
+    const clientSecret = screen.getByLabelText("Client secret") as HTMLInputElement;
+    fireEvent.change(clientId, { target: { value: "client-id-private" } });
+    fireEvent.change(clientSecret, { target: { value: "client-secret-private" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save application" }));
+
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    expect(clientId.value).toBe("client-id-private");
+    expect(clientSecret.value).toBe("client-secret-private");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.stageGoogleOAuthApplication).toHaveBeenCalledTimes(2));
+    expect(mockSecurity.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
+    await waitFor(() => expect(clientId.value).toBe(""));
+    expect(clientSecret.value).toBe("");
   });
 });

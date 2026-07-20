@@ -28,6 +28,13 @@ import {
 } from "./coreCredentialModel";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 import type { SettingsCredentialMetadataProps } from "../settingsTypes";
+import {
+  SensitiveActionStepUp,
+} from "../SensitiveActionStepUp";
+import {
+  isPasswordStepUpRequired,
+  useSensitiveActionStepUp,
+} from "../sensitiveActionStepUpModel";
 
 export type CoreCredentialDefinition = {
   key: string;
@@ -60,14 +67,18 @@ function CredentialRow({
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDisable, setConfirmingDisable] = useState(false);
   const status = credentialStatusView(metadata);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const stepUp = useSensitiveActionStepUp();
+  const credentialActionLocked = Boolean(stepUp.pendingLabel);
 
   function restoreInputFocus() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  async function testPending() {
+  async function performPendingTest() {
+    let shouldRestoreFocus = true;
     setBusy("test");
     setMessage(null);
     setError(null);
@@ -76,57 +87,87 @@ function CredentialRow({
       onMetadata(result.metadata);
       setMessage("Validated and activated. Runtime configuration is updated.");
     } catch (caught) {
+      if (isPasswordStepUpRequired(caught)) {
+        shouldRestoreFocus = false;
+        throw caught;
+      }
       setError(credentialErrorMessage(apiErrorCode(caught)));
       await onRefresh().catch(() => {});
     } finally {
       setBusy(null);
-      restoreInputFocus();
+      if (shouldRestoreFocus) restoreInputFocus();
     }
+  }
+
+  async function testPending() {
+    await stepUp.run(
+      performPendingTest,
+      `testing the ${definition.label} credential`,
+    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft || busy) return;
-    setBusy("save");
-    setMessage(null);
-    setError(null);
-    try {
-      const staged = await stageInstanceCredential(definition.key, draft);
-      setDraft("");
-      onMetadata(staged);
-      setBusy("test");
+    const candidate = draft;
+    await stepUp.run(async () => {
+      let shouldRestoreFocus = true;
+      setBusy("save");
+      setMessage(null);
+      setError(null);
+      try {
+        const staged = await stageInstanceCredential(definition.key, candidate);
+        setDraft("");
+        onMetadata(staged);
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) {
+          shouldRestoreFocus = false;
+          throw caught;
+        }
+        setError(credentialErrorMessage(apiErrorCode(caught)));
+        await onRefresh().catch(() => {});
+        return;
+      } finally {
+        setBusy(null);
+        if (shouldRestoreFocus) restoreInputFocus();
+      }
       await testPending();
-    } catch (caught) {
-      setDraft("");
-      setError(credentialErrorMessage(apiErrorCode(caught)));
-      await onRefresh().catch(() => {});
-      setBusy(null);
-      restoreInputFocus();
-    }
+    }, `saving the ${definition.label} credential`);
   }
 
   async function runSourceAction(action: "import" | "disable" | "host") {
-    setBusy(action);
-    setMessage(null);
-    setError(null);
-    try {
-      const updated = action === "import"
-        ? await importInstanceCredentialEnvironment(definition.key)
-        : action === "disable"
-          ? await disableInstanceCredential(definition.key)
-          : await restoreHostInstanceCredential(definition.key);
-      onMetadata(updated);
-      setMessage(action === "import"
-        ? "Moved into encrypted Setpoint storage."
-        : action === "disable"
-          ? "Stored and pending values removed; host fallback is disabled."
-          : "Host-managed configuration is active again.");
-    } catch (caught) {
-      setError(credentialErrorMessage(apiErrorCode(caught)));
-    } finally {
-      setBusy(null);
-      restoreInputFocus();
-    }
+    await stepUp.run(async () => {
+      let shouldRestoreFocus = true;
+      setBusy(action);
+      setMessage(null);
+      setError(null);
+      try {
+        const updated = action === "import"
+          ? await importInstanceCredentialEnvironment(definition.key)
+          : action === "disable"
+            ? await disableInstanceCredential(definition.key)
+            : await restoreHostInstanceCredential(definition.key);
+        onMetadata(updated);
+        setMessage(action === "import"
+          ? "Copied into encrypted Setpoint storage. The Render variable still remains. Back up EA_ENCRYPTION_KEY, remove the provider variable in Render, redeploy, then verify the provider before considering the migration complete."
+          : action === "disable"
+            ? "Stored and pending values removed; host fallback is disabled."
+            : "Host-managed configuration is active again.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) {
+          shouldRestoreFocus = false;
+          throw caught;
+        }
+        setError(credentialErrorMessage(apiErrorCode(caught)));
+      } finally {
+        setBusy(null);
+        if (shouldRestoreFocus) restoreInputFocus();
+      }
+    }, action === "import"
+      ? `copying the ${definition.label} credential into Setpoint`
+      : action === "disable"
+        ? `removing the ${definition.label} credential`
+        : `restoring the host-managed ${definition.label} credential`);
   }
 
   const lastTest = formatCredentialTimestamp(metadata.lastTestedAt);
@@ -160,14 +201,14 @@ function CredentialRow({
               setError(null);
               setMessage(null);
             }}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || credentialActionLocked}
           />
         </div>
         <Button
           type="submit"
           size="sm"
           className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION)}
-          disabled={!draft || Boolean(busy)}
+          disabled={!draft || Boolean(busy) || credentialActionLocked}
         >
           {busy === "save" || busy === "test" ? "Testing…" : metadata.activeConfigured ? "Test replacement" : "Test and save"}
         </Button>
@@ -180,7 +221,7 @@ function CredentialRow({
             size="sm"
             variant="outline"
             className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || credentialActionLocked}
             onClick={testPending}
           >
             {busy === "test" ? "Testing…" : "Retest pending"}
@@ -192,10 +233,10 @@ function CredentialRow({
             size="sm"
             variant="outline"
             className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || credentialActionLocked}
             onClick={() => runSourceAction("import")}
           >
-            {busy === "import" ? "Moving…" : "Move into Setpoint"}
+            {busy === "import" ? "Copying…" : "Copy into Setpoint"}
           </Button>
         ) : null}
         {metadata.source !== "disabled" && metadata.source !== "absent" ? (
@@ -204,10 +245,10 @@ function CredentialRow({
             size="sm"
             variant="destructive"
             className={BUTTON_MOTION}
-            disabled={Boolean(busy)}
-            onClick={() => runSourceAction("disable")}
+            disabled={Boolean(busy) || credentialActionLocked}
+            onClick={() => setConfirmingDisable(true)}
           >
-            {busy === "disable" ? "Disabling…" : "Remove and disable"}
+            Remove and disable
           </Button>
         ) : null}
         {metadata.source === "disabled" ? (
@@ -216,13 +257,43 @@ function CredentialRow({
             size="sm"
             variant="outline"
             className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || credentialActionLocked}
             onClick={() => runSourceAction("host")}
           >
             {busy === "host" ? "Checking host…" : "Use host value"}
           </Button>
         ) : null}
       </div>
+      {confirmingDisable ? (
+        <div className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] p-3">
+          <p className="max-w-[70ch] text-[11px] leading-relaxed text-foreground">
+            This deletes the stored and pending {definition.label} credential and blocks host fallback. The provider will stop working until a credential is restored.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              className={BUTTON_MOTION}
+              disabled={Boolean(busy) || credentialActionLocked}
+              onClick={() => { setConfirmingDisable(false); void runSourceAction("disable"); }}
+            >
+              {busy === "disable" ? "Removing…" : `Confirm remove ${definition.label} credential`}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
+              disabled={Boolean(busy) || credentialActionLocked}
+              onClick={() => setConfirmingDisable(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      <SensitiveActionStepUp state={stepUp} className="mt-3" />
       {lastTest || lastSuccess || lastFailure ? (
         <FieldHint className="mt-2">
           {[

@@ -108,7 +108,31 @@ export function createGoogleOAuthCredentialManager(
     ]);
   }
 
-  return { resolveActive, selectForAuthorization, stageCandidate, resolveCandidate, promoteCandidate };
+  async function importEnvironment() {
+    const credentials = await service();
+    return credentials.importEnvironmentGroup([CLIENT_ID_KEY, CLIENT_SECRET_KEY]);
+  }
+
+  async function disable() {
+    const credentials = await service();
+    return credentials.disableGroup([CLIENT_ID_KEY, CLIENT_SECRET_KEY]);
+  }
+
+  async function useHostValues() {
+    const credentials = await service();
+    return credentials.useHostValueGroup([CLIENT_ID_KEY, CLIENT_SECRET_KEY]);
+  }
+
+  return {
+    resolveActive,
+    selectForAuthorization,
+    stageCandidate,
+    resolveCandidate,
+    promoteCandidate,
+    importEnvironment,
+    disable,
+    useHostValues,
+  };
 }
 
 export type GoogleOAuthCredentialManager = ReturnType<typeof createGoogleOAuthCredentialManager>;

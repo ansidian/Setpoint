@@ -9,9 +9,13 @@ const mockApi = vi.hoisted(() => ({
   importTodoistOAuthEnvironment: vi.fn(),
   beginTodoistOAuth: vi.fn(),
 }));
+const mockSecurity = vi.hoisted(() => ({
+  stepUpWithPassword: vi.fn(),
+}));
 
 vi.mock("@/api", () => mockApi);
 vi.mock("@/lib/todoistSetupApi", () => mockApi);
+vi.mock("@/auth/securityApi", () => mockSecurity);
 
 const { default: TodoistCard } = await import("./TodoistCard");
 
@@ -39,6 +43,7 @@ describe("TodoistCard", () => {
       verifiedAt: "2026-07-19T18:00:00.000Z",
     });
     mockApi.disconnectTodoistConnection.mockResolvedValue({ success: true });
+    mockSecurity.stepUpWithPassword.mockResolvedValue({ recentAuth: true });
   });
 
   it("shows Connected and a masked placeholder when already configured", () => {
@@ -88,6 +93,29 @@ describe("TodoistCard", () => {
     expect(mockApi.getTodoistConnectionStatus).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves a personal token while password step-up retries the save", async () => {
+    mockApi.saveTodoistPersonalToken
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), {
+        code: "PASSWORD_STEP_UP_REQUIRED",
+        status: 403,
+      }))
+      .mockResolvedValueOnce({ success: true, verifiedAt: "2026-07-19T18:00:00.000Z" });
+    render(<TodoistCard settings={{}} />);
+    const input = screen.getByLabelText("Personal API token") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "tok-private" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
+
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    expect(input.value).toBe("tok-private");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.saveTodoistPersonalToken).toHaveBeenCalledTimes(2));
+    expect(mockApi.saveTodoistPersonalToken).toHaveBeenLastCalledWith("tok-private");
+    expect(mockSecurity.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
+    await waitFor(() => expect(input.value).toBe(""));
+  });
+
   it("stages advanced application credentials write-only while keeping personal tokens primary", async () => {
     mockApi.stageTodoistOAuthApplication.mockResolvedValue({ credentials: [] });
     render(<TodoistCard settings={{}} />);
@@ -106,6 +134,52 @@ describe("TodoistCard", () => {
     expect((screen.getByLabelText("Client ID") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Client secret") as HTMLInputElement).value).toBe("");
     expect(screen.getByText(/personal token stays active until authorization succeeds/i)).toBeTruthy();
+  });
+
+  it("preserves the OAuth pair while password step-up retries staging", async () => {
+    mockApi.stageTodoistOAuthApplication
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), {
+        code: "PASSWORD_STEP_UP_REQUIRED",
+        status: 403,
+      }))
+      .mockResolvedValueOnce({ credentials: [] });
+    render(<TodoistCard settings={{}} openAdvancedSetup />);
+    const clientId = screen.getByLabelText("Client ID") as HTMLInputElement;
+    const clientSecret = screen.getByLabelText("Client secret") as HTMLInputElement;
+    fireEvent.change(clientId, { target: { value: "client-id" } });
+    fireEvent.change(clientSecret, { target: { value: "client-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save app credentials" }));
+
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    expect(clientId.value).toBe("client-id");
+    expect(clientSecret.value).toBe("client-secret");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.stageTodoistOAuthApplication).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(clientId.value).toBe(""));
+    expect(clientSecret.value).toBe("");
+  });
+
+  it("copies the OAuth pair and explains the Render cleanup boundary", async () => {
+    const environmentStatus = {
+      ...disconnectedStatus,
+      application: { configured: true, source: "environment", pendingConfigured: false },
+    };
+    const storedStatus = {
+      ...environmentStatus,
+      application: { configured: true, source: "stored", pendingConfigured: false },
+    };
+    mockApi.getTodoistConnectionStatus
+      .mockResolvedValueOnce(environmentStatus)
+      .mockResolvedValueOnce(storedStatus);
+    mockApi.importTodoistOAuthEnvironment.mockResolvedValue({ credentials: [] });
+    render(<TodoistCard settings={{}} openAdvancedSetup />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy into Setpoint" }));
+
+    await waitFor(() => expect(mockApi.importTodoistOAuthEnvironment).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/render variables still remain/i)).toBeTruthy();
   });
 
   it("opens only its advanced disclosure when targeted by a deep link", () => {

@@ -222,11 +222,30 @@ export function createInstanceCredentialService({
     return metadataFor(key, record);
   }
 
+  async function disableGroup(inputKeys: string[]): Promise<InstanceCredentialMetadata[]> {
+    const keys = inputKeys.map(requireKey);
+    const records = await store.disableGroup(keys);
+    for (const record of records) publish({ key: record.key, reason: "disabled" });
+    return records.map((record) => metadataFor(record.key, record));
+  }
+
   async function useHostValue(inputKey: string): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
+    if (environmentValue(key, environment) === null) throw new HostCredentialUnavailableError();
     await store.useHostValue(key);
     publish({ key, reason: "host_selected" });
     return metadataFor(key, null);
+  }
+
+  async function useHostValueGroup(inputKeys: string[]): Promise<InstanceCredentialMetadata[]> {
+    const keys = inputKeys.map((inputKey) => {
+      const key = requireKey(inputKey);
+      if (environmentValue(key, environment) === null) throw new HostCredentialUnavailableError();
+      return key;
+    });
+    await store.useHostValueGroup(keys);
+    for (const key of keys) publish({ key, reason: "host_selected" });
+    return keys.map((key) => metadataFor(key, null));
   }
 
   async function importEnvironment(inputKey: string): Promise<InstanceCredentialMetadata> {
@@ -261,7 +280,9 @@ export function createInstanceCredentialService({
     promotePendingGroup,
     recordPendingFailure,
     disable,
+    disableGroup,
     useHostValue,
+    useHostValueGroup,
     importEnvironment,
     importEnvironmentGroup,
     subscribe,

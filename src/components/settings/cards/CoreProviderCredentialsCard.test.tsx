@@ -11,8 +11,12 @@ const mockApi = vi.hoisted(() => ({
   testInstanceCredential: vi.fn(),
   useHostInstanceCredential: vi.fn(),
 }));
+const mockSecurity = vi.hoisted(() => ({
+  stepUpWithPassword: vi.fn(),
+}));
 
 vi.mock("@/api", () => mockApi);
+vi.mock("@/auth/securityApi", () => mockSecurity);
 
 const { default: CoreProviderCredentialsCard } = await import("./CoreProviderCredentialsCard");
 
@@ -75,6 +79,7 @@ afterEach(() => {
 
 beforeEach(() => {
   mockApi.getInstanceCredentials.mockResolvedValue({ credentials: [metadata()], rootKey: {} });
+  mockSecurity.stepUpWithPassword.mockResolvedValue({ recentAuth: true });
 });
 
 describe("CoreProviderCredentialsCard", () => {
@@ -135,17 +140,56 @@ describe("CoreProviderCredentialsCard", () => {
     expect(input.value).toBe("");
   });
 
-  it("moves an environment value server-side without reading it into the field", async () => {
+  it("copies an environment value server-side and explains the Render cleanup boundary", async () => {
     const environment = metadata({ source: "environment", activeConfigured: true });
     const stored = metadata({ source: "stored", activeConfigured: true });
     mockApi.importInstanceCredentialEnvironment.mockResolvedValue(stored);
 
     renderCard([environment]);
     const input = await screen.findByLabelText("OpenAI API key") as HTMLInputElement;
-    fireEvent.click(screen.getByRole("button", { name: "Move into Setpoint" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy into Setpoint" }));
 
     await waitFor(() => expect(mockApi.importInstanceCredentialEnvironment).toHaveBeenCalledWith("ai.openai_api_key"));
     expect(input.value).toBe("");
-    expect(await screen.findByText("Moved into encrypted Setpoint storage.")).toBeTruthy();
+    expect(await screen.findByText(/render variable still remains/i)).toBeTruthy();
+  });
+
+  it("requires inline confirmation before disabling a stored credential", async () => {
+    const stored = metadata({ source: "stored", activeConfigured: true });
+    const disabled = metadata({ source: "disabled", activeConfigured: false });
+    mockApi.disableInstanceCredential.mockResolvedValue(disabled);
+
+    renderCard([stored]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove and disable" }));
+
+    expect(mockApi.disableInstanceCredential).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove OpenAI credential" }));
+    await waitFor(() => expect(mockApi.disableInstanceCredential).toHaveBeenCalledWith("ai.openai_api_key"));
+  });
+
+  it("keeps an unsaved value in place while password step-up retries the save", async () => {
+    const pending = metadata({ pendingConfigured: true, validationState: "pending", version: 1 });
+    const active = metadata({ source: "stored", activeConfigured: true, validationState: "valid", version: 2 });
+    mockApi.stageInstanceCredential
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), {
+        code: "PASSWORD_STEP_UP_REQUIRED",
+        status: 403,
+      }))
+      .mockResolvedValueOnce(pending);
+    mockApi.testInstanceCredential.mockResolvedValue({ ok: true, code: "VALID", metadata: active });
+
+    renderCard();
+    const input = await screen.findByLabelText("OpenAI API key") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "sk-private-value" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test and save" }));
+
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    expect(input.value).toBe("sk-private-value");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.stageInstanceCredential).toHaveBeenCalledTimes(2));
+    expect(mockSecurity.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
+    await waitFor(() => expect(input.value).toBe(""));
   });
 });

@@ -14,6 +14,8 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `ConnectionsDirectory.tsx` — grouped, one-open disclosure directory synchronized to the URL hash, with progress-gated onboarding continuation
 - `ConnectionPanelContent.tsx` — service-to-existing-control ownership mapping, expanded state evidence, and targeted Advanced setup routing
 - `ConnectionDependencyPrompt.tsx` — concise setup/repair prerequisite prompt with canonical Connections deep links
+- `SensitiveActionStepUp.tsx` — reusable inline recent-password confirmation that retries a deferred credential action without losing form state
+- `sensitiveActionStepUpModel.ts` — deferred sensitive-action state and password-step-up retry controller
 - `featureDependencyModel.ts` — pure Automation/Finance visibility and AI provider-selection projection
 - `AccountsList.tsx` — draggable, editable provider-filtered account rows with icon/color pickers
 

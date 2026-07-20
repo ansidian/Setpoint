@@ -92,6 +92,49 @@ describe("instance credential service", () => {
     });
   });
 
+  it("does not delete a stored value when host fallback is unavailable", async () => {
+    const service = createService({ EA_ENCRYPTION_KEY: ROOT_KEY });
+    const staged = await service.stagePending("ai.openai_api_key", "stored-secret");
+    await service.promotePending("ai.openai_api_key", staged.version!);
+
+    await expect(service.useHostValue("ai.openai_api_key")).rejects.toMatchObject({
+      code: "HOST_CREDENTIAL_UNAVAILABLE",
+      status: 409,
+    });
+    await expect(service.resolve("ai.openai_api_key")).resolves.toMatchObject({
+      source: "stored",
+      value: "stored-secret",
+    });
+  });
+
+  it("validates every host value before atomically changing a credential group", async () => {
+    const service = createService({
+      EA_ENCRYPTION_KEY: ROOT_KEY,
+      GOOGLE_CLIENT_ID: "host-client-id",
+    });
+    const staged = await service.stagePendingGroup([
+      { key: "google.oauth_client_id", value: "stored-client-id" },
+      { key: "google.oauth_client_secret", value: "stored-client-secret" },
+    ]);
+    await service.promotePendingGroup(staged.map((item) => ({
+      key: item.key,
+      expectedVersion: item.version!,
+    })));
+
+    await expect(service.useHostValueGroup([
+      "google.oauth_client_id",
+      "google.oauth_client_secret",
+    ])).rejects.toMatchObject({ code: "HOST_CREDENTIAL_UNAVAILABLE" });
+    await expect(service.resolve("google.oauth_client_id")).resolves.toMatchObject({
+      source: "stored",
+      value: "stored-client-id",
+    });
+    await expect(service.resolve("google.oauth_client_secret")).resolves.toMatchObject({
+      source: "stored",
+      value: "stored-client-secret",
+    });
+  });
+
   it("rejects unknown keys before reading or writing storage", async () => {
     const service = createService({ EA_ENCRYPTION_KEY: ROOT_KEY });
     await expect(service.resolve("arbitrary.secret")).rejects.toMatchObject({
