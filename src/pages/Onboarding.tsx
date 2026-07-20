@@ -26,6 +26,9 @@ import { isOnboardingStepId } from "../../shared/types/onboarding";
 import { cn } from "@/lib/utils";
 
 const SECONDARY_BUTTON = "min-h-11 sm:min-h-8 motion-reduce:transition-none motion-reduce:transform-none";
+const SETUP_BUTTON = "group/setup border-primary/25 bg-primary/[0.08] text-primary hover:border-primary/40 hover:bg-primary/[0.14] hover:text-primary focus-visible:ring-primary/60";
+const SKIP_BUTTON = "border border-transparent text-muted-foreground hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-foreground";
+const FINISH_BUTTON = "border-white/[0.12] bg-white/[0.025] hover:border-primary/30 hover:bg-primary/[0.08] hover:text-primary focus-visible:ring-primary/60";
 
 function progressLabel(state: "pending" | "reviewed" | "completed" | "skipped") {
   if (state === "completed") return { label: "Reviewed", tone: "success" as const };
@@ -214,22 +217,33 @@ export default function Onboarding(): ReactElement {
                 })}
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {active.targets.map((target) => (
-                  <Link
-                    key={`${target.connectionId}-${target.href}`}
-                    to={target.href}
-                    className={cn(buttonVariants({ variant: "secondary" }), SECONDARY_BUTTON)}
-                  >
-                    Set up {target.label}<ArrowRight aria-hidden="true" />
-                  </Link>
-                ))}
-                <Button variant="secondary" className={SECONDARY_BUTTON} disabled={busy} onClick={() => void mutate({ action: "complete", stepId: active.id })}>Mark reviewed</Button>
-                <Button variant="ghost" className={SECONDARY_BUTTON} disabled={busy} onClick={() => void mutate({ action: "skip", stepId: active.id })}>Skip for now</Button>
+              <div className="mt-5 flex flex-col gap-3">
+                <div className="flex flex-wrap gap-2">
+                  {active.targets.map((target) => (
+                    <Link
+                      key={`${target.connectionId}-${target.href}`}
+                      to={target.href}
+                      className={cn(buttonVariants({ variant: "secondary" }), SECONDARY_BUTTON, SETUP_BUTTON)}
+                    >
+                      Set up {target.label}
+                      <ArrowRight aria-hidden="true" className="transition-transform duration-200 group-hover/setup:translate-x-0.5 motion-reduce:transition-none" />
+                    </Link>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-white/[0.05] pt-3">
+                  <Button className={SECONDARY_BUTTON} disabled={busy} onClick={() => void mutate({ action: "complete", stepId: active.id })}>
+                    <Check aria-hidden="true" /> Mark reviewed
+                  </Button>
+                  <Button variant="ghost" className={`${SECONDARY_BUTTON} ${SKIP_BUTTON}`} disabled={busy} onClick={() => void mutate({ action: "skip", stepId: active.id })}>
+                    <SkipForward aria-hidden="true" /> Skip for now
+                  </Button>
+                </div>
               </div>
               <div className="mt-7 flex flex-col gap-3 border-t border-white/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <p className="max-w-[54ch] text-[11px] leading-relaxed text-muted-foreground">Finish at any time. Pending and skipped capabilities remain visible in Settings without reopening this page.</p>
-                <Button variant="outline" className={SECONDARY_BUTTON} disabled={busy} onClick={() => void mutate({ action: "finish" })}>Finish onboarding</Button>
+                <Button variant="outline" className={`${SECONDARY_BUTTON} ${FINISH_BUTTON}`} disabled={busy} onClick={() => void mutate({ action: "finish" })}>
+                  <Check aria-hidden="true" /> Finish onboarding
+                </Button>
               </div>
               {error ? <p role="alert" className="mt-3 text-[12px] text-[var(--sp-rose)]">{error}</p> : null}
             </section>

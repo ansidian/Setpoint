@@ -124,7 +124,11 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
                   const StateIcon = state.icon;
                   const metadata = rowMetadata(row);
                   return (
-                    <div key={row.id} className="border-t border-white/[0.06] first:border-t-0">
+                    <div
+                      key={row.id}
+                      data-settings-flash-container
+                      className="border-t border-white/[0.06] first:border-t-0"
+                    >
                       <button
                         id={row.id}
                         type="button"

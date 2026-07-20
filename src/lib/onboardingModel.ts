@@ -117,6 +117,7 @@ export function projectOnboardingChecklist(progress: OnboardingProgress) {
 
 export function onboardingContinueHref(progress: OnboardingProgress): string | null {
   if (progress.status === "complete") return null;
-  const inProgressStep = ONBOARDING_STEPS.find((step) => progress.steps[step.id] === "reviewed");
-  return inProgressStep ? `/onboarding?step=${inProgressStep.id}` : null;
+  const reviewedStep = ONBOARDING_STEPS.find((step) => progress.steps[step.id] === "reviewed");
+  const activeStepId = reviewedStep?.id ?? projectOnboardingChecklist(progress).activeStepId;
+  return `/onboarding?step=${activeStepId}`;
 }

@@ -58,6 +58,7 @@ export default function Settings() {
         ? "todoist-advanced-setup"
         : location.hash.slice(1);
     let target: HTMLElement | null = null;
+    let flashedTarget: HTMLElement | null = null;
     let settleTimer: number | null = null;
     let scrollFallbackTimer: number | null = null;
     let flashTimer: number | null = null;
@@ -74,9 +75,10 @@ export default function Settings() {
 
     function flashTarget() {
       if (!target) return;
-      target.dataset.settingsTargetActive = "true";
+      flashedTarget = target.closest<HTMLElement>("[data-settings-flash-container]") ?? target;
+      flashedTarget.dataset.settingsTargetActive = "true";
       flashTimer = window.setTimeout(() => {
-        if (target) delete target.dataset.settingsTargetActive;
+        if (flashedTarget) delete flashedTarget.dataset.settingsTargetActive;
       }, 1600);
     }
 
@@ -153,7 +155,7 @@ export default function Settings() {
       if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
       if (flashTimer !== null) window.clearTimeout(flashTimer);
       clearScrollWait();
-      if (target) delete target.dataset.settingsTargetActive;
+      if (flashedTarget) delete flashedTarget.dataset.settingsTargetActive;
     };
   }, [loading, location.hash, location.search, tab]);
 
