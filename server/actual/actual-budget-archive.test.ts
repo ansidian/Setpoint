@@ -1,64 +1,180 @@
+import { crc32, deflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import {
   MAX_ACTUAL_ARCHIVE_ENTRY_BYTES,
-  assertSafeActualBudgetArchive,
+  readActualBudgetArchive,
   validateActualBudgetId,
 } from "./actual-budget-archive.ts";
 
-function zipWithDeclaredEntry({
-  name = "db.sqlite",
-  compressedSize = 0,
-  uncompressedSize = 0,
-}: {
-  name?: string;
-  compressedSize?: number;
+interface ZipEntryFixture {
+  name: string;
+  data?: Buffer;
+  method?: 0 | 8;
+  flags?: number;
+  localFlags?: number;
+  localMethod?: number;
+  crc?: number;
   uncompressedSize?: number;
-} = {}): Buffer {
-  const nameBuffer = Buffer.from(name);
-  const localHeader = Buffer.alloc(30 + nameBuffer.length + compressedSize);
-  localHeader.writeUInt32LE(0x04034b50, 0);
-  localHeader.writeUInt16LE(20, 4);
-  localHeader.writeUInt32LE(compressedSize, 18);
-  localHeader.writeUInt32LE(uncompressedSize, 22);
-  localHeader.writeUInt16LE(nameBuffer.length, 26);
-  nameBuffer.copy(localHeader, 30);
-
-  const centralDirectory = Buffer.alloc(46 + nameBuffer.length);
-  centralDirectory.writeUInt32LE(0x02014b50, 0);
-  centralDirectory.writeUInt16LE(20, 6);
-  centralDirectory.writeUInt32LE(compressedSize, 20);
-  centralDirectory.writeUInt32LE(uncompressedSize, 24);
-  centralDirectory.writeUInt16LE(nameBuffer.length, 28);
-  centralDirectory.writeUInt32LE(0, 42);
-  nameBuffer.copy(centralDirectory, 46);
-
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(1, 8);
-  end.writeUInt16LE(1, 10);
-  end.writeUInt32LE(centralDirectory.length, 12);
-  end.writeUInt32LE(localHeader.length, 16);
-  return Buffer.concat([localHeader, centralDirectory, end]);
 }
 
-describe("assertSafeActualBudgetArchive", () => {
+function zipWithEntries(entries: ZipEntryFixture[]): Buffer {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let localOffset = 0;
+
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name);
+    const data = entry.data ?? Buffer.alloc(0);
+    const method = entry.method ?? 0;
+    const compressed = method === 8 ? deflateRawSync(data) : data;
+    const checksum = entry.crc ?? crc32(data);
+    const uncompressedSize = entry.uncompressedSize ?? data.length;
+    const flags = entry.flags ?? 0;
+
+    const local = Buffer.alloc(30 + name.length + compressed.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(entry.localFlags ?? flags, 6);
+    local.writeUInt16LE(entry.localMethod ?? method, 8);
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(uncompressedSize, 22);
+    local.writeUInt16LE(name.length, 26);
+    name.copy(local, 30);
+    compressed.copy(local, 30 + name.length);
+
+    const central = Buffer.alloc(46 + name.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(flags, 8);
+    central.writeUInt16LE(method, 10);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(uncompressedSize, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(localOffset, 42);
+    name.copy(central, 46);
+
+    localParts.push(local);
+    centralParts.push(central);
+    localOffset += local.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(localOffset, 16);
+  return Buffer.concat([...localParts, centralDirectory, end]);
+}
+
+describe("readActualBudgetArchive", () => {
+  it("reads stored and deflated target files without exposing other entries", () => {
+    const archive = zipWithEntries([
+      { name: "budget/db.sqlite", data: Buffer.from("sqlite"), method: 0 },
+      { name: "budget/metadata.json", data: Buffer.from('{"id":"Budget-1"}'), method: 8 },
+      { name: "budget/notes.txt", data: Buffer.from("not exposed"), method: 8 },
+    ]);
+
+    expect(readActualBudgetArchive(archive)).toEqual({
+      database: Buffer.from("sqlite"),
+      metadata: Buffer.from('{"id":"Budget-1"}'),
+    });
+  });
+
+  it("rejects an entry whose expanded data does not match its CRC", () => {
+    const archive = zipWithEntries([
+      { name: "db.sqlite", data: Buffer.from("sqlite"), crc: 123 },
+      { name: "metadata.json", data: Buffer.from("{}") },
+    ]);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(/CRC/);
+  });
+
+  it("rejects an entry whose actual expanded length differs from its headers", () => {
+    const archive = zipWithEntries([
+      { name: "db.sqlite", data: Buffer.from("sqlite"), uncompressedSize: 99 },
+      { name: "metadata.json", data: Buffer.from("{}") },
+    ]);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(/expanded size/);
+  });
+
+  it("rejects duplicate target basenames", () => {
+    const archive = zipWithEntries([
+      { name: "one/db.sqlite", data: Buffer.from("one") },
+      { name: "two/db.sqlite", data: Buffer.from("two") },
+      { name: "metadata.json", data: Buffer.from("{}") },
+    ]);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(/exactly one db.sqlite and metadata.json/);
+  });
+
+  it("rejects disagreement between central and local headers", () => {
+    const archive = zipWithEntries([
+      { name: "db.sqlite", data: Buffer.from("sqlite"), localMethod: 8 },
+      { name: "metadata.json", data: Buffer.from("{}") },
+    ]);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(/local file header does not match/);
+  });
+
+  it.each([
+    { label: "encrypted", flags: 0x1, message: /encrypted/ },
+    { label: "data-descriptor", flags: 0x8, message: /data descriptors/ },
+  ])("rejects $label entries", ({ flags, message }) => {
+    const archive = zipWithEntries([
+      { name: "db.sqlite", flags },
+      { name: "metadata.json" },
+    ]);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(message);
+  });
+
+  it("rejects unsupported compression methods", () => {
+    const archive = zipWithEntries([
+      { name: "db.sqlite" },
+      { name: "metadata.json" },
+    ]);
+    archive.writeUInt16LE(12, archive.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])) + 10);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(/unsupported compression method/);
+  });
+
+  it("rejects archives missing either required target", () => {
+    const archive = zipWithEntries([{ name: "db.sqlite", data: Buffer.from("sqlite") }]);
+
+    expect(() => readActualBudgetArchive(archive)).toThrow(/exactly one db.sqlite and metadata.json/);
+  });
+});
+
+describe("readActualBudgetArchive bounds", () => {
   it("accepts a structurally bounded archive", () => {
-    expect(() => assertSafeActualBudgetArchive(zipWithDeclaredEntry())).not.toThrow();
+    const archive = zipWithEntries([
+      { name: "db.sqlite" },
+      { name: "metadata.json" },
+    ]);
+
+    expect(() => readActualBudgetArchive(archive)).not.toThrow();
   });
 
   it("rejects a tiny archive that declares a zip-bomb-sized entry", () => {
-    const archive = zipWithDeclaredEntry({
+    const archive = zipWithEntries([{
+      name: "db.sqlite",
       uncompressedSize: MAX_ACTUAL_ARCHIVE_ENTRY_BYTES + 1,
-    });
+    }, { name: "metadata.json" }]);
 
-    expect(() => assertSafeActualBudgetArchive(archive)).toThrow(/expanded size limit/);
+    expect(() => readActualBudgetArchive(archive)).toThrow(/expanded size limit/);
   });
 
   it("rejects central-directory offsets that point outside the archive", () => {
-    const archive = zipWithDeclaredEntry();
+    const archive = zipWithEntries([{ name: "db.sqlite" }, { name: "metadata.json" }]);
     archive.writeUInt32LE(archive.length + 100, archive.length - 6);
 
-    expect(() => assertSafeActualBudgetArchive(archive)).toThrow(/central directory/);
+    expect(() => readActualBudgetArchive(archive)).toThrow(/central directory/);
   });
 });
 

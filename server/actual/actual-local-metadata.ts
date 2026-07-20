@@ -1,4 +1,3 @@
-import AdmZip from "adm-zip";
 import { createClient } from "@libsql/client";
 import type { Client } from "@libsql/client";
 import type { InStatement } from "@libsql/client";
@@ -21,7 +20,7 @@ import {
   fetchActualBuffer,
   syncDownloadedBudget,
 } from "./actualMetadataSync.ts";
-import { assertSafeActualBudgetArchive, validateActualBudgetId } from "./actual-budget-archive.ts";
+import { readActualBudgetArchive, validateActualBudgetId } from "./actual-budget-archive.ts";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.ts";
@@ -158,18 +157,8 @@ async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir
     token,
     fileId,
   });
-  assertSafeActualBudgetArchive(buffer);
-  const zip = new AdmZip(buffer);
-  const entries = zip.getEntries();
-  const dbEntries = entries.filter((entry) => entry.entryName.split(/[\\/]/).at(-1) === "db.sqlite");
-  const metaEntries = entries.filter((entry) => entry.entryName.split(/[\\/]/).at(-1) === "metadata.json");
-  const dbEntry = dbEntries.length === 1 ? dbEntries[0] : null;
-  const metaEntry = metaEntries.length === 1 ? metaEntries[0] : null;
-  if (!dbEntry || !metaEntry) {
-    throw Object.assign(new Error("Actual Budget download did not include db.sqlite and metadata.json"), { status: 502 });
-  }
-
-  const parsedMetadata = JSON.parse(zip.readAsText(metaEntry)) as BudgetMetadata;
+  const archive = readActualBudgetArchive(buffer);
+  const parsedMetadata = JSON.parse(archive.metadata.toString("utf8")) as BudgetMetadata;
   const budgetId = validateActualBudgetId(parsedMetadata.id);
   const metadata: LocalBudget["metadata"] = {
     ...parsedMetadata,
@@ -181,9 +170,7 @@ async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir
   };
   const budgetDir = path.join(dataDir, budgetId);
   await mkdir(budgetDir, { recursive: true });
-  const databaseBuffer = zip.readFile(dbEntry);
-  if (!databaseBuffer) throw Object.assign(new Error("Actual Budget download did not include a readable db.sqlite"), { status: 502 });
-  await writeFile(path.join(budgetDir, "db.sqlite"), databaseBuffer);
+  await writeFile(path.join(budgetDir, "db.sqlite"), archive.database);
   await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify(metadata));
   const syncDeltas = await syncDownloadedBudget(config, token, { budgetDir, metadata });
   let backupPrune = { removed: 0, kept: 0 };
