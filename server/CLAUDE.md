@@ -55,6 +55,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
 - `scripts/reset-passkeys.ts` — wipes passkey/session tables for local dev reset
+- `scripts/rotate-encryption-key.ts` — dry-run-first, offline transactional root-key rotation CLI
 - `scripts/triage-eval.ts`, `scripts/triage-preflight-dry-run.ts` — email triage model eval harness and preflight-rules dry run
 
 ### `test-utils/` — shared test-only helpers (not themselves test files, so mapped explicitly)

@@ -8,14 +8,13 @@ process.env.EA_ENCRYPTION_KEY = TEST_KEY;
 
 const {
   createEncryption,
-  credentialEncryptionContext,
   decrypt,
   encrypt,
   getRootKeyHealth,
   parseRootEncryptionKey,
 } = await import("./encryption.ts");
 
-const TEST_CONTEXT = credentialEncryptionContext("ea_settings", "actual_budget_password", "owner-1");
+const TEST_CONTEXT = { table: "ea_settings", field: "actual_budget_password", recordId: "owner-1" };
 
 // Helper: encrypt using the CBC algorithm to generate compatibility test fixtures.
 function cbcEncrypt(plaintext: string) {
@@ -166,7 +165,7 @@ describe("encryption", () => {
   describe("AAD-bound v2 context", () => {
     it("rejects ciphertext moved to a different record", () => {
       const encrypted = encrypt("sensitive-data", TEST_CONTEXT);
-      const otherContext = credentialEncryptionContext("ea_settings", "actual_budget_password", "owner-2");
+      const otherContext = { ...TEST_CONTEXT, recordId: "owner-2" };
 
       expect(() => decrypt(encrypted, otherContext)).toThrow(
         "Encrypted credential is invalid or cannot be decrypted",
@@ -175,7 +174,7 @@ describe("encryption", () => {
 
     it("rejects ciphertext moved to a different field", () => {
       const encrypted = encrypt("sensitive-data", TEST_CONTEXT);
-      const otherContext = credentialEncryptionContext("ea_settings", "discord_webhook_url", "owner-1");
+      const otherContext = { ...TEST_CONTEXT, field: "discord_webhook_url" };
 
       expect(() => decrypt(encrypted, otherContext)).toThrow(
         "Encrypted credential is invalid or cannot be decrypted",

@@ -15,14 +15,6 @@ export type CredentialEncryptionContext = Readonly<{
   recordId: string;
 }>;
 
-export function credentialEncryptionContext(
-  table: string,
-  field: string,
-  recordId: string,
-): CredentialEncryptionContext {
-  return { table, field, recordId };
-}
-
 function aadFor(context: CredentialEncryptionContext): Buffer {
   return Buffer.from(JSON.stringify([
     "setpoint-credential",

@@ -8,6 +8,8 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `account-canonical.ts` — dedupes configured accounts, resolves canonical Gmail account
 - `settings-schemas.ts` — write-boundary validation for `ea_settings` JSON blobs
 - `encryption.ts` — secret encrypt/decrypt for stored credentials
+- `credential-encryption-context.ts` — canonical table/field/record AAD contexts for encrypted credential families
+- `encrypted-credential-inventory.ts` — allowlisted inventory of every encrypted database field used by audits and rotation
 - `google-places.ts` — Google Places autocomplete/details client with radius biasing
 - `weather.ts` — Pirate Weather fetch and condition → lucide icon mapping
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
@@ -17,6 +19,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `instance-credential-store.ts` — encrypted active/pending persistence, disable tombstones, and atomic candidate promotion
 - `instance-credential-service.ts` — server-only source resolution, env import, metadata projection, and change subscriptions
 - `root-key-health.ts` — non-secret root-key fingerprint and allowlisted ciphertext decryptability audit
+- `root-key-rotation.ts` — preflight and all-or-nothing transactional re-encryption across the credential inventory
 - `capability-projection.ts` — pure provider-neutral capability/source/health projection from injected redacted metadata
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
