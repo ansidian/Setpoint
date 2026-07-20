@@ -14,6 +14,13 @@ import {
 import type { GmailPubSubStatus } from "../../../../shared/types/email";
 import { SETTINGS_PRIMARY_BUTTON_CLASS, SETTINGS_SECONDARY_BUTTON_CLASS } from "../settings-core";
 import { FieldHint, SectionLabel, SettingsCard, StatusPill } from "../settings-ui";
+import {
+  SensitiveActionStepUp,
+} from "../SensitiveActionStepUp";
+import {
+  isPasswordStepUpRequired,
+  useSensitiveActionStepUp,
+} from "../sensitiveActionStepUpModel";
 
 const BUTTON_MOTION = "min-h-11 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0 sm:min-h-8";
 
@@ -27,6 +34,8 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(openAdvancedSetup);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const stepUp = useSensitiveActionStepUp();
+  const credentialActionLocked = Boolean(stepUp.pendingLabel);
 
   useEffect(() => {
     if (demo) return;
@@ -45,35 +54,58 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
     if (openAdvancedSetup) setAdvancedOpen(true);
   }, [openAdvancedSetup]);
 
-  async function run(action: () => Promise<GmailPubSubStatus>, success: string) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      setStatus(await action());
-      setMessage(success);
-    } catch {
-      setMessage("The Gmail real-time configuration could not be updated.");
-    } finally {
-      setBusy(false);
-    }
+  async function run(action: () => Promise<GmailPubSubStatus>, success: string, label: string) {
+    await stepUp.run(async () => {
+      setBusy(true);
+      setMessage(null);
+      try {
+        setStatus(await action());
+        setMessage(success);
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setMessage("The Gmail real-time configuration could not be updated.");
+      } finally {
+        setBusy(false);
+      }
+    }, label);
   }
 
   async function handleGenerate() {
     if (status?.pushToken.configured && !window.confirm(
       "Regenerating invalidates the existing Pub/Sub subscription callback token. Update the external subscription immediately or real-time delivery will stop.",
     )) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const result = await generateGmailPubSubCallback();
-      setStatus(result.status);
-      setCopyMessage(null);
-      setRevealedCallback(result.callbackUrl);
-    } catch {
-      setMessage("A callback could not be generated.");
-    } finally {
-      setBusy(false);
-    }
+    await stepUp.run(async () => {
+      setBusy(true);
+      setMessage(null);
+      try {
+        const result = await generateGmailPubSubCallback();
+        setStatus(result.status);
+        setCopyMessage(null);
+        setRevealedCallback(result.callbackUrl);
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setMessage("A callback could not be generated.");
+      } finally {
+        setBusy(false);
+      }
+    }, status?.pushToken.configured ? "regenerating the Gmail callback" : "generating the Gmail callback");
+  }
+
+  async function handleTestWatches() {
+    await stepUp.run(async () => {
+      setBusy(true);
+      setMessage(null);
+      try {
+        const result = await testGmailPubSubWatches();
+        setMessage(result.ok ? `Watch registration succeeded for ${result.registered} account(s).` : "Watch registration needs attention.");
+        setStatus(await getGmailPubSubStatus());
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setMessage("Watch registration needs attention.");
+      } finally {
+        setBusy(false);
+      }
+    }, "testing the Gmail watches");
   }
 
   const periodic = !status?.configured;
@@ -102,38 +134,36 @@ export default function GmailRealtimeCard({ openAdvancedSetup = false }: { openA
             <div className="mt-4 flex flex-col gap-4">
               <div>
                 <SectionLabel htmlFor="gmail-pubsub-topic">Google Cloud topic</SectionLabel>
-                <Input id="gmail-pubsub-topic" value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="projects/project-id/topics/gmail" />
+                <Input id="gmail-pubsub-topic" value={topic} disabled={credentialActionLocked} onChange={(event) => setTopic(event.target.value)} placeholder="projects/project-id/topics/gmail" />
                 <FieldHint className="mt-1">Saving a topic does not expose or replace the callback token.</FieldHint>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" disabled={busy || !topic.trim()} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={() => run(async () => {
+                <Button size="sm" disabled={busy || credentialActionLocked || !topic.trim()} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={() => run(async () => {
                   await setGmailPubSubTopic(topic.trim());
                   setTopic("");
                   return getGmailPubSubStatus();
-                }, "Pub/Sub topic saved.")}>Save topic</Button>
-                <Button size="sm" disabled={busy} className={`${SETTINGS_PRIMARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleGenerate}>
+                }, "Pub/Sub topic saved.", "saving the Gmail Pub/Sub topic")}>Save topic</Button>
+                <Button size="sm" disabled={busy || credentialActionLocked} className={`${SETTINGS_PRIMARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleGenerate}>
                   {status?.pushToken.configured ? "Regenerate callback" : "Generate callback"}
                 </Button>
-                <Button size="sm" disabled={busy || !status?.configured} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const result = await testGmailPubSubWatches();
-                    setMessage(result.ok ? `Watch registration succeeded for ${result.registered} account(s).` : "Watch registration needs attention.");
-                    setStatus(await getGmailPubSubStatus());
-                  } catch { setMessage("Watch registration needs attention."); } finally { setBusy(false); }
-                }}>Test watches</Button>
+                <Button size="sm" disabled={busy || credentialActionLocked || !status?.configured} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={handleTestWatches}>Test watches</Button>
                 {status?.pushToken.source === "environment" ? (
-                  <Button size="sm" disabled={busy} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={() => run(importGmailPubSubEnvironmentToken, "Host token migrated into Setpoint.")}>Migrate host token</Button>
+                  <Button size="sm" disabled={busy || credentialActionLocked} className={`${SETTINGS_SECONDARY_BUTTON_CLASS} ${BUTTON_MOTION}`} onClick={() => run(
+                    importGmailPubSubEnvironmentToken,
+                    "Copied into encrypted Setpoint storage. The Render variable still remains. Back up EA_ENCRYPTION_KEY, remove the Gmail push-token variable in Render, redeploy, then verify real-time delivery before considering the migration complete.",
+                    "copying the Gmail push token into Setpoint",
+                  )}>Copy into Setpoint</Button>
                 ) : null}
                 {status?.pushToken.configured ? (
-                  <Button variant="destructive" size="sm" disabled={busy} className={BUTTON_MOTION} onClick={() => {
+                  <Button variant="destructive" size="sm" disabled={busy || credentialActionLocked} className={BUTTON_MOTION} onClick={() => {
                     if (!window.confirm("Revoke this callback token? The external Pub/Sub subscription will stop delivering until it is updated.")) return;
-                    void run(revokeGmailPubSubToken, "Callback revoked. Periodic updates remain active.");
+                    void run(revokeGmailPubSubToken, "Callback revoked. Periodic updates remain active.", "revoking the Gmail callback");
                   }}>Revoke callback</Button>
                 ) : null}
               </div>
               {status?.callbackUrl ? <FieldHint>Callback base: {status.callbackUrl}</FieldHint> : null}
               {message ? <FieldHint>{message}</FieldHint> : null}
+              <SensitiveActionStepUp state={stepUp} />
             </div>
           </details>
         ) : null}

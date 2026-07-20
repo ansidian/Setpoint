@@ -1,8 +1,14 @@
 import { Router } from "express";
-import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.ts";
+import {
+  requireCookieSessionOrApiTokenScope,
+  requireRecentPasswordAuth,
+} from "../../middleware/auth.ts";
 import * as billsService from "../../bills/bills-service.ts";
 import { validateActualBudgetUrl } from "../../platform/settings-schemas.ts";
-import { billExtractLimiter } from "../../middleware/rate-limits.ts";
+import {
+  actualConnectionLimiter,
+  billExtractLimiter,
+} from "../../middleware/rate-limits.ts";
 import type { ActualBillWriteInput } from "../../actual/actual.ts";
 
 type HttpError = Error & { status?: number };
@@ -209,7 +215,7 @@ router.get("/actual/categories", async (_req, res) => {
   }
 });
 
-router.post("/actual/test", async (req, res) => {
+router.post("/actual/test", requireRecentPasswordAuth, actualConnectionLimiter, async (req, res) => {
   const { serverURL, password, syncId } = req.body || {};
   if (serverURL) {
     const validation = validateActualBudgetUrl(serverURL);
@@ -227,7 +233,7 @@ router.post("/actual/test", async (req, res) => {
   }
 });
 
-router.post("/actual/connection", async (req, res) => {
+router.post("/actual/connection", requireRecentPasswordAuth, actualConnectionLimiter, async (req, res) => {
   const { serverURL, password, syncId } = req.body || {};
   if (typeof serverURL !== "string" || typeof syncId !== "string") {
     return res.status(400).json({ message: "Actual Budget server URL and sync ID are required" });
@@ -258,7 +264,7 @@ router.post("/actual/connection", async (req, res) => {
   }
 });
 
-router.delete("/actual/connection", async (_req, res) => {
+router.delete("/actual/connection", requireRecentPasswordAuth, async (_req, res) => {
   try {
     return res.json(await billsService.removeActualConnection(ownerUserId()));
   } catch (error: unknown) {

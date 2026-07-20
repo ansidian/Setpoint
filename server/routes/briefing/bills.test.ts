@@ -33,6 +33,7 @@ const billsModule = await import("./bills.ts");
 const billsRouter = billsModule.default;
 const quickTxnRouter = billsModule.quickTxnRouter;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
+let passwordAuthenticatedAt = Date.now();
 
 function makeApp() {
   const app = express();
@@ -54,15 +55,16 @@ function makeQuickTxnApp() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  passwordAuthenticatedAt = Date.now();
   mockDb.execute.mockImplementation(async ({ sql, args }) => {
     if (sql.includes("FROM ea_sessions")) {
       return args[0] === cookieSessionHash
         ? { rows: [{
             expires_at: Date.now() + 60_000,
-            authenticated_at: 0,
-            password_authenticated_at: 0,
+            authenticated_at: passwordAuthenticatedAt,
+            password_authenticated_at: passwordAuthenticatedAt,
             security_generation: 1,
-            auth_method: "legacy",
+            auth_method: "password",
           }] }
         : { rows: [] };
     }
@@ -238,6 +240,26 @@ describe("Bill Pay routes", () => {
       password: "candidate-password",
       syncId: "candidate-sync",
     });
+  });
+
+  it("requires recent password authentication for Actual connection changes", async () => {
+    passwordAuthenticatedAt = 0;
+
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/connection")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        serverURL: "https://actual.example.test",
+        password: "candidate-password",
+        syncId: "candidate-sync",
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      code: "PASSWORD_STEP_UP_REQUIRED",
+      message: "Confirm your password to continue",
+    });
+    expect(mockBillsService.saveActualConnection).not.toHaveBeenCalled();
   });
 
   it("removes the Actual connection through an effect-specific endpoint", async () => {

@@ -14,8 +14,16 @@ import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
 import { isDemoMode } from "@/demo/config";
+import { cn } from "@/lib/utils";
 import type { SettingsCardStateProps, SettingsConnectionRefreshProps } from "../settingsTypes";
 import type { SettingsPatchRequest } from "../../../../shared/types/settings";
+import {
+  SensitiveActionStepUp,
+} from "../SensitiveActionStepUp";
+import {
+  isPasswordStepUpRequired,
+  useSensitiveActionStepUp,
+} from "../sensitiveActionStepUpModel";
 
 type DiscordTestStatus = "save-failed" | "sent" | "failed" | null;
 interface DiscordFormState {
@@ -27,6 +35,8 @@ interface DiscordFormState {
   testing: boolean;
   testStatus: DiscordTestStatus;
 }
+
+const BUTTON_MOTION = "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
 
 export default function DiscordRemindersCard({
   settings,
@@ -43,9 +53,10 @@ export default function DiscordRemindersCard({
     testing: false,
     testStatus: null,
   });
+  const stepUp = useSensitiveActionStepUp();
+  const credentialActionLocked = Boolean(stepUp.pendingLabel);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync the Discord form from saved settings on load/change
     setDiscordForm((current) => ({
       ...current,
       userId: settings?.discord_user_id || "",
@@ -56,49 +67,59 @@ export default function DiscordRemindersCard({
   }, [settings?.discord_user_id, settings?.discord_webhook_configured]);
 
   async function handleSaveDiscordSettings() {
-    setDiscordForm((current) => ({ ...current, saving: true, testStatus: null }));
     const trimmedWebhook = discordForm.webhookUrl.trim();
     const trimmedUserId = discordForm.userId.trim();
-    try {
-      const payload: SettingsPatchRequest = { discord_user_id: trimmedUserId };
-      if (trimmedWebhook) payload.discord_webhook_url = trimmedWebhook;
-      await updateSettings(payload);
-      sessionStorage.setItem("ea_settings_changed", "1");
-      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
-      setDiscordForm((current) => ({
-        ...current,
-        webhookUrl: "",
-        userId: trimmedUserId,
-        configured: current.configured || !!trimmedWebhook,
-        dirty: false,
-        saving: false,
-      }));
-      await onRefreshConnections().catch(() => {});
-    } catch {
-      setDiscordForm((current) => ({ ...current, saving: false, testStatus: "save-failed" }));
-    }
+    const payload: SettingsPatchRequest = { discord_user_id: trimmedUserId };
+    if (trimmedWebhook) payload.discord_webhook_url = trimmedWebhook;
+    await stepUp.run(async () => {
+      setDiscordForm((current) => ({ ...current, saving: true, testStatus: null }));
+      try {
+        await updateSettings(payload);
+        sessionStorage.setItem("ea_settings_changed", "1");
+        window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+        setDiscordForm((current) => ({
+          ...current,
+          webhookUrl: "",
+          userId: trimmedUserId,
+          configured: current.configured || !!trimmedWebhook,
+          dirty: false,
+          saving: false,
+        }));
+        await onRefreshConnections().catch(() => {});
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setDiscordForm((current) => ({ ...current, saving: false, testStatus: "save-failed" }));
+      } finally {
+        setDiscordForm((current) => ({ ...current, saving: false }));
+      }
+    }, trimmedWebhook ? "saving the Discord webhook" : "saving the Discord user ID");
   }
 
   async function handleClearDiscordSettings() {
-    setDiscordForm((current) => ({ ...current, saving: true, testStatus: null }));
-    try {
-      await updateSettings({ discord_webhook_url: "", discord_user_id: "" });
-      sessionStorage.setItem("ea_settings_changed", "1");
-      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
-      setDiscordForm({
-        webhookUrl: "",
-        userId: "",
-        configured: false,
-        dirty: false,
-        saving: false,
-        testing: false,
-        testStatus: null,
-      });
-      setConfirmingRemoval(false);
-      await onRefreshConnections().catch(() => {});
-    } catch {
-      setDiscordForm((current) => ({ ...current, saving: false, testStatus: "save-failed" }));
-    }
+    await stepUp.run(async () => {
+      setDiscordForm((current) => ({ ...current, saving: true, testStatus: null }));
+      try {
+        await updateSettings({ discord_webhook_url: "", discord_user_id: "" });
+        sessionStorage.setItem("ea_settings_changed", "1");
+        window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+        setDiscordForm({
+          webhookUrl: "",
+          userId: "",
+          configured: false,
+          dirty: false,
+          saving: false,
+          testing: false,
+          testStatus: null,
+        });
+        setConfirmingRemoval(false);
+        await onRefreshConnections().catch(() => {});
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setDiscordForm((current) => ({ ...current, saving: false, testStatus: "save-failed" }));
+      } finally {
+        setDiscordForm((current) => ({ ...current, saving: false }));
+      }
+    }, "removing the Discord webhook");
   }
 
   async function handleTestDiscordWebhook() {
@@ -131,6 +152,7 @@ export default function DiscordRemindersCard({
                   : "https://discord.com/api/webhooks/..."
               }
               value={discordForm.webhookUrl}
+              disabled={credentialActionLocked}
               onChange={(event) => {
                 const nextValue = event.target.value;
                 setDiscordForm((current) => ({
@@ -153,6 +175,7 @@ export default function DiscordRemindersCard({
               aria-label="Discord user ID"
               placeholder="Optional mention"
               value={discordForm.userId}
+              disabled={credentialActionLocked}
               onChange={(event) => {
                 const nextValue = event.target.value;
                 setDiscordForm((current) => ({
@@ -175,8 +198,8 @@ export default function DiscordRemindersCard({
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={handleSaveDiscordSettings}
-            className={SETTINGS_PRIMARY_BUTTON_CLASS}
-            disabled={!discordForm.dirty || discordForm.saving}
+            className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION)}
+            disabled={!discordForm.dirty || discordForm.saving || credentialActionLocked}
             size="sm"
           >
             {discordForm.saving ? "Saving…" : "Save Discord"}
@@ -185,8 +208,8 @@ export default function DiscordRemindersCard({
             type="button"
             variant="outline"
             onClick={handleTestDiscordWebhook}
-            className={SETTINGS_SECONDARY_BUTTON_CLASS}
-            disabled={demoMode || !discordForm.configured || discordForm.dirty || discordForm.testing}
+            className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
+            disabled={demoMode || !discordForm.configured || discordForm.dirty || discordForm.testing || credentialActionLocked}
             size="sm"
           >
             <Send size={13} />
@@ -197,6 +220,7 @@ export default function DiscordRemindersCard({
               <StatusPill tone="success">Saved</StatusPill>
               <button
                 type="button"
+                disabled={credentialActionLocked}
                 onClick={() => setConfirmingRemoval(true)}
                 className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
               >
@@ -220,7 +244,7 @@ export default function DiscordRemindersCard({
                 type="button"
                 variant="destructive"
                 size="sm"
-                disabled={discordForm.saving}
+                disabled={discordForm.saving || credentialActionLocked}
                 onClick={handleClearDiscordSettings}
                 className="transition-transform duration-200 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
               >
@@ -230,15 +254,16 @@ export default function DiscordRemindersCard({
                 type="button"
                 variant="secondary"
                 size="sm"
-                disabled={discordForm.saving}
+                disabled={discordForm.saving || credentialActionLocked}
                 onClick={() => setConfirmingRemoval(false)}
-                className={SETTINGS_SECONDARY_BUTTON_CLASS}
+                className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
               >
                 Cancel
               </Button>
             </div>
           </div>
         ) : null}
+        <SensitiveActionStepUp state={stepUp} />
       </div>
     </SettingsCard>
   );

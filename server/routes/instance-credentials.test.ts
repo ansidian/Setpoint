@@ -11,7 +11,16 @@ import type { TodoistOAuthCredentialManager } from "../tasks/todoist-oauth-crede
 
 vi.mock("../middleware/auth.ts", () => ({
   requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
-    req.cookies?.ea_session === "valid" ? next() : res.status(401).json({ message: "Not authenticated" }),
+    req.cookies?.ea_session === "valid" || req.cookies?.ea_session === "stale"
+      ? next()
+      : res.status(401).json({ message: "Not authenticated" }),
+  requireRecentPasswordAuth: (req: express.Request, res: express.Response, next: express.NextFunction) =>
+    req.cookies?.ea_session === "valid"
+      ? next()
+      : res.status(403).json({
+          code: "PASSWORD_STEP_UP_REQUIRED",
+          message: "Confirm your password to continue",
+        }),
 }));
 
 const { errorHandler } = await import("../middleware/async-handler.ts");
@@ -64,6 +73,18 @@ function createApp(
       credentials: [metadata, { ...metadata, key: "google.oauth_client_secret" }],
       candidateVersions: { clientId: 3, clientSecret: 4 },
     })),
+    importEnvironment: vi.fn(async () => [
+      { ...metadata, key: "google.oauth_client_id" },
+      { ...metadata, key: "google.oauth_client_secret" },
+    ]),
+    disable: vi.fn(async () => [
+      { ...metadata, key: "google.oauth_client_id", source: "disabled" as const },
+      { ...metadata, key: "google.oauth_client_secret", source: "disabled" as const },
+    ]),
+    useHostValues: vi.fn(async () => [
+      { ...metadata, key: "google.oauth_client_id", source: "environment" as const },
+      { ...metadata, key: "google.oauth_client_secret", source: "environment" as const },
+    ]),
     ...googleOAuthManagerOverrides,
   } as unknown as GoogleOAuthCredentialManager;
   const gmailPubSubManager = {
@@ -121,6 +142,25 @@ describe("instance credential routes", () => {
     expect((await request(app).get("/api/instance-credentials")).status).toBe(401);
   });
 
+  it("allows redacted metadata but rejects mutations without recent password auth", async () => {
+    const { app, service } = createApp();
+    const metadata = await request(app)
+      .get("/api/instance-credentials")
+      .set("Cookie", "ea_session=stale");
+    const mutation = await request(app)
+      .put("/api/instance-credentials/ai.openai_api_key/pending")
+      .set("Cookie", "ea_session=stale")
+      .send({ value: "browser-secret" });
+
+    expect(metadata.status).toBe(200);
+    expect(mutation.status).toBe(403);
+    expect(mutation.body).toEqual({
+      code: "PASSWORD_STEP_UP_REQUIRED",
+      message: "Confirm your password to continue",
+    });
+    expect(service.stagePending).not.toHaveBeenCalled();
+  });
+
   it("accepts write-only candidates without returning plaintext", async () => {
     const { app, service } = createApp();
     const response = await request(app)
@@ -147,6 +187,36 @@ describe("instance credential routes", () => {
     });
     expect(JSON.stringify(response.body)).not.toContain("browser-client-id");
     expect(JSON.stringify(response.body)).not.toContain("browser-client-secret");
+  });
+
+  it.each([
+    ["import-environment", "importEnvironment"],
+    ["disable", "disable"],
+    ["use-host", "useHostValues"],
+  ] as const)("changes the Google pair through the atomic %s action", async (path, method) => {
+    const { app, googleOAuthManager } = createApp();
+    const response = await request(app)
+      .post(`/api/instance-credentials/google-oauth/${path}`)
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    expect(googleOAuthManager[method]).toHaveBeenCalledTimes(1);
+    expect(response.body.credentials).toHaveLength(2);
+    expect(JSON.stringify(response.body)).not.toContain("environment-secret-value");
+  });
+
+  it("rejects generic single-key mutations for provider-owned credential pairs", async () => {
+    const { app, service } = createApp();
+    const response = await request(app)
+      .post("/api/instance-credentials/google.oauth_client_id/disable")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      code: "CREDENTIAL_GROUP_ACTION_REQUIRED",
+      message: "Use the provider-owned credential-pair action",
+    });
+    expect(service.disable).not.toHaveBeenCalled();
   });
 
   it("stages the Todoist application pair without returning plaintext", async () => {

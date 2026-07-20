@@ -847,7 +847,10 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/instance-credentials/gmail-pubsub/test-watches` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/gmail-pubsub/topic` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/gmail-pubsub/use-host-token` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/google-oauth/disable` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/google-oauth/import-environment` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/google-oauth/use-host` | `server/routes/instance-credentials.ts` |
 | POST | `/api/instance-credentials/todoist-oauth/import-environment` | `server/routes/instance-credentials.ts` |
 | PUT | `/api/instance-credentials/todoist-oauth/pending` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |

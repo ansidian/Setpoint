@@ -92,4 +92,42 @@ describe("Google OAuth credential manager", () => {
       clientSecret: "env-client-secret",
     });
   });
+
+  it("changes the Google application source as one credential pair", async () => {
+    const { manager: google, service } = manager({
+      GOOGLE_CLIENT_ID: "env-client-id",
+      GOOGLE_CLIENT_SECRET: "env-client-secret",
+    });
+
+    const imported = await google.importEnvironment();
+    expect(imported).toHaveLength(2);
+    expect(imported.every((item) => item.source === "stored")).toBe(true);
+    expect(JSON.stringify(imported)).not.toContain("env-client-secret");
+
+    const disabled = await google.disable();
+    expect(disabled.every((item) => item.source === "disabled")).toBe(true);
+    await expect(google.resolveActive()).rejects.toMatchObject({ code: "GOOGLE_OAUTH_NOT_CONFIGURED" });
+
+    const restored = await google.useHostValues();
+    expect(restored.every((item) => item.source === "environment")).toBe(true);
+    await expect(service.resolve("google.oauth_client_id")).resolves.toMatchObject({
+      source: "environment",
+      value: "env-client-id",
+    });
+    await expect(google.resolveActive()).resolves.toEqual({
+      clientId: "env-client-id",
+      clientSecret: "env-client-secret",
+    });
+  });
+
+  it("keeps both Google values disabled when one host value is missing", async () => {
+    const { manager: google, service } = manager({ GOOGLE_CLIENT_ID: "env-client-id" });
+    await google.disable();
+
+    await expect(google.useHostValues()).rejects.toMatchObject({
+      code: "HOST_CREDENTIAL_UNAVAILABLE",
+    });
+    await expect(service.getCredentialMetadata("google.oauth_client_id")).resolves.toMatchObject({ source: "disabled" });
+    await expect(service.getCredentialMetadata("google.oauth_client_secret")).resolves.toMatchObject({ source: "disabled" });
+  });
 });

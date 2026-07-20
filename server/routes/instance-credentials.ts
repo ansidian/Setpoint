@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { requireCookieSession } from "../middleware/auth.ts";
+import type { Response } from "express";
+import { requireCookieSession, requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import {
   instanceCredentialService,
@@ -35,6 +36,22 @@ function candidateValue(value: unknown): string | null {
   return value;
 }
 
+const PROVIDER_OWNED_GROUP_KEYS = new Set([
+  "google.oauth_client_id",
+  "google.oauth_client_secret",
+  "tasks.todoist_client_id",
+  "tasks.todoist_client_secret",
+]);
+
+function rejectGenericGroupMutation(key: string, res: Response): boolean {
+  if (!PROVIDER_OWNED_GROUP_KEYS.has(key)) return false;
+  res.status(409).json({
+    code: "CREDENTIAL_GROUP_ACTION_REQUIRED",
+    message: "Use the provider-owned credential-pair action",
+  });
+  return true;
+}
+
 export function createInstanceCredentialsRouter(
   service: InstanceCredentialService = instanceCredentialService,
   aiManager: AiCredentialManager = aiCredentialManager,
@@ -50,7 +67,7 @@ export function createInstanceCredentialsRouter(
     return res.json(await service.getMetadata());
   });
 
-  router.put("/google-oauth/pending", requireCookieSession, async (req, res) => {
+  router.put("/google-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
     const clientId = candidateValue(req.body?.clientId);
     const clientSecret = candidateValue(req.body?.clientSecret);
     if (clientId === null || clientSecret === null) {
@@ -59,7 +76,19 @@ export function createInstanceCredentialsRouter(
     return res.json(await googleOAuthManager.stageCandidate({ clientId, clientSecret }));
   });
 
-  router.put("/todoist-oauth/pending", requireCookieSession, async (req, res) => {
+  router.post("/google-oauth/import-environment", requireRecentPasswordAuth, async (_req, res) => {
+    return res.json({ credentials: await googleOAuthManager.importEnvironment() });
+  });
+
+  router.post("/google-oauth/disable", requireRecentPasswordAuth, async (_req, res) => {
+    return res.json({ credentials: await googleOAuthManager.disable() });
+  });
+
+  router.post("/google-oauth/use-host", requireRecentPasswordAuth, async (_req, res) => {
+    return res.json({ credentials: await googleOAuthManager.useHostValues() });
+  });
+
+  router.put("/todoist-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
     const clientId = candidateValue(req.body?.clientId);
     const clientSecret = candidateValue(req.body?.clientSecret);
     if (clientId === null || clientSecret === null) {
@@ -68,7 +97,7 @@ export function createInstanceCredentialsRouter(
     return res.json(await todoistOAuthManager.stageCandidate({ clientId, clientSecret }));
   });
 
-  router.post("/todoist-oauth/import-environment", requireCookieSession, async (_req, res) => {
+  router.post("/todoist-oauth/import-environment", requireRecentPasswordAuth, async (_req, res) => {
     return res.json({ credentials: await todoistOAuthManager.importEnvironment() });
   });
 
@@ -76,56 +105,61 @@ export function createInstanceCredentialsRouter(
     return res.json(await gmailPubSubManager.getStatus());
   });
 
-  router.put("/gmail-pubsub/topic", requireCookieSession, async (req, res) => {
+  router.put("/gmail-pubsub/topic", requireRecentPasswordAuth, async (req, res) => {
     const value = candidateValue(req.body?.value);
     if (value === null) return res.status(400).json({ message: "Pub/Sub topic is required" });
     return res.json(await gmailPubSubManager.setTopic(value));
   });
 
-  router.post("/gmail-pubsub/generate-callback", requireCookieSession, async (_req, res) => {
+  router.post("/gmail-pubsub/generate-callback", requireRecentPasswordAuth, async (_req, res) => {
     return res.json(await gmailPubSubManager.generateCallback());
   });
 
-  router.post("/gmail-pubsub/import-environment-token", requireCookieSession, async (_req, res) => {
+  router.post("/gmail-pubsub/import-environment-token", requireRecentPasswordAuth, async (_req, res) => {
     return res.json(await gmailPubSubManager.importEnvironmentToken());
   });
 
-  router.post("/gmail-pubsub/use-host-token", requireCookieSession, async (_req, res) => {
+  router.post("/gmail-pubsub/use-host-token", requireRecentPasswordAuth, async (_req, res) => {
     return res.json(await gmailPubSubManager.useHostToken());
   });
 
-  router.post("/gmail-pubsub/revoke-token", requireCookieSession, async (_req, res) => {
+  router.post("/gmail-pubsub/revoke-token", requireRecentPasswordAuth, async (_req, res) => {
     return res.json(await gmailPubSubManager.revokeToken());
   });
 
-  router.post("/gmail-pubsub/test-watches", requireCookieSession, async (_req, res) => {
+  router.post("/gmail-pubsub/test-watches", requireRecentPasswordAuth, async (_req, res) => {
     const result = await gmailPubSubManager.testWatches();
     return res.status(result.ok ? 200 : 422).json(result);
   });
 
-  router.put("/:key/pending", requireCookieSession, async (req, res) => {
+  router.put("/:key/pending", requireRecentPasswordAuth, async (req, res) => {
+    if (rejectGenericGroupMutation(req.params.key!, res)) return;
     const value = candidateValue(req.body?.value);
     if (value === null) return res.status(400).json({ message: "Credential value is required" });
     return res.json(await service.stagePending(req.params.key!, value));
   });
 
-  router.post("/:key/test", requireCookieSession, async (req, res) => {
+  router.post("/:key/test", requireRecentPasswordAuth, async (req, res) => {
     const key = req.params.key!;
+    if (rejectGenericGroupMutation(key, res)) return;
     const result = key === "weather.pirate_weather_api_key" || key === "calendar.google_places_api_key"
       ? await locationManager.testPending(key)
       : await aiManager.testPending(key);
     return res.status(result.ok ? 200 : 422).json(result);
   });
 
-  router.post("/:key/import-environment", requireCookieSession, async (req, res) => {
+  router.post("/:key/import-environment", requireRecentPasswordAuth, async (req, res) => {
+    if (rejectGenericGroupMutation(req.params.key!, res)) return;
     return res.json(await service.importEnvironment(req.params.key!));
   });
 
-  router.post("/:key/disable", requireCookieSession, async (req, res) => {
+  router.post("/:key/disable", requireRecentPasswordAuth, async (req, res) => {
+    if (rejectGenericGroupMutation(req.params.key!, res)) return;
     return res.json(await service.disable(req.params.key!));
   });
 
-  router.post("/:key/use-host", requireCookieSession, async (req, res) => {
+  router.post("/:key/use-host", requireRecentPasswordAuth, async (req, res) => {
+    if (rejectGenericGroupMutation(req.params.key!, res)) return;
     return res.json(await service.useHostValue(req.params.key!));
   });
 

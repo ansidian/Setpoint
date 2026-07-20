@@ -22,6 +22,13 @@ import {
 import type { SettingsCardStateProps, SettingsConnectionRefreshProps } from "../settingsTypes";
 import type { TodoistConnectionStatus } from "../../../../shared/types/tasks";
 import { cn } from "@/lib/utils";
+import {
+  SensitiveActionStepUp,
+} from "../SensitiveActionStepUp";
+import {
+  isPasswordStepUpRequired,
+  useSensitiveActionStepUp,
+} from "../sensitiveActionStepUpModel";
 
 const BUTTON_MOTION_CLASS =
   "min-h-11 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0 sm:min-h-8";
@@ -47,6 +54,8 @@ export default function TodoistCard({
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthMessage, setOauthMessage] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(openAdvancedSetup);
+  const stepUp = useSensitiveActionStepUp();
+  const credentialActionLocked = Boolean(stepUp.pendingLabel);
 
   useEffect(() => {
     if (settings?.todoist_configured) {
@@ -73,102 +82,119 @@ export default function TodoistCard({
   }, [openAdvancedSetup]);
 
   async function handleSaveTodoistSecret() {
-    setTodoistSavingSecret(true);
-    setTodoistMessage(null);
-    try {
-      await saveTodoistPersonalToken(todoistToken);
-      sessionStorage.setItem("ea_settings_changed", "1");
-      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
-      setTodoistConfigured(true);
-      setTodoistDirty(false);
-      setTodoistToken("");
-      await onRefreshConnections().catch(() => {});
+    const candidate = todoistToken;
+    await stepUp.run(async () => {
+      setTodoistSavingSecret(true);
+      setTodoistMessage(null);
       try {
-        setOauthStatus(await getTodoistConnectionStatus());
-      } catch {
-        // The personal-token mutation succeeded; advanced status can recover on the next load.
+        await saveTodoistPersonalToken(candidate);
+        sessionStorage.setItem("ea_settings_changed", "1");
+        window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+        setTodoistConfigured(true);
+        setTodoistDirty(false);
+        setTodoistToken("");
+        await onRefreshConnections().catch(() => {});
+        try {
+          setOauthStatus(await getTodoistConnectionStatus());
+        } catch {
+          // The personal-token mutation succeeded; advanced status can recover on the next load.
+        }
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setTodoistMessage("Todoist personal token could not be verified. The working connection was not changed.");
+      } finally {
+        setTodoistSavingSecret(false);
       }
-    } catch {
-      setTodoistMessage("Todoist personal token could not be verified. The working connection was not changed.");
-    } finally {
-      setTodoistSavingSecret(false);
-    }
+    }, "saving the Todoist personal token");
   }
 
   async function handleDisconnectTodoist() {
-    setDisconnecting(true);
-    setTodoistMessage(null);
-    try {
-      await disconnectTodoistConnection();
-      sessionStorage.setItem("ea_settings_changed", "1");
-      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
-      setTodoistConfigured(false);
-      setTodoistDirty(false);
-      setTodoistToken("");
-      setConfirmingDisconnect(false);
-      setOauthStatus((current) => current ? {
-        ...current,
-        mode: "disconnected",
-        configured: false,
-        oauthRefreshable: false,
-        needsReauth: false,
-        deliveryMode: "periodic",
-      } : current);
-      await onRefreshConnections().catch(() => {});
-    } catch {
-      setTodoistMessage("Todoist could not be disconnected.");
-    } finally {
-      setDisconnecting(false);
-    }
+    await stepUp.run(async () => {
+      setDisconnecting(true);
+      setTodoistMessage(null);
+      try {
+        await disconnectTodoistConnection();
+        sessionStorage.setItem("ea_settings_changed", "1");
+        window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+        setTodoistConfigured(false);
+        setTodoistDirty(false);
+        setTodoistToken("");
+        setConfirmingDisconnect(false);
+        setOauthStatus((current) => current ? {
+          ...current,
+          mode: "disconnected",
+          configured: false,
+          oauthRefreshable: false,
+          needsReauth: false,
+          deliveryMode: "periodic",
+        } : current);
+        await onRefreshConnections().catch(() => {});
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setTodoistMessage("Todoist could not be disconnected.");
+      } finally {
+        setDisconnecting(false);
+      }
+    }, "disconnecting Todoist");
   }
 
   async function handleSaveOAuthApplication() {
-    setOauthBusy(true);
-    setOauthMessage(null);
-    try {
-      await stageTodoistOAuthApplication({ clientId, clientSecret });
-      setClientId("");
-      setClientSecret("");
+    const candidate = { clientId, clientSecret };
+    await stepUp.run(async () => {
+      setOauthBusy(true);
+      setOauthMessage(null);
       try {
-        setOauthStatus(await getTodoistConnectionStatus());
-      } catch {
-        setOauthStatus((current) => current ? {
-          ...current,
-          application: { ...current.application, pendingConfigured: true },
-        } : current);
+        await stageTodoistOAuthApplication(candidate);
+        setClientId("");
+        setClientSecret("");
+        try {
+          setOauthStatus(await getTodoistConnectionStatus());
+        } catch {
+          setOauthStatus((current) => current ? {
+            ...current,
+            application: { ...current.application, pendingConfigured: true },
+          } : current);
+        }
+        setOauthMessage("Application credentials saved as a pending candidate. Connect to validate them.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setOauthMessage("Application credentials could not be saved.");
+      } finally {
+        setOauthBusy(false);
       }
-      setOauthMessage("Application credentials saved as a pending candidate. Connect to validate them.");
-    } catch {
-      setOauthMessage("Application credentials could not be saved.");
-    } finally {
-      setOauthBusy(false);
-    }
+    }, "saving the Todoist OAuth application");
   }
 
   async function handleImportEnvironment() {
-    setOauthBusy(true);
-    setOauthMessage(null);
-    try {
-      await importTodoistOAuthEnvironment();
-      setOauthStatus(await getTodoistConnectionStatus());
-      setOauthMessage("Host-managed Todoist credentials were migrated into Setpoint.");
-    } catch {
-      setOauthMessage("Host-managed Todoist credentials could not be migrated.");
-    } finally {
-      setOauthBusy(false);
-    }
+    await stepUp.run(async () => {
+      setOauthBusy(true);
+      setOauthMessage(null);
+      try {
+        await importTodoistOAuthEnvironment();
+        setOauthStatus(await getTodoistConnectionStatus());
+        setOauthMessage("Copied into encrypted Setpoint storage. The Render variables still remain. Back up EA_ENCRYPTION_KEY, remove both Todoist OAuth variables in Render, redeploy, then verify Todoist before considering the migration complete.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setOauthMessage("Host-managed Todoist credentials could not be copied.");
+      } finally {
+        setOauthBusy(false);
+      }
+    }, "copying the Todoist OAuth credentials into Setpoint");
   }
 
   async function handleBeginOAuth() {
-    setOauthBusy(true);
-    setOauthMessage(null);
-    try {
-      const { url } = await beginTodoistOAuth();
-      window.location.assign(url);
-    } catch {
-      setOauthMessage("Todoist authorization could not be started.");
-      setOauthBusy(false);
-    }
+    await stepUp.run(async () => {
+      setOauthBusy(true);
+      setOauthMessage(null);
+      try {
+        const { url } = await beginTodoistOAuth();
+        window.location.assign(url);
+      } catch (caught) {
+        setOauthBusy(false);
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setOauthMessage("Todoist authorization could not be started.");
+      }
+    }, "starting Todoist authorization");
   }
 
   return (
@@ -191,6 +217,7 @@ export default function TodoistCard({
                 : "Todoist API token"
             }
             value={todoistToken}
+            disabled={credentialActionLocked}
             onChange={(event) => {
               setTodoistToken(event.target.value);
               setTodoistDirty(true);
@@ -220,7 +247,7 @@ export default function TodoistCard({
             <Button
               onClick={handleSaveTodoistSecret}
               className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
-              disabled={!todoistDirty || todoistSavingSecret}
+              disabled={!todoistDirty || todoistSavingSecret || credentialActionLocked}
               size="sm"
             >
               {todoistSavingSecret ? "Saving & verifying…" : "Save & verify"}
@@ -235,6 +262,7 @@ export default function TodoistCard({
               )}
               <button
                 type="button"
+                disabled={credentialActionLocked}
                 onClick={() => setConfirmingDisconnect(true)}
                 className="min-h-11 rounded-md px-2 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none sm:min-h-0"
               >
@@ -255,7 +283,7 @@ export default function TodoistCard({
                 type="button"
                 variant="destructive"
                 size="sm"
-                disabled={disconnecting}
+                disabled={disconnecting || credentialActionLocked}
                 onClick={handleDisconnectTodoist}
                 className={BUTTON_MOTION_CLASS}
               >
@@ -265,7 +293,7 @@ export default function TodoistCard({
                 type="button"
                 variant="secondary"
                 size="sm"
-                disabled={disconnecting}
+                disabled={disconnecting || credentialActionLocked}
                 onClick={() => setConfirmingDisconnect(false)}
                 className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
               >
@@ -274,6 +302,8 @@ export default function TodoistCard({
             </div>
           </div>
         ) : null}
+
+        <SensitiveActionStepUp state={stepUp} />
 
         <details
           open={advancedOpen}
@@ -302,6 +332,7 @@ export default function TodoistCard({
                 <Input
                   id="todoist-client-id"
                   value={clientId}
+                  disabled={credentialActionLocked}
                   autoComplete="off"
                   onChange={(event) => setClientId(event.target.value)}
                   placeholder="Todoist app client ID"
@@ -313,6 +344,7 @@ export default function TodoistCard({
                   id="todoist-client-secret"
                   type="password"
                   value={clientSecret}
+                  disabled={credentialActionLocked}
                   autoComplete="new-password"
                   onChange={(event) => setClientSecret(event.target.value)}
                   placeholder="Todoist app client secret"
@@ -324,7 +356,7 @@ export default function TodoistCard({
               <Button
                 size="sm"
                 className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
-                disabled={!clientId || !clientSecret || oauthBusy}
+                disabled={!clientId || !clientSecret || oauthBusy || credentialActionLocked}
                 onClick={handleSaveOAuthApplication}
               >
                 Save app credentials
@@ -332,7 +364,7 @@ export default function TodoistCard({
               <Button
                 size="sm"
                 className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
-                disabled={oauthBusy || !oauthStatus?.application.configured && !oauthStatus?.application.pendingConfigured}
+                disabled={oauthBusy || credentialActionLocked || !oauthStatus?.application.configured && !oauthStatus?.application.pendingConfigured}
                 onClick={handleBeginOAuth}
               >
                 Connect with OAuth
@@ -341,10 +373,10 @@ export default function TodoistCard({
                 <Button
                   size="sm"
                   className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION_CLASS)}
-                  disabled={oauthBusy}
+                  disabled={oauthBusy || credentialActionLocked}
                   onClick={handleImportEnvironment}
                 >
-                  Migrate host credentials
+                  {oauthBusy ? "Copying…" : "Copy into Setpoint"}
                 </Button>
               ) : null}
               {oauthStatus?.mode === "oauth" ? (

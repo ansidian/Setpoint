@@ -35,6 +35,12 @@ vi.mock("../platform/weather.ts", () => ({
 vi.mock("../scheduler.ts", () => ({
   initScheduler: vi.fn(async () => {}),
 }));
+vi.mock("../middleware/auth.ts", () => ({
+  requireRecentPasswordAuth: (req: express.Request, res: express.Response, next: express.NextFunction) =>
+    req.header("x-recent-password-auth") === "1"
+      ? next()
+      : res.status(403).json({ code: "PASSWORD_STEP_UP_REQUIRED", message: "Confirm your password" }),
+}));
 vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
@@ -294,10 +300,31 @@ describe("settings PUT scalar field validation (P3-55)", () => {
   it("rejects a non-Discord discord_webhook_url and does not encrypt/persist (SEC-05)", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
+      .set("x-recent-password-auth", "1")
       .send({ discord_webhook_url: "https://evil.com/hook" });
 
     expect(res.status).toBe(400);
     expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
+  });
+
+  it("requires recent password authentication before replacing a Discord webhook", async () => {
+    const stale = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ discord_webhook_url: "https://discord.com/api/webhooks/123/private-token" });
+
+    expect(stale.status).toBe(403);
+    expect(stale.body.code).toBe("PASSWORD_STEP_UP_REQUIRED");
+    expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
+
+    const recent = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("x-recent-password-auth", "1")
+      .send({ discord_webhook_url: "https://discord.com/api/webhooks/123/private-token" });
+
+    expect(recent.status).toBe(200);
+    expect((await getSettingsRow()).discord_webhook_url_encrypted).toBe(
+      "enc:https://discord.com/api/webhooks/123/private-token",
+    );
   });
 
   it("accepts unrelated valid scalar settings and persists them", async () => {

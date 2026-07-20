@@ -20,6 +20,7 @@ import {
   mapUpcomingBills,
 } from "./actualCoreModel.ts";
 import db from "../db/connection.ts";
+import { ActualPasswordRequiredForServerChangeError, isSameActualServerUrl } from "./actual-connection-test.ts";
 import type {
   ActualAccount,
   ActualCategoryGroup,
@@ -241,6 +242,9 @@ export function testConnection(userId: string, overrides: ActualConnectionOverri
       } else {
         // Dirty URL/sync-id but password unchanged — fall back to stored password
         const stored = await getActualConfig(userId).catch(() => null);
+        if (stored && !isSameActualServerUrl(serverURL, stored.serverURL)) {
+          throw new ActualPasswordRequiredForServerChangeError();
+        }
         password = stored?.password || null;
       }
     } else {

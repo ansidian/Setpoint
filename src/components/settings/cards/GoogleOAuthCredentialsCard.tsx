@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { KeyRound } from "lucide-react";
 import {
-  disableInstanceCredential,
+  disableGoogleOAuthApplication,
   getGmailAuthUrl,
-  importInstanceCredentialEnvironment,
+  importGoogleOAuthEnvironment,
   stageGoogleOAuthApplication,
-  useHostInstanceCredential as restoreHostInstanceCredential,
+  useHostGoogleOAuthApplication as restoreHostGoogleOAuthApplication,
 } from "@/api";
 import { getCanonicalOriginStatus } from "@/auth/securityApi";
 import { isDemoMode } from "@/demo/config";
@@ -21,6 +21,13 @@ import {
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 import { formatCredentialTimestamp } from "./coreCredentialModel";
 import type { SettingsCredentialMetadataProps } from "../settingsTypes";
+import {
+  SensitiveActionStepUp,
+} from "../SensitiveActionStepUp";
+import {
+  isPasswordStepUpRequired,
+  useSensitiveActionStepUp,
+} from "../sensitiveActionStepUpModel";
 
 const CLIENT_ID_KEY = "google.oauth_client_id";
 const CLIENT_SECRET_KEY = "google.oauth_client_secret";
@@ -49,7 +56,10 @@ export default function GoogleOAuthCredentialsCard({
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDisable, setConfirmingDisable] = useState(false);
   const clientIdRef = useRef<HTMLInputElement | null>(null);
+  const stepUp = useSensitiveActionStepUp();
+  const credentialActionLocked = Boolean(stepUp.pendingLabel);
 
   function restoreFormFocus() {
     requestAnimationFrame(() => clientIdRef.current?.focus());
@@ -75,38 +85,61 @@ export default function GoogleOAuthCredentialsCard({
   async function saveCandidate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!clientId || !clientSecret || busy) return;
-    setBusy("save"); setMessage(null); setError(null);
-    try {
-      const result = await stageGoogleOAuthApplication(clientId, clientSecret);
-      setClientId(""); setClientSecret("");
-      onCredentialMetadataChange(result.credentials);
-      setMessage("Pending application saved. Connect Google to validate it; the active application remains in use until authorization succeeds.");
-    } catch {
-      setClientId(""); setClientSecret("");
-      setError("The Google application candidate could not be saved.");
-      await onRefreshCredentialMetadata().catch(() => {});
-    } finally { setBusy(null); restoreFormFocus(); }
+    const candidate = { clientId, clientSecret };
+    await stepUp.run(async () => {
+      let shouldRestoreFocus = true;
+      setBusy("save"); setMessage(null); setError(null);
+      try {
+        const result = await stageGoogleOAuthApplication(candidate.clientId, candidate.clientSecret);
+        setClientId(""); setClientSecret("");
+        onCredentialMetadataChange(result.credentials);
+        setMessage("Pending application saved. Connect Google to validate it; the active application remains in use until authorization succeeds.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) {
+          shouldRestoreFocus = false;
+          throw caught;
+        }
+        setError("The Google application candidate could not be saved.");
+        await onRefreshCredentialMetadata().catch(() => {});
+      } finally {
+        setBusy(null);
+        if (shouldRestoreFocus) restoreFormFocus();
+      }
+    }, "saving this Google application");
   }
 
   async function sourceAction(action: "import" | "disable" | "host") {
-    setBusy(action); setMessage(null); setError(null);
-    try {
-      const keys = [CLIENT_ID_KEY, CLIENT_SECRET_KEY];
-      await Promise.all(keys.map((key) => action === "import"
-        ? importInstanceCredentialEnvironment(key)
-        : action === "disable"
-          ? disableInstanceCredential(key)
-          : restoreHostInstanceCredential(key)));
-      await onRefreshCredentialMetadata();
-      setMessage(action === "import"
-        ? "Host-managed Google application credentials moved into encrypted Setpoint storage."
-        : action === "disable"
-          ? "Stored and pending Google application credentials removed; host fallback is disabled."
-          : "Host-managed Google application credentials are active again.");
-    } catch {
-      setError("The Google application source could not be changed. No credential values were exposed.");
-      await onRefreshCredentialMetadata().catch(() => {});
-    } finally { setBusy(null); restoreFormFocus(); }
+    await stepUp.run(async () => {
+      let shouldRestoreFocus = true;
+      setBusy(action); setMessage(null); setError(null);
+      try {
+        const result = action === "import"
+          ? await importGoogleOAuthEnvironment()
+          : action === "disable"
+            ? await disableGoogleOAuthApplication()
+            : await restoreHostGoogleOAuthApplication();
+        onCredentialMetadataChange(result.credentials);
+        setMessage(action === "import"
+          ? "Copied into encrypted Setpoint storage. The Render variables still remain. Back up EA_ENCRYPTION_KEY, remove both Google variables in Render, redeploy, then verify Google before considering the migration complete."
+          : action === "disable"
+            ? "Stored and pending Google application credentials removed; host fallback is disabled."
+            : "Host-managed Google application credentials are active again.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) {
+          shouldRestoreFocus = false;
+          throw caught;
+        }
+        setError("The Google application source could not be changed. No credential values were exposed.");
+        await onRefreshCredentialMetadata().catch(() => {});
+      } finally {
+        setBusy(null);
+        if (shouldRestoreFocus) restoreFormFocus();
+      }
+    }, action === "import"
+      ? "copying the Google credentials into Setpoint"
+      : action === "disable"
+        ? "removing the Google credentials"
+        : "restoring the host-managed Google credentials");
   }
 
   async function connectGoogle() {
@@ -154,36 +187,66 @@ export default function GoogleOAuthCredentialsCard({
           <form onSubmit={saveCandidate} className="grid gap-3 sm:grid-cols-2">
             <div>
               <SectionLabel htmlFor="google-oauth-client-id">Client ID</SectionLabel>
-              <Input ref={clientIdRef} id="google-oauth-client-id" value={clientId} autoComplete="off" placeholder="Google OAuth client ID" onChange={(event) => setClientId(event.target.value)} disabled={Boolean(busy)} />
+              <Input ref={clientIdRef} id="google-oauth-client-id" value={clientId} autoComplete="off" placeholder="Google OAuth client ID" onChange={(event) => setClientId(event.target.value)} disabled={Boolean(busy) || credentialActionLocked} />
             </div>
             <div>
               <SectionLabel htmlFor="google-oauth-client-secret">Client secret</SectionLabel>
-              <Input id="google-oauth-client-secret" type="password" value={clientSecret} autoComplete="new-password" placeholder="Google OAuth client secret" onChange={(event) => setClientSecret(event.target.value)} disabled={Boolean(busy)} />
+              <Input id="google-oauth-client-secret" type="password" value={clientSecret} autoComplete="new-password" placeholder="Google OAuth client secret" onChange={(event) => setClientSecret(event.target.value)} disabled={Boolean(busy) || credentialActionLocked} />
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-              <Button type="submit" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={!clientId || !clientSecret || Boolean(busy)}>
+              <Button type="submit" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={!clientId || !clientSecret || Boolean(busy) || credentialActionLocked}>
                 {busy === "save" ? "Saving…" : configured ? "Save replacement" : "Save application"}
               </Button>
-              <Button type="button" size="sm" className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || (!configured && !pending)} onClick={connectGoogle}>
+              <Button type="button" size="sm" className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || credentialActionLocked || (!configured && !pending)} onClick={connectGoogle}>
                 {busy === "connect" ? "Opening Google…" : pending ? "Connect to validate" : "Connect Google"}
               </Button>
               {allEnvironment ? (
-                <Button type="button" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy)} onClick={() => sourceAction("import")}>
-                  {busy === "import" ? "Moving…" : "Move into Setpoint"}
+                <Button type="button" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || credentialActionLocked} onClick={() => sourceAction("import")}>
+                  {busy === "import" ? "Copying…" : "Copy into Setpoint"}
                 </Button>
               ) : null}
               {anyConfigured && !allDisabled ? (
-                <Button type="button" size="sm" variant="destructive" className={BUTTON_MOTION} disabled={Boolean(busy)} onClick={() => sourceAction("disable")}>
-                  {busy === "disable" ? "Disabling…" : "Remove and disable"}
+                <Button type="button" size="sm" variant="destructive" className={BUTTON_MOTION} disabled={Boolean(busy) || credentialActionLocked} onClick={() => setConfirmingDisable(true)}>
+                  Remove and disable
                 </Button>
               ) : null}
               {allDisabled ? (
-                <Button type="button" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy)} onClick={() => sourceAction("host")}>
+                <Button type="button" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || credentialActionLocked} onClick={() => sourceAction("host")}>
                   {busy === "host" ? "Checking host…" : "Use host value"}
                 </Button>
               ) : null}
             </div>
           </form>
+          {confirmingDisable ? (
+            <div className="rounded-lg border border-danger/25 bg-danger/[0.05] p-3">
+              <p className="max-w-[70ch] text-[11px] leading-relaxed text-foreground">
+                This deletes both stored and pending Google application credentials and blocks host fallback. Google connections cannot be renewed until credentials are restored.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  className={BUTTON_MOTION}
+                  disabled={Boolean(busy) || credentialActionLocked}
+                  onClick={() => { setConfirmingDisable(false); void sourceAction("disable"); }}
+                >
+                  {busy === "disable" ? "Removing…" : "Confirm remove Google credentials"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
+                  disabled={Boolean(busy) || credentialActionLocked}
+                  onClick={() => setConfirmingDisable(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <SensitiveActionStepUp state={stepUp} />
           {callbackUrl ? (
             <div>
               <div className="text-[11px] font-medium text-foreground">Authorized redirect URI</div>

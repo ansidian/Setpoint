@@ -13,8 +13,16 @@ import {
   SETTINGS_PRIMARY_BUTTON_CLASS,
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
+import { cn } from "@/lib/utils";
 import type { SettingsCardStateProps, SettingsConnectionRefreshProps } from "../settingsTypes";
 import type { ActualCacheHydrationResponse, ActualCacheStatusResponse } from "../../../../shared/types/bills";
+import {
+  SensitiveActionStepUp,
+} from "../SensitiveActionStepUp";
+import {
+  isPasswordStepUpRequired,
+  useSensitiveActionStepUp,
+} from "../sensitiveActionStepUpModel";
 
 type TestStatus = "testing" | "ok" | "fail" | null;
 type HydrateStatus = "checking" | "hydrating" | "ok" | "missing" | "fail" | null;
@@ -24,6 +32,7 @@ type CacheSummaryResult = (ActualCacheStatusResponse | ActualCacheHydrationRespo
   backupCount?: number;
 };
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+const BUTTON_MOTION = "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:translate-y-0";
 
 function formatCacheSize(bytes: unknown) {
   if (typeof bytes !== "number" || !Number.isFinite(bytes)) return null;
@@ -81,6 +90,8 @@ export default function ActualBudgetConnectionCard({
   const [hydrateMsg, setHydrateMsg] = useState<string | null>(null);
   const [hydrateResult, setHydrateResult] = useState<CacheSummaryResult | null>(null);
   const cacheStatusRequestRef = useRef(0);
+  const stepUp = useSensitiveActionStepUp();
+  const credentialActionLocked = Boolean(stepUp.pendingLabel);
 
   function markActualDirty() {
     cacheStatusRequestRef.current += 1;
@@ -138,75 +149,84 @@ export default function ActualBudgetConnectionCard({
   }, [actualConfigured, actualDirty, settings?.actual_budget_url, settings?.actual_budget_sync_id]);
 
   async function handleSaveActualSecret() {
-    setActualSavingSecret(true);
-    setTestStatus("testing");
-    setTestMsg(null);
-    try {
-      const candidate = {
-        serverURL: actualForm.serverUrl,
-        syncId: actualForm.syncId,
-        ...(actualForm.password ? { password: actualForm.password } : {}),
-      };
-      await saveActualBudgetConnection(candidate);
-      sessionStorage.setItem("ea_settings_changed", "1");
-      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
-      setActualConfigured(true);
-      setActualDirty(false);
-      setActualForm((current) => ({ ...current, password: "" }));
-      setTestStatus("ok");
-      setHydrateStatus(null);
-      setHydrateResult(null);
-      await onRefreshConnections().catch(() => {});
-    } catch (error) {
-      setTestStatus("fail");
-      setTestMsg(errorMessage(error, "Connection could not be saved"));
-    } finally {
-      setActualSavingSecret(false);
-    }
+    const candidate = {
+      serverURL: actualForm.serverUrl,
+      syncId: actualForm.syncId,
+      ...(actualForm.password ? { password: actualForm.password } : {}),
+    };
+    await stepUp.run(async () => {
+      setActualSavingSecret(true);
+      setTestStatus("testing");
+      setTestMsg(null);
+      try {
+        await saveActualBudgetConnection(candidate);
+        sessionStorage.setItem("ea_settings_changed", "1");
+        window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+        setActualConfigured(true);
+        setActualDirty(false);
+        setActualForm((current) => ({ ...current, password: "" }));
+        setTestStatus("ok");
+        setHydrateStatus(null);
+        setHydrateResult(null);
+        await onRefreshConnections().catch(() => {});
+      } catch (error) {
+        if (isPasswordStepUpRequired(error)) throw error;
+        setTestStatus("fail");
+        setTestMsg(errorMessage(error, "Connection could not be saved"));
+      } finally {
+        setActualSavingSecret(false);
+      }
+    }, "saving the Actual Budget connection");
   }
 
   async function handleRemoveActualConnection() {
-    setRemoving(true);
-    setTestMsg(null);
-    try {
-      await removeActualBudgetConnection();
-      sessionStorage.setItem("ea_settings_changed", "1");
-      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
-      setActualConfigured(false);
-      setActualDirty(false);
-      setActualForm({ serverUrl: "", password: "", syncId: "" });
-      setConfirmingRemoval(false);
-      setTestStatus(null);
-      setHydrateStatus(null);
-      setHydrateMsg(null);
-      setHydrateResult(null);
-      await onRefreshConnections().catch(() => {});
-    } catch (error) {
-      setTestStatus("fail");
-      setTestMsg(errorMessage(error, "Actual credentials could not be removed"));
-    } finally {
-      setRemoving(false);
-    }
+    await stepUp.run(async () => {
+      setRemoving(true);
+      setTestMsg(null);
+      try {
+        await removeActualBudgetConnection();
+        sessionStorage.setItem("ea_settings_changed", "1");
+        window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+        setActualConfigured(false);
+        setActualDirty(false);
+        setActualForm({ serverUrl: "", password: "", syncId: "" });
+        setConfirmingRemoval(false);
+        setTestStatus(null);
+        setHydrateStatus(null);
+        setHydrateMsg(null);
+        setHydrateResult(null);
+        await onRefreshConnections().catch(() => {});
+      } catch (error) {
+        if (isPasswordStepUpRequired(error)) throw error;
+        setTestStatus("fail");
+        setTestMsg(errorMessage(error, "Actual credentials could not be removed"));
+      } finally {
+        setRemoving(false);
+      }
+    }, "removing the Actual Budget credentials");
   }
 
   async function handleTestActual() {
-    setTestStatus("testing");
-    setTestMsg(null);
-    try {
-      const overrides = actualDirty
-        ? {
-            serverURL: actualForm.serverUrl,
-            password: actualForm.password || undefined,
-            syncId: actualForm.syncId,
-          }
-        : null;
-      const result = await testActualBudget(overrides);
-      setTestStatus(result.success ? "ok" : "fail");
-      if (!result.success && result.message) setTestMsg(result.message);
-    } catch (error) {
-      setTestStatus("fail");
-      setTestMsg(errorMessage(error, "Connection failed"));
-    }
+    const overrides = actualDirty
+      ? {
+          serverURL: actualForm.serverUrl,
+          password: actualForm.password || undefined,
+          syncId: actualForm.syncId,
+        }
+      : null;
+    await stepUp.run(async () => {
+      setTestStatus("testing");
+      setTestMsg(null);
+      try {
+        const result = await testActualBudget(overrides);
+        setTestStatus(result.success ? "ok" : "fail");
+        if (!result.success && result.message) setTestMsg(result.message);
+      } catch (error) {
+        if (isPasswordStepUpRequired(error)) throw error;
+        setTestStatus("fail");
+        setTestMsg(errorMessage(error, "Connection failed"));
+      }
+    }, "checking the Actual Budget connection");
   }
 
   async function handleHydrateActualCache() {
@@ -244,6 +264,7 @@ export default function ActualBudgetConnectionCard({
             type="url"
             placeholder="https://actual.yourdomain.com"
             value={actualForm.serverUrl}
+            disabled={credentialActionLocked}
             onChange={(event) => {
               setActualForm((current) => ({ ...current, serverUrl: event.target.value }));
               markActualDirty();
@@ -260,6 +281,7 @@ export default function ActualBudgetConnectionCard({
                 : "Actual Budget password"
             }
             value={actualForm.password}
+            disabled={credentialActionLocked}
             onChange={(event) => {
               setActualForm((current) => ({ ...current, password: event.target.value }));
               markActualDirty();
@@ -272,6 +294,7 @@ export default function ActualBudgetConnectionCard({
             type="text"
             placeholder="Budget sync ID"
             value={actualForm.syncId}
+            disabled={credentialActionLocked}
             onChange={(event) => {
               setActualForm((current) => ({ ...current, syncId: event.target.value }));
               markActualDirty();
@@ -281,24 +304,24 @@ export default function ActualBudgetConnectionCard({
         <div className="flex flex-wrap items-center gap-2">
           <Button
             onClick={handleSaveActualSecret}
-            className={SETTINGS_PRIMARY_BUTTON_CLASS}
-            disabled={!actualDirty || actualSavingSecret}
+            className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION)}
+            disabled={!actualDirty || actualSavingSecret || credentialActionLocked}
             size="sm"
           >
             {actualSavingSecret ? "Saving & verifying…" : "Save & verify"}
           </Button>
           <Button
             variant="secondary"
-            className={SETTINGS_SECONDARY_BUTTON_CLASS}
+            className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
             size="sm"
             onClick={handleTestActual}
-            disabled={testStatus === "testing"}
+            disabled={testStatus === "testing" || credentialActionLocked}
           >
             {testStatus === "testing" ? "Checking…" : "Check connection"}
           </Button>
           <Button
             variant="secondary"
-            className={SETTINGS_SECONDARY_BUTTON_CLASS}
+            className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
             size="sm"
             onClick={handleHydrateActualCache}
             disabled={!actualConfigured || actualDirty || hydrateStatus === "hydrating"}
@@ -339,7 +362,7 @@ export default function ActualBudgetConnectionCard({
                     type="button"
                     variant="destructive"
                     size="sm"
-                    disabled={removing}
+                    disabled={removing || credentialActionLocked}
                     onClick={handleRemoveActualConnection}
                     className="transition-[transform,background-color] duration-200 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
                   >
@@ -349,9 +372,9 @@ export default function ActualBudgetConnectionCard({
                     type="button"
                     variant="secondary"
                     size="sm"
-                    disabled={removing}
+                    disabled={removing || credentialActionLocked}
                     onClick={() => setConfirmingRemoval(false)}
-                    className={SETTINGS_SECONDARY_BUTTON_CLASS}
+                    className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)}
                   >
                     Cancel
                   </Button>
@@ -360,6 +383,7 @@ export default function ActualBudgetConnectionCard({
             ) : (
               <button
                 type="button"
+                disabled={credentialActionLocked}
                 onClick={() => setConfirmingRemoval(true)}
                 className="rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground/75 transition-[color,background-color,transform] duration-200 hover:-translate-y-px hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
               >
@@ -368,6 +392,7 @@ export default function ActualBudgetConnectionCard({
             )}
           </div>
         ) : null}
+        <SensitiveActionStepUp state={stepUp} />
       </div>
     </SettingsCard>
   );

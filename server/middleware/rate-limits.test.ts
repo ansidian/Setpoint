@@ -9,6 +9,7 @@ import {
   makeAlfredRunLimiter,
   makeEmailSearchLimiter,
   makePlacesLimiter,
+  makeActualConnectionLimiter,
 } from "./rate-limits.ts";
 
 function buildApp(limiter: RequestHandler) {
@@ -72,6 +73,14 @@ describe("rate-limits", () => {
 
     expect(lastRes.status).toBe(429);
     expect(lastRes.body).toEqual({ message: "Too many places requests, try again later" });
+    expect(lastRes.headers).toHaveProperty("ratelimit-limit");
+  });
+
+  it("actualConnectionLimiter bounds privileged connection probes", async () => {
+    const lastRes = await exhaustLimiter(makeActualConnectionLimiter(), 11);
+
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body).toEqual({ message: "Too many Actual connection requests, try again later" });
     expect(lastRes.headers).toHaveProperty("ratelimit-limit");
   });
 });

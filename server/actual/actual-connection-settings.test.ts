@@ -77,9 +77,37 @@ describe("saveActualConnectionCandidate", () => {
     });
   });
 
-  it("preserves the stored password when a verified replacement leaves it blank", async () => {
-    await saveActualConnectionCandidate("owner-1", {
+  it("rejects a changed server URL before validation when the password is blank", async () => {
+    const testConnection = vi.fn();
+
+    await expect(saveActualConnectionCandidate("owner-1", {
       serverURL: "https://replacement.actual.test/",
+      syncId: "replacement-sync",
+    }, {
+      dbClient: db,
+      encryptValue: (value) => `enc:${value}`,
+      testConnection,
+    })).rejects.toMatchObject({
+      code: "ACTUAL_PASSWORD_REQUIRED_FOR_SERVER_CHANGE",
+      status: 400,
+    });
+
+    expect(testConnection).not.toHaveBeenCalled();
+    const stored = await db.execute({
+      sql: `SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id
+            FROM ea_settings WHERE user_id = ?`,
+      args: ["owner-1"],
+    });
+    expect(stored.rows[0]).toMatchObject({
+      actual_budget_url: "https://working.actual.test",
+      actual_budget_password_encrypted: "enc:working-password",
+      actual_budget_sync_id: "working-sync",
+    });
+  });
+
+  it("preserves the stored password when the same server leaves it blank", async () => {
+    await saveActualConnectionCandidate("owner-1", {
+      serverURL: "https://working.actual.test/",
       syncId: "replacement-sync",
     }, {
       dbClient: db,
@@ -98,7 +126,7 @@ describe("saveActualConnectionCandidate", () => {
       args: ["owner-1"],
     });
     expect(stored.rows[0]).toMatchObject({
-      actual_budget_url: "https://replacement.actual.test",
+      actual_budget_url: "https://working.actual.test",
       actual_budget_password_encrypted: "enc:working-password",
       actual_budget_sync_id: "replacement-sync",
     });

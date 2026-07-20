@@ -109,6 +109,30 @@ describe("instance credential store", () => {
     expect(await store.get("weather.pirate_weather_api_key")).toBeNull();
   });
 
+  it("disables and restores a provider-owned credential group in one transaction", async () => {
+    const store = createInstanceCredentialStore(db);
+    await store.importActiveGroup([
+      { key: "google.oauth_client_id", encryptedValue: "stored-id" },
+      { key: "google.oauth_client_secret", encryptedValue: "stored-secret" },
+    ], 10);
+
+    const disabled = await store.disableGroup([
+      "google.oauth_client_id",
+      "google.oauth_client_secret",
+    ], 20);
+    expect(disabled).toEqual([
+      expect.objectContaining({ key: "google.oauth_client_id", disabled: true, activeValueEncrypted: null }),
+      expect.objectContaining({ key: "google.oauth_client_secret", disabled: true, activeValueEncrypted: null }),
+    ]);
+
+    await store.useHostValueGroup([
+      "google.oauth_client_id",
+      "google.oauth_client_secret",
+    ]);
+    expect(await store.get("google.oauth_client_id")).toBeNull();
+    expect(await store.get("google.oauth_client_secret")).toBeNull();
+  });
+
   it("rejects unknown keys at the persistence boundary", async () => {
     const store = createInstanceCredentialStore(db);
     await expect(store.stagePending(

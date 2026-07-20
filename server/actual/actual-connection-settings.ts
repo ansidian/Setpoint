@@ -1,7 +1,11 @@
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
-import { testActualConnectionHttp } from "./actual-connection-test.ts";
+import {
+  ActualPasswordRequiredForServerChangeError,
+  isSameActualServerUrl,
+  testActualConnectionHttp,
+} from "./actual-connection-test.ts";
 
 export interface ActualConnectionCandidate {
   serverURL: string;
@@ -29,6 +33,18 @@ export async function saveActualConnectionCandidate(
   const serverURL = candidate.serverURL.trim().replace(/\/+$/, "");
   const syncId = candidate.syncId.trim();
   const password = candidate.password?.trim() || null;
+  if (!password) {
+    const current = await dbClient.execute({
+      sql: `SELECT actual_budget_url, actual_budget_password_encrypted
+            FROM ea_settings WHERE user_id = ?`,
+      args: [userId],
+    });
+    const stored = current.rows[0];
+    if (stored?.actual_budget_password_encrypted
+      && !isSameActualServerUrl(serverURL, stored.actual_budget_url)) {
+      throw new ActualPasswordRequiredForServerChangeError();
+    }
+  }
   const verification = await testConnection(userId, {
     serverURL,
     syncId,

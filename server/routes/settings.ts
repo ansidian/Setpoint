@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { RequestHandler } from "express";
 import type { Value } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
@@ -33,6 +34,7 @@ import { getTriageCacheStats } from "../triage/triage-cache-stats.ts";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.ts";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
+import { requireRecentPasswordAuth } from "../middleware/auth.ts";
 import {
   validateDiscordWebhookUrl,
   validateEmailInterests,
@@ -60,6 +62,11 @@ function errorMessage(error: unknown): string {
 
 // Bare router: mounted behind requireCookieSession in routes/accounts.ts.
 const router = Router();
+
+const requireRecentAuthForSecretSettings: RequestHandler = (req, res, next) => {
+  if (req.body?.discord_webhook_url === undefined) return next();
+  return requireRecentPasswordAuth(req, res, next);
+};
 
 // GET /settings response allowlist (SEC-06): every ea_settings column NOT
 // listed here is withheld from the client by default, including secrets
@@ -194,7 +201,7 @@ router.get("/email-search/usage", async (_req, res) => {
   }
 });
 
-router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", async (req, res) => {
+router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
   const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
