@@ -6,6 +6,7 @@ import db from "../db/connection.ts";
 import { hashToken, requireCookieSession } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import { encrypt, decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../email/gmail.ts";
 import { testConnection as testIcloud } from "../email/icloud.ts";
 import type { ConfiguredEmailAccount } from "../email/email-provider-types.ts";
@@ -258,7 +259,7 @@ router.post<Record<string, never>, ICloudAccountResponse | ErrorResponse, ICloud
         email,
         label || email,
         color || "#a259ff",
-        encrypt(password),
+        encrypt(password, accountCredentialContext(accountId)),
         nextSort,
       ],
     });
@@ -284,7 +285,10 @@ router.post<{ id: string }, AccountMutationResponse | ErrorResponse>("/accounts/
     const account = result.rows[0]!;
     if (account.type === "gmail") await testGmail(account as unknown as ConfiguredEmailAccount);
     else if (account.type === "icloud")
-      await testIcloud(String(account.email), decrypt(String(account.credentials_encrypted)));
+      await testIcloud(
+        String(account.email),
+        decrypt(String(account.credentials_encrypted), accountCredentialContext(String(account.id))),
+      );
     res.json({ success: true });
   } catch (err) {
     console.error("Error testing account:", err);

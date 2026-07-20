@@ -26,6 +26,7 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import type { ActualConfig, ActualMetadata } from "../../shared/types/actual.ts";
 
 interface LocalBudget {
@@ -84,7 +85,10 @@ export async function getActualConfig(userId: string, { dbClient = db }: LocalAc
   return {
     serverURL: trimServerUrl(settings.actual_budget_url),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(String(settings.actual_budget_password_encrypted))
+      ? decrypt(
+          String(settings.actual_budget_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+        )
       : null,
     syncId: String(settings.actual_budget_sync_id),
   };

@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import {
   batchMarkAsRead as gmailBatchMarkAsRead,
   snoozeAtGmail,
@@ -495,7 +496,10 @@ export async function markAllRead(userId: string, uids: string | string[]): Prom
     }
 
     for (const { account, uids: accUids } of groupedIcloud.values()) {
-      const password = decrypt(account.credentials_encrypted);
+      const password = decrypt(
+        account.credentials_encrypted,
+        accountCredentialContext(account.id),
+      );
       ops.push({
         provider: "icloud",
         uids: accUids,

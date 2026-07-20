@@ -1,4 +1,5 @@
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import db from "../db/connection.ts";
 import type { ActualConfig } from "../../shared/types/actual.ts";
 
@@ -64,7 +65,10 @@ async function getActualConfig(userId: string): Promise<ActualConfig> {
   return {
     serverURL: trimServerUrl(settings.actual_budget_url),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(String(settings.actual_budget_password_encrypted))
+      ? decrypt(
+          String(settings.actual_budget_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+        )
       : null,
     syncId: String(settings.actual_budget_sync_id),
   };

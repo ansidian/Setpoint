@@ -1,5 +1,10 @@
 import db from "./connection.ts";
 import { encrypt, decrypt } from "../platform/encryption.ts";
+import {
+  accountCredentialContext,
+  settingsCredentialContext,
+  type EncryptedSettingsField,
+} from "../platform/credential-encryption-context.ts";
 import type { Row } from "@libsql/client";
 
 // One-shot rewrite of CBC-encrypted column values into GCM format.
@@ -45,7 +50,10 @@ async function rewriteColumn({ table, idCol, valCol }: EncryptionTarget) {
   });
   for (const row of rows) {
     const { id, val } = encryptedRowValues(row);
-    const rewrapped = encrypt(decrypt(val));
+    const context = table === "ea_accounts"
+      ? accountCredentialContext(id)
+      : settingsCredentialContext(id, valCol as EncryptedSettingsField);
+    const rewrapped = encrypt(decrypt(val, context), context);
     await db.execute({
       sql: `UPDATE ${table} SET ${valCol} = ? WHERE ${idCol} = ?`,
       args: [rewrapped, id],

@@ -1,6 +1,7 @@
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import {
   ActualPasswordRequiredForServerChangeError,
   isSameActualServerUrl,
@@ -20,7 +21,10 @@ export async function saveActualConnectionCandidate(
   candidate: ActualConnectionCandidate,
   {
     dbClient = db,
-    encryptValue = encrypt,
+    encryptValue = (value) => encrypt(
+      value,
+      settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+    ),
     testConnection = testActualConnectionHttp,
     now = () => new Date(),
   }: {
