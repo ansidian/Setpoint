@@ -116,10 +116,7 @@ async function getActualConfig(userId: string): Promise<ActualConfig> {
   return {
     serverURL: String(settings.actual_budget_url).replace(/\/+$/, ""),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(
-          String(settings.actual_budget_password_encrypted),
-          settingsCredentialContext(userId, "actual_budget_password_encrypted"),
-        )
+      ? decrypt(String(settings.actual_budget_password_encrypted), settingsCredentialContext(userId, "actual_budget_password_encrypted"))
       : null,
     syncId: String(settings.actual_budget_sync_id),
   };

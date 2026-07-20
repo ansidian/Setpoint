@@ -13,6 +13,7 @@
     "server/scripts/reindex-emails.ts",
     "server/scripts/reindex-icloud-mime.ts",
     "server/scripts/reset-passkeys.ts",
+    "server/scripts/rotate-encryption-key.ts",
     "server/scripts/seed-email-search-retrieval-eval.ts",
     "server/scripts/triage-eval.ts",
     "server/scripts/triage-preflight-dry-run.ts",
