@@ -215,29 +215,6 @@ WebAuthn/redirect variables may stay in the host environment while migrating.
 Setpoint imports legacy owner auth once and keeps optional provider environment
 fallbacks active until they are explicitly migrated or disabled in Settings.
 
-#### Rotating `EA_ENCRYPTION_KEY`
-
-Root-key rotation is an offline database operation. Back up Turso and both keys,
-deploy this dual-read release first, and stop every Setpoint web/worker process
-before applying it. Provide the current key as `EA_ENCRYPTION_KEY` and the new
-key as `EA_ENCRYPTION_KEY_NEXT` through the private process environment—never
-as command-line arguments. For Turso, also select the production database with
-`NODE_ENV=production`, `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN`.
-
-1. Run `npm run security:rotate-encryption-key`. The default dry-run decrypts,
-   re-encrypts, and verifies the full inventory in memory without changing rows.
-2. Review the redacted row counts and old/new key fingerprints.
-3. With every Setpoint process still stopped, run
-   `npm run security:rotate-encryption-key -- --apply --confirm-offline`.
-4. Replace the host's `EA_ENCRYPTION_KEY` with the new key, remove
-   `EA_ENCRYPTION_KEY_NEXT`, restart, and verify health and provider connections.
-
-Any pre-commit failure rolls the transaction back. After a successful commit,
-the database requires the new key; if restart/deployment fails, keep the service
-stopped and fix it with the new key. Returning to the old key requires restoring
-the matching pre-rotation database backup. Never run rotation during a rolling
-deployment, because an old process could write old-key ciphertext after rotation.
-
 When adding or changing a custom domain, attach and verify it in Render first,
 then change the canonical URL under Settings → System using recent password
 confirmation. Review the displayed passkey and OAuth/webhook consequences and
