@@ -193,38 +193,6 @@ resolve the current credentials at request time, so replacements do not require
 a restart. Saving a personal token later explicitly returns the connection to
 personal-token mode and periodic delivery.
 
-### Deployment operations
-
-The `master` branch is the stable release branch. Stable versions are tagged and
-published as non-prerelease GitHub Releases; feature branches and prereleases are
-not deployment targets. The Blueprint disables automatic deploys, so upstream
-pushes never roll out to owner-operated instances.
-
-For an upgrade, read the target release notes and database migration guidance,
-back up Turso and the root key, then use Render's **Manual Deploy → Deploy a
-specific commit** and select the commit named by that release. Confirm `/healthz`
-and sign in before considering the upgrade complete. Roll back by deploying the
-previous release commit only when its release notes say the database migrations
-are backward-compatible; otherwise restore the matching Turso backup and retain
-the same root key. Do not use **Deploy latest commit** as an upgrade shortcut.
-
-To redeploy an existing database, supply the same Turso URL/token and the exact
-existing `EA_ENCRYPTION_KEY`; never allow a new generated key to replace it.
-Existing `EA_USER_ID`, `EA_PASSWORD_HASH`, provider variables, and compatible
-WebAuthn/redirect variables may stay in the host environment while migrating.
-Setpoint imports legacy owner auth once and keeps optional provider environment
-fallbacks active until they are explicitly migrated or disabled in Settings.
-
-When adding or changing a custom domain, attach and verify it in Render first,
-then change the canonical URL under Settings → System using recent password
-confirmation. Review the displayed passkey and OAuth/webhook consequences and
-update external provider callback registrations. Changing only Render or DNS
-does not update Setpoint's canonical security boundary.
-
-Other Node hosts remain supported through the same production commands and
-bootstrap variables, but their always-on process, HTTPS proxy, secret backup,
-and explicit release pinning are operator responsibilities.
-
 ### Running locally
 
 ```bash
