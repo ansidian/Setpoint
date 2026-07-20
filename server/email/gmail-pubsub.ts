@@ -18,6 +18,8 @@ type TokenRow = {
   errorCode: string | null;
 };
 
+type VerificationRow = Pick<TokenRow, "pushTokenHash" | "tokenDisabled">;
+
 const runtimeCredentialService = {
   async resolve(key: string) {
     return (await import("../platform/instance-credential-service.ts")).instanceCredentialService.resolve(key);
@@ -89,6 +91,19 @@ export function createGmailPubSubService({
     } : null;
   }
 
+  async function readVerificationRow(): Promise<VerificationRow | null> {
+    const result = await dbClient.execute({
+      sql: `SELECT push_token_hash, token_disabled
+            FROM ea_gmail_pubsub_config WHERE singleton_id = 1`,
+      args: [],
+    });
+    const row = result.rows[0];
+    return row ? {
+      pushTokenHash: row.push_token_hash ? String(row.push_token_hash) : null,
+      tokenDisabled: Number(row.token_disabled) === 1,
+    } : null;
+  }
+
   async function writeToken(pushTokenHash: string | null, tokenDisabled: boolean): Promise<void> {
     await dbClient.execute({
       sql: `INSERT INTO ea_gmail_pubsub_config
@@ -102,20 +117,19 @@ export function createGmailPubSubService({
     });
   }
 
-  async function tokenSource(): Promise<"stored" | "environment" | "disabled" | "absent"> {
-    const row = await readTokenRow();
+  function tokenSource(row: VerificationRow | null): "stored" | "environment" | "disabled" | "absent" {
     if (row?.pushTokenHash) return "stored";
     if (row?.tokenDisabled) return "disabled";
     return environment.GMAIL_PUBSUB_PUSH_TOKEN ? "environment" : "absent";
   }
 
   async function getStatus() {
-    const [topic, callbackUrl, pushTokenSource, tokenRow] = await Promise.all([
+    const [topic, callbackUrl, tokenRow] = await Promise.all([
       credentialService.resolve("gmail.pubsub_topic"),
       canonicalUrlResolver(),
-      tokenSource(),
       readTokenRow(),
     ]);
+    const pushTokenSource = tokenSource(tokenRow);
     const configured = Boolean(topic.value) && (pushTokenSource === "stored" || pushTokenSource === "environment");
     return {
       configured,
@@ -179,8 +193,8 @@ export function createGmailPubSubService({
   }
 
   async function verifyToken(candidate: string): Promise<boolean> {
+    const row = await readVerificationRow();
     if (!candidate) return false;
-    const row = await readTokenRow();
     if (row?.pushTokenHash) return safeHashEqual(candidate, row.pushTokenHash);
     if (row?.tokenDisabled) return false;
     const legacyToken = environment.GMAIL_PUBSUB_PUSH_TOKEN;

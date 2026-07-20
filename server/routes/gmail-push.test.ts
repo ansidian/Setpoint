@@ -141,4 +141,20 @@ describe("Gmail Pub/Sub push route", () => {
     expect((await request(app).post("/api/gmail/push?token=rotated").send({ message: { data: "abc" } })).status).toBe(200);
     expect(pubSubApi.verifyToken).toHaveBeenCalledTimes(2);
   });
+
+  it("fails closed with a retryable response when authoritative token verification is unavailable", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    pubSubApi.verifyToken.mockRejectedValueOnce(new Error("shared database unavailable"));
+    try {
+      const res = await request(makeApp())
+        .post("/api/gmail/push?token=do-not-log-this-token")
+        .send({ message: { data: "abc" } });
+
+      expect(res.status).toBe(503);
+      expect(gmailSyncApi.enqueueHistorySyncFromPubSub).not.toHaveBeenCalled();
+      expect(JSON.stringify(log.mock.calls)).not.toContain("do-not-log-this-token");
+    } finally {
+      log.mockRestore();
+    }
+  });
 });

@@ -15,7 +15,14 @@ function bearerToken(req: Request): string {
 export function createGmailPushRouter(pubSubService: GmailPubSubService = gmailPubSubService) {
   const router = Router();
   router.post("/push", async (req, res) => {
-    if (!await pubSubService.verifyToken(bearerToken(req))) {
+    let verified = false;
+    try {
+      verified = await pubSubService.verifyToken(bearerToken(req));
+    } catch {
+      console.error("[Gmail Push] Token verification unavailable");
+      return res.status(503).json({ message: "Gmail Pub/Sub verification unavailable" });
+    }
+    if (!verified) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
