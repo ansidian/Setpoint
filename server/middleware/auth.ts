@@ -4,25 +4,20 @@ import type { Request, RequestHandler } from "express";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENT_AUTH_MAX_AGE_MS = 10 * 60 * 1000;
+export const PASSWORD_STEP_UP_WINDOW_MS = 15 * 60 * 1000;
+export const PASSWORD_STEP_UP_MAX_FAILURES = 5;
 const SESSION_TOKEN_PREFIX = "sha256:";
 
-// P2-27: every authenticated /api request validates the session token, which in
-// production is a remote Turso round-trip. For a single user the token is static
-// between ~monthly logins, so memoize a positive validation for a short TTL keyed
-// by the hashed token. Only positive, unexpired results are cached; negatives and
-// expirations always fall through to the DB. Invalidated on logout (deleteSession)
-// and on full revocation (session-rotation); the TTL bounds any missed
-// invalidation to a few tens of seconds.
-const SESSION_CACHE_TTL_MS = 30_000;
-type SessionCacheEntry = { expiresAt: number; cachedAt: number };
+export type SessionAuthMethod = "legacy" | "password" | "passkey" | "password_plus_passkey" | "recovery";
+export type SessionSecurityContext = {
+  expiresAt: number;
+  authenticatedAt: number;
+  passwordAuthenticatedAt: number;
+  securityGeneration: number;
+  authMethod: SessionAuthMethod;
+};
 export type ApiTokenContext = { id: string | number; scopes: string[] };
 type RequestWithApiToken = Request & { apiToken?: ApiTokenContext };
-
-const sessionValidationCache = new Map<string, SessionCacheEntry>();
-
-export function __clearSessionValidationCache() {
-  sessionValidationCache.clear();
-}
 
 export function hashToken(raw: string) {
   return crypto.createHash("sha256").update(raw).digest("hex");
@@ -79,10 +74,21 @@ export async function deleteSession(token: string) {
     sql: "DELETE FROM ea_sessions WHERE token IN (?, ?)",
     args: [token, hashSessionToken(token)],
   });
-  sessionValidationCache.delete(hashSessionToken(token));
 }
 
-export async function createSession({ authenticatedAt = Date.now() }: { authenticatedAt?: number } = {}) {
+export async function createSession({
+  securityGeneration,
+  authMethod,
+  authenticatedAt = Date.now(),
+  passwordAuthenticatedAt = authMethod === "password" || authMethod === "password_plus_passkey"
+    ? authenticatedAt
+    : 0,
+}: {
+  securityGeneration: number;
+  authMethod: SessionAuthMethod;
+  authenticatedAt?: number;
+  passwordAuthenticatedAt?: number;
+}): Promise<string | null> {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + SESSION_MAX_AGE_MS;
   // P3-18: expired sessions are otherwise never reclaimed (the lazy delete only
@@ -93,83 +99,69 @@ export async function createSession({ authenticatedAt = Date.now() }: { authenti
     sql: "DELETE FROM ea_sessions WHERE expires_at < ?",
     args: [Date.now()],
   });
-  await db.execute({
-    sql: "INSERT INTO ea_sessions (token, expires_at, authenticated_at) VALUES (?, ?, ?)",
-    args: [hashSessionToken(token), expiresAt, authenticatedAt],
+  const inserted = await db.execute({
+    sql: `INSERT INTO ea_sessions
+            (token, expires_at, authenticated_at, password_authenticated_at,
+             security_generation, auth_method)
+          SELECT ?, ?, ?, ?, ?, ?
+           WHERE EXISTS (
+             SELECT 1 FROM ea_owner
+              WHERE singleton_id = 1 AND security_generation = ?
+           )`,
+    args: [
+      hashSessionToken(token),
+      expiresAt,
+      authenticatedAt,
+      passwordAuthenticatedAt,
+      securityGeneration,
+      authMethod,
+      securityGeneration,
+    ],
   });
-  return token;
+  return inserted.rowsAffected === 1 ? token : null;
 }
 
-export async function hasRecentAuth(
-  token: string | null | undefined,
-  { now = Date.now(), maxAgeMs = RECENT_AUTH_MAX_AGE_MS }: { now?: number; maxAgeMs?: number } = {},
-): Promise<boolean> {
-  if (!token) return false;
-  const result = await db.execute({
-    sql: "SELECT expires_at, authenticated_at FROM ea_sessions WHERE token IN (?, ?)",
-    args: [hashSessionToken(token), token],
-  });
-  const row = result.rows[0];
-  if (!row) return false;
+function mapSessionContext(row: Record<string, unknown> | undefined): SessionSecurityContext | null {
+  if (!row) return null;
   const expiresAt = numberValue(row.expires_at);
   const authenticatedAt = numberValue(row.authenticated_at);
-  return Boolean(
-    expiresAt && expiresAt >= now
-    && authenticatedAt && authenticatedAt <= now
-    && now - authenticatedAt <= maxAgeMs,
-  );
+  const passwordAuthenticatedAt = numberValue(row.password_authenticated_at);
+  const securityGeneration = numberValue(row.security_generation);
+  const authMethod = stringValue(row.auth_method) as SessionAuthMethod | null;
+  if (!expiresAt || authenticatedAt === null || passwordAuthenticatedAt === null
+    || !securityGeneration || !authMethod) return null;
+  return { expiresAt, authenticatedAt, passwordAuthenticatedAt, securityGeneration, authMethod };
 }
 
-export async function markSessionRecentlyAuthenticated(
+export async function getSessionSecurityContext(
   token: string | null | undefined,
-  authenticatedAt = Date.now(),
-): Promise<boolean> {
-  if (!token) return false;
-  const result = await db.execute({
-    sql: "UPDATE ea_sessions SET authenticated_at = ? WHERE token IN (?, ?)",
-    args: [authenticatedAt, hashSessionToken(token), token],
-  });
-  return result.rowsAffected > 0;
-}
-
-export async function validateSession(token: string | null | undefined): Promise<boolean> {
-  if (!token) return false;
+): Promise<SessionSecurityContext | null> {
+  if (!token) return null;
   const hashedToken = hashSessionToken(token);
-
-  // P2-27: serve a recent positive validation from the in-process cache, skipping
-  // the remote Turso SELECT. A cached entry is honored only within the TTL and
-  // only while still unexpired; otherwise drop it and fall through to the DB
-  // (which also runs the legacy-token migration and lazy expiry cleanup).
   const nowMs = Date.now();
-  const cached = sessionValidationCache.get(hashedToken);
-  if (cached && nowMs - cached.cachedAt < SESSION_CACHE_TTL_MS) {
-    if (nowMs <= cached.expiresAt) return true;
-    sessionValidationCache.delete(hashedToken);
-  }
 
-  let result = await db.execute({
-    sql: "SELECT expires_at FROM ea_sessions WHERE token = ?",
-    args: [hashedToken],
+  const selectSession = async (storedToken: string) => db.execute({
+    sql: `SELECT s.expires_at, s.authenticated_at, s.password_authenticated_at,
+                 s.security_generation, s.auth_method
+            FROM ea_sessions s
+            JOIN ea_owner o
+              ON o.singleton_id = 1
+             AND o.security_generation = s.security_generation
+           WHERE s.token = ?`,
+    args: [storedToken],
   });
-  let storedToken = hashedToken;
 
+  let result = await selectSession(hashedToken);
+  let storedToken = hashedToken;
   if (!result.rows.length) {
-    result = await db.execute({
-      sql: "SELECT expires_at FROM ea_sessions WHERE token = ?",
-      args: [token],
-    });
+    result = await selectSession(token);
     storedToken = token;
   }
-  if (!result.rows.length) return false;
-  const expiresAt = numberValue(result.rows[0]!.expires_at);
-  if (!expiresAt || Date.now() > expiresAt) {
-    // Lazy cleanup — delete expired session
-    await db.execute({
-      sql: "DELETE FROM ea_sessions WHERE token = ?",
-      args: [storedToken],
-    });
-    sessionValidationCache.delete(hashedToken);
-    return false;
+  const context = mapSessionContext(result.rows[0] as Record<string, unknown> | undefined);
+  if (!context) return null;
+  if (nowMs > context.expiresAt) {
+    await db.execute({ sql: "DELETE FROM ea_sessions WHERE token = ?", args: [storedToken] });
+    return null;
   }
   if (storedToken === token) {
     await db.execute({
@@ -177,11 +169,137 @@ export async function validateSession(token: string | null | undefined): Promise
       args: [hashedToken, token],
     }).catch((err: unknown) => console.error("[EA] session hash migration failed:", errorMessage(err)));
   }
-  sessionValidationCache.set(hashedToken, {
-    expiresAt,
-    cachedAt: Date.now(),
+  return context;
+}
+
+export async function hasRecentPasswordAuth(
+  token: string | null | undefined,
+  { now = Date.now(), maxAgeMs = RECENT_AUTH_MAX_AGE_MS }: { now?: number; maxAgeMs?: number } = {},
+): Promise<boolean> {
+  const context = await getSessionSecurityContext(token);
+  if (!context) return false;
+  const { expiresAt, passwordAuthenticatedAt } = context;
+  return Boolean(
+    expiresAt >= now
+    && passwordAuthenticatedAt > 0
+    && passwordAuthenticatedAt <= now
+    && now - passwordAuthenticatedAt <= maxAgeMs,
+  );
+}
+
+export async function markSessionPasswordAuthenticated(
+  token: string | null | undefined,
+  authenticatedAt = Date.now(),
+): Promise<boolean> {
+  if (!token) return false;
+  const result = await db.execute({
+    sql: `UPDATE ea_sessions
+             SET authenticated_at = ?,
+                 password_authenticated_at = ?,
+                 auth_method = 'password',
+                 step_up_failure_count = 0,
+                 step_up_blocked_until = 0,
+                 step_up_window_started_at = 0
+           WHERE token IN (?, ?)
+             AND security_generation = (
+               SELECT security_generation FROM ea_owner WHERE singleton_id = 1
+             )`,
+    args: [authenticatedAt, authenticatedAt, hashSessionToken(token), token],
   });
-  return true;
+  return result.rowsAffected > 0;
+}
+
+export type PasswordStepUpThrottle = {
+  failureCount: number;
+  blockedUntil: number;
+};
+
+export async function getPasswordStepUpThrottle(
+  token: string | null | undefined,
+  now = Date.now(),
+): Promise<PasswordStepUpThrottle | null> {
+  if (!token) return null;
+  const result = await db.execute({
+    sql: `SELECT s.step_up_failure_count, s.step_up_blocked_until, s.step_up_window_started_at
+            FROM ea_sessions s
+            JOIN ea_owner o
+              ON o.singleton_id = 1
+             AND o.security_generation = s.security_generation
+           WHERE s.token IN (?, ?)`,
+    args: [hashSessionToken(token), token],
+  });
+  const row = result.rows[0];
+  if (!row) return null;
+  const windowStartedAt = Number(row.step_up_window_started_at || 0);
+  const blockedUntil = Number(row.step_up_blocked_until || 0);
+  if ((windowStartedAt > 0 && windowStartedAt <= now - PASSWORD_STEP_UP_WINDOW_MS)
+    || (blockedUntil > 0 && blockedUntil <= now)) {
+    await db.execute({
+      sql: `UPDATE ea_sessions
+               SET step_up_failure_count = 0,
+                   step_up_blocked_until = 0,
+                   step_up_window_started_at = 0
+             WHERE token IN (?, ?)`,
+      args: [hashSessionToken(token), token],
+    });
+    return { failureCount: 0, blockedUntil: 0 };
+  }
+  return {
+    failureCount: Number(row.step_up_failure_count || 0),
+    blockedUntil,
+  };
+}
+
+export async function recordPasswordStepUpFailure(
+  token: string | null | undefined,
+  now = Date.now(),
+): Promise<PasswordStepUpThrottle | null> {
+  if (!token) return null;
+  const windowCutoff = now - PASSWORD_STEP_UP_WINDOW_MS;
+  const blockedUntil = now + PASSWORD_STEP_UP_WINDOW_MS;
+  const result = await db.execute({
+    sql: `UPDATE ea_sessions
+             SET step_up_failure_count = CASE
+                   WHEN step_up_window_started_at = 0 OR step_up_window_started_at <= ? THEN 1
+                   ELSE step_up_failure_count + 1
+                 END,
+                 step_up_window_started_at = CASE
+                   WHEN step_up_window_started_at = 0 OR step_up_window_started_at <= ? THEN ?
+                   ELSE step_up_window_started_at
+                 END,
+                 step_up_blocked_until = CASE
+                   WHEN (CASE
+                     WHEN step_up_window_started_at = 0 OR step_up_window_started_at <= ? THEN 1
+                     ELSE step_up_failure_count + 1
+                   END) >= ? THEN ?
+                   ELSE 0
+                 END
+           WHERE token IN (?, ?)
+             AND security_generation = (
+               SELECT security_generation FROM ea_owner WHERE singleton_id = 1
+             )
+       RETURNING step_up_failure_count, step_up_blocked_until`,
+    args: [
+      windowCutoff,
+      windowCutoff,
+      now,
+      windowCutoff,
+      PASSWORD_STEP_UP_MAX_FAILURES,
+      blockedUntil,
+      hashSessionToken(token),
+      token,
+    ],
+  });
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    failureCount: Number(row.step_up_failure_count || 0),
+    blockedUntil: Number(row.step_up_blocked_until || 0),
+  };
+}
+
+export async function validateSession(token: string | null | undefined): Promise<boolean> {
+  return Boolean(await getSessionSecurityContext(token));
 }
 
 function getBearerToken(req: Request) {
@@ -192,7 +310,9 @@ function getBearerToken(req: Request) {
 
 export const requireCookieSession: RequestHandler = async (req, res, next) => {
   try {
-    if (await validateSession(req.cookies?.ea_session)) {
+    const context = await getSessionSecurityContext(req.cookies?.ea_session);
+    if (context) {
+      res.locals.authSession = context;
       return next();
     }
     return res.status(401).json({ message: "Not authenticated" });
@@ -205,18 +325,20 @@ export const requireCookieSession: RequestHandler = async (req, res, next) => {
   }
 };
 
-export const requireRecentAuth: RequestHandler = async (req, res, next) => {
+export const requireRecentPasswordAuth: RequestHandler = async (req, res, next) => {
   try {
     const token = req.cookies?.ea_session;
-    if (!await validateSession(token)) {
+    const context = await getSessionSecurityContext(token);
+    if (!context) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    if (!await hasRecentAuth(token)) {
+    if (!await hasRecentPasswordAuth(token)) {
       return res.status(403).json({
-        code: "STEP_UP_REQUIRED",
-        message: "Confirm your password or passkey to continue",
+        code: "PASSWORD_STEP_UP_REQUIRED",
+        message: "Confirm your password to continue",
       });
     }
+    res.locals.authSession = context;
     return next();
   } catch (err) {
     return next(err);

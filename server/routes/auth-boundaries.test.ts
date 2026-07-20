@@ -137,9 +137,25 @@ function makeApp() {
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(`
+    CREATE TABLE ea_owner (
+      singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+      user_id TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      auth_mode TEXT NOT NULL DEFAULT 'password_or_passkey',
+      security_generation INTEGER NOT NULL DEFAULT 1,
+      claimed_at INTEGER NOT NULL
+    );
+
     CREATE TABLE ea_sessions (
       token TEXT PRIMARY KEY,
-      expires_at INTEGER NOT NULL
+      expires_at INTEGER NOT NULL,
+      authenticated_at INTEGER NOT NULL DEFAULT 0,
+      password_authenticated_at INTEGER NOT NULL DEFAULT 0,
+      security_generation INTEGER NOT NULL DEFAULT 1,
+      auth_method TEXT NOT NULL DEFAULT 'password',
+      step_up_failure_count INTEGER NOT NULL DEFAULT 0,
+      step_up_blocked_until INTEGER NOT NULL DEFAULT 0,
+      step_up_window_started_at INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE ea_api_tokens (
@@ -216,6 +232,12 @@ async function createMigratedDb() {
       sort_order INTEGER DEFAULT 0
     );
   `);
+  await db.execute({
+    sql: `INSERT INTO ea_owner
+            (singleton_id, user_id, password_hash, auth_mode, security_generation, claimed_at)
+          VALUES (1, ?, ?, 'password_or_passkey', 1, ?)`,
+    args: ["user-1", "test-password-hash", Date.now()],
+  });
   await db.execute({
     sql: "INSERT INTO ea_settings (user_id, email_triage_mode) VALUES (?, ?)",
     args: ["user-1", "auto"],

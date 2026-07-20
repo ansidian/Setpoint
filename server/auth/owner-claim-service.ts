@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { activateOwner } from "./owner-context.ts";
 import { ownerStore, type OwnerRecord } from "./owner-store.ts";
+import { isAcceptableNewPassword } from "./password-policy.ts";
 
 interface OwnerClaimStore {
   getOwner(): Promise<OwnerRecord | null>;
@@ -41,7 +42,7 @@ export async function claimInitialOwner(
     canonicalOrigin,
   }: ClaimOwnerOptions = {},
 ): Promise<InitialOwnerClaimResult> {
-  if (typeof password !== "string" || password.length === 0 || password.length > 1024) {
+  if (!isAcceptableNewPassword(password)) {
     return { status: "invalid" };
   }
   if (await store.getOwner()) return { status: "conflict" };

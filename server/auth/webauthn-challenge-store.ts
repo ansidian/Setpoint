@@ -15,17 +15,19 @@ export type StoredWebAuthnChallenge = {
   credentialId: string | null;
   createdAt: number;
   expiresAt: number;
+  securityGeneration: number;
 };
 
-type CreateChallengeInput = Partial<{
+type CreateChallengeInput = {
   userId: string;
   challengeType: WebAuthnChallengeType;
-  pendingAuthHash: string | null;
-  credentialId: string | null;
-  now: number;
-  ttlMs: number;
-  challenge: string;
-}>;
+  securityGeneration: number;
+  pendingAuthHash?: string | null;
+  credentialId?: string | null;
+  now?: number;
+  ttlMs?: number;
+  challenge?: string;
+};
 
 export function hashWebAuthnChallenge(raw: unknown) {
   return CHALLENGE_HASH_PREFIX + crypto.createHash("sha256").update(String(raw || "")).digest("hex");
@@ -47,6 +49,7 @@ function mapChallenge(row: Row | undefined): StoredWebAuthnChallenge | null {
     credentialId: row.credential_id ? String(row.credential_id) : null,
     createdAt: Number(row.created_at),
     expiresAt: Number(row.expires_at),
+    securityGeneration: Number(row.security_generation),
   };
 }
 
@@ -61,13 +64,17 @@ export function createWebAuthnChallengeStore(database: Client = db) {
   async function createChallenge({
     userId,
     challengeType,
+    securityGeneration,
     pendingAuthHash = null,
     credentialId = null,
     now = Date.now(),
     ttlMs = WEBAUTHN_CHALLENGE_TTL_MS,
     challenge,
-  }: CreateChallengeInput = {}) {
+  }: CreateChallengeInput) {
     if (!userId) throw new Error("userId is required");
+    if (!Number.isInteger(securityGeneration) || securityGeneration < 1) {
+      throw new Error("securityGeneration is required");
+    }
     assertChallengeType(challengeType);
     const rawChallenge = challenge || crypto.randomBytes(32).toString("base64url");
     const challengeHash = hashWebAuthnChallenge(rawChallenge);
@@ -75,9 +82,19 @@ export function createWebAuthnChallengeStore(database: Client = db) {
     await deleteExpired(now);
     await database.execute({
       sql: `INSERT INTO ea_webauthn_challenges
-              (challenge_hash, user_id, challenge_type, pending_auth_hash, credential_id, created_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [challengeHash, userId, challengeType, pendingAuthHash, credentialId, now, expiresAt],
+              (challenge_hash, user_id, challenge_type, pending_auth_hash, credential_id,
+               created_at, expires_at, security_generation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        challengeHash,
+        userId,
+        challengeType,
+        pendingAuthHash,
+        credentialId,
+        now,
+        expiresAt,
+        securityGeneration,
+      ],
     });
     return {
       challenge: rawChallenge,
@@ -88,6 +105,7 @@ export function createWebAuthnChallengeStore(database: Client = db) {
       credentialId,
       createdAt: now,
       expiresAt,
+      securityGeneration,
     };
   }
 
@@ -103,16 +121,13 @@ export function createWebAuthnChallengeStore(database: Client = db) {
     if (challengeType) assertChallengeType(challengeType);
     const challengeHash = hashWebAuthnChallenge(rawChallenge);
     const result = await database.execute({
-      sql: "SELECT * FROM ea_webauthn_challenges WHERE challenge_hash = ?",
+      sql: `DELETE FROM ea_webauthn_challenges
+             WHERE challenge_hash = ?
+         RETURNING *`,
       args: [challengeHash],
     });
     const row = result.rows[0];
     if (!row) return null;
-
-    await database.execute({
-      sql: "DELETE FROM ea_webauthn_challenges WHERE challenge_hash = ?",
-      args: [challengeHash],
-    });
 
     if (Number(row.expires_at) <= now) return null;
     if (userId && row.user_id !== userId) return null;
@@ -145,5 +160,4 @@ const challengeStore = createWebAuthnChallengeStore();
 
 export const createChallenge = challengeStore.createChallenge;
 export const consumeChallenge = challengeStore.consumeChallenge;
-export const clearChallenges = challengeStore.clearChallenges;
 export const deleteChallengesForPendingAuth = challengeStore.deleteChallengesForPendingAuth;

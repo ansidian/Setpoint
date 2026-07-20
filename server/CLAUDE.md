@@ -26,14 +26,17 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `auth/passkey-store.ts` — CRUD for stored passkey credentials
 - `auth/auth-mode.ts` — explicit password-or-passkey vs. strict password-plus-passkey resolution
 - `auth/recovery-code-store.ts` — high-entropy recovery-code generation, hashing, replacement, status, and atomic consumption
-- `auth/pending-auth-store.ts` — short-lived pending-auth token issuance/lookup (WebAuthn ceremony handoff)
-- `auth/session-rotation.ts` — bulk session revocation (e.g. on passkey changes), clears the auth validation cache
+- `auth/pending-auth-store.ts` — generation-bound short-lived pending-auth issuance plus atomic consumption (WebAuthn ceremony handoff)
+- `auth/session-cookie.ts` — centralized secure session-cookie issue/clear behavior around generation-conditional session creation
+- `auth/security-transition.ts` — transactional owner-generation compare-and-swap for credential mutations plus session/pending/challenge revocation
+- `auth/password-policy.ts` — existing-password verification bounds and the minimum policy for every newly chosen password
+- `auth/setup-token.ts` — constant-time validation of the out-of-band first-claim deployment secret
 - `auth/owner-store.ts` — singleton owner persistence and atomic claim invariant
 - `auth/owner-bootstrap.ts` — startup resolution and fail-closed legacy env import
 - `auth/owner-claim-service.ts` — first-visitor password hashing and owner claim orchestration
 - `auth/owner-context.ts` — process-local claimed-owner context and runtime activation notifications
 - `auth/owner-runtime.ts` — one-shot gate that admits background work only after owner claim
-- `auth/webauthn-challenge-store.ts` — short-lived WebAuthn challenge issuance/lookup
+- `auth/webauthn-challenge-store.ts` — generation-bound short-lived WebAuthn challenge issuance and atomic consumption
 - `auth/webauthn-config.ts` — relying-party (RP) id/name/origin resolution for dev vs. production
 - `auth/webauthn-service.ts` — registration/authentication option + verification flows (via `@simplewebauthn/server`)
 

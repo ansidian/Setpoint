@@ -82,7 +82,7 @@ applySecurityMiddleware(app);
 // routes and installProductionFrontend so both API and asset payloads shrink.
 app.use(responseCompression());
 app.get("/healthz", (_req, res) => {
-  res.json({ status: "ok", claimed: Boolean(getActiveOwner()) });
+  res.json({ status: "ok" });
 });
 app.use("/api", requireClaimedInstance);
 app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRoutes);
@@ -97,8 +97,6 @@ app.use("/api", (req, res, next) => {
     return next();
   }
   if (req.path === "/gmail/push") return next();
-  if (req.path === "/auth/login") return next();
-  if (req.path === "/auth/setup/claim") return next();
   if (req.headers.authorization?.startsWith("Bearer ")) return next();
   if (req.headers["x-requested-with"] !== "Setpoint") {
     return res.status(403).json({ message: "Forbidden" });

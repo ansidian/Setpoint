@@ -153,6 +153,18 @@ describe("Login passkey flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "I saved these codes" }));
     expect(onLogin).toHaveBeenCalledTimes(1);
   });
+
+  it("rejects a short recovery password before calling the recovery API", async () => {
+    render(<Login onLogin={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Recover access" }));
+    fireEvent.change(screen.getByLabelText("Recovery code"), { target: { value: "SP-OLD-CODE" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "too-short" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "too-short" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset access" }));
+
+    expect(await screen.findByText(/at least 12 characters/i)).toBeTruthy();
+    expect(securityApiMocks.recoverOwnerAccess).not.toHaveBeenCalled();
+  });
 });
 
 async function submitPassword(password: string): Promise<void> {

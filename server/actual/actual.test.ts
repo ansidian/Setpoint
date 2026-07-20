@@ -102,6 +102,12 @@ actualApiState.reset();
 const actualLocalMock = vi.hoisted(() => ({
   actualDataDir: vi.fn(() => process.cwd()),
   findLocalBudgetDir: vi.fn().mockResolvedValue(null),
+  hydrateLocalActualCache: vi.fn().mockResolvedValue({
+    success: true,
+    hydrated: true,
+    budgetId: "Budget-Hydrated",
+    budgetDir: "/var/ea-actual/Budget-Hydrated",
+  }),
   pruneActualBudgetBackups: vi.fn().mockResolvedValue({ removed: 0, kept: 0 }),
   readLocalActualMetadata: vi.fn(),
 }));
@@ -363,6 +369,22 @@ describe("actual.ts sendBill mutex", () => {
     expect(actualApi.downloadBudget).not.toHaveBeenCalled();
     expect(actualApi.addTransactions).toHaveBeenCalled();
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Local");
+  });
+
+  it("hydrates a missing development cache through the bounded downloader instead of the SDK archive path", async () => {
+    actualLocalMock.actualDataDir.mockReturnValue("/var/ea-actual");
+    const { sendBill } = await import("./actual-core.ts");
+    const actualApi = await importActualApiMock();
+
+    await sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25, due_date: "2026-05-10", account_id: "a1" }, "user1");
+
+    expect(actualLocalMock.hydrateLocalActualCache).toHaveBeenCalledWith("user1", {
+      dataDir: "/var/ea-actual",
+      forceDownload: true,
+    });
+    expect(actualApi.loadBudget).toHaveBeenCalledWith("Budget-Hydrated");
+    expect(actualApi.downloadBudget).not.toHaveBeenCalled();
+    expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Hydrated");
   });
 
   it("refuses a production bill pay write when the local Actual cache is missing", async () => {

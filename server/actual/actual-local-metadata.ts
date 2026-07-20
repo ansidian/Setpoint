@@ -21,6 +21,7 @@ import {
   fetchActualBuffer,
   syncDownloadedBudget,
 } from "./actualMetadataSync.ts";
+import { assertSafeActualBudgetArchive, validateActualBudgetId } from "./actual-budget-archive.ts";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.ts";
@@ -153,23 +154,28 @@ async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir
     token,
     fileId,
   });
+  assertSafeActualBudgetArchive(buffer);
   const zip = new AdmZip(buffer);
-  const dbEntry = zip.getEntries().find((entry) => entry.entryName.includes("db.sqlite"));
-  const metaEntry = zip.getEntries().find((entry) => entry.entryName.includes("metadata.json"));
+  const entries = zip.getEntries();
+  const dbEntries = entries.filter((entry) => entry.entryName.split(/[\\/]/).at(-1) === "db.sqlite");
+  const metaEntries = entries.filter((entry) => entry.entryName.split(/[\\/]/).at(-1) === "metadata.json");
+  const dbEntry = dbEntries.length === 1 ? dbEntries[0] : null;
+  const metaEntry = metaEntries.length === 1 ? metaEntries[0] : null;
   if (!dbEntry || !metaEntry) {
     throw Object.assign(new Error("Actual Budget download did not include db.sqlite and metadata.json"), { status: 502 });
   }
 
   const parsedMetadata = JSON.parse(zip.readAsText(metaEntry)) as BudgetMetadata;
+  const budgetId = validateActualBudgetId(parsedMetadata.id);
   const metadata: LocalBudget["metadata"] = {
     ...parsedMetadata,
-    id: String(parsedMetadata.id || ""),
+    id: budgetId,
     cloudFileId: fileId,
     groupId: file.groupId || config.syncId,
     lastUploaded: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
     encryptKeyId: null,
   };
-  const budgetDir = path.join(dataDir, metadata.id || "");
+  const budgetDir = path.join(dataDir, budgetId);
   await mkdir(budgetDir, { recursive: true });
   const databaseBuffer = zip.readFile(dbEntry);
   if (!databaseBuffer) throw Object.assign(new Error("Actual Budget download did not include a readable db.sqlite"), { status: 502 });

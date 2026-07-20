@@ -28,10 +28,14 @@ export const getSetupStatus = (): Promise<SetupStatusResponse> => (
   isDemoMode() ? Promise.resolve({ claimed: true }) : setupFetch<SetupStatusResponse>("/api/auth/setup/status")
 );
 
-export const claimOwner = (password: string, canonicalOrigin: string): Promise<OwnerClaimResponse> => {
+export const claimOwner = (
+  setupToken: string,
+  password: string,
+  canonicalOrigin: string,
+): Promise<OwnerClaimResponse> => {
   if (isDemoMode()) return Promise.reject(new Error("DEMO_API_UNHANDLED"));
   return setupFetch<OwnerClaimResponse>("/api/auth/setup/claim", {
     method: "POST",
-    body: JSON.stringify({ password, canonicalOrigin }),
+    body: JSON.stringify({ setupToken, password, canonicalOrigin }),
   });
 };

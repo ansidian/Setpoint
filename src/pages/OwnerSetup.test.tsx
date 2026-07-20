@@ -16,6 +16,7 @@ describe("OwnerSetup", () => {
   it("keeps mismatched passwords in the browser", async () => {
     render(<OwnerSetup onClaimed={vi.fn()} />);
 
+    fireEvent.change(screen.getByLabelText("Deployment setup token"), { target: { value: "deployment-setup-token" } });
     fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "first-password" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "different-password" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /confirm this is the canonical/i }));
@@ -34,6 +35,7 @@ describe("OwnerSetup", () => {
     });
     render(<OwnerSetup onClaimed={onClaimed} />);
 
+    fireEvent.change(screen.getByLabelText("Deployment setup token"), { target: { value: "deployment-setup-token" } });
     fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "new-owner-password" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "new-owner-password" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /confirm this is the canonical/i }));
@@ -43,13 +45,14 @@ describe("OwnerSetup", () => {
     expect(onClaimed).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "I saved these codes" }));
     expect(onClaimed).toHaveBeenCalledTimes(1);
-    expect(claimOwner).toHaveBeenCalledWith("new-owner-password", window.location.origin);
+    expect(claimOwner).toHaveBeenCalledWith("deployment-setup-token", "new-owner-password", window.location.origin);
   });
 
   it("prefills the visible browser origin and requires explicit confirmation", () => {
     render(<OwnerSetup onClaimed={vi.fn()} />);
 
     expect(screen.getByLabelText<HTMLInputElement>("Canonical Setpoint URL").value).toBe(window.location.origin);
+    fireEvent.change(screen.getByLabelText("Deployment setup token"), { target: { value: "deployment-setup-token" } });
     fireEvent.change(screen.getByLabelText("Create password"), { target: { value: "new-owner-password" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "new-owner-password" } });
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Claim Setpoint" }).disabled).toBe(true);
@@ -59,14 +62,17 @@ describe("OwnerSetup", () => {
     claimOwner.mockRejectedValue(new Error("Instance is already claimed"));
     render(<OwnerSetup onClaimed={vi.fn()} />);
 
+    const setupToken = screen.getByLabelText("Deployment setup token") as HTMLInputElement;
     const password = screen.getByLabelText("Create password") as HTMLInputElement;
     const confirmation = screen.getByLabelText("Confirm password") as HTMLInputElement;
+    fireEvent.change(setupToken, { target: { value: "deployment-setup-token" } });
     fireEvent.change(password, { target: { value: "new-owner-password" } });
     fireEvent.change(confirmation, { target: { value: "new-owner-password" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /confirm this is the canonical/i }));
     fireEvent.click(screen.getByRole("button", { name: "Claim Setpoint" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("Instance is already claimed");
+    expect(setupToken.value).toBe("");
     expect(password.value).toBe("");
     expect(confirmation.value).toBe("");
   });

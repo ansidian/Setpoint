@@ -4,6 +4,7 @@ import { filterBillSchedulesForRange } from "./actual-bill-occurrences.ts";
 import {
   actualDataDir,
   findLocalBudgetDir,
+  hydrateLocalActualCache,
   pruneActualBudgetBackups,
 } from "./actual-local-metadata.ts";
 import {
@@ -33,8 +34,8 @@ import type {
 type ActualError = Error & { status?: number; code?: string };
 interface SdkActualConfig extends ActualConfig {
   dataDir: string;
-  localBudgetId: string | null;
-  localBudgetDir: string | null;
+  localBudgetId: string;
+  localBudgetDir: string;
 }
 interface ActiveBudget extends SdkActualConfig {
   key: string;
@@ -83,7 +84,6 @@ interface ActualSdk {
   init(options: { serverURL: string; password?: string | null; dataDir?: string }): Promise<void>;
   shutdown(): Promise<void>;
   loadBudget(id: string): Promise<{ error?: string } | void>;
-  downloadBudget(syncId: string, options?: { password: string }): Promise<void>;
   getBudgets(): Promise<Array<{ groupId?: string }>>;
   getAccounts(): Promise<ActualAccount[]>;
   getPayees(): Promise<ActualPayee[]>;
@@ -137,7 +137,7 @@ async function maybePruneBackups(budgetDir: string): Promise<void> {
     console.warn("[EA] Actual local backup pruning failed:", err instanceof Error ? err.message : err);
   });
 }
-function allowColdActualDownload(): boolean {
+function allowColdActualHydration(): boolean {
   return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD === "1";
 }
 
@@ -156,14 +156,33 @@ async function ensureActualBudget(userId: string): Promise<SdkActualConfig> {
   const baseConfig = await getActualConfig(userId);
   const dataDir = actualDataDir();
   const localBudget = await findLocalBudgetDir(baseConfig.syncId, { dataDir }).catch((err: unknown) => {
-    console.warn("[EA] Actual local budget lookup failed; falling back to cold download path:", err instanceof Error ? err.message : err);
+    console.warn("[EA] Actual local budget lookup failed; falling back to bounded cache hydration:", err instanceof Error ? err.message : err);
     return null;
   });
+  let localBudgetId = localBudget?.metadata?.id || null;
+  let localBudgetDir = localBudget?.budgetDir || null;
+  if (!localBudgetId || !localBudgetDir) {
+    if (!allowColdActualHydration()) {
+      throw Object.assign(new Error("Actual local budget cache is unavailable; refusing cold Actual download in production"), {
+        status: 503,
+        code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
+      });
+    }
+    const hydrated = await hydrateLocalActualCache(userId, { dataDir, forceDownload: true });
+    localBudgetId = typeof hydrated.budgetId === "string" && hydrated.budgetId ? hydrated.budgetId : null;
+    localBudgetDir = typeof hydrated.budgetDir === "string" && hydrated.budgetDir ? hydrated.budgetDir : null;
+    if (!localBudgetId || !localBudgetDir) {
+      throw Object.assign(new Error("Actual cache hydration completed without a loadable local budget"), {
+        status: 502,
+        code: "ACTUAL_LOCAL_BUDGET_HYDRATION_FAILED",
+      });
+    }
+  }
   const config: SdkActualConfig = {
     ...baseConfig,
     dataDir,
-    localBudgetId: localBudget?.metadata?.id || null,
-    localBudgetDir: localBudget?.budgetDir || null,
+    localBudgetId,
+    localBudgetDir,
   };
   const key = actualSessionKey(config);
   if (activeBudget?.key === key) return config;
@@ -172,25 +191,12 @@ async function ensureActualBudget(userId: string): Promise<SdkActualConfig> {
   }
   try {
     await sdk.init({ serverURL: config.serverURL, password: config.password, dataDir });
-    if (config.localBudgetId) {
-      const result = await sdk.loadBudget(config.localBudgetId);
-      if (result?.error) {
-        throw Object.assign(new Error(`Actual local budget load failed: ${result.error}`), {
-          status: 503,
-          code: "ACTUAL_LOCAL_BUDGET_LOAD_FAILED",
-        });
-      }
-    } else {
-      if (!allowColdActualDownload()) {
-        throw Object.assign(new Error("Actual local budget cache is unavailable; refusing cold Actual download in production"), {
-          status: 503,
-          code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
-        });
-      }
-      await sdk.downloadBudget(
-        config.syncId,
-        config.password ? { password: config.password } : undefined,
-      );
+    const result = await sdk.loadBudget(config.localBudgetId);
+    if (result?.error) {
+      throw Object.assign(new Error(`Actual local budget load failed: ${result.error}`), {
+        status: 503,
+        code: "ACTUAL_LOCAL_BUDGET_LOAD_FAILED",
+      });
     }
     activeBudget = { key, ...config, loadedAt: new Date().toISOString() };
     return config;

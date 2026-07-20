@@ -61,15 +61,18 @@ For a detailed look at how everything fits together, see [ARCHITECTURE.md](ARCHI
 
 The Blueprint creates one native Node 24 web service on Render's paid Starter
 plan. It asks for only a [Turso](https://turso.tech/) database URL and auth token;
-Render generates the 256-bit `EA_ENCRYPTION_KEY`. Starter is intentionally
+Render generates the 256-bit `EA_ENCRYPTION_KEY` and a separate first-claim
+`EA_SETUP_TOKEN`. Starter is intentionally
 always on because Setpoint's schedulers, reconciliation jobs, and reminders stop
 when a service sleeps. Check Render's current pricing before creating the
 service; the free plan is not a supported Setpoint production configuration.
 
 1. Create a Turso database and token, then click **Deploy to Render**.
 2. Enter `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` when Render prompts.
-3. Wait for `/healthz` to pass, open the service URL, and claim the instance by
-   confirming its canonical URL and creating the owner password.
+3. Wait for `/healthz` to pass, copy the generated `EA_SETUP_TOKEN` from the
+   service environment, then open the service URL and claim the instance by
+   entering that token, confirming the canonical URL, and creating an owner
+   password of at least 12 characters.
 4. Save the one-time recovery codes offline, then use the skippable onboarding
    checklist to connect email/calendar, AI, tasks, weather, finances, and
    notifications as useful. Provider credentials are entered write-only inside
@@ -86,7 +89,8 @@ key backup without the Turso database does not restore the installation.
 The complete template is in [`.env.example`](.env.example):
 
 - **Required production bootstrap:** `TURSO_DATABASE_URL`,
-  `TURSO_AUTH_TOKEN`, and a 256-bit hex or base64 `EA_ENCRYPTION_KEY`.
+  `TURSO_AUTH_TOKEN`, a 256-bit hex or base64 `EA_ENCRYPTION_KEY`, and a random
+  `EA_SETUP_TOKEN` of at least 32 characters for the one-time owner claim.
 - **Optional advanced provider sources:** AI, Google, Todoist, Pirate Weather,
   Google Places, and Gmail Pub/Sub values. Normal setup stores these write-only
   in Setpoint; existing host values remain supported and can be migrated from
@@ -103,12 +107,15 @@ email backfill. Backfill resumes interrupted jobs by default; set
 
 ### Dashboard auth and passkey recovery
 
-On a fresh database, open Setpoint after startup, confirm the visible canonical
-URL, and create the owner password in the browser. The first successful claim
-atomically creates the stable owner ID, stores only the bcrypt password hash,
-persists the confirmed origin, signs that browser in, and permanently closes
-public setup. Provider APIs and background workers remain disabled until the
-claim succeeds. `GET /healthz` remains available for deployment readiness.
+On a fresh database, open Setpoint after startup, enter the out-of-band
+`EA_SETUP_TOKEN`, confirm the visible canonical URL, and create the owner
+password in the browser. The first successful claim atomically creates the
+stable owner ID, stores only the bcrypt password hash, persists the confirmed
+origin, signs that browser in, and permanently closes public setup. The setup
+token is compared in constant time and is never stored in the database or
+returned by the app. Provider APIs and background workers remain disabled until
+the claim succeeds. `GET /healthz` reports readiness without disclosing claim
+state.
 
 Existing installations may keep `EA_USER_ID` and `EA_PASSWORD_HASH`; startup
 imports that exact legacy identity once. Partial or conflicting legacy auth
@@ -118,12 +125,15 @@ The private app accepts either the owner password or a registered WebAuthn
 passkey by default. Registering a passkey does not disable password login.
 Settings -> System can explicitly enable strict password-plus-passkey login;
 identity and access changes require a password confirmation from the last ten
-minutes.
+minutes. A passkey-only session can use the dashboard but cannot register or
+remove credentials, change the password or mode/domain, regenerate recovery
+codes, or mint/revoke API tokens until that password step-up succeeds.
 
 Fresh owner claim displays eight one-time offline recovery codes. Setpoint
 stores only their hashes and never returns them through normal Settings reads.
 Using one code replaces the owner password, clears passkeys and pending auth,
-revokes prior sessions, and displays a replacement recovery-code set once.
+revokes prior sessions and API tokens, and displays a replacement recovery-code
+set once.
 
 The confirmed canonical URL derives the WebAuthn RP ID/origin and provider
 callback URLs. Existing compatible `EA_WEBAUTHN_*` and `GOOGLE_REDIRECT_URI`
@@ -141,9 +151,10 @@ npm run auth:reset-passkeys -- --confirm
 ```
 
 The reset clears registered passkeys, pending password-auth attempts, WebAuthn
-challenges, and browser sessions. The next successful password login uses the
-default password-or-passkey mode. Scoped API tokens are separate automation
-credentials and do not grant dashboard login.
+challenges, and browser sessions, increments the owner's security generation,
+and restores password-or-passkey mode. Scoped API tokens are separate automation
+credentials and do not grant dashboard login; an in-app offline recovery revokes
+them as part of the credential reset.
 
 ### Opt-in Turso semantic search verification
 

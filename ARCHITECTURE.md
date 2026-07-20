@@ -362,22 +362,22 @@ sequenceDiagram
     S->>DB: SELECT password_hash FROM ea_owner singleton
     S->>S: bcrypt.compare(password, stored password_hash)
     alt Default password-or-passkey mode
-        S->>DB: INSERT ea_sessions (token, expires_at)
+        S->>DB: INSERT ea_sessions (token, generation, auth method, password proof time, expires_at)
         S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
     else Explicit password-plus-passkey mode
-        S->>DB: INSERT ea_pending_auth (10-min pending password auth)
+        S->>DB: INSERT ea_pending_auth (5-min password proof + security generation)
         S->>B: Set-Cookie: ea_pending_auth (httpOnly, secure, sameSite=strict)
         B->>S: POST /api/auth/passkey/authentication/options
-        S->>DB: INSERT ea_webauthn_challenges
+        S->>DB: INSERT ea_webauthn_challenges (one-time challenge + generation)
         S->>B: WebAuthn authentication options
         B->>S: POST /api/auth/passkey/authentication/verify
-        S->>DB: Consume challenge and update passkey usage
-        S->>DB: INSERT ea_sessions (token, expires_at)
+        S->>DB: Atomically consume challenge/pending auth and update passkey usage
+        S->>DB: INSERT ea_sessions only if owner generation is unchanged
         S->>B: Set-Cookie: ea_session, clear ea_pending_auth
     end
 
     B->>S: GET /api/dashboard/current (cookie)
-    S->>DB: SELECT FROM ea_sessions WHERE token = ?
+    S->>DB: JOIN ea_sessions to ea_owner on security_generation
     S->>S: Check expires_at > now
     S->>B: 200 current dashboard envelope (or 401 if expired)
 ```
@@ -385,17 +385,27 @@ sequenceDiagram
 The browser auth model has six distinct states:
 
 1. **Unclaimed Instance** - no `ea_owner` singleton row. Only static/setup auth routes and `GET /healthz` are available; provider APIs and all background workers are gated.
-2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
+2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`, its authentication method, password-proof timestamp, and owner security generation. Every validation joins the session to the current owner generation, so a credential transition or operator reset invalidates every older session immediately, including across processes and even if a deletion races. Used by the SPA and required by normal dashboard routes; the app does not prompt for passkey on every request.
 3. **Pending Passkey Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created after a correct password in explicit strict mode, or when default-mode passwordless passkey login begins. It can request and verify WebAuthn options but cannot access dashboard routes.
 4. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
-5. **Recent Authentication** - the authenticated session's `authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, canonical-domain, and powerful API-token changes.
+5. **Recent Password Authentication** - the authenticated session's `password_authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, canonical-domain, and powerful API-token changes. Passkey-only and recovery-created sessions do not satisfy this boundary until the owner confirms the current password; failed confirmations are throttled in the session row before more bcrypt work is accepted.
 6. **Recovery or Operator Reset** - one offline recovery code can replace credentials in-app; the local `npm run auth:reset-passkeys -- --confirm` path remains the last-resort operator reset.
 
+The browser keeps a separate, shorter Security Settings unlock. Sensitive controls start locked whenever the System section mounts and lock on `pagehide`; the server's recent-auth timestamp can authorize requests during that visit but never auto-opens a later section visit or restored page.
+
 Ownership is database-backed in the singleton `ea_owner` row. Fresh claims rely on
-the singleton primary-key invariant so exactly one concurrent insert succeeds.
+an out-of-band `EA_SETUP_TOKEN` plus the singleton primary-key invariant so only
+an authorized claimant can attempt the one concurrent insert that succeeds.
 Existing `EA_USER_ID` plus `EA_PASSWORD_HASH` values are an optional startup
 compatibility source: startup imports the exact pair when no owner exists and
 fails closed for partial or conflicting state.
+
+Every sensitive credential or security mutation is a compare-and-swap
+transaction against `ea_owner.security_generation`. The transaction increments
+the generation, performs the mutation, and clears sessions, pending auth, and
+WebAuthn challenges before commit; the initiating browser receives a replacement
+session only after the commit. Offline recovery additionally revokes all scoped
+API tokens.
 
 Two credential paths exist, but they no longer feed a single shared "any auth works" guard:
 
@@ -498,8 +508,14 @@ erDiagram
     }
 
     ea_sessions {
-        text token PK "32-byte hex"
+        text token PK "sha256 digest"
         int expires_at "Unix ms, 30-day TTL"
+        int authenticated_at "Unix ms"
+        int password_authenticated_at "Unix ms or 0"
+        int security_generation
+        text auth_method
+        int step_up_failure_count
+        int step_up_blocked_until
         datetime created_at
     }
 
@@ -656,13 +672,13 @@ erDiagram
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
 | `ea_onboarding_progress` | `037_onboarding_progress.sql` |
-| `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql` |
+| `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql` |
 | `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
-| `ea_pending_auth` | `012_passkey_auth.sql` |
+| `ea_pending_auth` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
-| `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql` |
+| `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
 | `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
@@ -674,7 +690,7 @@ erDiagram
 | `ea_triage_feedback` | `001_ea_tables.sql` |
 | `ea_triage_jobs` | `001_ea_tables.sql` |
 | `ea_triage_rules` | `001_ea_tables.sql` |
-| `ea_webauthn_challenges` | `012_passkey_auth.sql` |
+| `ea_webauthn_challenges` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `migrations` | `024_retire_legacy_ledger_rows.sql` |
 <!-- END:db -->
 
@@ -732,12 +748,12 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 |--------|------|------|
 | GET | `/` | `server/routes/auth-canonical-origin.ts` |
 | PATCH | `/` | `server/routes/auth-canonical-origin.ts` |
+| GET | `/api-tokens` | `server/routes/auth-security.ts` |
+| POST | `/api-tokens` | `server/routes/auth-security.ts` |
+| DELETE | `/api-tokens/:id` | `server/routes/auth-security.ts` |
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.ts` |
 | POST | `/api/alfred/run` | `server/routes/alfred.ts` |
 | GET | `/api/alfred/usage` | `server/routes/alfred.ts` |
-| GET | `/api/auth/api-tokens` | `server/routes/auth.ts` |
-| POST | `/api/auth/api-tokens` | `server/routes/auth.ts` |
-| DELETE | `/api/auth/api-tokens/:id` | `server/routes/auth.ts` |
 | GET | `/api/auth/check` | `server/routes/auth.ts` |
 | POST | `/api/auth/login` | `server/routes/auth.ts` |
 | POST | `/api/auth/logout` | `server/routes/auth.ts` |
@@ -748,11 +764,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | DELETE | `/api/auth/passkeys/:credentialId` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/options` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/verify` | `server/routes/auth.ts` |
-| POST | `/api/auth/recovery` | `server/routes/auth.ts` |
-| POST | `/api/auth/recovery-codes/regenerate` | `server/routes/auth.ts` |
-| PATCH | `/api/auth/security/auth-mode` | `server/routes/auth.ts` |
-| POST | `/api/auth/security/password` | `server/routes/auth.ts` |
-| POST | `/api/auth/security/step-up/password` | `server/routes/auth.ts` |
 | POST | `/api/auth/setup/claim` | `server/routes/auth.ts` |
 | GET | `/api/auth/setup/status` | `server/routes/auth.ts` |
 | GET | `/api/briefing/actual/accounts` | `server/routes/briefing/bills.ts` |
@@ -857,9 +868,14 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.ts` |
 | GET | `/email-search/usage` | `server/routes/settings.ts` |
 | POST | `/preview` | `server/routes/auth-canonical-origin.ts` |
+| POST | `/recovery` | `server/routes/auth-security.ts` |
+| POST | `/recovery-codes/regenerate` | `server/routes/auth-security.ts` |
 | GET | `/reminders` | `server/routes/reminders.ts` |
 | POST | `/reminders` | `server/routes/reminders.ts` |
 | DELETE | `/reminders/:id` | `server/routes/reminders.ts` |
+| PATCH | `/security/auth-mode` | `server/routes/auth-security.ts` |
+| POST | `/security/password` | `server/routes/auth-security.ts` |
+| POST | `/security/step-up/password` | `server/routes/auth-security.ts` |
 | POST | `/settings/discord-reminder-test` | `server/routes/reminders.ts` |
 | GET | `/triage/cache-stats` | `server/routes/settings.ts` |
 <!-- END:routes -->
@@ -972,6 +988,8 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-dom
 | GET | `/api/briefing/actual/categories` | Category tree |
 | POST | `/api/briefing/actual/test` | Test connection |
 
+Remote cache hydration streams the archive through a 128 MiB download cap, validates its central directory, entry count, compression methods, and declared expanded sizes before `adm-zip` sees it, and accepts only a path-safe local budget identifier. The in-process SDK loads that validated on-disk budget and does not receive a remote ZIP directly.
+
 ### Accounts & Settings
 
 | Method | Path | Purpose |
@@ -1008,7 +1026,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-dom
 
 Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted, and new tokens receive a default 90-day expiry.
 
-Passkeys and API tokens are separate auth surfaces. A registered passkey can unlock the browser session after a successful dashboard password; a scoped API token can only call specifically opted-in automation endpoints and cannot satisfy the dashboard route guard.
+Passkeys and API tokens are separate auth surfaces. A registered passkey can unlock the browser directly in password-or-passkey mode or complete login after the password in strict mode; a scoped API token can only call specifically opted-in automation endpoints and cannot satisfy the dashboard route guard.
 
 ## Deployment
 

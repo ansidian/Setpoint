@@ -9,6 +9,7 @@ export interface OwnerRecord {
   userId: string;
   passwordHash: string;
   authMode: OwnerAuthMode;
+  securityGeneration: number;
   claimedAt: number;
 }
 
@@ -33,7 +34,7 @@ function numberValue(value: unknown): number {
 export function createOwnerStore(dbClient: OwnerStoreDb = db) {
   async function getOwner(): Promise<OwnerRecord | null> {
     const result = await dbClient.execute({
-      sql: `SELECT singleton_id, user_id, password_hash, auth_mode, claimed_at
+      sql: `SELECT singleton_id, user_id, password_hash, auth_mode, security_generation, claimed_at
               FROM ea_owner
              WHERE singleton_id = ?`,
       args: [OWNER_SINGLETON_ID],
@@ -45,6 +46,7 @@ export function createOwnerStore(dbClient: OwnerStoreDb = db) {
       userId: stringValue(row.user_id),
       passwordHash: stringValue(row.password_hash),
       authMode: isOwnerAuthMode(row.auth_mode) ? row.auth_mode : "password_or_passkey",
+      securityGeneration: numberValue(row.security_generation),
       claimedAt: numberValue(row.claimed_at),
     };
   }
@@ -109,5 +111,3 @@ export function createOwnerStore(dbClient: OwnerStoreDb = db) {
 
 export const ownerStore = createOwnerStore();
 export const getOwner = ownerStore.getOwner;
-export const setOwnerAuthMode = ownerStore.setAuthMode;
-export const updateOwnerPasswordHash = ownerStore.updatePasswordHash;

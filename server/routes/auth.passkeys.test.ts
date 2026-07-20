@@ -56,6 +56,7 @@ vi.mock("../db/connection.ts", () => ({
       statements: Parameters<Client["batch"]>[0],
       mode?: TransactionMode,
     ) => currentDb().batch(statements, mode),
+    transaction: (mode?: TransactionMode) => currentDb().transaction(mode),
   },
 }));
 vi.mock("@simplewebauthn/server", () => webAuthnMocks);
@@ -65,7 +66,7 @@ process.env.NODE_ENV = "test";
 process.env.EA_USER_ID = "user-1";
 process.env.EA_PASSWORD_HASH = authPasswordHash;
 const authRoutes = (await import("./auth.ts")).default;
-const { requireCookieSession, __clearSessionValidationCache } = await import("../middleware/auth.ts");
+const { requireCookieSession } = await import("../middleware/auth.ts");
 
 function makeApp() {
   const app = express();
@@ -86,10 +87,6 @@ describe("auth passkey routes", () => {
   beforeEach(async () => {
     testState.db.current = await createAuthTestDb();
     await seedOwner(currentDb(), { passwordHash: authPasswordHash });
-    // P2-27: validateSession now memoizes positive results in a module-level cache;
-    // clear it between tests so each starts from a clean DB-backed state (otherwise
-    // a prior test's cached "cookie-session" masks this test's DB-error path).
-    __clearSessionValidationCache();
     // Full reset (not mockClear) so any sibling-leaked implementation/return on
     // these shared webAuthn fns is wiped, then reinstate this file's defaults.
     // mockClear only resets call history and would carry a leaked mockResolvedValue
@@ -132,6 +129,7 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
 
     const res = await request(makeApp())
@@ -160,12 +158,14 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
     await createWebAuthnChallengeStore(currentDb()).createChallenge({
       userId: "user-1",
       challengeType: "authentication",
       pendingAuthHash: hashPendingAuthToken("pending-token"),
       challenge: "auth-challenge",
+      securityGeneration: 1,
     });
     webAuthnMocks.verifyAuthenticationResponse.mockImplementation(async ({ expectedChallenge }) => {
       expect(await expectedChallenge("auth-challenge")).toBe(true);
@@ -208,12 +208,14 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
     await createWebAuthnChallengeStore(currentDb()).createChallenge({
       userId: "user-1",
       challengeType: "authentication",
       pendingAuthHash: hashPendingAuthToken("pending-token"),
       challenge: "auth-challenge",
+      securityGeneration: 1,
     });
     webAuthnMocks.verifyAuthenticationResponse.mockImplementation(async ({ expectedChallenge }) => {
       expect(await expectedChallenge("auth-challenge")).toBe(true);
@@ -241,12 +243,14 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
     await createWebAuthnChallengeStore(currentDb()).createChallenge({
       userId: "user-1",
       challengeType: "registration",
       pendingAuthHash: hashPendingAuthToken("pending-token"),
       challenge: "registration-challenge",
+      securityGeneration: 1,
     });
     webAuthnMocks.verifyAuthenticationResponse.mockImplementation(async ({ expectedChallenge }) => {
       if (!(await expectedChallenge("registration-challenge"))) {
@@ -279,6 +283,7 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
 
     const res = await request(makeApp())
@@ -299,12 +304,14 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
     await createWebAuthnChallengeStore(currentDb()).createChallenge({
       userId: "user-1",
       challengeType: "authentication",
       pendingAuthHash: hashPendingAuthToken("pending-token"),
       challenge: "auth-challenge",
+      securityGeneration: 1,
     });
 
     const res = await request(makeApp())
@@ -350,6 +357,7 @@ describe("auth passkey routes", () => {
     await createPendingAuthStore(currentDb()).createPendingAuth({
       userId: "user-1",
       token: "pending-token",
+      securityGeneration: 1,
     });
 
     const res = await request(makeApp())
@@ -408,12 +416,13 @@ describe("auth passkey routes", () => {
     expect(res.body.rp).toMatchObject({ id: "127.0.0.1" });
   });
 
-  it("verifies first passkey registration without silently enabling strict mode", async () => {
+  it("verifies first passkey registration, rotates sessions, and does not silently enable strict mode", async () => {
     await seedSession(currentDb(), "cookie-session", Date.now() + 60_000, Date.now());
     await createWebAuthnChallengeStore(currentDb()).createChallenge({
       userId: "user-1",
       challengeType: "registration",
       challenge: "registration-challenge",
+      securityGeneration: 1,
     });
     webAuthnMocks.verifyRegistrationResponse.mockImplementation(async ({ expectedChallenge }) => {
       expect(await expectedChallenge("registration-challenge")).toBe(true);
@@ -460,7 +469,7 @@ describe("auth passkey routes", () => {
       authMode: "password_or_passkey",
     });
     expect(sessions.rows).toHaveLength(1);
-    expect(oldSession.rows).toHaveLength(1);
+    expect(oldSession.rows).toHaveLength(0);
   });
 
   it("deletes individual passkeys with session rotation and allows final deletion", async () => {
