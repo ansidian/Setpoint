@@ -29,7 +29,7 @@ export type ResolvedInstanceCredential = {
 
 export type InstanceCredentialChangeEvent = {
   key: InstanceCredentialKey;
-  reason: "pending_staged" | "promoted" | "validation_failed" | "disabled" | "host_selected" | "environment_imported";
+  reason: "pending_staged" | "pending_discarded" | "promoted" | "validation_failed" | "disabled" | "host_selected" | "environment_imported";
 };
 
 export class UnknownInstanceCredentialError extends Error {
@@ -76,11 +76,13 @@ export function createInstanceCredentialService({
   environment = process.env,
   encryption = createEncryption(),
   rootKeyHealthResolver,
+  now = Date.now,
 }: {
   store?: InstanceCredentialStore;
   environment?: NodeJS.ProcessEnv | Record<string, string | undefined>;
   encryption?: ReturnType<typeof createEncryption>;
   rootKeyHealthResolver?: () => Promise<RootKeyHealthMetadata>;
+  now?: () => number;
 } = {}) {
   const listeners = new Set<(event: InstanceCredentialChangeEvent) => void>();
 
@@ -95,7 +97,7 @@ export function createInstanceCredentialService({
 
   async function resolve(inputKey: string): Promise<ResolvedInstanceCredential> {
     const key = requireKey(inputKey);
-    const record = await store.get(key);
+    const record = await store.get(key, now());
     if (record?.activeValueEncrypted) {
       return { key, source: "stored", value: encryption.decrypt(record.activeValueEncrypted, instanceCredentialContext(key)) };
     }
@@ -107,7 +109,7 @@ export function createInstanceCredentialService({
 
   async function readPending(inputKey: string): Promise<{ value: string; version: number } | null> {
     const key = requireKey(inputKey);
-    const record = await store.get(key);
+    const record = await store.get(key, now());
     if (!record?.pendingValueEncrypted) return null;
     return { value: encryption.decrypt(record.pendingValueEncrypted, instanceCredentialContext(key)), version: record.version };
   }
@@ -129,6 +131,8 @@ export function createInstanceCredentialService({
       source,
       activeConfigured: Boolean(record?.activeValueEncrypted) || source === "environment",
       pendingConfigured: Boolean(record?.pendingValueEncrypted),
+      pendingStagedAt: record?.pendingValueEncrypted ? record.pendingStagedAt : null,
+      pendingExpiresAt: record?.pendingValueEncrypted ? record.pendingExpiresAt : null,
       validationState: record?.validationState ?? "untested",
       lastTestedAt: record?.lastTestedAt ?? null,
       lastSucceededAt: record?.lastSucceededAt ?? null,
@@ -154,7 +158,7 @@ export function createInstanceCredentialService({
   }
 
   async function getMetadata(): Promise<InstanceCredentialMetadataResponse> {
-    const records = await store.list();
+    const records = await store.list(now());
     const byKey = new Map(records.map((record) => [record.key, record]));
     return {
       credentials: listInstanceCredentialDefinitions().map((definition) =>
@@ -168,12 +172,12 @@ export function createInstanceCredentialService({
 
   async function getCredentialMetadata(inputKey: string): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
-    return metadataFor(key, await store.get(key));
+    return metadataFor(key, await store.get(key, now()));
   }
 
   async function stagePending(inputKey: string, value: string): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
-    const record = await store.stagePending(key, encryption.encrypt(value, instanceCredentialContext(key)));
+    const record = await store.stagePending(key, encryption.encrypt(value, instanceCredentialContext(key)), now());
     publish({ key, reason: "pending_staged" });
     return metadataFor(key, record);
   }
@@ -185,14 +189,14 @@ export function createInstanceCredentialService({
       key: requireKey(entry.key),
       encryptedValue: encryption.encrypt(entry.value, instanceCredentialContext(requireKey(entry.key))),
     }));
-    const records = await store.stagePendingGroup(supported);
+    const records = await store.stagePendingGroup(supported, now());
     for (const record of records) publish({ key: record.key, reason: "pending_staged" });
     return records.map((record) => metadataFor(record.key, record));
   }
 
   async function promotePending(inputKey: string, expectedVersion: number): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
-    const record = await store.promotePending(key, expectedVersion);
+    const record = await store.promotePending(key, expectedVersion, now());
     publish({ key, reason: "promoted" });
     return metadataFor(key, record);
   }
@@ -204,7 +208,7 @@ export function createInstanceCredentialService({
       key: requireKey(entry.key),
       expectedVersion: entry.expectedVersion,
     }));
-    const records = await store.promotePendingGroup(supported);
+    const records = await store.promotePendingGroup(supported, now());
     for (const record of records) publish({ key: record.key, reason: "promoted" });
     return records.map((record) => metadataFor(record.key, record));
   }
@@ -212,21 +216,40 @@ export function createInstanceCredentialService({
   async function recordPendingFailure(inputKey: string, expectedVersion: number, errorCode: string): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
     const redactedCode = safeErrorCode(errorCode) ?? "VALIDATION_FAILED";
-    const record = await store.recordPendingFailure(key, expectedVersion, redactedCode);
+    const record = await store.recordPendingFailure(key, expectedVersion, redactedCode, now());
     publish({ key, reason: "validation_failed" });
     return metadataFor(key, record);
   }
 
+  async function discardPending(inputKey: string, expectedVersion: number): Promise<InstanceCredentialMetadata> {
+    const key = requireKey(inputKey);
+    const record = await store.discardPending(key, expectedVersion, now());
+    publish({ key, reason: "pending_discarded" });
+    return metadataFor(key, record);
+  }
+
+  async function discardPendingGroup(
+    entries: Array<{ key: string; expectedVersion: number }>,
+  ): Promise<InstanceCredentialMetadata[]> {
+    const supported = entries.map((entry) => ({
+      key: requireKey(entry.key),
+      expectedVersion: entry.expectedVersion,
+    }));
+    const records = await store.discardPendingGroup(supported, now());
+    for (const record of records) publish({ key: record.key, reason: "pending_discarded" });
+    return records.map((record) => metadataFor(record.key, record));
+  }
+
   async function disable(inputKey: string): Promise<InstanceCredentialMetadata> {
     const key = requireKey(inputKey);
-    const record = await store.disable(key);
+    const record = await store.disable(key, now());
     publish({ key, reason: "disabled" });
     return metadataFor(key, record);
   }
 
   async function disableGroup(inputKeys: string[]): Promise<InstanceCredentialMetadata[]> {
     const keys = inputKeys.map(requireKey);
-    const records = await store.disableGroup(keys);
+    const records = await store.disableGroup(keys, now());
     for (const record of records) publish({ key: record.key, reason: "disabled" });
     return records.map((record) => metadataFor(record.key, record));
   }
@@ -254,7 +277,7 @@ export function createInstanceCredentialService({
     const key = requireKey(inputKey);
     const value = environmentValue(key, environment);
     if (value === null) throw new HostCredentialUnavailableError();
-    const record = await store.importActive(key, encryption.encrypt(value, instanceCredentialContext(key)));
+    const record = await store.importActive(key, encryption.encrypt(value, instanceCredentialContext(key)), now());
     publish({ key, reason: "environment_imported" });
     return metadataFor(key, record);
   }
@@ -266,7 +289,7 @@ export function createInstanceCredentialService({
       if (value === null) throw new HostCredentialUnavailableError();
       return { key, encryptedValue: encryption.encrypt(value, instanceCredentialContext(key)) };
     });
-    const records = await store.importActiveGroup(entries);
+    const records = await store.importActiveGroup(entries, now());
     for (const record of records) publish({ key: record.key, reason: "environment_imported" });
     return records.map((record) => metadataFor(record.key, record));
   }
@@ -281,6 +304,8 @@ export function createInstanceCredentialService({
     promotePending,
     promotePendingGroup,
     recordPendingFailure,
+    discardPending,
+    discardPendingGroup,
     disable,
     disableGroup,
     useHostValue,

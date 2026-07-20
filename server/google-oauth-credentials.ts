@@ -108,6 +108,14 @@ export function createGoogleOAuthCredentialManager(
     ]);
   }
 
+  async function discardCandidate(candidateVersions: GoogleOAuthCandidateVersions) {
+    const credentials = await service();
+    return credentials.discardPendingGroup([
+      { key: CLIENT_ID_KEY, expectedVersion: candidateVersions.clientId },
+      { key: CLIENT_SECRET_KEY, expectedVersion: candidateVersions.clientSecret },
+    ]);
+  }
+
   async function importEnvironment() {
     const credentials = await service();
     return credentials.importEnvironmentGroup([CLIENT_ID_KEY, CLIENT_SECRET_KEY]);
@@ -129,6 +137,7 @@ export function createGoogleOAuthCredentialManager(
     stageCandidate,
     resolveCandidate,
     promoteCandidate,
+    discardCandidate,
     importEnvironment,
     disable,
     useHostValues,

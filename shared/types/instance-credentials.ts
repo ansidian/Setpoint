@@ -8,6 +8,8 @@ export type InstanceCredentialMetadata = {
   source: InstanceCredentialSource;
   activeConfigured: boolean;
   pendingConfigured: boolean;
+  pendingStagedAt: number | null;
+  pendingExpiresAt: number | null;
   validationState: InstanceCredentialValidationState;
   lastTestedAt: number | null;
   lastSucceededAt: number | null;

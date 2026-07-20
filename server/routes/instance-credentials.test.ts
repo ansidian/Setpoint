@@ -41,6 +41,8 @@ function createApp(
     source: "stored" as const,
     activeConfigured: true,
     pendingConfigured: true,
+    pendingStagedAt: 100,
+    pendingExpiresAt: 86_400_100,
     validationState: "pending" as const,
     lastTestedAt: null,
     lastSucceededAt: null,
@@ -54,6 +56,7 @@ function createApp(
       rootKey: { configured: true, valid: true, fingerprint: "sha256:abc", decryptability: "ok" as const },
     })),
     stagePending: vi.fn(async () => metadata),
+    discardPending: vi.fn(async () => ({ ...metadata, pendingConfigured: false, pendingStagedAt: null, pendingExpiresAt: null })),
     importEnvironment: vi.fn(async () => metadata),
     disable: vi.fn(async () => ({ ...metadata, source: "disabled" as const })),
     useHostValue: vi.fn(async () => ({ ...metadata, source: "environment" as const })),
@@ -85,6 +88,10 @@ function createApp(
       { ...metadata, key: "google.oauth_client_id", source: "environment" as const },
       { ...metadata, key: "google.oauth_client_secret", source: "environment" as const },
     ]),
+    discardCandidate: vi.fn(async () => [
+      { ...metadata, key: "google.oauth_client_id", pendingConfigured: false },
+      { ...metadata, key: "google.oauth_client_secret", pendingConfigured: false },
+    ]),
     ...googleOAuthManagerOverrides,
   } as unknown as GoogleOAuthCredentialManager;
   const gmailPubSubManager = {
@@ -108,6 +115,10 @@ function createApp(
     importEnvironment: vi.fn(async () => [
       { ...metadata, key: "tasks.todoist_client_id" },
       { ...metadata, key: "tasks.todoist_client_secret" },
+    ]),
+    discardCandidate: vi.fn(async () => [
+      { ...metadata, key: "tasks.todoist_client_id", pendingConfigured: false },
+      { ...metadata, key: "tasks.todoist_client_secret", pendingConfigured: false },
     ]),
     ...todoistOAuthManagerOverrides,
   } as unknown as TodoistOAuthCredentialManager;
@@ -173,6 +184,23 @@ describe("instance credential routes", () => {
     expect(JSON.stringify(response.body)).not.toContain("browser-secret");
   });
 
+  it("discards a generic candidate by expected version with recent password auth", async () => {
+    const { app, service } = createApp();
+    const blocked = await request(app)
+      .delete("/api/instance-credentials/ai.openai_api_key/pending")
+      .set("Cookie", "ea_session=stale")
+      .send({ expectedVersion: 2 });
+    const response = await request(app)
+      .delete("/api/instance-credentials/ai.openai_api_key/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ expectedVersion: 2 });
+
+    expect(blocked.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect(service.discardPending).toHaveBeenCalledWith("ai.openai_api_key", 2);
+    expect(response.body).toMatchObject({ pendingConfigured: false });
+  });
+
   it("stages the Google application pair through one write-only provider action", async () => {
     const { app, googleOAuthManager } = createApp();
     const response = await request(app)
@@ -205,6 +233,18 @@ describe("instance credential routes", () => {
     expect(JSON.stringify(response.body)).not.toContain("environment-secret-value");
   });
 
+  it("discards the Google pair through one version-bound action", async () => {
+    const { app, googleOAuthManager } = createApp();
+    const response = await request(app)
+      .delete("/api/instance-credentials/google-oauth/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ candidateVersions: { clientId: 3, clientSecret: 4 } });
+
+    expect(response.status).toBe(200);
+    expect(googleOAuthManager.discardCandidate).toHaveBeenCalledWith({ clientId: 3, clientSecret: 4 });
+    expect(response.body.credentials).toHaveLength(2);
+  });
+
   it("rejects generic single-key mutations for provider-owned credential pairs", async () => {
     const { app, service } = createApp();
     const response = await request(app)
@@ -233,6 +273,33 @@ describe("instance credential routes", () => {
     });
     expect(JSON.stringify(response.body)).not.toContain("browser-client-id");
     expect(JSON.stringify(response.body)).not.toContain("browser-client-secret");
+  });
+
+  it("discards the Todoist pair through one version-bound action", async () => {
+    const { app, todoistOAuthManager } = createApp();
+    const response = await request(app)
+      .delete("/api/instance-credentials/todoist-oauth/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ candidateVersions: { clientId: 5, clientSecret: 6 } });
+
+    expect(response.status).toBe(200);
+    expect(todoistOAuthManager.discardCandidate).toHaveBeenCalledWith({ clientId: 5, clientSecret: 6 });
+  });
+
+  it("rejects generic pair-member discard and malformed expected versions", async () => {
+    const { app, service } = createApp();
+    const pair = await request(app)
+      .delete("/api/instance-credentials/google.oauth_client_id/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ expectedVersion: 3 });
+    const malformed = await request(app)
+      .delete("/api/instance-credentials/ai.openai_api_key/pending")
+      .set("Cookie", "ea_session=valid")
+      .send({ expectedVersion: "3" });
+
+    expect(pair.status).toBe(409);
+    expect(malformed.status).toBe(400);
+    expect(service.discardPending).not.toHaveBeenCalled();
   });
 
   it("migrates Todoist host credentials through an explicit redacted action", async () => {
@@ -295,6 +362,8 @@ describe("instance credential routes", () => {
           source: "stored" as const,
           activeConfigured: true,
           pendingConfigured: true,
+          pendingStagedAt: 1,
+          pendingExpiresAt: 86_400_001,
           validationState: "invalid" as const,
           lastTestedAt: 1,
           lastSucceededAt: null,

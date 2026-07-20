@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { KeyRound } from "lucide-react";
 import {
   disableGoogleOAuthApplication,
+  discardGoogleOAuthPending,
   getGmailAuthUrl,
   importGoogleOAuthEnvironment,
   stageGoogleOAuthApplication,
@@ -19,7 +20,7 @@ import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
-import { formatCredentialTimestamp } from "./coreCredentialModel";
+import { formatCredentialTimestamp, pendingCredentialExpiryLabel } from "./coreCredentialModel";
 import type { SettingsCredentialMetadataProps } from "../settingsTypes";
 import {
   SensitiveActionStepUp,
@@ -142,6 +143,27 @@ export default function GoogleOAuthCredentialsCard({
         : "restoring the host-managed Google credentials");
   }
 
+  async function discardPending() {
+    const clientIdVersion = credentials.find((item) => item.key === CLIENT_ID_KEY)?.version;
+    const clientSecretVersion = credentials.find((item) => item.key === CLIENT_SECRET_KEY)?.version;
+    if (clientIdVersion == null || clientSecretVersion == null) return;
+    const candidateVersions = { clientId: clientIdVersion, clientSecret: clientSecretVersion };
+    await stepUp.run(async () => {
+      setBusy("discard"); setMessage(null); setError(null);
+      try {
+        await discardGoogleOAuthPending(candidateVersions);
+        await onRefreshCredentialMetadata();
+        setMessage("Pending application discarded. The active Google application is unchanged.");
+      } catch (caught) {
+        if (isPasswordStepUpRequired(caught)) throw caught;
+        setError("The pending Google application could not be discarded. The active application is unchanged.");
+        await onRefreshCredentialMetadata().catch(() => {});
+      } finally {
+        setBusy(null);
+      }
+    }, "discarding the pending Google application");
+  }
+
   async function connectGoogle() {
     setBusy("connect"); setMessage(null); setError(null);
     try {
@@ -157,6 +179,9 @@ export default function GoogleOAuthCredentialsCard({
 
   const configured = credentials.length === 2 && credentials.every((item) => item.activeConfigured);
   const pending = credentials.some((item) => item.pendingConfigured);
+  const pendingMetadata = credentials.find((item) => item.pendingConfigured && item.pendingExpiresAt !== null);
+  const pendingExpiry = pendingMetadata ? pendingCredentialExpiryLabel(pendingMetadata) : null;
+  const canDiscardPending = credentials.length === 2 && credentials.every((item) => item.pendingConfigured && item.version !== null);
   const source = metadataUnavailable ? "Status unavailable" : sourceLabel(credentials);
   const sourceValue = credentials[0]?.source;
   const allEnvironment = credentials.length === 2 && credentials.every((item) => item.source === "environment");
@@ -200,6 +225,11 @@ export default function GoogleOAuthCredentialsCard({
               <Button type="button" size="sm" className={cn(SETTINGS_PRIMARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || credentialActionLocked || (!configured && !pending)} onClick={connectGoogle}>
                 {busy === "connect" ? "Opening Google…" : pending ? "Connect to validate" : "Connect Google"}
               </Button>
+              {pending ? (
+                <Button type="button" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || credentialActionLocked || !canDiscardPending} onClick={discardPending}>
+                  {busy === "discard" ? "Discarding…" : "Discard pending"}
+                </Button>
+              ) : null}
               {allEnvironment ? (
                 <Button type="button" size="sm" variant="outline" className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, BUTTON_MOTION)} disabled={Boolean(busy) || credentialActionLocked} onClick={() => sourceAction("import")}>
                   {busy === "import" ? "Copying…" : "Copy into Setpoint"}
@@ -247,6 +277,7 @@ export default function GoogleOAuthCredentialsCard({
             </div>
           ) : null}
           <SensitiveActionStepUp state={stepUp} />
+          {pendingExpiry ? <FieldHint>{pendingExpiry}</FieldHint> : null}
           {callbackUrl ? (
             <div>
               <div className="text-[11px] font-medium text-foreground">Authorized redirect URI</div>

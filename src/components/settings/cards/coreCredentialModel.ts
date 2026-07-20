@@ -59,3 +59,8 @@ export function formatCredentialTimestamp(timestamp: number | null): string | nu
     timeStyle: "short",
   }).format(new Date(timestamp));
 }
+
+export function pendingCredentialExpiryLabel(metadata: InstanceCredentialMetadata): string | null {
+  if (!metadata.pendingConfigured || metadata.pendingExpiresAt === null) return null;
+  return `Pending candidate expires ${formatCredentialTimestamp(metadata.pendingExpiresAt)}`;
+}

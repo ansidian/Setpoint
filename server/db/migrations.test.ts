@@ -609,4 +609,25 @@ describe("database migrations", () => {
     const columns = await db.execute("PRAGMA table_info('ea_sessions')");
     expect(columns.rows.map((row) => row.name)).toContain("step_up_window_started_at");
   });
+
+  it("adds durable pending credential timestamps and backfills legacy candidates", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["033_instance_credentials.sql"]);
+    await db.execute({
+      sql: `INSERT INTO ea_instance_credentials
+              (credential_key, pending_value_encrypted, validation_state, updated_at)
+            VALUES (?, ?, 'pending', ?)`,
+      args: ["ai.openai_api_key", "legacy-ciphertext", 1_000],
+    });
+
+    await applyMigrations(db, ["040_pending_credential_lifecycle.sql"]);
+
+    const row = (await db.execute(
+      `SELECT pending_staged_at, pending_expires_at
+       FROM ea_instance_credentials WHERE credential_key = 'ai.openai_api_key'`,
+    )).rows[0];
+    expect(row).toEqual({ pending_staged_at: 1_000, pending_expires_at: 86_401_000 });
+    const columns = await db.execute("PRAGMA index_info('idx_instance_credentials_pending_expiry')");
+    expect(columns.rows.map((entry) => entry.name)).toEqual(["pending_expires_at"]);
+  });
 });

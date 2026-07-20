@@ -8,6 +8,7 @@ const mockApi = vi.hoisted(() => ({
   stageTodoistOAuthApplication: vi.fn(),
   importTodoistOAuthEnvironment: vi.fn(),
   beginTodoistOAuth: vi.fn(),
+  discardTodoistOAuthPending: vi.fn(),
 }));
 const mockSecurity = vi.hoisted(() => ({
   stepUpWithPassword: vi.fn(),
@@ -29,7 +30,7 @@ const disconnectedStatus = {
   configured: false,
   oauthRefreshable: false,
   needsReauth: false,
-  application: { configured: false, source: "absent", pendingConfigured: false },
+  application: { configured: false, source: "absent", pendingConfigured: false, pendingStagedAt: null, pendingExpiresAt: null, candidateVersions: null },
   callbackUrl: "https://setpoint.example.com/api/ea/accounts/todoist/callback",
   webhookUrl: "https://setpoint.example.com/api/todoist/webhook",
   deliveryMode: "periodic",
@@ -159,6 +160,41 @@ describe("TodoistCard", () => {
     await waitFor(() => expect(mockApi.stageTodoistOAuthApplication).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(clientId.value).toBe(""));
     expect(clientSecret.value).toBe("");
+  });
+
+  it("shows OAuth expiry and atomically discards the pair after password step-up", async () => {
+    const pendingStatus = {
+      ...disconnectedStatus,
+      application: {
+        configured: true,
+        source: "stored" as const,
+        pendingConfigured: true,
+        pendingStagedAt: Date.UTC(2026, 6, 20, 18),
+        pendingExpiresAt: Date.UTC(2026, 6, 21, 18),
+        candidateVersions: { clientId: 21, clientSecret: 22 },
+      },
+    };
+    const activeStatus = {
+      ...pendingStatus,
+      application: { ...pendingStatus.application, pendingConfigured: false, pendingStagedAt: null, pendingExpiresAt: null, candidateVersions: null },
+    };
+    mockApi.getTodoistConnectionStatus.mockResolvedValueOnce(pendingStatus).mockResolvedValueOnce(activeStatus);
+    mockApi.discardTodoistOAuthPending
+      .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), { code: "PASSWORD_STEP_UP_REQUIRED", status: 403 }))
+      .mockResolvedValueOnce({ credentials: [] });
+
+    render(<TodoistCard settings={{}} openAdvancedSetup />);
+    expect(await screen.findByText(/Pending candidate expires/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard pending" }));
+    expect(await screen.findByLabelText("Current password")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
+
+    await waitFor(() => expect(mockApi.discardTodoistOAuthPending).toHaveBeenCalledTimes(2));
+    expect(mockApi.discardTodoistOAuthPending).toHaveBeenLastCalledWith({ clientId: 21, clientSecret: 22 });
+    await waitFor(() => expect(mockApi.getTodoistConnectionStatus).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Discard pending" })).toBeNull();
+    expect(screen.getByText(/App credentials: stored/)).toBeTruthy();
   });
 
   it("copies the OAuth pair and explains the Render cleanup boundary", async () => {
