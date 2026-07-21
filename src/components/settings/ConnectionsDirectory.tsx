@@ -75,6 +75,8 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
       pathname: location.pathname,
       search: nextSearch.toString() ? `?${nextSearch}` : "",
       hash: openId === row.id ? "" : `#${row.hash}`,
+    }, {
+      state: { settingsTargetReveal: "suppress" },
     });
   }
 

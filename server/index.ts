@@ -43,6 +43,7 @@ import { errorHandler } from "./middleware/async-handler.ts";
 import { requireClaimedInstance } from "./middleware/owner-gate.ts";
 import { resolveOwnerBootstrap } from "./auth/owner-bootstrap.ts";
 import { ownerStore } from "./auth/owner-store.ts";
+import { onboardingProgressStore } from "./onboarding-progress-store.ts";
 import { activateOwner, getActiveOwner, onOwnerActivated } from "./auth/owner-context.ts";
 import { createOwnerRuntimeGate } from "./auth/owner-runtime.ts";
 import { canonicalUrlService } from "./platform/canonical-url.ts";
@@ -176,6 +177,9 @@ timeAsync("migrations", () => migrate())
   .then(() => timeAsync("owner-bootstrap", () => resolveOwnerBootstrap({
     store: ownerStore,
     env: process.env,
+    onLegacyOwner: async (owner) => {
+      await onboardingProgressStore.completeExistingOwner(owner.userId);
+    },
   })))
   .then(async (bootstrap) => {
     if (bootstrap.claimed) {
