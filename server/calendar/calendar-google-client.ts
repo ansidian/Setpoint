@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { decrypt, encrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.ts";
 import type {
@@ -7,6 +8,7 @@ import type {
   GoogleCalendarSource,
   GoogleEventResource,
 } from "../../shared/types/calendar.ts";
+import { googleOAuthCredentialManager } from "../google-oauth-credentials.ts";
 
 export interface StoredCalendarAccount extends CalendarAccount {
   credentials_encrypted?: string | null;
@@ -72,9 +74,6 @@ export const CALENDAR_FULL_SCOPE = "https://www.googleapis.com/auth/calendar";
 const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 const CALENDAR_API_TIMEOUT_MS = 30_000;
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-
 // Google's OAuth token responses normally carry expires_in (seconds), but a
 // malformed/partial response can omit it. Defaulting to this TTL keeps
 // expires_at finite so the refresh guard stays deterministic instead of
@@ -127,7 +126,9 @@ async function getAccountCredentials(account: StoredCalendarAccount): Promise<Ca
     throwCalendarError(400, "calendar_auth_missing", "Calendar credentials are missing for this account");
   }
   try {
-    return JSON.parse(decrypt(account.credentials_encrypted)) as CalendarCredentials;
+    return JSON.parse(
+      decrypt(account.credentials_encrypted, accountCredentialContext(account.id)),
+    ) as CalendarCredentials;
   } catch {
     throwCalendarError(500, "calendar_auth_invalid", "Calendar credentials could not be read");
   }
@@ -138,7 +139,7 @@ async function persistCredentials(accountId: string, credentials: CalendarCreden
     sql: `UPDATE ea_accounts
           SET credentials_encrypted = ?, updated_at = datetime('now')
           WHERE id = ?`,
-    args: [encrypt(JSON.stringify(credentials)), accountId],
+    args: [encrypt(JSON.stringify(credentials), accountCredentialContext(accountId)), accountId],
   });
 }
 
@@ -148,12 +149,13 @@ export async function getAuthorizedAccount(account: StoredCalendarAccount): Prom
   if (typeof credentials.expires_at !== "number"
     || !Number.isFinite(credentials.expires_at)
     || credentials.expires_at < Date.now() + 5 * 60 * 1000) {
+    const applicationCredentials = await googleOAuthCredentialManager.resolveActive();
     const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID!,
-        client_secret: GOOGLE_CLIENT_SECRET!,
+        client_id: applicationCredentials.clientId,
+        client_secret: applicationCredentials.clientSecret,
         refresh_token: credentials.refresh_token!,
         grant_type: "refresh_token",
       }),

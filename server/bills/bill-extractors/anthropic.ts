@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
+import { resolveAiApiKey } from "../../ai-credentials.ts";
 import type { BillCandidate, BillExtractionProvider, BillExtractionRequest } from "../../../shared/types/bills.ts";
 
 type HttpError = Error & { status?: number };
@@ -34,7 +35,7 @@ export const ANTHROPIC_PROVIDER: BillExtractionProvider & { id: string; envVar: 
   envVar: "ANTHROPIC_API_KEY",
 
   async extract({ model, systemPrompt, content }: BillExtractionRequest) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = await resolveAiApiKey("anthropic");
     if (!apiKey) {
       const err: HttpError = new Error("ANTHROPIC_API_KEY not set");
       err.status = 503;
@@ -59,8 +60,8 @@ export const ANTHROPIC_PROVIDER: BillExtractionProvider & { id: string; envVar: 
     }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
 
     if (!apiRes.ok) {
-      const text = await apiRes.text();
-      console.error(`[EA] Bill extract Anthropic error (${apiRes.status}):`, text);
+      await apiRes.text();
+      console.error(`[EA] Bill extract Anthropic error (${apiRes.status})`);
       const err: HttpError = new Error(`Anthropic API error (${apiRes.status})`);
       err.status = 502;
       throw err;

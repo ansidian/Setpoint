@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { useAgendaFetch } from "./useAgendaFetch";
 import type { AgendaRangeController } from "./useAgendaFetch";
 
@@ -128,7 +128,6 @@ describe("useAgendaFetch", () => {
 
     rerender({ topmostMonth: "2026-05" });
 
-    await new Promise((r) => setTimeout(r, 50));
     expect(domainRange.ensureRange).not.toHaveBeenCalled();
   });
 
@@ -240,7 +239,9 @@ describe("useAgendaFetch", () => {
 
     domainRange.ensureRange.mockRejectedValueOnce(new Error("transient"));
     rerender({ topmostMonth: "2026-06" });
-    await new Promise((r) => setTimeout(r, 30));
+    await vi.waitFor(() => {
+      expect(domainRange.ensureRange).toHaveBeenCalledTimes(2);
+    });
     expect(result.current.loadedMonths).toEqual(loadedAfterInitial);
 
     rerender({ topmostMonth: "2026-07" });
@@ -272,7 +273,9 @@ describe("useAgendaFetch", () => {
     const walk = ["2026-04", "2026-02", "2025-12", "2025-10", "2025-08"];
     for (const topmostMonth of walk) {
       rerender({ topmostMonth });
-      await new Promise((r) => setTimeout(r, 25));
+      await vi.waitFor(() => {
+        expect(result.current.loadedMonths).toContain(topmostMonth);
+      });
     }
 
     const loaded = result.current.loadedMonths;
@@ -349,7 +352,6 @@ describe("useAgendaFetch", () => {
 
       rerender({ topmostMonth: null, pendingTargetMonth: "2026-05" });
 
-      await new Promise((r) => setTimeout(r, 50));
       expect(domainRange.ensureRange).not.toHaveBeenCalled();
     });
 
@@ -390,8 +392,10 @@ describe("useAgendaFetch", () => {
         expect(result.current.loadedMonths).toEqual(["2027-02", "2027-03", "2027-04"]);
       });
 
-      releaseSlowFetch();
-      await new Promise((r) => setTimeout(r, 20));
+      await act(async () => {
+        releaseSlowFetch();
+        await Promise.resolve();
+      });
       expect(result.current.loadedMonths).toEqual(["2027-02", "2027-03", "2027-04"]);
     });
   });

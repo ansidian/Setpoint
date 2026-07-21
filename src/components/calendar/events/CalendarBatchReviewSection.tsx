@@ -43,7 +43,6 @@ interface CalendarBatchReviewSectionProps {
 
 const SCHEDULE_PICKER_WIDTH = 328;
 const SCHEDULE_PICKER_HEIGHT = 540;
-const ACCENT = "var(--ea-accent)";
 
 function sectionCardStyle(): CSSProperties {
   return {

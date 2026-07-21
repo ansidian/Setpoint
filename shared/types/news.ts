@@ -1,6 +1,4 @@
 export type NewsSourceKind = "rss" | "hn";
-export type NewsViewMode = "all" | "new";
-export type NewsSourceHealthState = "healthy" | "failing" | "delayed" | "paused";
 
 export interface NewsSource {
   id: number;

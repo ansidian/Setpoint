@@ -1,6 +1,7 @@
+import { resolveGooglePlacesApiKey } from "../location-credentials.ts";
 import { fetchWithTimeout } from "./fetch-with-timeout.ts";
+import type { InstanceCredentialService } from "./instance-credential-service.ts";
 
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 const GOOGLE_PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 const GOOGLE_PLACES_TIMEOUT_MS = 10_000;
@@ -42,22 +43,14 @@ function buildPlacesError(status: number, code: string, message: string): Places
   return error;
 }
 
-function requirePlacesConfig() {
-  if (!GOOGLE_PLACES_API_KEY) {
+function requirePlacesConfig(apiKey: string | null): asserts apiKey is string {
+  if (!apiKey) {
     throw buildPlacesError(
       503,
       "calendar_places_not_configured",
       "Google Places is not configured for calendar location search.",
     );
   }
-}
-
-async function readErrorMessage(res: Response, fallbackMessage: string) {
-  const body: unknown = await res.json().catch(() => null);
-  if (!isRecord(body)) return fallbackMessage;
-  const nestedError = body.error;
-  if (isRecord(nestedError) && typeof nestedError.message === "string") return nestedError.message;
-  return typeof body.message === "string" ? body.message : fallbackMessage;
 }
 
 function buildLocationCircle(lat: number | undefined, lng: number | undefined, radius: number) {
@@ -118,12 +111,14 @@ function normalizePrediction(entry: unknown): PlacePrediction | null {
   };
 }
 
-async function autocompleteRequest(body: Record<string, unknown>): Promise<PlacePrediction[]> {
-  const res = await fetchWithTimeout(GOOGLE_PLACES_AUTOCOMPLETE_URL, {
+async function autocompleteRequest(apiKey: string, body: Record<string, unknown>): Promise<PlacePrediction[]> {
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(GOOGLE_PLACES_AUTOCOMPLETE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
+      "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask": [
         "suggestions.placePrediction.placeId",
         "suggestions.placePrediction.text",
@@ -132,13 +127,16 @@ async function autocompleteRequest(body: Record<string, unknown>): Promise<Place
       ].join(","),
     },
     body: JSON.stringify(body),
-  }, { timeoutMs: GOOGLE_PLACES_TIMEOUT_MS });
+    }, { timeoutMs: GOOGLE_PLACES_TIMEOUT_MS });
+  } catch {
+    throw buildPlacesError(503, "calendar_places_unavailable", "Google Places is temporarily unavailable.");
+  }
 
   if (!res.ok) {
     throw buildPlacesError(
       res.status,
       "calendar_places_lookup_failed",
-      await readErrorMessage(res, "Failed to fetch place suggestions."),
+      "Failed to fetch place suggestions.",
     );
   }
 
@@ -149,8 +147,13 @@ async function autocompleteRequest(body: Record<string, unknown>): Promise<Place
     .filter((prediction): prediction is PlacePrediction => prediction !== null);
 }
 
-export async function suggestGooglePlaces(query: unknown, options: PlaceSearchOptions = {}) {
-  requirePlacesConfig();
+export async function suggestGooglePlaces(
+  query: unknown,
+  options: PlaceSearchOptions = {},
+  credentials?: Pick<InstanceCredentialService, "resolve">,
+) {
+  const apiKey = await resolveGooglePlacesApiKey(credentials);
+  requirePlacesConfig(apiKey);
 
   const input = String(query || "").trim();
   if (!input) return [];
@@ -169,7 +172,7 @@ export async function suggestGooglePlaces(query: unknown, options: PlaceSearchOp
   let predictions: PlacePrediction[] = [];
   const locationRestriction = buildLocationCircle(options.lat, options.lng, RESTRICTED_RADIUS_METERS);
   if (locationRestriction) {
-    predictions = await autocompleteRequest({
+    predictions = await autocompleteRequest(apiKey, {
       ...body,
       locationRestriction,
     });
@@ -177,7 +180,7 @@ export async function suggestGooglePlaces(query: unknown, options: PlaceSearchOp
 
   if (predictions.length < MIN_SUGGESTION_COUNT) {
     const locationBias = buildLocationCircle(options.lat, options.lng, BIASED_RADIUS_METERS);
-    predictions = await autocompleteRequest({
+    predictions = await autocompleteRequest(apiKey, {
       ...body,
       ...(locationBias ? { locationBias } : null),
     });
@@ -190,8 +193,13 @@ export async function suggestGooglePlaces(query: unknown, options: PlaceSearchOp
   return rankPredictions(predictions);
 }
 
-export async function getGooglePlaceDetails(placeId: unknown, options: PlaceSearchOptions = {}) {
-  requirePlacesConfig();
+export async function getGooglePlaceDetails(
+  placeId: unknown,
+  options: PlaceSearchOptions = {},
+  credentials?: Pick<InstanceCredentialService, "resolve">,
+) {
+  const apiKey = await resolveGooglePlacesApiKey(credentials);
+  requirePlacesConfig(apiKey);
 
   const id = String(placeId || "").trim();
   if (!id) {
@@ -205,18 +213,23 @@ export async function getGooglePlaceDetails(placeId: unknown, options: PlaceSear
     url.searchParams.set("sessionToken", options.sessionToken);
   }
 
-  const res = await fetchWithTimeout(url, {
-    headers: {
-      "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
-      "X-Goog-FieldMask": "id,displayName,formattedAddress,location,googleMapsUri",
-    },
-  }, { timeoutMs: GOOGLE_PLACES_TIMEOUT_MS });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "id,displayName,formattedAddress,location,googleMapsUri",
+      },
+    }, { timeoutMs: GOOGLE_PLACES_TIMEOUT_MS });
+  } catch {
+    throw buildPlacesError(503, "calendar_places_unavailable", "Google Places is temporarily unavailable.");
+  }
 
   if (!res.ok) {
     throw buildPlacesError(
       res.status,
       "calendar_place_details_failed",
-      await readErrorMessage(res, "Failed to load place details."),
+      "Failed to load place details.",
     );
   }
 

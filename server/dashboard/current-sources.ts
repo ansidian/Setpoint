@@ -154,14 +154,3 @@ export function currentResponseContentKey(response: unknown): string | null {
   }
   return createHash("sha1").update(JSON.stringify(canonical)).digest("hex");
 }
-
-export function shouldPublishBillsCurrentChange(
-  previousRow: CurrentDashboardCacheRow | null | undefined,
-  nextPayload: unknown,
-): boolean {
-  return providerFor("bills_current")!.shouldPublishChange!(
-    previousRow,
-    parsePayload(previousRow, null),
-    nextPayload,
-  );
-}

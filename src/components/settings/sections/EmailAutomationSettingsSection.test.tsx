@@ -2,6 +2,7 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
+import type { ConnectionId, ConnectionRowView, ConnectionState } from "../connectionModel";
 
 vi.mock("@/components/settings/cards/EmailTriageModeCard", () => ({
   default: function EmailTriageModeCardMock() {
@@ -18,6 +19,12 @@ vi.mock("@/components/settings/cards/EmailAiModelCard", () => ({
 vi.mock("@/components/settings/cards/TriageSoundSettingsCard", () => ({
   default: function TriageSoundSettingsCardMock() {
     return <div data-testid="triage-sound-settings-card" />;
+  },
+}));
+
+vi.mock("@/components/settings/cards/CoreProviderCredentialsCard", () => ({
+  default: function CoreProviderCredentialsCardMock() {
+    return <div data-testid="core-provider-credentials-card" />;
   },
 }));
 
@@ -43,13 +50,51 @@ const { default: EmailAutomationSettingsSection } = await import("./EmailAutomat
 
 // Stateful harness so setSettings(updater) feeds back into the section and the
 // lookback/interests controls reflect the latest settings on re-render.
-function Harness({ initialSettings = { email_interests: [] }, patch }: {
+function connection(id: ConnectionId, state: ConnectionState): ConnectionRowView {
+  const labels: Partial<Record<ConnectionId, string>> = {
+    "google-workspace": "Google Workspace",
+    "icloud-mail": "iCloud Mail",
+    anthropic: "Anthropic",
+    openai: "OpenAI",
+  };
+  return {
+    id,
+    group: id === "openai" || id === "anthropic" ? "ai_providers" : "data_sources",
+    label: labels[id] || id,
+    description: "",
+    minimumViable: "",
+    hash: id,
+    state,
+    statusLabel: state,
+    source: "absent",
+    mode: null,
+    identities: [],
+    lastTestedAt: null,
+    lastSucceededAt: null,
+    lastFailedAt: null,
+  };
+}
+
+const CONNECTED_DEPENDENCIES = [
+  connection("google-workspace", "connected"),
+  connection("icloud-mail", "not_connected"),
+  connection("anthropic", "connected"),
+  connection("openai", "not_connected"),
+];
+
+function Harness({ initialSettings = { email_interests: [] }, patch, connections = CONNECTED_DEPENDENCIES }: {
   initialSettings?: SettingsState;
   patch: SettingsPatch;
+  connections?: ConnectionRowView[];
 }) {
   const [settings, setSettings] = useState<SettingsState | null>(initialSettings);
   return (
-    <EmailAutomationSettingsSection settings={settings} setSettings={setSettings} patch={patch} />
+    <EmailAutomationSettingsSection
+      settings={settings}
+      setSettings={setSettings}
+      patch={patch}
+      connections={connections}
+    />
   );
 }
 
@@ -58,28 +103,87 @@ afterEach(() => {
 });
 
 describe("EmailAutomationSettingsSection", () => {
-  it("renders every email-automation card plus the lookback and interests panels", () => {
+  it("shows one email-source prerequisite when Automation is unavailable", () => {
     render(
-      <EmailAutomationSettingsSection
-        settings={{ email_interests: [] }}
-        setSettings={vi.fn()}
+      <Harness
         patch={vi.fn()}
+        connections={[
+          connection("google-workspace", "not_connected"),
+          connection("icloud-mail", "not_connected"),
+          connection("anthropic", "not_connected"),
+          connection("openai", "not_connected"),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Connect an email source")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Google Workspace" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#google-workspace");
+    expect(screen.getByRole("link", { name: "iCloud Mail" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#icloud-mail");
+    expect(screen.queryByTestId("email-triage-mode-card")).toBeNull();
+    expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
+  });
+
+  it("shows email behavior plus an AI setup prompt when only email is connected", () => {
+    render(
+      <Harness
+        patch={vi.fn()}
+        connections={[
+          connection("google-workspace", "connected"),
+          connection("icloud-mail", "not_connected"),
+          connection("anthropic", "not_connected"),
+          connection("openai", "not_connected"),
+        ]}
       />,
     );
 
     expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
-    expect(screen.getByTestId("triage-sound-settings-card")).toBeTruthy();
+    expect(screen.getByText("Connect an AI provider")).toBeTruthy();
+    expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
+    expect(screen.queryByTestId("bill-extraction-card")).toBeNull();
+  });
+
+  it("shows email and AI behavior when both dependency groups are connected", () => {
+    render(<Harness patch={vi.fn()} />);
+
+    expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
     expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
     expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
-    expect(screen.getByText("Email Lookback")).toBeTruthy();
-    expect(screen.getByText("Email Interests")).toBeTruthy();
-    expect(screen.getByTestId("important-senders-card")).toBeTruthy();
-    expect(screen.getByTestId("snapshot-boundaries-card")).toBeTruthy();
+    expect(screen.queryByText("Connect an AI provider")).toBeNull();
+  });
 
-    expect(
-      screen.getByText("Controls how far back the email snapshot looks when gathering context."),
-    ).toBeTruthy();
-    expect(screen.queryByText(/generation/i)).toBeNull();
+  it("keeps AI controls visible with an explicit repair path when the adopted provider breaks", () => {
+    render(
+      <Harness
+        initialSettings={{
+          email_ai_provider: "openai",
+          bill_extract_provider: "openai",
+          email_interests: [],
+        }}
+        patch={vi.fn()}
+        connections={[
+          connection("google-workspace", "connected"),
+          connection("icloud-mail", "not_connected"),
+          connection("anthropic", "not_connected"),
+          connection("openai", "needs_attention"),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("OpenAI needs attention")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Repair OpenAI" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#openai");
+    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
+    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+  });
+
+  it("keeps provider credential forms out of Automation while retaining model controls", () => {
+    render(<Harness patch={vi.fn()} />);
+
+    expect(screen.queryByTestId("core-provider-credentials-card")).toBeNull();
+    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
+    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
   });
 
   describe("email lookback clamp", () => {
@@ -100,12 +204,12 @@ describe("EmailAutomationSettingsSection", () => {
       expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 1 });
     });
 
-    it("clamps an above-maximum lookback down to 72 hours", () => {
+    it("clamps an above-maximum lookback down to 168 hours", () => {
       const { patch, input } = renderLookback();
 
       fireEvent.change(input, { target: { value: "999" } });
 
-      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 72 });
+      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 168 });
     });
 
     it("passes an in-range lookback through unchanged", () => {

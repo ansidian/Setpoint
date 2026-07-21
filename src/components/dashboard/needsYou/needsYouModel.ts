@@ -2,7 +2,6 @@ import { daysUntil, formatAmount } from "../../../lib/bill-utils";
 import { formatChipDateTime } from "../../../lib/shell-helpers";
 import type { ActualBillOccurrence } from "../../../../shared/types/actual";
 import type { SnapshotItem } from "../../../../shared/types/snapshots";
-import type { DeadlineOccurrence } from "../../../../shared/types/tasks";
 import type { DashboardDeadline } from "../../../context/dashboardTaskProjection";
 
 export type NeedsYouEmail = Omit<Partial<SnapshotItem>, "id" | "lane"> & {
@@ -52,16 +51,6 @@ interface RankedNeedsYouCard extends NeedsYouCard {
 
 function isRankedNeedsYouCard(card: RankedNeedsYouCard | null): card is RankedNeedsYouCard {
   return card !== null;
-}
-
-interface InboxRow {
-  id: string;
-  lane: "needs_attention" | "fyi";
-  dotTone: string;
-  dotState: "hollow" | "solid";
-  label: string;
-  age: string | null;
-  snapshotItemId: number | null;
 }
 
 const TONE = { rose: "var(--sp-rose)", cream: "var(--sp-cream)", cyan: "var(--sp-cyan)", green: "var(--sp-green)", accent: "var(--sp-accent)" };

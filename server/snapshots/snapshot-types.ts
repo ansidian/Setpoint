@@ -13,11 +13,6 @@ export interface SnapshotWriteDb extends SnapshotReadDb {
   batch(statements: InStatement[], mode?: TransactionMode): Promise<SnapshotDbResult[]>;
 }
 
-export interface SnapshotClockOptions {
-  dbClient?: SnapshotWriteDb;
-  now?: Date;
-}
-
 export interface SnapshotEmailSource extends Record<string, unknown> {
   uid?: string;
   id?: string;

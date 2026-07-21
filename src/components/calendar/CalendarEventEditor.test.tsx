@@ -2,12 +2,11 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mockDeleteCalendarEvent } from "./CalendarEventEditor.test-setup.ts";
 import { renderModal, openFloatingEventEditorFromSelectedChip } from "./CalendarEventEditor.test-utils.tsx";
+import { renderEventEditor } from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor create and edit lifecycle", () => {
   it("auto focuses the title when opening the create editor", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
 
     const title = await screen.findByTestId("calendar-event-title");
     await waitFor(() => {
@@ -16,9 +15,7 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
   });
 
   it("opens event create as a compact Todoist-style icon composer", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
 
     const rail = await screen.findByTestId("calendar-event-editor-rail");
     expect(rail.getAttribute("data-editor-layout")).toBe("slim-icon");
@@ -47,9 +44,7 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
   });
 
   it("opens compact popovers from the icon action row one at a time", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
@@ -71,32 +66,7 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     });
   });
 
-  it("auto focuses the title when opening the edit editor", async () => {
-    const event = {
-      id: "event-focus-edit",
-      etag: '"etag-focus-edit"',
-      title: "Planning block",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-    };
-    renderModal({ events: [event] });
-
-    await openFloatingEventEditorFromSelectedChip();
-
-    const title = screen.getByTestId("calendar-event-title") as HTMLInputElement;
-    await waitFor(() => {
-      expect(document.activeElement).toBe(title);
-    });
-    expect(title.selectionStart).toBe("Planning block".length);
-    expect(title.selectionEnd).toBe("Planning block".length);
-  });
-
-  it("deletes a selected single event from the detail action", async () => {
+  it("deletes an edited single event from the editor action", async () => {
     const event = {
       id: "event-1",
       etag: '"etag-1"',
@@ -110,12 +80,7 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
       allDay: false,
       htmlLink: "https://calendar.google.com",
     };
-    const { refreshRange, removeEvent } = renderModal({ events: [event] });
-
-    fireEvent.click((await screen.findAllByTestId("calendar-agenda-event-row"))[0]!);
-    expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
-
-    fireEvent.click(within(await screen.findByTestId("calendar-floating-detail-panel")).getByRole("button", { name: /edit details/i }));
+    const { refreshRange, removeEvent } = renderEventEditor({ event });
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
@@ -201,9 +166,7 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
   });
 
   it("cancels the editor on browser back", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    renderEventEditor();
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     window.dispatchEvent(new PopStateEvent("popstate"));

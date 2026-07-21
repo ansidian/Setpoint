@@ -1,7 +1,6 @@
 import { buildDemoNews } from "./newsData.ts";
 import { buildDemoTransactions } from "./financeData.ts";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
 const CAREER_COLOR = "#f5c2e7";
@@ -23,7 +22,6 @@ const PACIFIC_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
 export type DemoSeed = ReturnType<typeof makeDemoSeed>;
 type DemoCalendarEvent = ReturnType<typeof event>;
 type DemoTask = ReturnType<typeof task>;
-type DemoBill = ReturnType<typeof bill>;
 type DemoSnapshotEmail = ReturnType<typeof snapshotEmail>;
 type DemoLaneKey = "queued" | "needs_attention" | "catch_up" | "fyi" | "handled" | "untriaged_read" | "noise";
 type DemoLanes = Record<DemoLaneKey, DemoSnapshotEmail[]>;

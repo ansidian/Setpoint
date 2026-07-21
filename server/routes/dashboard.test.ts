@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import cookieParser from "cookie-parser";
@@ -42,8 +41,7 @@ vi.mock("../dashboard/current-service.ts", () => ({
 process.env.EA_USER_ID = "u1";
 
 const { default: router } = await import("./dashboard.ts");
-const { __resetCurrentDashboardEventsForTests } = await import("../dashboard/current-events.ts");
-const { __clearSessionValidationCache } = await import("../middleware/auth.ts");
+const { clearCurrentDashboardEventSubscribers } = await import("../dashboard/current-events.ts");
 
 function makeApp(): Express {
   const app = express();
@@ -71,10 +69,25 @@ function hashSessionToken(raw: string): string {
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(`
+    CREATE TABLE ea_owner (
+      singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+      user_id TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      auth_mode TEXT NOT NULL DEFAULT 'password_or_passkey',
+      security_generation INTEGER NOT NULL DEFAULT 1,
+      claimed_at INTEGER NOT NULL
+    );
     CREATE TABLE ea_sessions (
       token TEXT PRIMARY KEY,
-      expires_at INTEGER NOT NULL
+      expires_at INTEGER NOT NULL,
+      authenticated_at INTEGER NOT NULL DEFAULT 0,
+      password_authenticated_at INTEGER NOT NULL DEFAULT 0,
+      security_generation INTEGER NOT NULL DEFAULT 1,
+      auth_method TEXT NOT NULL DEFAULT 'legacy'
     );
+    INSERT INTO ea_owner
+      (singleton_id, user_id, password_hash, auth_mode, security_generation, claimed_at)
+    VALUES (1, 'u1', 'unused-test-hash', 'password_or_passkey', 1, 1);
   `);
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
@@ -90,14 +103,7 @@ function auth(requestBuilder: Test): Test {
 describe("dashboard routes", () => {
   beforeEach(async () => {
     testState.db.current = await createMigratedDb();
-    __resetCurrentDashboardEventsForTests();
-    // auth.js keeps a module-level, 30s-TTL positive sessionValidationCache keyed
-    // by the hashed cookie token. A sibling test that authenticates "cookie-session"
-    // leaves a positive entry behind; without this reset a later test could be served
-    // a stale positive validation from cache instead of re-reading this test's DB,
-    // making an unauthenticated/revoked request wrongly pass. Clear it so every test
-    // re-validates against its own freshly migrated session table.
-    __clearSessionValidationCache();
+    clearCurrentDashboardEventSubscribers();
     testState.getCurrentDashboard.mockReset().mockResolvedValue({ weather: { temp: 71 } });
     testState.getDashboardSystemHealth.mockReset().mockResolvedValue({ systemStatus: { state: "current" } });
     testState.requestCurrentDashboardRefresh.mockReset().mockResolvedValue({
@@ -107,7 +113,7 @@ describe("dashboard routes", () => {
   });
 
   afterEach(async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     await testState.db.current?.close?.();
     testState.db.current = null;
   });
@@ -153,6 +159,7 @@ describe("dashboard routes", () => {
   });
 
   it("translates current-dashboard service failures to route errors", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.getCurrentDashboard.mockRejectedValueOnce(new Error("service down"));
 
     const res = await auth(request(makeApp()).get("/api/dashboard/current"));

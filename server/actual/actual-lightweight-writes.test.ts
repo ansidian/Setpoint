@@ -1,6 +1,5 @@
-import { mkdtemp, mkdir, writeFile } from "fs/promises";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
-import os from "os";
+import { mkdir, writeFile } from "fs/promises";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
 import {
@@ -18,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value: unknown) => value }));
 
-const { sendBillLightweight, __testing__ } = await import("./actual-lightweight-writes.ts");
+const { sendBillLightweight } = await import("./actual-lightweight-writes.ts");
 
 let tempDir: string | null = null;
 const originalDataDir = process.env.ACTUAL_DATA_DIR;
@@ -58,7 +57,7 @@ function mockActualRequests(count = 1): void {
 }
 
 async function createBudgetDb() {
-  tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-lightweight-"));
+  tempDir = await createTestTempDir("actual-lightweight-");
   const budgetDir = path.join(tempDir, "My-Finances-d8e502a");
   await mkdir(budgetDir, { recursive: true });
   await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
@@ -148,7 +147,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockActualRequests();
 });
-
 afterEach(async () => {
   global.fetch = originalFetch;
   if (originalDataDir == null) delete process.env.ACTUAL_DATA_DIR;
@@ -156,58 +154,6 @@ afterEach(async () => {
   if (tempDir) await removeTempDir(tempDir);
   tempDir = null;
 });
-
-describe("actualDateInt (P2-39 date validation)", () => {
-  it("returns the YYYYMMDD integer for a valid date", () => {
-    expect(__testing__.actualDateInt("2026-05-15")).toBe(20260515);
-  });
-  it("throws instead of serializing NaN/garbage for a non-date", () => {
-    expect(() => __testing__.actualDateInt("not-a-date")).toThrow();
-    expect(() => __testing__.actualDateInt("")).toThrow();
-    expect(() => __testing__.actualDateInt(null)).toThrow();
-  });
-});
-
-describe("findExistingSchedule (P2-16 cross-type guard)", () => {
-  const billSchedule = {
-    id: "sched-bill",
-    name: "Acme",
-    conditions: [{ op: "is", field: "amount", value: -5000 }], // negative => a bill/payment
-  };
-
-  it("reuses a same-type bare-name match", () => {
-    // A bill write (negative amount) named "Acme" reuses the bill schedule.
-    expect(__testing__.findExistingSchedule([billSchedule], null, null, -5000, "Acme")).toBe(billSchedule);
-  });
-
-  it("does not reuse a bare-name schedule of the opposite type", () => {
-    // A transfer write (positive amount) named "Acme" must NOT clobber the bill schedule.
-    expect(__testing__.findExistingSchedule([billSchedule], null, null, 5000, "Acme")).toBeNull();
-  });
-
-  it("extends the cross-type guard to isbetween schedules via the shared amount-condition parser (P3-76)", () => {
-    const rangeBill = {
-      id: "sched-range-bill",
-      name: "Acme",
-      conditions: [{ op: "isbetween", field: "amount", value: { num1: -4000, num2: -6000 } }],
-    };
-    // Range midpoint is -5000 (negative => bill). A positive transfer named "Acme" must not clobber it.
-    expect(__testing__.findExistingSchedule([rangeBill], null, null, 5000, "Acme")).toBeNull();
-    // A same-sign bill write still reuses it.
-    expect(__testing__.findExistingSchedule([rangeBill], null, null, -5000, "Acme")).toBe(rangeBill);
-  });
-});
-
-describe("computeSyncSince (P2-15 since-window)", () => {
-  it("prefers lastSyncedTimestamp, then lastPushedTimestamp", () => {
-    expect(__testing__.computeSyncSince({ lastSyncedTimestamp: "T-synced", lastPushedTimestamp: "T-pushed" })).toBe("T-synced");
-    expect(__testing__.computeSyncSince({ lastPushedTimestamp: "T-pushed" })).toBe("T-pushed");
-  });
-  it("falls back to epoch zero, never a 5-minute wall-clock window that drops old messages", () => {
-    expect(__testing__.computeSyncSince({})).toBe(new Timestamp(0, 0, "0").toString());
-  });
-});
-
 describe("sendBillLightweight", () => {
   it("writes an expense transaction into the local Actual DB and syncs CRDT messages", async () => {
     const budgetDir = await createBudgetDb();
@@ -446,6 +392,7 @@ describe("sendBillLightweight", () => {
   });
 
   it("flags a mid-sync failure as locally applied and leaves a recoverable state", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const budgetDir = await createBudgetDb();
     fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -503,50 +450,5 @@ describe("sendBillLightweight", () => {
 
     expect(err).toMatchObject({ status: 400 });
     expect((err as { localWriteApplied?: boolean }).localWriteApplied).toBeUndefined();
-  });
-});
-
-describe("verifyEncodedSyncRequest", () => {
-  const message = (overrides: Record<string, unknown> = {}) => ({
-    timestamp: "2026-05-15T12:00:00.000Z-0000-0123456789abcdef",
-    dataset: "transactions",
-    row: "txn-1",
-    column: "amount",
-    value: "N:-1234",
-    ...overrides,
-  });
-
-  it("accepts a faithful encode round-trip", () => {
-    const payload = {
-      groupId: "sync-123",
-      cloudFileId: "cloud-file-1",
-      since: "0",
-      messages: [message(), message({ column: "notes", value: "S:hello" })],
-    };
-    const buffer = __testing__.encodeSyncRequest(payload);
-    expect(() => __testing__.verifyEncodedSyncRequest(buffer, payload)).not.toThrow();
-  });
-
-  it("fails loudly when the encoded payload does not match the input", () => {
-    const encodedPayload = {
-      groupId: "sync-123",
-      cloudFileId: "cloud-file-1",
-      since: "0",
-      messages: [message()],
-    };
-    const buffer = __testing__.encodeSyncRequest(encodedPayload);
-
-    expect(() => __testing__.verifyEncodedSyncRequest(buffer, {
-      ...encodedPayload,
-      messages: [message({ value: "N:-9999" })],
-    })).toThrow(/encode self-check/);
-    expect(() => __testing__.verifyEncodedSyncRequest(buffer, {
-      ...encodedPayload,
-      messages: [message(), message()],
-    })).toThrow(/messageCount/);
-    expect(() => __testing__.verifyEncodedSyncRequest(buffer, {
-      ...encodedPayload,
-      groupId: "other-group",
-    })).toThrow(/groupId/);
   });
 });

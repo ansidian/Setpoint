@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  _clearAlfredConversationsForTest,
+  clearAlfredConversations,
   cacheAlfredItems,
   createAlfredConversation,
   deleteAlfredConversation,
@@ -15,7 +15,7 @@ const HOUR = 60 * 60 * 1000;
 
 describe("alfred conversation store", () => {
   beforeEach(() => {
-    _clearAlfredConversationsForTest();
+    clearAlfredConversations();
   });
 
   it("creates a conversation with an id, empty transcript, and empty item cache", () => {

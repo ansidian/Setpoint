@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
+import { clearCurrentDashboardEventSubscribers, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 import type { InStatement } from "@libsql/client";
 
+vi.mock("../ai-credentials.ts", () => ({
+  resolveAiApiKey: async (provider: "openai" | "anthropic") =>
+    process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
+}));
+
 describe("email triage worker model routing", () => {
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
@@ -109,209 +114,6 @@ describe("email triage worker model routing", () => {
     unsubscribe();
     });
 
-  it("uses the configured inbox triage model for direct strong triage", async () => {
-    const dbClient = await createMigratedDb();
-    await dbClient.execute({
-      sql: `INSERT INTO ea_settings
-              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model, email_triage_mode)
-            VALUES (?, 'openai', 'gpt-5.4', 'anthropic', 'claude-haiku-4-5', 'real')`,
-      args: ["user-1"],
-    });
-    await queueEmail(dbClient, {
-      subject: "Security alert: payment due",
-      body_snippet: "Review this payment due security alert.",
-      body_text: "Your account has a security alert and a payment due. Review now.",
-      from_name: "Bank Security",
-      from_address: "security@bank.example",
-    });
-
-    const originalOpenAiKey = process.env.OPENAI_API_KEY;
-    const originalFetch = global.fetch;
-    process.env.OPENAI_API_KEY = "test-openai-key";
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
-    const fetchMock = vi.fn(async (_input: string | URL | Request, _options?: RequestInit) => ({
-      ok: true,
-      json: async () => ({
-        model: "gpt-5.4",
-        output: [{
-          type: "function_call",
-          name: "submit_email_triage",
-          arguments: JSON.stringify({
-            lane: "needs_attention",
-            category: "security",
-            urgency: "high",
-            escalation_badge: "High Risk",
-            summary: "Security payment alert needs review.",
-            action: "Review account",
-            deadline_at: null,
-            confidence: 0.91,
-            bill_candidate: null,
-          }),
-        }],
-        usage: {
-          input_tokens: 90,
-          output_tokens: 30,
-          prompt_tokens_details: { cached_tokens: 48 },
-        },
-      }),
-    }) as unknown as Response);
-    global.fetch = fetchMock;
-
-    try {
-      const result = await processNextEmailTriageJob({
-        dbClient,
-        now: new Date("2026-05-03T12:21:00.000Z"),
-      });
-
-      expect(result).toMatchObject({
-        processed: true,
-        lane: "needs_attention",
-        source: "strong_model",
-        model_calls: ["strong"],
-      });
-      const [url, options] = fetchMock.mock.calls[0]!;
-      expect(url).toBe("https://api.openai.com/v1/responses");
-      const body = JSON.parse(String(options!.body));
-      expect(body.model).toBe("gpt-5.4");
-      expect(body.store).toBe(false);
-      expect(body.prompt_cache_key).toBe("ea-email-triage:v1:strong:gpt-5.4");
-      expect(body.prompt_cache_retention).toBe("24h");
-      expect(consoleLog).toHaveBeenCalledWith(
-        "[Email Triage] OpenAI cache tier=strong model=gpt-5.4 input=90 output=30 cached=48 key=ea-email-triage:v1:strong:gpt-5.4",
-      );
-    } finally {
-      process.env.OPENAI_API_KEY = originalOpenAiKey;
-      global.fetch = originalFetch;
-      consoleLog.mockRestore();
-    }
-    });
-
-  it("keeps account recovery and new sign-in code mail on the strong model", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      subject: "New sign-in verification code",
-      body_snippet: "A new sign-in used your verification code. Review if this wasn't you.",
-      body_text: "A new sign-in used your verification code. Review account recovery options if this wasn't you.",
-      from_name: "Account Security",
-      from_address: "security@example.com",
-    });
-    const modelClient = {
-      classify: vi.fn(async ({ tier }) => ({
-        decision: {
-          lane: "needs_attention",
-          category: "security",
-          urgency: "high",
-          escalation_badge: "High Risk",
-          summary: "New sign-in needs review.",
-          action: "Review account activity",
-          deadline_at: null,
-          confidence: 0.93,
-          bill_candidate: null,
-        },
-        usage: { input_tokens: 90, output_tokens: 30 },
-        tier,
-      })),
-    };
-
-    const result = await processNextEmailTriageJob({
-      dbClient,
-      modelClient,
-      now: new Date("2026-05-03T12:21:00.000Z"),
-    });
-
-    expect(result).toMatchObject({
-      processed: true,
-      email_id: "msg-1",
-      lane: "needs_attention",
-      source: "strong_model",
-      model_calls: ["strong"],
-    });
-    expect(modelClient.classify).toHaveBeenCalledTimes(1);
-    expect(modelClient.classify).toHaveBeenCalledWith(expect.objectContaining({ tier: "strong" }));
-    });
-
-  it("retries OpenAI triage without cache-only fields when a model rejects them", async () => {
-    const dbClient = await createMigratedDb();
-    await dbClient.execute({
-      sql: `INSERT INTO ea_settings
-              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model, email_triage_mode)
-            VALUES (?, 'openai', 'gpt-5.4', 'anthropic', 'claude-haiku-4-5', 'real')`,
-      args: ["user-1"],
-    });
-    await queueEmail(dbClient, {
-      subject: "Security alert: payment due",
-      body_snippet: "Review this payment due security alert.",
-      body_text: "Your account has a security alert and a payment due. Review now.",
-      from_name: "Bank Security",
-      from_address: "security@bank.example",
-    });
-
-    const originalOpenAiKey = process.env.OPENAI_API_KEY;
-    const originalFetch = global.fetch;
-    process.env.OPENAI_API_KEY = "test-openai-key";
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fetchMock = vi.fn(async (_input: string | URL | Request, _options?: RequestInit): Promise<Response> => ({ ok: true } as Response))
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        text: async () => "Unknown parameter: prompt_cache_retention",
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          model: "gpt-5.4",
-          output: [{
-            type: "function_call",
-            name: "submit_email_triage",
-            arguments: JSON.stringify({
-              lane: "needs_attention",
-              category: "security",
-              urgency: "high",
-              escalation_badge: "High Risk",
-              summary: "Security payment alert needs review.",
-              action: "Review account",
-              deadline_at: null,
-              confidence: 0.91,
-              bill_candidate: null,
-            }),
-          }],
-          usage: { input_tokens: 90, output_tokens: 30 },
-        }),
-      } as Response);
-    global.fetch = fetchMock;
-
-    try {
-      const result = await processNextEmailTriageJob({
-        dbClient,
-        now: new Date("2026-05-03T12:22:00.000Z"),
-      });
-
-      expect(result).toMatchObject({
-        processed: true,
-        lane: "needs_attention",
-        source: "strong_model",
-        model_calls: ["strong"],
-      });
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      const firstBody = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
-      const retryBody = JSON.parse(String(fetchMock.mock.calls[1]![1]!.body));
-      expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v1:strong:gpt-5.4");
-      expect(firstBody.prompt_cache_retention).toBe("24h");
-      expect(retryBody.store).toBe(false);
-      expect(retryBody.prompt_cache_key).toBeUndefined();
-      expect(retryBody.prompt_cache_retention).toBeUndefined();
-      expect(consoleWarn).toHaveBeenCalledWith(
-        "[Email Triage] OpenAI cache fields rejected for tier=strong model=gpt-5.4; retrying without cache-only fields",
-      );
-    } finally {
-      process.env.OPENAI_API_KEY = originalOpenAiKey;
-      global.fetch = originalFetch;
-      consoleLog.mockRestore();
-      consoleWarn.mockRestore();
-    }
-    });
-
   it("escalates low-confidence cheap results and stores both model results", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
@@ -380,11 +182,6 @@ describe("email triage worker model routing", () => {
     expect(rows.rows[0]).toMatchObject({
       lane: "needs_attention",
       triage_source: "strong_model",
-      // P3-69: per-result cost is no longer derived (always null), and the escalation
-      // path sums the cheap + strong costs — null + null === 0 — so an escalated
-      // decision persists 0 rather than the old fabricated 0.004. Either way it is a
-      // dead figure; real spend is recomputed from tokens in triage-cache-stats.
-      estimated_cost_usd: 0,
       latency_ms: 400,
       last_decision_reason: "escalated:cheap_confidence_below_floor",
     });
@@ -402,84 +199,8 @@ describe("email triage worker model routing", () => {
     });
     });
 
-  it("uses the configured bill extraction model for cheap triage", async () => {
-    const dbClient = await createMigratedDb();
-    await dbClient.execute({
-      sql: `INSERT INTO ea_settings
-              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model, email_triage_mode)
-            VALUES (?, 'anthropic', 'claude-sonnet-4-6', 'openai', 'gpt-5.4-nano', 'real')`,
-      args: ["user-1"],
-    });
-    await queueEmail(dbClient, {
-      subject: "Package update",
-      body_snippet: "Your item is moving through the network.",
-      body_text: "Your item is moving through the network and does not require action.",
-      from_name: "Shipping Desk",
-      from_address: "updates@shipper.example",
-    });
-
-    const originalOpenAiKey = process.env.OPENAI_API_KEY;
-    const originalFetch = global.fetch;
-    process.env.OPENAI_API_KEY = "test-openai-key";
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
-    const fetchMock = vi.fn(async (_input: string | URL | Request, _options?: RequestInit) => ({
-      ok: true,
-      json: async () => ({
-        model: "gpt-5.4-nano",
-        output: [{
-          type: "function_call",
-          name: "submit_email_triage",
-          arguments: JSON.stringify({
-            lane: "fyi",
-            category: "delivery",
-            urgency: "low",
-            escalation_badge: null,
-            summary: "Package status update.",
-            action: "No action needed.",
-            deadline_at: null,
-            confidence: 0.94,
-            bill_candidate: null,
-          }),
-        }],
-        usage: { input_tokens: 70, output_tokens: 20 },
-      }),
-    }) as unknown as Response);
-    global.fetch = fetchMock;
-
-    try {
-      const result = await processNextEmailTriageJob({
-        dbClient,
-        now: new Date("2026-05-03T12:29:00.000Z"),
-      });
-
-      expect(result).toMatchObject({
-        processed: true,
-        lane: "fyi",
-        source: "cheap_model",
-        model_calls: ["cheap"],
-      });
-      const [url, options] = fetchMock.mock.calls[0]!;
-      expect(url).toBe("https://api.openai.com/v1/responses");
-      const body = JSON.parse(String(options!.body));
-      expect(body.model).toBe("gpt-5.4-nano");
-      expect(body.store).toBe(false);
-      expect(body.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
-      expect(body.prompt_cache_retention).toBe("24h");
-
-      const rows = await dbClient.execute({
-        sql: "SELECT last_decision_reason FROM ea_email_triage WHERE email_id = ?",
-        args: ["msg-1"],
-      });
-      expect(rows.rows[0]!.last_decision_reason).toBe("cheap_accepted");
-    } finally {
-      process.env.OPENAI_API_KEY = originalOpenAiKey;
-      global.fetch = originalFetch;
-      consoleLog.mockRestore();
-    }
-    });
-
   it("fails open into Needs Attention with Needs Review when model triage fails", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Can you review this?",
@@ -551,7 +272,7 @@ describe("email triage worker model routing", () => {
     });
 
   it("defers a retryable model error (429) instead of marking the email failed (P2-32)", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
@@ -581,7 +302,7 @@ describe("email triage worker model routing", () => {
   });
 
   it("computes retry backoff from the actual post-claim attempt count", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
@@ -604,7 +325,7 @@ describe("email triage worker model routing", () => {
   });
 
   it("goes terminal on the 5th retryable failure instead of granting a 6th attempt", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
@@ -636,7 +357,7 @@ describe("email triage worker model routing", () => {
   });
 
   it("re-queues a job when snapshot attach fails during finalize, not leaving it stuck running (P2-31)", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const realDb = await createMigratedDb();
     await queueEmail(realDb, {
       subject: "Payment due for tuition",

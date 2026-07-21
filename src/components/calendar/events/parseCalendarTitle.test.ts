@@ -504,4 +504,25 @@ describe("parseCalendarTitle", () => {
       }),
     ]);
   });
+
+  it.each([
+    [
+      "Standup 2026-07-01 and 2026-07-01 and 2026-07-03",
+      ["2026-07-01", "2026-07-03"],
+    ],
+    [
+      "Standup next monday and next monday and next wednesday",
+      ["2026-06-22", "2026-06-24"],
+    ],
+  ])("deduplicates repeated dates in batch intent: %s", (title, expectedDates) => {
+    const parsed = parseCalendarTitle(title, {
+      now: new Date("2026-06-13T19:00:00.000Z").getTime(),
+      baseDate: "2026-06-13",
+      defaultStartTime: "09:00",
+      defaultEndTime: "09:30",
+    });
+
+    expect(parsed.mode).toBe("batch");
+    expect(parsed.batchDrafts.map((draft) => draft.startDate)).toEqual(expectedDates);
+  });
 });

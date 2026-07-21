@@ -48,8 +48,6 @@ export interface DeadlinesComputed {
   earliestOverdue: Date | null;
 }
 
-export const MAX_PILLS = 2;
-
 export const DEADLINE_COLOR = TODOIST_DEADLINE_COLOR;
 
 export const PRIORITY_META = {
@@ -161,13 +159,6 @@ export function getDayState(rawItems: unknown): DeadlineDayState {
   return groupDeadlines(Array.isArray(rawItems) ? rawItems as DeadlineItem[] : []);
 }
 
-export function getDefaultSelectedItemId(items: unknown = []): string {
-  const state = getDayState(items);
-  const firstOpen = state.activeItems[0];
-  const fallback = firstOpen || state.completedItems[0];
-  return getDeadlineSelectionId(fallback) || "";
-}
-
 export function compute({ data, viewYear, viewMonth }: { data?: DeadlinesData | null; viewYear: number; viewMonth: number }): DeadlinesComputed {
   const all = deadlineItemsFromData(data);
 
@@ -203,38 +194,4 @@ export function compute({ data, viewYear, viewMonth }: { data?: DeadlinesData | 
   }
 
   return { itemsByDay, itemsByDate, earliestOverdue };
-}
-
-export function canNavigateBack({ viewYear, viewMonth, currentYear, currentMonth, data, computed }: {
-  viewYear: number;
-  viewMonth: number;
-  currentYear: number;
-  currentMonth: number;
-  data?: DeadlinesData | null;
-  computed?: Partial<DeadlinesComputed> | null;
-}): boolean {
-  const currentIdx = currentYear * 12 + currentMonth;
-  const viewIdx = viewYear * 12 + viewMonth;
-  if (viewIdx > currentIdx) return true;
-  let minIdx = currentIdx - 12;
-  if (data?.minDate) {
-    const min = parseDueDate(data.minDate);
-    if (!Number.isNaN(min.getTime())) {
-      minIdx = min.getFullYear() * 12 + min.getMonth();
-    }
-    return viewIdx > minIdx;
-  }
-  const earliest = computed?.earliestOverdue;
-  if (!earliest) return viewIdx > minIdx;
-  const earliestIdx = earliest.getFullYear() * 12 + earliest.getMonth();
-  return viewIdx > earliestIdx;
-}
-
-export function hasOverdue(items: unknown): boolean {
-  const state = getDayState(items);
-  return state.activeItems.some((task) => task._overdueHint);
-}
-
-export function allComplete(_items: unknown): boolean {
-  return false;
 }

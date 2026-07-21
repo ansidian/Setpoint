@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: setpoint
+    runtime: node
+    plan: starter
+    branch: master
+    autoDeployTrigger: "off"
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24.15.0
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: EA_ENCRYPTION_KEY
+        generateValue: true
+      - key: EA_SETUP_TOKEN
+        generateValue: true

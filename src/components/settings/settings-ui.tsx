@@ -19,13 +19,13 @@ const STATUS_TONE_CLASSES = {
   danger: "border-[var(--sp-rose)]/20 bg-[var(--sp-rose)]/10 text-[var(--sp-rose)]",
 };
 
-type StatusTone = keyof typeof STATUS_TONE_CLASSES;
+export type StatusTone = keyof typeof STATUS_TONE_CLASSES;
 
 export function StatusPill({ tone = "neutral", className, children }: { tone?: StatusTone; className?: string; children: ReactNode }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[1.5px] uppercase",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[1.5px] uppercase",
         STATUS_TONE_CLASSES[tone],
         className
       )}
@@ -63,9 +63,9 @@ export function SaveStatus({ status }: { status: SettingsSaveStatus }) {
   return <StatusPill tone="neutral">Auto-save on</StatusPill>;
 }
 
-export function SectionLabel({ children, className }: { children: ReactNode; className?: string }) {
+export function SectionLabel({ children, className, htmlFor }: { children: ReactNode; className?: string; htmlFor?: string }) {
   return (
-    <label className={cn(FIELD_LABEL_CLASS, className)}>
+    <label className={cn(FIELD_LABEL_CLASS, className)} htmlFor={htmlFor}>
       {children}
     </label>
   );
@@ -79,7 +79,9 @@ export function FieldHint({ children, className }: { children: ReactNode; classN
   );
 }
 
-export function SettingsCard({ title, icon, description, children, headerAction, className }: {
+export function SettingsCard({ id, ready = true, title, icon, description, children, headerAction, className }: {
+  id?: string;
+  ready?: boolean;
   title: ReactNode;
   icon: ReactNode;
   description?: ReactNode;
@@ -89,9 +91,14 @@ export function SettingsCard({ title, icon, description, children, headerAction,
 }) {
   return (
     <section
+      id={id}
+      tabIndex={id ? -1 : undefined}
+      aria-labelledby={id ? `${id}-title` : undefined}
+      aria-busy={id && !ready ? true : undefined}
       data-settings-section=""
+      data-settings-target-ready={id ? String(ready) : undefined}
       className={cn(
-        "border-t border-white/[0.06] py-5 first:border-t-0 first:pt-0",
+        "scroll-mt-6 border-t border-white/[0.06] py-5 outline-none first:border-t-0 first:pt-0",
         className,
       )}
     >
@@ -100,9 +107,9 @@ export function SettingsCard({ title, icon, description, children, headerAction,
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
+              <div id={id ? `${id}-title` : undefined} className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 {title}
               </div>
               {description ? (
@@ -111,7 +118,11 @@ export function SettingsCard({ title, icon, description, children, headerAction,
                 </p>
               ) : null}
             </div>
-            {headerAction}
+            {headerAction ? (
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                {headerAction}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -194,7 +205,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
             <div className="min-w-0">
               <Link
                 to="/"
-                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground/75 transition-colors no-underline hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-foreground"
+                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground/75 transition-colors no-underline hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-white/[0.06] motion-reduce:transition-none"
               >
                 <ChevronLeft size={14} />
                 Dashboard
@@ -206,7 +217,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
                 Settings
               </h1>
               <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground/75">
-                Manage the accounts, automation, and AI behavior that power your daily dashboard.
+                Manage external connections, automation, finance behavior, and owner security.
               </p>
             </div>
             <div className="shrink-0">
@@ -229,7 +240,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
                 {TABS.map((tab) => {
                   const isSelected = activeTab === tab.id;
                   const className = cn(
-                    "rounded-lg border px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap transition-all",
+                    "rounded-lg border px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none",
                     isSelected
                       ? "border-primary/20 bg-primary/[0.12] text-primary shadow-[0_0_8px_rgba(203,166,218,0.18)]"
                       : "border-transparent text-muted-foreground hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-foreground"

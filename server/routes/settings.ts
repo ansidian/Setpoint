@@ -1,7 +1,9 @@
 import { Router } from "express";
+import type { RequestHandler } from "express";
 import type { Value } from "@libsql/client";
 import db from "../db/connection.ts";
 import { encrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import { geocodeLocation } from "../platform/weather.ts";
 import { initScheduler } from "../scheduler.ts";
 import {
@@ -33,8 +35,8 @@ import { getTriageCacheStats } from "../triage/triage-cache-stats.ts";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.ts";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
+import { requireRecentPasswordAuth } from "../middleware/auth.ts";
 import {
-  validateActualBudgetUrl,
   validateDiscordWebhookUrl,
   validateEmailInterests,
   validateImportantSenders,
@@ -62,6 +64,11 @@ function errorMessage(error: unknown): string {
 // Bare router: mounted behind requireCookieSession in routes/accounts.ts.
 const router = Router();
 
+const requireRecentAuthForSecretSettings: RequestHandler = (req, res, next) => {
+  if (req.body?.discord_webhook_url === undefined) return next();
+  return requireRecentPasswordAuth(req, res, next);
+};
+
 // GET /settings response allowlist (SEC-06): every ea_settings column NOT
 // listed here is withheld from the client by default, including secrets
 // (*_encrypted, *_token*) and columns the client doesn't consume today
@@ -83,6 +90,7 @@ const SETTINGS_PUBLIC_FIELDS = [
   "email_triage_mode",
   "discord_user_id",
   "todoist_needs_reauth",
+  "todoist_connection_mode",
 ];
 
 router.get<Record<string, never>, GeocodeResult[] | ErrorResponse, never, { q?: string }>("/geocode", async (req, res) => {
@@ -133,7 +141,13 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
     safe.todoist_configured = !!todoist_api_token_encrypted;
     safe.todoist_needs_reauth = !!safe.todoist_needs_reauth;
-    safe.todoist_oauth_configured = !!(todoist_api_token_encrypted && todoist_oauth_refresh_token_encrypted);
+    safe.todoist_connection_mode = safe.todoist_connection_mode
+      || (todoist_api_token_encrypted
+        ? todoist_oauth_refresh_token_encrypted ? "oauth" : "personal_token"
+        : "disconnected");
+    safe.todoist_oauth_configured = !!(
+      todoist_api_token_encrypted && safe.todoist_connection_mode === "oauth"
+    );
     safe.discord_webhook_configured = !!discord_webhook_url_encrypted;
     safe.schedules = schedules_json
       ? JSON.parse(String(schedules_json))
@@ -188,13 +202,16 @@ router.get("/email-search/usage", async (_req, res) => {
   }
 });
 
-router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", async (req, res) => {
+router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
   const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
-    if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
-      return res.status(400).json({ message: "Provide either todoist_api_token or todoist_oauth_token_response, not both" });
+    if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
+      return res.status(400).json({ message: "Use the Actual Budget Save & verify connection endpoint" });
+    }
+    if (todoist_api_token !== undefined) {
+      return res.status(400).json({ message: "Use the Todoist Save & verify connection endpoint" });
     }
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
     const updates: string[] = [];
@@ -230,23 +247,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       updates.push("weather_lng = ?"); args.push(weather_lng);
     }
     if (weather_location !== undefined) { updates.push("weather_location = ?"); args.push(weather_location); }
-    if (actual_budget_url !== undefined) {
-      if (typeof actual_budget_url !== "string") {
-        return res.status(400).json({ message: "actual_budget_url must be a string" });
-      }
-      const validation = validateActualBudgetUrl(actual_budget_url);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.message! });
-      }
-      updates.push("actual_budget_url = ?"); args.push(validation.value!);
-    }
-    if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
-    if (actual_budget_sync_id !== undefined) {
-      if (typeof actual_budget_sync_id !== "string") {
-        return res.status(400).json({ message: "actual_budget_sync_id must be a string" });
-      }
-      updates.push("actual_budget_sync_id = ?"); args.push(actual_budget_sync_id);
-    }
     if (email_ai_provider !== undefined || email_ai_model !== undefined) {
       const resolved = resolveEmailAiModelConfig({
         provider: email_ai_provider,
@@ -267,14 +267,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
       updates.push("email_interests_json = ?");
       args.push(JSON.stringify(validation.value));
-    }
-    if (todoist_api_token !== undefined) {
-      updates.push("todoist_api_token_encrypted = ?");
-      args.push(todoist_api_token ? encrypt(todoist_api_token) : null);
-      updates.push("todoist_oauth_refresh_token_encrypted = NULL");
-      updates.push("todoist_oauth_access_token_expires_at = NULL");
-      updates.push("todoist_oauth_scope = NULL");
-      updates.push("todoist_oauth_token_type = NULL");
     }
     if (email_triage_mode !== undefined) {
       if (!isAllowedStoredEmailTriageMode(email_triage_mode)) {
@@ -313,7 +305,12 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
         return res.status(400).json({ message: validation.message! });
       }
       updates.push("discord_webhook_url_encrypted = ?");
-      args.push(validation.value ? encrypt(validation.value) : null);
+      args.push(validation.value
+        ? encrypt(
+            validation.value,
+            settingsCredentialContext(userId, "discord_webhook_url_encrypted"),
+          )
+        : null);
     }
     if (discord_user_id !== undefined) {
       const trimmedUserId = String(discord_user_id || "").trim();
@@ -334,13 +331,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       args.push(userId);
       await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
     }
-    if (todoist_api_token !== undefined && todoist_api_token) {
-      try {
-        await clearTodoistNeedsReauth(userId);
-      } catch (clearErr) {
-        console.error("[Settings] Failed to clear todoist_needs_reauth:", errorMessage(clearErr));
-      }
-    }
     if (todoist_oauth_token_response !== undefined) {
       const response = typeof todoist_oauth_token_response === "string"
         ? JSON.parse(todoist_oauth_token_response)
@@ -353,12 +343,9 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
     }
 
-    // Purge completed-task snapshots on disconnect. Current runtime reads domain data.
-    if (todoist_api_token !== undefined && !todoist_api_token) {
-      await db.execute({
-        sql: "DELETE FROM ea_completed_tasks WHERE user_id = ?",
-        args: [userId],
-      });
+    if (discord_webhook_url !== undefined || discord_user_id !== undefined) {
+      const { capabilityStatusService } = await import("../capability-status-service.ts");
+      capabilityStatusService.invalidate();
     }
 
     // Hot-reload cron jobs when schedules change (no server restart needed)
@@ -420,7 +407,7 @@ router.post<Record<string, never>, ScheduleSkipResponse | ErrorResponse, Schedul
 
 router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/models", async (_req, res) => {
   try {
-    res.json(emailAiModelAvailability());
+    res.json(await emailAiModelAvailability());
   } catch (err) {
     // P3-54: fixed user-facing string; raw error message stays in the log only.
     console.error("Error fetching models:", errorMessage(err));
@@ -430,7 +417,7 @@ router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("
 
 router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/bill-extract-models", async (_req, res) => {
   try {
-    res.json(billExtractAvailability());
+    res.json(await billExtractAvailability());
   } catch (err) {
     // P3-54: fixed user-facing string; raw error message stays in the log only.
     console.error("Error fetching bill-extract catalog:", errorMessage(err));

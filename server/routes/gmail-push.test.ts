@@ -12,11 +12,17 @@ const gmailSyncApi = vi.hoisted(() => ({
 const schedulerApi = vi.hoisted(() => ({
   requestGmailHistorySyncDrain: vi.fn(),
 }));
+const pubSubApi = vi.hoisted(() => ({
+  verifyToken: vi.fn(async (candidate: string) => candidate === "push-secret"),
+}));
 
 vi.mock("../email/gmail-sync.ts", () => ({
   enqueueHistorySyncFromPubSub: gmailSyncApi.enqueueHistorySyncFromPubSub,
 }));
 vi.mock("../scheduler.ts", () => schedulerApi);
+vi.mock("../email/gmail-pubsub.ts", () => ({
+  gmailPubSubService: pubSubApi,
+}));
 
 process.env.GMAIL_PUBSUB_PUSH_TOKEN = "push-secret";
 
@@ -32,6 +38,7 @@ function makeApp() {
 describe("Gmail Pub/Sub push route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pubSubApi.verifyToken.mockImplementation(async (candidate: string) => candidate === "push-secret");
   });
 
   it("acks a verified Pub/Sub push and requests an immediate background history drain", async () => {
@@ -113,6 +120,7 @@ describe("Gmail Pub/Sub push route", () => {
     vi.stubEnv("GMAIL_PUBSUB_PUSH_TOKEN", "");
     vi.stubEnv("NODE_ENV", "development");
 
+    pubSubApi.verifyToken.mockResolvedValue(false);
     try {
       const res = await request(makeApp())
         .post("/api/gmail/push")
@@ -122,6 +130,31 @@ describe("Gmail Pub/Sub push route", () => {
       expect(gmailSyncApi.enqueueHistorySyncFromPubSub).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllEnvs();
+    }
+  });
+
+  it("delegates verification on every request so regenerated tokens take effect without restart", async () => {
+    pubSubApi.verifyToken.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const app = makeApp();
+
+    expect((await request(app).post("/api/gmail/push?token=rotated").send({ message: { data: "abc" } })).status).toBe(401);
+    expect((await request(app).post("/api/gmail/push?token=rotated").send({ message: { data: "abc" } })).status).toBe(200);
+    expect(pubSubApi.verifyToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed with a retryable response when authoritative token verification is unavailable", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    pubSubApi.verifyToken.mockRejectedValueOnce(new Error("shared database unavailable"));
+    try {
+      const res = await request(makeApp())
+        .post("/api/gmail/push?token=do-not-log-this-token")
+        .send({ message: { data: "abc" } });
+
+      expect(res.status).toBe(503);
+      expect(gmailSyncApi.enqueueHistorySyncFromPubSub).not.toHaveBeenCalled();
+      expect(JSON.stringify(log.mock.calls)).not.toContain("do-not-log-this-token");
+    } finally {
+      log.mockRestore();
     }
   });
 });

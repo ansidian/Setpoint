@@ -192,8 +192,6 @@ export interface AlfredToolResultMap {
   group_items: AlfredToolResultBase & { shown?: number };
 }
 
-export type AlfredToolResult = AlfredToolResultMap[AlfredToolName];
-
 export interface AlfredUsageModelSummary {
   calls: number;
   inputTokens: number;

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { acquireScrollLock } from "./scrollLock";
 
 describe("acquireScrollLock", () => {
+  // These overflow values are the helper's public state-transition contract.
+  // They protect nested overlay locking/restoration rather than CSS appearance.
   let target: HTMLDivElement;
 
   beforeEach(() => {

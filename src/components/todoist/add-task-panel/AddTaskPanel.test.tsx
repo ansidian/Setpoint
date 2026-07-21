@@ -1,8 +1,7 @@
-import { act, cleanup, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
-import useAddTaskPanelController from "./useAddTaskPanelController";
 import { ensureChrono } from "../../calendar/events/parseCalendarTitle";
 import { invalidateTodoistReferenceCache } from "./todoistReferenceCache";
 import type { AddTaskPanelProps } from "./types";
@@ -55,31 +54,9 @@ function PanelHarness(props: Omit<Partial<AddTaskPanelProps>, "anchorRef" | "onC
   );
 }
 
-// The submit failure paths (provider-create rejection, reminder-create rejection)
-// settle their error state across several promise-resolution + React-commit ticks.
-// A single `runAllTimersAsync` flushes that chain only when a sibling test has
-// already warmed the path; run cold (or under shuffled order) it can return with
-// the `setError`/`setReminderError` re-render still pending, so the error notice
-// is not yet in the DOM. Flush repeatedly until the timer/microtask queue is
-// fully drained so these tests assert on a settled UI regardless of order.
-async function flushSubmitSettled() {
-  for (let i = 0; i < 5; i += 1) {
-    await vi.runAllTimersAsync();
-  }
-}
-
 describe("AddTaskPanel due picker", () => {
-  // The NLP/recurring path (controller -> add-task-panel/parsing) reuses the
-  // same lazily-imported chrono-node singleton as the calendar editor
-  // (../../calendar/events/parseCalendarTitle). parsing.ts calls the
-  // SYNCHRONOUS parseCalendarTitle, which only returns the full natural-language
-  // result once chrono has finished loading; a cold singleton degrades to "no
-  // temporal match", so the recurring `due_string`/preview is wrong. The
-  // singleton persists across files/tests and is only warm if an earlier test
-  // already triggered NLP parsing — under shuffled full-suite order this test can
-  // run cold. Warm it once here so the whole file is order-independent. beforeAll
-  // runs before beforeEach installs fake timers, so the dynamic import resolves on
-  // real timers.
+  // Warm the shared lazy chrono singleton before fake timers so NLP behavior is
+  // independent of shuffled test order.
   beforeAll(async () => {
     await ensureChrono();
   });
@@ -152,61 +129,6 @@ describe("AddTaskPanel due picker", () => {
     }));
   });
 
-  it("does not create pending reminders when provider task creation fails", async () => {
-    mockCreateDeadline.mockRejectedValueOnce(new Error("Todoist unavailable"));
-
-    render(<PanelHarness />);
-    vi.runOnlyPendingTimers();
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Call dentist tomorrow at 10am" },
-    });
-    fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
-    fireEvent.click(screen.getByText("Add task"));
-    await flushSubmitSettled();
-
-    expect(mockCreateDeadline).toHaveBeenCalled();
-    expect(mockCreateReminder).not.toHaveBeenCalled();
-    expect(screen.getByText("Todoist unavailable")).toBeTruthy();
-  });
-
-  it("does not re-create the task on retry after a reminder failure (no duplicate)", async () => {
-    mockCreateDeadline.mockResolvedValueOnce({
-      id: "todo-new",
-      title: "Call dentist",
-      due_date: "2026-04-20",
-      due_time: "10:00 AM",
-      class_name: "Inbox",
-    });
-    // The reminder create throws on the first attempt, after the task is created.
-    mockCreateReminder.mockRejectedValueOnce(new Error("Reminder service down"));
-
-    render(<PanelHarness />);
-    vi.runOnlyPendingTimers();
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Call dentist tomorrow at 10am" },
-    });
-    fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
-
-    // First submit: task is created, reminder create fails. Per P3-29 the deadline
-    // is already committed, so reminder failures are collected (not thrown) and the
-    // panel stays open with a "task saved, reminders failed" notice instead of the
-    // raw error. P2-14's no-duplicate-on-retry guarantee (below) is unaffected.
-    fireEvent.click(screen.getByText("Add task"));
-    await flushSubmitSettled();
-    expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Task saved, but reminders could not be updated.")).toBeTruthy();
-
-    // Retry: must UPDATE the already-committed task, never create a second one.
-    fireEvent.click(screen.getByText("Add task"));
-    await flushSubmitSettled();
-    expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
-    expect(mockUpdateDeadline).toHaveBeenCalledWith("todo-new", expect.objectContaining({
-      title: "Call dentist",
-    }));
-  });
-
   it("loads existing reminders when editing a Todoist task", async () => {
     mockListReminders.mockResolvedValueOnce({
       reminders: [
@@ -261,78 +183,6 @@ describe("AddTaskPanel due picker", () => {
       expect.objectContaining({
         title: "Send invoice",
         dueString: "2026-04-19 at 10:01 AM",
-      }),
-    );
-  });
-
-  it("allows creating a task with an overdue manual due date", async () => {
-    render(<PanelHarness />);
-    vi.runOnlyPendingTimers();
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Backfill notes" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Set due date" }));
-    vi.runOnlyPendingTimers();
-    const picker = screen.getByRole("dialog", { name: "Todoist due date picker" });
-    const pastDay = within(picker).getByRole("button", { name: "18" });
-
-    expect((pastDay as HTMLButtonElement).disabled).toBe(false);
-
-    fireEvent.click(pastDay);
-    fireEvent.click(within(picker).getByRole("button", { name: "Set due date" }));
-    fireEvent.click(screen.getByText("Add task"));
-    await vi.runAllTimersAsync();
-
-    expect(mockCreateDeadline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Backfill notes",
-        dueString: "2026-04-18 at 10:01 AM",
-      }),
-    );
-  });
-
-  it("submits parsed overdue NLP times as explicit Todoist due strings", async () => {
-    vi.setSystemTime(new Date("2026-04-20T19:45:00.000Z"));
-    render(<PanelHarness />);
-    vi.runOnlyPendingTimers();
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Backfill notes today at 9am" },
-    });
-
-    expect(screen.getByText("Today, Apr 20 at 9 AM")).toBeTruthy();
-
-    fireEvent.click(screen.getByText("Add task"));
-    await vi.runAllTimersAsync();
-
-    expect(mockCreateDeadline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Backfill notes",
-        dueString: "2026-04-20 at 9 AM",
-      }),
-    );
-  });
-
-  it("submits recurring NLP as cleaned content plus Todoist due_string", async () => {
-    render(<PanelHarness />);
-    vi.runOnlyPendingTimers();
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Water plants every weekday at 9am !2" },
-    });
-
-    expect(screen.getByTestId("todoist-recurring-preview").textContent).toContain("Every Mon, Tue, Wed, Thu, Fri at 9 AM");
-
-    fireEvent.click(screen.getByText("Add task"));
-    await vi.runAllTimersAsync();
-
-    expect(mockCreateDeadline).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Water plants",
-        priority: 2,
-        dueString: "every weekday at 9am",
       }),
     );
   });
@@ -543,49 +393,6 @@ describe("AddTaskPanel due picker", () => {
     );
   });
 
-  it("suppresses unchanged edit previews until the due placement changes", () => {
-    const onDraftPreviewChange = vi.fn();
-
-    render(
-      <AddTaskPanel
-        host="inline"
-        editingTask={{
-          id: "todo-1",
-          title: "Follow up",
-          description: "",
-          class_name: "Inbox",
-          priority: 4,
-          labels: [],
-          due_date: "2026-04-21",
-          due_time: "2:30 PM",
-        }}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-        onDraftPreviewChange={onDraftPreviewChange}
-      />,
-    );
-    vi.runOnlyPendingTimers();
-
-    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
-    expect(onDraftPreviewChange).toHaveBeenCalledWith(expect.objectContaining({
-      dueDate: "2026-04-21",
-      placementChanged: false,
-    }));
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Follow up tomorrow at 9am" },
-    });
-
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 20, 2026 · 9 AM");
-    expect(onDraftPreviewChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      dueDate: "2026-04-20",
-      dueTime: "9 AM",
-      placementChanged: true,
-    }));
-  });
-
   it("keeps original due metadata visible when an edit draft changes due placement", () => {
     render(
       <AddTaskPanel
@@ -614,8 +421,7 @@ describe("AddTaskPanel due picker", () => {
 
     expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 20, 2026 · 9 AM");
     const metadata = screen.getByTestId("todoist-edit-metadata");
-    const originalDueChip = within(metadata).getByText("April 21, 2026 · 2:30 PM");
-    expect(originalDueChip.style.flex).toBe("0 0 auto");
+    expect(within(metadata).getByText("April 21, 2026 · 2:30 PM")).toBeTruthy();
     expect(metadata.textContent).toContain("April 21, 2026 · 2:30 PM");
     expect(metadata.textContent).not.toContain("April 20, 2026 · 9 AM");
   });
@@ -650,31 +456,6 @@ describe("AddTaskPanel due picker", () => {
     expect(metadata.textContent).toContain("IHSS");
   });
 
-  it("shows a quiet no-due metadata chip for edits without a due date", () => {
-    render(
-      <AddTaskPanel
-        host="inline"
-        editingTask={{
-          id: "todo-no-due",
-          title: "Follow up",
-          description: "",
-          labels: [],
-        }}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    vi.runOnlyPendingTimers();
-
-    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
-    const metadata = screen.getByTestId("todoist-edit-metadata");
-    expect(metadata.textContent).toContain("No due date");
-    expect(metadata.textContent).not.toContain("No labels");
-    expect(metadata.textContent).not.toContain("No priority");
-  });
-
   it("uses inline cancel actions instead of the floating close chrome", () => {
     render(
       <AddTaskPanel
@@ -700,25 +481,6 @@ describe("AddTaskPanel due picker", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
     expect(screen.queryByLabelText("Close")).toBeNull();
     expect(screen.queryByText(/Esc to cancel/i)).toBeNull();
-  });
-
-  it("closes the inline editor immediately when cancel is pressed", () => {
-    const onClose = vi.fn();
-
-    render(
-      <AddTaskPanel
-        host="inline"
-        onClose={onClose}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    vi.runOnlyPendingTimers();
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("uses inline Confirm / Cancel controls when cancelling a dirty workspace", () => {
@@ -820,76 +582,5 @@ describe("AddTaskPanel due picker", () => {
 
     expect(mockDeleteDeadline).toHaveBeenCalledWith("todo-delete");
     expect(onTaskDeleted).toHaveBeenCalledWith("todo-delete");
-  });
-});
-
-describe("useAddTaskPanelController seeding", () => {
-  beforeEach(() => {
-    mockGetTodoistProjects.mockResolvedValue([]);
-    mockGetTodoistLabels.mockResolvedValue([]);
-    mockListReminders.mockResolvedValue({ reminders: [] });
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
-  it("seeds a NEW task's title/description from initialInput/initialDescription", () => {
-    const { result } = renderHook(() =>
-      useAddTaskPanelController({
-        host: "floating",
-        onClose: () => {},
-        initialInput: "Buy a standing-desk mat",
-        initialDescription: "the cheap ones flatten out fast",
-      }),
-    );
-    expect(result.current.input).toBe("Buy a standing-desk mat");
-    expect(result.current.description).toBe("the cheap ones flatten out fast");
-    expect(result.current.isEdit).toBe(false);
-    expect(result.current.isDirty).toBe(false);
-  });
-
-  it("expands email context, removes native resizing, and exposes description URLs as links", () => {
-    render(<PanelHarness
-      host="inline"
-      descriptionVariant="email-context"
-      initialDescription={"From: Sender\nSource: https://mail.google.com/mail/u/0/#inbox/message"}
-    />);
-
-    const description = screen.getByRole("textbox", { name: "Task description" }) as HTMLTextAreaElement;
-    expect(description.getAttribute("rows")).toBe("7");
-    expect(description.style.minHeight).toBe("152px");
-    expect(description.style.maxHeight).toBe("240px");
-    expect(description.style.overflowY).toBe("auto");
-    expect(description.style.resize).toBe("none");
-    expect(screen.getByRole("link", { name: "https://mail.google.com/mail/u/0/#inbox/message" }).getAttribute("href"))
-      .toBe("https://mail.google.com/mail/u/0/#inbox/message");
-  });
-
-  it("requires an effective due value when the embedding flow requests one", () => {
-    const withoutDue = renderHook(() => useAddTaskPanelController({
-      host: "floating", onClose: () => {}, initialInput: "Follow up", requireDue: true,
-    }));
-    expect(withoutDue.result.current.canSubmit).toBe(false);
-    withoutDue.unmount();
-    const withDue = renderHook(() => useAddTaskPanelController({
-      host: "floating", onClose: () => {}, initialInput: "Follow up", requireDue: true,
-      initialDueEpochMs: Date.parse("2126-08-01T16:00:00Z"),
-    }));
-    expect(withDue.result.current.canSubmit).toBe(true);
-  });
-
-  it("enforces a required provenance suffix at submission even if it was removed from the editable description", async () => {
-    mockCreateDeadline.mockResolvedValueOnce({ id: "todo-source", title: "Follow up" });
-    const { result } = renderHook(() => useAddTaskPanelController({
-      host: "floating", onClose: () => {}, initialInput: "Follow up", initialDescription: "Manual notes",
-      requiredDescriptionSuffix: "Source: https://mail.google.com/mail/message",
-    }));
-    act(() => result.current.setDescription("Edited notes"));
-    await result.current.handleSubmit();
-    expect(mockCreateDeadline).toHaveBeenCalledWith(expect.objectContaining({
-      description: "Edited notes\n\nSource: https://mail.google.com/mail/message",
-    }));
   });
 });

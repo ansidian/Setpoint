@@ -1,4 +1,3 @@
-import AdmZip from "adm-zip";
 import { createClient } from "@libsql/client";
 import type { Client } from "@libsql/client";
 import type { InStatement } from "@libsql/client";
@@ -6,7 +5,6 @@ import {
   projectActualMetadata,
   actualDateInt,
   ymdFromActualDate,
-  normalizeRuleConditions,
 } from "./actualMetadataModel.ts";
 import {
   actualDataDir,
@@ -22,10 +20,12 @@ import {
   fetchActualBuffer,
   syncDownloadedBudget,
 } from "./actualMetadataSync.ts";
+import { readActualBudgetArchive, validateActualBudgetId } from "./actual-budget-archive.ts";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import type { ActualConfig, ActualMetadata } from "../../shared/types/actual.ts";
 
 interface LocalBudget {
@@ -84,7 +84,10 @@ export async function getActualConfig(userId: string, { dbClient = db }: LocalAc
   return {
     serverURL: trimServerUrl(settings.actual_budget_url),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(String(settings.actual_budget_password_encrypted))
+      ? decrypt(
+          String(settings.actual_budget_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+        )
       : null,
     syncId: String(settings.actual_budget_sync_id),
   };
@@ -154,27 +157,20 @@ async function downloadBudgetZip(config: ActualConfig, { dataDir = actualDataDir
     token,
     fileId,
   });
-  const zip = new AdmZip(buffer);
-  const dbEntry = zip.getEntries().find((entry) => entry.entryName.includes("db.sqlite"));
-  const metaEntry = zip.getEntries().find((entry) => entry.entryName.includes("metadata.json"));
-  if (!dbEntry || !metaEntry) {
-    throw Object.assign(new Error("Actual Budget download did not include db.sqlite and metadata.json"), { status: 502 });
-  }
-
-  const parsedMetadata = JSON.parse(zip.readAsText(metaEntry)) as BudgetMetadata;
+  const archive = readActualBudgetArchive(buffer);
+  const parsedMetadata = JSON.parse(archive.metadata.toString("utf8")) as BudgetMetadata;
+  const budgetId = validateActualBudgetId(parsedMetadata.id);
   const metadata: LocalBudget["metadata"] = {
     ...parsedMetadata,
-    id: String(parsedMetadata.id || ""),
+    id: budgetId,
     cloudFileId: fileId,
     groupId: file.groupId || config.syncId,
     lastUploaded: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
     encryptKeyId: null,
   };
-  const budgetDir = path.join(dataDir, metadata.id || "");
+  const budgetDir = path.join(dataDir, budgetId);
   await mkdir(budgetDir, { recursive: true });
-  const databaseBuffer = zip.readFile(dbEntry);
-  if (!databaseBuffer) throw Object.assign(new Error("Actual Budget download did not include a readable db.sqlite"), { status: 502 });
-  await writeFile(path.join(budgetDir, "db.sqlite"), databaseBuffer);
+  await writeFile(path.join(budgetDir, "db.sqlite"), archive.database);
   await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify(metadata));
   const syncDeltas = await syncDownloadedBudget(config, token, { budgetDir, metadata });
   let backupPrune = { removed: 0, kept: 0 };
@@ -303,9 +299,3 @@ export async function readLocalActualMetadata(userId: string, options: LocalActu
     await client.close();
   }
 }
-
-export const __testing__ = {
-  normalizeRuleConditions,
-  findLocalBudgetDir,
-  syncDownloadedBudget,
-};

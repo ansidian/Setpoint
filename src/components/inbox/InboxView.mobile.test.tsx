@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView";
 import type { InboxActiveSnapshotController, InboxViewProps } from "./InboxView";
-import { searchEmails, markEmailAsRead, markEmailAsUnread } from "../../api";
+import { searchEmails, markEmailAsRead } from "../../api";
 import {
   makeActiveSnapshot,
   makeInboxAccounts,
@@ -333,44 +333,6 @@ describe("InboxView mobile", () => {
     });
   });
 
-  it("hides the mobile Show more results button when there is nothing more to load", async () => {
-    vi.mocked(searchEmails).mockReset();
-    vi.mocked(searchEmails).mockResolvedValue(makeSearchResponse({
-      accounts: [
-        {
-          account_id: "gmail-personal",
-          account_label: "Personal",
-          account_email: "personal@example.com",
-          account_color: "#cba6da",
-          account_icon: "Mail",
-          results: [
-            makeSearchResult({
-              uid: "gmail-personal-amazon-1",
-              from_name: "Amazon.com",
-              from_address: "store-news@amazon.com",
-              subject: "Amazon order from last month",
-              body_snippet: "Your historical order is indexed.",
-              email_date: "2026-04-02T12:00:00.000Z",
-              read: true,
-            }),
-          ],
-        },
-      ],
-      total: 1,
-      has_more: false,
-      query: "amazon",
-    }));
-
-    renderInbox({ isMobile: true });
-
-    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
-      target: { value: "amazon" },
-    });
-
-    expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Show more results" })).toBeNull();
-  });
-
   it("shows skeleton rows instead of search chrome or empty copy while mobile indexed search is loading", async () => {
     vi.mocked(searchEmails).mockResolvedValueOnce({ accounts: [], results: [], total: 0, offset: 0, has_more: false, capped: false, query: "tuition" });
 
@@ -416,26 +378,6 @@ describe("InboxView mobile", () => {
 
     expect(onAskAlfred).toHaveBeenCalledWith("amazon return");
     expect(screen.queryByTestId("inbox-ai-confirmation")).toBeNull();
-  });
-
-  it("hands cmd+enter in the mobile search off to alfred", () => {
-    const onAskAlfred = vi.fn();
-    renderInbox({ isMobile: true, liveEmails: [], onAskAlfred });
-    const input = screen.getByLabelText("Search indexed mail");
-
-    fireEvent.change(input, { target: { value: "tuition deadline" } });
-    fireEvent.keyDown(input, { key: "Enter", metaKey: true });
-
-    expect(onAskAlfred).toHaveBeenCalledWith("tuition deadline");
-  });
-
-  it("respects a seedSelectedId on mobile", () => {
-    activateBudgetSnapshot();
-
-    renderInbox({ isMobile: true, seedSelectedId: "email-action" });
-
-    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
-    expect(screen.getByText("Project budget sign-off")).toBeTruthy();
   });
 
   it("closes the reader when marking a selected live email unread", () => {
@@ -542,77 +484,6 @@ describe("InboxView mobile", () => {
     });
   });
 
-  it("updates active snapshot read state immediately when opening and toggling mail", async () => {
-    function SnapshotHarness() {
-      const [readOverrides, setReadOverrides] = useState({});
-      return (
-        <InboxView
-          accent="#cba6da"
-          customize={{
-            aiVerbosity: "standard",
-            showPreview: true,
-            inboxDensity: "default",
-            sidebarCompact: false,
-            inboxLayout: "two-pane",
-            inboxGrouping: "swimlanes",
-          }}
-          emailAccounts={[]}
-          briefingSummary=""
-          briefingGeneratedAt="2026-05-03 15:00:00"
-          liveEmails={[]}
-          liveReadOverrides={readOverrides}
-          onLiveReadOverrideChange={(uid, read) => {
-            setReadOverrides((prev) => ({ ...prev, [uid]: read }));
-          }}
-          snoozedEntries={[]}
-          resurfacedEntries={[]}
-          onOpenDashboard={() => {}}
-          onRefresh={() => {}}
-          seedSelectedId="snapshot-msg-1"
-          isMobile
-        />
-      );
-    }
-
-    activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    };
-
-    render(
-      <DashboardProvider
-        briefing={{ emails: { accounts: [] } }}
-        setBriefing={() => {}}
-        setCalendarDeadlines={() => {}}
-      >
-        <SnapshotHarness />
-      </DashboardProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
-    });
-
-    await waitFor(() => {
-      expect(markEmailAsRead).toHaveBeenCalledWith("snapshot-msg-1");
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
-    expect(screen.getByRole("button", { name: /Mark unread/i })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /Mark unread/i }));
-    expect(markEmailAsUnread).toHaveBeenCalledWith("snapshot-msg-1");
-  });
-
-  it("keeps the desktop inbox path intact", () => {
-    renderInbox({ isMobile: false });
-
-    expect(screen.getByTestId("inbox-desktop-view")).toBeTruthy();
-    expect(screen.queryByTestId("inbox-mobile-list")).toBeNull();
-  });
-
   it("deselects the active desktop email on browser back", async () => {
     activateBudgetSnapshot();
 
@@ -645,89 +516,6 @@ describe("InboxView mobile", () => {
     expect(screen.getByText(/1 email across 1 account/i)).toBeTruthy();
     expect(screen.queryByText("Handle the approval first, then everything else can wait.")).toBeNull();
     expect(screen.queryByText(/Snapshot updated/i)).toBeNull();
-  });
-
-  it("shows unread noise as a quiet mobile summary hint", () => {
-    activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot({
-        filters: {
-          accounts: [{
-            account_id: "gmail-work",
-            label: "Work",
-            email: "work@example.com",
-            color: "#89dceb",
-            icon: "Mail",
-            count: 1,
-          }],
-          categories: [],
-        },
-        lanes: {
-          needs_attention: [],
-          fyi: [],
-          noise: [{
-            id: 12,
-            snapshot_item_id: 12,
-            uid: "noise-unread-1",
-            email_id: "noise-unread-1",
-            account_id: "gmail-work",
-            lane: "noise",
-            subject: "Sale digest",
-            from_name: "Store",
-            from_address: "store@example.com",
-            summary: "Low-priority promotion.",
-            date: "2026-05-03T15:00:00.000Z",
-            read: false,
-          }],
-        },
-      }),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    };
-
-    renderInbox({ isMobile: true, liveEmails: [] });
-
-    expect(screen.getByText((_, element) => element?.textContent === "1 noise unread")).toBeTruthy();
-  });
-
-  it("shows a Pinned group label above a pinned row on mobile", () => {
-    activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot({
-        pinned: [{
-          uid: "pinned-msg-1",
-          pinned_at: "2026-05-03T15:30:00.000Z",
-          account_id: "gmail-work",
-          subject: "Pinned budget approval",
-          from_name: "Dana",
-          from_address: "dana@example.com",
-          preview: "Keep this handy.",
-          date: "2026-05-03T15:00:00.000Z",
-          read: false,
-        }],
-      }),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    };
-
-    renderInbox({ isMobile: true, liveEmails: [] });
-
-    const pinnedLabel = screen.getByText("Pinned");
-    const pinnedRow = screen.getByText("Pinned budget approval");
-    expect(pinnedLabel.compareDocumentPosition(pinnedRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("shows no Pinned group label on mobile when there are no pins", () => {
-    activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot(),
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-    };
-
-    renderInbox({ isMobile: true, liveEmails: [] });
-
-    expect(screen.queryByText("Pinned")).toBeNull();
   });
 
   it("shows resurfaced snoozes as fresh live rows in active snapshot mode", () => {

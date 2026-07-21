@@ -18,9 +18,7 @@ const {
   createCalendarEvent,
   deleteCalendarEvent,
   extractStructuredRecurrence,
-  fetchCalendarMirrorEvents,
   invalidateCalendarListCache,
-  listCalendarsForAccount,
   updateCalendarEvent,
 } = await import("./calendar.ts");
 
@@ -127,95 +125,6 @@ describe("calendar recurring mutations", () => {
     // vi.clearAllMocks() does not touch this source-module cache, so a sibling
     // test that listed `school` as read-only would otherwise leak forward.
     invalidateCalendarListCache();
-  });
-
-  it("omits CalendarList entries that are not selected in Google Calendar", async () => {
-    fetchMock.mockImplementation(async (url, init = {}) => {
-      const parsed = new URL(String(url));
-      const method = init.method || "GET";
-      const path = parsed.pathname.replace("/calendar/v3/", "");
-      if (method === "GET" && path === "users/me/calendarList") {
-        return jsonResponse({
-          items: [
-            { id: "primary", summary: "Primary", accessRole: "owner", primary: true, selected: true },
-            { id: "work", summary: "Work", accessRole: "reader", selected: false },
-            { id: "school", summary: "School", accessRole: "reader" },
-          ],
-        });
-      }
-      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
-    });
-
-    await expect(listCalendarsForAccount(account)).resolves.toEqual([
-      expect.objectContaining({ id: "primary", summary: "Primary" }),
-      expect.objectContaining({ id: "school", summary: "School" }),
-    ]);
-  });
-
-  it("preserves cancelled status for expanded recurring mirror occurrences with start times", async () => {
-    fetchMock.mockImplementation(async (url, init = {}) => {
-      const parsed = new URL(String(url));
-      const method = init.method || "GET";
-      const path = parsed.pathname.replace("/calendar/v3/", "");
-      if (method === "GET" && path === "calendars/work/events") {
-        return jsonResponse({
-          items: [
-            {
-              id: "series-work_20260512T111500Z",
-              status: "cancelled",
-              recurringEventId: "series-work",
-              originalStartTime: { dateTime: "2026-05-12T04:15:00-07:00" },
-              start: { dateTime: "2026-05-12T04:15:00-07:00" },
-              end: { dateTime: "2026-05-12T08:00:00-07:00" },
-              summary: "Work",
-            },
-          ],
-          nextSyncToken: "sync-1",
-        });
-      }
-      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
-    });
-
-    await expect(fetchCalendarMirrorEvents(account, {
-      id: "work",
-      summary: "Work",
-      backgroundColor: "#cd74e6",
-      writable: true,
-    }, {
-      window: { start: "2026-05-01", end: "2026-06-01" },
-    })).resolves.toMatchObject({
-      events: [
-        {
-          id: "series-work_20260512T111500Z",
-          status: "cancelled",
-          recurringEventId: "series-work",
-          originalStartTime: "2026-05-12T04:15:00-07:00",
-        },
-      ],
-      nextSyncToken: "sync-1",
-    });
-  });
-
-  it("windowed mirror fetch omits orderBy so Google returns a nextSyncToken", async () => {
-    fetchMock.mockImplementation(async (url, init = {}) => {
-      const parsed = new URL(String(url));
-      const method = init.method || "GET";
-      const path = parsed.pathname.replace("/calendar/v3/", "");
-      if (method === "GET" && path === "calendars/work/events") {
-        return jsonResponse({ items: [], nextSyncToken: "sync-1" });
-      }
-      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
-    });
-
-    await expect(fetchCalendarMirrorEvents(account, { id: "work", summary: "Work" }, {
-      window: { start: "2026-05-01", end: "2026-06-01" },
-    })).resolves.toMatchObject({ nextSyncToken: "sync-1" });
-
-    const [url] = fetchMock.mock.calls.find(([callUrl]) => String(callUrl).includes("calendars/work/events"))!;
-    const params = new URL(String(url)).searchParams;
-    expect(params.get("orderBy")).toBeNull();
-    expect(params.get("singleEvents")).toBe("true");
-    expect(params.get("timeMin")).toBe("2026-05-01T00:00:00.000Z");
   });
 
   it("uses the fetched parent etag when editing an instance with all scope", async () => {

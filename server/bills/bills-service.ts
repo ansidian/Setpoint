@@ -4,6 +4,9 @@ import {
   testConnection as actualTestConnection,
   createQuickTxn as actualCreateQuickTxn,
   invalidateActualMetadataCache,
+  removeActualConnection as removeStoredActualConnection,
+  saveActualConnectionCandidate,
+  type ActualConnectionCandidate,
 } from "../actual/actual.ts";
 import db from "../db/connection.ts";
 import { resolveBillPaySample as resolveBillPaySampleCore } from "./bill-pay-service.ts";
@@ -26,6 +29,7 @@ import type { SampleOptions } from "./bill-pay-service.ts";
 import type { LocalActualOptions } from "../actual/actual-local-metadata.ts";
 import type { ActualBillWriteInput, ActualQuickTransactionInput } from "../actual/actual.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
+import { capabilityStatusService } from "../capability-status-service.ts";
 
 type ReconciliationError = Error & {
   localWriteApplied?: boolean;
@@ -45,7 +49,6 @@ export { extractBill } from "./bill-extraction-service.ts";
 export { shouldScheduleImmediateBillsRefresh } from "./bills-mirror-refresh-policy.ts";
 export {
   BILLS_MIRROR_MAINTENANCE_TTL_MS,
-  __resetBillsMirrorRefreshTimersForTests,
   armPendingBillsMirrorRefreshes,
   billMirrorRefreshRange,
   clearPendingBillsMirrorRefresh,
@@ -165,6 +168,20 @@ export async function listPayees(userId: string) {
 
 export async function testConnection(userId: string, overrides: Parameters<typeof actualTestConnection>[1] = null) {
   return actualTestConnection(userId, overrides);
+}
+
+export async function saveActualConnection(userId: string, candidate: ActualConnectionCandidate) {
+  const result = await saveActualConnectionCandidate(userId, candidate);
+  await invalidateActualMetadataCache();
+  capabilityStatusService.invalidate();
+  return result;
+}
+
+export async function removeActualConnection(userId: string) {
+  const result = await removeStoredActualConnection(userId);
+  await invalidateActualMetadataCache();
+  capabilityStatusService.invalidate();
+  return result;
 }
 
 export async function createQuickTxn(userId: string, payload: ActualQuickTransactionInput) {

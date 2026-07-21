@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { checkSizeBaseline, isSizeCheckedSource } from "./component-sizes.mts"
+import {
+  checkSizeBaseline,
+  isSizeCheckedSource,
+  isSizeCheckedTest,
+} from "./component-sizes.mts"
 
 describe("isSizeCheckedSource", () => {
   test("governs .ts source anywhere under src, not just /components/ or /pages/", () => {
@@ -78,5 +82,35 @@ describe("checkSizeBaseline", () => {
     expect(warnings).toContain(
       "Oversized source-file debt above 600 lines:\n  - src/b.ts: 900\n  - src/a.ts: 700",
     )
+  })
+})
+
+describe("oversized test-file ratchet", () => {
+  test("governs Vitest TypeScript files without treating test infrastructure as production source", () => {
+    expect(isSizeCheckedTest("src/components/inbox/InboxView.test.tsx")).toBe(true)
+    expect(isSizeCheckedTest("server/email/email-service.test.ts")).toBe(true)
+    expect(isSizeCheckedTest("scripts/lib/component-sizes.test.mts")).toBe(true)
+    expect(isSizeCheckedTest("src/components/calendar/CalendarModal.test-utils.tsx")).toBe(false)
+    expect(isSizeCheckedTest("src/components/inbox/InboxView.tsx")).toBe(false)
+  })
+
+  test("rejects a new oversized test while allowing a grandfathered file at its exact allowance", () => {
+    const files = [
+      { path: "src/components/NewSurface.test.tsx", lineCount: 601 },
+      { path: "server/email/legacy.test.ts", lineCount: 725 },
+    ]
+    const baseline = {
+      threshold: 600,
+      files: { "server/email/legacy.test.ts": 725 },
+    }
+
+    expect(checkSizeBaseline({
+      files,
+      baseline,
+      baselineName: "test-size",
+      debtName: "test-file",
+    }).failures).toEqual([
+      "src/components/NewSurface.test.tsx is 601 lines and is not in the test-size baseline",
+    ])
   })
 })

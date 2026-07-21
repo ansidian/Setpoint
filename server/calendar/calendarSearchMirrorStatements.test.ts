@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  iso,
   normalizeText,
   mirrorOccurrenceStatement,
   upsertStateStatement,
@@ -11,10 +10,7 @@ import {
   tombstoneUnlistedCalendarStatements,
 } from "./calendarSearchMirrorStatements.ts";
 
-describe("iso / normalizeText", () => {
-  it("iso formats a Date as ISO", () => {
-    expect(iso(new Date("2026-05-12T19:00:00.000Z"))).toBe("2026-05-12T19:00:00.000Z");
-  });
+describe("normalizeText", () => {
   it("normalizeText trims, lowercases, and collapses whitespace", () => {
     expect(normalizeText("  Final   Presentation\n Room ")).toBe("final presentation room");
     expect(normalizeText(null)).toBe("");

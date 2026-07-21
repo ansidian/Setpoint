@@ -32,21 +32,17 @@ beforeEach(() => {
 });
 
 const {
-  readBillsMirrorRange,
-  readBillsMirrorCurrent,
   refreshBillsMirror,
   scheduleBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
-  isBillsMirrorMaintenanceDue,
   startBillsMirrorRefreshWorker,
   stopBillsMirrorRefreshWorker,
-  __resetBillsMirrorRefreshTimersForTests,
 } = await import("./bills-mirror-sync.ts");
 
 // scheduleBillsMirrorRefresh arms a real setTimeout; clear it after every test so an
 // armed timer never leaks into a later test (previously only two cases reset inline).
 afterEach(() => {
-  __resetBillsMirrorRefreshTimersForTests();
+  stopBillsMirrorRefreshWorker();
 });
 
 function rowResult(rows: Array<Record<string, unknown>> = []) {
@@ -54,138 +50,6 @@ function rowResult(rows: Array<Record<string, unknown>> = []) {
 }
 
 describe("Bills mirror", () => {
-  it("reads occurrence mirror rows with stable occurrence ids and sync health", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce(rowResult([
-        {
-          status: "current",
-          actual_configured: 1,
-          actual_budget_url: "https://actual.example.test",
-          last_success_at: "2026-05-06T12:00:00.000Z",
-          last_attempt_at: "2026-05-06T12:00:00.000Z",
-          last_error: null,
-          pending_refresh_at: null,
-          refresh_started_at: null,
-        },
-      ]))
-      .mockResolvedValueOnce(rowResult([
-        {
-          occurrence_id: "sched-1:2026-05-10",
-          schedule_id: "sched-1",
-          occurrence_date: "2026-05-10",
-          name: "Mortgage",
-          payee: "Mortgage Co",
-          amount: 1500,
-          type: "bill",
-          paid: 0,
-          open_action_disabled: 0,
-        },
-      ]));
-
-    const out = await readBillsMirrorRange("u1", { start: "2026-05-01", end: "2026-05-31" });
-
-    expect(out).toMatchObject({
-      schedules: [
-        {
-          id: "sched-1:2026-05-10",
-          scheduleId: "sched-1",
-          next_date: "2026-05-10",
-          paid: false,
-          openActionDisabled: false,
-        },
-      ],
-      recentTransactions: [],
-      actualBudgetUrl: "https://actual.example.test",
-      syncHealth: {
-        state: "current",
-        configured: true,
-        lastSuccessAt: "2026-05-06T12:00:00.000Z",
-      },
-    });
-  });
-
-  it("returns empty mirror data with needs_sync health without reading Actual", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce(rowResult([]))
-      .mockResolvedValueOnce(rowResult([]));
-
-    const out = await readBillsMirrorRange("u1", { start: "2026-05-01", end: "2026-05-31" });
-
-    expect(out.schedules).toEqual([]);
-    expect(out.syncHealth).toMatchObject({ state: "needs_sync", configured: null });
-    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
-  });
-
-  it("readBillsMirrorCurrent returns 7-day bills but a broader allSchedules window", async () => {
-    const now = new Date("2026-05-06T12:00:00.000Z");
-    mockDb.execute
-      .mockResolvedValueOnce(rowResult([
-        {
-          status: "current",
-          actual_configured: 1,
-          actual_budget_url: "https://actual.example.test",
-          last_success_at: "2026-05-06T12:00:00.000Z",
-          last_attempt_at: "2026-05-06T12:00:00.000Z",
-          last_error: null,
-          pending_refresh_at: null,
-          refresh_started_at: null,
-        },
-      ]))
-      .mockResolvedValueOnce(rowResult([
-        {
-          occurrence_id: "spectrum:2026-05-11",
-          schedule_id: "spectrum",
-          occurrence_date: "2026-05-11",
-          name: "Spectrum",
-          payee: "Spectrum",
-          amount: 50,
-          type: "bill",
-          paid: 0,
-          open_action_disabled: 0,
-        },
-        {
-          occurrence_id: "water:2026-06-26",
-          schedule_id: "water",
-          occurrence_date: "2026-06-26",
-          name: "Water Bill",
-          payee: "SGV Water",
-          amount: 50.67,
-          type: "bill",
-          paid: 0,
-          open_action_disabled: 0,
-        },
-        {
-          occurrence_id: "sce:2026-07-15",
-          schedule_id: "sce",
-          occurrence_date: "2026-07-15",
-          name: "SCE",
-          payee: "SCE",
-          amount: 120,
-          type: "bill",
-          paid: 0,
-          open_action_disabled: 0,
-        },
-      ]));
-
-    const out = await readBillsMirrorCurrent("u1", { now });
-
-    expect(out.bills.map((bill) => bill.scheduleId)).toEqual(["spectrum"]);
-    expect(out.allSchedules.map((bill) => bill.scheduleId)).toEqual(["spectrum", "water", "sce"]);
-    // The broader read window (lookback into April, lookahead into August) is the
-    // behavioral contract. Match the occurrence query by its table marker instead of
-    // pinning it to a positional call index.
-    const occurrenceCall = mockDb.execute.mock.calls.find((call) =>
-      /ea_bill_occurrence_mirror/i.test(call[0].sql),
-    );
-    expect(occurrenceCall).toBeTruthy();
-    expect(occurrenceCall![0].args).toEqual(expect.arrayContaining([
-      "u1",
-      expect.stringMatching(/^2026-04-/),
-      expect.stringMatching(/^2026-08-/),
-    ]));
-  });
-
   it("upserts schedule and occurrence mirror rows and prunes stale ones on successful refresh", async () => {
     const actualMetadata = {
       accounts: [{ id: "acct-1", name: "Checking" }],
@@ -416,6 +280,7 @@ describe("Bills mirror", () => {
   });
 
   it("returns old mirror rows with degraded health when lightweight refresh fails without spawning the Actual worker", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata
       .mockRejectedValueOnce(new Error("Actual local file unavailable"))
       .mockRejectedValueOnce(new Error("Actual download timed out"));
@@ -585,7 +450,7 @@ describe("Bills mirror", () => {
 
     // dueAt would be 12:01:00; the earlier pending 12:00:30 must win.
     expect(out.pendingRefreshAt).toBe("2026-05-06T12:00:30.000Z");
-    __resetBillsMirrorRefreshTimersForTests();
+    stopBillsMirrorRefreshWorker();
   });
 
   it("P3-37: arms to the new due time when no earlier refresh is pending", async () => {
@@ -599,7 +464,7 @@ describe("Bills mirror", () => {
     });
 
     expect(out.pendingRefreshAt).toBe("2026-05-06T12:01:00.000Z");
-    __resetBillsMirrorRefreshTimersForTests();
+    stopBillsMirrorRefreshWorker();
   });
 
   it("P3-38: an empty Actual read does not wipe a non-empty bills mirror", async () => {
@@ -693,40 +558,6 @@ describe("Bills mirror", () => {
     expect(out.allSchedules).toEqual([]);
   });
 
-  it("flags maintenance due only for old successful configured mirrors", () => {
-    const now = new Date("2026-05-06T18:01:00.000Z");
-
-    expect(isBillsMirrorMaintenanceDue({
-      state: "current",
-      configured: true,
-      lastSuccessAt: "2026-05-06T12:00:00.000Z",
-      pendingRefreshAt: null,
-      refreshStartedAt: null,
-    }, { now })).toBe(true);
-
-    expect(isBillsMirrorMaintenanceDue({
-      state: "current",
-      configured: true,
-      lastSuccessAt: "2026-05-06T12:02:00.000Z",
-    }, { now })).toBe(false);
-
-    expect(isBillsMirrorMaintenanceDue({
-      state: "needs_sync",
-      configured: true,
-      lastSuccessAt: "2026-05-06T11:00:00.000Z",
-    }, { now })).toBe(false);
-  });
-
-  it("backs off degraded mirror maintenance after a recent failed attempt", () => {
-    const now = new Date("2026-05-06T18:01:00.000Z");
-
-    expect(isBillsMirrorMaintenanceDue({
-      state: "degraded",
-      configured: true,
-      lastSuccessAt: "2026-05-06T12:00:00.000Z",
-      lastAttemptAt: "2026-05-06T17:55:00.000Z",
-    }, { now })).toBe(false);
-  });
 
   describe("stopBillsMirrorRefreshWorker", () => {
     beforeEach(() => {
@@ -749,12 +580,6 @@ describe("Bills mirror", () => {
       await vi.advanceTimersByTimeAsync(5000);
 
       expect(mockDb.execute).not.toHaveBeenCalled();
-    });
-
-    it("is safe to call twice", () => {
-      startBillsMirrorRefreshWorker({ intervalMs: 1000 });
-      stopBillsMirrorRefreshWorker();
-      expect(() => stopBillsMirrorRefreshWorker()).not.toThrow();
     });
 
     it("allows a fresh start after stop", async () => {

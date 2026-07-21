@@ -120,22 +120,6 @@ export function fallbackDecision(email: Partial<TriageEmail>, err: Error): Triag
   });
 }
 
-export function noModelDecision(email: Partial<TriageEmail>): TriageDecision {
-  // LEGACY fallback only. The dev no_model path now routes through
-  // heuristicNoModelDecision (triage-heuristic-scorer.ts); this constant-lane
-  // decision is retained for explicit fallback use and is no longer the default.
-  return createTriageDecision({
-    lane: "needs_attention",
-    category: "uncategorized",
-    urgency: "normal",
-    escalation_badge: "Needs Review",
-    summary: email.body_snippet || email.subject || "Review provider message.",
-    action: "Review",
-    triage_source: "no_model_fallback",
-    last_decision_reason: "no_model_legacy_fallback",
-  });
-}
-
 export function triageDecisionFromPreflight(preflight: Partial<TriagePreflightResult> | null | undefined): TriageDecision | null {
   if (!preflight || preflight.action !== "finalize") return null;
   return createTriageDecision({

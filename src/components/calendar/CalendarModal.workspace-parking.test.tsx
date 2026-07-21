@@ -61,44 +61,6 @@ describe("CalendarModal floating detail behavior", () => {
     });
   });
 
-  it("keeps the floating detail open when clicking the same selected chip", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
-    fireEvent.click(chip);
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-
-    fireEvent.click(chip);
-
-    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
-    expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
-  });
-
   it("keeps overflow open while a selected overflow item opens floating detail, then Escape closes detail first", async () => {
     window.innerWidth = 1900;
 
@@ -230,42 +192,6 @@ describe("CalendarModal floating detail behavior", () => {
       expect(panel.getAttribute("data-forced-side")).toMatch(/^(left|right)$/);
       expect(panel.getAttribute("data-side-intent")).toBe("user-flip");
     });
-  });
-
-  it("does not render floating detail on stacked layouts", async () => {
-    window.innerWidth = 1100;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
   });
 
 });

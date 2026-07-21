@@ -1,6 +1,5 @@
-import { mkdtemp, mkdir, readFile, readdir, utimes, writeFile } from "fs/promises";
-import { removeTempDir } from "../test-utils/temp-dir.ts";
-import os from "os";
+import { mkdir, readFile, readdir, utimes, writeFile } from "fs/promises";
+import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
 import {
@@ -18,13 +17,13 @@ import {
 } from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  __testing__,
   describeLocalActualCache,
   hydrateLocalActualCache,
   pruneActualBudgetBackups,
   pruneLocalActualBackups,
   readLocalActualMetadata,
 } from "./actual-local-metadata.ts";
+import { syncDownloadedBudget } from "./actualMetadataSync.ts";
 
 let tempDir: string | null = null;
 const originalFetch = global.fetch;
@@ -99,7 +98,7 @@ async function writeBudgetFixture(budgetDir: string, {
 }
 
 async function createActualBudgetFixture() {
-  tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+  tempDir = await createTestTempDir("actual-local-");
   await writeBudgetFixture(path.join(tempDir!, "Budget-1"));
 }
 
@@ -230,7 +229,7 @@ describe("readLocalActualMetadata", () => {
   });
 
   it("reports configured but not hydrated when the local Actual cache is missing", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
 
     const result = await describeLocalActualCache("u1", {
       dbClient: settingsDbClient(),
@@ -277,7 +276,7 @@ describe("readLocalActualMetadata", () => {
   });
 
   it("applies remote sync deltas to a freshly downloaded Actual snapshot before reading transactions", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
     const budgetDir = path.join(tempDir!, "Budget-Sync");
     const baseTimestamp = new Timestamp(1000, 0, makeClientId()).toString();
     await writeSyncPullFixture(budgetDir, { lastSyncedTimestamp: baseTimestamp });
@@ -289,13 +288,10 @@ describe("readLocalActualMetadata", () => {
       { timestamp: new Timestamp(2004, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "schedule", value: "S:sched-1" },
       { timestamp: new Timestamp(2005, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "tombstone", value: "N:0" },
     ];
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () => syncResponseBuffer(remoteMessages),
-    });
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(syncResponseBuffer(remoteMessages)));
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    const syncResult = await __testing__.syncDownloadedBudget({
+    const syncResult = await syncDownloadedBudget({
       serverURL: "https://actual.example.test",
       syncId: "sync-123",
     }, "token-1", {
@@ -371,7 +367,7 @@ describe("readLocalActualMetadata", () => {
   });
 
   it("downloads a budget zip on refresh when no local cache exists", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
     const remoteBudgetDir = path.join(tempDir!, "Budget-Remote");
     await writeBudgetFixture(remoteBudgetDir, {
       id: "Budget-Remote",
@@ -401,7 +397,7 @@ describe("readLocalActualMetadata", () => {
   });
 
   it("does not download from Actual when local-only metadata is requested", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
     const downloadBudget = vi.fn();
 
     await expect(readLocalActualMetadata("u1", {
@@ -458,7 +454,7 @@ describe("readLocalActualMetadata", () => {
   });
 
   it("keeps only the newest local Actual zip backup for a budget", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
     const budgetDir = path.join(tempDir!, "My-Finances-d8e502a");
     const backupDir = path.join(budgetDir, "backups");
     await mkdir(backupDir, { recursive: true });
@@ -497,7 +493,7 @@ describe("readLocalActualMetadata", () => {
 
   it("openLocalBudgetClient throws 503 when the local budget is missing", async () => {
     const { openLocalBudgetClient } = await import("./actual-local-metadata.ts");
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
     await expect(openLocalBudgetClient("u1", {
       dbClient: settingsDbClient(),
       dataDir: tempDir!,
@@ -506,7 +502,7 @@ describe("readLocalActualMetadata", () => {
   });
 
   it("prunes backups across local Actual budget folders", async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    tempDir = await createTestTempDir("actual-local-");
     const budgetDir = path.join(tempDir!, "My-Finances-d8e502a");
     const backupDir = path.join(budgetDir, "backups");
     await mkdir(backupDir, { recursive: true });

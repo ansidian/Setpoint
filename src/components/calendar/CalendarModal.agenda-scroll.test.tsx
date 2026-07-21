@@ -367,11 +367,12 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
     may5Header.getBoundingClientRect = () => ({ top: -48, bottom: -14, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
     may6Header.getBoundingClientRect = () => ({ top: 2, bottom: 36, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
 
+    const performanceNow = vi.spyOn(performance, "now").mockReturnValue(Number.MAX_SAFE_INTEGER);
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
       fireEvent.scroll(agendaRail);
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     });
+    performanceNow.mockRestore();
 
     expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
     expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Late workshop");

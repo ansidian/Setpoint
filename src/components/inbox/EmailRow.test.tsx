@@ -72,10 +72,4 @@ describe("EmailRow pinned", () => {
     renderRow();
     expect(screen.queryByTestId("email-row-pin")).toBeNull();
   });
-
-  it("applies a muted treatment when a pinned email was provider-removed", () => {
-    const { container } = renderRow({ email: { _pinned: true, _providerRemoved: true } });
-    const row = container.querySelector<HTMLElement>('[role="button"]');
-    expect(row?.style.opacity).toBe("0.55");
-  });
 });

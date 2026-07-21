@@ -21,7 +21,6 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `email/useInboxSelectionHistory.ts` — browser history state for inbox selection
 - `useIsMobile.ts` — mobile viewport detection
 - `useMediaQuery.ts` — reactive media query matching
-- `useKeyHold.ts` — key hold duration/progress with completion callback
 - `useWarmImport.ts` — warms a lazy dynamic import on idle after first paint
 - `useDismissablePortal.ts` — outside-pointerdown (sparing one `ref` or many `refs`, plus an optional `ignoreSelector` escape hatch) + capture-phase Escape dismissal for body-portal menus/popovers/anchored panels, with optional Tab containment and on-open autofocus. Consumed by `CalendarQuickActionLayer`, `DeadlineQuickActionLayer`, and `shared/pickers/AnchoredFloatingPanel`
 

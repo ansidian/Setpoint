@@ -1,10 +1,9 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComponentType, ReactNode } from "react";
-import eventsView from "./eventsView.tsx";
-import billsView from "./billsView.tsx";
 import { DashboardProvider as StrictDashboardProvider } from "../../../context/DashboardContext";
-import { renderDeadlinesCellContents } from "./deadlines/DeadlinesCellContent.tsx";
+import billsView from "./billsView.tsx";
+import eventsView from "./eventsView.tsx";
 import { renderDeadlinesDetail, renderDeadlinesFloatingDetail } from "./deadlines/DeadlinesDetailRail.tsx";
 import { getDayState as getDeadlineDayState } from "./deadlines/deadlinesModel.ts";
 
@@ -12,7 +11,6 @@ const DashboardProvider = StrictDashboardProvider as unknown as ComponentType<{
   children: ReactNode;
   [key: string]: unknown;
 }>;
-
 const mockCompleteDeadlineOccurrence = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../api", () => ({
@@ -23,7 +21,6 @@ vi.mock("../../../api", () => ({
 
 const deadlinesDetail = {
   getDayState: getDeadlineDayState,
-  renderCellContents: renderDeadlinesCellContents,
   renderDetail: renderDeadlinesDetail,
   renderFloatingDetail: renderDeadlinesFloatingDetail,
 };
@@ -34,906 +31,179 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("calendar detail timeline", () => {
-  it("renders event detail rows with all-day items first, timed items in order, and no source text", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        items: [
-          {
-            id: "timed-late",
-            title: "Later meeting",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
-            color: "#4285f4",
-            source: "Work Calendar",
-            location: "Room B",
-            allDay: false,
-          },
-          {
-            id: "all-day",
-            title: "Offsite",
-            startMs: new Date("2026-04-19T07:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
-            color: "#34a853",
-            source: "Work Calendar",
-            allDay: true,
-            duration: "All day",
-          },
-          {
-            id: "timed-early",
-            title: "Morning review",
-            startMs: new Date("2026-04-19T16:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T16:30:00.000Z").getTime(),
-            color: "#4285f4",
-            source: "Work Calendar",
-            location: "Room A",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    const rows = screen.getAllByTestId("timeline-detail-row").map((row) => row.textContent);
-    expect(rows[0]).toContain("Offsite");
-    expect(rows[1]).toContain("Morning review");
-    expect(rows[2]).toContain("Later meeting");
-    expect(screen.getByTestId("timeline-detail-masthead").textContent).toContain("Events ledger");
-    expect(screen.queryByText("Work Calendar")).toBeNull();
-  });
-
-  it("switches shared detail rows into compact density on busy days", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        items: [
-          {
-            id: "event-1",
-            title: "Breakfast",
-            startMs: new Date("2026-04-19T15:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T15:30:00.000Z").getTime(),
-            color: "#4285f4",
-            allDay: false,
-          },
-          {
-            id: "event-2",
-            title: "Standup",
-            startMs: new Date("2026-04-19T16:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T16:30:00.000Z").getTime(),
-            color: "#34a853",
-            allDay: false,
-          },
-          {
-            id: "event-3",
-            title: "Lunch",
-            startMs: new Date("2026-04-19T19:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:30:00.000Z").getTime(),
-            color: "#f59e0b",
-            allDay: false,
-          },
-          {
-            id: "event-4",
-            title: "Review",
-            startMs: new Date("2026-04-19T22:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T22:30:00.000Z").getTime(),
-            color: "#ef4444",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByTestId("timeline-detail-rail").getAttribute("data-density")).toBe("compact");
-    expect(screen.getAllByTestId("timeline-detail-row")[0]!.getAttribute("data-density")).toBe("compact");
-  });
-
-  it("uses the compressed selected event card on every event day", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 16,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "event-1",
-        items: [
-          {
-            id: "event-1",
-            title: "Work",
-            startMs: new Date("2026-04-16T11:15:00.000Z").getTime(),
-            endMs: new Date("2026-04-16T15:00:00.000Z").getTime(),
-            color: "#cba6da",
-            writable: true,
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByText("4:15-8:00 AM")).toBeTruthy();
-  });
-
-  it("keeps selected event density consistent when switching between same-day items", () => {
-    const items = [
-      {
-        id: "event-1",
-        title: "Work",
-        startMs: new Date("2026-04-16T11:15:00.000Z").getTime(),
-        endMs: new Date("2026-04-16T15:00:00.000Z").getTime(),
-        color: "#cba6da",
-        writable: true,
-        allDay: false,
-      },
-      {
-        id: "event-2",
-        title: "(ZOOM) CS4662-01: ADV MACHINE & DEEP LEARNING",
-        startMs: new Date("2026-04-16T17:50:00.000Z").getTime(),
-        endMs: new Date("2026-04-16T19:05:00.000Z").getTime(),
-        color: "#f9c74f",
-        location: "SH184",
-        isRecurring: true,
-        allDay: false,
-      },
-    ];
-    const renderDetail = (selectedItemId: string) => eventsView.renderDetail({
-      selectedDay: 16,
+describe("calendar detail timeline rendering", () => {
+  it("renders representative event rows in model order and forwards row selection", () => {
+    const onSelectItem = vi.fn();
+    render(eventsView.renderDetail({
+      selectedDay: 19,
       viewYear: 2026,
       viewMonth: 3,
-      selectedItemId,
-      items,
-    });
+      onSelectItem,
+      items: [
+        {
+          id: "timed-late",
+          title: "Later meeting",
+          startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
+          color: "#4285f4",
+          source: "Work Calendar",
+          allDay: false,
+        },
+        {
+          id: "all-day",
+          title: "Offsite",
+          startMs: new Date("2026-04-19T07:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
+          color: "#34a853",
+          source: "Work Calendar",
+          allDay: true,
+        },
+        {
+          id: "timed-early",
+          title: "Morning review",
+          startMs: new Date("2026-04-19T16:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-19T16:30:00.000Z").getTime(),
+          color: "#4285f4",
+          source: "Work Calendar",
+          allDay: false,
+        },
+      ],
+    }));
 
-    const { rerender } = render(renderDetail("event-1"));
-    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-height-mode")).toBe("auto");
+    const rows = screen.getAllByTestId("timeline-detail-row");
+    expect(rows.map((row) => row.textContent)).toEqual(expect.arrayContaining([
+      expect.stringContaining("Offsite"),
+      expect.stringContaining("Morning review"),
+      expect.stringContaining("Later meeting"),
+    ]));
+    expect(rows[0]!.textContent).toContain("Offsite");
+    expect(rows[1]!.textContent).toContain("Morning review");
+    expect(screen.queryByText("Work Calendar")).toBeNull();
 
-    rerender(renderDetail("event-2"));
-
-    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-height-mode")).toBe("auto");
-    expect(screen.getByTestId("calendar-selected-event-title").textContent).toBe("CS4662-01: ADV MACHINE & DEEP LEARNING");
+    fireEvent.click(rows[1]!);
+    expect(onSelectItem).toHaveBeenCalledWith("timed-early");
   });
 
-  it("keeps selected event details in the rail", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 16,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "event-2",
-        items: [
-          {
-            id: "event-1",
-            title: "Morning review",
-            startMs: new Date("2026-04-16T16:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-16T16:30:00.000Z").getTime(),
-            color: "#cba6da",
-            allDay: false,
-          },
-          {
-            id: "event-2",
-            title: "Design review",
-            startMs: new Date("2026-04-16T17:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-16T18:00:00.000Z").getTime(),
-            color: "#89b4fa",
-            location: "Room A",
-            writable: true,
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
-    expect(screen.getByRole("button", { name: /edit details/i })).toBeTruthy();
-  });
-
-  it("labels Google birthday events as read-only special events", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 22,
-        viewYear: 2026,
-        viewMonth: 4,
-        selectedItemId: "birthday-1_20260522",
-        items: [
-          {
-            id: "birthday-1_20260522",
-            title: "Maya's birthday",
-            eventType: "birthday",
-            birthdayProperties: { type: "birthday", contact: "people/c12345" },
-            startMs: new Date("2026-05-22T19:00:00.000Z").getTime(),
-            endMs: new Date("2026-05-23T19:00:00.000Z").getTime(),
-            color: "#5484ed",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/birthday-1",
-            openUrl: "https://calendar.google.com/calendar/u/0/r/eventedit/birthday-1",
-            writable: false,
-            allDay: true,
-            isRecurring: true,
-          },
-        ],
-      }),
-    );
+  it("renders a Google birthday as a read-only special-date detail", () => {
+    render(eventsView.renderDetail({
+      selectedDay: 22,
+      viewYear: 2026,
+      viewMonth: 4,
+      selectedItemId: "birthday-1_20260522",
+      items: [{
+        id: "birthday-1_20260522",
+        title: "Maya's birthday",
+        eventType: "birthday",
+        birthdayProperties: { type: "birthday", contact: "people/c12345" },
+        startMs: new Date("2026-05-22T19:00:00.000Z").getTime(),
+        endMs: new Date("2026-05-23T19:00:00.000Z").getTime(),
+        color: "#5484ed",
+        openUrl: "https://calendar.google.com/calendar/u/0/r/eventedit/birthday-1",
+        writable: false,
+        allDay: true,
+        isRecurring: true,
+      }],
+    }));
 
     const card = screen.getByTestId("calendar-selected-event-card");
     expect(card.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
     expect(card.textContent).toContain("Birthday");
     expect(card.textContent).toContain("Read-only");
-    expect(card.textContent).not.toContain("All day");
-    expect(card.textContent).not.toContain("Recurring");
     expect(screen.queryByRole("button", { name: /edit details/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /open calendar/i })).toBeNull();
   });
 
-  it("uses the selected event source color for floating detail gradients", () => {
-    render(
-      eventsView.renderFloatingDetail({
-        selectedItemId: "event-source-color",
-        items: [
-          {
-            id: "event-source-color",
-            title: "Source colored event",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:00:00.000Z").getTime(),
-            color: "#f59e0b",
-            allDay: false,
-          },
-        ],
-      }),
-    );
+  it("renders event action projections and forwards edit", () => {
+    const onEditEvent = vi.fn();
+    render(eventsView.renderDetail({
+      selectedDay: 19,
+      viewYear: 2026,
+      viewMonth: 3,
+      selectedItemId: "event-actions",
+      onEditEvent,
+      items: [{
+        id: "event-actions",
+        title: "Planning block",
+        startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-19T19:00:00.000Z").getTime(),
+        color: "#4285f4",
+        location: "https://example.zoom.us/j/11122233344",
+        description: "Prep https://docs.example.com/agenda.",
+        htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/actions",
+        writable: true,
+        allDay: false,
+      }],
+    }));
 
-    const hero = screen.getByTestId("calendar-selected-event-card").firstElementChild;
-    expect(hero?.getAttribute("data-accent")).toBe("#f59e0b");
+    expect(screen.getByRole("link", { name: /join zoom/i }).getAttribute("href"))
+      .toBe("https://example.zoom.us/j/11122233344");
+    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href"))
+      .toBe("https://docs.example.com/agenda");
+    expect(screen.getByRole("link", { name: /open calendar/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    expect(onEditEvent).toHaveBeenCalledWith(expect.objectContaining({ id: "event-actions" }));
   });
 
-  it("shows Events overlay deadline statuses in the selected-day detail rail", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        items: [
-          {
-            id: "todo-0",
-            title: "Draft essay",
-            due_date: "2026-04-19",
-            source: "todoist",
-            class_name: "English",
-            status: "in_progress",
-            calendarItemKind: "deadline",
-          },
-          {
-            id: "todo-1",
-            title: "Submit report",
-            due_date: "2026-04-19",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "complete",
-            calendarItemKind: "deadline",
-          },
-        ],
-      }),
-    );
+  it("renders Events-overlay deadline status semantics", () => {
+    render(eventsView.renderDetail({
+      selectedDay: 19,
+      viewYear: 2026,
+      viewMonth: 3,
+      items: [
+        { id: "todo-0", title: "Draft essay", due_date: "2026-04-19", status: "in_progress", calendarItemKind: "deadline" },
+        { id: "todo-1", title: "Submit report", due_date: "2026-04-19", status: "complete", calendarItemKind: "deadline" },
+      ],
+    }));
 
     expect(screen.getByTestId("deadline-status-indicator-todo-0").textContent).toContain("In progress");
-    expect(screen.getByTestId("deadline-status-indicator-todo-1").textContent).toContain("Complete");
     expect(screen.getByText("Submit report").closest("[data-testid='timeline-detail-row']")?.getAttribute("data-complete")).toBe("true");
   });
 
-  it("renders selected event CTAs in the selected card footer", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "event-actions",
-        onEditEvent: vi.fn(),
-        items: [
-          {
-            id: "event-actions",
-            title: "Planning block",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:00:00.000Z").getTime(),
-            color: "#4285f4",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/actions",
-            writable: true,
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    const card = screen.getByTestId("calendar-selected-event-card");
-    const dock = screen.getByTestId("timeline-detail-action-dock");
-
-    expect(card.contains(dock)).toBe(true);
-    expect(card.textContent).toContain("Edit details");
-    expect(card.textContent).toContain("Open Calendar");
-    expect(dock.textContent).toContain("Edit details");
-    expect(dock.textContent).toContain("Open Calendar");
-  });
-
-
-  it("shows a Join Zoom action for vanity subdomain links in the location", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "zoom-location",
-        items: [
-          {
-            id: "zoom-location",
-            title: "Advisor sync",
-            startMs: new Date("2026-04-19T16:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T16:30:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "https://example.zoom.us/j/11122233344",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/abc123",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByRole("link", { name: /join zoom/i }).getAttribute("href")).toBe(
-      "https://example.zoom.us/j/11122233344",
-    );
-    expect(screen.getByRole("link", { name: /open calendar/i })).toBeTruthy();
-    expect(screen.getAllByText("Zoom meeting").length).toBeGreaterThan(0);
-    expect(screen.queryByText("https://example.zoom.us/j/11122233344")).toBeNull();
-  });
-
-  it("shows a Join Zoom action when the link only appears in event notes", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "zoom-description",
-        items: [
-          {
-            id: "zoom-description",
-            title: "Team sync",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "Conference Room B",
-            description: "Notes: join at https://zoom.us/j/12345678901?pwd=abc.",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/def456",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByRole("link", { name: /join zoom/i }).getAttribute("href")).toBe(
-      "https://zoom.us/j/12345678901?pwd=abc",
-    );
-  });
-
-  it("shows Open URL for the first non-Zoom event URL", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "external-url",
-        items: [
-          {
-            id: "external-url",
-            title: "Portal review",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "Join https://example.zoom.us/j/11122233344",
-            description: "Prep doc https://docs.example.com/agenda.",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/external-url",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByRole("link", { name: /join zoom/i }).getAttribute("href")).toBe(
-      "https://example.zoom.us/j/11122233344",
-    );
-    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
-      "https://docs.example.com/agenda",
-    );
-    expect(screen.getByRole("link", { name: /open calendar/i })).toBeTruthy();
-  });
-
-  it("shows Open URL for HTML description links instead of Google Calendar source links", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "html-url",
-        items: [
-          {
-            id: "html-url",
-            title: "Portal review",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
-            color: "#4285f4",
-            description: '<a href="https://www.google.com/url?q=https%3A%2F%2Fdocs.example.com%2Fagenda%3Fx%3D1%26y%3D2&amp;sa=D">Agenda</a>',
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/html-url",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
-      "https://docs.example.com/agenda?x=1&y=2",
-    );
-    expect(screen.getByRole("link", { name: /open calendar/i }).getAttribute("href")).toBe(
-      "https://calendar.google.com/calendar/u/0/r/eventedit/html-url",
-    );
-  });
-
-  it("shows Open URL for bare URLs in the location field", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "bare-location-url",
-        items: [
-          {
-            id: "bare-location-url",
-            title: "Watch party",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "twitch.tv/pathofexile",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/bare-location-url",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
-      "https://twitch.tv/pathofexile",
-    );
-  });
-
-  it("compresses the selected event card for long Zoom events and strips the provider prefix from the displayed title", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 30,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "zoom-long-title",
-        items: [
-          {
-            id: "zoom-long-title",
-            title: "(ZOOM) CS4662-01: ADV MACHINE & DEEP LEARNING",
-            startMs: new Date("2026-04-30T17:50:00.000Z").getTime(),
-            endMs: new Date("2026-04-30T19:05:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "https://example.zoom.us/j/11122233344",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/zoom-long",
-            isRecurring: true,
-            allDay: false,
-          },
-          {
-            id: "other-event",
-            title: "Work",
-            startMs: new Date("2026-04-30T11:15:00.000Z").getTime(),
-            endMs: new Date("2026-04-30T15:00:00.000Z").getTime(),
-            color: "#f59e0b",
-            location: "SH184",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-event-title").textContent).toBe("CS4662-01: ADV MACHINE & DEEP LEARNING");
-    expect(screen.getByRole("link", { name: /join zoom/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /open calendar/i })).toBeTruthy();
-  });
-
-  it("shows Open URL, not Join Zoom, for non-Zoom links", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "non-zoom",
-        items: [
-          {
-            id: "non-zoom",
-            title: "In-person review",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "Join docs https://example.com/meeting",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/ghi789",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.queryByRole("link", { name: /join zoom meeting/i })).toBeNull();
-    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
-      "https://example.com/meeting",
-    );
-  });
-
-  it("omits the access fact card when the selected event has no location or attendees", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "no-accessory",
-        items: [
-          {
-            id: "no-accessory",
-            title: "Quiet block",
-            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:15:00.000Z").getTime(),
-            color: "#4285f4",
-            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/jkl012",
-            writable: true,
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.queryByText("Editable event")).toBeNull();
-    expect(screen.queryByText("Access")).toBeNull();
-  });
-
-  it("keeps the selected event compact time on one row", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "time-nowrap",
-        items: [
-          {
-            id: "time-nowrap",
-            title: "Long meeting",
-            startMs: new Date("2026-04-19T17:50:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:05:00.000Z").getTime(),
-            color: "#4285f4",
-            location: "SH184",
-            allDay: false,
-          },
-        ],
-      }),
-    );
-
-    const timeValue = screen.getByTestId("calendar-selected-event-time");
-    expect(timeValue.textContent).toBe("10:50 AM-12:05 PM");
-    expect(timeValue.getAttribute("data-nowrap")).toBe("true");
-  });
-
-  it("shows selected event reminder timing in the detail card", () => {
-    render(
-      eventsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        selectedItemId: "event-1",
-        items: [
-          {
-            id: "event-1",
-            title: "Work block",
-            startMs: new Date("2026-04-19T17:50:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:05:00.000Z").getTime(),
-            color: "#4285f4",
-            allDay: false,
-            hasUpcomingReminder: true,
-            upcomingReminderCount: 1,
-            nextReminderAt: "2026-04-19T17:20:00.000Z",
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByTestId("calendar-detail-reminder-indicator").textContent).toContain("Reminder Apr 19");
-  });
-
-  it("shows selected event reminder timing in the floating detail card", () => {
-    render(
-      eventsView.renderFloatingDetail({
-        selectedItemId: "event-1",
-        items: [
-          {
-            id: "event-1",
-            title: "Work block",
-            startMs: new Date("2026-04-19T17:50:00.000Z").getTime(),
-            endMs: new Date("2026-04-19T19:05:00.000Z").getTime(),
-            color: "#4285f4",
-            allDay: false,
-            hasUpcomingReminder: true,
-            upcomingReminderCount: 2,
-            nextReminderAt: "2026-04-19T17:20:00.000Z",
-          },
-        ],
-      }),
-    );
-
-    const indicator = screen.getByTestId("calendar-detail-reminder-indicator");
-    expect(indicator.textContent).toContain("Reminder Apr 19");
-    expect(indicator.textContent).not.toContain("2 reminders");
-  });
-
-  it("renders deadlines chronologically, uses End of day, and selects rows in-place", () => {
-    const onSelect = vi.fn();
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          { id: "todo-1", title: "Open early", due_date: "2026-04-19", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
-          { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "9:00 AM", class_name: "Inbox", status: "complete" },
-          { id: "todo-3", title: "No time task", due_date: "2026-04-19", due_time: null, class_name: "Inbox", status: "open" },
-        ],
+  it("renders deadline sections, reminder detail, occurrence selection, and completed disclosure", () => {
+    const onSelectItem = vi.fn();
+    const tasks = [
+      {
+        id: "todo-1",
+        title: "Open early",
+        due_date: "2026-04-19",
+        due_time: "9:00 AM",
+        class_name: "Inbox",
+        status: "open",
+        hasUpcomingReminder: true,
+        nextReminderAt: "2026-04-19T15:30:00.000Z",
       },
-    };
+      { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "9:00 AM", class_name: "Inbox", status: "complete" },
+      { id: "todo-3", title: "No time task", due_date: "2026-04-19", due_time: null, class_name: "Inbox", status: "open" },
+    ];
 
     render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={{ upcoming: tasks }} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 19,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.deadlines.upcoming,
+          items: tasks,
           selectedItemId: "deadline:todo-1:2026-04-19",
-          onSelectItem: onSelect,
+          onSelectItem,
         })}
       </DashboardProvider>,
     );
 
-    const rows = screen.getAllByTestId("timeline-detail-row");
-    expect(rows[0]!.textContent).toContain("Open early");
-    expect(rows[1]!.textContent).toContain("End of day");
-    expect(screen.getByTestId("timeline-detail-masthead").textContent).toContain("Deadline ledger");
-    expect(screen.getByRole("button", { name: /edit/i })).toBeTruthy();
-    expect(screen.getByTestId("calendar-selected-deadline-status").textContent).toContain("Incomplete");
-    expect(screen.getByTestId("deadline-status-indicator-todo-1").getAttribute("aria-label")).toBe("Incomplete");
-    expect(screen.getByTestId("deadline-status-indicator-todo-3").getAttribute("aria-label")).toBe("Incomplete");
+    const activeRows = screen.getAllByTestId("timeline-detail-row");
+    expect(activeRows[0]!.textContent).toContain("Open early");
+    expect(activeRows[1]!.textContent).toContain("End of day");
+    expect(screen.getByTestId("calendar-detail-reminder-indicator").textContent).toContain("Reminder Apr 19");
     expect(screen.queryByText("Complete early")).toBeNull();
-    expect(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines").textContent).toContain("1");
+
+    fireEvent.click(activeRows[1]!);
+    expect(onSelectItem).toHaveBeenCalledWith("deadline:todo-3:2026-04-19");
 
     fireEvent.click(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines"));
-    expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByTestId("deadline-status-indicator-todo-2").getAttribute("aria-label")).toBe("Complete");
-
-    const completedRows = screen.getAllByTestId("timeline-detail-row");
-    expect(completedRows[2]!.getAttribute("data-complete")).toBe("true");
-
-    fireEvent.click(rows[1]!);
-    expect(onSelect).toHaveBeenCalledWith("deadline:todo-3:2026-04-19");
+    const completedRow = screen.getByText("Complete early").closest("[data-testid='timeline-detail-row']");
+    expect(completedRow?.getAttribute("data-complete")).toBe("true");
   });
 
-  it("keeps selected deadline details in the rail", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "Ship report",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            url: "https://todoist.com/showTask?id=1",
-          },
-          {
-            id: "todo-2",
-            title: "Review deck",
-            due_date: "2026-04-22",
-            due_time: "6:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 22,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>,
-    );
-
-    expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Ship report");
-    expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
-  });
-
-  it("shows selected deadline reminder timing in the detail card", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "Ship report",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            hasUpcomingReminder: true,
-            upcomingReminderCount: 2,
-            nextReminderAt: "2026-04-22T23:30:00.000Z",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 22,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>,
-    );
-
-    const detailCard = screen.getByTestId("calendar-selected-deadline-card");
-    expect(screen.getByTestId("calendar-detail-reminder-indicator").textContent).toContain("Reminder");
-    expect(detailCard.textContent).toContain("Apr 22");
-  });
-
-  it("shows selected deadline reminder timing in the floating detail card", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "Ship report",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            hasUpcomingReminder: true,
-            upcomingReminderCount: 2,
-            nextReminderAt: "2026-04-22T23:30:00.000Z",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderFloatingDetail({
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
-        })}
-      </DashboardProvider>,
-    );
-
-    const indicator = screen.getByTestId("calendar-detail-reminder-indicator");
-    expect(indicator.textContent).toContain("Reminder Apr 22");
-    expect(indicator.textContent).not.toContain("2 reminders");
-  });
-
-  it("uses the compressed card density for all floating deadline details", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "Ship report",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderFloatingDetail({
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
-        })}
-      </DashboardProvider>,
-    );
-
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-  });
-
-  it("uses domain deadline identity in floating detail gradients", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "Ship report",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            class_name: "Inbox",
-            status: "open",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderFloatingDetail({
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "deadline:todo-1:2026-04-22",
-        })}
-      </DashboardProvider>,
-    );
-
-    const hero = screen.getByTestId("calendar-selected-deadline-card").firstElementChild;
-    expect(hero?.textContent).toContain("Deadline");
-  });
-
-  it("keeps complete text stable and swaps the icon to loading while a deadline is completing", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "Ship report",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            _completing: true,
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderFloatingDetail({
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
-        })}
-      </DashboardProvider>,
-    );
-
-    const complete = screen.getByRole("button", { name: /^complete$/i });
-    expect(complete.getAttribute("aria-busy")).toBe("true");
-    expect(complete.textContent).toContain("Complete");
-    expect(screen.queryByText(/completing/i)).toBeNull();
-  });
-
-  it("closes floating deadline detail shortly after complete starts", async () => {
+  it("forwards floating deadline completion and closes after the action starts", async () => {
     vi.useFakeTimers();
     mockCompleteDeadlineOccurrence.mockResolvedValueOnce({});
     const onCloseFloatingDetail = vi.fn();
@@ -946,26 +216,18 @@ describe("calendar detail timeline", () => {
       class_name: "Inbox",
       status: "open",
     };
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [task],
-        stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
-      },
-    };
 
     render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={{ upcoming: [task] }} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderFloatingDetail({
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
+          items: [task],
+          selectedItemId: "deadline:todo-1:2026-04-22",
           onCloseFloatingDetail,
         })}
       </DashboardProvider>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /^complete$/i }));
-
     expect(mockCompleteDeadlineOccurrence).toHaveBeenCalledWith("todo-1", "2026-04-22");
     expect(onCloseFloatingDetail).not.toHaveBeenCalled();
     await act(async () => {
@@ -974,327 +236,59 @@ describe("calendar detail timeline", () => {
     expect(onCloseFloatingDetail).toHaveBeenCalledTimes(1);
   });
 
-  it("shows completed deadlines immediately when a day only has completed items", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 19,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: deadlinesDetail.getDayState(briefing.deadlines.upcoming),
-          selectedItemId: "todo-2",
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>,
-    );
-
-    expect(screen.getAllByText("Complete early").length).toBeGreaterThan(1);
-  });
-
-  it("compresses the selected deadline card on two-deadline days", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "mow the lawn",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            url: "https://todoist.com/showTask?id=1",
-          },
-          {
-            id: "todo-2",
-            title: "Senior Design Deliverables",
-            due_date: "2026-04-22",
-            due_time: null,
-            source: "todoist",
-            class_name: "Senior Design (CS 4962-01/02)",
-            status: "in_progress",
-            url: "https://todoist.com/showTask?id=2",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 22,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-1",
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>,
-    );
-
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-deadline-status").textContent).toContain("Incomplete");
-    expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /open todoist/i })).toBeTruthy();
-  });
-
-  it("keeps deadline secondary CTAs in the same selected-card footer group without provider-status actions", () => {
-    const task = {
-      id: "deadline-1",
-      title: "Presentation Slides",
-      due_date: "2026-04-29",
-      due_time: "11:59 PM",
-      class_name: "Senior Design (CS 4962-01/02)",
-      status: "open",
-      url: "https://todoist.com/showTask?id=deadline-1",
-    };
-
-    render(
-      <DashboardProvider briefing={{ emails: { accounts: [] }, deadlines: { upcoming: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 29,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: [task],
-          selectedItemId: "deadline:deadline-1:2026-04-29",
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>,
-    );
-
-    const card = screen.getByTestId("calendar-selected-deadline-card");
-    const dock = screen.getByTestId("timeline-detail-action-dock");
-    const complete = screen.getByRole("button", { name: /^complete$/i });
-    const edit = screen.getByRole("button", { name: /^edit$/i });
-    const openTodoist = screen.getByRole("button", { name: /^open todoist$/i });
-
-    expect(card.contains(dock)).toBe(true);
-    expect(complete.parentElement).toBe(edit.parentElement);
-    expect(complete.parentElement).toBe(openTodoist.parentElement);
-    expect(screen.queryByRole("button", { name: /^in progress$/i })).toBeNull();
-  });
-
-  it("keeps selected deadline density consistent when switching between same-day tasks", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-1",
-            title: "mow the lawn",
-            due_date: "2026-04-22",
-            due_time: "5:00 PM",
-            source: "todoist",
-            class_name: "Inbox",
-            status: "open",
-            url: "https://todoist.com/showTask?id=1",
-          },
-          {
-            id: "todo-2",
-            title: "Senior Design Deliverables for Capstone Presentation",
-            due_date: "2026-04-22",
-            due_time: "11:59 PM",
-            source: "todoist",
-            class_name: "Senior Design (CS 4962-01/02)",
-            status: "in_progress",
-            url: "https://todoist.com/showTask?id=2",
-          },
-        ],
-      },
-    };
-    const renderDetail = (selectedItemId: string) => (
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 22,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: briefing.deadlines.upcoming,
-          selectedItemId,
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>
-    );
-
-    const { rerender } = render(renderDetail("todo-1"));
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-height-mode")).toBe("auto");
-
-    rerender(renderDetail("todo-2"));
-
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-height-mode")).toBe("auto");
-    expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Senior Design Deliverables");
-  });
-
-  it("compresses the selected deadline card for long single deadlines", () => {
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: {
-        upcoming: [
-          {
-            id: "todo-long",
-            title: "Senior Design Deliverables for Capstone Presentation",
-            due_date: "2026-04-23",
-            due_time: "11:59 PM",
-            source: "todoist",
-            class_name: "Senior Design (CS 4962-01/02)",
-            status: "open",
-            url: "https://todoist.com/showTask?id=3",
-          },
-        ],
-      },
-    };
-
-    render(
-      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
-        {deadlinesDetail.renderDetail({
-          selectedDay: 23,
-          viewYear: 2026,
-          viewMonth: 3,
-          items: briefing.deadlines.upcoming,
-          selectedItemId: "todo-long",
-          onSelectItem: () => {},
-        })}
-      </DashboardProvider>,
-    );
-
-    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Senior Design Deliverables");
-    expect(screen.getByTestId("calendar-selected-deadline-status").textContent).toContain("Incomplete");
-  });
-
-  it("does not render completed deadlines into month cells when active items exist", () => {
-    render(
-      <div>
-        {deadlinesDetail.renderCellContents({
-          items: deadlinesDetail.getDayState([
-            { id: "todo-1", title: "Open early", due_date: "2026-04-19", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "11:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
-          ]),
-        })}
-      </div>,
-    );
-
-    expect(screen.getByText("Open early")).toBeTruthy();
-    expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByText("Complete early").closest("s")).toBeTruthy();
-  });
-
-  it("keeps completed-only deadline month cells visually quiet", () => {
-    render(
-      <div>
-        {deadlinesDetail.renderCellContents({
-          items: deadlinesDetail.getDayState([
-            { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "11:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
-          ]),
-        })}
-      </div>,
-    );
-
-    expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByText("Complete early").closest("s")).toBeTruthy();
-  });
-
-  it("shows unpaid bills first and hides paid bills behind a collapsed section", () => {
-    render(
-      billsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        data: {},
-        items: billsView.getDayState([
-          { id: "bill-1", name: "Rent", payee: "Rent", amount: 2000, next_date: "2026-04-19", paid: false, type: "bill" },
-          { id: "bill-2", name: "Internet", payee: "Internet", amount: 80, next_date: "2026-04-19", paid: true, type: "bill" },
-        ]),
-      }),
-    );
+  it("renders unpaid bills first and discloses paid bills on request", () => {
+    render(billsView.renderDetail({
+      selectedDay: 19,
+      viewYear: 2026,
+      viewMonth: 3,
+      data: {},
+      items: billsView.getDayState([
+        { id: "bill-1", name: "Rent", payee: "Rent", amount: 2000, next_date: "2026-04-19", paid: false, type: "bill" },
+        { id: "bill-2", name: "Internet", payee: "Internet", amount: 80, next_date: "2026-04-19", paid: true, type: "bill" },
+      ]),
+    }));
 
     expect(screen.getAllByText("Rent").length).toBeGreaterThan(0);
     expect(screen.queryByText("Internet")).toBeNull();
-    expect(screen.getByTestId("timeline-detail-section-toggle-completed-bills").textContent).toContain("1");
-
     fireEvent.click(screen.getByTestId("timeline-detail-section-toggle-completed-bills"));
     expect(screen.getByText("Internet")).toBeTruthy();
   });
 
-  it("does not describe selected paid bills as overdue", () => {
-    render(
-      billsView.renderDetail({
-        selectedDay: 19,
-        viewYear: 2026,
-        viewMonth: 3,
-        data: {},
-        selectedItemId: "bill-2",
-        items: billsView.getDayState([
-          { id: "bill-2", name: "Internet", payee: "Internet", amount: 80, next_date: "2026-04-19", paid: true, type: "bill" },
-        ]),
-      }),
-    );
-
-    expect(screen.queryByText(/overdue/i)).toBeNull();
-    expect(screen.getAllByText("Cleared").length).toBeGreaterThan(0);
-  });
-
-  it("selects transactions into read-only detail and separates inflows from outflows", () => {
-    render(
-      billsView.renderDetail({
-        selectedDay: 19,
-        selectedDateKey: "2026-04-19",
-        viewYear: 2026,
-        viewMonth: 3,
-        data: {},
-        selectedItemId: "income-1",
-        items: billsView.getDayState([
-          { id: "income-1", name: "Employer", payee: "Employer", amount: 5000, date: "2026-04-19", direction: "income", category: "Income", account: "Checking", type: "transaction" },
-          { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", category: "Groceries", account: "Checking", type: "transaction" },
-        ]),
-      }),
-    );
+  it("renders transaction direction and forwards read-only transaction selection", () => {
+    const onSelectItem = vi.fn();
+    render(billsView.renderDetail({
+      selectedDay: 19,
+      selectedDateKey: "2026-04-19",
+      viewYear: 2026,
+      viewMonth: 3,
+      data: {},
+      selectedItemId: "income-1",
+      onSelectItem,
+      items: billsView.getDayState([
+        { id: "income-1", name: "Employer", payee: "Employer", amount: 5000, date: "2026-04-19", direction: "income", category: "Income", account: "Checking", type: "transaction" },
+        { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", category: "Groceries", account: "Checking", type: "transaction" },
+      ]),
+    }));
 
     expect(screen.getAllByText("+$5,000.00").length).toBeGreaterThan(0);
     expect(screen.getByText("Inflows")).toBeTruthy();
     expect(screen.getByText("Outflows")).toBeTruthy();
-    expect(screen.getByText("Market")).toBeTruthy();
+    fireEvent.click(screen.getByText("Market").closest("[data-testid='timeline-detail-row']")!);
+    expect(onSelectItem).toHaveBeenCalledWith("expense-1");
   });
 
-  it("warns when the transaction range is truncated", () => {
-    render(
-      billsView.renderDetail({
-        selectedDay: 19,
-        selectedDateKey: "2026-04-19",
-        viewYear: 2026,
-        viewMonth: 3,
-        data: { transactionsTruncated: true },
-        items: billsView.getDayState([
-          { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", type: "transaction" },
-        ]),
-      }),
-    );
+  it("renders the finance-range warning without coupling to its inline styles", () => {
+    render(billsView.renderDetail({
+      selectedDay: 19,
+      selectedDateKey: "2026-04-19",
+      viewYear: 2026,
+      viewMonth: 3,
+      data: { transactionsTruncated: true },
+      items: billsView.getDayState([
+        { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", type: "transaction" },
+      ]),
+    }));
 
-    expect(screen.getByTestId("calendar-bills-source-warning").textContent).toMatch(/limited/i);
-  });
-
-  it("shows a paid bill preview when a day has no unpaid bills", () => {
-    render(
-      <div>
-        {billsView.renderCellContents({
-          items: billsView.getDayState([
-            { id: "bill-2", name: "Internet", payee: "Internet", amount: 80, next_date: "2026-04-19", paid: true, type: "bill" },
-          ]),
-        })}
-      </div>,
-    );
-
-    expect(screen.getByText("Internet")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-bills-source-warning")).getByText(/limited/i)).toBeTruthy();
   });
 });

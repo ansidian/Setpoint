@@ -238,6 +238,30 @@ describe("database migrations", () => {
     expect(pendingIndex.rows.map((row) => row.name)).toEqual(["user_id", "expires_at"]);
   });
 
+  it("adds explicit auth mode, recent-auth state, and hashed recovery storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "030_owner_bootstrap.sql",
+      "031_auth_recovery.sql",
+    ]);
+
+    const ownerColumns = await db.execute("PRAGMA table_info('ea_owner')");
+    const ownerByName = new Map(ownerColumns.rows.map((row) => [row.name, row]));
+    expect(ownerByName.get("auth_mode")!.notnull).toBe(1);
+    expect(ownerByName.get("auth_mode")!.dflt_value).toBe("'password_or_passkey'");
+
+    const sessionColumns = await db.execute("PRAGMA table_info('ea_sessions')");
+    const sessionByName = new Map(sessionColumns.rows.map((row) => [row.name, row]));
+    expect(sessionByName.get("authenticated_at")!.notnull).toBe(1);
+    expect(sessionByName.get("authenticated_at")!.dflt_value).toBe("0");
+
+    const recoveryColumns = await db.execute("PRAGMA table_info('ea_owner_recovery_codes')");
+    const recoveryByName = new Map(recoveryColumns.rows.map((row) => [row.name, row]));
+    expect(recoveryByName.get("code_hash")!.notnull).toBe(1);
+    expect(recoveryByName.get("used_at")!.type).toBe("INTEGER");
+  });
+
   it("adds normalized email date storage for temporal search filters", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, [
@@ -463,4 +487,70 @@ describe("database migrations", () => {
     const row = await db.execute("SELECT carryover_count FROM ea_briefing_snapshot_items WHERE email_id = 'msg-1'");
     expect(Number(row.rows[0]!.carryover_count)).toBe(0);
   });
+
+  it("preserves existing Todoist connections while adding explicit OAuth state", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["001_ea_tables.sql"]);
+    await db.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, todoist_api_token_encrypted, todoist_oauth_refresh_token_encrypted)
+            VALUES (?, ?, ?), (?, ?, NULL)`,
+      args: ["oauth-owner", "encrypted-access", "encrypted-refresh", "personal-owner", "encrypted-personal"],
+    });
+
+    await applyMigrations(db, ["036_todoist_oauth_setup.sql"]);
+
+    const rows = await db.execute(
+      "SELECT user_id, todoist_connection_mode FROM ea_settings ORDER BY user_id",
+    );
+    expect(rows.rows).toEqual([
+      { user_id: "oauth-owner", todoist_connection_mode: "oauth" },
+      { user_id: "personal-owner", todoist_connection_mode: "personal_token" },
+    ]);
+    const stateColumns = await db.execute("PRAGMA table_info('ea_todoist_oauth_states')");
+    expect(stateColumns.rows.map((row) => row.name)).toContain("browser_bind_hash");
+  });
+
+  it("adds the singleton instance credential registry with disablement integrity", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["033_instance_credentials.sql"]);
+
+    await db.execute({
+      sql: `INSERT INTO ea_instance_credentials
+              (credential_key, active_value_encrypted, updated_at)
+            VALUES (?, ?, ?)`,
+      args: ["ai.openai_api_key", "encrypted", 10],
+    });
+    const row = await db.execute(
+      "SELECT disabled, validation_state, version FROM ea_instance_credentials",
+    );
+    expect(row.rows[0]).toMatchObject({ disabled: 0, validation_state: "untested", version: 1 });
+
+    await expect(db.execute({
+      sql: `UPDATE ea_instance_credentials
+            SET disabled = 1
+            WHERE credential_key = ?`,
+      args: ["ai.openai_api_key"],
+    })).rejects.toThrow();
+  });
+
+  it("stores Gmail push verification material as a non-reversible singleton hash", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, ["035_gmail_pubsub_config.sql"]);
+
+    await db.execute({
+      sql: `INSERT INTO ea_gmail_pubsub_config
+              (singleton_id, push_token_hash, updated_at)
+            VALUES (1, 'sha256-only', 10)`,
+      args: [],
+    });
+    const columns = await db.execute("PRAGMA table_info('ea_gmail_pubsub_config')");
+    const names = columns.rows.map((row) => row.name);
+    expect(names).toContain("push_token_hash");
+    expect(names).not.toContain("push_token");
+    await expect(db.execute(
+      "UPDATE ea_gmail_pubsub_config SET token_disabled = 1 WHERE singleton_id = 1",
+    )).rejects.toThrow();
+  });
+
 });

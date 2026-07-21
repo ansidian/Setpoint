@@ -16,7 +16,7 @@ vi.mock("../db/connection.ts", () => ({
   },
 }));
 
-const { buildSnapshot, partitionByExpiry, hydrateRecurringTombstones } =
+const { buildSnapshot, hydrateRecurringTombstones } =
   await import("./tombstones.ts");
 
 describe("buildSnapshot", () => {
@@ -75,26 +75,6 @@ describe("buildSnapshot", () => {
   });
 });
 
-describe("partitionByExpiry", () => {
-  it("separates live (due_date >= today) from expired (due_date < today)", () => {
-    const rows = [
-      { todoist_id: "a", due_date: "2026-04-17" },
-      { todoist_id: "b", due_date: "2026-04-18" },
-      { todoist_id: "c", due_date: "2026-04-19" },
-    ];
-    const { live, expired } = partitionByExpiry(rows, "2026-04-18");
-    expect(live.map((r) => r.todoist_id)).toEqual(["b", "c"]);
-    expect(expired.map((r) => r.todoist_id)).toEqual(["a"]);
-  });
-
-  it("treats missing due_date as expired (defensive)", () => {
-    const rows = [{ todoist_id: "x", due_date: null }];
-    const { live, expired } = partitionByExpiry(rows, "2026-04-18");
-    expect(live).toEqual([]);
-    expect(expired).toHaveLength(1);
-  });
-});
-
 describe("hydrateRecurringTombstones", () => {
   beforeEach(async () => {
     testState.db.current = await createCompletedTasksTestDb();
@@ -135,6 +115,7 @@ describe("hydrateRecurringTombstones", () => {
   });
 
   it("gracefully skips rows with malformed snapshot_json", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     await seedCompletedTask(testState.db.current, {
       todoist_id: "bad",
       due_date: "2099-01-01",

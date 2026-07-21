@@ -1,5 +1,5 @@
 import { epochFromLa, laComponents } from "../inbox/helpers";
-import { addDaysYmd, daysBetweenYmd, parseYmd } from "./calendarDateUtils.ts";
+import { addDaysYmd, parseYmd } from "./calendarDateUtils.ts";
 import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors";
 
 const TIME_12_RE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
@@ -317,11 +317,6 @@ export function ghostDisplayRange(input?: unknown): string {
   ].filter(Boolean).join(" · ");
 }
 
-export function dateOutsideMonth(dateKey: string, viewYear: number, viewMonth: number): boolean {
-  const parsed = parseYmd(dateKey);
-  return !!parsed && (parsed.year !== viewYear || parsed.month !== viewMonth);
-}
-
 export function dateOutsideVisibleGrid(dateKey: string, viewYear: number, viewMonth: number): boolean {
   const parsed = parseYmd(dateKey);
   if (!parsed) return false;
@@ -337,9 +332,4 @@ export function dateOutsideVisibleGrid(dateKey: string, viewYear: number, viewMo
 export function monthFromYmd(dateKey: string) {
   const parsed = parseYmd(dateKey);
   return parsed ? { year: parsed.year, month: parsed.month, day: parsed.day } : null;
-}
-
-export function ghostSpanDays(ghost?: Partial<Pick<Ghost, "startDate" | "endDate">> | null): number {
-  if (!ghost?.startDate || !ghost?.endDate) return 0;
-  return Math.max(0, daysBetweenYmd(ghost.startDate, ghost.endDate));
 }

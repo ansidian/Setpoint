@@ -1,7 +1,7 @@
 const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 const TIME_12H_RE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
 
-import type { ReminderAnchor, ReminderAnchorKind, ReminderPayloadSnapshot } from "../../shared/types/reminders.ts";
+import type { ReminderAnchor } from "../../shared/types/reminders.ts";
 
 interface TodoistReminderTask extends Record<string, unknown> {
   id?: unknown;
@@ -18,14 +18,6 @@ interface TodoistReminderTask extends Record<string, unknown> {
   url?: string | null;
   class_color?: string | null;
   due?: { date?: string | null; timezone?: string | null } | null;
-}
-
-export interface TodoistReminderSource {
-  sourceType: "todoist_task";
-  sourceItemId: string;
-  anchorKind: ReminderAnchorKind | null;
-  anchorAt: string | null;
-  payloadSnapshot: ReminderPayloadSnapshot;
 }
 
 function zonedDateTimeToUtcIso(dateIso: string, time: string, timeZone = PACIFIC_TIME_ZONE): string | null {
@@ -132,20 +124,4 @@ export function todoistReminderAnchorFromTask(task: TodoistReminderTask): Remind
   }
 
   return null;
-}
-
-export function todoistReminderSourceFromTask(task: TodoistReminderTask): TodoistReminderSource {
-  const anchor = todoistReminderAnchorFromTask(task);
-  return {
-    sourceType: "todoist_task",
-    sourceItemId: String(task?.id || task?.item_id || ""),
-    anchorKind: anchor?.anchorKind || null,
-    anchorAt: anchor?.anchorAt || null,
-    payloadSnapshot: {
-      title: task?.title || task?.content || "Todoist task",
-      context: task?.class_name || task?.project_name || "Todoist",
-      url: task?.url || null,
-      color: task?.class_color || null,
-    },
-  };
 }

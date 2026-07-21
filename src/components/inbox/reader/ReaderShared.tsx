@@ -1,66 +1,6 @@
-import { ChevronDown, ChevronUp, Mail } from "lucide-react";
-import type { MouseEventHandler, ReactNode } from "react";
+import { Mail } from "lucide-react";
 import { Kbd } from "../primitives";
 import EmptyStateSplash from "../../shared/EmptyStateSplash";
-
-export function MobileSection({ title, accent, open, onToggle, children, testId }: {
-  title: string;
-  accent: string;
-  open: boolean;
-  onToggle: MouseEventHandler<HTMLButtonElement>;
-  children: ReactNode;
-  testId?: string;
-}) {
-  return (
-    <div
-      data-testid={testId}
-      style={{
-        margin: "14px 16px 0",
-        borderRadius: 12,
-        background: "color-mix(in srgb, var(--sp-mantle) 72%, transparent)",
-        border: `1px solid ${accent}22`,
-        overflow: "hidden",
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "12px 14px",
-          border: "none",
-          background: "transparent",
-          color: "#fff",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          textAlign: "left",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: 1.8,
-            textTransform: "uppercase",
-            color: accent,
-          }}
-        >
-          {title}
-        </span>
-        <span style={{ flex: 1 }} />
-        {open ? (
-          <ChevronUp size={16} color="rgba(205,214,244,0.6)" />
-        ) : (
-          <ChevronDown size={16} color="rgba(205,214,244,0.6)" />
-        )}
-      </button>
-      {open && <div style={{ padding: "0 0 14px" }}>{children}</div>}
-    </div>
-  );
-}
 
 export function ReaderEmptyState() {
   return (

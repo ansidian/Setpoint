@@ -1,5 +1,4 @@
 // server/news/news-catalog.test.js
-// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { NEWS_STARTER_CATALOG } from "./news-catalog.ts";
 

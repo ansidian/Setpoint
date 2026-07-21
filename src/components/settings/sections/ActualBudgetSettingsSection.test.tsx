@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import type { SearchableDropdownProps } from "@/components/shared/SearchableDropdown";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
+import type { ConnectionRowView, ConnectionState } from "../connectionModel";
 
 const mockApi = vi.hoisted(() => ({
   getActualMetadata: vi.fn(),
@@ -44,10 +45,30 @@ vi.mock("@/components/shared/SearchableDropdown", () => ({
 
 const { default: ActualBudgetSettingsSection } = await import("./ActualBudgetSettingsSection");
 
-function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict = false }: {
+function actualConnection(state: ConnectionState): ConnectionRowView {
+  return {
+    id: "actual-budget",
+    group: "data_sources",
+    label: "Actual Budget",
+    description: "",
+    minimumViable: "",
+    hash: "actual-budget",
+    state,
+    statusLabel: state,
+    source: "settings",
+    mode: "actual_budget",
+    identities: [],
+    lastTestedAt: null,
+    lastSucceededAt: null,
+    lastFailedAt: null,
+  };
+}
+
+function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict = false, state = "connected" }: {
   initialSettings?: SettingsState;
   patch?: Mock<SettingsPatch>;
   strict?: boolean;
+  state?: ConnectionState;
 } = {}) {
   function Harness() {
     const [settings, setSettings] = useState<SettingsState | null>(initialSettings || {
@@ -62,6 +83,7 @@ function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict
         settings={settings}
         setSettings={setSettings}
         patch={patch}
+        connections={[actualConnection(state)]}
       />
     );
   }
@@ -126,67 +148,60 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetSettingsSection", () => {
-  it("does not fetch Actual metadata on mount or connection test", async () => {
-    renderSection();
+  it("shows one Actual setup prompt and hides Finance customization when disconnected", () => {
+    renderSection({ state: "not_connected" });
 
-    expect(await screen.findByDisplayValue("https://actual.example.test")).toBeTruthy();
-    expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Test Connection" }));
-
-    await waitFor(() => {
-      expect(mockApi.testActualBudget).toHaveBeenCalled();
-    });
-    expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+    expect(screen.getByText("Connect Actual Budget")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set up Actual Budget" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#actual-budget");
+    expect(screen.queryByText("Bill Pay Mappings")).toBeNull();
+    expect(screen.queryByText("Mapping Test")).toBeNull();
+    expect(screen.queryByText("Utility Pay Links")).toBeNull();
   });
 
-  it("runs explicit Actual cache hydration from saved settings", async () => {
-    renderSection();
+  it("shows full Finance controls when Actual is connected", () => {
+    renderSection({ state: "connected" });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Hydrate Cache" }));
+    expect(screen.getByText("Bill Pay Mappings")).toBeTruthy();
+    expect(screen.getByText("Mapping Test")).toBeTruthy();
+    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
+    expect(screen.queryByText("Actual Budget needs attention")).toBeNull();
+  });
 
-    await waitFor(() => {
-      expect(mockApi.hydrateActualBudgetCache).toHaveBeenCalled();
+  it("retains Finance settings but disables live operations while Actual needs attention", () => {
+    renderSection({
+      state: "needs_attention",
+      initialSettings: {
+        bill_pay_mappings: { version: 1, profiles: [] },
+        utility_pay_links: [{
+          scheduleId: "schedule-electric",
+          label: "Electric",
+          url: "https://utility.example.test",
+        }],
+      },
     });
-    expect(await screen.findByText("Cache ready")).toBeTruthy();
-    expect(screen.getByText(/My-Finances-d8e502a/)).toBeTruthy();
+
+    expect(screen.getByText("Actual Budget needs attention")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Repair connection" }).getAttribute("href"))
+      .toBe("/settings?tab=connections#actual-budget");
+    expect(screen.getByText("Bill Pay Mappings")).toBeTruthy();
+    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Run Test" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Schedule for pay link" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "+ Add pay link" }).disabled).toBe(true);
+    expect(screen.getByDisplayValue<HTMLInputElement>("https://utility.example.test").disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /profile/i }));
     expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Payee" }).disabled).toBe(true);
   });
 
-  it("validates an existing Actual cache when the settings section loads", async () => {
-    mockApi.getActualCacheStatus.mockResolvedValueOnce({
-      success: true,
-      configured: true,
-      hydrated: true,
-      budgetId: "My-Finances-d8e502a",
-      dbSizeBytes: 50_000_000,
-      backupCount: 1,
-    });
-
+  it("keeps Actual connection controls out of Finance while retaining mapping controls", async () => {
     renderSection();
 
-    expect(await screen.findByText("Cache ready")).toBeTruthy();
-    expect(screen.getByText(/My-Finances-d8e502a/)).toBeTruthy();
-    expect(mockApi.hydrateActualBudgetCache).not.toHaveBeenCalled();
-  });
-
-  it("owns the moved Actual connection controls", async () => {
-    renderSection();
-
-    expect(await screen.findByDisplayValue("https://actual.example.test")).toBeTruthy();
-    expect(screen.getByDisplayValue("sync-id")).toBeTruthy();
-
-    fireEvent.change(screen.getByDisplayValue("sync-id"), {
-      target: { value: "new-sync" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(mockApi.updateSettings).toHaveBeenCalledWith({
-        actual_budget_url: "https://actual.example.test",
-        actual_budget_sync_id: "new-sync",
-      });
-    });
+    expect(screen.queryByDisplayValue("https://actual.example.test")).toBeNull();
+    expect(await screen.findByText("Bill Pay Mappings")).toBeTruthy();
+    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
   });
 
   it("reaches patch with an added chip and a selected target label", async () => {

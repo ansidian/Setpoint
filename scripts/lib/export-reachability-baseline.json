@@ -1,0 +1,15 @@
+{
+  "exemptions": {
+    "scripts/lib/test-environment-partitions.mts:collectVitestTestFiles": "Governance helper exercised directly by its contract tests and intentionally not part of the product runtime",
+    "scripts/lib/test-environment-partitions.mts:getTestEnvironmentAssignments": "Governance helper exercised directly by its contract tests and intentionally not part of the product runtime",
+    "server/actual/actual-worker.ts:shutdownActualWorker": "Explicit worker teardown seam used by the Actual worker integration suite to prevent process leakage",
+    "server/alfred/alfred-conversations.ts:clearAlfredConversations": "Explicit in-memory reset seam used to isolate Alfred conversation tests",
+    "server/auth/owner-context.ts:clearOwnerContext": "Explicit owner-context reset seam used to isolate middleware tests",
+    "server/dashboard/current-events.ts:clearCurrentDashboardEventSubscribers": "Explicit event-subscriber reset seam used to isolate current-dashboard publisher tests",
+    "server/platform/weather.ts:clearWeatherCache": "Explicit weather-cache reset seam used to isolate cache and provider tests",
+    "server/snapshots/snapshot-test-fixtures.ts:createMigratedDb": "Shared migrated database fixture consumed by snapshot, news, and pinned-email integration tests",
+    "server/snapshots/snapshot-test-fixtures.ts:migrationSql": "Shared migration fixture consumed by snapshot integration tests",
+    "server/snapshots/snapshot-test-fixtures.ts:seedSnapshotItem": "Shared snapshot row fixture consumed by lifecycle integration tests",
+    "src/components/todoist/add-task-panel/todoistReferenceCache.ts:invalidateTodoistReferenceCache": "Explicit client cache reset seam used to isolate Todoist reference-cache and panel tests"
+  }
+}

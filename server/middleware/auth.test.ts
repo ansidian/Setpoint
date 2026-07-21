@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
-import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.ts";
+import { createAuthTestDb, hashApiToken, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import type { Client, InStatement } from "@libsql/client";
 
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
@@ -23,7 +23,8 @@ const {
   validateSession,
   deleteSession,
   validateBearer,
-  __clearSessionValidationCache,
+  hasRecentPasswordAuth,
+  markSessionPasswordAuthenticated,
 } = await import("./auth.ts");
 
 async function seedApiToken(
@@ -40,7 +41,7 @@ async function seedApiToken(
 describe("auth middleware session storage", () => {
   beforeEach(async () => {
     testState.db.current = await createAuthTestDb();
-    __clearSessionValidationCache();
+    await seedOwner(currentDb(), { passwordHash: "hash" });
   });
 
   afterEach(async () => {
@@ -55,7 +56,11 @@ describe("auth middleware session storage", () => {
       Buffer.alloc(size, 1)
     )) as typeof crypto.randomBytes);
 
-    const rawToken = await createSession();
+    const rawToken = await createSession({
+      securityGeneration: 1,
+      authMethod: "password",
+      passwordAuthenticatedAt: 1_000,
+    });
 
     const expectedRaw = Buffer.alloc(32, 1).toString("hex");
     const expectedStored = hashSessionToken(expectedRaw);
@@ -69,6 +74,32 @@ describe("auth middleware session storage", () => {
     expect(result.rows[0]!.token).toBe(expectedStored);
     expect(result.rows[0]!.token).not.toBe(rawToken);
     expect(result.rows[0]!.expires_at).toBeGreaterThan(before + 29 * 24 * 60 * 60 * 1000);
+  });
+
+  it("does not treat a passkey as password proof and records an explicit password step-up", async () => {
+    const token = await createSession({
+      authenticatedAt: 1_000,
+      passwordAuthenticatedAt: 0,
+      authMethod: "passkey",
+      securityGeneration: 1,
+    });
+
+    await expect(hasRecentPasswordAuth(token, { now: 1_001 })).resolves.toBe(false);
+
+    await markSessionPasswordAuthenticated(token, 20_000);
+    await expect(hasRecentPasswordAuth(token, { now: 20_001 })).resolves.toBe(true);
+    await expect(hasRecentPasswordAuth(token, { now: 20_000 + 11 * 60_000 })).resolves.toBe(false);
+  });
+
+  it("refuses to issue a session against a stale owner security generation", async () => {
+    await currentDb().execute("UPDATE ea_owner SET security_generation = 2");
+
+    await expect(createSession({
+      securityGeneration: 1,
+      authMethod: "password",
+      passwordAuthenticatedAt: Date.now(),
+    })).resolves.toBeNull();
+    expect((await currentDb().execute("SELECT token FROM ea_sessions")).rows).toEqual([]);
   });
 
   it("validates hashed session rows", async () => {
@@ -86,8 +117,8 @@ describe("auth middleware session storage", () => {
 
   it("accepts raw session rows and migrates them to hashed storage", async () => {
     await currentDb().execute({
-      sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-      args: ["raw-session", Date.now() + 60_000],
+      sql: "INSERT INTO ea_sessions (token, expires_at, security_generation) VALUES (?, ?, ?)",
+      args: ["raw-session", Date.now() + 60_000, 1],
     });
 
     const ok = await validateSession("raw-session");
@@ -153,7 +184,7 @@ describe("auth middleware session storage", () => {
       args: [hashSessionToken("stale-session"), Date.now() - 60_000],
     });
 
-    await createSession();
+    await createSession({ securityGeneration: 1, authMethod: "password" });
 
     const rows = await currentDb().execute({
       sql: "SELECT token FROM ea_sessions WHERE token = ?",
@@ -162,25 +193,21 @@ describe("auth middleware session storage", () => {
     expect(rows.rows).toHaveLength(0);
   });
 
-  it("serves a repeat validation from cache without re-querying the database (P2-27)", async () => {
-    await seedSession(currentDb(), "cached-session");
-    const spy = vi.spyOn(currentDb(), "execute");
+  it("rechecks owner generation so a rotation in another process revokes a validated session", async () => {
+    await seedSession(currentDb(), "externally-revoked-session");
 
-    expect(await validateSession("cached-session")).toBe(true);
-    const callsAfterFirst = spy.mock.calls.length;
-    expect(callsAfterFirst).toBeGreaterThan(0);
+    expect(await validateSession("externally-revoked-session")).toBe(true);
+    await currentDb().execute("UPDATE ea_owner SET security_generation = security_generation + 1");
 
-    expect(await validateSession("cached-session")).toBe(true);
-    // Second validation is a cache hit: no additional DB round-trips.
-    expect(spy.mock.calls.length).toBe(callsAfterFirst);
+    expect(await validateSession("externally-revoked-session")).toBe(false);
   });
 
-  it("invalidates the session cache on logout so a revoked token stops validating (P2-27)", async () => {
-    await seedSession(currentDb(), "logout-cache-session");
+  it("stops validating a session after logout", async () => {
+    await seedSession(currentDb(), "logout-session");
 
-    expect(await validateSession("logout-cache-session")).toBe(true); // populates cache
-    await deleteSession("logout-cache-session"); // deletes row AND clears cache entry
+    expect(await validateSession("logout-session")).toBe(true);
+    await deleteSession("logout-session");
 
-    expect(await validateSession("logout-cache-session")).toBe(false);
+    expect(await validateSession("logout-session")).toBe(false);
   });
 });

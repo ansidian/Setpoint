@@ -288,5 +288,3 @@ export default function useCalendarSearchActivation({
 
   return { calendarSearch, calendarSearchShell };
 }
-
-export type CalendarSearchActivationController = ReturnType<typeof useCalendarSearchActivation>;

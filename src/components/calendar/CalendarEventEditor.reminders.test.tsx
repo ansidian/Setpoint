@@ -1,11 +1,14 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { mockCreateCalendarEvent, mockListReminders, mockCreateReminder } from "./CalendarEventEditor.test-setup.ts";
-import { renderModal, openFloatingEventEditorFromSelectedChip, getActiveEventSaveButton } from "./CalendarEventEditor.test-utils.tsx";
+import {
+  getActiveEventSaveButton,
+  renderEventEditor,
+} from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor reminder behavior", () => {
   it("adds pending reminder chips during event create and flushes them after provider creation succeeds", async () => {
-    const { upsertEvents } = renderModal({ focusDate: "2099-05-10" });
+    const { upsertEvents } = renderEventEditor({ focusDate: "2099-05-10" });
     const savedEvent = {
       id: "event-reminder-create",
       title: "Planning block",
@@ -18,11 +21,15 @@ describe("CalendarEventEditor reminder behavior", () => {
     };
     mockCreateCalendarEvent.mockResolvedValue({ event: savedEvent });
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
       target: { value: "Planning block" },
     });
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+    vi.useRealTimers();
     fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
 
     expect(screen.getByTestId("calendar-event-reminder-chip").textContent).toMatch(/30 minutes before/i);
@@ -55,27 +62,6 @@ describe("CalendarEventEditor reminder behavior", () => {
     });
   });
 
-  it("does not flush pending reminders when event creation fails", async () => {
-    renderModal({ focusDate: "2099-05-10" });
-    mockCreateCalendarEvent.mockRejectedValue(new Error("Google Calendar failed"));
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Planning block" },
-    });
-    fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
-    await waitFor(() => {
-      expect((screen.getByTestId("calendar-event-save") as HTMLButtonElement).disabled).toBe(false);
-    });
-    fireEvent.click(getActiveEventSaveButton());
-
-    await waitFor(() => {
-      expect(screen.getByText("Google Calendar failed")).toBeTruthy();
-    });
-    expect(mockCreateReminder).not.toHaveBeenCalled();
-  });
-
   it("loads existing reminders while editing and keeps sent reminders visually distinct", async () => {
     const event = {
       id: "event-reminder-edit",
@@ -95,9 +81,7 @@ describe("CalendarEventEditor reminder behavior", () => {
         { id: "reminder-sent", status: "sent", offset_minutes: -30 },
       ],
     });
-    renderModal({ events: [event] });
-
-    await openFloatingEventEditorFromSelectedChip();
+    renderEventEditor({ event });
 
     await waitFor(() => {
       expect(mockListReminders).toHaveBeenCalledWith({

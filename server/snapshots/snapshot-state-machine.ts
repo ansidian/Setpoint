@@ -61,12 +61,9 @@ import {
   ARRIVAL_GRACE_UNTRIAGED_READ_LANE,
 } from "./arrival-grace.ts";
 import {
-  SNAPSHOT_LANES as SHARED_SNAPSHOT_LANES,
   type SnapshotProviderRemovedState,
   type SnapshotTriageLane,
 } from "../../shared/types/snapshots.ts";
-
-export const SNAPSHOT_LANES = SHARED_SNAPSHOT_LANES;
 
 // Lanes a triage decision or user lane-move may assign.
 export const TRIAGE_LANES: ReadonlySet<string> = new Set<SnapshotTriageLane>(["needs_attention", "fyi", "noise"]);

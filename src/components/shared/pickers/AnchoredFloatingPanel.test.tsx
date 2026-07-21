@@ -107,6 +107,8 @@ describe("AnchoredFloatingPanel", () => {
 
     const panel = await screen.findByRole("dialog", { name: "Test anchored panel" });
 
+    // Fixed coordinates are the output of the anchored-placement contract for
+    // the mocked rectangles; a wrong value strands the panel off its trigger.
     await waitFor(() => {
       expect(panel.style.top).toBe("374px");
       expect(panel.style.left).toBe("100px");
@@ -127,6 +129,7 @@ describe("AnchoredFloatingPanel", () => {
     );
 
     const panel = await screen.findByRole("dialog", { name: "Test anchored panel" });
+    // The first coordinate establishes the old anchor before the rerender.
     await waitFor(() => {
       expect(panel.style.left).toBe("100px");
     });
@@ -143,6 +146,7 @@ describe("AnchoredFloatingPanel", () => {
       </AnchoredFloatingPanel>,
     );
 
+    // These coordinates prove the public re-anchoring behavior, not browser layout.
     await waitFor(() => {
       expect(panel.style.top).toBe("162px");
       expect(panel.style.left).toBe("820px");
@@ -165,6 +169,8 @@ describe("AnchoredFloatingPanel", () => {
 
     const panel = await screen.findByRole("dialog", { name: "Test anchored panel" });
 
+    // Scroll containment is an explicit floating-panel compatibility contract:
+    // caller overflow styles must not re-enable page scroll chaining.
     expect(panel.style.overflow).not.toBe("hidden");
     expect(panel.style.overflowY).toBe("auto");
     expect(panel.style.overscrollBehavior).toBe("contain");
@@ -331,6 +337,8 @@ describe("AnchoredFloatingPanel", () => {
     );
 
     const dialog = screen.getByRole("dialog", { name: "Snooze options" });
+    // An empty value proves desktop-only style props did not leak across the
+    // mobile host boundary; 999px would make the sheet unusable.
     expect(dialog.style.padding).toBe("");
   });
 

@@ -6,6 +6,7 @@ import {
   isAllowedBillExtractModel,
 } from "../bills/bill-extractors/catalog.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
+import { resolveAiApiKey, type AiProvider } from "../ai-credentials.ts";
 import type {
   TriageDb,
   TriageEmail,
@@ -256,17 +257,22 @@ export async function loadTriageModelConfig(userId: string, dbClient: TriageDb =
 
 export function createTriageModelClient({
   fetchImpl = fetch,
+  credentialResolver = resolveAiApiKey,
   config = {
     cheap: { provider: "anthropic", model: DEFAULT_CHEAP_MODEL },
     strong: { provider: "anthropic", model: DEFAULT_STRONG_MODEL },
   },
-}: { fetchImpl?: unknown; config?: TriageModelConfig } = {}): TriageModelClient {
+}: {
+  fetchImpl?: unknown;
+  config?: TriageModelConfig;
+  credentialResolver?: (provider: AiProvider) => Promise<string | null>;
+} = {}): TriageModelClient {
   const fetchFn = fetchImpl as TriageFetch;
   return {
     async classify({ tier, email, reason }): Promise<TriageModelResult> {
       const choice = config[tier] || config.cheap || config.strong;
       if (choice.provider === "openai") {
-        const apiKey = process.env.OPENAI_API_KEY;
+        const apiKey = await credentialResolver("openai");
         if (!apiKey) {
           const err = new Error("OPENAI_API_KEY not set for triage") as TriageError;
           err.status = 503;
@@ -328,10 +334,10 @@ export function createTriageModelClient({
                 latency_ms: Date.now() - started,
               };
             }
-            const retryText = await res.text?.();
-            throw Object.assign(new Error(`OpenAI triage API error (${res.status})${retryText ? `: ${retryText}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
+            await res.text?.();
+            throw Object.assign(new Error(`OpenAI triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
           }
-          throw Object.assign(new Error(`OpenAI triage API error (${res.status})${text ? `: ${text}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
+          throw Object.assign(new Error(`OpenAI triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
         }
         const data = await res.json();
         const source = isRecord(data) ? data : {};
@@ -353,7 +359,7 @@ export function createTriageModelClient({
         };
       }
 
-      const apiKey = process.env.ANTHROPIC_API_KEY;
+      const apiKey = await credentialResolver("anthropic");
       if (!apiKey) {
         const err = new Error("ANTHROPIC_API_KEY not set for triage") as TriageError;
         err.status = 503;
@@ -391,8 +397,8 @@ export function createTriageModelClient({
         }),
       }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn });
       if (!res.ok) {
-        const text = await res.text?.();
-        throw Object.assign(new Error(`Anthropic triage API error (${res.status})${text ? `: ${text}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
+        await res.text?.();
+        throw Object.assign(new Error(`Anthropic triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
       }
       const data = await res.json();
       const source = isRecord(data) ? data : {};
@@ -413,18 +419,4 @@ export function createTriageModelClient({
       };
     },
   };
-}
-
-export function createAnthropicTriageModelClient({
-  fetchImpl = fetch,
-  cheapModel = DEFAULT_CHEAP_MODEL,
-  strongModel = DEFAULT_STRONG_MODEL,
-}: { fetchImpl?: unknown; cheapModel?: string; strongModel?: string } = {}): TriageModelClient {
-  return createTriageModelClient({
-    fetchImpl,
-    config: {
-      cheap: { provider: "anthropic", model: cheapModel },
-      strong: { provider: "anthropic", model: strongModel },
-    },
-  });
 }

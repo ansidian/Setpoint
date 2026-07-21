@@ -1,6 +1,5 @@
 import {
   getTodoistMirrorHealth,
-  listTodoistMirrorActiveTaskIds,
   listTodoistMirrorActiveTasks,
   listTodoistMirrorCompletedTasks,
   listTodoistMirrorDueTaskIds,
@@ -23,8 +22,6 @@ import type {
 import type { RawTodoistDue, RawTodoistItem } from "./todoistMirrorStatements.ts";
 
 const BASE_URL = "https://api.todoist.com/api/v1";
-const TODOIST_DUE_TASKS_QUERY = "!no date";
-
 // Todoist's REST API inverts our UI priority scale: API 4 = urgent, API 1 =
 // natural/no priority. Dashboard uses 1 = urgent, 4 = low, null = none.
 // Note: Todoist can't distinguish "user picked P4 Low" from "no priority" —
@@ -468,21 +465,10 @@ export async function fetchTodoistTasksRange(userId: string, { start, end, refre
 // Set of id strings for every non-deleted, non-checked task with a due date.
 // Returns null when Todoist isn't configured; callers must treat null as
 // "can't verify" and skip pruning rather than wiping every tombstone.
-export async function fetchTodoistTaskIdSet(userId: string, options: { refresh?: boolean } = {}): Promise<Set<string> | null> {
-  const health = await prepareTodoistMirrorRead(userId, options);
-  if (!health.configured) return null;
-  return listTodoistMirrorActiveTaskIds(userId);
-}
-
 export async function fetchTodoistDueTaskIdSet(userId: string, options: { refresh?: boolean } = {}): Promise<Set<string> | null> {
   const health = await prepareTodoistMirrorRead(userId, options);
   if (!health.configured) return null;
   return listTodoistMirrorDueTaskIds(userId);
-}
-
-export async function fetchTodoistTasksAndIdSet(userId: string, options: TodoistReadOptions = {}): Promise<{ tasks: TodoistTask[]; idSet: Set<string> | null }> {
-  const { tasks, idSet } = await fetchMirrorMappedTasks(userId, options);
-  return { tasks, idSet };
 }
 
 export async function completeTodoistTask(userId: string, taskId: string): Promise<void> {
@@ -609,21 +595,6 @@ export async function updateTodoistTask(userId: string, taskId: string, { conten
   };
 }
 
-export async function testConnection(userId: string): Promise<{ success: true; projectCount: number }> {
-  const token = await getToken(userId);
-  if (!token) throw new Error("Todoist API token not configured");
-  const data = await todoistFetch<ProjectListResponse | NonNullable<ProjectListResponse["results"]>>(token, "/projects?limit=1");
-  return { success: true, projectCount: (Array.isArray(data) ? data : data.results || []).length };
-}
-
 export async function getTodoistSyncHealth(userId: string): Promise<TodoistMirrorHealth> {
   return getTodoistMirrorHealth(userId);
 }
-
-// Test-only exports (do not use in production code)
-export const __testing__ = {
-  dedupeTodoistRangeTasks,
-  mapCompletedTodoistTask,
-  mapTodoistTask,
-  TODOIST_DUE_TASKS_QUERY,
-};

@@ -1,4 +1,5 @@
 import { decrypt } from "../platform/encryption.ts";
+import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import db from "../db/connection.ts";
 import type { ActualConfig } from "../../shared/types/actual.ts";
 
@@ -15,12 +16,36 @@ interface ActualErrorBody {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+export class ActualPasswordRequiredForServerChangeError extends Error {
+  readonly code = "ACTUAL_PASSWORD_REQUIRED_FOR_SERVER_CHANGE";
+  readonly status = 400;
+
+  constructor() {
+    super("Enter the Actual Budget password again when changing the server URL");
+  }
+}
+
 function trimServerUrl(value: unknown): string {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
+export function normalizeActualServerUrl(value: unknown): string {
+  const trimmed = trimServerUrl(value);
+  try {
+    const parsed = new URL(trimmed);
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin}${pathname}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+export function isSameActualServerUrl(left: unknown, right: unknown): boolean {
+  return normalizeActualServerUrl(left) === normalizeActualServerUrl(right);
+}
+
 function joinUrl(base: string, path: string): string {
-  return `${trimServerUrl(base)}${path}`;
+  return `${normalizeActualServerUrl(base)}${path}`;
 }
 
 function timeoutMs(): number {
@@ -40,7 +65,10 @@ async function getActualConfig(userId: string): Promise<ActualConfig> {
   return {
     serverURL: trimServerUrl(settings.actual_budget_url),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(String(settings.actual_budget_password_encrypted))
+      ? decrypt(
+          String(settings.actual_budget_password_encrypted),
+          settingsCredentialContext(userId, "actual_budget_password_encrypted"),
+        )
       : null,
     syncId: String(settings.actual_budget_sync_id),
   };
@@ -54,6 +82,7 @@ async function fetchJson<T = unknown>(url: string, options: RequestInit = {}): P
   try {
     response = await fetch(url, {
       ...options,
+      redirect: "manual",
       signal: controller.signal,
       headers: {
         ...(options.headers || {}),
@@ -78,11 +107,9 @@ async function fetchJson<T = unknown>(url: string, options: RequestInit = {}): P
   }
 
   if (!response.ok || body?.status === "error") {
-    const reason = body?.reason || body?.description || bodyText || `HTTP ${response.status}`;
-    // SEC-05: do not reflect the remote server's response body back to the
-    // client (partial-response SSRF oracle) — log the real reason server-side
-    // only and throw a generic, status-derived message.
-    console.error(`Actual Budget connection test failed (HTTP ${response.status}): ${reason}`);
+    // Provider-controlled response text is neither reflected nor logged. A
+    // hostile endpoint could otherwise forge logs or persist echoed secrets.
+    console.error("Actual Budget connection test failed", { status: response.status });
     throw Object.assign(new Error(`Actual Budget connection failed (HTTP ${response.status})`), {
       status: response.status >= 500 ? 502 : 400,
     });
@@ -96,7 +123,14 @@ export async function testActualConnectionHttp(userId: string, overrides: Actual
     : await getActualConfig(userId);
   const serverURL = trimServerUrl(overrides?.serverURL || stored?.serverURL);
   const syncId = String(overrides?.syncId || stored?.syncId || "").trim();
-  const password = overrides?.password || stored?.password || null;
+  const suppliedPassword = overrides?.password || null;
+  if (!suppliedPassword
+    && overrides?.serverURL
+    && stored?.serverURL
+    && !isSameActualServerUrl(overrides.serverURL, stored.serverURL)) {
+    throw new ActualPasswordRequiredForServerChangeError();
+  }
+  const password = suppliedPassword || stored?.password || null;
 
   if (!serverURL || !syncId) {
     throw Object.assign(new Error("Actual Budget server URL and sync ID are required"), { status: 400 });

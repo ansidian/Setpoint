@@ -182,18 +182,3 @@ export function currentToLiveDataBulk(
     refreshNow,
   };
 }
-
-export function currentToLiveData(
-  current: CurrentDashboardResponse | null,
-  {
-    refreshNow,
-    isPolling,
-  }: { refreshNow: () => Promise<CurrentDashboardResponse | null>; isPolling: boolean },
-): CurrentDashboardLiveData {
-  const bulk = currentToLiveDataBulk(current, { refreshNow });
-  return {
-    ...bulk,
-    isPolling,
-    billsLoading: bulk.actualConfigured && isPolling && !bulk.liveBills.length,
-  };
-}

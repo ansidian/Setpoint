@@ -54,10 +54,6 @@ export function daysBetweenYmd(start: string, end: string): number {
   return Math.round((endMs - startMs) / 86400000);
 }
 
-export function monthKeyFromParts(year: number, month: number): string {
-  return `${year}-${String(month + 1).padStart(2, "0")}`;
-}
-
 export function getMonthData(year: number, month: number) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -90,11 +86,6 @@ export function getMultiMonthGridRange(year: number, month: number, radius = 0) 
   const { start } = getVisibleGridRange(year, month - radius);
   const { end } = getVisibleGridRange(year, month + radius);
   return { start, end };
-}
-
-export function sameYmdMonth(value: string, year: number, month: number): boolean {
-  const parsed = parseYmd(value);
-  return !!parsed && parsed.year === year && parsed.month === month;
 }
 
 // {year, month (0-indexed), day} of "now" in Pacific — the calendar's today seed.

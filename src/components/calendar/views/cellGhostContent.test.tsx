@@ -1,6 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { renderDeadlinesCellContents } from "./deadlines/DeadlinesCellContent.tsx";
 import { renderEventsCellContents } from "./events/EventsCellContent.tsx";
 
 const layout = { tier: "lg", cellHeight: 0, gridGap: 0, weekHeaderGap: 0 } as const;
@@ -77,32 +76,6 @@ describe("calendar cell ghost content", () => {
     expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeNull();
     expect(chip.textContent).toContain("Maya's birthday");
     expect(chip.textContent).not.toContain("All day");
-  });
-
-  it("renders deadline ghosts with deadline source color and due-time ordering", () => {
-    render(renderDeadlinesCellContents({
-      items: [
-        { id: "late", title: "Late task", due_date: "2026-04-20", due_time: "5:00 PM", source: "todoist", status: "open" },
-      ],
-      ghosts: [{
-        id: "deadline-ghost",
-        kind: "deadline",
-        title: "Morning task",
-        startDate: "2026-04-20",
-        endDate: "2026-04-20",
-        dueTime: "9:00 AM",
-        dueMinutes: 540,
-        source: "todoist",
-        color: "#e44332",
-      }],
-      layout,
-      day: 20,
-      dateKey: "2026-04-20",
-    }));
-
-    const chips = screen.getAllByText(/Morning task|Late task/).map((node) => node.textContent);
-    expect(chips).toEqual(["Morning task", "Late task"]);
-    expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("9a");
   });
 
   it("renders Todoist deadline ghosts in Events cells", () => {

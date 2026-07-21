@@ -85,23 +85,6 @@ export const ACCOUNT_ICON_OPTIONS = [
   "Monitor", "Wrench", "Star", "Rocket",
 ] as const satisfies readonly IconName[];
 
-// Pirate Weather condition code → lucide icon name.
-export const WEATHER_ICON_NAMES = {
-  "clear-day": "Sun",
-  "clear-night": "Moon",
-  "rain": "CloudRain",
-  "snow": "CloudSnow",
-  "sleet": "CloudSnow",
-  "wind": "Wind",
-  "fog": "CloudFog",
-  "cloudy": "Cloud",
-  "partly-cloudy-day": "CloudSun",
-  "partly-cloudy-night": "CloudMoon",
-  "hail": "CloudSnow",
-  "thunderstorm": "CloudLightning",
-  "tornado": "Tornado",
-} as const satisfies Record<string, IconName>;
-
 // Resolve any input — lucide name, emoji, or unknown string — to a lucide
 // component when possible.
 export function resolveIcon(value: unknown): LucideIcon | null {

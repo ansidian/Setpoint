@@ -3,7 +3,6 @@ import { createClient, type Client } from "@libsql/client";
 import crypto from "crypto";
 
 const {
-  __testing__,
   cleanupTodoistWebhookDeliveries,
   handleTodoistWebhookDelivery,
   requestTodoistMirrorSync,
@@ -11,7 +10,7 @@ const {
   startTodoistMirrorSyncWorker,
 } = await import("./todoist-webhook.ts");
 const {
-  __resetCurrentDashboardEventsForTests,
+  clearCurrentDashboardEventSubscribers,
   subscribeCurrentDashboardEvents,
 } = await import("../dashboard/current-events.ts");
 
@@ -58,13 +57,32 @@ beforeEach(async () => {
 
 afterEach(async () => {
   stopTodoistMirrorSyncWorker();
-  __resetCurrentDashboardEventsForTests();
+  clearCurrentDashboardEventSubscribers();
   vi.useRealTimers();
   await testDb?.close?.();
   testDb = null as unknown as Client;
 });
 
 describe("handleTodoistWebhookDelivery", () => {
+  it("resolves the current application secret for every delivery", async () => {
+    const rawBody = Buffer.from('{"event_name":"item:updated"}');
+    const resolveClientSecret = vi.fn(async () => "rotated-secret");
+
+    await handleTodoistWebhookDelivery({
+      userId: "u1",
+      rawBody,
+      headers: {
+        "x-todoist-hmac-sha256": signPayload(rawBody, "rotated-secret"),
+        "x-todoist-delivery-id": "delivery-runtime-secret",
+      },
+      resolveClientSecret,
+      dbClient: testDb,
+      requestSync: vi.fn(),
+    });
+
+    expect(resolveClientSecret).toHaveBeenCalledTimes(1);
+  });
+
   it("persists a verified delivery and requests mirror sync", async () => {
     const rawBody = Buffer.from(JSON.stringify({
       event_name: "item:updated",
@@ -254,6 +272,7 @@ describe("requestTodoistMirrorSync", () => {
   });
 
   it("publishes a degraded refetch hint when requested sync fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.useFakeTimers();
     const listener = vi.fn();
     const syncFn = vi.fn(async () => {

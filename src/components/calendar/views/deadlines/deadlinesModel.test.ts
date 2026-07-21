@@ -1,41 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  canNavigateBack,
   compute,
   deadlineAccentFor,
   getDeadlineSelectionId,
 } from "./deadlinesModel.ts";
 
-describe("deadlinesModel range navigation", () => {
-  it("allows previous navigation by rolling window even without overdue data", () => {
-    expect(canNavigateBack({
-      viewYear: 2026,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      data: { minDate: "2025-05-02" },
-      computed: {},
-    })).toBe(true);
-
-    expect(canNavigateBack({
-      viewYear: 2026,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      data: {},
-      computed: {},
-    })).toBe(true);
-
-    expect(canNavigateBack({
-      viewYear: 2025,
-      viewMonth: 4,
-      currentYear: 2026,
-      currentMonth: 4,
-      data: { minDate: "2025-05-02" },
-      computed: {},
-    })).toBe(false);
-  });
-
+describe("deadlinesModel", () => {
   it("groups completed deadline history with active deadlines from the domain payload", () => {
     const result = compute({
       viewYear: 2026,
@@ -50,6 +20,26 @@ describe("deadlinesModel range navigation", () => {
 
     expect(result.itemsByDate["2026-05-10"]!.activeItems.map((item) => item.id)).toEqual(["active"]);
     expect(result.itemsByDate["2026-05-10"]!.completedItems.map((item) => item.id)).toEqual(["done"]);
+  });
+
+  it("keeps adjacent-month deadlines addressable only by their full date", () => {
+    const result = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        upcoming: [{
+          id: "deadline-apr-30",
+          title: "Essay",
+          due_date: "2026-04-30",
+          status: "incomplete",
+        }],
+      },
+    });
+
+    expect(result.itemsByDay[30]).toBeUndefined();
+    expect(result.itemsByDate["2026-04-30"]!.items).toEqual([
+      expect.objectContaining({ title: "Essay" }),
+    ]);
   });
 
   it("uses deadline occurrence identity for every deadline row", () => {

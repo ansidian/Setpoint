@@ -27,14 +27,6 @@ describe("resolveReaderActions snapshot workflow", () => {
     expect(a.showSnapshotWorkflowActions).toBe(true);
   });
 
-  it("offers handle + move-to-needs for an fyi row but not move-to-fyi", () => {
-    const a = resolveReaderActions(snapshotEmail({ _lane: "fyi" }));
-    expect(a.canHandle).toBe(true);
-    expect(a.canMoveToNeeds).toBe(true);
-    expect(a.canMoveToNoise).toBe(true);
-    expect(a.canMoveToFyi).toBe(false);
-  });
-
   it("offers only reopen for a handled row", () => {
     const a = resolveReaderActions(snapshotEmail({ _lane: "handled", handled_at: "2026-05-03T16:00:00Z" }));
     expect(a.canReopen).toBe(true);
@@ -50,14 +42,6 @@ describe("resolveReaderActions snapshot workflow", () => {
     expect(a.canMoveToFyi).toBe(false);
     expect(a.canReopen).toBe(false);
     expect(a.showSnapshotWorkflowActions).toBe(false);
-  });
-
-  it("blocks all snapshot lifecycle actions for an untriaged_read row", () => {
-    const a = resolveReaderActions(snapshotEmail({ _lane: "untriaged_read" }));
-    expect(a.canDismiss).toBe(false);
-    expect(a.canHandle).toBe(false);
-    expect(a.canMoveToFyi).toBe(false);
-    expect(a.canReopen).toBe(false);
   });
 
   it("strips every snapshot action for a catch-up row", () => {

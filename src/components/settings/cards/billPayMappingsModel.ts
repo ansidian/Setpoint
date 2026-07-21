@@ -30,8 +30,6 @@ interface ActualOption { id: string; name: string; [key: string]: unknown }
 interface ActualCategoryGroup { group_name?: string; categories?: ActualOption[] }
 export interface StoredActualOption extends ActualOption { missing?: boolean; missingLabel?: string }
 
-export const EMPTY_MAPPINGS: Readonly<NormalizedBillPayMappings> = Object.freeze({ version: 1, profiles: [] });
-
 export const BEHAVIOR_TYPES = [
   { value: "expense", label: "Expense" },
   { value: "bill", label: "Bill" },
@@ -124,10 +122,6 @@ export function moveAt<T>(items: T[], index: number, direction: number): T[] {
   const next = [...items];
   [next[index], next[nextIndex]] = [next[nextIndex]!, next[index]!];
   return next;
-}
-
-export function setChipValue(_source: unknown, value: unknown): string[] {
-  return normalizeChips(value);
 }
 
 export function addChip(source: unknown, value: unknown): string[] {

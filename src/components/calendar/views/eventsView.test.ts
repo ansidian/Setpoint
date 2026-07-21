@@ -53,18 +53,9 @@ describe("eventsView.compute", () => {
     expect(Object.keys(itemsByDay)).toEqual(["10"]);
   });
 
-  it("returns empty itemsByDay when data is missing", () => {
+  it.each([null, {}])("returns empty itemsByDay when event data is missing", (data) => {
     const { itemsByDay } = eventsView.compute({
-      data: null,
-      viewYear: 2026,
-      viewMonth: 3,
-    });
-    expect(itemsByDay).toEqual({});
-  });
-
-  it("returns empty itemsByDay when events array is missing", () => {
-    const { itemsByDay } = eventsView.compute({
-      data: {},
+      data,
       viewYear: 2026,
       viewMonth: 3,
     });
@@ -131,23 +122,6 @@ describe("eventsView.canNavigateBack", () => {
         computed: { itemsByDay: {} },
       }),
     ).toBe(true);
-  });
-});
-
-describe("eventsView.getVisibleEventCount", () => {
-  it("uses stable tier-based capacity for regular and overflow states", () => {
-    expect(eventsView.getVisibleEventCount(4, { tier: "lg" })).toBe(4);
-    expect(eventsView.getVisibleEventCount(5, { tier: "lg" })).toBe(3);
-  });
-
-  it("allows denser xl cells without measuring rendered height", () => {
-    expect(eventsView.getVisibleEventCount(6, { tier: "xl" })).toBe(6);
-    expect(eventsView.getVisibleEventCount(7, { tier: "xl" })).toBe(5);
-  });
-
-  it("uses the 4K uhd tier for high-density event cells", () => {
-    expect(eventsView.getVisibleEventCount(11, { tier: "uhd" })).toBe(11);
-    expect(eventsView.getVisibleEventCount(12, { tier: "uhd" })).toBe(10);
   });
 });
 

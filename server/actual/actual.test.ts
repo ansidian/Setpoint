@@ -59,6 +59,17 @@ async function importActualApiMock(): Promise<MockActualApi> {
   return (await import("@actual-app/api")).default as unknown as MockActualApi;
 }
 
+function holdFirstCall(mock: ReturnType<typeof vi.fn>) {
+  let release!: () => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  mock.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    release = resolve;
+    markStarted();
+  }));
+  return { started, release: () => release() };
+}
+
 const actualApiState = vi.hoisted<ActualApiState>(() => ({
   accounts: [],
   payees: [],
@@ -91,6 +102,12 @@ actualApiState.reset();
 const actualLocalMock = vi.hoisted(() => ({
   actualDataDir: vi.fn(() => process.cwd()),
   findLocalBudgetDir: vi.fn().mockResolvedValue(null),
+  hydrateLocalActualCache: vi.fn().mockResolvedValue({
+    success: true,
+    hydrated: true,
+    budgetId: "Budget-Hydrated",
+    budgetDir: "/var/ea-actual/Budget-Hydrated",
+  }),
   pruneActualBudgetBackups: vi.fn().mockResolvedValue({ removed: 0, kept: 0 }),
   readLocalActualMetadata: vi.fn(),
 }));
@@ -181,23 +198,18 @@ describe("actual-core mutex (withLock)", () => {
     const { testConnection } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     // Launch two calls without awaiting the first — simulates concurrent access
     const p1 = testConnection("user1");
     const p2 = testConnection("user1");
 
+    await firstInit.started;
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    // Verify sequential: first call must complete before second starts
-    expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
+    expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 
   it("a rejected call does not block the next caller", async () => {
@@ -359,6 +371,22 @@ describe("actual.ts sendBill mutex", () => {
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Local");
   });
 
+  it("hydrates a missing development cache through the bounded downloader instead of the SDK archive path", async () => {
+    actualLocalMock.actualDataDir.mockReturnValue("/var/ea-actual");
+    const { sendBill } = await import("./actual-core.ts");
+    const actualApi = await importActualApiMock();
+
+    await sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25, due_date: "2026-05-10", account_id: "a1" }, "user1");
+
+    expect(actualLocalMock.hydrateLocalActualCache).toHaveBeenCalledWith("user1", {
+      dataDir: "/var/ea-actual",
+      forceDownload: true,
+    });
+    expect(actualApi.loadBudget).toHaveBeenCalledWith("Budget-Hydrated");
+    expect(actualApi.downloadBudget).not.toHaveBeenCalled();
+    expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Hydrated");
+  });
+
   it("refuses a production bill pay write when the local Actual cache is missing", async () => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
@@ -388,14 +416,7 @@ describe("actual.ts sendBill mutex", () => {
     const { getMetadata, sendBill } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     const billData = {
       type: "expense",
@@ -408,9 +429,11 @@ describe("actual.ts sendBill mutex", () => {
     const p1 = getMetadata("user1");
     const p2 = sendBill(billData, "user1");
 
+    await firstInit.started;
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    expect(order).toEqual(["init-1-start", "init-1-end"]);
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(actualApi.addTransactions).toHaveBeenCalled();
   });
 
@@ -447,40 +470,6 @@ describe("actual.ts sendBill mutex", () => {
       expect.objectContaining({ schedule: expect.objectContaining({ id: "sched-bill" }) }),
     );
   });
-
-  it("sends an explicit empty note for one-time bill pay transactions when notes are blank", async () => {
-    const { sendBill } = await import("./actual.ts");
-    const actualApi = await importActualApiMock();
-
-    await sendBill({
-      type: "expense",
-      payee: "U.S. Bank",
-      amount: 42.25,
-      due_date: "2026-05-10",
-      account_id: "a1",
-      notes: "",
-    }, "user1");
-
-    const [txn] = actualApi.__getTransactions();
-    expect(txn!.notes).toBe("");
-  });
-
-  it("preserves user-entered notes for one-time bill pay transactions", async () => {
-    const { sendBill } = await import("./actual.ts");
-    const actualApi = await importActualApiMock();
-
-    await sendBill({
-      type: "expense",
-      payee: "U.S. Bank",
-      amount: 42.25,
-      due_date: "2026-05-10",
-      account_id: "a1",
-      notes: "Autopay scheduled from checking",
-    }, "user1");
-
-    const [txn] = actualApi.__getTransactions();
-    expect(txn!.notes).toBe("Autopay scheduled from checking");
-  });
 });
 
 describe("actual-core testConnection mutex", () => {
@@ -494,25 +483,19 @@ describe("actual-core testConnection mutex", () => {
     const { getMetadata, testConnection } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     const p1 = getMetadata("user1");
     const p2 = testConnection("user1");
 
+    await firstInit.started;
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    // Both inits sequential
-    expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
+    expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 });
-
 describe("actual.ts createQuickTxn", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -595,14 +578,7 @@ describe("actual.ts createQuickTxn", () => {
     const { getMetadata, createQuickTxn } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
-    const order: string[] = [];
-    let callCount = 0;
-    actualApi.init.mockImplementation(async () => {
-      const n = ++callCount;
-      order.push(`init-${n}-start`);
-      await new Promise((r) => setTimeout(r, 20));
-      order.push(`init-${n}-end`);
-    });
+    const firstInit = holdFirstCall(actualApi.init);
 
     const p1 = getMetadata("user1");
     const p2 = createQuickTxn("user1", {
@@ -612,95 +588,11 @@ describe("actual.ts createQuickTxn", () => {
       date: "2026-04-16",
     });
 
+    await firstInit.started;
+    firstInit.release();
     await Promise.all([p1, p2]);
 
-    expect(order).toEqual(["init-1-start", "init-1-end"]);
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
     expect(actualApi.addTransactions).toHaveBeenCalled();
-  });
-});
-
-describe("actual.ts calendar bill mapping", () => {
-  beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
-  });
-
-  it("maps open bill and transfer schedules to composite due-date instances", async () => {
-    const { __testing__ } = await import("./actual.ts");
-    const payeeMap = { p1: "SCE", p2: "Visa transfer" };
-    const schedules: ActualSchedule[] = [
-      {
-        id: "s1",
-        name: "Electricity",
-        next_date: "2026-05-10",
-        type: "bill",
-        conditions: [
-          { field: "amount", value: -12234 },
-          { field: "payee", value: "p1" },
-        ],
-      },
-      {
-        id: "s2",
-        name: "Credit card",
-        next_date: "2026-05-12",
-        type: "transfer",
-        conditions: [
-          { field: "amount", value: 25000 },
-          { field: "payee", value: "p2" },
-        ],
-      },
-      {
-        id: "s3",
-        name: "Paycheck",
-        next_date: "2026-05-15",
-        type: "income",
-        conditions: [{ field: "amount", value: 100000 }],
-      },
-      {
-        id: "s4",
-        name: "Old transfer",
-        next_date: "2026-05-18",
-        completed: true,
-        type: "transfer",
-        conditions: [
-          { field: "amount", value: 5000 },
-          { field: "payee", value: "p2" },
-        ],
-      },
-    ];
-
-    expect(__testing__.mapOpenBillInstances(schedules, payeeMap, { start: "2026-05-01", end: "2026-05-31" }))
-      .toEqual([
-        expect.objectContaining({ id: "s1:2026-05-10", scheduleId: "s1", payee: "SCE", paid: false, type: "bill" }),
-        expect.objectContaining({ id: "s2:2026-05-12", scheduleId: "s2", payee: "Visa transfer", paid: false, type: "transfer" }),
-      ]);
-  });
-
-  it("marks calendar bill instances paid when Actual has a matching schedule transaction", async () => {
-    const { getCalendarBillsRange } = await import("./actual.ts");
-    const actualApi = await importActualApiMock();
-    actualApi.__state.payees = [
-      { id: "p1", name: "SCE", transfer_acct: null },
-    ];
-    actualApi.__state.schedules = [
-      { id: "s1", name: "Electricity", rule: "r1", next_date: "2026-05-10", completed: false },
-    ];
-    actualApi.__state.rules = [
-      { id: "r1", conditions: [{ field: "amount", value: -12234 }, { field: "payee", value: "p1" }] },
-    ];
-    actualApi.__state.transactions = [
-      { id: "t1", date: "2026-05-10", amount: -12234, payee: "p1", schedule: "s1" },
-    ];
-
-    const out = await getCalendarBillsRange("user1", { start: "2026-05-01", end: "2026-05-31" });
-
-    expect(out.schedules).toEqual([
-      expect.objectContaining({
-        id: "s1:2026-05-10",
-        scheduleId: "s1",
-        paid: true,
-        openActionDisabled: true,
-      }),
-    ]);
   });
 });

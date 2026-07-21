@@ -1,6 +1,7 @@
 import { simpleParser } from "mailparser";
 import db from "../db/connection.ts";
 import { encrypt, decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { htmlToPlainText } from "./html-to-text.ts";
 import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
@@ -8,6 +9,13 @@ import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } 
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
 import { emailErrorMessage } from "./email-provider-types.ts";
+import { canonicalUrlService } from "../platform/canonical-url.ts";
+import {
+  googleOAuthCredentialManager,
+  type GoogleOAuthApplicationCredentials,
+} from "../google-oauth-credentials.ts";
+import { GOOGLE_COMBINED_SCOPES } from "./gmail-oauth-url.ts";
+export { getAuthUrl } from "./gmail-oauth-url.ts";
 
 interface GmailCredentials {
   access_token: string;
@@ -75,18 +83,6 @@ const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
 const PROFILE_FETCH_TIMEOUT_MS = 30_000;
 const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.NODE_ENV === "production"
-  ? process.env.GOOGLE_REDIRECT_URI
-  : `http://localhost:${process.env.EA_SERVER_PORT || 3001}/api/ea/accounts/gmail/callback`;
-
-const SCOPES = [
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-];
-
 // Google's OAuth token responses normally carry expires_in (seconds), but a
 // malformed/partial response can omit it. Defaulting to this TTL keeps
 // expires_at finite so the refresh guard stays deterministic instead of
@@ -102,37 +98,28 @@ function computeExpiresAt(expiresIn: unknown, now = Date.now()): number {
   return now + ttl * 1000;
 }
 
-// --- OAuth flow ---
-
-export function getAuthUrl(state: string): string {
-  const params = new URLSearchParams({
-    client_id: String(GOOGLE_CLIENT_ID),
-    redirect_uri: String(GOOGLE_REDIRECT_URI),
-    response_type: "code",
-    scope: SCOPES.join(" "),
-    access_type: "offline",
-    prompt: "consent",
-    state: state,
-  });
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
-
-export async function handleCallback(code: string, _accountId: string | null | undefined, userId: string): Promise<{ email: string; accountId: string }> {
+export async function handleCallback(
+  code: string,
+  _accountId: string | null | undefined,
+  userId: string,
+  applicationCredentials: GoogleOAuthApplicationCredentials,
+  onValidated?: () => Promise<void>,
+): Promise<{ email: string; accountId: string }> {
+  const redirectUri = await canonicalUrlService.resolveProviderCallbackUrl("googleOAuth");
   const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: String(GOOGLE_CLIENT_ID),
-      client_secret: String(GOOGLE_CLIENT_SECRET),
-      redirect_uri: String(GOOGLE_REDIRECT_URI),
+      client_id: applicationCredentials.clientId,
+      client_secret: applicationCredentials.clientSecret,
+      redirect_uri: redirectUri,
       grant_type: "authorization_code",
     }),
   }, { timeoutMs: TOKEN_EXCHANGE_TIMEOUT_MS });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token exchange failed: ${text}`);
+    throw new Error(`Google OAuth token exchange failed (${res.status})`);
   }
 
   const tokens = await res.json() as GmailTokenResponse;
@@ -140,7 +127,7 @@ export async function handleCallback(code: string, _accountId: string | null | u
     access_token: tokens.access_token || "",
     refresh_token: tokens.refresh_token || "",
     expires_at: computeExpiresAt(tokens.expires_in),
-    scopes: tokens.scope ? tokens.scope.split(" ").filter(Boolean) : SCOPES,
+    scopes: tokens.scope ? tokens.scope.split(" ").filter(Boolean) : GOOGLE_COMBINED_SCOPES,
   };
 
   // Fetch the user's email address for the label
@@ -149,8 +136,13 @@ export async function handleCallback(code: string, _accountId: string | null | u
     { headers: { Authorization: `Bearer ${credentials.access_token}` } },
     { timeoutMs: PROFILE_FETCH_TIMEOUT_MS },
   );
+  if (!profileRes.ok) {
+    throw new Error(`Google OAuth profile validation failed (${profileRes.status})`);
+  }
   const profile = await profileRes.json() as GmailProfileResponse;
   const email = profile.emailAddress || "";
+  if (!email) throw new Error("Google OAuth profile did not include an email address");
+  await onValidated?.();
 
   const existingAccounts = await db.execute({
     sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail' ORDER BY sort_order ASC, created_at ASC",
@@ -181,7 +173,7 @@ export async function handleCallback(code: string, _accountId: string | null | u
       userId,
       email,
       canonical?.label || email,
-      encrypt(JSON.stringify(credentials)),
+      encrypt(JSON.stringify(credentials), accountCredentialContext(targetAccountId)),
       nextSort,
     ],
   });
@@ -190,8 +182,10 @@ export async function handleCallback(code: string, _accountId: string | null | u
 }
 
 async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
-  const credentials = JSON.parse(decrypt(account.credentials_encrypted)) as GmailCredentials;
   const canonicalAccountId = account.canonical_id || account.id;
+  const credentials = JSON.parse(
+    decrypt(account.credentials_encrypted, accountCredentialContext(canonicalAccountId)),
+  ) as GmailCredentials;
 
   // Refresh if the token expires within 5 minutes. Treat a non-finite/null
   // expires_at as already-expired so a malformed stored credential forces a
@@ -200,12 +194,13 @@ async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
   const expiresAt = credentials.expires_at;
   const isExpiring = !Number.isFinite(expiresAt) || expiresAt < Date.now() + 5 * 60 * 1000;
   if (isExpiring) {
+    const applicationCredentials = await googleOAuthCredentialManager.resolveActive();
     const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: String(GOOGLE_CLIENT_ID),
-        client_secret: String(GOOGLE_CLIENT_SECRET),
+        client_id: applicationCredentials.clientId,
+        client_secret: applicationCredentials.clientSecret,
         refresh_token: credentials.refresh_token,
         grant_type: "refresh_token",
       }),
@@ -229,7 +224,10 @@ async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
 
     await db.execute({
       sql: `UPDATE ea_accounts SET credentials_encrypted = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [encrypt(JSON.stringify(credentials)), canonicalAccountId],
+      args: [
+        encrypt(JSON.stringify(credentials), accountCredentialContext(canonicalAccountId)),
+        canonicalAccountId,
+      ],
     });
 
     if (account.needs_reauth) {
@@ -461,10 +459,8 @@ function extractMessageId(account: ConfiguredEmailAccount, uid: string): string 
   return uid.startsWith(prefix) ? uid.slice(prefix.length) : uid;
 }
 
-// Returns `true` if the message currently has no UNREAD label, `false` if it
-// still does, or `null` on any error (caller treats null as "don't know, leave
-// the cached read state alone"). Metadata-only fetch — no body/headers —
-// keeps this cheap enough to run per resurfaced row on every live poll.
+// Metadata-only provider read used by incremental sync to reconcile cached
+// read state without fetching message bodies.
 export async function isMessageRead(account: ConfiguredEmailAccount, uid: string): Promise<boolean | null> {
   try {
     const messageId = extractMessageId(account, uid);
@@ -520,34 +516,6 @@ export async function trashMessage(account: ConfiguredEmailAccount, uid: string)
     },
   );
   if (!res.ok) throw new Error(`Gmail trash failed: ${res.status}`);
-}
-
-export async function archiveMessage(account: ConfiguredEmailAccount, uid: string): Promise<void> {
-  const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
-  const res = await fetch(
-    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ removeLabelIds: ["INBOX"] }),
-    },
-  );
-  if (!res.ok) throw new Error(`Gmail archive failed: ${res.status}`);
-}
-
-export async function unarchiveMessage(account: ConfiguredEmailAccount, uid: string): Promise<void> {
-  const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
-  const res = await fetch(
-    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ addLabelIds: ["INBOX"] }),
-    },
-  );
-  if (!res.ok) throw new Error(`Gmail unarchive failed: ${res.status}`);
 }
 
 // --- EA/Snoozed label (used for native-parity snooze) ---

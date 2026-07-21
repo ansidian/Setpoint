@@ -6,7 +6,6 @@ import {
   billMirrorRefreshRange,
   currentPayloadFromOccurrences,
   isBillsMirrorMaintenanceDue,
-  isoNow,
   mirrorStateFromRow,
   normalizeMirrorOccurrence,
   occurrenceFromRow,
@@ -19,10 +18,6 @@ import type { ActualBillOccurrence } from "../../shared/types/actual.ts";
 const NOW = new Date("2026-05-20T12:00:00-07:00");
 
 describe("date helpers", () => {
-  it("isoNow returns the ISO timestamp", () => {
-    expect(isoNow(NOW)).toBe(NOW.toISOString());
-  });
-
   it("todayYmd resolves to the Pacific calendar date", () => {
     expect(todayYmd(NOW)).toBe("2026-05-20");
   });

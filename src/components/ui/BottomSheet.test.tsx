@@ -56,6 +56,9 @@ describe("BottomSheet", () => {
       </BottomSheet>,
     );
 
+    // Body overflow is the scroll-lock primitive's observable compatibility
+    // contract: opening must lock the page and cleanup must restore the caller's
+    // exact prior value, independent of visual layout.
     expect(document.body.style.overflow).toBe("hidden");
     unmount();
     expect(document.body.style.overflow).toBe("scroll");

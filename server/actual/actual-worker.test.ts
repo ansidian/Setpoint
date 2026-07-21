@@ -16,9 +16,8 @@ vi.mock("child_process", () => ({
 }));
 
 const {
-  getActualWorkerHealth,
   runActualWorkerOperation,
-  shutdownActualWorkerForTests,
+  shutdownActualWorker,
 } = await import("./actual-worker.ts");
 
 function createChild(): TestChild {
@@ -32,12 +31,12 @@ function createChild(): TestChild {
 
 describe("Actual worker runner", () => {
   beforeEach(() => {
-    shutdownActualWorkerForTests();
+    shutdownActualWorker();
     forkMock.mockReset();
   });
 
   afterEach(() => {
-    shutdownActualWorkerForTests();
+    shutdownActualWorker();
     vi.useRealTimers();
     delete process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS;
     delete process.env.EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB;
@@ -91,10 +90,6 @@ describe("Actual worker runner", () => {
 
     await expect(second).resolves.toEqual([{ id: "payee-1" }]);
     expect(forkMock).toHaveBeenCalledTimes(1);
-    expect(getActualWorkerHealth()).toMatchObject({
-      state: "idle",
-      inFlight: 0,
-    });
   });
 
   it("rejects with a 502 when the worker exits before responding", async () => {
@@ -156,11 +151,6 @@ describe("Actual worker runner", () => {
     await vi.advanceTimersByTimeAsync(25);
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
     child.emit("exit", null, "SIGTERM");
-    expect(getActualWorkerHealth()).toMatchObject({
-      state: "idle",
-      pid: null,
-      lastError: null,
-    });
   });
 
   it("shuts down the worker immediately when an operation opts out of reuse", async () => {
@@ -182,11 +172,6 @@ describe("Actual worker runner", () => {
     await expect(resultPromise).resolves.toEqual({ success: true });
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
     child.emit("exit", null, "SIGTERM");
-    expect(getActualWorkerHealth()).toMatchObject({
-      state: "idle",
-      pid: null,
-      lastError: null,
-    });
   });
 
   it("discards and force-kills a timed-out worker before the next operation", async () => {

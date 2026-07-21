@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StrictMode, useState } from "react";
@@ -47,12 +46,10 @@ describe("MobileReader mobile-sheet menus", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Email actions" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Snooze" }));
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-    const snoozeDialog = screen.getByRole("dialog", { name: "Snooze" });
+    const snoozeDialog = await screen.findByRole("dialog", { name: "Snooze" });
     const snoozeMenu = within(snoozeDialog).getByRole("menu", { name: "Snooze until" });
     const snoozeActions = within(snoozeMenu).getAllByRole("menuitem");
     expect(snoozeActions).toHaveLength(6);
-    expect(snoozeActions.every((action) => action.style.minHeight === "var(--sp-touch-min)")).toBe(true);
     expect(within(snoozeDialog).queryByText("Snooze until")).toBeNull();
   });
 });

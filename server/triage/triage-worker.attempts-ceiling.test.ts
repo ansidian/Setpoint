@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  __resetCurrentDashboardEventsForTests,
+  clearCurrentDashboardEventSubscribers,
   subscribeCurrentDashboardEvents,
 } from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
@@ -32,7 +32,7 @@ async function insertStaleRunningJob(dbClient: Client, { emailId, attempts, lock
 
 describe("email triage worker stale-recovery attempt ceiling (P3-67)", () => {
   it("moves an over-ceiling stale job to terminal 'failed' and emits triage_failed instead of re-queueing", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     // Two stale running jobs: one under the ceiling (re-queued), one at the
     // ceiling (terminal failed). Both locked well before the stale cutoff.
@@ -103,7 +103,7 @@ describe("email triage worker stale-recovery attempt ceiling (P3-67)", () => {
   });
 
   it("respects a custom maxAttempts ceiling", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await insertStaleRunningJob(dbClient, {
       emailId: "msg-low",
@@ -128,7 +128,7 @@ describe("email triage worker stale-recovery attempt ceiling (P3-67)", () => {
 
 describe("email triage worker snooze join is account-scoped (P3-68)", () => {
   it("does not defer a different account's email that shares a uid with a snoozed one", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
 
     // Account A (gmail-work) owns the indexed email msg-1 and snoozes it.
@@ -190,7 +190,7 @@ describe("email triage worker snooze join is account-scoped (P3-68)", () => {
   });
 
   it("still defers the snoozed email for the account that actually owns it", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, { uid: "msg-1" });
     await dbClient.execute({

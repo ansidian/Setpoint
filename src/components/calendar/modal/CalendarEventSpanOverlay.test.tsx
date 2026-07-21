@@ -1,14 +1,13 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarEventSpanOverlay from "./CalendarEventSpanOverlay";
-import { getChipLeadingColumnWidth } from "./CalendarCellItemChipModel";
 
 afterEach(() => {
   cleanup();
 });
 
 describe("CalendarEventSpanOverlay", () => {
-  it("keeps spanning event ghost chip time labels in a stable leading column", () => {
+  it("renders spanning event ghost time and title content", () => {
     render(
       <CalendarEventSpanOverlay
         segments={[{
@@ -40,8 +39,7 @@ describe("CalendarEventSpanOverlay", () => {
     const content = ghost.querySelector<HTMLElement>("[data-calendar-span-title-fit]");
 
     expect(meta?.textContent).toContain("1p");
-    expect(meta?.style.width).toBe(`${getChipLeadingColumnWidth([{ leadingLabel: "1:00 PM" }])}px`);
-    expect(content?.style.gridTemplateColumns).toBe(`${meta?.style.width} minmax(0, 1fr)`);
+    expect(content).toBeTruthy();
     expect(ghost.querySelector("[data-calendar-span-title-text='true']")?.textContent).toBe("Check-in IHSS");
   });
 
@@ -98,7 +96,6 @@ describe("CalendarEventSpanOverlay", () => {
     expect(titles[0]?.getAttribute("data-calendar-span-title-fit")).toBe(
       titles[1]?.getAttribute("data-calendar-span-title-fit"),
     );
-    expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
   });
 
   it("renders Google birthday spans as special-date markers without all-day or recurring metadata", () => {

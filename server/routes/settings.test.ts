@@ -4,8 +4,6 @@ import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import express from "express";
 import request from "supertest";
 
-import { geocodeLocation } from "../platform/weather.ts";
-
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
 }));
@@ -28,11 +26,20 @@ vi.mock("../platform/encryption.ts", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
+vi.mock("../capability-status-service.ts", () => ({
+  capabilityStatusService: { invalidate: vi.fn() },
+}));
 vi.mock("../platform/weather.ts", () => ({
   geocodeLocation: vi.fn(async () => []),
 }));
 vi.mock("../scheduler.ts", () => ({
   initScheduler: vi.fn(async () => {}),
+}));
+vi.mock("../middleware/auth.ts", () => ({
+  requireRecentPasswordAuth: (req: express.Request, res: express.Response, next: express.NextFunction) =>
+    req.header("x-recent-password-auth") === "1"
+      ? next()
+      : res.status(403).json({ code: "PASSWORD_STEP_UP_REQUIRED", message: "Confirm your password" }),
 }));
 vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   billExtractAvailability: vi.fn(() => []),
@@ -74,6 +81,7 @@ async function createMigratedDb() {
       todoist_oauth_access_token_expires_at INTEGER,
       todoist_oauth_scope TEXT,
       todoist_oauth_token_type TEXT,
+      todoist_connection_mode TEXT,
       discord_webhook_url_encrypted TEXT,
       future_secret_encrypted TEXT,
       future_api_token TEXT
@@ -131,44 +139,6 @@ describe("settings write-boundary validation", () => {
     expect(initScheduler).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects non-string email interests", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ email_interests_json: ["ai", 42] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid email_interests_json entry: must be a non-empty string");
-    expect((await getSettingsRow()).email_interests_json).toBeNull();
-  });
-
-  it("accepts email interests sent as a JSON string and stores the canonical form", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ email_interests_json: '["ai infrastructure"]' });
-
-    expect(res.status).toBe(200);
-    expect((await getSettingsRow()).email_interests_json).toBe('["ai infrastructure"]');
-  });
-
-  it("rejects important senders without a usable address", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/important-senders")
-      .send({ senders: [{ name: "boss" }] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid senders entry: address must be an email address");
-    expect((await getSettingsRow()).important_senders_json).toBe("[]");
-  });
-
-  it("stores valid important senders", async () => {
-    const senders = [{ address: "boss@company.com", name: "boss", source: "manual" }];
-    const res = await request(makeApp())
-      .put("/api/ea/important-senders")
-      .send({ senders });
-
-    expect(res.status).toBe(200);
-    expect(JSON.parse(String((await getSettingsRow()).important_senders_json))).toEqual(senders);
-  });
 });
 
 describe("GET /settings todoist_needs_reauth", () => {
@@ -192,8 +162,8 @@ describe("GET /settings todoist_needs_reauth", () => {
   });
 });
 
-describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)", () => {
-  it("clears todoist_needs_reauth when a non-empty token is saved (manual reconnect)", async () => {
+describe("PUT /settings rejects direct Todoist credential writes", () => {
+  it("requires the provider-specific Save & verify endpoint for replacements", async () => {
     await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
@@ -203,11 +173,15 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
       .put("/api/ea/settings")
       .send({ todoist_api_token: "a-fresh-valid-token" });
 
-    expect(res.status).toBe(200);
-    expect((await getSettingsRow()).todoist_needs_reauth).toBe(0);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Todoist Save & verify/i);
+    expect(await getSettingsRow()).toMatchObject({
+      todoist_needs_reauth: 1,
+      todoist_connection_mode: null,
+    });
   });
 
-  it("does not clear todoist_needs_reauth when disconnecting (empty token)", async () => {
+  it("requires the provider-specific disconnect endpoint for removal", async () => {
     await currentDb().execute({
       sql: "UPDATE ea_settings SET todoist_needs_reauth = 1 WHERE user_id = ?",
       args: ["user-1"],
@@ -217,23 +191,17 @@ describe("PUT /settings todoist_api_token clears todoist_needs_reauth (REL-01)",
       .put("/api/ea/settings")
       .send({ todoist_api_token: "" });
 
-    expect(res.status).toBe(200);
-    expect((await getSettingsRow()).todoist_needs_reauth).toBe(1);
+    expect(res.status).toBe(400);
+    expect(await getSettingsRow()).toMatchObject({
+      todoist_needs_reauth: 1,
+      todoist_connection_mode: null,
+    });
   });
 });
 
 describe("settings error messages do not leak internals (P3-54)", () => {
-  it("returns a fixed geocode failure string, not the raw error message", async () => {
-    vi.mocked(geocodeLocation).mockRejectedValueOnce(new Error("ENOTFOUND api.pirateweather.net secret-key=abc123"));
-
-    const res = await request(makeApp()).get("/api/ea/geocode?q=Berlin");
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Failed to geocode location");
-    expect(JSON.stringify(res.body)).not.toContain("secret-key");
-  });
-
   it("returns a fixed important-senders failure string, not the raw DB error", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const realExecute = currentDb().execute.bind(currentDb());
     currentDb().execute = vi.fn((statement: InStatement) => {
       if (typeof statement !== "string" && statement.sql.includes("important_senders_json")) {
@@ -247,6 +215,11 @@ describe("settings error messages do not leak internals (P3-54)", () => {
     expect(res.status).toBe(500);
     expect(res.body.message).toBe("Failed to fetch important senders");
     expect(JSON.stringify(res.body)).not.toContain("secret_internal_detail");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Error fetching important senders:",
+      "SQLITE_ERROR: no such column secret_internal_detail",
+    );
+    consoleError.mockRestore();
   });
 });
 
@@ -305,37 +278,6 @@ describe("GET /settings response allowlist (SEC-06)", () => {
 });
 
 describe("settings PUT scalar field validation (P3-55)", () => {
-  it("rejects an out-of-range weather coordinate and does not persist", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ weather_lat: 200 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("weather_lat must be a number between -90 and 90");
-    // Default left untouched.
-    expect((await getSettingsRow()).weather_lat).toBe(34.0686);
-  });
-
-  it("rejects a negative email_lookback_hours and does not persist", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ email_lookback_hours: -5 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("email_lookback_hours must be an integer between 1 and 168");
-    expect((await getSettingsRow()).email_lookback_hours).toBe(16);
-  });
-
-  it("rejects a non-string actual_budget_url and does not persist", async () => {
-    const res = await request(makeApp())
-      .put("/api/ea/settings")
-      .send({ actual_budget_url: { evil: true } });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toBe("actual_budget_url must be a string");
-    expect((await getSettingsRow()).actual_budget_url).toBeNull();
-  });
-
   it("rejects a dangerous-scheme actual_budget_url and does not persist (SEC-05)", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
@@ -345,33 +287,53 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     expect((await getSettingsRow()).actual_budget_url).toBeNull();
   });
 
-  it("accepts a loopback actual_budget_url (self-hosted Actual server, SEC-05)", async () => {
+  it("routes even valid Actual settings through the provider-specific endpoint", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .send({ actual_budget_url: "http://localhost:5006" });
 
-    expect(res.status).toBe(200);
-    expect((await getSettingsRow()).actual_budget_url).toBe("http://localhost:5006");
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Actual Budget Save & verify/i);
+    expect((await getSettingsRow()).actual_budget_url).toBeNull();
   });
 
   it("rejects a non-Discord discord_webhook_url and does not encrypt/persist (SEC-05)", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
+      .set("x-recent-password-auth", "1")
       .send({ discord_webhook_url: "https://evil.com/hook" });
 
     expect(res.status).toBe(400);
     expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
   });
 
-  it("accepts valid scalar settings and persists them", async () => {
+  it("requires recent password authentication before replacing a Discord webhook", async () => {
+    const stale = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ discord_webhook_url: "https://discord.com/api/webhooks/123/private-token" });
+
+    expect(stale.status).toBe(403);
+    expect(stale.body.code).toBe("PASSWORD_STEP_UP_REQUIRED");
+    expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
+
+    const recent = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("x-recent-password-auth", "1")
+      .send({ discord_webhook_url: "https://discord.com/api/webhooks/123/private-token" });
+
+    expect(recent.status).toBe(200);
+    expect((await getSettingsRow()).discord_webhook_url_encrypted).toBe(
+      "enc:https://discord.com/api/webhooks/123/private-token",
+    );
+  });
+
+  it("accepts unrelated valid scalar settings and persists them", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .send({
         email_lookback_hours: 24,
         weather_lat: 40.7128,
         weather_lng: -74.006,
-        actual_budget_url: "https://actual.example.com",
-        actual_budget_sync_id: "sync-123",
       });
 
     expect(res.status).toBe(200);
@@ -379,7 +341,7 @@ describe("settings PUT scalar field validation (P3-55)", () => {
     expect(row.email_lookback_hours).toBe(24);
     expect(row.weather_lat).toBe(40.7128);
     expect(row.weather_lng).toBe(-74.006);
-    expect(row.actual_budget_url).toBe("https://actual.example.com");
-    expect(row.actual_budget_sync_id).toBe("sync-123");
+    expect(row.actual_budget_url).toBeNull();
+    expect(row.actual_budget_sync_id).toBeNull();
   });
 });

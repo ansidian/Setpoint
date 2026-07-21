@@ -412,6 +412,7 @@ describe("snooze waker", () => {
   });
 
   it("leaves a snooze 'snoozed' when reattach throws, so the next tick retries it (P2-29)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const dbClient = await createMigratedDb();
     const now = new Date("2026-05-04T17:30:00.000Z");
     const resurfacedAt = now.getTime();

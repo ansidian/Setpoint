@@ -29,14 +29,4 @@ describe("buildCalendarModalShellProps", () => {
     const props = buildCalendarModalShellProps(minimalInput({ handlers: { navigateToToday } }));
     expect(props.handlers.navigateToToday).toBe(navigateToToday);
   });
-
-  it("still exposes the existing month/view handlers", () => {
-    const navigateMonth = () => {};
-    const handleViewChange = () => {};
-    const props = buildCalendarModalShellProps(
-      minimalInput({ handlers: { navigateMonth, handleViewChange } }),
-    );
-    expect(props.handlers.navigateMonth).toBe(navigateMonth);
-    expect(props.handlers.onViewChange).toBe(handleViewChange);
-  });
 });

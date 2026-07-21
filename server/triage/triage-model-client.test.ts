@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createTriageModelClient,
+  createTriageModelClient as createRuntimeTriageModelClient,
   loadTriageModelConfig,
 } from "./triage-model-client.ts";
 import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
 } from "../bills/bill-extractors/catalog.ts";
+
+function createTriageModelClient(
+  options: Parameters<typeof createRuntimeTriageModelClient>[0] = {},
+) {
+  return createRuntimeTriageModelClient({
+    ...options,
+    credentialResolver: async (provider) => process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
+  });
+}
 
 const email = {
   from_name: "University Billing",
@@ -210,6 +219,13 @@ describe("triage model client", () => {
     await client.classify({ tier: "cheap", email, reason: "no_preflight_match" });
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body));
+    const retryBody = JSON.parse(String(fetchImpl.mock.calls[1]![1]!.body));
+    expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
+    expect(firstBody.prompt_cache_retention).toBe("24h");
+    expect(retryBody.store).toBe(false);
+    expect(retryBody.prompt_cache_key).toBeUndefined();
+    expect(retryBody.prompt_cache_retention).toBeUndefined();
     expect(fetchImpl.mock.calls[1]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 });

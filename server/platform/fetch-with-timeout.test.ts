@@ -23,9 +23,9 @@ describe("fetchWithTimeout", () => {
   it("rejects and aborts the signal when fetchFn does not settle within timeoutMs", async () => {
     vi.useFakeTimers();
 
-    const mockFetchFn = vi.fn((url, opts) => {
+    const mockFetchFn = vi.fn((_url, opts) => {
       // Return a promise that never settles until the signal fires
-      return new Promise((resolve, reject) => {
+      return new Promise((_resolve, reject) => {
         if (opts.signal.aborted) {
           reject(opts.signal.reason);
         } else {

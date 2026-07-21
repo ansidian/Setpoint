@@ -1,5 +1,4 @@
 // server/news/news-poller.test.js
-// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
 import type { Value } from "@libsql/client";

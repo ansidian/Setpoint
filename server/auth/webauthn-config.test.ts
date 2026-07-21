@@ -33,9 +33,33 @@ describe("WebAuthn config", () => {
     });
   });
 
-  it("requires explicit production WebAuthn config", () => {
+  it("requires explicit production WebAuthn config only without canonical state", () => {
     expect(() => resolveWebAuthnConfig({ NODE_ENV: "production" }))
       .toThrow(/EA_WEBAUTHN_RP_NAME, EA_WEBAUTHN_RP_ID, EA_WEBAUTHN_ORIGIN/);
+
+    expect(resolveWebAuthnConfig(
+      { NODE_ENV: "production" },
+      { canonicalOrigin: "https://dashboard.example.com" },
+    )).toEqual({
+      mode: "production",
+      rpName: "Setpoint",
+      rpId: "dashboard.example.com",
+      origin: "https://dashboard.example.com",
+    });
+  });
+
+  it("prefers persisted canonical state over legacy environment values", () => {
+    expect(resolveWebAuthnConfig({
+      NODE_ENV: "production",
+      EA_WEBAUTHN_RP_NAME: "Legacy name",
+      EA_WEBAUTHN_RP_ID: "legacy.example.com",
+      EA_WEBAUTHN_ORIGIN: "https://legacy.example.com",
+    }, { canonicalOrigin: "https://current.example.com" })).toEqual({
+      mode: "production",
+      rpName: "Setpoint",
+      rpId: "current.example.com",
+      origin: "https://current.example.com",
+    });
   });
 
   it("rejects unsafe production origin and RP ID values", () => {

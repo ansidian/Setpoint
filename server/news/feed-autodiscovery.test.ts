@@ -1,5 +1,4 @@
 // server/news/feed-autodiscovery.test.js
-// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { discoverFeedUrls, looksLikeFeed } from "./feed-autodiscovery.ts";
 

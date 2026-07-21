@@ -73,6 +73,7 @@ describe("actual.ts sendBill write-path selection", () => {
   });
 
   it("falls back to the SDK worker when lightweight is unsupported and the fallback is enabled", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = "1";
     mockSendBillLightweight.mockRejectedValue(unsupportedError());
     mockRunActualWorkerOperation.mockResolvedValue({ success: true });
@@ -88,6 +89,7 @@ describe("actual.ts sendBill write-path selection", () => {
   });
 
   it("refuses the SDK fallback when it is not enabled in production", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     mockSendBillLightweight.mockRejectedValue(unsupportedError());
 
     await expect(sendBill(BILL, "u1")).rejects.toMatchObject({
@@ -97,6 +99,7 @@ describe("actual.ts sendBill write-path selection", () => {
   });
 
   it("never falls back after the lightweight local write was applied (would duplicate)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = "1";
     mockSendBillLightweight.mockRejectedValue(Object.assign(new Error("sync failed"), {
       status: 502,

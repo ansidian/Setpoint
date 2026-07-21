@@ -16,6 +16,7 @@ vi.mock("./connection.ts", () => ({
   },
 }));
 vi.mock("../platform/encryption.ts", () => ({
+  credentialEncryptionContext: vi.fn((table, field, recordId) => ({ table, field, recordId })),
   encrypt: vi.fn((value) => `gcm:${value}`),
   decrypt: vi.fn((value) => value.replace(/^aabb:/, "")),
 }));

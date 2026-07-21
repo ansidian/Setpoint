@@ -7,7 +7,6 @@ import { lazy, Suspense, useMemo } from "react";
 import { makeCalendarBillsData } from "./calendarBillsData";
 import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
 import type { ComponentProps } from "react";
-import type { DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
 import type { DashboardBriefingProjection, CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { DashboardCalendarBillsData } from "./calendarBillsData";
 import type { CalendarView } from "../../../shared/types/calendar";

@@ -1,0 +1,5 @@
+{
+  "_comment": "Ratcheting test maintainability guard for check:harness. Existing files above 600 lines are grandfathered at their current allowance; new oversized files and growth require decomposition or a documented baseline exception.",
+  "threshold": 600,
+  "files": {}
+}

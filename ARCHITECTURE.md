@@ -57,7 +57,7 @@ graph TB
 | Weather | Pirate Weather | Forecast data |
 | Tasks | Todoist API | Deadline items + personal tasks |
 | Finance | @actual-app/api behind provider worker + EA mirrors | Budget tracking, bill management |
-| Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password plus passkey login, session tokens |
+| Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password-or-passkey default, optional strict mode, offline recovery |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
 | Scheduling | node-cron | Snapshot boundary checks and background workers |
 
@@ -269,7 +269,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useCurrentDashboard` | `src/hooks/useCurrentDashboard.ts` |
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
-| `useKeyHold` | `src/hooks/useKeyHold.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
 | `useNews` | `src/hooks/useNews.ts` |
 | `useNotifications` | `src/hooks/useNotifications.ts` |
@@ -336,7 +335,7 @@ graph LR
 
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
-| Auth | `/api/auth` | 13 | Password/passkey login, passkey management, session check/logout, scoped API tokens |
+| Auth | `/api/auth` | 23 | First-run owner claim, canonical-domain management, password/passkey login, recovery and step-up, passkey management, session check/logout, scoped API tokens |
 | Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 15 | Account CRUD, Gmail OAuth, settings, schedules, geocode, important senders |
@@ -350,44 +349,80 @@ sequenceDiagram
     participant S as Server
     participant DB as Turso
 
+    B->>S: GET /api/auth/setup/status
+    alt Instance is unclaimed
+        B->>S: POST /api/auth/setup/claim {password, canonicalOrigin}
+        S->>S: Generate stable owner UUID and bcrypt hash
+        S->>DB: Atomically INSERT OR IGNORE ea_owner + confirmed ea_instance_metadata
+        S->>DB: INSERT ea_sessions (hashed token, expires_at)
+        S->>B: Set-Cookie: ea_session; close public setup
+    end
+
     B->>S: POST /api/auth/login {password}
-    S->>S: bcrypt.compare(password, EA_PASSWORD_HASH)
-    alt No registered passkeys
-        S->>DB: INSERT ea_sessions (token, expires_at)
+    S->>DB: SELECT password_hash FROM ea_owner singleton
+    S->>S: bcrypt.compare(password, stored password_hash)
+    alt Default password-or-passkey mode
+        S->>DB: INSERT ea_sessions (token, generation, auth method, password proof time, expires_at)
         S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
-    else Registered passkeys exist
-        S->>DB: INSERT ea_pending_auth (10-min pending password auth)
+    else Explicit password-plus-passkey mode
+        S->>DB: INSERT ea_pending_auth (5-min password proof + security generation)
         S->>B: Set-Cookie: ea_pending_auth (httpOnly, secure, sameSite=strict)
         B->>S: POST /api/auth/passkey/authentication/options
-        S->>DB: INSERT ea_webauthn_challenges
+        S->>DB: INSERT ea_webauthn_challenges (one-time challenge + generation)
         S->>B: WebAuthn authentication options
         B->>S: POST /api/auth/passkey/authentication/verify
-        S->>DB: Consume challenge and update passkey usage
-        S->>DB: INSERT ea_sessions (token, expires_at)
+        S->>DB: Atomically consume challenge/pending auth and update passkey usage
+        S->>DB: INSERT ea_sessions only if owner generation is unchanged
         S->>B: Set-Cookie: ea_session, clear ea_pending_auth
     end
 
     B->>S: GET /api/dashboard/current (cookie)
-    S->>DB: SELECT FROM ea_sessions WHERE token = ?
+    S->>DB: JOIN ea_sessions to ea_owner on security_generation
     S->>S: Check expires_at > now
     S->>B: 200 current dashboard envelope (or 401 if expired)
 ```
 
-The browser auth model has four distinct states:
+The browser auth model has six distinct states:
 
-1. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
-2. **Pending Password Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created only after a correct password when at least one passkey is registered. It can request and verify WebAuthn authentication options, but it cannot access dashboard routes or passkey registration endpoints.
-3. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
-4. **Passkey Reset** - local operator recovery via `npm run auth:reset-passkeys -- --confirm`. It clears registered passkeys, pending auth, WebAuthn challenges, and browser sessions so the next password login returns to setup mode.
+1. **Unclaimed Instance** - no `ea_owner` singleton row. Only static/setup auth routes and `GET /healthz` are available; provider APIs and all background workers are gated.
+2. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`, its authentication method, password-proof timestamp, and owner security generation. Every validation joins the session to the current owner generation, so a credential transition or operator reset invalidates every older session immediately, including across processes and even if a deletion races. Used by the SPA and required by normal dashboard routes; the app does not prompt for passkey on every request.
+3. **Pending Passkey Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created after a correct password in explicit strict mode, or when default-mode passwordless passkey login begins. It can request and verify WebAuthn options but cannot access dashboard routes.
+4. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
+5. **Recent Password Authentication** - the authenticated session's `password_authenticated_at` is within ten minutes. Required for password, passkey, recovery-code, auth-mode, canonical-domain, and powerful API-token changes. Passkey-only and recovery-created sessions do not satisfy this boundary until the owner confirms the current password; failed confirmations are throttled in the session row before more bcrypt work is accepted.
+6. **Recovery or Operator Reset** - one offline recovery code can replace credentials in-app; the local `npm run auth:reset-passkeys -- --confirm` path remains the last-resort operator reset.
+
+The browser keeps a separate, shorter Security Settings unlock. Sensitive controls start locked whenever the System section mounts and lock on `pagehide`; the server's recent-auth timestamp can authorize requests during that visit but never auto-opens a later section visit or restored page.
+
+Ownership is database-backed in the singleton `ea_owner` row. Fresh claims rely on
+an out-of-band `EA_SETUP_TOKEN` plus the singleton primary-key invariant so only
+an authorized claimant can attempt the one concurrent insert that succeeds.
+Existing `EA_USER_ID` plus `EA_PASSWORD_HASH` values are an optional startup
+compatibility source: startup imports the exact pair when no owner exists and
+fails closed for partial or conflicting state.
+
+Every sensitive credential or security mutation is a compare-and-swap
+transaction against `ea_owner.security_generation`. The transaction increments
+the generation, performs the mutation, and clears sessions, pending auth, and
+WebAuthn challenges before commit; the initiating browser receives a replacement
+session only after the commit. Offline recovery additionally revokes all scoped
+API tokens.
 
 Two credential paths exist, but they no longer feed a single shared "any auth works" guard:
 
-1. **Cookie session** - normal dashboard access after password-only setup login or password plus passkey login.
+1. **Cookie session** - normal dashboard access after password, passwordless passkey, strict password-plus-passkey, or successful recovery.
 2. **Scoped API token** - `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check because they carry their own unforgeable secret.
 
-Production WebAuthn configuration is explicit and fail-fast: `EA_WEBAUTHN_RP_NAME`, `EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are required when `NODE_ENV=production`. Development defaults are `Setpoint`, `localhost`, and `http://localhost:5173`.
+Production WebAuthn configuration prefers the persisted canonical HTTPS origin, deriving RP name `Setpoint`, RP ID from its hostname, and the exact expected origin. Compatible legacy `EA_WEBAUTHN_*` and `GOOGLE_REDIRECT_URI` values import only when they resolve to one origin; otherwise the explicit values remain compatibility fallbacks. Development defaults remain `Setpoint`, `localhost`, and `http://localhost:5173`.
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
+
+### Gmail Pub/Sub callback threat model
+
+The callback credential is a 256-bit random bearer token whose lifetime lasts until the owner generates, imports, revokes, or switches away from it. Setpoint persists only its SHA-256 hash (or an explicit disabled tombstone); the one-time generated callback URL is the only response that contains a newly generated plaintext token. Callback verification hashes the candidate in-process and uses a fixed-length `timingSafeEqual` comparison against the stored hash.
+
+Every callback performs one narrow authoritative read of `push_token_hash` and `token_disabled` from the shared database. There is intentionally no TTL or process-local verification cache: a cache would delay revocation and rotation, let application instances disagree, and repopulate inconsistently after restart. Consequently, generation, environment-token import, revocation, and switching to the host token take effect on the next callback across all instances and survive restarts without a local invalidation protocol. A database read failure fails closed with a retryable `503`; callback logs and database query arguments contain neither plaintext tokens nor ciphertext.
+
+Generating or importing a token invalidates the previous Setpoint credential immediately, but Google Pub/Sub subscription configuration is external. Until the subscription's push endpoint is updated to the newly returned callback URL, deliveries using the old URL fail authorization and rely on Pub/Sub retry plus the periodic Gmail reconciliation path. Operators should therefore rotate the external subscription promptly and treat the one-time callback URL as a secret.
 
 ## Current Dashboard Pipeline
 
@@ -481,8 +516,14 @@ erDiagram
     }
 
     ea_sessions {
-        text token PK "32-byte hex"
+        text token PK "sha256 digest"
         int expires_at "Unix ms, 30-day TTL"
+        int authenticated_at "Unix ms"
+        int password_authenticated_at "Unix ms or 0"
+        int security_generation
+        text auth_method
+        int step_up_failure_count
+        int step_up_blocked_until
         datetime created_at
     }
 
@@ -620,7 +661,7 @@ erDiagram
 | `ea_calendar_search_mirror_state` | `011_calendar_search_mirror.sql` |
 | `ea_calendar_search_occurrences` | `011_calendar_search_mirror.sql` |
 | `ea_completed_tasks` | `001_ea_tables.sql`, `014_completed_deadline_occurrences.sql` |
-| `ea_csrf_tokens` | `001_ea_tables.sql` |
+| `ea_csrf_tokens` | `001_ea_tables.sql`, `034_google_oauth_binding.sql` |
 | `ea_current_data_cache` | `001_ea_tables.sql` |
 | `ea_dismissed_emails` | `001_ea_tables.sql` |
 | `ea_email_backfill_state` | `001_ea_tables.sql` |
@@ -630,27 +671,34 @@ erDiagram
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
+| `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
+| `ea_instance_credentials` | `033_instance_credentials.sql`, `040_pending_credential_lifecycle.sql` |
+| `ea_instance_metadata` | `032_canonical_url.sql` |
 | `ea_news_items` | `026_news.sql` |
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
+| `ea_onboarding_progress` | `037_onboarding_progress.sql` |
+| `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql` |
+| `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
-| `ea_pending_auth` | `012_passkey_auth.sql` |
+| `ea_pending_auth` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
-| `ea_sessions` | `001_ea_tables.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql` |
+| `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |
+| `ea_todoist_oauth_states` | `036_todoist_oauth_setup.sql` |
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
 | `ea_triage_jobs` | `001_ea_tables.sql` |
 | `ea_triage_rules` | `001_ea_tables.sql` |
-| `ea_webauthn_challenges` | `012_passkey_auth.sql` |
+| `ea_webauthn_challenges` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `migrations` | `024_retire_legacy_ledger_rows.sql` |
 <!-- END:db -->
 
@@ -662,7 +710,15 @@ The active dashboard is served from current snapshot, triage, cache, and provide
 
 ### Encryption at Rest
 
-All stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY`. Format: `gcm:iv:ciphertext:authTag`.
+All new stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY` and the explicit format `gcm:v2:iv:ciphertext:authTag`. GCM additional authenticated data binds each value to its table, logical field, and primary-key identity, so ciphertext moved to another credential record or field fails authentication. Instance-credential active and pending slots intentionally share the same logical credential-key context because promotion atomically moves the encrypted candidate between those slots. Existing unversioned `gcm:iv:ciphertext:authTag` values remain read-only compatible until an operator completes root-key rotation; every normal write and rotation output emits v2.
+
+`npm run security:rotate-encryption-key` is the dry-run-first offline rotation tool. It inventories and verifies every encrypted field without writing by default. `--apply --confirm-offline` re-encrypts the complete inventory inside one write transaction using `EA_ENCRYPTION_KEY_NEXT`, verifies every replacement before commit, and rolls back on any error or concurrent row change. Runtime decryption remains single-key and fail-closed; there is no old-key fallback that could conceal a partial rotation.
+
+### Pending Credential Lifecycle
+
+Write-only credential candidates expire 24 hours after staging. Dedicated `pending_staged_at` and `pending_expires_at` fields keep candidate lifetime separate from connection history; metadata responses expose only those timestamps and opaque versions, never values. Reads prune expired candidates transactionally, and promotion, provider tests, and OAuth callbacks require the exact unexpired version that initiated the operation. Google and Todoist application credential pairs expire, discard, test, and promote atomically.
+
+Settings provides an explicit recent-password-protected discard action. Discard is version-bound so a stale browser cannot remove a newer candidate, preserves the active stored or environment-backed credential, and leaves historical success/failure timestamps intact. Migration 040 gives already-pending candidates the same bounded lifetime using their last recorded update as the compatibility anchor.
 
 ### Graceful Degradation
 
@@ -706,12 +762,14 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 <!-- BEGIN:routes -->
 | Method | Path | File |
 |--------|------|------|
+| GET | `/` | `server/routes/auth-canonical-origin.ts` |
+| PATCH | `/` | `server/routes/auth-canonical-origin.ts` |
+| GET | `/api-tokens` | `server/routes/auth-security.ts` |
+| POST | `/api-tokens` | `server/routes/auth-security.ts` |
+| DELETE | `/api-tokens/:id` | `server/routes/auth-security.ts` |
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.ts` |
 | POST | `/api/alfred/run` | `server/routes/alfred.ts` |
 | GET | `/api/alfred/usage` | `server/routes/alfred.ts` |
-| GET | `/api/auth/api-tokens` | `server/routes/auth.ts` |
-| POST | `/api/auth/api-tokens` | `server/routes/auth.ts` |
-| DELETE | `/api/auth/api-tokens/:id` | `server/routes/auth.ts` |
 | GET | `/api/auth/check` | `server/routes/auth.ts` |
 | POST | `/api/auth/login` | `server/routes/auth.ts` |
 | POST | `/api/auth/logout` | `server/routes/auth.ts` |
@@ -722,11 +780,15 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | DELETE | `/api/auth/passkeys/:credentialId` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/options` | `server/routes/auth.ts` |
 | POST | `/api/auth/passkeys/registration/verify` | `server/routes/auth.ts` |
+| POST | `/api/auth/setup/claim` | `server/routes/auth.ts` |
+| GET | `/api/auth/setup/status` | `server/routes/auth.ts` |
 | GET | `/api/briefing/actual/accounts` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/bills/:id/mark-paid` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/cache/hydrate` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/cache/status` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/categories` | `server/routes/briefing/bills.ts` |
+| DELETE | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
+| POST | `/api/briefing/actual/connection` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/metadata` | `server/routes/briefing/bills.ts` |
 | GET | `/api/briefing/actual/payees` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/actual/send` | `server/routes/briefing/bills.ts` |
@@ -776,12 +838,40 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/calendar/places/suggest` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/range` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/search` | `server/routes/calendar.ts` |
+| GET | `/api/capabilities/` | `server/routes/capabilities.ts` |
 | GET | `/api/dashboard/current` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
+| GET | `/api/ea/accounts/todoist/auth` | `server/routes/todoist-oauth.ts` |
+| GET | `/api/ea/accounts/todoist/callback` | `server/routes/todoist-oauth.ts` |
+| DELETE | `/api/ea/accounts/todoist/connection` | `server/routes/todoist-oauth.ts` |
+| POST | `/api/ea/accounts/todoist/personal-token` | `server/routes/todoist-oauth.ts` |
+| GET | `/api/ea/accounts/todoist/status` | `server/routes/todoist-oauth.ts` |
 | POST | `/api/gmail/push` | `server/routes/gmail-push.ts` |
+| GET | `/api/instance-credentials/` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/disable` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/import-environment` | `server/routes/instance-credentials.ts` |
+| DELETE | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/:key/pending` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/test` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/:key/use-host` | `server/routes/instance-credentials.ts` |
+| GET | `/api/instance-credentials/gmail-pubsub` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/generate-callback` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/import-environment-token` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/revoke-token` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/test-watches` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/gmail-pubsub/topic` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/gmail-pubsub/use-host-token` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/google-oauth/disable` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/google-oauth/import-environment` | `server/routes/instance-credentials.ts` |
+| DELETE | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/google-oauth/pending` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/google-oauth/use-host` | `server/routes/instance-credentials.ts` |
+| POST | `/api/instance-credentials/todoist-oauth/import-environment` | `server/routes/instance-credentials.ts` |
+| DELETE | `/api/instance-credentials/todoist-oauth/pending` | `server/routes/instance-credentials.ts` |
+| PUT | `/api/instance-credentials/todoist-oauth/pending` | `server/routes/instance-credentials.ts` |
 | GET | `/api/news/` | `server/routes/news.ts` |
 | GET | `/api/news/catalog` | `server/routes/news.ts` |
 | POST | `/api/news/refresh` | `server/routes/news.ts` |
@@ -795,11 +885,19 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | PATCH | `/api/news/topics/:id` | `server/routes/news.ts` |
 | POST | `/api/news/topics/import-starter` | `server/routes/news.ts` |
 | POST | `/api/news/topics/reorder` | `server/routes/news.ts` |
+| GET | `/api/onboarding/` | `server/routes/onboarding.ts` |
+| PATCH | `/api/onboarding/` | `server/routes/onboarding.ts` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.ts` |
 | GET | `/email-search/usage` | `server/routes/settings.ts` |
+| POST | `/preview` | `server/routes/auth-canonical-origin.ts` |
+| POST | `/recovery` | `server/routes/auth-security.ts` |
+| POST | `/recovery-codes/regenerate` | `server/routes/auth-security.ts` |
 | GET | `/reminders` | `server/routes/reminders.ts` |
 | POST | `/reminders` | `server/routes/reminders.ts` |
 | DELETE | `/reminders/:id` | `server/routes/reminders.ts` |
+| PATCH | `/security/auth-mode` | `server/routes/auth-security.ts` |
+| POST | `/security/password` | `server/routes/auth-security.ts` |
+| POST | `/security/step-up/password` | `server/routes/auth-security.ts` |
 | POST | `/settings/discord-reminder-test` | `server/routes/reminders.ts` |
 | GET | `/triage/cache-stats` | `server/routes/settings.ts` |
 <!-- END:routes -->
@@ -808,14 +906,22 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| POST | `/api/auth/login` | No | Password login. Creates `ea_session` only when no passkeys exist; otherwise creates pending password auth |
-| POST | `/api/auth/passkey/authentication/options` | Pending password auth | Create passkey authentication challenge |
-| POST | `/api/auth/passkey/authentication/verify` | Pending password auth | Verify passkey assertion and issue `ea_session` |
+| POST | `/api/auth/login` | No | Password login; issues a session in default mode or pending auth in strict mode |
+| POST | `/api/auth/passkey/authentication/options` | No or pending password auth | Start default-mode passwordless passkey or continue strict login |
+| POST | `/api/auth/passkey/authentication/verify` | Pending passkey auth | Verify passkey assertion and issue `ea_session` |
 | POST | `/api/auth/passkey/authentication/cancel` | Pending password auth | Cancel pending password auth and clear challenges |
 | GET | `/api/auth/passkeys` | Cookie | List registered passkey metadata |
-| POST | `/api/auth/passkeys/registration/options` | Cookie | Create passkey registration challenge |
-| POST | `/api/auth/passkeys/registration/verify` | Cookie | Verify and store registered passkey |
-| DELETE | `/api/auth/passkeys/:credentialId` | Cookie | Delete one registered passkey and rotate browser sessions |
+| POST | `/api/auth/passkeys/registration/options` | Recent cookie | Create passkey registration challenge |
+| POST | `/api/auth/passkeys/registration/verify` | Recent cookie | Verify and store registered passkey |
+| DELETE | `/api/auth/passkeys/:credentialId` | Recent cookie | Delete one registered passkey and rotate browser sessions |
+| POST | `/api/auth/security/step-up/password` | Cookie | Refresh recent-auth state after password confirmation |
+| PATCH | `/api/auth/security/auth-mode` | Recent cookie | Explicitly change password-or-passkey vs. strict mode |
+| GET | `/api/auth/security/canonical-origin` | Cookie | Read the confirmed origin and derived callback metadata |
+| POST | `/api/auth/security/canonical-origin/preview` | Cookie | Preview passkey and external callback impact without mutation |
+| PATCH | `/api/auth/security/canonical-origin` | Recent cookie | Confirm a canonical-domain change after impact review |
+| POST | `/api/auth/security/password` | Recent cookie | Replace the owner password and rotate sessions |
+| POST | `/api/auth/recovery-codes/regenerate` | Recent cookie | Replace and reveal offline recovery codes once |
+| POST | `/api/auth/recovery` | No | Consume one recovery code and establish replacement credentials |
 | GET | `/api/auth/check` | Cookie | Session validation |
 | POST | `/api/auth/logout` | Cookie | Destroy session |
 
@@ -904,6 +1010,8 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-dom
 | GET | `/api/briefing/actual/categories` | Category tree |
 | POST | `/api/briefing/actual/test` | Test connection |
 
+Remote cache hydration streams the archive through a 128 MiB download cap, then uses the bounded Node reader in `actual-budget-archive.ts` to validate its central and local headers, entry count, stored/deflate methods, actual expanded sizes, and CRCs before returning only `db.sqlite` and `metadata.json`. It accepts only a path-safe local budget identifier. The in-process SDK loads that validated on-disk budget and does not receive a remote ZIP directly.
+
 ### Accounts & Settings
 
 | Method | Path | Purpose |
@@ -940,7 +1048,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.ts` (per-dom
 
 Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted, and new tokens receive a default 90-day expiry.
 
-Passkeys and API tokens are separate auth surfaces. A registered passkey can unlock the browser session after a successful dashboard password; a scoped API token can only call specifically opted-in automation endpoints and cannot satisfy the dashboard route guard.
+Passkeys and API tokens are separate auth surfaces. A registered passkey can unlock the browser directly in password-or-passkey mode or complete login after the password in strict mode; a scoped API token can only call specifically opted-in automation endpoints and cannot satisfy the dashboard route guard.
 
 ## Deployment
 
@@ -955,6 +1063,6 @@ Passkeys and API tokens are separate auth surfaces. A registered passkey can unl
 1. `npm run dev` → concurrently runs Vite (HMR) + Express (--watch)
 2. Vite proxies `/api/*` to Express on port 3001
 
-**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_PASSWORD_HASH` (bcrypt), `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, database tokens.
+**Environment variables:** See `.env.example` for full reference. Key secrets: `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, and database tokens. `EA_USER_ID` plus `EA_PASSWORD_HASH` remain an optional legacy owner-import pair.
 
 **Security defaults:** production enables HSTS + CSP + frame/referrer/permissions headers. `trust proxy` defaults to `1` only in production and can be overridden via `TRUST_PROXY`.

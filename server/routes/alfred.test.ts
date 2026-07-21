@@ -22,7 +22,7 @@ vi.mock("../db/connection.ts", () => ({
 }));
 
 const { createAlfredRouter } = await import("./alfred.ts");
-const { _clearAlfredConversationsForTest } = await import("../alfred/alfred-conversations.ts");
+const { clearAlfredConversations } = await import("../alfred/alfred-conversations.ts");
 
 function hashSessionToken(raw: string): string {
   return `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
@@ -31,10 +31,25 @@ function hashSessionToken(raw: string): string {
 async function createMigratedDb(): Promise<Client> {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(`
+    CREATE TABLE ea_owner (
+      singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+      user_id TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      auth_mode TEXT NOT NULL DEFAULT 'password_or_passkey',
+      security_generation INTEGER NOT NULL DEFAULT 1,
+      claimed_at INTEGER NOT NULL
+    );
     CREATE TABLE ea_sessions (
       token TEXT PRIMARY KEY,
-      expires_at INTEGER NOT NULL
+      expires_at INTEGER NOT NULL,
+      authenticated_at INTEGER NOT NULL DEFAULT 0,
+      password_authenticated_at INTEGER NOT NULL DEFAULT 0,
+      security_generation INTEGER NOT NULL DEFAULT 1,
+      auth_method TEXT NOT NULL DEFAULT 'legacy'
     );
+    INSERT INTO ea_owner
+      (singleton_id, user_id, password_hash, auth_mode, security_generation, claimed_at)
+    VALUES (1, 'user-1', 'unused-test-hash', 'password_or_passkey', 1, 1);
   `);
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
@@ -47,7 +62,10 @@ function buildApp(): express.Express {
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/alfred", createAlfredRouter({ run: testState.run }));
+  app.use("/api/alfred", createAlfredRouter({
+    run: testState.run,
+    credentialResolver: async () => process.env.ANTHROPIC_API_KEY || null,
+  }));
   return app;
 }
 
@@ -61,7 +79,7 @@ describe("alfred routes", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     testState.db.current = await createMigratedDb();
     testState.run.mockReset();
-    _clearAlfredConversationsForTest();
+    clearAlfredConversations();
   });
 
   afterEach(async () => {
@@ -155,6 +173,7 @@ describe("alfred routes", () => {
   });
 
   it("emits run_error when the run loop throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.run.mockRejectedValue(new Error("api down"));
     const res = await auth(request(buildApp()).post("/api/alfred/run")).send({ message: "hi" });
     expect(res.text).toContain("event: run_error");

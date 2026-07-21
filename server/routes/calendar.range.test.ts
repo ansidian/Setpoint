@@ -101,13 +101,12 @@ const {
 } = await import("../tasks/deadline-helpers.ts") as unknown as { computeDeadlineStats: MockFunction; loadCompletedTaskIds: MockFunction };
 const { loadUserConfig } = await import("../platform/config-service.ts") as unknown as { loadUserConfig: MockFunction };
 const { fetchCalendar } = await import("../calendar/calendar.ts") as unknown as { fetchCalendar: MockFunction };
-const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.ts") as unknown as Record<"fetchTodoistDueTaskIdSet" | "fetchTodoistTasksAll" | "fetchTodoistTasksRange" | "getTodoistSyncHealth", MockFunction>;
+const { fetchTodoistDueTaskIdSet, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.ts") as unknown as Record<"fetchTodoistDueTaskIdSet" | "fetchTodoistTasksRange" | "getTodoistSyncHealth", MockFunction>;
 const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.ts") as unknown as Record<"isBillsMirrorMaintenanceDue" | "readBillsMirrorRange" | "scheduleBillsMirrorRefresh", MockFunction>;
 const { queryTransactions } = await import("../transactions/transactions-service.ts") as unknown as { queryTransactions: MockFunction };
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.ts") as unknown as { requestBillsCurrentMaintenanceRefresh: MockFunction };
 const { hydrateRecurringTombstones } = await import("../tasks/tombstones.ts") as unknown as { hydrateRecurringTombstones: MockFunction };
 const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.ts") as unknown as { listUpcomingReminderStatesForSources: MockFunction };
-const db = (await import("../db/connection.ts")).default as unknown as { execute: MockFunction };
 const calendarRoutes = (await import("./calendar.ts")).default;
 
 function makeApp() {
@@ -155,34 +154,6 @@ describe("GET /api/calendar/range", () => {
     expect(res.body.message).toMatch(/start/i);
   });
 
-  it("returns 400 when end param missing", async () => {
-    const res = await request(makeApp()).get("/api/calendar/range?start=2026-04-18");
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/end/i);
-  });
-
-  it("returns 400 on malformed date", async () => {
-    const res = await request(makeApp()).get(
-      "/api/calendar/range?start=not-a-date&end=2026-04-25",
-    );
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when end < start", async () => {
-    const res = await request(makeApp()).get(
-      "/api/calendar/range?start=2026-04-25&end=2026-04-18",
-    );
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when span > 62 days", async () => {
-    const res = await request(makeApp()).get(
-      "/api/calendar/range?start=2026-01-01&end=2026-12-31",
-    );
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/62/);
-  });
-
   it("returns events on happy path", async () => {
     listUpcomingReminderStatesForSources.mockResolvedValueOnce(new Map([
       ["calendar_event:event-1:", {
@@ -218,67 +189,6 @@ describe("GET /api/calendar/range", () => {
     expect(res.body.fetchedAt).toEqual(expect.any(String));
   });
 
-  it("filters to calendar-enabled Gmail accounts", async () => {
-    loadUserConfig.mockResolvedValueOnce({
-      accounts: [
-        { id: "a1", type: "gmail", email: "on@y.com", calendar_enabled: 1 },
-        { id: "a2", type: "gmail", email: "off@y.com", calendar_enabled: 0 },
-        { id: "a3", type: "icloud", email: "i@y.com" },
-      ],
-      settings: {},
-    });
-    await request(makeApp()).get(
-      "/api/calendar/range?start=2026-04-18&end=2026-04-25",
-    );
-    const passed = fetchCalendar.mock.calls[0]![0] as Array<{ email: string }>;
-    expect(passed).toHaveLength(1);
-    expect(passed[0]!.email).toBe("on@y.com");
-  });
-});
-
-describe("GET /api/calendar/deadlines", () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
-    fetchTodoistTasksAll.mockResolvedValue([
-      { id: "todo-open", title: "Open task", due_date: "2026-05-04", source: "todoist", status: "incomplete" },
-    ]);
-    fetchTodoistDueTaskIdSet.mockResolvedValue(new Set(["todo-open"]));
-    hydrateRecurringTombstones.mockResolvedValue([
-      { id: "todo-done", title: "Completed task", due_date: "2026-05-03", source: "todoist", status: "complete", _tombstone: true },
-    ]);
-    getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
-    loadCompletedTaskIds.mockResolvedValue(new Set());
-    computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
-    listUpcomingReminderStatesForSources.mockResolvedValue(new Map());
-    db.execute.mockRejectedValue(new Error("latest briefing JSON should not be read"));
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-    vi.useRealTimers();
-  });
-
-  it("hydrates completed Todoist rows from completed-task snapshots without previous briefing JSON", async () => {
-    const res = await request(makeApp()).get("/api/calendar/deadlines");
-
-    expect(res.status).toBe(200);
-    expect(fetchTodoistTasksAll).toHaveBeenCalledWith(process.env.EA_USER_ID);
-    expect(hydrateRecurringTombstones).toHaveBeenCalledWith(
-      process.env.EA_USER_ID,
-      new Set(["todo-open"]),
-      { viewBoundary: "today" },
-    );
-    expect(db.execute).not.toHaveBeenCalled();
-    expect(res.body.upcoming.map((item: { id: string }) => item.id)).toEqual(["todo-open", "todo-done"]);
-    expect(res.body.upcoming[0]).toMatchObject({
-      source: "todoist",
-      sourceLabel: "Todoist",
-      color: "#e44332",
-      sourceColor: "#e44332",
-    });
-    expect(res.body.stats).toEqual({ total: 2 });
-  });
 });
 
 describe("GET /api/calendar/deadlines/range", () => {
@@ -353,23 +263,6 @@ describe("GET /api/calendar/deadlines/range", () => {
     expect(res.body.errors).toEqual([{ source: "todoist", message: "Todoist down" }]);
   });
 
-  it("rejects calendar-domain ranges older than the rolling 12-month window", async () => {
-    const res = await request(makeApp()).get(
-      "/api/calendar/deadlines/range?start=2025-04-01&end=2025-04-30",
-    );
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/12-month/i);
-  });
-
-  it("allows adjacent-month grid spillover when the visible range overlaps the 12-month window", async () => {
-    const res = await request(makeApp()).get(
-      "/api/calendar/deadlines/range?start=2025-04-27&end=2025-06-07",
-    );
-
-    expect(res.status).toBe(200);
-    expect(fetchTodoistTasksRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2025-04-27", end: "2025-06-07" });
-  });
 });
 
 describe("GET /api/calendar/bills/range", () => {

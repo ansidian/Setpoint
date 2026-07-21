@@ -10,11 +10,8 @@ import {
   mergeDeadlineOverlayIntoEvents,
   orderPlanningItems,
 } from "./events/eventsPlanningModel.ts";
-import {
-  getDefaultSelectedItemId,
-  renderEventsDetail,
-  renderEventsFloatingDetail,
-} from "./events/EventsDetailRail.tsx";
+import { renderEventsDetail, renderEventsFloatingDetail } from "./events/EventsDetailRail.tsx";
+import { getDefaultSelectedItemId } from "./events/eventDetailModel.ts";
 import type {
   CalendarCellMeta,
   CalendarDeadlineOverlay,

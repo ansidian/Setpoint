@@ -7,11 +7,13 @@ const apiMocks = vi.hoisted(() => ({
   verifyPasskeyAuthentication: vi.fn(),
   cancelPasskeyAuthentication: vi.fn(),
 }));
+const securityApiMocks = vi.hoisted(() => ({ recoverOwnerAccess: vi.fn() }));
 const browserMocks = vi.hoisted(() => ({
   startPasskeyAuthentication: vi.fn(),
 }));
 
 vi.mock("../api", () => apiMocks);
+vi.mock("../auth/securityApi", () => securityApiMocks);
 vi.mock("../auth/passkeyBrowser", () => browserMocks);
 
 const { default: Login } = await import("./Login");
@@ -117,6 +119,51 @@ describe("Login passkey flow", () => {
 
     await waitFor(() => expect(apiMocks.cancelPasskeyAuthentication).toHaveBeenCalledTimes(1));
     expect(screen.getByLabelText("Password")).toBeTruthy();
+  });
+
+  it("offers passwordless passkey sign-in without submitting a password", async () => {
+    apiMocks.getPasskeyAuthenticationOptions.mockResolvedValue({ challenge: "challenge-1" });
+    browserMocks.startPasskeyAuthentication.mockResolvedValue({ id: "credential-1", response: {} });
+    apiMocks.verifyPasskeyAuthentication.mockResolvedValue({ authenticated: true });
+    const onLogin = vi.fn();
+
+    render(<Login onLogin={onLogin} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use a passkey" }));
+
+    await waitFor(() => expect(onLogin).toHaveBeenCalledTimes(1));
+    expect(apiMocks.login).not.toHaveBeenCalled();
+  });
+
+  it("recovers with a one-time code and acknowledges replacement codes", async () => {
+    securityApiMocks.recoverOwnerAccess.mockResolvedValue({
+      authenticated: true,
+      recoveryCodes: ["SP-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-1111-2222"],
+    });
+    const onLogin = vi.fn();
+
+    render(<Login onLogin={onLogin} />);
+    fireEvent.click(screen.getByRole("button", { name: "Recover access" }));
+    fireEvent.change(screen.getByLabelText("Recovery code"), { target: { value: "SP-OLD-CODE" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "replacement-password" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "replacement-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset access" }));
+
+    expect(await screen.findByText("SP-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-1111-2222")).toBeTruthy();
+    expect(onLogin).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "I saved these codes" }));
+    expect(onLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a short recovery password before calling the recovery API", async () => {
+    render(<Login onLogin={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Recover access" }));
+    fireEvent.change(screen.getByLabelText("Recovery code"), { target: { value: "SP-OLD-CODE" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "too-short" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "too-short" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset access" }));
+
+    expect(await screen.findByText(/at least 12 characters/i)).toBeTruthy();
+    expect(securityApiMocks.recoverOwnerAccess).not.toHaveBeenCalled();
   });
 });
 

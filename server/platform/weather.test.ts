@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// fetchWeather captures PIRATE_WEATHER_API_KEY at module load, so set it before import.
-vi.hoisted(() => {
-  process.env.PIRATE_WEATHER_API_KEY = "test-key";
-});
-
 import {
-  __resetWeatherCacheForTests,
+  clearWeatherCache,
   fetchWeather,
   geocodeLocation,
   normalizeWeatherPayload,
@@ -69,6 +64,13 @@ describe("normalizeWeatherPayload", () => {
 });
 
 describe("fetchWeather caching", () => {
+  const credentials = (value: string | null) => ({
+    resolve: vi.fn(async () => ({
+      key: "weather.pirate_weather_api_key" as const,
+      source: value ? "stored" as const : "disabled" as const,
+      value,
+    })),
+  });
   const payload = (temperature: number) => ({
     timezone: "America/Los_Angeles",
     currently: { time: 1777651200, temperature, summary: "Clear", icon: "clear-day" },
@@ -81,7 +83,7 @@ describe("fetchWeather caching", () => {
   });
 
   beforeEach(() => {
-    __resetWeatherCacheForTests();
+    clearWeatherCache();
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
@@ -93,8 +95,9 @@ describe("fetchWeather caching", () => {
   it("serves the cached payload within the TTL without re-fetching", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse(payload(60)));
 
-    const first = await fetchWeather(1.01, 1.01);
-    const second = await fetchWeather(1.01, 1.01);
+    const service = credentials("test-key");
+    const first = await fetchWeather(1.01, 1.01, service as never);
+    const second = await fetchWeather(1.01, 1.01, service as never);
 
     expect(first.temp).toBe(60);
     expect(second).toBe(first);
@@ -108,11 +111,12 @@ describe("fetchWeather caching", () => {
       .mockResolvedValueOnce(okResponse(payload(60)))
       .mockResolvedValueOnce(okResponse(payload(75)));
 
-    const first = await fetchWeather(2.02, 2.02);
+    const service = credentials("test-key");
+    const first = await fetchWeather(2.02, 2.02, service as never);
     expect(first.temp).toBe(60);
 
     vi.setSystemTime(new Date("2026-05-01T00:31:00.000Z")); // past the 30-min TTL
-    const stale = await fetchWeather(2.02, 2.02);
+    const stale = await fetchWeather(2.02, 2.02, service as never);
 
     // Stale payload returned immediately, and a background refresh was issued
     // (the second fetch) rather than blocking the caller on it.
@@ -123,15 +127,36 @@ describe("fetchWeather caching", () => {
   it("throws on fetch failure when there is no cached data", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("boom", { status: 500 }));
 
-    await expect(fetchWeather(3.03, 3.03)).rejects.toThrow(/Pirate Weather error/);
+    await expect(fetchWeather(3.03, 3.03, credentials("test-key") as never)).rejects.toThrow(/Pirate Weather error/);
   });
 
   it("sends the Pirate Weather request with an AbortSignal", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse(payload(60)));
 
-    await fetchWeather(4.04, 4.04);
+    await fetchWeather(4.04, 4.04, credentials("test-key") as never);
 
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("uses a rotated key immediately and does not reuse the prior key's cache", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(okResponse(payload(60)))
+      .mockResolvedValueOnce(okResponse(payload(75)));
+    const firstService = credentials("first-secret");
+    const rotatedService = credentials("rotated-secret");
+
+    expect((await fetchWeather(5.05, 5.05, firstService as never)).temp).toBe(60);
+    expect((await fetchWeather(5.05, 5.05, rotatedService as never)).temp).toBe(75);
+
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("first-secret");
+    expect(String(fetchMock.mock.calls[1]![0])).toContain("rotated-secret");
+  });
+
+  it("does not serve cached weather after the credential is disabled", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse(payload(60)));
+    await fetchWeather(6.06, 6.06, credentials("working-secret") as never);
+
+    await expect(fetchWeather(6.06, 6.06, credentials(null) as never)).rejects.toThrow("Pirate Weather is not configured");
   });
 });
 

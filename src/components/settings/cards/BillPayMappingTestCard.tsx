@@ -121,7 +121,10 @@ function DiagnosticsResult({ result }: { result: BillPayResolution | null }) {
   );
 }
 
-export default function BillPayMappingTestCard({ settings }: Pick<SettingsCardStateProps, "settings">) {
+export default function BillPayMappingTestCard({
+  settings,
+  liveMetadataAvailable = true,
+}: Pick<SettingsCardStateProps, "settings"> & { liveMetadataAvailable?: boolean }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [result, setResult] = useState<BillPayResolution | null>(null);
   const [status, setStatus] = useState<TestStatus>("idle");
@@ -134,6 +137,7 @@ export default function BillPayMappingTestCard({ settings }: Pick<SettingsCardSt
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!liveMetadataAvailable) return;
     setStatus("loading");
     setError(null);
     setResult(null);
@@ -198,7 +202,7 @@ export default function BillPayMappingTestCard({ settings }: Pick<SettingsCardSt
             type="submit"
             size="sm"
             className={SETTINGS_PRIMARY_BUTTON_CLASS}
-            disabled={status === "loading"}
+            disabled={status === "loading" || !liveMetadataAvailable}
           >
             {status === "loading" ? "Testing..." : "Run Test"}
           </Button>

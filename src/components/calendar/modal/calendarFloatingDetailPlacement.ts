@@ -205,11 +205,6 @@ export function resolveFloatingDetailPlacement({
   };
 }
 
-export function isRectInside(inner: CalendarRectLike | null | undefined, outer: CalendarRectLike | null | undefined): boolean {
-  if (!inner || !outer) return false;
-  return inner.bottom > outer.top && inner.top < outer.bottom && inner.right > outer.left && inner.left < outer.right;
-}
-
 export function clampFloatingPosition(
   position: { left: number; top: number },
   size: { width?: number; height?: number; maxHeight?: number } | null | undefined,

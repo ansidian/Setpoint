@@ -228,12 +228,6 @@ export default function CalendarSearchRail({
   const resultRowRefs = useRef(new Map<number, HTMLButtonElement>());
   const headerRefs = useRef(new Map<string, HTMLButtonElement>());
   const lastCenteredSignatureRef = useRef("");
-  const lastActivationRef = useRef({
-    signature: "",
-    index: -1,
-    direction: 0,
-    nextIndex: -1,
-  });
   const stateLabel = calendarSearchStateLabel(search);
   const showSkeleton = shouldShowCalendarSearchSkeleton(search);
   const compact = layoutMode === "stacked-replaces-agenda";
@@ -287,30 +281,16 @@ export default function CalendarSearchRail({
     search.setHighlightedIndex?.(highlightedNextIndex);
     const nextScrollTop = scrollElementNearestInScroller(scrollerRef.current, rowElement);
     if (nextScrollTop != null) search.setScrollTop?.(nextScrollTop);
-    lastActivationRef.current = {
-      signature: resultSignature,
-      index,
-      direction,
-      nextIndex: highlightedNextIndex,
-    };
     return true;
   };
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
     if (event.key === "Enter") {
       const direction = event.shiftKey ? -1 : 1;
-      const lastActivation = lastActivationRef.current;
-      const directionChangedFromQueuedHighlight = (
-        lastActivation.signature === resultSignature
-        && lastActivation.index >= 0
-        && lastActivation.direction !== 0
-        && lastActivation.direction !== direction
-        && lastActivation.nextIndex === search.highlightedIndex
-      );
       const index = nextActivationIndex({
-        highlightedIndex: directionChangedFromQueuedHighlight ? lastActivation.index : search.highlightedIndex,
+        highlightedIndex: search.highlightedIndex,
         direction,
-        includeCurrent: !directionChangedFromQueuedHighlight,
+        includeCurrent: true,
       });
       if (index >= 0 && activateSearchResultAtIndex(index, direction)) {
         event.preventDefault?.();
@@ -320,15 +300,6 @@ export default function CalendarSearchRail({
     }
     search.handleInputKeyDown(event);
   };
-
-  useEffect(() => {
-    lastActivationRef.current = {
-      signature: resultSignature,
-      index: -1,
-      direction: 0,
-      nextIndex: -1,
-    };
-  }, [resultSignature]);
 
   useLayoutEffect(() => {
     if (search.autoCenterResults === false) return undefined;

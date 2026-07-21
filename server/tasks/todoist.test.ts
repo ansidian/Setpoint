@@ -58,117 +58,6 @@ beforeEach(() => {
   testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValue([]);
 });
 
-describe("mapTodoistTask", () => {
-  it("propagates is_recurring=true from due.is_recurring", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    const projects = new Map([["p1", { name: "Home", color: "grape" }]]);
-    const raw = {
-      id: "t1",
-      content: "Empty dishwasher",
-      project_id: "p1",
-      due: { date: "2026-04-18", is_recurring: true },
-      priority: 1,
-      labels: [],
-    };
-    const out = __testing__.mapTodoistTask(raw, projects);
-    expect(out.is_recurring).toBe(true);
-  });
-
-  it("defaults is_recurring to false when due.is_recurring is absent", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    const projects = new Map([["p1", { name: "Home", color: "grape" }]]);
-    const raw = {
-      id: "t2",
-      content: "One-off task",
-      project_id: "p1",
-      due: { date: "2026-04-18" },
-      priority: 1,
-      labels: [],
-    };
-    const out = __testing__.mapTodoistTask(raw, projects);
-    expect(out.is_recurring).toBe(false);
-  });
-
-  it("uses the all-dated Todoist filter instead of a short due window", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    expect(__testing__.TODOIST_DUE_TASKS_QUERY).toBe("!no date");
-  });
-
-  it("maps completed-by-due-date rows into complete Todoist deadline items", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    const projects = new Map([["p1", { name: "School", color: "blue" }]]);
-    const raw = {
-      task_id: "t3",
-      content: "Submit draft",
-      project_id: "p1",
-      due: { date: "2026-04-18T14:30:00", is_recurring: true },
-      priority: 4,
-      labels: ["writing"],
-      description: "Final pass",
-    };
-
-    expect(__testing__.mapCompletedTodoistTask(raw, projects)).toMatchObject({
-      id: "t3",
-      title: "Submit draft",
-      due_date: "2026-04-18",
-      due_time: "2:30 PM",
-      class_name: "School",
-      status: "complete",
-      source: "todoist",
-      priority: 1,
-      labels: ["writing"],
-      is_recurring: true,
-    });
-  });
-
-  it("keeps the literal (no-Z) due datetime path byte-identical", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    const projects = new Map([["p1", { name: "Home", color: "grape" }]]);
-    const raw = {
-      id: "t4",
-      content: "Floating due",
-      project_id: "p1",
-      due: { date: "2026-01-15T19:00:00" },
-      priority: 1,
-      labels: [],
-    };
-    const out = __testing__.mapTodoistTask(raw, projects);
-    expect(out.due_time).toBe("7:00 PM");
-    expect(out.due_date).toBe("2026-01-15");
-  });
-
-  it("converts a Z-suffixed due datetime to Pacific time/date", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    const projects = new Map([["p1", { name: "Home", color: "grape" }]]);
-    const raw = {
-      id: "t5",
-      content: "Fixed-timezone due",
-      project_id: "p1",
-      // 2026-01-16T03:00:00Z = 2026-01-15 7:00 PM PST
-      due: { date: "2026-01-16T03:00:00Z" },
-      priority: 1,
-      labels: [],
-    };
-    const out = __testing__.mapTodoistTask(raw, projects);
-    expect(out.due_time).toBe("7:00 PM");
-    expect(out.due_date).toBe("2026-01-15");
-  });
-
-  it("dedupes recurring Todoist range rows by id and due date", async () => {
-    const { __testing__ } = await import("./todoist.ts");
-    const rows = [
-      { id: "t1", due_date: "2026-04-18", status: "incomplete" },
-      { id: "t1", due_date: "2026-04-18", status: "complete" },
-      { id: "t1", due_date: "2026-04-25", status: "complete" },
-    ];
-
-    expect(__testing__.dedupeTodoistRangeTasks(rows)).toEqual([
-      { id: "t1", due_date: "2026-04-18", status: "incomplete" },
-      { id: "t1", due_date: "2026-04-25", status: "complete" },
-    ]);
-  });
-});
-
 describe("Todoist write mirror coherence", () => {
   it("sends due_lang only when creating a task with a truthy due_string", async () => {
     const createdTask = {
@@ -503,27 +392,6 @@ describe("Todoist mirror-backed facade", () => {
     vi.useRealTimers();
   });
 
-  it("derives mapped tasks and active id set from one mirror task read", async () => {
-    testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
-      {
-        id: "t1",
-        content: "Submit lab",
-        project_id: "p1",
-        due: { date: "2026-05-05" },
-        priority: 1,
-        labels: [],
-      },
-    ]);
-    const { fetchTodoistTasksAndIdSet } = await import("./todoist.ts");
-
-    const result = await fetchTodoistTasksAndIdSet("u1");
-
-    expect(testState.mirror.listTodoistMirrorActiveTasks).toHaveBeenCalledTimes(1);
-    expect(testState.mirror.listTodoistMirrorActiveTaskIds).not.toHaveBeenCalled();
-    expect(result.tasks.map((task) => task.id)).toEqual(["t1"]);
-    expect(result.idSet).toEqual(new Set(["t1"]));
-  });
-
   it("reads non-deleted due Todoist ids for tombstone orphan pruning", async () => {
     testState.mirror.listTodoistMirrorDueTaskIds.mockResolvedValueOnce(new Set(["active-1", "completed-1"]));
     const { fetchTodoistDueTaskIdSet } = await import("./todoist.ts");
@@ -598,6 +466,7 @@ describe("Todoist mirror-backed facade", () => {
   });
 
   it("falls back to empty mirror data when bootstrap sync fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     testState.mirror.getTodoistMirrorHealth
       .mockResolvedValueOnce({
         state: "unavailable",

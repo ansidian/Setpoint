@@ -85,7 +85,13 @@ beforeEach(() => {
   mockDb.execute.mockImplementation(async ({ sql, args }) => {
     if (sql.includes("FROM ea_sessions")) {
       return args[0] === cookieSessionHash
-        ? { rows: [{ expires_at: Date.now() + 60_000 }] }
+        ? { rows: [{
+            expires_at: Date.now() + 60_000,
+            authenticated_at: 0,
+            password_authenticated_at: 0,
+            security_generation: 1,
+            auth_method: "legacy",
+          }] }
         : { rows: [] };
     }
     return { rows: [] };
@@ -137,6 +143,7 @@ describe("snapshot routes", () => {
   });
 
   it("maps snapshot detail service errors to HTTP responses", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const error = new Error("Snapshot not found") as HttpError;
     error.status = 404;
     vi.mocked(snapshotService.getSnapshotViewById).mockRejectedValueOnce(error);
@@ -160,6 +167,7 @@ describe("snapshot routes", () => {
   });
 
   it("reports invalid snapshot item lane input as a bad request", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await request(makeApp())
       .patch("/api/briefing/snapshot/items/42/lane")
       .set("Cookie", authCookie())

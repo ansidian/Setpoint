@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
+import { clearCurrentDashboardEventSubscribers, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 
 describe("email triage worker grace flows", () => {
   it("delays weak-risk security once and exposes pending snapshot metadata", async () => {
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       from_name: "Account Security",
@@ -366,7 +366,7 @@ describe("email triage worker grace flows", () => {
       body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
     });
     const modelClient = { classify: vi.fn() };
-    __resetCurrentDashboardEventsForTests();
+    clearCurrentDashboardEventSubscribers();
     const events: Record<string, unknown>[] = [];
     const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event: Record<string, unknown>) => events.push(event));
 

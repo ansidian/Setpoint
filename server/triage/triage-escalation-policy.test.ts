@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   CHEAP_CONFIDENCE_FLOOR,
   cheapEscalationReason,
-  shouldEscalateCheap,
 } from "./triage-escalation-policy.ts";
 
 function confidentDecision(overrides = {}) {
@@ -57,12 +56,5 @@ describe("triage escalation policy", () => {
       escalation_badge: "High Risk",
       urgency: "high",
     }))).toBe("cheap_confidence_below_floor");
-  });
-
-  it("keeps shouldEscalateCheap consistent with the reason", () => {
-    const confident = confidentDecision();
-    const shaky = confidentDecision({ confidence: 0.2 });
-    expect(shouldEscalateCheap(confident)).toBe(false);
-    expect(shouldEscalateCheap(shaky)).toBe(true);
   });
 });

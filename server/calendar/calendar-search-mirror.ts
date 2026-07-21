@@ -12,9 +12,6 @@ import {
   addMonthsIso,
 } from "./calendarSearchMirrorSync.ts";
 import type { Client, Row } from "@libsql/client";
-import type {
-  NormalizedCalendarEvent,
-} from "../../shared/types/calendar.ts";
 import type { StoredCalendarAccount } from "./calendar-google-client.ts";
 import type { MirrorEvent } from "./calendarSearchMirrorStatements.ts";
 import type { EventSearchInput as CalendarEventSearchInput } from "./calendar-search.ts";

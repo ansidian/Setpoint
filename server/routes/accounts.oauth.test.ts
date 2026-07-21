@@ -8,6 +8,7 @@ import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import {
   createAuthTestDb,
   seedGmailAccount,
+  seedOwner,
   seedSession,
 } from "../test-utils/auth-db.ts";
 import type { AccountSummary } from "../../shared/types/accounts.ts";
@@ -21,7 +22,24 @@ function currentDb(): Client {
 }
 const gmailApi = vi.hoisted(() => ({
   getAuthUrl: vi.fn((state) => `https://accounts.example.test/oauth?state=${state}`),
-  handleCallback: vi.fn(async () => ({ email: "user@example.com", accountId: "gmail-user@example.com" })),
+  handleCallback: vi.fn(async (
+    _code: string,
+    _accountId: null,
+    _userId: string,
+    _credentials: { clientId: string; clientSecret: string },
+    onValidated?: () => Promise<void>,
+  ) => {
+    await onValidated?.();
+    return { email: "user@example.com", accountId: "gmail-user@example.com" };
+  }),
+}));
+const googleOAuthApi = vi.hoisted(() => ({
+  selectForAuthorization: vi.fn(async () => ({
+    credentials: { clientId: "client-id", clientSecret: "client-secret" },
+    candidateVersions: { clientId: 7, clientSecret: 9 },
+  })),
+  resolveCandidate: vi.fn(async () => ({ clientId: "client-id", clientSecret: "client-secret" })),
+  promoteCandidate: vi.fn(async () => []),
 }));
 const emailIndexApi = vi.hoisted(() => ({ queueEmailIndexBackfill: vi.fn(async () => ({ queued: true })) }));
 const emailBackfillApi = vi.hoisted(() => ({ wakeEmailBackfillWorker: vi.fn() }));
@@ -39,6 +57,9 @@ vi.mock("../email/gmail.ts", () => ({
   getAuthUrl: gmailApi.getAuthUrl,
   handleCallback: gmailApi.handleCallback,
   testConnection: vi.fn(),
+}));
+vi.mock("../google-oauth-credentials.ts", () => ({
+  googleOAuthCredentialManager: googleOAuthApi,
 }));
 vi.mock("../email/icloud.ts", () => ({ testConnection: vi.fn() }));
 vi.mock("../platform/encryption.ts", () => ({
@@ -84,6 +105,7 @@ describe("accounts Gmail OAuth binding", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     testState.db.current = await createAuthTestDb();
+    await seedOwner(currentDb(), { passwordHash: "unused-test-hash" });
     await seedSession(currentDb(), "cookie-session");
   });
 
@@ -100,7 +122,9 @@ describe("accounts Gmail OAuth binding", () => {
       .set("Cookie", ["ea_session=cookie-session"]);
 
     const csrfResult = await currentDb().execute({
-      sql: "SELECT token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label FROM ea_csrf_tokens",
+      sql: `SELECT token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label,
+                   google_client_id_version, google_client_secret_version
+            FROM ea_csrf_tokens`,
       args: [],
     });
 
@@ -117,6 +141,12 @@ describe("accounts Gmail OAuth binding", () => {
       account_label: "user-1:Work",
       oauth_user_id: "user-1",
       oauth_label: "Work",
+      google_client_id_version: 7,
+      google_client_secret_version: 9,
+    });
+    expect(gmailApi.getAuthUrl).toHaveBeenCalledWith(expect.any(String), {
+      clientId: "client-id",
+      clientSecret: "client-secret",
     });
     expect(csrfResult.rows[0]!.browser_bind_hash).toBe(
       crypto.createHash("sha256").update(rawBind).digest("hex"),
@@ -168,7 +198,15 @@ describe("accounts Gmail OAuth binding", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("http://localhost:5173/settings?account_connected=user@example.com");
-    expect(gmailApi.handleCallback).toHaveBeenCalledWith("auth-code", null, "user-1");
+    expect(googleOAuthApi.resolveCandidate).toHaveBeenCalledWith({ clientId: 7, clientSecret: 9 });
+    expect(gmailApi.handleCallback).toHaveBeenCalledWith(
+      "auth-code",
+      null,
+      "user-1",
+      { clientId: "client-id", clientSecret: "client-secret" },
+      expect.any(Function),
+    );
+    expect(googleOAuthApi.promoteCandidate).toHaveBeenCalledWith({ clientId: 7, clientSecret: 9 });
     expect(accountResult.rows[0]!.label).toBe("Work");
     expect(csrfResult.rows).toHaveLength(0);
     expect(emailIndexApi.queueEmailIndexBackfill).toHaveBeenCalledWith("user-1");
@@ -177,6 +215,7 @@ describe("accounts Gmail OAuth binding", () => {
   });
 
   it("returns a generic message on callback failure without leaking the internal error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     gmailApi.handleCallback.mockRejectedValueOnce(
       new Error("invalid_grant: token exchange failed at https://oauth.internal/secret"),
     );
@@ -194,6 +233,34 @@ describe("accounts Gmail OAuth binding", () => {
     expect(res.text).toBe("OAuth failed. Please try connecting the account again.");
     expect(res.text).not.toMatch(/invalid_grant/);
     expect(res.text).not.toMatch(/oauth\.internal/);
+    expect(googleOAuthApi.promoteCandidate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale bound candidate before exchanging the authorization code", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    googleOAuthApi.resolveCandidate.mockRejectedValueOnce(
+      Object.assign(new Error("changed"), { code: "INSTANCE_CREDENTIAL_CONFLICT" }),
+    );
+    await seedCsrfToken({ token: "state-1", browserBind: "bind-cookie", label: "Work" });
+
+    const res = await request(makeApp())
+      .get("/api/ea/accounts/gmail/callback?code=auth-code&state=state-1")
+      .set("Cookie", ["ea_oauth_bind=bind-cookie"]);
+
+    expect(res.status).toBe(500);
+    expect(res.text).toBe("OAuth failed. Please try connecting the account again.");
+    expect(gmailApi.handleCallback).not.toHaveBeenCalled();
+    expect(googleOAuthApi.promoteCandidate).not.toHaveBeenCalled();
+  });
+
+  it("redacts provider error query details", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await request(makeApp())
+      .get("/api/ea/accounts/gmail/callback?error=access_denied_secret_detail&state=state-1");
+
+    expect(res.status).toBe(400);
+    expect(res.text).toBe("Google OAuth was not completed. Please try again.");
+    expect(res.text).not.toContain("secret_detail");
   });
 });
 
@@ -201,6 +268,7 @@ describe("GET /accounts needs_reauth", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     testState.db.current = await createAuthTestDb();
+    await seedOwner(currentDb(), { passwordHash: "unused-test-hash" });
     await seedSession(currentDb(), "cookie-session");
   });
 
@@ -251,8 +319,9 @@ async function seedCsrfToken({
 }): Promise<void> {
   await currentDb().execute({
     sql: `INSERT INTO ea_csrf_tokens
-            (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label)
-          VALUES (?, ?, ?, ?, ?, ?)`,
+            (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label,
+             google_client_id_version, google_client_secret_version)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       token,
       `user-1:${label}`,
@@ -260,6 +329,8 @@ async function seedCsrfToken({
       crypto.createHash("sha256").update(browserBind).digest("hex"),
       "user-1",
       label,
+      7,
+      9,
     ],
   });
 }

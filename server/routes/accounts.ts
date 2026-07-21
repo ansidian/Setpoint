@@ -6,6 +6,7 @@ import db from "../db/connection.ts";
 import { hashToken, requireCookieSession } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import { encrypt, decrypt } from "../platform/encryption.ts";
+import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../email/gmail.ts";
 import { testConnection as testIcloud } from "../email/icloud.ts";
 import type { ConfiguredEmailAccount } from "../email/email-provider-types.ts";
@@ -24,6 +25,7 @@ import type {
   ICloudAccountRequest,
   ICloudAccountResponse,
 } from "../../shared/types/accounts.ts";
+import { googleOAuthCredentialManager } from "../google-oauth-credentials.ts";
 
 type ErrorResponse = { message: string };
 type GmailOAuthQuery = { code?: string; state?: string; error?: string };
@@ -32,6 +34,8 @@ const handleGmailCallback = handleCallback as unknown as (
   code: string,
   redirectUri: null,
   userId: string,
+  applicationCredentials: { clientId: string; clientSecret: string },
+  onValidated?: () => Promise<void>,
 ) => Promise<GmailOAuthCallbackResult>;
 
 function errorMessage(error: unknown): string {
@@ -73,7 +77,8 @@ router.get<Record<string, never>, string, never, GmailOAuthQuery>("/accounts/gma
         args: [csrfToken],
       }).catch(() => {});
     }
-    return res.status(400).send(`Google OAuth error: ${oauthError}`);
+    console.warn("Google OAuth was declined by the provider");
+    return res.status(400).send("Google OAuth was not completed. Please try again.");
   }
   if (!code || !csrfToken) {
     return res.status(400).send("Missing code or state parameter");
@@ -82,7 +87,9 @@ router.get<Record<string, never>, string, never, GmailOAuthQuery>("/accounts/gma
   try {
     // Validate CSRF token (SEC-03)
     const csrfResult = await db.execute({
-      sql: "SELECT account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label FROM ea_csrf_tokens WHERE token = ?",
+      sql: `SELECT account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label,
+                   google_client_id_version, google_client_secret_version
+            FROM ea_csrf_tokens WHERE token = ?`,
       args: [csrfToken],
     });
 
@@ -114,7 +121,32 @@ router.get<Record<string, never>, string, never, GmailOAuthQuery>("/accounts/gma
     const userId = String(csrfRow.oauth_user_id || legacyUserId);
     const label = String(csrfRow.oauth_label ?? legacyLabelParts.join(":"));
 
-    const result = await handleGmailCallback(code, null, userId);
+    const clientIdVersion = csrfRow.google_client_id_version;
+    const clientSecretVersion = csrfRow.google_client_secret_version;
+    const candidateVersions = clientIdVersion == null && clientSecretVersion == null
+      ? null
+      : {
+          clientId: Number(clientIdVersion),
+          clientSecret: Number(clientSecretVersion),
+        };
+    if (candidateVersions
+      && (!Number.isInteger(candidateVersions.clientId)
+        || !Number.isInteger(candidateVersions.clientSecret))) {
+      throw new Error("Invalid Google OAuth candidate binding");
+    }
+    const applicationCredentials = candidateVersions
+      ? await googleOAuthCredentialManager.resolveCandidate(candidateVersions)
+      : await googleOAuthCredentialManager.resolveActive();
+
+    const result = await handleGmailCallback(
+      code,
+      null,
+      userId,
+      applicationCredentials,
+      candidateVersions
+        ? () => googleOAuthCredentialManager.promoteCandidate(candidateVersions).then(() => undefined)
+        : undefined,
+    );
     if (label && label !== "Gmail") {
       await db.execute({
         sql: "UPDATE ea_accounts SET label = ? WHERE id = ?",
@@ -166,6 +198,7 @@ router.get<Record<string, never>, GmailAuthUrlResponse, never, { label?: string 
   const userId = process.env.EA_USER_ID!;
   const label = req.query.label || "Gmail";
   const oauthBind = crypto.randomBytes(32).toString("base64url");
+  const credentialSelection = await googleOAuthCredentialManager.selectForAuthorization();
 
   // Generate CSRF token and store with label
   const csrfToken = crypto.randomUUID();
@@ -178,12 +211,24 @@ router.get<Record<string, never>, GmailAuthUrlResponse, never, { label?: string 
     args: [Date.now()],
   });
   await db.execute({
-    sql: "INSERT INTO ea_csrf_tokens (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label) VALUES (?, ?, ?, ?, ?, ?)",
-    args: [csrfToken, `${userId}:${label}`, expiresAt, hashToken(oauthBind), userId, label],
+    sql: `INSERT INTO ea_csrf_tokens
+            (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label,
+             google_client_id_version, google_client_secret_version)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      csrfToken,
+      `${userId}:${label}`,
+      expiresAt,
+      hashToken(oauthBind),
+      userId,
+      label,
+      credentialSelection.candidateVersions?.clientId ?? null,
+      credentialSelection.candidateVersions?.clientSecret ?? null,
+    ],
   });
 
   res.cookie(GMAIL_OAUTH_BIND_COOKIE, oauthBind, gmailOauthBindCookieOptions());
-  res.json({ url: getAuthUrl(csrfToken) });
+  res.json({ url: await getAuthUrl(csrfToken, credentialSelection.credentials) });
 });
 
 router.post<Record<string, never>, ICloudAccountResponse | ErrorResponse, ICloudAccountRequest>("/accounts/icloud", async (req, res) => {
@@ -214,7 +259,7 @@ router.post<Record<string, never>, ICloudAccountResponse | ErrorResponse, ICloud
         email,
         label || email,
         color || "#a259ff",
-        encrypt(password),
+        encrypt(password, accountCredentialContext(accountId)),
         nextSort,
       ],
     });
@@ -240,7 +285,10 @@ router.post<{ id: string }, AccountMutationResponse | ErrorResponse>("/accounts/
     const account = result.rows[0]!;
     if (account.type === "gmail") await testGmail(account as unknown as ConfiguredEmailAccount);
     else if (account.type === "icloud")
-      await testIcloud(String(account.email), decrypt(String(account.credentials_encrypted)));
+      await testIcloud(
+        String(account.email),
+        decrypt(String(account.credentials_encrypted), accountCredentialContext(String(account.id))),
+      );
     res.json({ success: true });
   } catch (err) {
     console.error("Error testing account:", err);

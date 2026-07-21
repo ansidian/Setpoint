@@ -37,6 +37,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **Trigger:** Gmail Pub/Sub push (POST `/api/gmail/push` → `server/routes/gmail-push.ts`) durably enqueues a history sync via `server/email/gmail-sync.ts:enqueueHistorySyncFromPubSub`, acknowledges the webhook, then requests an immediate coalesced drain via `server/scheduler.ts:requestGmailHistorySyncDrain`; the per-minute cron remains the reliability fallback.
 
+0. `server/email/gmail-pubsub.ts:verifyToken` — performs one narrow shared-database hash/tombstone read for every delivery, hashes the candidate, and compares fixed-length hashes with `timingSafeEqual`; no TTL cache is used, so rotation/revocation is immediate across processes and restarts. Database failure returns a retryable `503` without queueing work or logging token material.
 1. `server/email/gmail-sync.ts:processNextGmailHistorySyncJob` — claims a queued job, loads the account
 2. `server/email/gmail-sync.ts:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state
 3. `server/email/email-index.ts:indexEmails` — parses and writes emails into `ea_email_index`
@@ -151,3 +152,81 @@ Selection path:
 **SSE:** none — purely client-side state.
 
 **UI:** selected chips get the selection accent border/wash on every surface; first modifier-click closes any open detail/editor; bare cmd/ctrl promotes-or-dismisses; plain click anywhere clears the set.
+
+## 7. First-run owner claim → authenticated runtime
+
+**Trigger:** the SPA reads `GET /api/auth/setup/status` before normal session auth. A missing `ea_owner` singleton routes the browser to `/setup`.
+
+1. `src/pages/OwnerSetup.tsx` — prefills the visible browser origin, requires the out-of-band deployment setup token, explicit canonical-URL confirmation, and a matching password of at least 12 characters, then sends them to `POST /api/auth/setup/claim`.
+2. `server/routes/auth.ts` — rate-limits the claim and constant-time verifies `EA_SETUP_TOKEN` before any owner write; the token is never persisted or returned. `server/auth/owner-claim-service.ts:claimInitialOwner` then generates a stable UUID and bcrypt hash.
+3. `server/auth/owner-store.ts:claimOwner` — one write transaction uses `INSERT OR IGNORE` against singleton key `1` and persists the confirmed origin in separate `ea_instance_metadata`; the uniqueness invariant admits one concurrent claimant and all others receive the fixed conflict.
+4. `server/auth/recovery-code-store.ts:replaceRecoveryCodes` — generates eight high-entropy offline recovery codes, persists only SHA-256 hashes, and returns plaintext only in the successful claim response.
+5. `server/middleware/auth.ts:createSession` — persists only the hashed session token plus authentication method, password-proof timestamp, and owner security generation; insertion succeeds only while that generation is current. The successful browser receives the raw token in an HttpOnly cookie.
+6. `server/auth/owner-context.ts:activateOwner` — exposes the claimed ID to remaining single-owner runtime modules and notifies startup gating.
+7. `server/auth/owner-runtime.ts:createOwnerRuntimeGate` — starts schedulers and provider workers once, only after a stored or newly claimed owner exists.
+
+**Compatibility:** `server/auth/owner-bootstrap.ts:resolveOwnerBootstrap` runs after migrations and before listen. It imports an exact legacy `EA_USER_ID`/`EA_PASSWORD_HASH` pair into `ea_owner`, preserves the bcrypt hash and ID, and fails closed for partial or conflicting state.
+
+**Canonical origin:** `server/platform/canonical-url.ts` imports compatible legacy WebAuthn/Google callback values only when they identify one origin. Persisted state then drives WebAuthn RP values and Google, Todoist, Gmail Pub/Sub, and webhook callback projections. Security Settings previews affected passkeys and callback registrations before a recent-auth-gated change; request headers never write canonical state.
+
+**Pre-claim boundary:** `server/middleware/owner-gate.ts` returns a fixed setup-required response for non-setup APIs. `GET /healthz` remains successful and reports readiness only; `GET /api/auth/setup/status` is the explicit setup-state endpoint. Demo mode resolves setup as already claimed and rejects claim mutations locally without a network call.
+
+## 8. Owner sign-in, step-up, and offline recovery
+
+**Normal mode:** `ea_owner.auth_mode = password_or_passkey`. A valid password issues a session directly. Passkey options may instead create a short-lived `ea_pending_auth` binding, and successful WebAuthn verification consumes its challenge before issuing the same session type. Registering a passkey does not change this mode.
+
+**Strict mode:** the owner explicitly changes `auth_mode` to `password_plus_passkey` through a recent-password-protected Security action. Password login then creates generation-bound pending auth and WebAuthn completes the session. Mode, password, passkey, recovery-code, canonical-origin, and powerful API-token mutations require `ea_sessions.password_authenticated_at` to be within ten minutes. A passkey-only session cannot cross that boundary; password confirmation failures are counted and blocked in the durable session row.
+
+**Security transitions:** each sensitive mutation compare-and-swaps `ea_owner.security_generation` inside the same write transaction as the credential change, then clears every browser session plus owner pending-auth and WebAuthn state. The initiating browser receives a new generation-bound session after commit. Atomic `DELETE ... RETURNING` consumption prevents concurrent reuse of a challenge or pending-auth token.
+
+**Security Settings unlock:** the System section never treats the server's remaining recent-auth window as permission to reopen sensitive password, passkey, recovery, or auth-mode controls. `PasskeysCard` starts locally locked on every mount, so switching Settings sections, navigating away and back, or refreshing requires the dashboard password again. A `pagehide` lock also clears sensitive drafts and one-time recovery-code display before a browser back/forward-cache restore. The ten-minute server window remains the request-authorization boundary only while the current section visit is open.
+
+**Recovery:** `POST /api/auth/recovery` rate-limits and atomically consumes one unused recovery-code hash. Success replaces the password, returns mode to password-or-passkey, clears passkeys, pending auth, WebAuthn challenges, prior sessions, and API tokens in one security transition, issues a fresh non-password-provenance session, and returns a newly generated recovery-code set exactly once.
+
+**Pending provider credentials:** write-only candidates expire 24 hours after staging. Registry reads lazily prune stale values, while tests, promotions, and OAuth callbacks compare the exact candidate version and require its expiry to remain in the future. Google and Todoist app pairs are one atomic candidate: either both values remain current or both expire/discard together. Recent-password-protected discard endpoints are version-bound and remove only the pending candidate, preserving the active stored or environment-backed connection and returning metadata only.
+
+## 9. Todoist personal token → optional OAuth and webhooks
+
+**Default:** `PUT /api/ea/settings` stores a write-only personal API token in `ea_settings`, marks `todoist_connection_mode = personal_token`, and clears OAuth refresh metadata. Task reads and writes continue through the same mirrored Todoist domain and periodic sync backstop.
+
+**Advanced OAuth:**
+
+1. `PUT /api/instance-credentials/todoist-oauth/pending` stages a client ID/client secret pair in the typed instance-credential registry; active stored or env-backed credentials remain in use.
+2. `GET /api/ea/accounts/todoist/auth` binds the owner, browser cookie hash, one-time state, and pending credential versions in `ea_todoist_oauth_states`, then returns Todoist's authorization URL.
+3. `GET /api/ea/accounts/todoist/callback` consumes the state, verifies expiry and browser binding, resolves the exact credential versions, and exchanges the code server-side.
+4. Only a successful exchange promotes the candidate app pair and stores encrypted access/refresh tokens with `todoist_connection_mode = oauth`; failed or stale callbacks leave the working connection unchanged.
+5. `server/tasks/todoist-token.ts` resolves current app credentials for every refresh and persists rotated refresh tokens. `server/tasks/todoist-webhook.ts` resolves the current client secret for every HMAC verification, so stored replacements activate without restart.
+
+**Compatibility:** `TODOIST_CLIENT_ID` and `TODOIST_CLIENT_SECRET` remain runtime fallbacks and can be migrated through the explicit authenticated action without returning their values. Legacy encrypted personal and OAuth token rows are assigned an explicit mode by migration 036.
+
+**Presentation:** `GET /api/ea/accounts/todoist/status` returns only mode, source, health, and canonical callback/webhook URLs. Settings keeps the personal token primary and places app registration, env migration, OAuth, and webhook guidance in an advanced disclosure.
+
+## 10. Capability status projection
+
+**Trigger:** authenticated consumers call `GET /api/capabilities`; `refresh=1` bypasses the short metadata cache.
+
+1. `server/capability-status-service.ts` reads only allowlisted per-key registry metadata plus configured booleans, account reauth flags, and existing Actual, Todoist, and Gmail delivery evidence. It does not decrypt credentials or call providers.
+2. `server/platform/capability-projection.ts` converts that injected evidence into independent stable capability states, redacted reason/action identifiers, sources, modes, and timestamps.
+3. `server/routes/capabilities.ts` returns the shared metadata-only contract behind cookie authentication. Registry changes invalidate the cache; other persisted changes become visible through explicit refresh or the five-second TTL.
+4. `src/api.ts:getCapabilities` uses the private endpoint in normal builds and the fictional inert projection in demo builds.
+
+**Separation:** onboarding completion/progress is not part of capability health. Optional Gmail Pub/Sub, Todoist OAuth/webhooks, and Places states cannot degrade their base capabilities.
+
+## 11. Authenticated onboarding progress → shared Settings workflows
+
+**Trigger:** after an authenticated bootstrap or login, `src/App.tsx` reads onboarding progress. A newly claimed owner is sent to `/onboarding`; an owner whose checklist was explicitly finished continues to the dashboard.
+
+1. `server/db/migrations/037_onboarding_progress.sql` — creates owner-keyed, versioned presentation progress and backfills owners present at migration time as finished so existing installations keep their current entry behavior.
+2. `server/auth/owner-bootstrap.ts` → `server/onboarding-progress-store.ts` — matching legacy environment owners are initialized as finished after owner import, covering the production startup order where migrations run first. The insert is missing-row-only so an explicit reopen remains in progress.
+3. `server/onboarding-progress-store.ts` — reads and allowlist-updates reviewed/completed/skipped step state separately from `completed_at`; finish and reopen change only the checklist lifecycle.
+4. `server/routes/onboarding.ts` — exposes authenticated `GET` and allowlisted `PATCH` mutations without accepting provider values or returning secrets.
+5. `src/lib/onboardingApi.ts` — uses the authenticated API normally and an in-memory, network-free projection in demo builds.
+6. `src/lib/onboardingModel.ts` — owns the locked capability order, allowlisted provider-specific Connections targets, first-unfinished projection, and the **Continue setup** destination (the first persisted `reviewed` step when present, otherwise the projected active step); none of these consult capability health.
+7. `src/pages/Onboarding.tsx` — renders the resumable checklist, reads live `/api/capabilities` metadata, resumes an allowlisted `?step=`, and renders one explicit Connections action per provider so tests, OAuth, and write-only credential behavior are shared.
+8. `src/pages/Settings.tsx` → `src/components/settings/ConnectionsDirectory.tsx` — fetches onboarding progress once at the page boundary; while the checklist is unfinished, the directory always shows **Continue setup** for the projected active step and never derives it from broken or disconnected services.
+9. `src/components/settings/sections/ConnectionsSettingsSection.tsx` → `ConnectionPanelContent.tsx` — canonical connection hashes open the owning row; allowlisted `setup=gmail-realtime|todoist-advanced` query targets reveal and focus only that service's Advanced setup disclosure. Ordinary in-directory row toggles mark their navigation as local so they update hash/history without replaying inbound deep-link scroll, focus, or flash behavior.
+10. `src/App.tsx` — keeps dashboard access available while unfinished, resumes the checklist from login, and observes finish/reopen events so an explicit finish is immediately non-blocking.
+
+**Deep links:** base services use `/settings?tab=connections#<connection-id>`. Gmail realtime and Todoist advanced retain the owning connection hash and add an allowlisted `setup` query; deterministic legacy tab/card pairs are canonicalized, while ambiguous combined-card hashes are not guessed.
+
+**Separation:** capability degradation never reopens onboarding or changes persisted presentation progress. An unfinished checklist always keeps a return path from Connections, including when the active step is untouched or skipped; explicit finish removes that path. Finishing is permitted with every integration pending, and demo onboarding/Settings use the in-memory progress adapter without calling setup, provider, or onboarding endpoints.

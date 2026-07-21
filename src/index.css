@@ -179,6 +179,34 @@
   --color-text-faint: rgba(205, 214, 244, 0.6); /* 5.13:1 on --background — quietest READABLE tier (WCAG AA) */
 }
 
+@keyframes settingsTargetFlash {
+  0% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
+  18%, 62% {
+    background-color: color-mix(in srgb, var(--ea-accent) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ea-accent) 32%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
+}
+
+[data-settings-target-active="true"] {
+  animation: settingsTargetFlash 1.6s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-settings-target-active="true"] {
+    animation: none;
+    background-color: color-mix(in srgb, var(--ea-accent) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ea-accent) 32%, transparent);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

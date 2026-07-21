@@ -20,6 +20,29 @@ describe("billsModel range data", () => {
     expect(result.monthTotal).toBe(100);
   });
 
+  it("keeps adjacent-month bills addressable only by their full date", () => {
+    const result = compute({
+      viewYear: 2026,
+      viewMonth: 4,
+      data: {
+        schedules: [{
+          id: "sce",
+          name: "Electric",
+          next_date: "2026-04-30",
+          conditions: [{ field: "amount", value: 8400 }],
+          paid: false,
+        }],
+        recentTransactions: [{ scheduleId: "sce", date: "2026-04-30", amount: 8400 }],
+        payeeMap: {},
+      },
+    });
+
+    expect(result.itemsByDay[30]).toBeUndefined();
+    expect(result.itemsByDate["2026-04-30"]!.items).toEqual([
+      expect.objectContaining({ name: "Electric" }),
+    ]);
+  });
+
   it("does not create calendar items for a schedule with an invalid amount", () => {
     const result = compute({
       viewYear: 2026,

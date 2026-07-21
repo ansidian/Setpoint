@@ -2,18 +2,23 @@ import { runActualWorkerOperation } from "./actual-worker.ts";
 import { testActualConnectionHttp } from "./actual-connection-test.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
 import { sendBillLightweight } from "./actual-lightweight-writes.ts";
-import { buildBillOccurrencesFromSchedules } from "./actual-bill-occurrences.ts";
 import type { ActualWorkerOperation, ActualWorkerOptions } from "./actual-worker-protocol.ts";
 import type {
-  ActualAccount,
-  ActualBillOccurrence,
-  ActualCategoryGroup,
-  ActualDateRange,
   ActualMetadata,
-  ActualPayee,
-  ActualRecentTransaction,
-  ActualSchedule,
 } from "../../shared/types/actual.ts";
+
+export type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
+import type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
+
+export async function saveActualConnectionCandidate(userId: string, candidate: ActualConnectionCandidate) {
+  const service = await import("./actual-connection-settings.ts");
+  return service.saveActualConnectionCandidate(userId, candidate);
+}
+
+export async function removeActualConnection(userId: string) {
+  const service = await import("./actual-connection-settings.ts");
+  return service.removeActualConnection(userId);
+}
 
 export interface ActualBillWriteInput {
   amount: number;
@@ -42,13 +47,6 @@ export interface ActualQuickTransactionResult {
   category: string | null;
 }
 
-export interface ActualCalendarBillsRangeResult {
-  schedules: ActualBillOccurrence[];
-  recentTransactions: ActualRecentTransaction[];
-  payeeMap: Record<string, string>;
-  actualBudgetUrl: string;
-}
-
 export { isSchedulePaid } from "./actual-bill-occurrences.ts";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;
@@ -59,14 +57,6 @@ const WRITE_OPERATION_WORKER_OPTIONS = {
   shutdownAfterOperation: true,
 };
 let metadataCache: { data: ActualMetadata | null; ts: number } = { data: null, ts: 0 };
-
-function mapOpenBillInstances(schedules: ActualSchedule[], payeeMap: Record<string, string>, range: ActualDateRange): ActualBillOccurrence[] {
-  return buildBillOccurrencesFromSchedules(schedules, {
-    payeeMap,
-    recentTransactions: range.recentTransactions || [],
-    range,
-  });
-}
 
 function shouldUseInProcessActual(): boolean {
   return process.env.NODE_ENV === "test" || process.env.EA_ACTUAL_WORKER_DISABLED === "1";
@@ -137,34 +127,6 @@ export async function getMetadata(userId: string, { forceWorker = false, forceRe
   return data;
 }
 
-export async function getAccounts(userId: string): Promise<ActualAccount[]> {
-  const { accounts } = await getMetadata(userId);
-  return accounts;
-}
-
-export async function getRecentTransactions(userId: string): Promise<ActualRecentTransaction[]> {
-  const { recentTransactions } = await getMetadata(userId);
-  return recentTransactions;
-}
-
-export async function getPayees(userId: string): Promise<ActualPayee[]> {
-  const { payees } = await getMetadata(userId);
-  return payees;
-}
-
-export async function getCategories(userId: string): Promise<ActualCategoryGroup[]> {
-  const { categories } = await getMetadata(userId);
-  return categories;
-}
-
-export function getUpcomingBills(userId: string): Promise<unknown> {
-  return callActual<unknown>("getUpcomingBills", [userId]);
-}
-
-export function getCalendarBillsRange(userId: string, range: ActualDateRange): Promise<ActualCalendarBillsRangeResult> {
-  return callActual<ActualCalendarBillsRangeResult>("getCalendarBillsRange", [userId, range]);
-}
-
 export async function markBillPaid(scheduleId: string, userId: string): Promise<unknown> {
   const result = await callActual<unknown>("markBillPaid", [scheduleId, userId], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
@@ -210,7 +172,3 @@ export async function createQuickTxn(userId: string, payload: ActualQuickTransac
   clearMetadataCache();
   return result;
 }
-
-export const __testing__ = {
-  mapOpenBillInstances,
-};

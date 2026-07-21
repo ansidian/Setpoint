@@ -15,20 +15,36 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `static-assets.ts` — production frontend static-file serving and SPA fallback
 - `startup-delays.ts` — staggered startup delay/jitter calculation for background workers
 - `timing.ts` — request/phase timing log helpers
+- `ai-credentials.ts` — OpenAI/Anthropic runtime credential resolution and pending-key validation/promotion
+- `location-credentials.ts` — Pirate Weather/Google Places runtime credential resolution and pending-key validation/promotion
+- `capability-status-service.ts` — composes redacted registry, account, settings, and operational evidence into cached capability status
+- `onboarding-progress-store.ts` — versioned, owner-keyed onboarding presentation progress; independent from live capability health
+- `google-oauth-credentials.ts` — Google application credential-pair staging, active/pending selection, callback version binding, and atomic promotion
 - `hash-password.ts` — one-shot CLI to bcrypt-hash a password for `EA_PASSWORD_HASH`
 
 ### `auth/` — passkey/WebAuthn and session support
 - `auth/passkey-store.ts` — CRUD for stored passkey credentials
-- `auth/pending-auth-store.ts` — short-lived pending-auth token issuance/lookup (WebAuthn ceremony handoff)
-- `auth/session-rotation.ts` — bulk session revocation (e.g. on passkey changes), clears the auth validation cache
-- `auth/webauthn-challenge-store.ts` — short-lived WebAuthn challenge issuance/lookup
+- `auth/auth-mode.ts` — explicit password-or-passkey vs. strict password-plus-passkey resolution
+- `auth/recovery-code-store.ts` — high-entropy recovery-code generation, hashing, replacement, status, and atomic consumption
+- `auth/pending-auth-store.ts` — generation-bound short-lived pending-auth issuance plus atomic consumption (WebAuthn ceremony handoff)
+- `auth/session-cookie.ts` — centralized secure session-cookie issue/clear behavior around generation-conditional session creation
+- `auth/security-transition.ts` — transactional owner-generation compare-and-swap for credential mutations plus session/pending/challenge revocation
+- `auth/password-policy.ts` — existing-password verification bounds and the minimum policy for every newly chosen password
+- `auth/setup-token.ts` — constant-time validation of the out-of-band first-claim deployment secret
+- `auth/owner-store.ts` — singleton owner persistence and atomic claim invariant
+- `auth/owner-bootstrap.ts` — startup resolution and fail-closed legacy env import
+- `auth/owner-claim-service.ts` — first-visitor password hashing and owner claim orchestration
+- `auth/owner-context.ts` — process-local claimed-owner context and runtime activation notifications
+- `auth/owner-runtime.ts` — one-shot gate that admits background work only after owner claim
+- `auth/webauthn-challenge-store.ts` — generation-bound short-lived WebAuthn challenge issuance and atomic consumption
 - `auth/webauthn-config.ts` — relying-party (RP) id/name/origin resolution for dev vs. production
 - `auth/webauthn-service.ts` — registration/authentication option + verification flows (via `@simplewebauthn/server`)
 
 ### `db/` — connection and migrations
 - `db/config.ts` — resolves the libsql client config (local file vs. remote URL/token) from env
 - `db/connection.ts` — the shared libsql client instance (default export)
-- `db/migrate.ts` — runs the SQL files under `db/migrations/` in order at startup
+- `db/migrate.ts` — discovers and runs the SQL files under `db/migrations/` in order at startup
+- `db/migration-runner.ts` — applies one migration body and its ledger row atomically
 - `db/migrate-encryption.ts` — one-shot rewrite of legacy CBC-encrypted columns to GCM
 
 ### `scripts/` — one-off/ad-hoc CLI maintenance scripts (not imported by the server)
@@ -39,6 +55,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
 - `scripts/reset-passkeys.ts` — wipes passkey/session tables for local dev reset
+- `scripts/rotate-encryption-key.ts` — dry-run-first, offline transactional root-key rotation CLI
 - `scripts/triage-eval.ts`, `scripts/triage-preflight-dry-run.ts` — email triage model eval harness and preflight-rules dry run
 
 ### `test-utils/` — shared test-only helpers (not themselves test files, so mapped explicitly)

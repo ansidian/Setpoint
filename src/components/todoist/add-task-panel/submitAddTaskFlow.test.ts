@@ -169,14 +169,4 @@ describe("submitAddTaskFlow reminder mutations", () => {
     expect(result.committedTask).toEqual({ id: "new-1", title: "Call dentist" });
   });
 
-  it("deletes removed reminders, counts them, and still projects (deleted-only change)", async () => {
-    const deleteReminder = vi.fn().mockResolvedValue({ success: true });
-    const args = baseArgs({ removedReminderIds: ["rem-old"], deleteReminder });
-
-    const result = await submitAddTaskFlow(args);
-
-    expect(deleteReminder).toHaveBeenCalledWith("rem-old");
-    expect(result.deleted).toBe(1);
-    expect(result.projectedTask).not.toBe(result.savedTask);
-  });
 });

@@ -4,7 +4,7 @@ import { emailSearchLimiter } from "../../middleware/rate-limits.ts";
 import type { PinnedEmailSnapshot } from "../../../shared/types/email.ts";
 
 const router = Router();
-const EA_USER_ID = process.env.EA_USER_ID!;
+const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function errorStatus(error: unknown, fallback = 500): number {
   return error && typeof error === "object" && "status" in error && typeof error.status === "number"
@@ -18,7 +18,7 @@ function errorMessage(error: unknown): string {
 
 router.get("/email/:uid", async (req, res) => {
   try {
-    res.json(await emailService.getEmailBody(EA_USER_ID, req.params.uid!));
+    res.json(await emailService.getEmailBody(ownerUserId(), req.params.uid!));
   } catch (err) {
     const status = errorStatus(err);
     if (status >= 500) console.error("Error fetching email body:", err);
@@ -28,7 +28,7 @@ router.get("/email/:uid", async (req, res) => {
 
 router.post("/dismiss/:emailId", async (req, res) => {
   try {
-    await emailService.dismiss(EA_USER_ID, req.params.emailId!);
+    await emailService.dismiss(ownerUserId(), req.params.emailId!);
     res.json({ ok: true });
   } catch (err) {
     console.error("Error dismissing email:", err);
@@ -42,7 +42,7 @@ router.post("/email/:uid/snooze", async (req, res) => {
     return res.status(400).json({ message: "until_ts must be a future epoch millisecond value" });
   }
   try {
-    await emailService.snooze(EA_USER_ID, req.params.uid!, untilTs, (req.body?.snapshot ?? null) as PinnedEmailSnapshot | null);
+    await emailService.snooze(ownerUserId(), req.params.uid!, untilTs, (req.body?.snapshot ?? null) as PinnedEmailSnapshot | null);
     res.json({ ok: true });
   } catch (err) {
     const status = errorStatus(err);
@@ -53,7 +53,7 @@ router.post("/email/:uid/snooze", async (req, res) => {
 
 router.delete("/email/:uid/snooze", async (req, res) => {
   try {
-    await emailService.wake(EA_USER_ID, req.params.uid!);
+    await emailService.wake(ownerUserId(), req.params.uid!);
     res.json({ ok: true });
   } catch (err) {
     console.error("Error unsnoozing email:", err);
@@ -63,7 +63,7 @@ router.delete("/email/:uid/snooze", async (req, res) => {
 
 router.post("/email/:uid/pin", async (req, res) => {
   try {
-    await emailService.pin(EA_USER_ID, req.params.uid!, (req.body?.snapshot ?? null) as PinnedEmailSnapshot | null);
+    await emailService.pin(ownerUserId(), req.params.uid!, (req.body?.snapshot ?? null) as PinnedEmailSnapshot | null);
     res.json({ ok: true });
   } catch (err) {
     const status = errorStatus(err);
@@ -74,7 +74,7 @@ router.post("/email/:uid/pin", async (req, res) => {
 
 router.delete("/email/:uid/pin", async (req, res) => {
   try {
-    await emailService.unpin(EA_USER_ID, req.params.uid!);
+    await emailService.unpin(ownerUserId(), req.params.uid!);
     res.json({ ok: true });
   } catch (err) {
     const status = errorStatus(err);
@@ -85,7 +85,7 @@ router.delete("/email/:uid/pin", async (req, res) => {
 
 router.post("/email/:uid/mark-read", async (req, res) => {
   try {
-    await emailService.markRead(EA_USER_ID, req.params.uid!);
+    await emailService.markRead(ownerUserId(), req.params.uid!);
     res.json({ ok: true });
   } catch (err) {
     const status = errorStatus(err);
@@ -96,7 +96,7 @@ router.post("/email/:uid/mark-read", async (req, res) => {
 
 router.post("/email/:uid/mark-unread", async (req, res) => {
   try {
-    await emailService.markUnread(EA_USER_ID, req.params.uid!);
+    await emailService.markUnread(ownerUserId(), req.params.uid!);
     res.json({ ok: true });
   } catch (err) {
     const status = errorStatus(err);
@@ -107,7 +107,7 @@ router.post("/email/:uid/mark-unread", async (req, res) => {
 
 router.post("/email/:uid/trash", async (req, res) => {
   try {
-    await emailService.trash(EA_USER_ID, req.params.uid!);
+    await emailService.trash(ownerUserId(), req.params.uid!);
     res.json({ ok: true });
   } catch (err) {
     const status = errorStatus(err);
@@ -122,7 +122,7 @@ router.post("/email/mark-all-read", async (req, res) => {
     return res.status(400).json({ message: "uids array required" });
   }
   try {
-    const result = await emailService.markAllRead(EA_USER_ID, uids);
+    const result = await emailService.markAllRead(ownerUserId(), uids);
     res.json({
       ok: !result.failed?.length,
       updatedUids: result.updatedUids || [],
@@ -136,7 +136,7 @@ router.post("/email/mark-all-read", async (req, res) => {
 
 router.post("/email/arrival-grace/settle", async (_req, res) => {
   try {
-    res.json({ ok: true, ...(await emailService.settleArrivalGrace(EA_USER_ID)) });
+    res.json({ ok: true, ...(await emailService.settleArrivalGrace(ownerUserId())) });
   } catch (err) {
     console.error("Error settling arrival-grace email:", err);
     res.status(errorStatus(err)).json({ message: errorMessage(err) });
@@ -149,7 +149,7 @@ router.get("/email-search", emailSearchLimiter, async (req, res) => {
     return res.status(400).json({ message: "Query parameter 'q' is required" });
   }
   try {
-    res.json(await emailService.searchEmails(EA_USER_ID, { q, limit, offset, debug: debug === "1" }));
+    res.json(await emailService.searchEmails(ownerUserId(), { q, limit, offset, debug: debug === "1" }));
   } catch (err) {
     console.error("[EA] Email search error:", errorMessage(err));
     const status = errorStatus(err);

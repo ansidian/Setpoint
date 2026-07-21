@@ -19,10 +19,12 @@ const mockActual = {
   getCalendarBillsRange: vi.fn(),
   testConnection: vi.fn(),
   createQuickTxn: vi.fn(),
+  invalidateActualMetadataCache: vi.fn(),
 };
 const mockActualLocal = {
   describeLocalActualCache: vi.fn(),
   hydrateLocalActualCache: vi.fn(),
+  openLocalBudgetClient: vi.fn(),
   readLocalActualMetadata: vi.fn(),
 };
 const mockDb = {
@@ -73,8 +75,10 @@ beforeEach(() => {
     backupSizeBytes: 512,
     backupPrune: { removed: 0, kept: 1 },
   });
+  mockActualLocal.openLocalBudgetClient.mockReset();
   mockActualLocal.readLocalActualMetadata.mockReset();
   mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
+  mockActual.invalidateActualMetadataCache.mockResolvedValue(undefined);
   mockActual.getPayees.mockResolvedValue([]);
   mockActual.getMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [], schedules: [], recentTransactions: [] });
   mockDb.execute.mockReset();
@@ -96,7 +100,7 @@ const {
   hydrateActualCache,
   resolveBillPaySeed,
   resolveBillPaySample,
-  __resetBillsMirrorRefreshTimersForTests,
+  stopBillsMirrorRefreshWorker,
 } = await import("./bills-service.ts");
 
 function rowResult(rows: Array<Record<string, unknown>> = []) {
@@ -105,6 +109,29 @@ function rowResult(rows: Array<Record<string, unknown>> = []) {
 
 describe("Bill Pay resolver service", () => {
   it("loads a triaged server candidate by email id before resolving without Actual metadata", async () => {
+    const metadataReader = vi.fn().mockResolvedValue({
+      accounts: [],
+      payees: [],
+      payeeMap: {},
+      categories: [],
+      schedules: [],
+      recentTransactions: [],
+      syncHealth: {
+        state: "unavailable",
+        lastSuccessAt: null,
+        lastAttemptAt: null,
+        lastError: "metadata fixture unavailable",
+      },
+    });
+    const occurrenceReader = vi.fn().mockResolvedValue({
+      schedules: [],
+      syncHealth: {
+        state: "unavailable",
+        lastSuccessAt: null,
+        lastError: "occurrence fixture unavailable",
+      },
+    });
+    const transactionReader = vi.fn().mockResolvedValue({ transactions: [] });
     mockDb.execute
       .mockResolvedValueOnce({
         rows: [{
@@ -146,11 +173,20 @@ describe("Bill Pay resolver service", () => {
         }],
       });
 
-    const result = await resolveBillPaySeed("u1", {
-      emailId: "msg-1",
-      candidate: { payee_hint: "Client fallback", amount: 1 },
-      source: "triage",
-    });
+    const result = await resolveBillPaySeed(
+      "u1",
+      {
+        emailId: "msg-1",
+        candidate: { payee_hint: "Client fallback", amount: 1 },
+        source: "triage",
+      },
+      {
+        metadataReader,
+        occurrenceReader,
+        transactionReader,
+        now: new Date("2026-07-17T12:00:00.000Z"),
+      },
+    );
 
     expect(result.mapping).toMatchObject({
       status: "matched",
@@ -164,7 +200,20 @@ describe("Bill Pay resolver service", () => {
       amount: 64.2,
       due_date: "2026-05-29",
     });
+    expect(occurrenceReader).toHaveBeenCalledWith(
+      "u1",
+      { start: "2026-05-29", end: "2026-05-29" },
+      { dbClient: mockDb },
+    );
+    expect(transactionReader).toHaveBeenCalledWith("u1", {
+      start: "2026-05-29",
+      end: "2026-05-29",
+      direction: "all",
+      include_transfers: true,
+      limit: 100,
+    });
     expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActualLocal.openLocalBudgetClient).not.toHaveBeenCalled();
   });
 
   it("resolves a pasted-text mapping sample without requiring an email id", async () => {
@@ -221,7 +270,10 @@ describe("Bill Pay resolver service", () => {
 describe("sendBill", () => {
   it("forwards to actual.sendBill and schedules a delayed mirror refresh", async () => {
     mockActual.sendBill.mockResolvedValueOnce({ id: "bill-1" });
-    mockDb.execute.mockResolvedValueOnce(rowResult());
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+      accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
+    });
+    mockDb.execute.mockResolvedValue(rowResult());
     const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
     expect(out).toEqual({ id: "bill-1" });
     expect(mockActual.sendBill).toHaveBeenCalledWith({ payee: "x", amount: 10, type: "bill" }, "u1");
@@ -229,6 +281,10 @@ describe("sendBill", () => {
       sql: expect.stringMatching(/ea_bills_mirror_state/i),
       args: expect.arrayContaining(["u1"]),
     }));
+    await vi.waitFor(() => {
+      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
+    });
+    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -254,11 +310,14 @@ describe("lightweight write reconciliation on sync-push failure", () => {
   }
 
   afterEach(() => {
-    __resetBillsMirrorRefreshTimersForTests();
+    stopBillsMirrorRefreshWorker();
   });
 
   it("sendBill: schedules a mirror refresh and returns partial success instead of throwing", async () => {
     mockActual.sendBill.mockRejectedValueOnce(localWriteSyncError());
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+      accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
+    });
     // SELECT pending_refresh_at (mirror state) then the upsert.
     mockDb.execute.mockResolvedValue(rowResult());
 
@@ -270,26 +329,44 @@ describe("lightweight write reconciliation on sync-push failure", () => {
       code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
     });
     expectMirrorRefreshScheduled();
+    await vi.waitFor(() => {
+      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
+    });
+    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
   });
 
   it("markBillPaid: still reconciles and does not surface a hard failure", async () => {
     mockActual.markBillPaid.mockRejectedValueOnce(localWriteSyncError());
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+      accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
+    });
     mockDb.execute.mockResolvedValue(rowResult());
 
     const out = await markBillPaid("u1", "sched-1");
 
     expect(out).toMatchObject({ syncPending: true, localWriteApplied: true });
     expectMirrorRefreshScheduled();
+    await vi.waitFor(() => {
+      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
+    });
+    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
   });
 
   it("createQuickTxn: still reconciles and does not surface a hard failure", async () => {
     mockActual.createQuickTxn.mockRejectedValueOnce(localWriteSyncError());
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+      accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
+    });
     mockDb.execute.mockResolvedValue(rowResult());
 
     const out = await createQuickTxn("u1", { accountName: "Checking", amount: 5, payee: "p" });
 
     expect(out).toMatchObject({ syncPending: true, localWriteApplied: true });
     expectMirrorRefreshScheduled();
+    await vi.waitFor(() => {
+      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
+    });
+    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
   });
 
   it("re-throws errors without localWriteApplied and skips mirror scheduling", async () => {
@@ -396,6 +473,7 @@ describe("listAccounts", () => {
   });
 
   it("can explicitly refresh empty metadata projections through the worker after lightweight projection fails", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mockDb.execute
       .mockResolvedValueOnce(rowResult([
         {
@@ -429,5 +507,21 @@ describe("listAccounts", () => {
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
     }));
+    expect(consoleWarn).toHaveBeenNthCalledWith(
+      1,
+      "[EA] Cached Actual metadata projection failed:",
+      "lightweight metadata unavailable",
+    );
+    expect(consoleWarn).toHaveBeenNthCalledWith(
+      2,
+      "[EA] Lightweight Actual metadata projection failed:",
+      "lightweight metadata unavailable",
+    );
+    expect(consoleWarn).toHaveBeenNthCalledWith(
+      3,
+      "[EA] Falling back to Actual worker metadata projection:",
+      "lightweight metadata unavailable",
+    );
+    consoleWarn.mockRestore();
   });
 });

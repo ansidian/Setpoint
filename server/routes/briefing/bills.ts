@@ -1,15 +1,21 @@
 import { Router } from "express";
-import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.ts";
+import {
+  requireCookieSessionOrApiTokenScope,
+  requireRecentPasswordAuth,
+} from "../../middleware/auth.ts";
 import * as billsService from "../../bills/bills-service.ts";
 import { validateActualBudgetUrl } from "../../platform/settings-schemas.ts";
-import { billExtractLimiter } from "../../middleware/rate-limits.ts";
+import {
+  actualConnectionLimiter,
+  billExtractLimiter,
+} from "../../middleware/rate-limits.ts";
 import type { ActualBillWriteInput } from "../../actual/actual.ts";
 
 type HttpError = Error & { status?: number };
 
 const router = Router();
 const quickTxnRouter = Router();
-const EA_USER_ID = process.env.EA_USER_ID as string;
+const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function isBlank(value: unknown): boolean {
   return value == null || String(value).trim() === "";
@@ -57,7 +63,7 @@ router.post("/actual/send", async (req, res) => {
     return res.status(400).json({ message: validationError });
   }
   try {
-    res.json(await billsService.sendBill(EA_USER_ID, billData as ActualBillWriteInput));
+    res.json(await billsService.sendBill(ownerUserId(), billData as ActualBillWriteInput));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error sending to Actual Budget:", err);
@@ -80,7 +86,7 @@ quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("ac
     return res.status(400).json({ message: "amount must be greater than 0" });
   }
   try {
-    const result = await billsService.createQuickTxn(EA_USER_ID, {
+    const result = await billsService.createQuickTxn(ownerUserId(), {
       accountName: account,
       amount: numericAmount,
       payee: String(payee),
@@ -104,7 +110,7 @@ router.post("/bills/extract", billExtractLimiter, async (req, res) => {
     return res.status(400).json({ message: "body is required" });
   }
   try {
-    res.json(await billsService.extractBill(EA_USER_ID, { subject, from, body }));
+    res.json(await billsService.extractBill(ownerUserId(), { subject, from, body }));
   } catch (error: unknown) {
     const err = error as HttpError;
     const status = err.status || 500;
@@ -125,7 +131,7 @@ router.post("/bills/resolve", async (req, res) => {
     source = "triage",
   } = req.body || {};
   try {
-    res.json(await billsService.resolveBillPaySeed(EA_USER_ID, {
+    res.json(await billsService.resolveBillPaySeed(ownerUserId(), {
       emailId,
       accountId,
       subject,
@@ -146,7 +152,7 @@ router.post("/bills/resolve", async (req, res) => {
 router.post("/bills/resolve-sample", async (req, res) => {
   const { mappings, email, candidate } = req.body || {};
   try {
-    res.json(await billsService.resolveBillPaySample(EA_USER_ID, {
+    res.json(await billsService.resolveBillPaySample(ownerUserId(), {
       mappings,
       email,
       candidate,
@@ -161,7 +167,7 @@ router.post("/bills/resolve-sample", async (req, res) => {
 
 router.post("/actual/bills/:id/mark-paid", async (req, res) => {
   try {
-    res.json(await billsService.markBillPaid(EA_USER_ID, req.params.id));
+    res.json(await billsService.markBillPaid(ownerUserId(), req.params.id));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error marking bill paid:", err);
@@ -171,7 +177,7 @@ router.post("/actual/bills/:id/mark-paid", async (req, res) => {
 
 router.get("/actual/metadata", async (_req, res) => {
   try {
-    res.json(await billsService.getMetadata(EA_USER_ID));
+    res.json(await billsService.getMetadata(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget metadata:", err.message);
@@ -181,7 +187,7 @@ router.get("/actual/metadata", async (_req, res) => {
 
 router.get("/actual/accounts", async (_req, res) => {
   try {
-    res.json(await billsService.listAccounts(EA_USER_ID));
+    res.json(await billsService.listAccounts(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget accounts:", err.message);
@@ -191,7 +197,7 @@ router.get("/actual/accounts", async (_req, res) => {
 
 router.get("/actual/payees", async (_req, res) => {
   try {
-    res.json(await billsService.listPayees(EA_USER_ID));
+    res.json(await billsService.listPayees(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget payees:", err.message);
@@ -201,7 +207,7 @@ router.get("/actual/payees", async (_req, res) => {
 
 router.get("/actual/categories", async (_req, res) => {
   try {
-    res.json(await billsService.listCategories(EA_USER_ID));
+    res.json(await billsService.listCategories(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget categories:", err.message);
@@ -209,7 +215,7 @@ router.get("/actual/categories", async (_req, res) => {
   }
 });
 
-router.post("/actual/test", async (req, res) => {
+router.post("/actual/test", requireRecentPasswordAuth, actualConnectionLimiter, async (req, res) => {
   const { serverURL, password, syncId } = req.body || {};
   if (serverURL) {
     const validation = validateActualBudgetUrl(serverURL);
@@ -219,7 +225,7 @@ router.post("/actual/test", async (req, res) => {
   }
   const overrides = serverURL && syncId ? { serverURL, password, syncId } : null;
   try {
-    res.json(await billsService.testConnection(EA_USER_ID, overrides));
+    res.json(await billsService.testConnection(ownerUserId(), overrides));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget test failed:", err.message);
@@ -227,9 +233,50 @@ router.post("/actual/test", async (req, res) => {
   }
 });
 
+router.post("/actual/connection", requireRecentPasswordAuth, actualConnectionLimiter, async (req, res) => {
+  const { serverURL, password, syncId } = req.body || {};
+  if (typeof serverURL !== "string" || typeof syncId !== "string") {
+    return res.status(400).json({ message: "Actual Budget server URL and sync ID are required" });
+  }
+  if (password !== undefined && typeof password !== "string") {
+    return res.status(400).json({ message: "Actual Budget password must be a string" });
+  }
+  const validation = validateActualBudgetUrl(serverURL);
+  if (!validation.valid) {
+    return res.status(400).json({ message: validation.message, success: false });
+  }
+  if (!syncId.trim()) {
+    return res.status(400).json({ message: "Actual Budget sync ID is required", success: false });
+  }
+  try {
+    return res.json(await billsService.saveActualConnection(ownerUserId(), {
+      serverURL: validation.value!,
+      password,
+      syncId: syncId.trim(),
+    }));
+  } catch (error: unknown) {
+    const err = error as HttpError;
+    console.error("Actual Budget connection save failed:", err.message);
+    return res.status(err.status || 400).json({
+      message: err.message || "Actual Budget connection could not be saved",
+      success: false,
+    });
+  }
+});
+
+router.delete("/actual/connection", requireRecentPasswordAuth, async (_req, res) => {
+  try {
+    return res.json(await billsService.removeActualConnection(ownerUserId()));
+  } catch (error: unknown) {
+    const err = error as HttpError;
+    console.error("Actual Budget connection removal failed:", err.message);
+    return res.status(err.status || 500).json({ message: "Actual Budget credentials could not be removed" });
+  }
+});
+
 router.post("/actual/cache/hydrate", async (_req, res) => {
   try {
-    res.json(await billsService.hydrateActualCache(EA_USER_ID));
+    res.json(await billsService.hydrateActualCache(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget cache hydration failed:", err.message);
@@ -239,7 +286,7 @@ router.post("/actual/cache/hydrate", async (_req, res) => {
 
 router.get("/actual/cache/status", async (_req, res) => {
   try {
-    res.json(await billsService.getActualCacheStatus(EA_USER_ID));
+    res.json(await billsService.getActualCacheStatus(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget cache status check failed:", err.message);

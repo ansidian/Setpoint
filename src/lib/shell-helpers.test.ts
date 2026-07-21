@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { phaseIndex, briefingPhaseLabel, greetingFor, dueDateToMs, buildTimeline, deriveLane, formatChipDateTime } from "./shell-helpers";
-import { greetingPools } from "./dashboard-helpers";
+import { phaseIndex, briefingPhaseLabel, dueDateToMs, buildTimeline, deriveLane, formatChipDateTime } from "./shell-helpers";
 
 const iso = (ms: number | null) => new Date(ms!).toISOString();
 
@@ -80,73 +79,9 @@ describe("briefingPhaseLabel", () => {
   });
 });
 
-describe("greetingFor — personable pools", () => {
-  it("returns a phrase from the correct pool for the hour", () => {
-    const { text } = greetingFor(atHourPacific(8));
-    expect(greetingPools[1].greetings).toContain(text); // morning pool
-  });
-
-  it("returns the right label for each phase", () => {
-    expect(greetingFor(atHourPacific(2)).label).toBe("Late night");
-    expect(greetingFor(atHourPacific(8)).label).toBe("Good morning");
-    expect(greetingFor(atHourPacific(14)).label).toBe("Good afternoon");
-    expect(greetingFor(atHourPacific(19)).label).toBe("Good evening");
-    expect(greetingFor(atHourPacific(22)).label).toBe("Tonight");
-  });
-
-  it("is stable for the same phase on the same day", () => {
-    const a = greetingFor(atHourPacific(8));
-    const b = greetingFor(atHourPacific(10));
-    expect(a.text).toBe(b.text);
-  });
-
-  it("may change when the phase changes", () => {
-    // Not strictly guaranteed (different pools), but label must differ:
-    const morning = greetingFor(atHourPacific(8));
-    const afternoon = greetingFor(atHourPacific(14));
-    expect(morning.label).not.toBe(afternoon.label);
-  });
-
-  it("ignores the name argument (pool phrases are complete sentences)", () => {
-    const a = greetingFor(atHourPacific(8), "");
-    const b = greetingFor(atHourPacific(8), "Andy");
-    expect(a.text).toBe(b.text);
-  });
-});
-
-// dueDateToMs returns an absolute UTC instant, so these assertions are
-// independent of the host's local timezone — the PST cases pin the real Pacific
-// wall-clock instant the buggy fixed-7h-offset code computed one hour early.
+// These absolute instants own Pacific wall-clock parsing across PST/PDT and
+// protect the fallback used when Todoist supplies no usable due time.
 describe("dueDateToMs (Pacific DST-correct)", () => {
-  it("anchors an 11:59pm deadline to true Pacific time during PST (winter)", () => {
-    // 2026-01-15 is PST (UTC-8): 11:59pm PT == 2026-01-16T07:59:00Z.
-    expect(iso(dueDateToMs("2026-01-15", "11:59pm"))).toBe("2026-01-16T07:59:00.000Z");
-  });
-
-  it("buckets a small-hours deadline onto the correct Pacific day during PST", () => {
-    // 12:30am PST == 2026-01-15T08:30:00Z (same calendar day in PT).
-    expect(iso(dueDateToMs("2026-01-15", "12:30am"))).toBe("2026-01-15T08:30:00.000Z");
-  });
-
-  it("uses the 11:59pm Pacific fallback when due_time is missing or unparseable", () => {
-    expect(iso(dueDateToMs("2026-01-15", ""))).toBe("2026-01-16T07:59:00.000Z");
-    expect(iso(dueDateToMs("2026-01-15", "nonsense"))).toBe("2026-01-16T07:59:00.000Z");
-  });
-
-  it("stays exact during PDT (summer, UTC-7)", () => {
-    // 11:59pm PDT == 2026-07-16T06:59:00Z.
-    expect(iso(dueDateToMs("2026-07-15", "11:59pm"))).toBe("2026-07-16T06:59:00.000Z");
-  });
-
-  it("returns null for an empty date", () => {
-    expect(dueDateToMs("", "5pm")).toBeNull();
-  });
-});
-
-// P3-15's more exhaustive offset coverage. Both suites pass against the resolved
-// dueDateToMs (shared epochFromLa) since they assert absolute UTC instants for
-// Jan/Jul dates, well clear of DST transitions. Reuses the top-level `iso`.
-describe("dueDateToMs — resolves the real Pacific offset (PST vs PDT)", () => {
   it("PST-season 11:59pm resolves to 23:59 PST = 07:59Z next day (UTC-8)", () => {
     // January → PST (UTC-8). 23:59 PST on Jan 15 == 07:59Z on Jan 16.
     expect(iso(dueDateToMs("2026-01-15", "11:59pm"))).toBe("2026-01-16T07:59:00.000Z");
@@ -177,8 +112,8 @@ describe("dueDateToMs — resolves the real Pacific offset (PST vs PDT)", () => 
   });
 
   it("parses minute precision and lowercases am/pm with surrounding space", () => {
-    // "9:00 AM" PST == 09:00 + 8 == 17:00Z same day.
     expect(iso(dueDateToMs("2026-01-15", "9:00 AM"))).toBe("2026-01-15T17:00:00.000Z");
+    expect(iso(dueDateToMs("2026-01-15", "12:30am"))).toBe("2026-01-15T08:30:00.000Z");
   });
 
   it("handles the am/pm 12-hour edge cases", () => {

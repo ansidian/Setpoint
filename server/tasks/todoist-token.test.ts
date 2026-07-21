@@ -30,6 +30,7 @@ async function createTodoistTokenTestDb() {
       todoist_oauth_access_token_expires_at TEXT,
       todoist_oauth_scope TEXT,
       todoist_oauth_token_type TEXT,
+      todoist_connection_mode TEXT,
       todoist_needs_reauth INTEGER NOT NULL DEFAULT 0
     );
   `);
@@ -121,14 +122,15 @@ describe("getTodoistApiToken", () => {
         scope: "data:read_write,data:delete",
       }),
     }));
+    const resolveApplicationCredentials = vi.fn(async () => ({
+      clientId: "runtime-client-id",
+      clientSecret: "runtime-client-secret",
+    }));
 
     const token = await getTodoistApiToken("u1", {
       dbClient: testState.db.current,
       fetchFn,
-      env: {
-        TODOIST_CLIENT_ID: "client-id",
-        TODOIST_CLIENT_SECRET: "client-secret",
-      },
+      resolveApplicationCredentials,
       now: new Date("2026-05-04T20:00:00.000Z"),
     });
 
@@ -142,16 +144,18 @@ describe("getTodoistApiToken", () => {
     );
     const [, init] = fetchFn.mock.calls[0]! as unknown as [unknown, RequestInit];
     const body = init.body as URLSearchParams;
-    expect(body.get("client_id")).toBe("client-id");
-    expect(body.get("client_secret")).toBe("client-secret");
+    expect(body.get("client_id")).toBe("runtime-client-id");
+    expect(body.get("client_secret")).toBe("runtime-client-secret");
     expect(body.get("grant_type")).toBe("refresh_token");
     expect(body.get("refresh_token")).toBe("refresh-1");
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(resolveApplicationCredentials).toHaveBeenCalledTimes(1);
 
     const row = (await testState.db.current.execute("SELECT * FROM ea_settings WHERE user_id = 'u1'")).rows[0]!;
     expect(row.todoist_api_token_encrypted).toBe("enc:fresh-access");
     expect(row.todoist_oauth_refresh_token_encrypted).toBe("enc:refresh-2");
     expect(row.todoist_oauth_access_token_expires_at).toBe("2026-05-04T21:00:00.000Z");
+    expect(row.todoist_connection_mode).toBe("oauth");
     expect(row.todoist_oauth_scope).toBe("data:read_write,data:delete");
     expect(row.todoist_oauth_token_type).toBe("Bearer");
   });

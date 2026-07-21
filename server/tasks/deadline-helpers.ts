@@ -6,22 +6,6 @@ interface DeadlineLike {
   points_possible?: number | null;
 }
 
-export function carryForwardCompletedTodoist<T extends DeadlineLike>(newList: T[], prevList: T[] | null | undefined, boundary: string): T[] {
-  if (!prevList?.length) return newList;
-  const keyOf = (task: T) => `${task.id}:${task.due_date}`;
-  const keys = new Set(newList.map(keyOf));
-  const carried: T[] = [];
-  for (const task of prevList) {
-    if (task.status !== "complete" || task._tombstone) continue;
-    if (!task.due_date || task.due_date < boundary) continue;
-    const key = keyOf(task);
-    if (keys.has(key)) continue;
-    carried.push(task);
-    keys.add(key);
-  }
-  return carried.length ? [...newList, ...carried] : newList;
-}
-
 export function computeDeadlineStats(deadlines: DeadlineLike[]) {
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" });
   const today = fmt.format(new Date());

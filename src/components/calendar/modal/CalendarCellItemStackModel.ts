@@ -3,6 +3,28 @@ import { getVisibleCellItemCount } from "./calendarCellItemMetrics";
 export interface CalendarCellStackItem {
   id?: unknown;
   isGhost?: boolean;
+  selectionId?: unknown;
+  matchItemIds?: unknown[];
+}
+
+export function calendarCellItemMatchesSelected(item: CalendarCellStackItem, selectedItemId: unknown): boolean {
+  if (String(item.id) === String(selectedItemId)) return true;
+  if (item.selectionId != null && String(item.selectionId) === String(selectedItemId)) return true;
+  return (item.matchItemIds || []).some((id) => String(id) === String(selectedItemId));
+}
+
+export function getSelectedHiddenCellItemKey<T extends CalendarCellStackItem>({
+  hiddenItems,
+  selectedItemId,
+  dateKey,
+}: {
+  hiddenItems: T[];
+  selectedItemId: unknown;
+  dateKey?: string | null;
+}): string | null {
+  if (selectedItemId == null) return null;
+  const selectedItem = hiddenItems.find((item) => calendarCellItemMatchesSelected(item, selectedItemId));
+  return selectedItem ? `${dateKey || ""}:${selectedItem.selectionId ?? selectedItem.id}` : null;
 }
 
 export interface CalendarCellStackMetrics {
@@ -56,10 +78,6 @@ export function getReservedCellItemLaneHeight(count: number, metrics?: CalendarC
   const itemHeight = metrics?.spanLaneHeight ?? metrics?.itemHeight ?? 28;
   const gap = metrics?.spanLaneGap ?? metrics?.gap ?? 4;
   return count * (itemHeight + gap);
-}
-
-export function getMeasuredVisibleCellItemCount<T extends CalendarCellStackItem>(items: T[], availableHeight: number = Number.NaN, metrics?: CalendarCellStackMetrics): number {
-  return getMeasuredCellItemStackPlan(items, availableHeight, metrics).visibleCount;
 }
 
 export function getMeasuredCellItemStackPlan<T extends CalendarCellStackItem>(items: T[], availableHeight: number = Number.NaN, metrics?: CalendarCellStackMetrics): { visibleCount: number; overflowVisible: boolean } {

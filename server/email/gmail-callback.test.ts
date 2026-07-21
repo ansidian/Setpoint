@@ -24,12 +24,17 @@ vi.mock("../db/connection.ts", () => ({
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: (value: string) => value,
   encrypt: (value: string) => value,
+  createEncryption: () => ({
+    decrypt: (value: string) => value,
+    encrypt: (value: string) => value,
+  }),
+  getRootKeyHealth: () => ({ configured: true, valid: true, fingerprint: "sha256:test" }),
 }));
 
 const fetchMock: FetchMock = vi.fn<(input: unknown, init?: RequestInit) => Promise<unknown>>();
 vi.stubGlobal("fetch", fetchMock);
 
-const { handleCallback } = await import("./gmail.ts");
+const { getAuthUrl, handleCallback } = await import("./gmail.ts");
 
 describe("gmail callback canonicalization", () => {
   beforeEach(async () => {
@@ -38,6 +43,7 @@ describe("gmail callback canonicalization", () => {
         "006_email_search_embedding_state.sql",
         "007_email_search_ai_usage.sql",
         "028_provider_needs_reauth.sql",
+        "032_canonical_url.sql",
       ],
     });
     fetchMock.mockReset();
@@ -82,7 +88,10 @@ describe("gmail callback canonicalization", () => {
         json: async () => ({ emailAddress: "User@example.com" }),
       });
 
-    const result = await handleCallback("auth-code", "ignored", "user-1");
+    const result = await handleCallback("auth-code", "ignored", "user-1", {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    });
 
     expect(result).toEqual({
       email: "User@example.com",
@@ -114,6 +123,35 @@ describe("gmail callback canonicalization", () => {
       refresh_token: "rtok",
       scopes: ["https://www.googleapis.com/auth/gmail.modify"],
     });
+    const tokenBody = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(tokenBody.get("client_id")).toBe("client-id");
+    expect(tokenBody.get("client_secret")).toBe("client-secret");
+  });
+
+  it("builds the combined Gmail and Calendar authorization URL from canonical configuration", async () => {
+    await currentDb().execute({
+      sql: `INSERT INTO ea_instance_metadata
+              (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+            VALUES (1, ?, 'owner_confirmed', 100, 100)`,
+      args: ["https://setpoint.example.com"],
+    });
+
+    const url = new URL(await getAuthUrl("state-value", {
+      clientId: "client-id",
+      clientSecret: "must-not-appear",
+    }));
+    const scopes = url.searchParams.get("scope")?.split(" ") ?? [];
+    expect(url.searchParams.get("client_id")).toBe("client-id");
+    expect(url.searchParams.get("redirect_uri")).toBe(
+      "https://setpoint.example.com/api/ea/accounts/gmail/callback",
+    );
+    expect(url.searchParams.get("state")).toBe("state-value");
+    expect(scopes).toEqual(expect.arrayContaining([
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+    ]));
+    expect(url.toString()).not.toContain("must-not-appear");
   });
 
   it("sends the token-exchange and profile fetches with an AbortSignal (REL-02)", async () => {
@@ -138,9 +176,35 @@ describe("gmail callback canonicalization", () => {
         json: async () => ({ emailAddress: "user@example.com" }),
       });
 
-    await handleCallback("auth-code", "ignored", "user-1");
+    await handleCallback("auth-code", "ignored", "user-1", {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    });
 
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(fetchMock.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("uses the persisted canonical Google callback for token exchange", async () => {
+    await currentDb().execute({
+      sql: `INSERT INTO ea_instance_metadata
+              (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+            VALUES (1, ?, 'owner_confirmed', 100, 100)`,
+      args: ["https://setpoint.example.com"],
+    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "tok", refresh_token: "rtok", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ emailAddress: "user@example.com" }) });
+
+    await handleCallback("auth-code", null, "user-1", {
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    });
+
+    const body = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(body.get("redirect_uri")).toBe("https://setpoint.example.com/api/ea/accounts/gmail/callback");
   });
 });

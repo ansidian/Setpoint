@@ -6,7 +6,7 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 
 - `tasks-service.ts` — Todoist task complete/delete/projects/labels service wrappers
 - `deadlines-read.ts` — reads current/range deadlines: Todoist merge, tombstones, reminders
-- `deadline-helpers.ts` — task reconciliation: active filters, stats (covered by `carry-forward.test.ts`)
+- `deadline-helpers.ts` — task reconciliation: active filters and stats
 - `todoist.ts` — Todoist facade: fetch tasks, sync health
 - `todoist-api.ts` — Todoist REST client
 - `todoist-mirror.ts` — syncs tasks into the local Todoist mirror tables (thin IO orchestrator over the two pure modules below)
@@ -15,6 +15,10 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 - `todoist-webhook.ts` — webhook delta processing
 - `todoist-reminder-source.ts` — exposes Todoist deadlines as reminder sources
 - `todoist-token.ts` — Todoist OAuth token storage/refresh
+- `todoist-personal-token.ts` — read-only validation and atomic persistence for personal-token candidates
+- `todoist-oauth-credentials.ts` — runtime Todoist app credential selection, candidate binding, promotion, and env migration
+- `todoist-oauth.ts` — browser-bound OAuth begin/callback exchange plus redacted connection status
+- `todoist-setup.ts` — documented route-facing entry module for Todoist setup services
 - `tombstones.ts` — tombstones for completed recurring tasks (resurrection guard)
 
 (Other tests are not listed: `X.test.ts(x)` covers `X` by convention.)

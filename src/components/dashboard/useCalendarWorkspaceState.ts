@@ -41,7 +41,6 @@ interface CalendarWorkspaceOptions {
 // on via the passed-in `setCalendarMounted` when a deep-link opens the calendar,
 // which avoids a circular dependency with the shell's `setShellTab`.
 export default function useCalendarWorkspaceState({
-  isMobile,
   tab,
   setShellTab,
   setCalendarMounted,
@@ -94,7 +93,7 @@ export default function useCalendarWorkspaceState({
     setShellTab("calendar");
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
     if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
-  }, [isMobile, calendarView, showBills, loadCalendarDeadlines, loadCalendarBills, setShellTab, setCalendarMounted]);
+  }, [calendarView, showBills, loadCalendarDeadlines, loadCalendarBills, setShellTab, setCalendarMounted]);
 
   const jumpCalendarToToday = useCallback(() => {
     setCalendarJumpTodayRequestId((value) => value + 1);

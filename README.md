@@ -55,82 +55,95 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 
 For a detailed look at how everything fits together, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Setup (BYOK)
+## Deploy on Render
 
-This project requires your own API keys and credentials.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/ansidian/Setpoint/tree/master)
 
-### Environment variables
+The Blueprint creates one native Node 24 web service on Render's paid Starter
+plan. It asks for only a [Turso](https://turso.tech/) database URL and auth token;
+Render generates the 256-bit `EA_ENCRYPTION_KEY` and a separate first-claim
+`EA_SETUP_TOKEN`. Starter is intentionally
+always on because Setpoint's schedulers, reconciliation jobs, and reminders stop
+when a service sleeps. Check Render's current pricing before creating the
+service; the free plan is not a supported Setpoint production configuration.
 
-```bash
-# Auth (run `node server/hash-password.ts <your-password>` to generate)
-EA_PASSWORD_HASH=$2b$12$...
-EA_USER_ID=your-user-id
+1. Create a Turso database and token, then click **Deploy to Render**.
+2. Enter `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` when Render prompts.
+3. Wait for `/healthz` to pass, copy the generated `EA_SETUP_TOKEN` from the
+   service environment, then open the service URL and claim the instance by
+   entering that token, confirming the canonical URL, and creating an owner
+   password of at least 12 characters.
+4. Save the one-time recovery codes offline, then use the skippable onboarding
+   checklist to connect email/calendar, AI, tasks, weather, finances, and
+   notifications as useful. Provider credentials are entered write-only inside
+   Setpoint; they are not required to boot the service.
 
-# WebAuthn passkeys. Production requires all three and must use your HTTPS app origin.
-# Local dev defaults to Setpoint / localhost / http://localhost:5173 when unset.
-EA_WEBAUTHN_RP_NAME=Setpoint
-EA_WEBAUTHN_RP_ID=your-app-domain.com
-EA_WEBAUTHN_ORIGIN=https://your-app-domain.com
+Turso and the root key are separate parts of the backup boundary. Copy the
+generated `EA_ENCRYPTION_KEY` from Render's environment settings into a secure
+password manager or secret backup. Setpoint cannot display or reconstruct it.
+A Turso backup without that exact key cannot decrypt stored credentials, and a
+key backup without the Turso database does not restore the installation.
 
-# Database (Turso)
-TURSO_DATABASE_URL=libsql://your-ea-db.turso.io
-TURSO_AUTH_TOKEN=
+### Environment variable groups
 
-# Encryption key for stored credentials (64-char hex)
-EA_ENCRYPTION_KEY=
+The complete template is in [`.env.example`](.env.example):
 
-# Email AI providers (BYOK)
-ANTHROPIC_API_KEY=
+- **Required production bootstrap:** `TURSO_DATABASE_URL`,
+  `TURSO_AUTH_TOKEN`, a 256-bit hex or base64 `EA_ENCRYPTION_KEY`, and a random
+  `EA_SETUP_TOKEN` of at least 32 characters for the one-time owner claim.
+- **Optional advanced provider sources:** AI, Google, Todoist, Pirate Weather,
+  Google Places, and Gmail Pub/Sub values. Normal setup stores these write-only
+  in Setpoint; existing host values remain supported and can be migrated from
+  Settings without revealing them.
+- **Operational tuning and compatibility:** worker timing, local-development
+  switches, and legacy owner/origin imports. Fresh installs do not set an owner
+  ID, password hash, WebAuthn origin, or redirect URI.
 
-# OpenAI (enables OpenAI email AI, bill extraction, embeddings, and Ask AI)
-OPENAI_API_KEY=
-
-# Google OAuth (Gmail + Calendar)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=https://your-app.onrender.com/api/ea/accounts/gmail/callback
-GMAIL_PUBSUB_TOPIC=projects/your-project/topics/gmail-push
-GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
-
-# Todoist OAuth refresh + webhook verification
-TODOIST_CLIENT_ID=todoist-developer-app-client-id
-TODOIST_CLIENT_SECRET=todoist-developer-app-client-secret
-
-# Pirate Weather (optional)
-PIRATE_WEATHER_API_KEY=
-
-# Startup workers (optional)
-EA_STARTUP_WORKER_DELAY_MS=
-EA_STARTUP_WORKER_JITTER_MS=
-EA_STARTUP_INDEXER_OFFSET_MS=
-EA_STARTUP_BACKFILL_OFFSET_MS=
-EA_STARTUP_TODOIST_SYNC_OFFSET_MS=
-EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=
-```
-
-In production, startup workers are delayed so the web server can accept the
-first dashboard requests before catch-up jobs start. The default worker delay is
-60-120 seconds, with an extra 2 minutes before the passive email indexer and an
-extra 10 minutes before email backfill. Backfill only resumes interrupted jobs
-on startup by default; set `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` to queue a
-new broad backfill automatically.
+Production startup delays workers so the web server can accept initial requests
+before catch-up jobs start. The default worker delay is 60–120 seconds, with an
+extra 2 minutes before the passive email indexer and an extra 10 minutes before
+email backfill. Backfill resumes interrupted jobs by default; set
+`EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` only to queue a new broad backfill.
 
 ### Dashboard auth and passkey recovery
 
-The private app uses a dashboard password plus WebAuthn passkeys. If no
-registered passkey exists, a valid password creates an authenticated browser
-session and Settings -> System shows setup mode. After the first passkey is
-registered, future password login creates a short-lived pending password
-authentication and the browser must complete passkey authentication before the
-server issues the `ea_session` cookie.
+On a fresh database, open Setpoint after startup, enter the out-of-band
+`EA_SETUP_TOKEN`, confirm the visible canonical URL, and create the owner
+password in the browser. The first successful claim atomically creates the
+stable owner ID, stores only the bcrypt password hash, persists the confirmed
+origin, signs that browser in, and permanently closes public setup. The setup
+token is compared in constant time and is never stored in the database or
+returned by the app. Provider APIs and background workers remain disabled until
+the claim succeeds. `GET /healthz` reports readiness without disclosing claim
+state.
 
-Production startup fails fast unless `EA_WEBAUTHN_RP_NAME`,
-`EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are set. `EA_WEBAUTHN_RP_ID` is
-the hostname only, not a URL. `EA_WEBAUTHN_ORIGIN` must be the HTTPS origin
-served to the browser and must match the RP ID hostname.
+Existing installations may keep `EA_USER_ID` and `EA_PASSWORD_HASH`; startup
+imports that exact legacy identity once. Partial or conflicting legacy auth
+configuration fails closed instead of reopening public setup.
 
-If all passkeys are lost, use the local operator reset script against the
-intended database:
+The private app accepts either the owner password or a registered WebAuthn
+passkey by default. Registering a passkey does not disable password login.
+Settings -> System can explicitly enable strict password-plus-passkey login;
+identity and access changes require a password confirmation from the last ten
+minutes. A passkey-only session can use the dashboard but cannot register or
+remove credentials, change the password or mode/domain, regenerate recovery
+codes, or mint/revoke API tokens until that password step-up succeeds.
+
+Fresh owner claim displays eight one-time offline recovery codes. Setpoint
+stores only their hashes and never returns them through normal Settings reads.
+Using one code replaces the owner password, clears passkeys and pending auth,
+revokes prior sessions and API tokens, and displays a replacement recovery-code
+set once.
+
+The confirmed canonical URL derives the WebAuthn RP ID/origin and provider
+callback URLs. Existing compatible `EA_WEBAUTHN_*` and `GOOGLE_REDIRECT_URI`
+values are imported once when they identify the same origin; ambiguous legacy
+values remain active compatibility fallbacks and are never silently rewritten.
+Changing the domain in Settings requires recent password confirmation and shows
+the affected passkeys and external callback registrations first.
+
+If both normal sign-in and offline recovery are unavailable, use the local
+operator reset script against the intended database:
 
 ```bash
 npm run auth:reset-passkeys -- --dry-run
@@ -138,9 +151,10 @@ npm run auth:reset-passkeys -- --confirm
 ```
 
 The reset clears registered passkeys, pending password-auth attempts, WebAuthn
-challenges, and browser sessions. The next successful password login returns
-the dashboard to passkey setup mode. Scoped API tokens are separate automation
-credentials and do not grant dashboard login.
+challenges, and browser sessions, increments the owner's security generation,
+and restores password-or-passkey mode. Scoped API tokens are separate automation
+credentials and do not grant dashboard login; an in-app offline recovery revokes
+them as part of the credential reset.
 
 ### Opt-in Turso semantic search verification
 
@@ -160,58 +174,24 @@ semantic coverage changes only when you run an explicit bounded backfill.
 
 ### Todoist OAuth and webhook setup
 
-The server uses `TODOIST_CLIENT_SECRET` to verify Todoist's
-`X-Todoist-Hmac-SHA256` signature against the raw webhook body. It also uses
-`TODOIST_CLIENT_ID` plus `TODOIST_CLIENT_SECRET` to refresh Todoist OAuth access
-tokens before they expire.
+The default setup is a personal API token entered in Settings. It supports full
+Todoist read/write behavior and uses periodic reconciliation; OAuth is not
+required.
 
-In the Todoist Developer app console, configure the webhook callback URL to:
+For optional OAuth refresh and real-time webhooks, open **Settings → Connections
+→ Todoist**, expand **Advanced OAuth and webhooks**, and enter the client ID and client secret from your deployment's
+Todoist Developer app. Set the OAuth callback and webhook URLs in Todoist to the
+canonical URLs shown there, then choose **Connect with OAuth**. Setpoint binds the
+callback to the initiating browser, exchanges the code server-side, encrypts the
+access and refresh tokens, and promotes replacement app credentials only after a
+successful callback.
 
-```text
-https://your-app.onrender.com/api/todoist/webhook
-```
-
-Todoist requires webhook URLs to be HTTPS and to omit explicit ports. For local
-testing, expose the Express server with a tunnel and use the tunnel HTTPS URL:
-
-```text
-https://<your-tunnel-host>/api/todoist/webhook
-```
-
-Todoist webhooks are tied to a Todoist app. For personal use, Todoist documents
-that webhooks do not fire for the app creator by default; activate them by
-completing that Todoist app's OAuth flow for your own account. Use scopes:
-
-```text
-data:read_write,data:delete
-```
-
-After exchanging the OAuth code for JSON containing `access_token`,
-`refresh_token`, and `expires_in`, store that full JSON response through the
-authenticated settings API. The app encrypts the access and refresh tokens,
-tracks expiry, and refreshes before Todoist REST/Sync calls:
-
-```bash
-curl -X PUT "https://dashboard.example.com/api/ea/settings" \
-  -H "Content-Type: application/json" \
-  -H "X-Requested-With: Setpoint" \
-  -H "Cookie: ea_session=<your-session-cookie>" \
-  --data-binary @- <<'JSON'
-{
-  "todoist_oauth_token_response": {
-    "access_token": "...",
-    "token_type": "Bearer",
-    "expires_in": 3600,
-    "refresh_token": "...",
-    "scope": "data:read_write,data:delete"
-  }
-}
-JSON
-```
-
-Existing long-lived personal Todoist tokens still work. Setting a personal token
-through the Settings UI clears OAuth refresh metadata and uses personal-token
-mode.
+`TODOIST_CLIENT_ID` and `TODOIST_CLIENT_SECRET` remain supported as advanced host
+fallbacks. Settings identifies that source and can migrate both values into
+Setpoint without revealing them. Webhook HMAC verification and token refresh
+resolve the current credentials at request time, so replacements do not require
+a restart. Saving a personal token later explicitly returns the connection to
+personal-token mode and periodic delivery.
 
 ### Running locally
 
@@ -222,7 +202,21 @@ npm run dev        # runs both Vite (frontend) and Express (backend) concurrentl
 
 Frontend: `http://localhost:5173` — proxies `/api/*` to Express on port 3001.
 
-By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → System when you intentionally want real local triage or need to pause triage job draining.
+By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → Automation when you intentionally want real local triage or need to pause triage job draining.
+
+### Tests
+
+```bash
+npm run test:fast  # local feedback without real filesystem/libsql/Actual integrations
+npm run test:slow  # real filesystem, file-backed libsql, and Actual compatibility tests
+npm test           # complete required non-Playwright suite (fast + slow)
+```
+
+CI requires both the fast and slow commands and reports them as separate steps.
+Playwright remains opt-in through the `test:e2e*` commands.
+Filesystem fixtures are contained under the `setpoint-tests` child of the OS
+temp directory. Windows-locked residue is retained for a 24-hour safety window,
+then later test processes remove at most 100 stale entries per sweep.
 
 ### Production
 

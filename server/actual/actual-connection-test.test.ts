@@ -56,15 +56,34 @@ describe("testActualConnectionHttp", () => {
     expect(result).toEqual({ success: true, budgetCount: 2, budgetFound: true });
     expect(global.fetch).toHaveBeenNthCalledWith(1, "https://actual.example.com/account/login", expect.objectContaining({
       method: "POST",
+      redirect: "manual",
       body: JSON.stringify({ password: "decrypted:ciphertext", loginMethod: "password" }),
     }));
     expect(global.fetch).toHaveBeenNthCalledWith(2, "https://actual.example.com/sync/list-user-files", expect.objectContaining({
+      redirect: "manual",
       headers: expect.objectContaining({ "X-ACTUAL-TOKEN": "token-1" }),
     }));
   });
 
-  it("uses an override URL and sync id while falling back to the stored password", async () => {
+  it("refuses to send the stored password to a changed override URL", async () => {
     settingsRow({ actual_budget_url: "https://stored.example.com" });
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { testActualConnectionHttp } = await import("./actual-connection-test.ts");
+    await expect(testActualConnectionHttp("u1", {
+      serverURL: "https://override.example.com/",
+      syncId: "override-sync",
+    })).rejects.toMatchObject({
+      code: "ACTUAL_PASSWORD_REQUIRED_FOR_SERVER_CHANGE",
+      status: 400,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("may reuse the stored password when the normalized override URL is unchanged", async () => {
+    settingsRow({ actual_budget_url: "https://stored.example.com/actual/" });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ status: "ok", data: { token: "token-1" } }))
       .mockResolvedValueOnce(jsonResponse({ status: "ok", data: [{ groupId: "override-sync" }] }));
@@ -72,15 +91,19 @@ describe("testActualConnectionHttp", () => {
 
     const { testActualConnectionHttp } = await import("./actual-connection-test.ts");
     const result = await testActualConnectionHttp("u1", {
-      serverURL: "https://override.example.com/",
+      serverURL: "https://stored.example.com/actual",
       syncId: "override-sync",
     });
 
     expect(result.budgetFound).toBe(true);
-    expect(fetchMock.mock.calls[0]![0]).toBe("https://override.example.com/account/login");
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://stored.example.com/actual/account/login");
+    expect(fetchMock.mock.calls[0]![1]).toEqual(expect.objectContaining({
+      body: JSON.stringify({ password: "decrypted:ciphertext", loginMethod: "password" }),
+    }));
   });
 
-  it("does not reflect the remote error reason in the thrown message (SEC-05)", async () => {
+  it("does not reflect or log the remote error reason (SEC-05)", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     settingsRow();
     global.fetch = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ status: "error", reason: "internal-banner-xyz" })) as unknown as typeof fetch;
@@ -96,6 +119,7 @@ describe("testActualConnectionHttp", () => {
     expect(caught).not.toBeNull();
     expect(caught).toBeInstanceOf(Error);
     expect((caught as Error).message).not.toContain("internal-banner-xyz");
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("internal-banner-xyz");
   });
 
   it("fails fast when the hosted Actual server stalls", async () => {

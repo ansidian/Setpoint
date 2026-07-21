@@ -5,7 +5,9 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 ## Files
 
 ### Auth + accounts
-- `auth.ts` — login, passkey registration, WebAuthn, session management
+- `auth.ts` — setup-token owner claim, password/passkey login, passkey registration/deletion, session check/logout, and the mount point for the security subrouter
+- `auth-security.ts` — password step-up, canonical/auth-mode/password/recovery mutations, and scoped API-token management
+- `auth-canonical-origin.ts` — canonical-domain status, impact preview, and password-step-up/generation-gated mutation
 - `accounts.ts` — Gmail OAuth callback and account binding; mounts settings/reminders routers
 
 ### Briefing
@@ -28,6 +30,10 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `settings.ts` — user settings, model selection, integration configs
 - `gmail-push.ts` — Gmail Pub/Sub push intake, queues history syncs
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
+- `todoist-oauth.ts` — Todoist OAuth begin/callback/status routes with callback-scoped browser binding
+- `instance-credentials.ts` — authenticated metadata and write-only deployment credential mutations; dispatches allowlisted validation/promotion and Gmail Pub/Sub lifecycle actions to provider-owned managers
+- `capabilities.ts` — authenticated, metadata-only capability status projection with optional explicit refresh
+- `onboarding.ts` — authenticated, allowlisted onboarding progress, finish, and reopen mutations
 
 Tests are not listed; adjacent test files cover their same-named route by convention.
 

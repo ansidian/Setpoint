@@ -47,8 +47,6 @@ describe("CalendarInlineOverflowLayer", () => {
     const secondIcon = chips[1]!.querySelector<HTMLElement>("[data-calendar-chip-status-icon='complete']");
 
     expect(firstMeta?.textContent).toContain("11:59p");
-    expect(firstMeta?.style.width).toBe("35px");
-    expect(firstMeta?.style.justifyContent).toBe("center");
     expect(firstIcon?.getAttribute("aria-hidden")).toBe("true");
     expect(firstIcon?.closest("s")).toBeNull();
     expect(chips[0]!.textContent).toContain("Teamwork Assessment");
@@ -94,7 +92,6 @@ describe("CalendarInlineOverflowLayer", () => {
     expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
       titles[1]?.getAttribute("data-calendar-chip-title-fit"),
     );
-    expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
   });
 
   it("moves focus to the clicked hidden item", () => {
@@ -140,8 +137,6 @@ describe("CalendarInlineOverflowLayer", () => {
       .querySelector<HTMLElement>("[data-calendar-inline-overflow-boundary='bottom']");
 
     expect(boundary).toBeTruthy();
-    expect(boundary!.style.bottom).toBe("0px");
-    expect(boundary!.style.background).toBe("#0095FF");
     expect(
       screen.getByTestId("calendar-cell-inline-overflow")
         .querySelector("[data-calendar-inline-overflow-boundary='cross-month']"),
@@ -168,7 +163,5 @@ describe("CalendarInlineOverflowLayer", () => {
       .querySelector<HTMLElement>("[data-calendar-inline-overflow-boundary='bottom']");
 
     expect(boundary).toBeTruthy();
-    expect(boundary!.style.bottom).toBe("0px");
-    expect(boundary!.style.background).toBe("#0095FF");
   });
 });

@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { getAccounts, getSettings, updateSettings } from "@/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { getAccounts, getCapabilities, getInstanceCredentials, getSettings, updateSettings } from "@/api";
 import {
   normalizeSettingsTab,
   readTabFromSearchParams,
 } from "@/components/settings/settings-core";
+import { CONNECTION_GROUPS, projectConnectionRows } from "@/components/settings/connectionModel";
 import type { AccountSummary } from "../../../shared/types/accounts";
 import type { SettingsPatchRequest, SettingsResponse } from "../../../shared/types/settings";
 import type { SettingsTab } from "@/components/settings/settings-core";
+import type { CapabilityStatus } from "../../../shared/types/capabilities";
+import type { InstanceCredentialMetadata } from "../../../shared/types/instance-credentials";
 
 export type SettingsSaveStatus = "idle" | "saving" | "saved" | "error";
 type PendingSettingsPatch = Partial<SettingsPatchRequest>;
@@ -71,28 +74,41 @@ function useSettingsAutoSave() {
 }
 
 export default function useSettingsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<AccountSummary[]>([]);
   const [settings, setSettings] = useState<Partial<SettingsResponse> | null>(null);
+  const [capabilities, setCapabilities] = useState<CapabilityStatus[]>([]);
+  const [credentialMetadata, setCredentialMetadata] = useState<InstanceCredentialMetadata[] | null>(null);
   const [loading, setLoading] = useState(true);
   const { patch, status: saveStatus } = useSettingsAutoSave();
   const tab = readTabFromSearchParams(searchParams);
 
   const setTab = useCallback((nextTab: SettingsTab) => {
     const resolvedTab = normalizeSettingsTab(nextTab);
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      if (resolvedTab === "accounts") next.delete("tab");
-      else next.set("tab", resolvedTab);
-      return next;
+    const next = new URLSearchParams(searchParams);
+    if (resolvedTab === "connections") next.delete("tab");
+    else next.set("tab", resolvedTab);
+    navigate({
+      pathname: location.pathname,
+      search: next.toString() ? `?${next}` : "",
+      hash: "",
     });
-  }, [setSearchParams]);
+  }, [location.pathname, navigate, searchParams]);
 
   useEffect(() => {
-    Promise.all([getAccounts(), getSettings()])
-      .then(([accountsResult, settingsResult]) => {
+    Promise.all([
+      getAccounts(),
+      getSettings(),
+      getCapabilities().catch(() => ({ generatedAt: "", capabilities: [] })),
+      getInstanceCredentials().catch(() => null),
+    ])
+      .then(([accountsResult, settingsResult, capabilityResult, credentialResult]) => {
         setAccounts(Array.isArray(accountsResult) ? accountsResult : accountsResult.accounts);
         setSettings(settingsResult);
+        setCapabilities(capabilityResult.capabilities);
+        setCredentialMetadata(credentialResult?.credentials ?? null);
       })
       .catch(() => {
         setAccounts([]);
@@ -101,10 +117,61 @@ export default function useSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const refreshCapabilities = useCallback(() => {
+    void getCapabilities(true)
+      .then((result) => setCapabilities(result.capabilities))
+      .catch(() => {});
+  }, []);
+
+  const refreshConnections = useCallback(async () => {
+    const [settingsResult, capabilityResult] = await Promise.all([
+      getSettings(),
+      getCapabilities(true),
+    ]);
+    setSettings(settingsResult);
+    setCapabilities(capabilityResult.capabilities);
+  }, []);
+
+  const refreshInstanceCredentials = useCallback(async () => {
+    try {
+      const result = await getInstanceCredentials();
+      setCredentialMetadata(result.credentials);
+    } catch (error) {
+      setCredentialMetadata(null);
+      throw error;
+    }
+  }, []);
+
+  const updateInstanceCredentialMetadata = useCallback((updates: InstanceCredentialMetadata | InstanceCredentialMetadata[]) => {
+    const nextUpdates = Array.isArray(updates) ? updates : [updates];
+    setCredentialMetadata((current) => {
+      if (current === null) return nextUpdates;
+      const nextByKey = new Map(nextUpdates.map((metadata) => [metadata.key, metadata]));
+      const merged = current.map((metadata) => nextByKey.get(metadata.key) ?? metadata);
+      const currentKeys = new Set(current.map(({ key }) => key));
+      return [...merged, ...nextUpdates.filter(({ key }) => !currentKeys.has(key))];
+    });
+  }, []);
+
+  const connections = useMemo(() => projectConnectionRows({
+    accounts,
+    settings,
+    capabilities,
+    credentialMetadata,
+  }), [accounts, settings, capabilities, credentialMetadata]);
+
   return {
     accounts,
     setAccounts,
     settings,
+    capabilities,
+    connectionGroups: CONNECTION_GROUPS,
+    connections,
+    credentialMetadata,
+    refreshCapabilities,
+    refreshConnections,
+    refreshInstanceCredentials,
+    updateInstanceCredentialMetadata,
     setSettings,
     loading,
     tab,

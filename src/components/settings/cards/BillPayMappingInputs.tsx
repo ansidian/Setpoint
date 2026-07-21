@@ -13,7 +13,7 @@ import type { StoredActualOption } from "./billPayMappingsModel";
 const SELECT_CLASS =
   "h-8 w-full rounded-lg border border-white/[0.08] bg-input-bg px-2.5 text-[13px] font-medium text-foreground outline-none transition-colors hover:border-white/[0.14] focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/20";
 export const MINI_ICON_BUTTON_CLASS =
-  "size-7 rounded-lg border border-white/[0.08] bg-white/[0.03] text-muted-foreground transition-all hover:-translate-y-px hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-foreground active:translate-y-0 disabled:pointer-events-none disabled:opacity-40 disabled:translate-y-0";
+  "size-7 rounded-lg border border-white/[0.08] bg-white/[0.03] text-muted-foreground transition-all hover:-translate-y-px hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 disabled:pointer-events-none disabled:opacity-40 disabled:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none";
 
 export function ChipEditor({ label, chips, placeholder, onChange }: { label: string; chips: string[]; placeholder?: string; onChange: (chips: string[]) => void }) {
   const [draft, setDraft] = useState("");
@@ -36,7 +36,7 @@ export function ChipEditor({ label, chips, placeholder, onChange }: { label: str
             {chip}
             <button
               type="button"
-              className="text-primary/60 transition-colors hover:text-primary"
+              className="rounded-sm text-primary/60 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none"
               onClick={() => onChange(removeChip(chips, index))}
               aria-label={`Remove ${label} ${chip}`}
             >
@@ -64,7 +64,7 @@ export function ChipEditor({ label, chips, placeholder, onChange }: { label: str
   );
 }
 
-export function TargetDropdown({ label, options, value, storedLabel, missingLabel, placeholder, onChange }: {
+export function TargetDropdown({ label, options, value, storedLabel, missingLabel, placeholder, onChange, disabled = false }: {
   label: string;
   options: StoredActualOption[];
   value?: string;
@@ -72,6 +72,7 @@ export function TargetDropdown({ label, options, value, storedLabel, missingLabe
   missingLabel: string;
   placeholder?: string;
   onChange: (id: string, name: string) => void;
+  disabled?: boolean;
 }) {
   const displayOptions = optionWithStoredLabel(options, value, storedLabel, label);
   const warning = targetWarning(options, value, storedLabel, missingLabel);
@@ -80,17 +81,28 @@ export function TargetDropdown({ label, options, value, storedLabel, missingLabe
     <div className="min-w-0">
       <SectionLabel>{label}</SectionLabel>
       <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5">
-        <SearchableDropdown
-          ariaLabel={label}
-          options={displayOptions}
-          value={value || ""}
-          onChange={(nextId) => {
-            const selected = options.find((option) => option.id === nextId);
-            onChange(nextId, selected?.name || storedLabel || "");
-          }}
-          placeholder={placeholder}
-        />
-        {value ? (
+        {disabled ? (
+          <button
+            type="button"
+            disabled
+            aria-label={label}
+            className="flex w-full items-center rounded bg-input-bg px-2.5 py-1.5 text-left text-[13px] font-medium text-muted-foreground/70 disabled:cursor-not-allowed"
+          >
+            {displayOptions.find((option) => option.id === value)?.name || storedLabel || placeholder}
+          </button>
+        ) : (
+          <SearchableDropdown
+            ariaLabel={label}
+            options={displayOptions}
+            value={value || ""}
+            onChange={(nextId) => {
+              const selected = options.find((option) => option.id === nextId);
+              onChange(nextId, selected?.name || storedLabel || "");
+            }}
+            placeholder={placeholder}
+          />
+        )}
+        {value && !disabled ? (
           <button
             type="button"
             className={MINI_ICON_BUTTON_CLASS}

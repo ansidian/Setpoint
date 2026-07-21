@@ -20,6 +20,7 @@ import { queryTransactions, summarizeTransactions } from "../transactions/transa
 import type { AlfredRunEvent } from "../../shared/types/alfred.ts";
 import type { AlfredDependencies } from "../alfred/alfred-types.ts";
 import { errorMessage } from "../alfred/alfred-types.ts";
+import { resolveAiApiKey } from "../ai-credentials.ts";
 
 const ALFRED_DEPS = {
   retrieve: retrieveInboxAiSearch,
@@ -34,9 +35,14 @@ const ALFRED_DEPS = {
   summarizeTransactions,
 } as unknown as AlfredDependencies;
 
-export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred }: {
+export function createAlfredRouter({
+  deps = ALFRED_DEPS,
+  run = runAlfred,
+  credentialResolver = () => resolveAiApiKey("anthropic"),
+}: {
   deps?: AlfredDependencies;
   run?: typeof runAlfred;
+  credentialResolver?: () => Promise<string | null>;
 } = {}) {
   const router = Router();
   router.use(requireCookieSession);
@@ -47,7 +53,8 @@ export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred }: {
     if (!message) return res.status(400).json({ message: "message is required" });
     const model = resolveAlfredModel(req.body?.model);
     if (!model) return res.status(400).json({ message: "Unknown model" });
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const apiKey = await credentialResolver();
+    if (!apiKey) {
       return res.status(503).json({ message: "ANTHROPIC_API_KEY is not configured" });
     }
 
@@ -79,6 +86,7 @@ export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred }: {
         model,
         emit,
         signal: abort.signal,
+        apiKey,
         deps,
       });
     } catch (err) {
@@ -92,7 +100,7 @@ export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred }: {
     return undefined;
   });
 
-  router.get("/usage", async (req, res) => {
+  router.get("/usage", async (_req, res) => {
     try {
       res.json(await getAlfredUsageStats(process.env.EA_USER_ID as string));
     } catch (err) {

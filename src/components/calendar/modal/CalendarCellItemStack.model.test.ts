@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  calendarCellItemMatchesSelected,
   getMeasuredCellItemStackPlan,
-  getMeasuredVisibleCellItemCount,
   getReservedCellItemLaneHeight,
+  getSelectedHiddenCellItemKey,
   splitVisibleCellItems,
 } from "./CalendarCellItemStackModel";
 
@@ -23,8 +24,8 @@ describe("CalendarCellItemStack model", () => {
       { id: "fourth" },
     ];
 
-    expect(getMeasuredVisibleCellItemCount(items, 130, metrics)).toBe(3);
-    expect(getMeasuredVisibleCellItemCount(items, 100, metrics)).toBe(2);
+    expect(getMeasuredCellItemStackPlan(items, 130, metrics).visibleCount).toBe(3);
+    expect(getMeasuredCellItemStackPlan(items, 100, metrics).visibleCount).toBe(2);
   });
 
   it("reserves span lanes plus a trailing gap before deciding normal chip capacity", () => {
@@ -38,11 +39,11 @@ describe("CalendarCellItemStack model", () => {
     expect(reservedHeight).toBe(34);
     expect(getReservedCellItemLaneHeight(2, metrics)).toBe(68);
     expect(getReservedCellItemLaneHeight(0, metrics)).toBe(0);
-    expect(getMeasuredVisibleCellItemCount(
+    expect(getMeasuredCellItemStackPlan(
       items,
       90,
       { ...metrics, reservedHeight },
-    )).toBe(0);
+    ).visibleCount).toBe(0);
   });
 
   it("only exposes overflow when the +more trigger fully fits after reserved span lanes", () => {
@@ -91,5 +92,39 @@ describe("CalendarCellItemStack model", () => {
       "real-2",
       "real-3",
     ]);
+  });
+
+  it("keeps a ghost visible when ordinary compact capacity is zero", () => {
+    const items = [
+      { id: "real-1" },
+      { id: "ghost-1", isGhost: true },
+    ];
+    const plan = getMeasuredCellItemStackPlan(items, Number.NaN, {
+      fullVisibleCount: 1,
+      overflowVisibleCount: 0,
+    });
+    const composition = splitVisibleCellItems(items, plan.visibleCount);
+
+    expect(plan).toEqual({ visibleCount: 0, overflowVisible: true });
+    expect(composition.visibleItems.map((item) => item.id)).toEqual(["ghost-1"]);
+    expect(composition.hiddenItems.map((item) => item.id)).toEqual(["real-1"]);
+  });
+
+  it("matches selection aliases and derives a stable hidden occurrence key", () => {
+    const item = {
+      id: "schedule-1:2026-05-10",
+      selectionId: "schedule-1",
+      matchItemIds: ["provider-id"],
+    };
+
+    expect(calendarCellItemMatchesSelected(item, "schedule-1:2026-05-10")).toBe(true);
+    expect(calendarCellItemMatchesSelected(item, "schedule-1")).toBe(true);
+    expect(calendarCellItemMatchesSelected(item, "provider-id")).toBe(true);
+    expect(calendarCellItemMatchesSelected(item, "other")).toBe(false);
+    expect(getSelectedHiddenCellItemKey({
+      hiddenItems: [item],
+      selectedItemId: "provider-id",
+      dateKey: "2026-05-10",
+    })).toBe("2026-05-10:schedule-1");
   });
 });

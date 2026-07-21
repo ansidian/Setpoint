@@ -7,14 +7,31 @@ import { withActualClockLock } from "./actual-clock-lock.ts";
 describe("withActualClockLock", () => {
   it("serializes operations so their critical sections never interleave", async () => {
     const events: string[] = [];
+    let releaseFirst!: () => void;
+    const firstCanFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let markFirstStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve;
+    });
     const op = (id: number) =>
       withActualClockLock(async () => {
         events.push(`start-${id}`);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        if (id === 1) {
+          markFirstStarted();
+          await firstCanFinish;
+        }
         events.push(`end-${id}`);
       });
 
-    await Promise.all([op(1), op(2)]);
+    const first = op(1);
+    const second = op(2);
+
+    await firstStarted;
+    expect(events).toEqual(["start-1"]);
+    releaseFirst();
+    await Promise.all([first, second]);
 
     expect(events).toEqual(["start-1", "end-1", "start-2", "end-2"]);
   });

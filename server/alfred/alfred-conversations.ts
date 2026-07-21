@@ -90,6 +90,6 @@ export function stopAlfredConversationSweeper(): void {
   }
 }
 
-export function _clearAlfredConversationsForTest(): void {
+export function clearAlfredConversations(): void {
   conversations.clear();
 }

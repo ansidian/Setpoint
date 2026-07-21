@@ -1,5 +1,4 @@
 // server/news/news-model.test.js
-// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
   buildHnFeedUrl, buildNewsPagePayload, canonicalizeNewsUrl,

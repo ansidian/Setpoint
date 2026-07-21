@@ -130,6 +130,10 @@ describe("demo mode in-memory mutations", () => {
 
     await expect(api.getGmailAuthUrl()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testActualBudget(null)).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    await expect(api.saveActualBudgetConnection({ serverURL: "https://actual.example", syncId: "demo" })).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    await expect(api.removeActualBudgetConnection()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    await expect(api.saveTodoistPersonalToken("demo-token")).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    await expect(api.disconnectTodoistConnection()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testDiscordReminderWebhook()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
 
     // P3-18: location autocomplete no longer surfaces DEMO_API_UNHANDLED; it

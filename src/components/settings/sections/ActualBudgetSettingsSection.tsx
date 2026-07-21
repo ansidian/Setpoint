@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActualMetadata } from "@/api";
-import ActualBudgetConnectionCard from "@/components/settings/cards/ActualBudgetConnectionCard";
 import BillPayMappingsCard from "@/components/settings/cards/BillPayMappingsCard";
 import BillPayMappingTestCard from "@/components/settings/cards/BillPayMappingTestCard";
 import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
+import ConnectionDependencyPrompt from "@/components/settings/ConnectionDependencyPrompt";
+import { projectFeatureDependencies } from "@/components/settings/featureDependencyModel";
 import type { SettingsCardStateProps } from "../settingsTypes";
+import type { ConnectionRowView } from "../connectionModel";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 
 const EMPTY_METADATA: ActualMetadataResponse = { accounts: [], payees: [], categories: [] };
 
-export default function ActualBudgetSettingsSection({ settings, setSettings, patch }: SettingsCardStateProps) {
+export default function ActualBudgetSettingsSection({
+  settings,
+  setSettings,
+  patch,
+  connections,
+}: SettingsCardStateProps & { connections: readonly ConnectionRowView[] }) {
+  const dependency = projectFeatureDependencies(connections).finance;
   const [metadata, setMetadata] = useState<ActualMetadataResponse>(EMPTY_METADATA);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState("");
@@ -27,6 +35,7 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
   }, []);
 
   const requestMetadata = useCallback(() => {
+    if (!dependency.allowLiveMetadata) return Promise.resolve(EMPTY_METADATA);
     if (metadataPromiseRef.current) return metadataPromiseRef.current;
     setMetadataLoading(true);
     setMetadataError("");
@@ -46,11 +55,28 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
       });
     metadataPromiseRef.current = promise;
     return promise;
-  }, []);
+  }, [dependency.allowLiveMetadata]);
+
+  if (!dependency.showSettings) {
+    return (
+      <ConnectionDependencyPrompt
+        title="Connect Actual Budget"
+        description="Finance customization becomes available after Actual Budget is connected. Existing mappings and pay links remain saved while disconnected."
+        actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
+      />
+    );
+  }
 
   return (
     <>
-      <ActualBudgetConnectionCard settings={settings} />
+      {dependency.actual === "needs_attention" ? (
+        <ConnectionDependencyPrompt
+          title="Actual Budget needs attention"
+          description="Retained mappings and pay links stay available for review. Repair the connection to refresh Actual accounts, payees, categories, schedules, or run a mapping test."
+          attention
+          actions={[{ connectionId: "actual-budget", label: "Repair connection" }]}
+        />
+      ) : null}
       <BillPayMappingsCard
         settings={settings}
         setSettings={setSettings}
@@ -59,8 +85,9 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
         metadataLoading={metadataLoading}
         metadataError={metadataError}
         onRequestMetadata={requestMetadata}
+        liveMetadataAvailable={dependency.allowLiveMetadata}
       />
-      <BillPayMappingTestCard settings={settings} />
+      <BillPayMappingTestCard settings={settings} liveMetadataAvailable={dependency.allowLiveMetadata} />
       <UtilityPayLinksCard
         settings={settings}
         setSettings={setSettings}
@@ -69,6 +96,7 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
         metadataLoading={metadataLoading}
         metadataError={metadataError}
         onRequestMetadata={requestMetadata}
+        liveMetadataAvailable={dependency.allowLiveMetadata}
       />
     </>
   );

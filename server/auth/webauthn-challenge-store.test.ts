@@ -26,6 +26,7 @@ describe("WebAuthn challenge store", () => {
       pendingAuthHash: "sha256:pending",
       challenge: "raw-challenge",
       now: 2_000,
+      securityGeneration: 1,
     });
 
     const rows = await db.execute("SELECT * FROM ea_webauthn_challenges");
@@ -35,6 +36,7 @@ describe("WebAuthn challenge store", () => {
       challenge_type: "authentication",
       pending_auth_hash: "sha256:pending",
       expires_at: 302_000,
+      security_generation: 1,
     });
     expect(rows.rows[0]!.challenge_hash).not.toBe("raw-challenge");
   });
@@ -46,6 +48,7 @@ describe("WebAuthn challenge store", () => {
       credentialId: "credential-1",
       challenge: "registration-challenge",
       now: 1_000,
+      securityGeneration: 1,
     });
 
     await expect(store.consumeChallenge("registration-challenge", {
@@ -71,6 +74,7 @@ describe("WebAuthn challenge store", () => {
       challenge: "expired-challenge",
       now: 1_000,
       ttlMs: 100,
+      securityGeneration: 1,
     });
 
     await expect(store.consumeChallenge("expired-challenge", {
@@ -81,5 +85,30 @@ describe("WebAuthn challenge store", () => {
 
     const rows = await db.execute("SELECT challenge_hash FROM ea_webauthn_challenges");
     expect(rows.rows).toHaveLength(0);
+  });
+
+  it("allows only one concurrent consumer", async () => {
+    await store.createChallenge({
+      userId: "user-1",
+      challengeType: "authentication",
+      challenge: "concurrent-challenge",
+      now: 1_000,
+      securityGeneration: 1,
+    });
+
+    const results = await Promise.all([
+      store.consumeChallenge("concurrent-challenge", {
+        userId: "user-1",
+        challengeType: "authentication",
+        now: 1_100,
+      }),
+      store.consumeChallenge("concurrent-challenge", {
+        userId: "user-1",
+        challengeType: "authentication",
+        now: 1_100,
+      }),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
   });
 });

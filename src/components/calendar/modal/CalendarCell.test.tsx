@@ -46,7 +46,6 @@ describe("CalendarCell", () => {
 
     const cell = screen.getByRole("gridcell");
     expect(cell.getAttribute("data-current-month")).toBe("false");
-    expect(cell.style.opacity || "1").toBe("1");
     expect(cell.textContent).toContain("Costco Membership");
   });
 

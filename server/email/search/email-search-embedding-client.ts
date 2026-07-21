@@ -2,6 +2,7 @@ import {
   EMAIL_SEARCH_EMBEDDING_DIMENSIONS,
   EMAIL_SEARCH_EMBEDDING_MODEL,
 } from "./email-search-embeddings.ts";
+import { resolveAiApiKey } from "../../ai-credentials.ts";
 
 export interface EmailSearchEmbeddingError extends Error {
   status: number;
@@ -19,6 +20,7 @@ export interface EmailSearchEmbeddingClient {
 
 interface EmbeddingClientOptions {
   apiKey?: string;
+  credentialResolver?: () => Promise<string | null>;
   fetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<EmbeddingFetchResponse>;
 }
 
@@ -40,27 +42,16 @@ function buildEmbeddingError(message: string, status: number, code: string): Ema
   return err;
 }
 
-async function parseProviderError(response: EmbeddingFetchResponse): Promise<string> {
-  try {
-    const body: unknown = await response.json();
-    const error = isRecord(body) && isRecord(body.error) ? body.error : null;
-    return (error && typeof error.message === "string" ? error.message : null)
-      || (isRecord(body) && typeof body.message === "string" ? body.message : null)
-      || response.statusText
-      || `HTTP ${response.status || 500}`;
-  } catch {
-    return response.statusText || `HTTP ${response.status || 500}`;
-  }
-}
-
 export function createEmailSearchEmbeddingClient({
-  apiKey = process.env.OPENAI_API_KEY,
+  apiKey,
+  credentialResolver = () => resolveAiApiKey("openai"),
   fetchImpl = globalThis.fetch,
 }: EmbeddingClientOptions = {}): EmailSearchEmbeddingClient {
   return {
     async embed(inputs: string[]): Promise<EmailSearchEmbeddingVectors> {
       const normalizedInputs = inputs;
-      if (!apiKey) {
+      const currentApiKey = apiKey === undefined ? await credentialResolver() : apiKey;
+      if (!currentApiKey) {
         throw buildEmbeddingError(
           "OPENAI_API_KEY not set for email search embeddings",
           503,
@@ -78,7 +69,7 @@ export function createEmailSearchEmbeddingClient({
       const response = await fetchImpl("https://api.openai.com/v1/embeddings", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${currentApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -90,9 +81,9 @@ export function createEmailSearchEmbeddingClient({
       });
 
       if (!response.ok) {
-        const detail = await parseProviderError(response);
+        await response.json().catch(() => null);
         throw buildEmbeddingError(
-          `OpenAI embeddings request failed: ${detail}`,
+          "OpenAI embeddings request failed",
           502,
           "email_search_embeddings_provider_error",
         );

@@ -75,14 +75,6 @@ export function parseFrom(email: { from?: string; from_email?: string }): { from
   return { fromName: stripBalancedQuotes(raw), fromAddress: "" };
 }
 
-export async function isIndexEmpty(userId: string): Promise<boolean> {
-  const result = await db.execute({
-    sql: "SELECT 1 FROM ea_email_index WHERE user_id = ? LIMIT 1",
-    args: [userId],
-  });
-  return result.rows.length === 0;
-}
-
 function safeJson(value: unknown): Record<string, unknown> {
   if (!value) return {};
   try {

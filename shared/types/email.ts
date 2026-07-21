@@ -135,11 +135,6 @@ export interface EmailRangeResult {
   cursor?: string | null;
 }
 
-export interface EmailProviderMutationResult {
-  provider: EmailProvider;
-  accountId: string;
-}
-
 export interface PinnedEmailSnapshot extends Record<string, unknown> {
   account_id?: string | null;
   subject?: string;
@@ -283,4 +278,34 @@ export interface EmailSearchCostStats {
       estimatedCostUsd: number;
     };
   };
+}
+
+export interface GmailPubSubStatus {
+  configured: boolean;
+  healthy: boolean;
+  deliveryMode: "periodic" | "push_and_periodic";
+  deliveryStatus: "periodic_reconciliation" | "near_real_time";
+  delayedUpdates: boolean;
+  topic: { source: "stored" | "environment" | "disabled" | "absent"; configured: boolean };
+  pushToken: { source: "stored" | "environment" | "disabled" | "absent"; configured: boolean };
+  callbackUrl: string;
+  watchTest: {
+    lastTestedAt: string | null;
+    lastSucceededAt: string | null;
+    lastFailedAt: string | null;
+    errorCode: string | null;
+  };
+}
+
+export interface GmailPubSubCallbackResponse {
+  callbackUrl: string;
+  externalSubscriptionUpdateRequired: true;
+  status: GmailPubSubStatus;
+}
+
+export interface GmailPubSubWatchTestResponse {
+  ok: boolean;
+  errorCode: string | null;
+  checked: number;
+  registered: number;
 }

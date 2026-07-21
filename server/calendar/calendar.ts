@@ -1,7 +1,5 @@
 import {
-  buildSyntheticPrimaryCalendar,
   getAuthorizedAccount,
-  getRawEvent,
   googleCalendarFetch,
   listCalendarsForAccount,
 } from "./calendar-google-client.ts";
@@ -11,7 +9,6 @@ import {
   normalizeGoogleEvent,
 } from "./calendar-event-normalize.ts";
 import type {
-  CalendarAccount,
   GoogleCalendarSource,
   GoogleEventResource,
   NormalizedCalendarEvent,
@@ -299,17 +296,6 @@ export async function getCalendarSourceGroups(accounts: StoredCalendarAccount[])
   return groups;
 }
 
-export async function getCalendarEvent(
-  account: StoredCalendarAccount,
-  calendarId: string,
-  eventId: string,
-): Promise<NormalizedCalendarEvent> {
-  const calendars = await listCalendarsForAccount(account);
-  const calendar = calendars.find((entry) => entry.id === calendarId) || buildSyntheticPrimaryCalendar(account, false);
-  const { event } = await getRawEvent(account, calendarId, eventId);
-  return normalizeGoogleEvent({ account, calendar, event });
-}
-
 export function formatCalendarRouteError(err: unknown) {
   const error = err as Partial<CalendarServiceError>;
   return {
@@ -319,25 +305,4 @@ export function formatCalendarRouteError(err: unknown) {
       message: error?.message || "Calendar request failed",
     },
   };
-}
-
-export function getNextWeekRange() {
-  const now = new Date();
-  const dayOfWeekStr = new Intl.DateTimeFormat("en-US", {
-    timeZone: DASHBOARD_CALENDAR_TZ,
-    weekday: "short",
-  }).format(now);
-  const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(dayOfWeekStr);
-  const daysUntilNextSunday = (7 - dayOfWeek) % 7 || 7;
-  const nextSundayMs = now.getTime() + daysUntilNextSunday * 86400000;
-  const { dayStart: startDate } = pacificDayBoundaries(new Date(nextSundayMs));
-  const nextSaturdayMs = nextSundayMs + 6 * 86400000;
-  const { dayEnd: endDate } = pacificDayBoundaries(new Date(nextSaturdayMs));
-  return { startDate, endDate };
-}
-
-export function getTomorrowRange() {
-  const tomorrow = new Date(Date.now() + 86400000);
-  const { dayStart, dayEnd } = pacificDayBoundaries(tomorrow);
-  return { startDate: dayStart, endDate: dayEnd };
 }

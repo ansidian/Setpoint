@@ -18,6 +18,8 @@ const mockBillsService = vi.hoisted(() => ({
   listPayees: vi.fn(),
   listCategories: vi.fn(),
   testConnection: vi.fn(),
+  saveActualConnection: vi.fn(),
+  removeActualConnection: vi.fn(),
   hydrateActualCache: vi.fn(),
   getActualCacheStatus: vi.fn(),
 }));
@@ -31,6 +33,7 @@ const billsModule = await import("./bills.ts");
 const billsRouter = billsModule.default;
 const quickTxnRouter = billsModule.quickTxnRouter;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
+let passwordAuthenticatedAt = Date.now();
 
 function makeApp() {
   const app = express();
@@ -52,10 +55,17 @@ function makeQuickTxnApp() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  passwordAuthenticatedAt = Date.now();
   mockDb.execute.mockImplementation(async ({ sql, args }) => {
     if (sql.includes("FROM ea_sessions")) {
       return args[0] === cookieSessionHash
-        ? { rows: [{ expires_at: Date.now() + 60_000 }] }
+        ? { rows: [{
+            expires_at: Date.now() + 60_000,
+            authenticated_at: passwordAuthenticatedAt,
+            password_authenticated_at: passwordAuthenticatedAt,
+            security_generation: 1,
+            auth_method: "password",
+          }] }
         : { rows: [] };
     }
     return { rows: [] };
@@ -205,6 +215,62 @@ describe("Bill Pay routes", () => {
 
     expect(res.status).toBe(400);
     expect(mockBillsService.testConnection).not.toHaveBeenCalled();
+  });
+
+  it("validates and saves an Actual connection candidate in one provider-owned request", async () => {
+    mockBillsService.saveActualConnection.mockResolvedValueOnce({
+      success: true,
+      budgetCount: 1,
+      budgetFound: true,
+    });
+
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/connection")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        serverURL: "https://actual.example.test",
+        password: "candidate-password",
+        syncId: "candidate-sync",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, budgetCount: 1, budgetFound: true });
+    expect(mockBillsService.saveActualConnection).toHaveBeenCalledWith("user-1", {
+      serverURL: "https://actual.example.test",
+      password: "candidate-password",
+      syncId: "candidate-sync",
+    });
+  });
+
+  it("requires recent password authentication for Actual connection changes", async () => {
+    passwordAuthenticatedAt = 0;
+
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/connection")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        serverURL: "https://actual.example.test",
+        password: "candidate-password",
+        syncId: "candidate-sync",
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      code: "PASSWORD_STEP_UP_REQUIRED",
+      message: "Confirm your password to continue",
+    });
+    expect(mockBillsService.saveActualConnection).not.toHaveBeenCalled();
+  });
+
+  it("removes the Actual connection through an effect-specific endpoint", async () => {
+    mockBillsService.removeActualConnection.mockResolvedValueOnce({ success: true });
+    const res = await request(makeApp())
+      .delete("/api/briefing/actual/connection")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    expect(mockBillsService.removeActualConnection).toHaveBeenCalledWith("user-1");
   });
 
   it("validates the local Actual cache through briefing cookie auth", async () => {

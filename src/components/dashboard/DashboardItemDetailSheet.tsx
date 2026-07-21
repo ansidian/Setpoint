@@ -10,8 +10,6 @@ import { useDashboard } from "../../context/DashboardContext";
 import AddTaskPanel from "../todoist/AddTaskPanel";
 import { selectGlanceActions } from "./glanceActionsModel";
 import type { RefObject } from "react";
-import type { ActualBillOccurrence } from "../../../shared/types/actual";
-import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
 import type { GlanceActionContext, GlanceActionKey, GlanceKind } from "./glanceActionsModel";
 import type { TodoistEditorTask } from "../todoist/add-task-panel/types";

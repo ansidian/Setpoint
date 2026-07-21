@@ -13,17 +13,86 @@ import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCa
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
 import type { SettingsCardStateProps } from "../settingsTypes";
+import ConnectionDependencyPrompt from "../ConnectionDependencyPrompt";
+import { projectFeatureDependencies } from "../featureDependencyModel";
+import type { ConnectionRowView } from "../connectionModel";
 import type { FormEvent } from "react";
 
-export default function EmailAutomationSettingsSection({ settings, setSettings, patch }: SettingsCardStateProps) {
+export default function EmailAutomationSettingsSection({
+  settings,
+  setSettings,
+  patch,
+  connections,
+}: SettingsCardStateProps & { connections: readonly ConnectionRowView[] }) {
   const emailInterests = settings?.email_interests || [];
+  const dependencies = projectFeatureDependencies(connections).automation;
+
+  if (!dependencies.showEmailControls) {
+    const brokenEmailConnections = connections.filter(({ id, state }) =>
+      (id === "google-workspace" || id === "icloud-mail") && state === "needs_attention");
+    return (
+      <ConnectionDependencyPrompt
+        title={dependencies.email === "needs_attention" ? "Repair an email connection" : "Connect an email source"}
+        description="Automation needs a working Gmail or iCloud Mail connection before email behavior can be customized. Saved settings will return unchanged after reconnection."
+        attention={dependencies.email === "needs_attention"}
+        actions={brokenEmailConnections.length
+          ? brokenEmailConnections.map((connection) => ({
+            connectionId: connection.id,
+            label: `Repair ${connection.label}`,
+          }))
+          : [
+            { connectionId: "google-workspace", label: "Google Workspace" },
+            { connectionId: "icloud-mail", label: "iCloud Mail" },
+          ]}
+      />
+    );
+  }
+
+  const brokenAiConnections = connections.filter(({ id, state }) =>
+    (id === "openai" || id === "anthropic") && state === "needs_attention");
 
   return (
     <>
       <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
       <TriageSoundSettingsCard settings={settings} setSettings={setSettings} patch={patch} />
-      <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />
-      <BillExtractionAiCard settings={settings} setSettings={setSettings} patch={patch} />
+      {dependencies.ai === "not_connected" ? (
+        <ConnectionDependencyPrompt
+          title="Connect an AI provider"
+          description="Add OpenAI or Anthropic to choose models for inbox triage and bill extraction. Other email automation remains available."
+          actions={[
+            { connectionId: "openai", label: "OpenAI" },
+            { connectionId: "anthropic", label: "Anthropic" },
+          ]}
+        />
+      ) : (
+        <>
+          {dependencies.ai === "needs_attention" ? (
+            <ConnectionDependencyPrompt
+              title={`${brokenAiConnections.map(({ label }) => label).join(" and ")} needs attention`}
+              description="Repair the adopted AI connection to resume its model-backed automation. The saved provider and model remain unchanged."
+              attention
+              actions={brokenAiConnections.map((connection) => ({
+                connectionId: connection.id,
+                label: `Repair ${connection.label}`,
+              }))}
+            />
+          ) : null}
+          <EmailAiModelCard
+            settings={settings}
+            setSettings={setSettings}
+            patch={patch}
+            connections={connections}
+            showRepairLink={dependencies.ai === "connected"}
+          />
+          <BillExtractionAiCard
+            settings={settings}
+            setSettings={setSettings}
+            patch={patch}
+            connections={connections}
+            showRepairLink={dependencies.ai === "connected"}
+          />
+        </>
+      )}
 
       <SettingsCard
         title="Email Lookback"
@@ -35,10 +104,10 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
           <Input
             type="number"
             min="1"
-            max="72"
+            max="168"
             value={settings?.email_lookback_hours ?? 16}
             onChange={(event) => {
-              const value = Math.max(1, Math.min(72, parseInt(event.target.value, 10) || 16));
+              const value = Math.max(1, Math.min(168, parseInt(event.target.value, 10) || 16));
               setSettings((current) => ({ ...(current || {}), email_lookback_hours: value }));
               patch({ email_lookback_hours: value });
             }}
@@ -72,7 +141,7 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
                       setSettings((current) => ({ ...(current || {}), email_interests: nextInterests }));
                       patch({ email_interests_json: nextInterests });
                     }}
-                    className="inline-flex items-center bg-transparent text-primary/60 transition-colors hover:text-primary"
+                    className="inline-flex items-center rounded-sm bg-transparent text-primary/60 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none"
                     aria-label={`Remove ${tagValue}`}
                   >
                     <X size={12} />

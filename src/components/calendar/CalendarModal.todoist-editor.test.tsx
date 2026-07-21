@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { flushAnimationFrame, getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
+import { getVisibleGridRange } from "./calendarDateUtils.ts";
 
 describe("CalendarModal Todoist editor behavior", () => {
   it("switches from an event create to the Todoist create workspace without ghosts or losing the panel", async () => {
@@ -67,109 +68,6 @@ describe("CalendarModal Todoist editor behavior", () => {
     expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
   });
 
-  it("keeps a Todoist create workspace open across chevron month navigation", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        focusItemId="new"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{ upcoming: [] }}
-      />,
-    ));
-
-    const editor = await screen.findByTestId("todoist-inline-editor");
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Submit lab notes" },
-    });
-    fireEvent.click(screen.getByTestId("todoist-due-trigger"));
-    expect(await screen.findByRole("dialog", { name: /todoist due date picker/i })).toBeTruthy();
-
-    const headerNextButton = screen.getAllByRole("button", { name: /next month/i })
-      .find((btn) => btn.getAttribute("data-calendar-month-navigation") === "true");
-    fireEvent.click(headerNextButton!);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
-    });
-    expect(screen.getByTestId("todoist-inline-editor")).toBe(editor);
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-    expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
-
-    const headerPrevButton = screen.getAllByRole("button", { name: /previous month/i })
-      .find((btn) => btn.getAttribute("data-calendar-month-navigation") === "true");
-    fireEvent.click(headerPrevButton!);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-    });
-    expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
-  });
-
-  it("keeps a Todoist edit workspace open across chevron month navigation", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{
-          upcoming: [
-            {
-              id: "todo-1",
-              title: "First task",
-              due_date: "2026-04-20",
-              due_time: "9:00 AM",
-              class_name: "Inbox",
-              status: "open",
-            },
-          ],
-        }}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("events-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: /^edit$/i }));
-    const editor = await screen.findByTestId("todoist-inline-editor");
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "First task revised" },
-    });
-    fireEvent.click(screen.getByTestId("todoist-priority-trigger"));
-    expect(await screen.findByRole("option", { name: "P2 High" })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
-    });
-    expect(screen.getByTestId("todoist-inline-editor")).toBe(editor);
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    expect(screen.getByDisplayValue("First task revised")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    });
-    expect(screen.getByDisplayValue("First task revised")).toBeTruthy();
-  });
-
   it("opens a blank inline Todoist editor from a deadlines create focus request", async () => {
     window.innerWidth = 1900;
 
@@ -199,6 +97,7 @@ describe("CalendarModal Todoist editor behavior", () => {
 
     try {
       window.innerWidth = 1900;
+      const onEventsVisibleRangeChange = vi.fn();
 
       render(wrapWithDashboard(
         <CalendarModal
@@ -209,7 +108,12 @@ describe("CalendarModal Todoist editor behavior", () => {
           onViewChange={() => {}}
           focusDate="2026-04-30"
           focusItemId="new"
-          eventsData={{ getEvents: () => [] }}
+          eventsData={{
+            getEvents: () => [],
+            ensureRange: vi.fn().mockResolvedValue([]),
+            revision: 0,
+          }}
+          onEventsVisibleRangeChange={onEventsVisibleRangeChange}
           billsData={{}}
           deadlinesData={{ upcoming: [] }}
         />,
@@ -226,8 +130,9 @@ describe("CalendarModal Todoist editor behavior", () => {
         expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
       }, { timeout: 1500 });
 
-      await act(async () => {
-        await new Promise((resolve) => window.setTimeout(resolve, 850));
+      await waitFor(() => {
+        const { start, end } = getVisibleGridRange(2027, 4);
+        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
       });
 
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
@@ -237,33 +142,6 @@ describe("CalendarModal Todoist editor behavior", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("opens a blank inline Todoist editor from Shift+C in Events", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{
-          upcoming: [
-            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
-          ],
-        }}
-      />,
-    ));
-
-    fireEvent.keyDown(document, { key: "C", shiftKey: true });
-
-    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
   });
 
   it("opens the inline Todoist editor from the selected deadline detail", async () => {

@@ -58,6 +58,9 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 ### Selection
 - `calendarEventSelectionModel.ts` — selection eligibility checks and identity keys
 
+### Shared test infrastructure
+- `CalendarEventEditor.test-utils.tsx` — narrow real-hook + editor-rail harness for editor behavior that does not require the calendar controller, grid, or shell
+
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 
 ## Local patterns

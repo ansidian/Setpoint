@@ -32,17 +32,8 @@ export interface DashboardTimelineItem {
 
 export type TimelineGroup = [day: number, items: DashboardTimelineItem[]];
 
-export const timelineSettleTransition = {
-  type: "spring",
-  stiffness: 290,
-  damping: 32,
-  mass: 0.98,
-  bounce: 0,
-};
-
 export const GUTTER = 130;
 export const SPINE_LEFT = GUTTER - 16;
-export const PILL_SPINE_GAP = 16;
 export const MOBILE_GUTTER = 30;
 export const MOBILE_SPINE_LEFT = 6;
 

@@ -130,6 +130,43 @@ describe("useCalendarGhostPreview manual month browse", () => {
     expect(setViewDate).toHaveBeenCalledWith({ year: 2026, month: 3 });
   });
 
+  it("debounces event-ghost navigation without waiting for wall-clock time", () => {
+    const setViewDate = vi.fn();
+    renderHook((props) => useCalendarGhostPreview(props), {
+      initialProps: buildProps({
+        setViewDate,
+        deadlineEditor: null,
+        deadlineDraftPreview: null,
+        eventEditor: {
+          isEditorOpen: true,
+          effectiveTitle: "Planning block",
+          intentState: { mode: "single" },
+          draft: {
+            accountId: "gmail-main",
+            calendarId: "primary",
+            allDay: false,
+            startDate: "2026-05-12",
+            endDate: "2026-05-12",
+            startTime: "09:00",
+            endTime: "09:30",
+          },
+          writableCalendars: [{ value: "gmail-main::primary", color: "#4285f4" }],
+        },
+        viewData: { events: [] },
+      }),
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(349);
+    });
+    expect(setViewDate).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(setViewDate).toHaveBeenCalledWith({ year: 2026, month: 4 });
+  });
+
   it("produces deadline ghosts while composing Todoist items in Events view", () => {
     const { result } = renderHook((props) => useCalendarGhostPreview(props), {
       initialProps: buildProps({

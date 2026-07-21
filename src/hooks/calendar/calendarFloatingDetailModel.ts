@@ -29,20 +29,6 @@ export function dateCellSelector(dateKey: string): string {
   return `[role='gridcell'][data-date-key='${dateKey}']`;
 }
 
-export function isFloatingDetailTriggerTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement
-    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip'], [data-testid='calendar-agenda-bill-row'], [data-testid='calendar-agenda-deadline-row'], [data-calendar-overflow-trigger='true']");
-}
-
-export function isFloatingDetailActiveAnchorTarget(
-  target: EventTarget | null,
-  detail: CalendarFloatingDetailState | null | undefined,
-): boolean {
-  return target instanceof HTMLElement
-    && !!detail?.anchorElement
-    && detail.anchorElement.contains(target);
-}
-
 export function isFloatingDetailPanelTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement
     && !!target.closest("[data-calendar-floating-detail='true']");

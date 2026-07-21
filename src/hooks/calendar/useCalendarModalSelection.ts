@@ -160,5 +160,3 @@ export default function useCalendarModalSelection({
     focusDateKey,
   };
 }
-
-export type CalendarModalSelectionController = ReturnType<typeof useCalendarModalSelection>;

@@ -14,10 +14,9 @@ import {
   tombstoneUnlistedCalendarStatements,
 } from "./calendarSearchMirrorStatements.ts";
 import { addMonthsIso } from "./calendar-range-model.ts";
-import type { Client, Row } from "@libsql/client";
+import type { Client } from "@libsql/client";
 import type {
   GoogleCalendarSource,
-  NormalizedCalendarEvent,
 } from "../../shared/types/calendar.ts";
 import type { StoredCalendarAccount } from "./calendar-google-client.ts";
 import type { MirrorEvent } from "./calendarSearchMirrorStatements.ts";

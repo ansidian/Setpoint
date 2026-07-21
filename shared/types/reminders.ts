@@ -10,10 +10,6 @@ export interface ReminderSourceIdentity {
   sourceOccurrenceId?: string | null;
 }
 
-export type ReminderAnchorSource =
-  | { sourceType: "calendar_event"; startAt: string }
-  | { sourceType: "todoist_task"; dueDateTime?: string | null; dueDate?: string | null };
-
 export interface ReminderAnchor {
   anchorKind: ReminderAnchorKind;
   anchorAt: string;

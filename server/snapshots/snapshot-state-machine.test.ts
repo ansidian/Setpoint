@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   PROVIDER_REMOVED_STATES,
   SNAPSHOT_DISPLAY_LANES,
-  SNAPSHOT_LANES,
   TRIAGE_LANES,
   getSnapshotReopenLane,
   isPendingSnapshotTriage,
@@ -10,19 +9,6 @@ import {
 } from "./snapshot-state-machine.ts";
 
 describe("snapshot lane state machine", () => {
-  it("declares the 8 inbox lanes", () => {
-    expect([...SNAPSHOT_LANES].sort()).toEqual([
-      "carryover",
-      "catch_up",
-      "fyi",
-      "handled",
-      "needs_attention",
-      "noise",
-      "queued",
-      "untriaged_read",
-    ]);
-  });
-
   it("limits triage decisions and user lane moves to the three triage lanes", () => {
     expect([...TRIAGE_LANES].sort()).toEqual(["fyi", "needs_attention", "noise"]);
   });
