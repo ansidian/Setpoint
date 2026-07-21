@@ -6,6 +6,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createOwnerStore } from "./owner-store.ts";
 import { resolveOwnerBootstrap } from "./owner-bootstrap.ts";
+import { createOnboardingProgressStore } from "../onboarding-progress-store.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +20,7 @@ describe("owner bootstrap", () => {
       "012_passkey_auth.sql",
       "030_owner_bootstrap.sql",
       "031_auth_recovery.sql",
+      "037_onboarding_progress.sql",
       "038_auth_security_generation.sql",
     ]) {
       await db.executeMultiple(readFileSync(join(__dirname, `../db/migrations/${migration}`), "utf8"));
@@ -48,6 +50,29 @@ describe("owner bootstrap", () => {
       claimed: true,
       source: "legacy_import",
       owner: { userId: "legacy-owner", passwordHash, claimedAt: 123 },
+    });
+  });
+
+  it("marks a legacy-configured owner as finished when migrations ran before owner import", async () => {
+    const passwordHash = bcrypt.hashSync("existing password", 4);
+    const env = { EA_USER_ID: "legacy-owner", EA_PASSWORD_HASH: passwordHash };
+    const ownerStore = createOwnerStore(db);
+    const onboardingStore = createOnboardingProgressStore(db, () => 456);
+
+    await resolveOwnerBootstrap({ store: ownerStore, env, now: () => 123 });
+    await expect(onboardingStore.get("legacy-owner")).resolves.toMatchObject({ status: "in_progress" });
+
+    await resolveOwnerBootstrap({
+      store: ownerStore,
+      env,
+      onLegacyOwner: async (owner: { userId: string }) => {
+        await onboardingStore.completeExistingOwner(owner.userId);
+      },
+    });
+
+    await expect(onboardingStore.get("legacy-owner")).resolves.toMatchObject({
+      status: "complete",
+      completedAt: 456,
     });
   });
 

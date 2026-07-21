@@ -88,6 +88,14 @@ describe("ConnectionsDirectory", () => {
     await waitFor(() => expect(screen.getByTestId("panel-openai")).toBeTruthy());
   });
 
+  it("marks an ordinary drawer expansion as local settings navigation", () => {
+    renderDirectory();
+
+    fireEvent.click(screen.getByRole("button", { name: /Todoist/i }));
+
+    expect(window.history.state.usr).toMatchObject({ settingsTargetReveal: "suppress" });
+  });
+
   it("opens a canonical direct hash and closes it without leaving an empty hash", () => {
     window.history.replaceState({}, "", "/settings?tab=connections#actual-budget");
     renderDirectory();

@@ -16,6 +16,9 @@ import type { OnboardingProgress } from "../../shared/types/onboarding";
 
 export default function Settings() {
   const location = useLocation();
+  const suppressTargetReveal = (
+    location.state as { settingsTargetReveal?: unknown } | null
+  )?.settingsTargetReveal === "suppress";
   const [onboardingProgress, setOnboardingProgress] = useState<OnboardingProgress | null>(null);
   const {
     accounts,
@@ -50,7 +53,7 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    if (loading || !location.hash) return;
+    if (loading || !location.hash || suppressTargetReveal) return;
     const setupTarget = connectionSetupTargetFromSearch(location.search);
     const targetId = setupTarget === "gmail-realtime"
       ? "gmail-realtime-advanced-setup"
@@ -157,7 +160,7 @@ export default function Settings() {
       clearScrollWait();
       if (flashedTarget) delete flashedTarget.dataset.settingsTargetActive;
     };
-  }, [loading, location.hash, location.search, tab]);
+  }, [loading, location.hash, location.search, suppressTargetReveal, tab]);
 
   let content = (
     <>

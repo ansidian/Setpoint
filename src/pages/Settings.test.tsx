@@ -178,6 +178,32 @@ describe("Settings page", () => {
     expect(target.getAttribute("data-settings-target-active")).toBeNull();
   });
 
+  it("does not scroll, focus, or flash a drawer expanded from inside Settings", async () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(performance.now());
+      return 1;
+    });
+    window.history.replaceState(
+      { usr: { settingsTargetReveal: "suppress" } },
+      "",
+      "/settings?tab=connections#todoist",
+    );
+
+    renderSettings();
+
+    const target = await screen.findByTestId("settings-connections-section");
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    });
+    window.dispatchEvent(new Event("scrollend"));
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(target);
+    expect(screen.getByTestId("settings-connection-card").getAttribute("data-settings-target-active")).toBeNull();
+  });
+
   it("focuses the requested Advanced setup disclosure instead of the service row", async () => {
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;

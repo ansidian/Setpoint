@@ -13,6 +13,7 @@ interface OwnerBootstrapOptions {
   store: OwnerBootstrapStore;
   env: NodeJS.ProcessEnv | Record<string, string | undefined>;
   now?: () => number;
+  onLegacyOwner?: (owner: OwnerRecord) => void | Promise<void>;
 }
 
 export type OwnerBootstrapResult =
@@ -46,6 +47,7 @@ export async function resolveOwnerBootstrap({
   store,
   env,
   now = Date.now,
+  onLegacyOwner,
 }: OwnerBootstrapOptions): Promise<OwnerBootstrapResult> {
   const legacy = readLegacyIdentity(env);
   const stored = await store.getOwner();
@@ -57,6 +59,7 @@ export async function resolveOwnerBootstrap({
     )) {
       throw new Error("Legacy owner configuration conflicts with the stored owner");
     }
+    if (legacy) await onLegacyOwner?.(stored);
     return { claimed: true, owner: stored, source: "stored" };
   }
 
@@ -72,5 +75,6 @@ export async function resolveOwnerBootstrap({
   }
   const owner = await store.getOwner();
   if (!owner) throw new Error("Legacy owner import did not persist");
+  await onLegacyOwner?.(owner);
   return { claimed: true, owner, source: "legacy_import" };
 }

@@ -53,6 +53,21 @@ describe("onboarding progress store", () => {
     });
   });
 
+  it("initializes an existing owner as finished without overriding persisted progress", async () => {
+    const store = createOnboardingProgressStore(db, () => 225);
+
+    await expect(store.completeExistingOwner("new-owner")).resolves.toMatchObject({
+      status: "complete",
+      completedAt: 225,
+    });
+    await store.update("new-owner", { action: "reopen" });
+
+    await expect(store.completeExistingOwner("new-owner")).resolves.toMatchObject({
+      status: "in_progress",
+      completedAt: null,
+    });
+  });
+
   it("finishes automatically when the final checklist item is marked reviewed", async () => {
     const store = createOnboardingProgressStore(db, () => 250);
 

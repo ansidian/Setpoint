@@ -80,7 +80,18 @@ export function createOnboardingProgressStore(dbClient: Pick<Client, "execute"> 
     return { version: ONBOARDING_VERSION, status: completedAt == null ? "in_progress" : "complete", steps, completedAt, updatedAt: timestamp };
   }
 
-  return { get, update };
+  async function completeExistingOwner(userId: string): Promise<OnboardingProgress> {
+    const timestamp = now();
+    await dbClient.execute({
+      sql: `INSERT OR IGNORE INTO ea_onboarding_progress
+              (user_id, version, step_states, completed_at, updated_at)
+            VALUES (?, ?, '{}', ?, ?)`,
+      args: [userId, ONBOARDING_VERSION, timestamp, timestamp],
+    });
+    return get(userId);
+  }
+
+  return { get, update, completeExistingOwner };
 }
 
 export type OnboardingProgressStore = ReturnType<typeof createOnboardingProgressStore>;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -45,8 +45,9 @@ export default function Onboarding(): ReactElement {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const requestedStep = searchParams.get("step");
 
-  async function load(): Promise<void> {
+  const load = useCallback(async (): Promise<void> => {
     setError(null);
     try {
       const [nextProgress, status] = await Promise.all([
@@ -55,16 +56,15 @@ export default function Onboarding(): ReactElement {
       ]);
       setProgress(nextProgress);
       setCapabilities(status.capabilities);
-      const requestedStep = searchParams.get("step");
       setActiveId(isOnboardingStepId(requestedStep)
         ? requestedStep
         : projectOnboardingChecklist(nextProgress).activeStepId);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load onboarding");
     }
-  }
+  }, [requestedStep]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => { headingRef.current?.focus(); }, [activeId, progress?.status]);
 
   const checklist = useMemo(() => progress ? projectOnboardingChecklist(progress) : null, [progress]);
