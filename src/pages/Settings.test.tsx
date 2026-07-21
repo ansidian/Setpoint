@@ -179,6 +179,7 @@ describe("Settings page", () => {
   });
 
   it("does not scroll, focus, or flash a drawer expanded from inside Settings", async () => {
+    vi.useFakeTimers();
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -191,17 +192,21 @@ describe("Settings page", () => {
       "/settings?tab=connections#todoist",
     );
 
-    renderSettings();
+    try {
+      renderSettings();
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
 
-    const target = await screen.findByTestId("settings-connections-section");
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 200));
-    });
-    window.dispatchEvent(new Event("scrollend"));
+      const target = screen.getByTestId("settings-connections-section");
+      window.dispatchEvent(new Event("scrollend"));
 
-    expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(document.activeElement).not.toBe(target);
-    expect(screen.getByTestId("settings-connection-card").getAttribute("data-settings-target-active")).toBeNull();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(document.activeElement).not.toBe(target);
+      expect(screen.getByTestId("settings-connection-card").getAttribute("data-settings-target-active")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("focuses the requested Advanced setup disclosure instead of the service row", async () => {
