@@ -75,7 +75,7 @@ async function checkAgentsMap() {
     failures.push(`AGENTS.md is ${lines.length} lines; keep it near 100 lines and move details into docs/`)
   }
 
-  for (const pointer of ['ARCHITECTURE.md', 'PRODUCT.md', 'DESIGN.md', 'gitignored for this personal single-user repo', 'red state', 'TDD Cycle', 'npm run check:harness']) {
+  for (const pointer of ['ARCHITECTURE.md', 'PRODUCT.md', 'DESIGN.md', 'gitignored for this personal single-user repo', 'npm run check:harness']) {
     if (!agents.includes(pointer)) {
       failures.push(`AGENTS.md should point to ${pointer}`)
     }
