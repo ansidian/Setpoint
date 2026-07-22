@@ -94,7 +94,7 @@ export function ThreeTierLayout({ isMobile = false, band, timelinePanel, context
     );
   }
   return (
-    <DashboardLayoutFrame layoutMode="desktop" maxWidth={1480}
+    <DashboardLayoutFrame testId="dashboard-body-desktop" layoutMode="desktop" maxWidth={1480}
       style={{ padding: "15px 18px 18px", height: "100%", minHeight: 0, display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
       <DashboardSceneRegion delay={dashboardStageDelays.hero} style={{ flex: "none" }}>{band}</DashboardSceneRegion>
       <DashboardSceneRegion delay={dashboardStageDelays.primary} initial={{ opacity: 0, y: 16, scale: 0.994 }}

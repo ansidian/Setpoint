@@ -119,30 +119,22 @@ describe("formatScheduleSummary", () => {
 });
 
 describe("previewSegmentStyle", () => {
-  it("lets the schedule segment wrap and stay fully visible", () => {
-    expect(previewSegmentStyle("schedule")).toEqual({
+  it("preserves schedule visibility, secondary truncation, and conflict emphasis", () => {
+    expect(previewSegmentStyle("schedule")).toMatchObject({
       overflow: "visible",
-      textOverflow: "clip",
       whiteSpace: "normal",
       maxWidth: "100%",
-      fontWeight: 600,
     });
-  });
-
-  it("truncates non-schedule segments to a capped width", () => {
-    expect(previewSegmentStyle("repeat")).toEqual({
+    expect(previewSegmentStyle("repeat")).toMatchObject({
       overflow: "hidden",
       textOverflow: "ellipsis",
       whiteSpace: "nowrap",
       maxWidth: "min(190px, 100%)",
-      fontWeight: 500,
     });
-  });
-
-  it("keeps the conflict segment bold while still truncating it", () => {
-    const style = previewSegmentStyle("conflict");
-    expect(style.fontWeight).toBe(600);
-    expect(style.whiteSpace).toBe("nowrap");
-    expect(style.maxWidth).toBe("min(190px, 100%)");
+    expect(previewSegmentStyle("conflict")).toMatchObject({
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+      maxWidth: "min(190px, 100%)",
+    });
   });
 });

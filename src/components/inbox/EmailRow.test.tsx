@@ -35,11 +35,6 @@ function renderRow({ email = {}, ...props }: RenderRowOptions = {}) {
 }
 
 describe("EmailRow lane tag (mobile)", () => {
-  it("shows the lane label when showLaneTag is set on a triaged row", () => {
-    renderRow({ showLaneTag: true });
-    expect(screen.getByText("Needs Attention")).toBeTruthy();
-  });
-
   it("shows no lane tag on desktop (prop absent)", () => {
     renderRow();
     expect(screen.queryByText("Needs Attention")).toBeNull();

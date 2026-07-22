@@ -225,7 +225,6 @@ function TimelineRow({
       }}
     >
       <div
-        data-testid="timeline-row-dot"
         style={{
           position: "absolute",
           left: isMobile ? -30 : -22,
@@ -241,6 +240,7 @@ function TimelineRow({
         }}
       >
         <div
+          data-testid="timeline-row-dot"
           style={{
             width: 5,
             height: 5,

@@ -42,23 +42,6 @@ const createUrgentCard = (id: string | number, title = "Test card"): NeedsYouCar
 });
 
 describe("NeedsYouCarousel", () => {
-  it("renders the carousel with test ID", () => {
-    render(
-      <NeedsYouCarousel
-        urgentCards={[createUrgentCard(1)]}
-        backfillCards={[]}
-        moreCount={0}
-        moreLabel=""
-        onShowAll={() => {}}
-        onOpen={() => {}}
-        onMarkHandled={() => {}}
-        onComplete={() => {}}
-        onJump={() => {}}
-      />,
-    );
-    expect(screen.getByTestId("needs-you-carousel")).toBeTruthy();
-  });
-
   it("sets touch-action to 'pan-x pan-y' to allow vertical page scroll to start on the carousel", () => {
     render(
       <NeedsYouCarousel
@@ -79,27 +62,6 @@ describe("NeedsYouCarousel", () => {
     expect(carousel.style.touchAction).toBe("pan-x pan-y");
   });
 
-  it("renders both urgent cards in the carousel", () => {
-    render(
-      <NeedsYouCarousel
-        urgentCards={[
-          createUrgentCard(1, "First card"),
-          createUrgentCard(2, "Second card"),
-        ]}
-        backfillCards={[]}
-        moreCount={0}
-        moreLabel=""
-        onShowAll={() => {}}
-        onOpen={() => {}}
-        onMarkHandled={() => {}}
-        onComplete={() => {}}
-        onJump={() => {}}
-      />,
-    );
-    expect(screen.getByText("First card")).toBeTruthy();
-    expect(screen.getByText("Second card")).toBeTruthy();
-  });
-
   it("announces the current slide position via a polite live region", () => {
     render(
       <NeedsYouCarousel
@@ -118,12 +80,15 @@ describe("NeedsYouCarousel", () => {
         onJump={() => {}}
       />,
     );
+    expect(screen.getByText("First card")).toBeTruthy();
+    expect(screen.getByText("Second card")).toBeTruthy();
+    expect(screen.getByText("Third card")).toBeTruthy();
     const status = screen.getByRole("status");
     expect(status.textContent).toBe("Card 1 of 3");
   });
 
   it("keeps the position dots hidden from assistive tech", () => {
-    const { container } = render(
+    render(
       <NeedsYouCarousel
         urgentCards={[createUrgentCard(1), createUrgentCard(2)]}
         backfillCards={[]}
@@ -136,7 +101,9 @@ describe("NeedsYouCarousel", () => {
         onJump={() => {}}
       />,
     );
-    const dots = container.querySelectorAll("[aria-hidden]");
-    expect(dots.length).toBeGreaterThan(0);
+    const dotsContainer = screen.getByTestId("needs-you-carousel-dots");
+    const dots = Array.from(dotsContainer.querySelectorAll("[data-carousel-position-dot]"));
+    expect(dots).toHaveLength(2);
+    expect(dots.every((dot) => dot.getAttribute("aria-hidden") === "true")).toBe(true);
   });
 });

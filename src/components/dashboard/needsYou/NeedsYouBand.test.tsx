@@ -60,16 +60,11 @@ describe("NeedsYouBand", () => {
     );
   });
 
-  it("renders a card per urgent item and the count", () => {
-    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
-    expect(screen.getByText("PR blocker")).toBeTruthy();
-    expect(screen.getByText("1")).toBeTruthy();
-  });
-
   it("clicking the email card opens the reader (onOpenEmail) and the email STAYS — no separate Open button", () => {
     const onOpenEmail = vi.fn();
     render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} onOpenEmail={onOpenEmail} />);
     expect(screen.queryByText("Open email")).toBeNull();
+    expect(screen.getByText("1")).toBeTruthy();
     fireEvent.click(screen.getByText("PR blocker"));
     expect(onOpenEmail).toHaveBeenCalledWith("u1");
     expect(screen.getByText("PR blocker")).toBeTruthy();

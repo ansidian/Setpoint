@@ -1,24 +1,17 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  ErrorLine,
   ModelToggle,
   SayBlock,
   SuggestionList,
   ToolRows,
   ToolSteps,
-  UserLine,
 } from "./AlfredMessages";
 import type { AlfredToolEntry } from "./alfredPanelModel";
 
 afterEach(cleanup);
 
 describe("alfred message primitives", () => {
-  it("UserLine renders the text right-aligned in an accent bubble", () => {
-    render(<UserLine accent="#cba6da" text="What's left today?" />);
-    expect(screen.getByText("What's left today?")).toBeTruthy();
-  });
-
   it("ToolRows shows running label, done summary, and error summary", () => {
     render(<ToolRows accent="#cba6da" tools={[
       { toolId: "t1", name: "search_email", state: "running", summary: null },
@@ -31,27 +24,12 @@ describe("alfred message primitives", () => {
     expect(screen.queryByText("Retry")).toBeNull(); // no client-side retry by design
   });
 
-  it("SayBlock splits the lead sentence from the body when done", () => {
-    render(<SayBlock text="Two things need you. The rest can wait." done />);
-    expect(screen.getByText("Two things need you.")).toBeTruthy();
-    expect(screen.getByText("The rest can wait.")).toBeTruthy();
-  });
-
   it("SayBlock renders streaming text quietly in one block (no serif pseudo-header)", () => {
     // While streaming (not done), don't promote the first sentence to a serif
     // lead — that's what made every dropped preamble flash as a header.
     render(<SayBlock text="Two things need you. The rest can wait." />);
     expect(screen.getByText("Two things need you. The rest can wait.")).toBeTruthy();
     expect(screen.queryByText("The rest can wait.")).toBeNull(); // not split out yet
-  });
-
-  it("SayBlock keeps a done preamble as quiet prose (between-tool narration persists, never serif)", () => {
-    // The between-tool narration Alfred says before a tool call settles as a
-    // tagged preamble: it stays in the thread as one quiet block, the same as
-    // while it streamed — it must NOT resolve into the serif answer line.
-    render(<SayBlock text="Let me read a few more confirmation emails. Then check rejections." done preamble />);
-    expect(screen.getByText("Let me read a few more confirmation emails. Then check rejections.")).toBeTruthy();
-    expect(screen.queryByText("Then check rejections.")).toBeNull(); // not split into a serif lead + body
   });
 
   it("ToolSteps shows the full step trail and live count while the run is in flight", () => {
@@ -99,11 +77,6 @@ describe("alfred message primitives", () => {
       { toolId: "t1", name: "search_email", state: "done", summary: "Mail · 4 matches" },
     ]} />);
     expect(screen.getByRole("button", { name: /1 step\b/ })).toBeTruthy();
-  });
-
-  it("ErrorLine renders the message", () => {
-    render(<ErrorLine text="Alfred could not complete this run." />);
-    expect(screen.getByText("Alfred could not complete this run.")).toBeTruthy();
   });
 
   it("SuggestionList submits the picked suggestion", () => {

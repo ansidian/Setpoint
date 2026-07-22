@@ -118,9 +118,12 @@ describe("CalendarScrollContainer", () => {
     const { container } = renderContainer();
     const grids = container.querySelectorAll("[role='grid']");
     expect(grids).toHaveLength(5);
-    for (const grid of grids) {
-      expect(grid.getAttribute("aria-label")).toMatch(/calendar for/);
-    }
+    const expectedLabels = Array.from({ length: 5 }, (_, index) => {
+      const { year, month } = monthIndexToDate(index - 2, CURRENT_YEAR, CURRENT_MONTH);
+      const monthLabel = new Date(year, month).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      return `Events calendar for ${monthLabel}`;
+    });
+    expect(Array.from(grids, (grid) => grid.getAttribute("aria-label"))).toEqual(expectedLabels);
   });
 
   it("non-active grids render interactive cells without active-month testids", () => {

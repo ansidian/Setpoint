@@ -42,9 +42,7 @@ describe("BottomSheet", () => {
     fireEvent.click(screen.getByText("Inside"));
     expect(onClose).not.toHaveBeenCalled();
 
-    const backdrop = screen.getByRole("dialog").previousSibling;
-    if (!backdrop) throw new Error("Expected sheet backdrop");
-    fireEvent.click(backdrop);
+    fireEvent.click(screen.getByTestId("bottom-sheet-backdrop"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

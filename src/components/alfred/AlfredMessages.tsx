@@ -94,11 +94,14 @@ export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: {
   // answer (done && !preamble) resolves into the serif title line.
   if (!done || preamble) {
     return (
-      <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.6)" }}>{body}</div>
+      <div
+        data-alfred-message-kind={preamble ? "preamble" : "streaming-answer"}
+        style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.6)" }}
+      >{body}</div>
     );
   }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div data-alfred-message-kind="answer" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="ea-display" style={{
         fontSize: 17, lineHeight: 1.3, color: text,
         fontFamily: "var(--serif-choice, 'Instrument Serif', serif)",
@@ -126,9 +129,10 @@ export const ToolSteps = memo(function ToolSteps({ tools, done, accent }: { tool
   const n = tools.length;
   const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div data-alfred-message-kind="tools" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <button
         type="button"
+        className={done ? "transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none" : undefined}
         onClick={done ? () => setOpen((v) => !v) : undefined}
         aria-expanded={expanded}
         aria-disabled={!done}
@@ -188,6 +192,9 @@ function SuggestionRow({ suggestion, onPick, accent }: { suggestion: AlfredSugge
       onClick={() => onPick(suggestion.label)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
       style={{
         display: "flex", alignItems: "center", gap: 9, width: "100%", minHeight: 32,
         padding: "6px 10px", borderRadius: 9, cursor: "pointer", textAlign: "left",
@@ -219,6 +226,7 @@ export function ModelToggle({ modelKey, onChange, accent }: { modelKey: AlfredMo
           <button
             key={m.key}
             type="button"
+            className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
             onClick={() => onChange(m.key)}
             title={m.key === "haiku" ? "Claude Haiku — fastest" : "Claude Sonnet — most capable"}
             style={{

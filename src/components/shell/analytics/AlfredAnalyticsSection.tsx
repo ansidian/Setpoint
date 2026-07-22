@@ -66,7 +66,12 @@ export default function AlfredAnalyticsSection({ stats }: { stats: AlfredAnalyti
             {tools.map((tool) => {
               const hasErr = numberValue(tool.errors) > 0;
               return (
-                <div key={tool.name} className="grid grid-cols-[1fr_3.5rem_3rem_4rem] items-center gap-x-3 rounded-md px-1.5 py-1 text-[11px] text-foreground/85 odd:bg-white/[0.015]">
+                <div
+                  key={tool.name}
+                  role="group"
+                  aria-label={`Tool ${tool.name}`}
+                  className="grid grid-cols-[1fr_3.5rem_3rem_4rem] items-center gap-x-3 rounded-md px-1.5 py-1 text-[11px] text-foreground/85 odd:bg-white/[0.015]"
+                >
                   <span className="truncate font-medium">{tool.name}</span>
                   <span className="text-right tabular-nums text-foreground">{numberValue(tool.calls)}</span>
                   <span className={`text-right tabular-nums ${hasErr ? "text-[var(--sp-rose)]" : "text-muted-foreground/75"}`}>

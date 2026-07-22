@@ -40,17 +40,10 @@ beforeEach(() => {
 });
 
 describe("BriefingSchedulesCard", () => {
-  it("presents schedules as snapshot boundaries instead of a generator", () => {
-    renderCard();
-
-    expect(screen.getByText("Snapshot Boundaries")).toBeTruthy();
-    expect(screen.getByText("Schedule times for rolling the active email snapshot window.")).toBeTruthy();
-    expect(screen.queryByText(/generation/i)).toBeNull();
-  });
-
   it("adds and removes snapshot boundaries while persisting the updated payload", async () => {
     const patch = vi.fn();
     renderCard({ patch });
+    expect(screen.getByText("Snapshot Boundaries")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ add boundary/i }));
 

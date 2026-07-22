@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { createRef, StrictMode } from "react";
 import NoteEditor from "./NoteEditor";
 import type { NoteEditorApi } from "./NoteEditor";
 
 describe("NoteEditor", () => {
+  afterEach(cleanup);
+
   it("does not fire onBlur when the editor is torn down (StrictMode remount / unmount)", () => {
     // Regression: under StrictMode the mount effect runs mount->cleanup->mount; the
     // cleanup's view.destroy() blurs the just-focused editor. Routing that teardown
@@ -20,10 +22,12 @@ describe("NoteEditor", () => {
     expect(onBlur).not.toHaveBeenCalled();
   });
 
-  it("mounts a CM editor showing the initial value", () => {
-    const { container } = render(<NoteEditor value="hello world" onChange={() => {}} />);
-    expect(container.querySelector(".cm-editor")).toBeTruthy();
-    expect(container.textContent).toContain("hello world");
+  it.each([
+    ["plain text", "hello world", "hello world"],
+    ["markdown decorations", "a **bold** _em_ `code` #tag\n# heading\n- [ ] todo", "bold"],
+  ])("mounts the public editing surface with %s content", (_label, value, visibleText) => {
+    render(<NoteEditor value={value} onChange={() => {}} />);
+    expect(screen.getByRole("textbox", { name: "Note" }).textContent).toContain(visibleText);
   });
 
   it("calls onSubmit with the doc via the imperative handle", () => {
@@ -34,31 +38,11 @@ describe("NoteEditor", () => {
     expect(onSubmit).toHaveBeenCalledWith("note text");
   });
 
-  it("mounts with markdown content without throwing (live-preview decorations build)", () => {
-    // Exercises the livePreview/tagChips decoration path that plain-text values
-    // skip — a bad RangeSetBuilder add-order would throw here, not in the
-    // "hello world" test above.
-    const { container } = render(
-      <NoteEditor value={"a **bold** _em_ `code` #tag\n# heading\n- [ ] todo"} onChange={() => {}} />,
-    );
-    expect(container.querySelector(".cm-editor")).toBeTruthy();
-  });
-
-  it("renders with a custom ariaLabel on the content editor", () => {
-    const { container } = render(
-      <NoteEditor value="hello" ariaLabel="New note" onChange={() => {}} />,
-    );
-    const contentEl = container.querySelector(".cm-content");
-    expect(contentEl).toBeTruthy();
-    expect(contentEl?.getAttribute("aria-label")).toBe("New note");
-  });
-
-  it("renders with the default ariaLabel when not specified", () => {
-    const { container } = render(
-      <NoteEditor value="hello" onChange={() => {}} />,
-    );
-    const contentEl = container.querySelector(".cm-content");
-    expect(contentEl).toBeTruthy();
-    expect(contentEl?.getAttribute("aria-label")).toBe("Note");
+  it.each([
+    ["custom", "New note", "New note"],
+    ["default", undefined, "Note"],
+  ])("exposes the %s accessible name", (_label, ariaLabel, expectedName) => {
+    render(<NoteEditor value="hello" ariaLabel={ariaLabel} onChange={() => {}} />);
+    expect(screen.getByRole("textbox", { name: expectedName })).toBeTruthy();
   });
 });

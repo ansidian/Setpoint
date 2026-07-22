@@ -158,6 +158,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     >
           {/* Backdrop */}
           <Motion.div
+            data-testid="bottom-sheet-backdrop"
             className="absolute inset-0 bg-[var(--sp-deep)]/50"
             variants={{ open: { opacity: 1 }, closed: { opacity: 0 } }}
             transition={motionTransition(reduceMotion, motionDuration.exit)}

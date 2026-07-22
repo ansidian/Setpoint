@@ -120,24 +120,20 @@ describe("DashboardShell tab <-> tabpanel ARIA linkage", () => {
     vi.mocked(useIsMobile).mockReturnValue(false);
   });
 
-  it("marks the active tab's panel role=tabpanel, linked to its tab via aria-labelledby", async () => {
-    renderShell();
-
-    const panel = await screen.findByRole("tabpanel");
-    expect(panel.id).toBe("shell-tabpanel-dashboard");
-    expect(panel.getAttribute("aria-labelledby")).toBe("shell-tab-dashboard");
-    expect(panel.hasAttribute("aria-label")).toBe(false);
-  });
-
   it("swaps the accessible tabpanel when a different tab activates (inactive panels are hidden, not just re-labelled)", async () => {
     renderShell();
-    await screen.findByRole("tabpanel");
+    const dashboardTab = screen.getByRole("tab", { name: /Dashboard/ });
+    const dashboardPanel = await screen.findByRole("tabpanel", { name: /Dashboard/ });
+    expect(dashboardPanel.id).toBe("shell-tabpanel-dashboard");
+    expect(dashboardPanel.getAttribute("aria-labelledby")).toBe(dashboardTab.id);
+    expect(dashboardPanel.hasAttribute("aria-label")).toBe(false);
 
     fireEvent.click(screen.getByRole("tab", { name: /Inbox/ }));
 
-    const panel = await screen.findByRole("tabpanel");
+    const inboxTab = screen.getByRole("tab", { name: /Inbox/ });
+    const panel = await screen.findByRole("tabpanel", { name: /Inbox/ });
     expect(panel.id).toBe("shell-tabpanel-inbox");
-    expect(panel.getAttribute("aria-labelledby")).toBe("shell-tab-inbox");
+    expect(panel.getAttribute("aria-labelledby")).toBe(inboxTab.id);
     // Only one tabpanel should be in the accessibility tree at a time — the
     // dashboard tab's Activity-hidden panel must not still be queryable.
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);

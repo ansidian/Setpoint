@@ -1,13 +1,12 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const agendaContentSpy = vi.hoisted(() => vi.fn());
-
 vi.mock("./modal/CalendarModalAgendaRailContent", () => ({
-  default: (props: Record<string, unknown>) => {
-    agendaContentSpy(props);
-    return <div data-testid="agenda-content" />;
-  },
+  default: ({ hideMiniCalendar, mobileAgenda }: { hideMiniCalendar?: boolean; mobileAgenda?: boolean }) => (
+    <div data-testid="agenda-content" data-mobile-agenda={mobileAgenda ? "true" : undefined}>
+      {hideMiniCalendar ? null : <div data-testid="mock-mini-calendar" />}
+    </div>
+  ),
 }));
 vi.mock("./modal/CalendarFloatingDetailContent", () => ({
   default: () => <div data-testid="detail-content">detail</div>,
@@ -17,7 +16,6 @@ import CalendarMobileAgenda from "./CalendarMobileAgenda.tsx";
 
 afterEach(() => {
   cleanup();
-  agendaContentSpy.mockClear();
   window.history.replaceState({}, "", "/");
 });
 
@@ -51,17 +49,9 @@ describe("CalendarMobileAgenda", () => {
     expect(screen.getByText("June 2026")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Events" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Bills" })).toBeTruthy();
-    expect(screen.getByTestId("agenda-content")).toBeTruthy();
+    expect(screen.getByTestId("agenda-content").getAttribute("data-mobile-agenda")).toBe("true");
+    expect(screen.queryByTestId("mock-mini-calendar")).toBeNull();
     expect(screen.queryByTestId("detail-content")).toBeNull();
-  });
-
-  it("marks the agenda rail content as the mobile agenda", () => {
-    render(<CalendarMobileAgenda {...shellProps()} />);
-
-    expect(agendaContentSpy).toHaveBeenCalledWith(expect.objectContaining({
-      hideMiniCalendar: true,
-      mobileAgenda: true,
-    }));
   });
 
   it("fires navigateMonth and onViewChange from the chrome", () => {
