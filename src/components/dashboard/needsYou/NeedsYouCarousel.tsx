@@ -65,6 +65,7 @@ export function NeedsYouCarousel({ urgentCards, backfillCards, moreCount, moreLa
           <div style={SLIDE}>
             <button
               type="button"
+              className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
               onClick={onShowAll}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 4, padding: "13px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", color: "inherit", font: "inherit", minHeight: "var(--sp-touch-min)" }}
             >
@@ -78,6 +79,7 @@ export function NeedsYouCarousel({ urgentCards, backfillCards, moreCount, moreLa
           <div style={SLIDE}>
             <button
               type="button"
+              className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
               onClick={onCollapse}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 4, padding: "13px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", color: "inherit", font: "inherit", minHeight: "var(--sp-touch-min)" }}
             >
@@ -87,9 +89,9 @@ export function NeedsYouCarousel({ urgentCards, backfillCards, moreCount, moreLa
         )}
       </div>
       {slideCount > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
+        <div data-testid="needs-you-carousel-dots" style={{ display: "flex", justifyContent: "center", gap: 6 }}>
           {Array.from({ length: slideCount }).map((_, i) => (
-            <span key={i} aria-hidden style={{ width: 6, height: 6, borderRadius: 99, background: i === active ? "var(--sp-accent)" : "rgba(255,255,255,0.22)", transition: "background 150ms" }} />
+            <span key={i} data-carousel-position-dot aria-hidden style={{ width: 6, height: 6, borderRadius: 99, background: i === active ? "var(--sp-accent)" : "rgba(255,255,255,0.22)", transition: "background 150ms" }} />
           ))}
           <span role="status" aria-live="polite" className="sr-only">
             {`Card ${active + 1} of ${slideCount}`}

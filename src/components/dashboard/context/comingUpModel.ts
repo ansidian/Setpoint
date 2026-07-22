@@ -56,7 +56,7 @@ export function buildComingUp({
     rows.push({
       id: `deadline:${d.id}`, kind: "deadline", title: d.title || "",
       meta: d.class_name || d.project_name || "Deadline", sortDays: n,
-      chipTooltip: formatChipDateTime(d.due_date, d.due_time, n === 0), ...chipFor(n),
+      chipTooltip: formatChipDateTime(d.due_date, d.due_time, n === 0, "long"), ...chipFor(n),
     });
   }
 
@@ -68,7 +68,7 @@ export function buildComingUp({
     rows.push({
       id: `bill:${b.id}`, kind: "bill", title: b.name || "",
       meta: b.payee ? `${amount} · ${b.payee}` : amount, sortDays: n,
-      chipTooltip: formatChipDateTime(b.next_date, null, n === 0), ...chipFor(n),
+      chipTooltip: formatChipDateTime(b.next_date, null, n === 0, "long"), ...chipFor(n),
     });
   }
 

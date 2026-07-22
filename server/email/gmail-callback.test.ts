@@ -50,6 +50,7 @@ describe("gmail callback canonicalization", () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await testState.db.current?.close?.();
     testState.db.current = null;
   });
@@ -129,6 +130,7 @@ describe("gmail callback canonicalization", () => {
   });
 
   it("builds the combined Gmail and Calendar authorization URL from canonical configuration", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     await currentDb().execute({
       sql: `INSERT INTO ea_instance_metadata
               (singleton_id, canonical_origin, source, confirmed_at, updated_at)
@@ -186,6 +188,7 @@ describe("gmail callback canonicalization", () => {
   });
 
   it("uses the persisted canonical Google callback for token exchange", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     await currentDb().execute({
       sql: `INSERT INTO ea_instance_metadata
               (singleton_id, canonical_origin, source, confirmed_at, updated_at)

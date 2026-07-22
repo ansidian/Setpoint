@@ -39,7 +39,21 @@ describe("Inbox Remind me workspace", () => {
     expect(panelProps.current?.initialDescription).toContain("https://mail.google.com/mail/");
   });
 
-  it("opens the shared editor as a mobile sheet", () => {
+  it("toggles the desktop reminder rail closed and keeps its exit shell inert", () => {
+    render(<Harness />);
+    const reminderButton = screen.getByRole("button", { name: "Remind me" });
+
+    fireEvent.click(reminderButton);
+    expect(screen.getByRole("button", { name: "Hide reminder" }).getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(reminderButton);
+
+    const drawer = screen.getByTestId("inbox-remind-workspace");
+    expect(drawer.getAttribute("aria-hidden")).toBe("true");
+    expect(drawer.hasAttribute("inert")).toBe(true);
+    expect(drawer.style.pointerEvents).toBe("none");
+  });
+
+  it("opens AddTaskPanel with the floating host on mobile", () => {
     render(<Harness mobile />);
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(within(screen.getByTestId("inbox-mobile-actions-menu")).getByRole("button", { name: "Remind me" }));
@@ -54,7 +68,7 @@ describe("Inbox Remind me workspace", () => {
     expect(panelProps.current?.confirmDirtyCloseInline).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Dirty task" }));
     fireEvent.click(screen.getByRole("button", { name: "Close task" }));
-    expect(screen.queryByTestId("fake-task-panel")).toBeNull();
+    expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("true");
     expect(confirm).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
@@ -73,7 +87,7 @@ describe("Inbox Remind me workspace", () => {
     render(<SuccessHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
     fireEvent.click(screen.getByRole("button", { name: "Save task" }));
-    expect(screen.queryByTestId("fake-task-panel")).toBeNull();
+    expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByRole("status").textContent).toBe("Reminder added");
     expect(onAction).not.toHaveBeenCalled();
   });

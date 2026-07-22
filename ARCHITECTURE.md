@@ -270,6 +270,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
+| `useMotionPresence` | `src/hooks/useMotionPresence.ts` |
 | `useNews` | `src/hooks/useNews.ts` |
 | `useNotifications` | `src/hooks/useNotifications.ts` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.ts` |

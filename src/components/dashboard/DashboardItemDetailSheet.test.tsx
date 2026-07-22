@@ -33,14 +33,6 @@ afterEach(() => {
 describe("DashboardItemDetailSheet", () => {
   const deadline = { id: "t1", title: "Submit report", status: "open", due_date: "2026-07-15", priority: 1, url: "https://todoist.com/app/task/1" };
 
-  it("renders a deadline with complete, edit, todoist, and open-in-calendar", () => {
-    render(<DashboardItemDetailSheet kind="deadline" item={deadline} onClose={() => {}} onOpenInCalendar={() => {}} />);
-    expect(screen.getByText("Submit report")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Mark complete" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open in calendar" })).toBeTruthy();
-  });
-
   it("routes Mark complete through the dashboard completer", () => {
     render(<DashboardItemDetailSheet kind="deadline" item={deadline} onClose={() => {}} onOpenInCalendar={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Mark complete" }));
@@ -71,11 +63,13 @@ describe("DashboardItemDetailSheet", () => {
     expect(screen.getByRole("button", { name: "Open in calendar" })).toBeTruthy();
   });
 
-  it("renders an event with open-in-calendar and no edit", () => {
-    const event = { id: "e1", title: "Standup", startMs: new Date("2026-07-15T17:00:00Z").getTime(), endMs: new Date("2026-07-15T17:30:00Z").getTime(), writable: true, eventType: "default" };
+  it("renders an event with Edit Event first, followed by Open in Google Calendar", () => {
+    const event = { id: "e1", title: "Standup", startMs: new Date("2026-07-15T17:00:00Z").getTime(), endMs: new Date("2026-07-15T17:30:00Z").getTime(), writable: true, eventType: "default", htmlLink: "https://calendar.google.com/event?eid=abc" };
     render(<DashboardItemDetailSheet kind="event" item={event} onClose={() => {}} onOpenInCalendar={() => {}} />);
     expect(screen.getByText("Standup")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open in calendar" })).toBeTruthy();
+    const editEvent = screen.getByRole("button", { name: "Edit Event" });
+    const googleCalendar = screen.getByRole("link", { name: "Open in Google Calendar" });
+    expect(editEvent.compareDocumentPosition(googleCalendar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
@@ -108,6 +102,7 @@ describe("DashboardItemDetailSheet", () => {
       />,
     );
 
+    expect(screen.getByTestId("anchored-floating-panel-drag-handle").textContent).toContain("Deadline");
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByText("Submit report")).toBeTruthy();
 

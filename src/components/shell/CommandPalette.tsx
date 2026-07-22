@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import { motion as Motion, useReducedMotion } from "motion/react";
 import {
   BarChart3,
   LayoutList, Inbox, Clock, AlertCircle, CreditCard,
@@ -8,6 +9,8 @@ import {
   CalendarPlus, ListPlus, Notebook, Newspaper,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { motionDuration, motionTransition } from "../../lib/motion";
+import useMotionPresence from "../../hooks/useMotionPresence";
 
 export interface CommandPaletteItem {
   id: string;
@@ -32,27 +35,34 @@ export interface CommandPaletteProps {
  * starts at 0 and the query is empty each time the palette opens.
  */
 export default function CommandPalette({ open, ...rest }: CommandPaletteProps) {
-  if (!open) return null;
-  return <CommandPaletteInner {...rest} />;
+  const reduceMotion = useReducedMotion() ?? false;
+  const rendered = useMotionPresence(open, reduceMotion ? 0 : motionDuration.exit * 1000);
+  if (!rendered) return null;
+  return createPortal(
+    <CommandPaletteInner open={open} reduceMotion={reduceMotion} {...rest} />,
+    document.body,
+  );
 }
 
-function CommandPaletteInner({ accent, onClose, onAction }: Omit<CommandPaletteProps, "open">) {
+function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: Omit<CommandPaletteProps, "open"> & { open: boolean; reduceMotion: boolean }) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (!open) return undefined;
     const t = setTimeout(() => inputRef.current?.focus(), 30);
     return () => clearTimeout(t);
-  }, []);
+  }, [open]);
 
   useEffect(() => {
+    if (!open) return undefined;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, open]);
 
   const items = useMemo<CommandPaletteItem[]>(() => [
     { id: "go-dashboard", icon: LayoutList, label: "Go to Dashboard", hint: "1", kind: "tab", payload: "dashboard" },
@@ -100,14 +110,19 @@ function CommandPaletteInner({ accent, onClose, onAction }: Omit<CommandPaletteP
     }
   }
 
-  return createPortal(
-    <div
-      onClick={onClose}
+  return (
+    <Motion.div
+      initial={{ opacity: reduceMotion ? 1 : 0 }}
+      animate={{ opacity: open ? 1 : 0 }}
+      transition={motionTransition(reduceMotion, motionDuration.exit)}
+      onClick={open ? onClose : undefined}
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
       // Presence-based marker: the calendar's hotkey handler goes fully inert
       // while this blocking overlay is mounted (its pre-editable branches —
       // Cmd+F, the Escape cascade, bare Meta — would otherwise fire beneath
       // the palette's focused input).
-      data-suspend-calendar-hotkeys="blocking"
+      data-suspend-calendar-hotkeys={open ? "blocking" : undefined}
       style={{
         position: "fixed", inset: 0, zIndex: 100,
         // Static CSS faux-frost — no live backdrop-filter (which would re-blur the
@@ -128,7 +143,14 @@ function CommandPaletteInner({ accent, onClose, onAction }: Omit<CommandPaletteP
         paddingTop: 120,
       }}
     >
-      <div
+      <Motion.div
+        initial={reduceMotion ? false : { opacity: 0, y: -8, scale: 0.985 }}
+        animate={open
+          ? { opacity: 1, y: 0, scale: 1 }
+          : reduceMotion
+            ? { opacity: 0 }
+            : { opacity: 0, y: -5, scale: 0.99 }}
+        transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 520, borderRadius: 14,
@@ -224,8 +246,7 @@ function CommandPaletteInner({ accent, onClose, onAction }: Omit<CommandPaletteP
             </div>
           )}
         </div>
-      </div>
-    </div>,
-    document.body,
+      </Motion.div>
+    </Motion.div>
   );
 }

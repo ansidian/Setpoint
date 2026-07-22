@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import TodayTimeline from "./TodayTimeline";
 import { DashboardProvider } from "../../context/DashboardContext";
@@ -75,23 +75,24 @@ function renderDashboardBody({ isMobile = false, onOpenEmail = () => {} } = {}) 
 }
 
 describe("mobile dashboard 3-tier layout", () => {
-  it("stacks the three tiers on mobile", () => {
-    renderDashboardBody({ isMobile: true });
-    const body = screen.getByTestId("dashboard-body-mobile");
-    expect(body.getAttribute("data-layout-mode")).toBe("mobile");
-    expect(screen.getByTestId("needs-you-band")).toBeTruthy();
-    expect(screen.getByTestId("today-timeline-mobile")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
-    expect(document.querySelector('[data-sect="deadlines"]')).toBeNull();
-    expect(document.querySelector('[data-sect="bills"]')).toBeNull();
-  });
-
-  it("renders the fixed desktop 3-tier layout", () => {
-    renderDashboardBody({ isMobile: false });
-    expect(document.querySelector('[data-layout-mode="desktop"]')).toBeTruthy();
-    expect(screen.getByTestId("needs-you-band")).toBeTruthy();
-    expect(screen.getByTestId("today-timeline")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
+  it("renders the owned three-tier composition for mobile and desktop", () => {
+    for (const { isMobile, rootId, timelineId, mode } of [
+      { isMobile: true, rootId: "dashboard-body-mobile", timelineId: "today-timeline-mobile", mode: "mobile" },
+      { isMobile: false, rootId: "dashboard-body-desktop", timelineId: "today-timeline", mode: "desktop" },
+    ]) {
+      const view = renderDashboardBody({ isMobile });
+      const body = screen.getByTestId(rootId);
+      const scoped = within(body);
+      expect(body.getAttribute("data-layout-mode")).toBe(mode);
+      expect(scoped.getByTestId("needs-you-band")).toBeTruthy();
+      expect(scoped.getByTestId(timelineId)).toBeTruthy();
+      expect(scoped.getByTestId("dashboard-context-column")).toBeTruthy();
+      if (isMobile) {
+        expect(body.querySelector('[data-sect="deadlines"]')).toBeNull();
+        expect(body.querySelector('[data-sect="bills"]')).toBeNull();
+      }
+      view.unmount();
+    }
   });
 });
 
@@ -106,6 +107,7 @@ describe("TodayTimeline controls", () => {
       />,
     );
 
+    expect(screen.getByText("Today")).toBeTruthy();
     const deadlinesFilter = screen.getByRole("switch", { name: /deadlines/i });
     expect(deadlinesFilter.getAttribute("aria-checked")).toBe("true");
 
@@ -144,6 +146,37 @@ describe("TodayTimeline controls", () => {
 
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(timeline.textContent).toMatch(/Thursday review/);
+
+    fireEvent.click(toggle);
+
+    const closingContent = screen.getByTestId("rest-of-week-disclosure-content");
+    expect(closingContent.getAttribute("aria-hidden")).toBe("true");
+    expect(closingContent.hasAttribute("inert")).toBe(true);
+  });
+
+  it("uses one desktop spine offset for today, tomorrow, and rest of this week", () => {
+    // This exact offset is the shared scan-path contract across all three rails.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z").getTime());
+
+    render(
+      <TodayTimeline
+        accent="#cba6da"
+        events={[
+          { id: "tomorrow", title: "Tuesday review", startMs: new Date("2026-05-12T18:00:00.000Z").getTime(), endMs: new Date("2026-05-12T19:00:00.000Z").getTime() },
+          { id: "rest", title: "Thursday review", startMs: new Date("2026-05-14T18:00:00.000Z").getTime(), endMs: new Date("2026-05-14T19:00:00.000Z").getTime() },
+        ]}
+        deadlines={[]}
+        onJump={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^tomorrow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /rest of this week/i }));
+
+    const offsets = Array.from(document.querySelectorAll("[data-timeline-spine-offset]"))
+      .map((node) => node.getAttribute("data-timeline-spine-offset"));
+    expect(offsets).toEqual(["28", "28", "28"]);
   });
 
   it("renders a standalone NOW marker in a focus-window gap between events", () => {

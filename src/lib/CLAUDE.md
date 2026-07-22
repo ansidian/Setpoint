@@ -13,6 +13,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `email-links.ts` — builds a Gmail web URL from an email's uid + account
 - `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `instanceCredentialPendingApi.ts` — version-bound pending-credential discard calls shared by Settings and the central API export surface
+- `motion.ts` — shared Motion React durations, ease-out curve, and reduced-motion-aware transition builder
 - `icons.ts` — lucide icon name → component resolver (`resolveIcon`) for briefing/category icon fields
 - `Icon.tsx` — universal icon renderer (lucide name or known emoji); unknown input falls back to Sparkles
 - `onboardingModel.ts` — locked capability-led sequence, allowlisted provider targets, persisted-progress projection, and continue-setup selection

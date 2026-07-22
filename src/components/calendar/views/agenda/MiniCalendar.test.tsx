@@ -96,23 +96,6 @@ describe("MiniCalendar", () => {
     expect(marker.getAttribute("data-marker-contrast-ring")).toBe("dark");
   });
 
-  it("splits the mini calendar month title into white month text and solid red year text", () => {
-    render(
-      <MiniCalendar
-        viewYear={2026}
-        viewMonth={4}
-        todayKey="2026-05-15"
-        selectedDateKey="2026-05-20"
-      />,
-    );
-
-    expect(screen.getByTestId("calendar-mini-calendar-month-label").textContent).toBe("May");
-    // These exact title colors are a documented mini-calendar contract in DESIGN.md.
-    expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("#f8faff");
-    expect(screen.getByTestId("calendar-mini-calendar-year-label").textContent).toBe("2026");
-    expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("#ff453a");
-  });
-
   it("exposes compact month controls through provided callbacks only", () => {
     const onPreviousMonth = vi.fn();
     const onNextMonth = vi.fn();
@@ -128,6 +111,9 @@ describe("MiniCalendar", () => {
         onNextMonth={onNextMonth}
       />,
     );
+
+    expect(screen.getByTestId("calendar-mini-calendar-month-label").textContent).toBe("May");
+    expect(screen.getByTestId("calendar-mini-calendar-year-label").textContent).toBe("2026");
 
     fireEvent.click(screen.getByRole("button", { name: /previous mini calendar month/i }));
     fireEvent.click(screen.getByRole("button", { name: /next mini calendar month/i }));

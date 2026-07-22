@@ -90,7 +90,9 @@ function clearPendingAuthCookie(res: Response) {
 }
 
 async function webAuthnConfigForRequest(req: Request) {
-  const canonicalOrigin = await canonicalUrlService.resolveCanonicalOrigin(process.env);
+  const canonicalOrigin = process.env.NODE_ENV === "production"
+    ? await canonicalUrlService.resolveCanonicalOrigin(process.env)
+    : null;
   return resolveWebAuthnConfig(process.env, { requestOrigin: req.get("origin"), canonicalOrigin });
 }
 

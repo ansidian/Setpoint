@@ -64,7 +64,7 @@ describe("selectGlanceActions — bills", () => {
 describe("selectGlanceActions — events", () => {
   const ev = (overrides: Record<string, unknown> = {}) => ({ id: "e1", ...overrides });
 
-  it("offers zoom, open-url, google-calendar, and open-in-calendar when present", () => {
+  it("leads with edit-event and google-calendar before meeting and external links", () => {
     const actions = selectGlanceActions({
       kind: "event",
       item: ev({
@@ -72,14 +72,16 @@ describe("selectGlanceActions — events", () => {
         htmlLink: "https://calendar.google.com/event?eid=abc",
       }),
     });
-    expect(keys(actions)).toEqual(["zoom", "eventUrl", "gcal", "openInCalendar"]);
+    expect(keys(actions)).toEqual(["openInCalendar", "gcal", "zoom", "eventUrl"]);
+    expect(actions[0]!.label).toBe("Edit Event");
+    expect(actions[1]!.label).toBe("Open in Google Calendar");
   });
 
   it("falls back to only open-in-calendar for a plain event with no links", () => {
     expect(keys(selectGlanceActions({ kind: "event", item: ev({ title: "Standup" }) }))).toEqual(["openInCalendar"]);
   });
 
-  it("never offers edit on the glance sheet (events edit only in the calendar)", () => {
+  it("routes event editing through the calendar handoff rather than inline deadline editing", () => {
     const actions = selectGlanceActions({
       kind: "event",
       item: ev({ writable: true, eventType: "default", htmlLink: "https://calendar.google.com/event?eid=abc" }),

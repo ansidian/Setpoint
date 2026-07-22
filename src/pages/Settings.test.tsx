@@ -232,10 +232,10 @@ describe("Settings page", () => {
     mockApi.getAccounts.mockReturnValue(new Promise(() => {}));
     mockApi.getSettings.mockReturnValue(new Promise(() => {}));
 
-    const { container } = renderSettings();
+    renderSettings();
 
     expect(screen.getByText("Settings")).toBeTruthy();
-    expect(container.querySelectorAll(".animate-pulse").length).toBe(3);
+    expect(screen.getByRole("status", { name: "Loading settings" }).getAttribute("aria-busy")).toBe("true");
     expect(screen.queryByTestId("settings-connections-section")).toBeNull();
   });
 

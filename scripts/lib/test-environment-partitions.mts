@@ -67,6 +67,7 @@ const happyDomTypescriptTests = [
   "src/hooks/useCurrentDashboard.events.test.ts",
   "src/hooks/useCurrentDashboard.eventRefresh.test.ts",
   "src/hooks/useDismissablePortal.test.ts",
+  "src/hooks/useMotionPresence.test.ts",
   "src/hooks/useWarmImport.test.ts",
   "src/lib/scrollLock.test.ts",
   "src/lib/triageSoundGate.test.ts",

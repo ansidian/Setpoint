@@ -47,6 +47,7 @@ function renderMobileReader(overrides: MobileReaderOverrides = {}) {
       onClose={() => {}}
       showTriage={false}
       billOpen={overrides.billOpen ?? true}
+      billMounted={overrides.billMounted}
       setBillOpen={setBillOpen}
       onOpenRecordedBill={onOpenRecordedBill}
       snoozeOpen={false}
@@ -66,6 +67,14 @@ function renderMobileReader(overrides: MobileReaderOverrides = {}) {
 }
 
 describe("MobileReader controls", () => {
+  it("keeps a previously opened bill drawer mounted but inert while closed", () => {
+    renderMobileReader({ billOpen: false, billMounted: true });
+
+    const drawer = screen.getByTestId("inbox-mobile-bill-panel");
+    expect(drawer.getAttribute("aria-hidden")).toBe("true");
+    expect(drawer.hasAttribute("inert")).toBe(true);
+  });
+
   it("promotes the primary triage verbs while the overflow keeps the long tail", () => {
     const { onAction } = renderMobileReader({
       email: {

@@ -18,6 +18,7 @@ import type { TimelineRowItem, TimelineRowJumpPayload } from "./TimelineRow";
 export default function TimelineDayGroup({
   accent,
   day,
+  hideDayHeader = false,
   isFirst,
   isMobile = false,
   items,
@@ -26,6 +27,7 @@ export default function TimelineDayGroup({
 }: {
   accent: string;
   day: number;
+  hideDayHeader?: boolean;
   isFirst?: boolean;
   isMobile?: boolean;
   items: DashboardTimelineItem[];
@@ -33,7 +35,7 @@ export default function TimelineDayGroup({
   onJump?: (payload: TimelineRowJumpPayload, anchor: HTMLElement) => void;
 }) {
   const label = dayBucketLabel(day, now);
-  const hideHeader = isFirst && day === 0;
+  const hideHeader = hideDayHeader || (isFirst && day === 0);
   const isToday = day === 0;
   const showRelativeTooltip = day === 1 || day <= -2 || (day >= 2 && day <= 6);
 
@@ -109,6 +111,7 @@ export default function TimelineDayGroup({
         }}
       >
         <div
+          data-timeline-spine-offset={spineLeft}
           style={{
             position: "absolute",
             left: spineLeft,

@@ -1,10 +1,13 @@
 import { useRef, useEffect, useCallback } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, TouchEvent as ReactTouchEvent } from "react";
 import { createPortal } from "react-dom";
+import { motion as Motion, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
 import { findScrollableParent, shouldDismissOnDragEnd, shouldEngageDrag } from "./bottomSheetModel";
 import { acquireScrollLock } from "@/lib/scrollLock";
 import useBrowserBackDismiss from "@/hooks/useBrowserBackDismiss";
+import { motionDuration, motionTransition } from "@/lib/motion";
+import useMotionPresence from "@/hooks/useMotionPresence";
 
 export type BottomSheetProps = {
   open: boolean;
@@ -28,6 +31,8 @@ export type BottomSheetProps = {
 // header's only remaining element (the Close X) would be dead chrome over an
 // otherwise empty bar.
 export default function BottomSheet({ open, onClose, title, children, maxHeight = "70vh", height, hideTitle = false }: BottomSheetProps) {
+  const reduceMotion = useReducedMotion() ?? false;
+  const rendered = useMotionPresence(open, reduceMotion ? 0 : motionDuration.exit * 1000);
   const sheetRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
@@ -140,42 +145,54 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     isDragging.current = false;
   }, [onClose]);
 
-  if (!open) return null;
+  if (!rendered) return null;
 
   return createPortal(
-    <div
+    <Motion.div
+      initial="closed"
+      animate={open ? "open" : "closed"}
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
       className="fixed inset-0 z-50"
-      style={{ isolation: "isolate" }}
+      style={{ isolation: "isolate", pointerEvents: open ? "auto" : "none" }}
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-[var(--sp-deep)]/50 animate-[fadeIn_200ms_ease]"
-        onClick={onClose}
-      />
+          {/* Backdrop */}
+          <Motion.div
+            data-testid="bottom-sheet-backdrop"
+            className="absolute inset-0 bg-[var(--sp-deep)]/50"
+            variants={{ open: { opacity: 1 }, closed: { opacity: 0 } }}
+            transition={motionTransition(reduceMotion, motionDuration.exit)}
+            onClick={open ? onClose : undefined}
+          />
 
-      {/* Sheet */}
-      <div
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title || undefined}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        className="absolute bottom-0 left-0 right-0 flex flex-col animate-[slideUp_300ms_cubic-bezier(0.16,1,0.3,1)]"
-        style={{
-          ...(height ? { height } : { maxHeight }),
-          background: "var(--sp-panel)",
-          borderRadius: "12px 12px 0 0",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderBottom: "none",
-          paddingBottom: "var(--sp-safe-bottom)",
-          overscrollBehavior: "contain",
-          transition: "transform 300ms cubic-bezier(0.16,1,0.3,1)",
-        }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-      >
+          {/* Sheet */}
+          <Motion.div
+            ref={sheetRef}
+            role={open ? "dialog" : undefined}
+            aria-modal={open ? "true" : undefined}
+            aria-hidden={!open}
+            aria-label={title || undefined}
+            tabIndex={-1}
+            onKeyDown={onKeyDown}
+            className="absolute bottom-0 left-0 right-0 flex flex-col"
+            variants={{
+              open: { opacity: 1, y: 0 },
+              closed: { opacity: reduceMotion ? 1 : 0, y: reduceMotion ? 0 : "100%" },
+            }}
+            transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+            style={{
+              ...(height ? { height } : { maxHeight }),
+              background: "var(--sp-panel)",
+              borderRadius: "12px 12px 0 0",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "none",
+              paddingBottom: "var(--sp-safe-bottom)",
+              overscrollBehavior: "contain",
+            }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
         {/* Drag handle */}
         <div className="flex justify-center pt-2 pb-1 shrink-0">
           <div
@@ -211,8 +228,8 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
         >
           {children}
         </div>
-      </div>
-    </div>,
+          </Motion.div>
+    </Motion.div>,
     document.body,
   );
 }

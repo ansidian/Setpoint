@@ -218,10 +218,21 @@ function formatChipTime(dueTime: unknown): string | null {
   return mm === 0 ? `${h}${mer}` : `${h}:${String(mm).padStart(2, "0")}${mer}`;
 }
 
-// Short date for a chip tooltip: "2026-06-21" -> "6/21/26".
-function formatChipShortDate(dateStr: unknown): string | null {
+// Date for a chip tooltip: "2026-06-21" -> "6/21/26" (short) or
+// "Sunday, June 21" (long, matching the dashboard timeline's date labels).
+function formatChipDate(dateStr: unknown, dateStyle: "short" | "long"): string | null {
   const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return null;
+  if (dateStyle === "long") {
+    const year = Number(m[1]!);
+    const month = Number(m[2]!) - 1;
+    const day = Number(m[3]!);
+    const date = new Date(Date.UTC(year, month, day, 12));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) return null;
+    return date.toLocaleDateString("en-US", {
+      timeZone: "UTC", weekday: "long", month: "long", day: "numeric",
+    });
+  }
   return `${Number(m[2]!)}/${Number(m[3]!)}/${m[1]!.slice(2)}`;
 }
 
@@ -229,12 +240,18 @@ function formatChipShortDate(dateStr: unknown): string | null {
  * Absolute date+time label for a relative-time chip's hover tooltip, or null for
  * no tooltip. A due-today item gets NO tooltip — its chip already reads "Due
  * today (· time)" / "Today", so repeating it adds nothing. Any other day reveals
- * the otherwise-hidden absolute date: "6/21/26, 2pm" (time omitted when absent,
- * e.g. bills: "6/21/26"). Null when due-today or no date is given.
+ * the otherwise-hidden absolute date. The default short style renders
+ * "6/21/26, 2pm"; the long style renders "Sunday, June 21, 2pm". Time is
+ * omitted when absent. Null when due-today or no date is given.
  */
-export function formatChipDateTime(dateStr: unknown, dueTime: unknown, isToday: boolean): string | null {
+export function formatChipDateTime(
+  dateStr: unknown,
+  dueTime: unknown,
+  isToday: boolean,
+  dateStyle: "short" | "long" = "short",
+): string | null {
   if (isToday) return null;
-  const date = formatChipShortDate(dateStr);
+  const date = formatChipDate(dateStr, dateStyle);
   const time = formatChipTime(dueTime);
   if (!date) return time || null;
   return time ? `${date}, ${time}` : date;

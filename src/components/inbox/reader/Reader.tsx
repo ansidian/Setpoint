@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion as Motion, useReducedMotion } from "motion/react";
 import AddTaskPanel from "../../todoist/AddTaskPanel";
 import { useOptionalDashboard } from "../../../context/DashboardContext";
 import { buildRemindMeTaskSeed } from "./remindMeTaskSeedModel";
@@ -11,6 +12,8 @@ import useBillPayResolver from "./useBillPayResolver";
 import type { Dispatch, SetStateAction } from "react";
 import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
+import { motionDuration, motionTransition } from "../../../lib/motion";
+import useMotionPresence from "../../../hooks/useMotionPresence";
 
 export default function Reader({
   email,
@@ -45,6 +48,7 @@ export default function Reader({
   readOnly?: boolean;
   onWorkspaceDirtyChange?: (dirty: boolean) => void;
 }) {
+  const reduceMotion = useReducedMotion() ?? false;
   const snoozeBtnRef = useRef<HTMLButtonElement>(null);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [drafting, setDrafting] = useState(showDraft);
@@ -53,6 +57,9 @@ export default function Reader({
   const [taskDirty, setTaskDirty] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const taskPresence = useMotionPresence(taskOpen, reduceMotion ? 0 : motionDuration.exit * 1000);
+  const taskMounted = taskOpen || taskPresence;
+  const toastRendered = useMotionPresence(Boolean(toast), reduceMotion ? 0 : motionDuration.exit * 1000);
   const dashboard = useOptionalDashboard();
   const seed = useMemo(() => email ? buildRemindMeTaskSeed(email) : null, [email]);
   const bodyState = useEmailBody(email);
@@ -84,6 +91,14 @@ export default function Reader({
     setDraftDirty(false);
     setTaskOpen(true);
   };
+  const toggleTask = () => {
+    if (!taskOpen) {
+      openTask();
+      return;
+    }
+    if (!confirmDiscard(taskDirty)) return;
+    closeTask();
+  };
   const guardedSetBillOpen: Dispatch<SetStateAction<boolean>> = (update) => {
     const next = typeof update === "function" ? update(billOpen) : update;
     if (next && taskOpen && !confirmDiscard(taskDirty)) return;
@@ -98,7 +113,7 @@ export default function Reader({
     if (next) { setTaskOpen(false); setTaskDirty(false); setBillOpen(false); }
     setDrafting(next);
   };
-  const taskPanel = taskOpen ? (
+  const taskPanel = taskMounted ? (
     <AddTaskPanel
       key={String(email.id || email.uid)}
       host={isMobile ? "floating" : "inline"}
@@ -127,11 +142,12 @@ export default function Reader({
     accent,
     onAction,
     onClose,
-    onRemind: onRemind || openTask,
+    onRemind: onRemind || toggleTask,
     onAskAlfred,
     showTriage,
     showDraft: false,
     billOpen,
+    billMounted,
     setBillOpen: guardedSetBillOpen,
     onOpenRecordedBill,
     snoozeBtnRef,
@@ -143,12 +159,26 @@ export default function Reader({
     setDrafting: guardedSetDrafting,
     setDraftDirty,
     taskWorkspace: isMobile ? null : taskPanel,
+    taskOpen,
     readOnly,
   };
 
   return <>
     {isMobile ? <MobileReader {...sharedProps} /> : <DesktopReader {...sharedProps} billMounted={billMounted} />}
-    {isMobile ? taskPanel : null}
-    {toast && <div role="status" style={{ position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)", zIndex: 10000, padding: "9px 14px", borderRadius: 10, background: "var(--sp-panel)", color: "var(--sp-green)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 20px 60px rgba(0,0,0,0.55)" }}>{toast}</div>}
+    {isMobile && taskOpen ? taskPanel : null}
+      {toastRendered && (
+        <Motion.div
+          key="reminder-toast"
+          role={toast ? "status" : undefined}
+          aria-hidden={!toast}
+          inert={!toast ? true : undefined}
+          initial={reduceMotion ? false : { opacity: 0, x: "-50%", y: 8 }}
+          animate={{ opacity: toast ? 1 : 0, x: "-50%", y: toast || reduceMotion ? 0 : 6 }}
+          transition={motionTransition(reduceMotion, motionDuration.exit)}
+          style={{ position: "fixed", left: "50%", bottom: 20, zIndex: 10000, padding: "9px 14px", borderRadius: 10, background: "var(--sp-panel)", color: "var(--sp-green)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 20px 60px rgba(0,0,0,0.55)" }}
+        >
+          {toast || ""}
+        </Motion.div>
+      )}
   </>;
 }

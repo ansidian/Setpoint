@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { motion as Motion, useReducedMotion } from "motion/react";
 import {
   Reply,
   Sparkles,
@@ -20,10 +21,11 @@ import {
   isActualActioned,
   resolveActualCalendarTarget,
 } from "./actualActionStatusModel";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { InboxEmailLike } from "../inboxTypes";
 import type { BillResolutionState, EmailBodyState, ReaderSurfaceProps } from "./readerTypes";
 import { asBillCandidate, IDLE_BILL_RESOLUTION } from "./readerTypes";
+import { motionDuration, motionTransition } from "../../../lib/motion";
 
 function LiveEmailNotice({ email }: { email: InboxEmailLike }) {
   const pendingGrace = !!email?._pendingSecurityGrace;
@@ -126,19 +128,29 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
   bodyState: EmailBodyState;
   billResolution: BillResolutionState;
 }) {
+  const reduceMotion = useReducedMotion() ?? false;
   const extractionBody = resolveBillExtractionBody(bodyState);
   const billSeed = resolveBillSeed(billResolution, asBillCandidate(email.extractedBill));
 
   return (
-    <div
+    <Motion.div
+      initial={false}
+      animate={{ width: billOpen ? 360 : 0 }}
+      transition={motionTransition(reduceMotion, billOpen ? motionDuration.panel : motionDuration.exit)}
+      aria-hidden={!billOpen}
       style={{
-        maxWidth: billOpen ? 360 : 0,
         flexShrink: 0,
         overflow: "hidden",
       }}
     >
       {billMounted && (
-        <aside
+        <Motion.aside
+          initial={reduceMotion ? false : { opacity: 0, x: 14 }}
+          animate={{ opacity: billOpen ? 1 : 0, x: reduceMotion || billOpen ? 0 : 14 }}
+          transition={motionTransition(reduceMotion, billOpen ? motionDuration.panel : motionDuration.exit)}
+          aria-hidden={!billOpen}
+          inert={!billOpen ? true : undefined}
+          data-state={billOpen ? "open" : "closed"}
           style={{
             width: 360,
             height: "100%",
@@ -149,8 +161,7 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
             overflowY: "auto",
             overscrollBehavior: "contain",
             isolation: "isolate",
-            opacity: billOpen ? 1 : 0,
-            transition: "opacity 200ms ease",
+            pointerEvents: billOpen ? "auto" : "none",
           }}
         >
           <div
@@ -179,9 +190,10 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
               type="button"
               onClick={() => setBillOpen(false)}
               aria-label="Close bill pay"
+              className="bill-drawer-close"
               style={{
                 background: "transparent",
-                border: "none",
+                border: "1px solid transparent",
                 cursor: "pointer",
                 color: "rgba(205,214,244,0.5)",
                 padding: 4,
@@ -208,9 +220,48 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
               mappingLoading={billResolution?.status === "loading"}
             />
           </div>
-        </aside>
+        </Motion.aside>
       )}
-    </div>
+    </Motion.div>
+  );
+}
+
+function ReminderDrawer({ open, workspace }: { open: boolean; workspace: ReactNode }) {
+  const reduceMotion = useReducedMotion() ?? false;
+
+  return (
+    <Motion.div
+      initial={false}
+      animate={{ width: open ? 360 : 0 }}
+      transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+      aria-hidden={!open}
+      style={{ flexShrink: 0, overflow: "hidden" }}
+    >
+      {workspace && (
+        <Motion.aside
+          data-testid="inbox-remind-workspace"
+          initial={reduceMotion ? false : { opacity: 0, x: 14 }}
+          animate={{ opacity: open ? 1 : 0, x: reduceMotion || open ? 0 : 14 }}
+          transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+          aria-hidden={!open}
+          inert={!open ? true : undefined}
+          data-state={open ? "open" : "closed"}
+          style={{
+            width: 360,
+            height: "100%",
+            flexShrink: 0,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            borderLeft: "1px solid rgba(255,255,255,0.06)",
+            background: "var(--sp-panel)",
+            padding: 16,
+            pointerEvents: open ? "auto" : "none",
+          }}
+        >
+          {workspace}
+        </Motion.aside>
+      )}
+    </Motion.div>
   );
 }
 
@@ -237,6 +288,7 @@ export default function DesktopReader({
   onRemind,
   onAskAlfred,
   taskWorkspace,
+  taskOpen = false,
   setDraftDirty,
 }: ReaderSurfaceProps & { billMounted: boolean }) {
   const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
@@ -293,6 +345,7 @@ export default function DesktopReader({
         onAction={onAction}
         onClose={onClose}
         onRemind={onRemind}
+        reminderOpen={taskOpen}
         onAskAlfred={onAskAlfred}
         snoozeAnchorRef={resolvedSnoozeBtnRef}
         snoozeOpen={snoozeOpen}
@@ -387,7 +440,7 @@ export default function DesktopReader({
             bodyState={bodyState}
             billResolution={resolvedBillResolution}
           />
-          {taskWorkspace && <aside data-testid="inbox-remind-workspace" style={{ width: 360, flexShrink: 0, overflowY: "auto", overscrollBehavior: "contain", borderLeft: "1px solid rgba(255,255,255,0.06)", background: "var(--sp-panel)", padding: 16 }}>{taskWorkspace}</aside>}
+          <ReminderDrawer open={taskOpen} workspace={taskWorkspace} />
         </div>
 
         {(drafting || showDraft) && !catchUp && email.claude?.draftReply && (

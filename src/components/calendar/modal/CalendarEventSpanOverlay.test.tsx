@@ -43,7 +43,7 @@ describe("CalendarEventSpanOverlay", () => {
     expect(ghost.querySelector("[data-calendar-span-title-text='true']")?.textContent).toBe("Check-in IHSS");
   });
 
-  it("keeps selected span title metrics stable", () => {
+  it("keeps the selected and unselected span title-fit policy equal", () => {
     const title = "Advanced machine learning project review and lab planning";
     render(
       <CalendarEventSpanOverlay
@@ -93,9 +93,18 @@ describe("CalendarEventSpanOverlay", () => {
       .getAllByTestId("calendar-event-span-segment")
       .map((chip) => chip.querySelector<HTMLElement>("[data-calendar-span-title-fit]"));
 
-    expect(titles[0]?.getAttribute("data-calendar-span-title-fit")).toBe(
-      titles[1]?.getAttribute("data-calendar-span-title-fit"),
-    );
+    const titlePolicy = (title: HTMLElement | null | undefined) => {
+      const titleTextStyle = title?.querySelector<HTMLElement>("[data-calendar-span-title-text='true']")?.style as
+        | (CSSStyleDeclaration & { WebkitLineClamp: string })
+        | undefined;
+      return {
+        fontSize: title?.style.fontSize,
+        lineHeight: title?.style.lineHeight,
+        lineClamp: titleTextStyle?.WebkitLineClamp,
+      };
+    };
+    expect(titlePolicy(titles[0])).toEqual(titlePolicy(titles[1]));
+    expect(titlePolicy(titles[0])).toEqual({ fontSize: "10.5px", lineHeight: "1.08", lineClamp: "2" });
   });
 
   it("renders Google birthday spans as special-date markers without all-day or recurring metadata", () => {

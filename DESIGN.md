@@ -263,6 +263,14 @@ The following `--sp-*` tokens are defined in `src/index.css :root` and used thro
 
 - **`--sp-note-editor-font`** (`13px` base, flipped to `16px` at ≤639px): CodeMirror notes-editor font size. The 16px value at narrow viewports satisfies the iOS focus-zoom floor — inputs below 16px trigger an unwanted automatic zoom on iPhone Safari.
 
+### Motion
+
+- **`--sp-motion-fast`** (`150ms`): Hover, focus, press, and compact disclosure feedback.
+- **`--sp-motion-panel`** (`360ms`): Drawers, sheets, and other spatial panel state changes.
+- **`--sp-ease-out`** (`cubic-bezier(0.16, 1, 0.3, 1)`): The standard confident deceleration curve for product motion.
+
+Panel exits may use a shorter `260ms` duration. Retained closing shells must become inert and leave the accessibility tree immediately, even while their visual exit finishes.
+
 ## 7. Do's and Don'ts
 
 ### Do:

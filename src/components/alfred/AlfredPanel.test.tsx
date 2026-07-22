@@ -40,7 +40,7 @@ describe("AlfredPanel", () => {
       { type: "tool_start", tool_id: "t1", name: "get_upcoming_bills" },
       { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 1 upcoming" },
       { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
-      { type: "text_delta", text: "One bill is due." },
+      { type: "text_delta", text: "One bill is due. The rest can wait." },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     render(<AlfredPanel {...baseProps} />);
@@ -49,6 +49,7 @@ describe("AlfredPanel", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(screen.getByText("One bill is due.")).toBeTruthy());
+    expect(screen.getByText("The rest can wait.")).toBeTruthy();
     // The tool chip is now tucked behind a "steps" disclosure, collapsed by default.
     expect(screen.queryByText("Bills · 1 upcoming")).toBeNull();
     const steps = screen.getByRole("button", { name: /1 step\b/ });
@@ -58,7 +59,7 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("Any bills?")).toBeTruthy();
   });
 
-  it("keeps every between-tool narration visible, interleaved with its step disclosures, and only serifs the answer", async () => {
+  it("keeps every between-tool narration interleaved with its steps and identifies the final answer", async () => {
     // The reported regression: narration Alfred says between tool calls vanished.
     // A real multi-step run must read like an agentic trail — each narration line
     // persists as quiet prose above the tools it introduced; only the final answer
@@ -90,25 +91,29 @@ describe("AlfredPanel", () => {
     expect(first).toBeTruthy();
     expect(second).toBeTruthy();
 
-    // …rendered as quiet prose, not promoted to the serif answer line.
-    expect(first.getAttribute("style")).toContain("font-size: 11.5px");
-    expect(first.getAttribute("style")).not.toContain("serif");
-    expect(second.getAttribute("style")).not.toContain("serif");
-
-    // Only the final answer is the serif title line.
-    expect(screen.getByText("Here's what I found.").getAttribute("style")).toContain("serif");
-
-    // The concrete "no stack of serif pseudo-headers" guard: across a multi-narration
-    // run the panel renders EXACTLY ONE serif node (.ea-display) — the answer lead —
-    // never one per narration. (The empty-state title also uses .ea-display, but the
-    // empty state isn't rendered once the thread has messages.)
-    const serifNodes = document.querySelectorAll(".ea-display");
-    expect(serifNodes).toHaveLength(1);
-    expect(serifNodes[0]!.textContent).toBe("Here's what I found.");
+    const messageKinds = Array.from(document.querySelectorAll("[data-alfred-message-kind]"))
+      .map((node) => node.getAttribute("data-alfred-message-kind"));
+    expect(messageKinds).toEqual(["preamble", "tools", "preamble", "tools", "answer"]);
+    expect(first.closest('[data-alfred-message-kind="preamble"]')).toBeTruthy();
+    expect(second.closest('[data-alfred-message-kind="preamble"]')).toBeTruthy();
+    expect(screen.getByText("Here's what I found.").closest('[data-alfred-message-kind="answer"]')).toBeTruthy();
 
     // Each narration introduced its own settled step disclosure (no lingering spinner).
     expect(screen.getByRole("button", { name: /1 step\b/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /2 steps/ })).toBeTruthy();
+  });
+
+  it("renders a run error produced by the panel model", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_error", message: "Alfred could not complete this run." },
+    ]);
+    render(<AlfredPanel {...baseProps} />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "Try this" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("Alfred could not complete this run.")).toBeTruthy());
   });
 
   it("retries a handoff that arrived during an in-flight run instead of dropping it (P2-3)", async () => {

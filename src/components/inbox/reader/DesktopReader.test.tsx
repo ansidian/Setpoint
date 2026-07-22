@@ -250,6 +250,19 @@ describe("DesktopReader snapshot actions", () => {
     }));
   });
 
+  it("keeps a previously opened bill drawer mounted but inert while closed", () => {
+    renderReader({
+      billOpen: false,
+      billMounted: true,
+      email: { hasBill: true },
+    });
+
+    const drawer = screen.getByTestId("bill-badge").closest("aside");
+    expect(drawer?.getAttribute("aria-hidden")).toBe("true");
+    expect(drawer?.hasAttribute("inert")).toBe(true);
+    expect(drawer?.style.pointerEvents).toBe("none");
+  });
+
   it("shows compact desktop key hints for immediate reader actions", () => {
     renderReader();
 

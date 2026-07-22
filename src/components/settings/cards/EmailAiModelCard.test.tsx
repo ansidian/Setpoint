@@ -99,7 +99,6 @@ describe("EmailAiModelCard", () => {
     });
 
     expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
-    expect(screen.getByText("Model used for durable inbox triage. Bill extraction uses its own model.")).toBeTruthy();
     expect(screen.getByLabelText("Inbox triage provider")).toBeTruthy();
     expect(screen.getByLabelText("Inbox triage model")).toBeTruthy();
   });

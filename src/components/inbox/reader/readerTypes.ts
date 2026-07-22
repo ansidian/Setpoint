@@ -46,6 +46,7 @@ export interface ReaderSurfaceProps {
   showTriage: boolean;
   showDraft?: boolean;
   billOpen: boolean;
+  billMounted?: boolean;
   setBillOpen: Dispatch<SetStateAction<boolean>>;
   onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
   snoozeBtnRef?: RefObject<HTMLButtonElement | null>;
@@ -57,6 +58,7 @@ export interface ReaderSurfaceProps {
   setDrafting: Dispatch<SetStateAction<boolean>>;
   readOnly?: boolean;
   taskWorkspace?: ReactNode;
+  taskOpen?: boolean;
   setDraftDirty?: (dirty: boolean) => void;
 }
 

@@ -367,7 +367,7 @@ describe("CalendarModal event grid behavior", () => {
     const indicator = screen.getByTestId("calendar-pending-update");
     expect(indicator.textContent).toBe("");
     expect(indicator.getAttribute("aria-label")).toBe("Calendar updates pending");
-    expect(indicator.querySelector(".calendar-pending-update-icon")).toBeTruthy();
+    expect(within(indicator).getByTestId("calendar-pending-update-icon")).toBeTruthy();
   });
 
   it("keeps loading data for grid settles inside the agenda-sync suppression window", async () => {

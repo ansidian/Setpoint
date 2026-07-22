@@ -79,7 +79,12 @@ export function renderNoteMarkdown(content: unknown, { accent, onToggleCheckbox 
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       return (
-        <div key={li} style={{ fontWeight: 700, fontSize: heading[1]!.length <= 2 ? "1.08em" : "1em", margin: "1px 0" }}>
+        <div
+          key={li}
+          role="heading"
+          aria-level={heading[1]!.length}
+          style={{ fontWeight: 700, fontSize: heading[1]!.length <= 2 ? "1.08em" : "1em", margin: "1px 0" }}
+        >
           {inlineNodes(heading[2]!, accent, `${li}`)}
         </div>
       );

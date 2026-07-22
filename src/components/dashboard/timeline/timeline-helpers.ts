@@ -32,7 +32,7 @@ export interface DashboardTimelineItem {
 
 export type TimelineGroup = [day: number, items: DashboardTimelineItem[]];
 
-export const GUTTER = 130;
+export const GUTTER = 44;
 export const SPINE_LEFT = GUTTER - 16;
 export const MOBILE_GUTTER = 30;
 export const MOBILE_SPINE_LEFT = 6;
@@ -91,6 +91,14 @@ export function buildTimelineGroups(
   }
   if ((filters.events || filters.deadlines) && !groups.has(0)) {
     groups.set(0, []);
+  }
+  for (const dayItems of groups.values()) {
+    dayItems.sort((a, b) => {
+      const aAllDay = a.kind === "event" && !!a.data?.allDay;
+      const bAllDay = b.kind === "event" && !!b.data?.allDay;
+      if (aAllDay === bAllDay) return 0;
+      return aAllDay ? -1 : 1;
+    });
   }
   return [...groups.entries()].sort((a, b) => a[0] - b[0]);
 }

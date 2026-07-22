@@ -188,6 +188,7 @@ export function createCanonicalUrlService(dbClient: CanonicalUrlDb = db) {
   ): Promise<string | null> {
     const stored = await getCanonicalOrigin();
     if (stored) return stored;
+    if (env.NODE_ENV !== "production") return null;
     const legacy = resolveLegacyCanonicalOrigin(env);
     if (!legacy) return null;
     await writeOrigin(legacy, "legacy_import", now);
@@ -198,6 +199,10 @@ export function createCanonicalUrlService(dbClient: CanonicalUrlDb = db) {
     callback: ProviderCallback,
     env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
   ): Promise<string> {
+    if (env.NODE_ENV !== "production" && (callback === "googleOAuth" || callback === "todoistOAuth")) {
+      const localOrigin = `http://localhost:${env.EA_SERVER_PORT || 3001}`;
+      return deriveCanonicalUrls(localOrigin).callbacks[callback];
+    }
     const canonicalOrigin = await resolveCanonicalOrigin(env);
     if (canonicalOrigin) return deriveCanonicalUrls(canonicalOrigin).callbacks[callback];
     if (callback === "googleOAuth" && env.NODE_ENV === "production" && env.GOOGLE_REDIRECT_URI) {

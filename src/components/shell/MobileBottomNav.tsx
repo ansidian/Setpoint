@@ -41,6 +41,7 @@ export function MobileBottomNav({ tab, onTab, onRetap, inboxUnreadSignalCount }:
             type="button"
             aria-label={NAV_LABELS[tabKey]}
             aria-current={active ? "page" : undefined}
+            className="mobile-bottom-nav-button"
             onClick={() => (active && onRetap ? onRetap(tabKey) : onTab(tabKey))}
             style={{
               flex: 1,
@@ -59,7 +60,6 @@ export function MobileBottomNav({ tab, onTab, onRetap, inboxUnreadSignalCount }:
               fontSize: 10.5,
               fontWeight: 600,
               letterSpacing: 0.2,
-              transition: "color 150ms",
             }}
           >
             <span style={{ position: "relative", display: "inline-flex" }}>

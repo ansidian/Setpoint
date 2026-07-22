@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronUp } from "lucide-react";
+import { motion as Motion, useReducedMotion } from "motion/react";
 import BillBadge from "../../bills/BillBadge";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { formatBillAmount, resolveBillSeed } from "./billSeedModel";
@@ -6,36 +7,49 @@ import type { Dispatch, SetStateAction } from "react";
 import type { InboxEmailLike } from "../inboxTypes";
 import type { BillResolutionState, EmailBodyState } from "./readerTypes";
 import { asBillCandidate } from "./readerTypes";
+import { motionDuration, motionTransition } from "../../../lib/motion";
 
 // Mobile slide-up bill-pay sheet with an expand/collapse affordance. Extracted
 // from MobileReader; expand state is owned by the parent (so it persists across
 // open/close), while the seed/extraction/height derivations live here.
 export default function MobileBillDrawer({
   email,
+  open,
   billExpanded,
   setBillExpanded,
   bodyState,
   billResolution,
 }: {
   email: InboxEmailLike;
+  open: boolean;
   billExpanded: boolean;
   setBillExpanded: Dispatch<SetStateAction<boolean>>;
   bodyState: EmailBodyState;
   billResolution: BillResolutionState;
 }) {
+  const reduceMotion = useReducedMotion() ?? false;
   const extractionBody = resolveBillExtractionBody(bodyState);
   const extractedBill = asBillCandidate(email.extractedBill);
   const billSeed = resolveBillSeed(billResolution, extractedBill);
   const billPanelHeight = billExpanded ? "52%" : "38%";
 
   return (
-    <div
+    <Motion.div
       data-testid="inbox-mobile-bill-panel"
+      initial={reduceMotion ? false : { height: 0, minHeight: 0, opacity: 0, y: 16 }}
+      animate={{
+        height: open ? billPanelHeight : 0,
+        minHeight: open ? 220 : 0,
+        opacity: open ? 1 : 0,
+        y: reduceMotion || open ? 0 : 16,
+      }}
+      transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
       style={{
         flexShrink: 0,
-        height: billPanelHeight,
-        minHeight: 220,
         maxHeight: "58%",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
         borderTop: "1px solid color-mix(in srgb, var(--sp-green) 18%, transparent)",
@@ -55,16 +69,24 @@ export default function MobileBillDrawer({
             type="button"
             aria-label={billExpanded ? "Collapse bill pay" : "Expand bill pay"}
             onClick={() => setBillExpanded((value) => !value)}
+            className="mobile-bill-drawer-handle"
             style={{
               width: 44,
-              height: 6,
-              borderRadius: 999,
+              height: "var(--sp-touch-min)",
               border: "none",
-              background: "rgba(255,255,255,0.16)",
+              background: "transparent",
               cursor: "pointer",
               padding: 0,
+              display: "grid",
+              placeItems: "center",
             }}
-          />
+          >
+            <span
+              className="mobile-bill-drawer-handle-indicator"
+              aria-hidden="true"
+              style={{ width: 36, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.16)" }}
+            />
+          </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span
@@ -101,6 +123,7 @@ export default function MobileBillDrawer({
           <button
             type="button"
             onClick={() => setBillExpanded((value) => !value)}
+            className="mobile-bill-drawer-toggle"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -117,7 +140,14 @@ export default function MobileBillDrawer({
               fontWeight: 600,
             }}
           >
-            {billExpanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+            <Motion.span
+              aria-hidden="true"
+              animate={{ rotate: billExpanded && !reduceMotion ? 180 : 0 }}
+              transition={motionTransition(reduceMotion, motionDuration.feedback)}
+              style={{ display: "inline-flex" }}
+            >
+              <ChevronUp size={12} />
+            </Motion.span>
             {billExpanded ? "Less" : "More"}
           </button>
         </div>
@@ -145,6 +175,6 @@ export default function MobileBillDrawer({
           mappingLoading={billResolution?.status === "loading"}
         />
       </div>
-    </div>
+    </Motion.div>
   );
 }

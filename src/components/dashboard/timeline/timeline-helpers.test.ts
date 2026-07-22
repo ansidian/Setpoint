@@ -30,6 +30,33 @@ describe("timeline helpers", () => {
     expect(groups.map(([day]) => day)).toEqual([0, 1]);
   });
 
+  it("places all-day events before timed items within the same day", () => {
+    const now = Date.parse("2026-05-11T07:00:00.000Z"); // midnight Pacific
+    const groups = buildTimelineGroups([
+      {
+        kind: "event",
+        startMs: Date.parse("2026-05-11T11:15:00.000Z"), // 4:15 AM Pacific
+        data: { title: "Work", allDay: false },
+      },
+      {
+        kind: "event",
+        startMs: Date.parse("2026-05-11T12:00:00.000Z"), // synthetic all-day anchor
+        data: { title: "Application Processing Begins", allDay: true },
+      },
+      {
+        kind: "event",
+        startMs: Date.parse("2026-05-11T12:00:00.000Z"), // 5:00 AM Pacific
+        data: { title: "Test event", allDay: false },
+      },
+    ], now, { events: true, deadlines: true });
+
+    expect(groups[0]![1].map((item) => item.data?.title)).toEqual([
+      "Application Processing Begins",
+      "Work",
+      "Test event",
+    ]);
+  });
+
   describe("percentElapsed", () => {
     it("returns the fractional progress through a window", () => {
       expect(percentElapsed(100, 300, 200)).toBe(0.5);

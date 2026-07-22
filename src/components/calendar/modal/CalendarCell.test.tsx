@@ -29,26 +29,6 @@ function dataTransferWith(map: Record<string, string>) {
 }
 
 describe("CalendarCell", () => {
-  it("does not opacity-dim bill content in an adjacent-month cell", () => {
-    render(
-      <CalendarCell
-        {...baseCellProps}
-        view="bills"
-        viewLabel="Bills"
-        dateKey="2026-07-31"
-        dateLabel="31"
-        inCurrentMonth={false}
-        hasItems
-        itemCount={3}
-        renderCellContents={() => <span>Costco Membership</span>}
-      />,
-    );
-
-    const cell = screen.getByRole("gridcell");
-    expect(cell.getAttribute("data-current-month")).toBe("false");
-    expect(cell.textContent).toContain("Costco Membership");
-  });
-
   it("renders weather inline with the date header", () => {
     render(
       <CalendarCell

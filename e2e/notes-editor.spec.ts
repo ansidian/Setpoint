@@ -3,14 +3,16 @@ import { test, expect } from "@playwright/test";
 test("note capture: live markdown + #tag autocomplete", async ({ page }) => {
   await page.goto("/");
   await page.keyboard.press("4");                       // open Notes
-  const editor = page.getByTestId("note-editor").first().locator(".cm-content");
+  const editor = page.getByRole("textbox", { name: "New note" });
   await editor.click();
   await editor.pressSequentially("seed #home tag");     // ensure a #home tag exists
   await page.keyboard.press("Enter");
   await expect(page.getByText("seed #home tag")).toBeVisible(); // tag is now in the tag set
   await editor.click();
   await editor.pressSequentially("ship the thing #ho"); // per-keystroke events drive autocomplete
-  await expect(page.locator(".cm-tooltip-autocomplete")).toBeVisible();
+  const autocomplete = page.getByRole("listbox");
+  await expect(autocomplete).toBeVisible();
+  await expect(autocomplete.getByRole("option", { name: "#home" })).toBeVisible();
   await page.keyboard.press("Enter");                    // accept #home (does NOT submit)
   await expect(editor).toContainText("#home");
   await page.keyboard.press("Enter");                    // now submit the note
@@ -20,7 +22,7 @@ test("note capture: live markdown + #tag autocomplete", async ({ page }) => {
 test("note list: checkbox toggle persists after save (read-view path)", async ({ page }) => {
   await page.goto("/");
   await page.keyboard.press("4");
-  const editor = page.getByTestId("note-editor").first().locator(".cm-content");
+  const editor = page.getByRole("textbox", { name: "New note" });
   await editor.click();
   await editor.pressSequentially("- [ ] buy milk");
   await page.keyboard.press("Enter");

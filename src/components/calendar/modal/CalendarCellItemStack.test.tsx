@@ -17,12 +17,12 @@ afterEach(() => {
 });
 
 describe("CalendarCellItemStack ghost visibility", () => {
-  it("renders metadata as a compact run-in prefix and marks recurring items passively", () => {
+  it("renders chip metadata, title, recurring state, and reminder marker together", () => {
     render(
       <CalendarCellItemStack
         day={20}
         items={[
-          { id: "real-1", leadingLabel: "9:00 AM", title: "Weekly sync", recurring: true },
+          { id: "real-1", leadingLabel: "9:00 AM", title: "Weekly sync", recurring: true, hasUpcomingReminder: true },
         ]}
         metrics={metrics}
       />,
@@ -36,6 +36,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(meta?.textContent).toContain("9a");
     expect(title?.textContent).toBe("Weekly sync");
     expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeTruthy();
+    expect(chip.querySelector("[data-calendar-chip-reminder-marker='true']")).toBeTruthy();
     expect(content?.contains(meta)).toBe(true);
     expect(content?.contains(title)).toBe(true);
   });
@@ -64,26 +65,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeNull();
     expect(chip.textContent).toContain("Maya's birthday");
     expect(chip.textContent).not.toContain("All day");
-  });
-
-  it("renders upcoming reminder markers without adding a title column", () => {
-    render(
-      <CalendarCellItemStack
-        day={20}
-        items={[
-          {
-            id: "reminder",
-            leadingLabel: "9:00 AM",
-            title: "Reminder hold",
-            hasUpcomingReminder: true,
-          },
-        ]}
-        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 1 }}
-      />,
-    );
-
-    const chip = screen.getByTestId("calendar-cell-item-chip");
-    expect(chip.querySelector("[data-calendar-chip-reminder-marker='true']")).toBeTruthy();
   });
 
   it("does not report unchanged hidden composition on parent rerender", () => {
@@ -148,26 +129,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
     }));
   });
 
-  it("only strikes the title for completed items", () => {
-    render(
-      <CalendarCellItemStack
-        day={20}
-        items={[
-          { id: "real-1", leadingLabel: "$42", title: "Internet", complete: true },
-        ]}
-        metrics={metrics}
-      />,
-    );
-
-    const chip = screen.getByTestId("calendar-cell-item-chip");
-    const meta = chip.querySelector("[data-calendar-chip-meta='true']");
-    const title = chip.querySelector("[data-calendar-chip-title-text='true']");
-
-    expect(meta?.closest("s")).toBeNull();
-    expect(title?.closest("s")).toBeTruthy();
-  });
-
-  it("renders decorative status icons before completed and in-progress deadline chip titles", () => {
+  it("renders decorative status icons and strikes only completed titles", () => {
     render(
       <CalendarCellItemStack
         day={20}
@@ -188,6 +150,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(completeIcon).toBeTruthy();
     expect(completeIcon?.getAttribute("aria-hidden")).toBe("true");
     expect(completeIcon?.closest("s")).toBeNull();
+    expect(chips[0]!.querySelector("[data-calendar-chip-meta='true']")?.closest("s")).toBeNull();
     expect(chips[0]!.textContent).toContain("Turn in lab");
     expect(chips[0]!.querySelector("[data-calendar-chip-title-text='true']")?.closest("s")).toBeTruthy();
     expect(todoistCompleteIcon).toBeTruthy();
