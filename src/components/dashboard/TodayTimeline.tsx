@@ -1,15 +1,13 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion as Motion } from "motion/react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
+import { ChevronRight } from "lucide-react";
 import { buildTimeline } from "../../lib/shell-helpers";
 import type { TimelineEvent } from "../../lib/shell-helpers";
 import TimelineDayGroup from "./timeline/TimelineDayGroup";
 import TimelineHeader from "./timeline/TimelineHeader";
-import TimelineRow from "./timeline/TimelineRow";
 import {
   buildTimelineGroups,
   buildTodayTomorrowRestGroups,
-  deriveTimelineRowState,
   formatFullDateForOffset,
   shouldHoldPartialTimeline,
 } from "./timeline/timeline-helpers";
@@ -18,7 +16,9 @@ import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
 import type { TimelineDeadline } from "../../lib/shell-helpers";
 import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { DashboardTimelineItem, TimelineFilters, TimelineGroup } from "./timeline/timeline-helpers";
-import type { TimelineRowItem, TimelineRowJumpPayload } from "./timeline/TimelineRow";
+import type { TimelineRowJumpPayload } from "./timeline/TimelineRow";
+import useMotionPresence from "../../hooks/useMotionPresence";
+import { motionDuration, motionTransition } from "../../lib/motion";
 
 type TimelineJump = (payload: TimelineRowJumpPayload, anchor: HTMLElement) => void;
 interface TodayTimelineProps {
@@ -277,9 +277,11 @@ function TomorrowGroup({ accent, count, items, label, now, onJump, onToggle, ope
   onToggle: () => void;
   open: boolean;
 }) {
+  const reduceMotion = useReducedMotion() ?? false;
+  const contentPresence = useMotionPresence(open, reduceMotion ? 0 : motionDuration.exit * 1000);
+  const contentRendered = open || contentPresence;
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
-  const Chevron = open ? ChevronDown : ChevronRight;
   const summary = [
     count.events ? `${count.events} event${count.events === 1 ? "" : "s"}` : null,
     count.deadlines ? `${count.deadlines} deadline${count.deadlines === 1 ? "" : "s"}` : null,
@@ -292,35 +294,46 @@ function TomorrowGroup({ accent, count, items, label, now, onJump, onToggle, ope
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-          <Chevron size={14} color="rgba(205,214,244,0.5)" />
+          <Motion.span
+            aria-hidden="true"
+            animate={{ rotate: open && !reduceMotion ? 90 : 0 }}
+            transition={motionTransition(reduceMotion, motionDuration.feedback)}
+            style={{ display: "inline-flex" }}
+          >
+            <ChevronRight size={14} color="rgba(205,214,244,0.5)" />
+          </Motion.span>
           <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sp-text)" }}>Tomorrow</span>
           <span style={{ fontSize: 11, color: "rgba(205,214,244,0.4)" }}>{label}</span>
         </span>
         <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{summary}</span>
       </button>
-      {open && (
-        <div style={{ padding: "4px 6px 6px 28px" }}>
-          {items.map((item, i) => {
-            const rowState = deriveTimelineRowState(item, now);
-            return (
-              <div key={`tom-${item.kind}-${i}`}>
-                <TimelineRow
-                  item={item as TimelineRowItem}
-                  accent={accent}
-                  onJump={onJump}
-                  isPast={rowState.isPast}
-                  isLive={rowState.isLive}
-                  overdueText={rowState.overdueText}
-                  reminderSummary={rowState.reminderSummary}
-                  liveMarker={rowState.liveMarker}
-                />
-              </div>
-            );
-          })}
+      {contentRendered && (
+        <Motion.div
+          data-testid="tomorrow-disclosure-content"
+          aria-hidden={!open}
+          inert={!open ? true : undefined}
+          initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+          animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
+          transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+          style={{ overflow: "hidden" }}
+        >
+        <div style={{ padding: "4px 0 6px" }}>
+          {items.length > 0 && (
+            <TimelineDayGroup
+              day={1}
+              hideDayHeader
+              items={items}
+              now={now}
+              accent={accent}
+              onJump={onJump}
+              isMobile={false}
+            />
+          )}
           {items.length === 0 && (
-            <div style={{ fontSize: 11, color: "var(--color-text-faint)", padding: "6px 0" }}>Nothing scheduled tomorrow.</div>
+            <div style={{ fontSize: 11, color: "var(--color-text-faint)", padding: "6px 0 6px 44px" }}>Nothing scheduled tomorrow.</div>
           )}
         </div>
+        </Motion.div>
       )}
     </div>
   );
@@ -335,9 +348,11 @@ function RestOfWeekGroup({ accent, count, now, onJump, onToggle, open, rest }: {
   open: boolean;
   rest: TimelineGroup[];
 }) {
+  const reduceMotion = useReducedMotion() ?? false;
+  const contentPresence = useMotionPresence(open, reduceMotion ? 0 : motionDuration.exit * 1000);
+  const contentRendered = open || contentPresence;
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
-  const Chevron = open ? ChevronDown : ChevronRight;
   if (count <= 0) return null;
 
   return (
@@ -347,12 +362,28 @@ function RestOfWeekGroup({ accent, count, now, onJump, onToggle, open, rest }: {
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-          <Chevron size={14} color="rgba(205,214,244,0.5)" />
+          <Motion.span
+            aria-hidden="true"
+            animate={{ rotate: open && !reduceMotion ? 90 : 0 }}
+            transition={motionTransition(reduceMotion, motionDuration.feedback)}
+            style={{ display: "inline-flex" }}
+          >
+            <ChevronRight size={14} color="rgba(205,214,244,0.5)" />
+          </Motion.span>
           <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sp-text)" }}>Rest of this week</span>
         </span>
         <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{count} {count === 1 ? "item" : "items"}</span>
       </button>
-      {open && (
+      {contentRendered && (
+        <Motion.div
+          data-testid="rest-of-week-disclosure-content"
+          aria-hidden={!open}
+          inert={!open ? true : undefined}
+          initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+          animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
+          transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+          style={{ overflow: "hidden" }}
+        >
         <div style={{ paddingTop: 12 }}>
           {rest.map(([day, dayItems]) => (
             <TimelineDayGroup
@@ -366,6 +397,7 @@ function RestOfWeekGroup({ accent, count, now, onJump, onToggle, open, rest }: {
             />
           ))}
         </div>
+        </Motion.div>
       )}
     </div>
   );

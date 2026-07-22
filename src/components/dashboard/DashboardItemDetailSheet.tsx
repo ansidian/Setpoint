@@ -60,6 +60,7 @@ export default function DashboardItemDetailSheet({
   const { handleCompleteTask, handleUpdateTask } = useDashboard();
 
   if (!item) return null;
+  const placementKey = `${kind}:${String(item.id || item.uid || item.title || "item")}`;
 
   function doComplete() {
     setCompleting(true);
@@ -143,6 +144,10 @@ export default function DashboardItemDetailSheet({
         hideTitle
         width={360}
         maxWidth={380}
+        animatePosition
+        draggable
+        dragHandleLabel={KIND_LABEL[kind]}
+        placementKey={placementKey}
         // Blend into the dashboard instead of reading as a bolted-on modal: wear
         // the dashboard's own elevated-surface color (--sp-surface #24243a),
         // slightly translucent so it reads as the canvas lifting up, in place of
@@ -154,14 +159,14 @@ export default function DashboardItemDetailSheet({
         // Border stays off: the reused hero card supplies the only edge, so a
         // panel border would read as a doubled card-in-a-card.
         style={{
-          padding: 8,
-          borderRadius: 20,
+          padding: 0,
+          borderRadius: 16,
           border: "none",
           background: "color-mix(in srgb, var(--sp-surface) 88%, transparent)",
           boxShadow: `0 18px 44px -22px rgba(0,0,0,0.55), 0 4px 16px -8px color-mix(in srgb, ${accent} 22%, transparent)`,
         }}
       >
-        <div ref={editAnchorRef}>{card}</div>
+        <div ref={editAnchorRef} style={{ padding: 8 }}>{card}</div>
       </AnchoredFloatingPanel>
 
       {editing && (

@@ -167,7 +167,7 @@ export default function TimelineHeader({
     <SectionHeader
       title={(
         <Tooltip text={todayLabel} sideOffset={12}>
-          <span>Timeline</span>
+          <span>Today</span>
         </Tooltip>
       )}
       right={(

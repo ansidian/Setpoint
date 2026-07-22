@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CreditCard, CalendarClock } from "lucide-react";
+import { CreditCard, CalendarClock, Circle } from "lucide-react";
 import { SectionHeader, EmptyRow } from "../rails/railPrimitives";
 import { StatusChip } from "../../shared/StatusChip";
 import Tooltip from "../../shared/Tooltip";
@@ -24,6 +24,7 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }: {
 }) {
   const [rowHover, setRowHover] = useState(false);
   const completable = row.kind === "deadline" && !!onComplete;
+  const ItemIcon = row.kind === "bill" ? CreditCard : Circle;
 
   return (
     <div
@@ -42,7 +43,7 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }: {
       }}
     >
       <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 7 }}>
-        {row.kind === "bill" && <CreditCard size={13} color="rgba(205,214,244,0.45)" aria-hidden />}
+        <ItemIcon size={13} color="rgba(205,214,244,0.45)" aria-hidden style={{ flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12, color: "rgba(205,214,244,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title}</div>
           <div style={{ fontSize: 10, color: "rgba(205,214,244,0.4)", marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{row.meta}</div>

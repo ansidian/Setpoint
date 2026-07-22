@@ -1,9 +1,11 @@
 import { memo } from "react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
+import { ChevronRight } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { StickyHeader, LaneIcon } from "./primitives";
 import type { ReactNode } from "react";
 import type { InboxEmailLike } from "./inboxTypes";
+import { motionDuration, motionTransition } from "../../lib/motion";
 
 // One swimlane lane section: sticky header (icon, label, count, optional
 // noise-unread pill, chevron) plus the expanded row body. Memoized as a render
@@ -21,15 +23,16 @@ interface LaneSectionProps {
 }
 
 function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, renderRows }: LaneSectionProps) {
+  const reduceMotion = useReducedMotion() ?? false;
   const lane = LANE[laneKey] ?? LANE.fyi!;
   return (
     <div>
       <StickyHeader borderColor="rgba(255,255,255,0.03)">
-        <div
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
+          aria-expanded={!collapsed}
           onClick={() => onToggle(laneKey)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggle(laneKey); }}
+          className="inbox-lane-toggle sp-focus-ring"
           style={{
             display: "flex", alignItems: "center", gap: 8, width: "100%",
             cursor: "pointer", background: "transparent", border: "none",
@@ -78,14 +81,32 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
             </span>
           )}
           <span style={{ flex: 1 }} />
-          {collapsed ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
-        </div>
+          <Motion.span
+            aria-hidden="true"
+            animate={{ rotate: collapsed || reduceMotion ? 0 : 90 }}
+            transition={motionTransition(reduceMotion, motionDuration.feedback)}
+            style={{ display: "inline-flex", flexShrink: 0 }}
+          >
+            <ChevronRight size={12} color="rgba(205,214,244,0.4)" />
+          </Motion.span>
+        </button>
       </StickyHeader>
-      {!collapsed && (
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {renderRows(emails)}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <Motion.div
+            key="lane-rows"
+            initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: reduceMotion ? 1 : 0 }}
+            transition={motionTransition(reduceMotion, motionDuration.exit)}
+            style={{ overflow: "hidden" }}
+          >
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {renderRows(emails)}
+            </div>
+          </Motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

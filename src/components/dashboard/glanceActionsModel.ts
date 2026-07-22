@@ -29,8 +29,8 @@ type DashboardGlanceEvent = Partial<NormalizedCalendarEvent>;
 // "openInCalendar") are wired to handlers by the sheet. "openInCalendar" is the
 // explicit deep-link CTA present on every item. Pure — no React, no handlers.
 
-function openInCalendarAction(): GlanceAction {
-  return { key: "openInCalendar", label: "Open in calendar", type: "command", tone: "ghost" };
+function openInCalendarAction(label = "Open in calendar"): GlanceAction {
+  return { key: "openInCalendar", label, type: "command", tone: "ghost" };
 }
 
 function deadlineActions(task: DashboardGlanceDeadline): GlanceAction[] {
@@ -62,7 +62,11 @@ function billActions(bill: DashboardGlanceBill, ctx: GlanceActionContext): Glanc
 }
 
 function eventActions(ev: DashboardGlanceEvent): GlanceAction[] {
-  const out: GlanceAction[] = [];
+  const out: GlanceAction[] = [openInCalendarAction("Edit Event")];
+  const gcalUrl = calendarActionUrl(ev);
+  if (gcalUrl) {
+    out.push({ key: "gcal", label: "Open in Google Calendar", type: "link", href: gcalUrl, tone: "ghost" });
+  }
   const zoomUrl = extractZoomMeetingUrl(ev);
   if (zoomUrl) {
     out.push({ key: "zoom", label: "Join Zoom", type: "link", href: zoomUrl, tone: "accent" });
@@ -71,11 +75,6 @@ function eventActions(ev: DashboardGlanceEvent): GlanceAction[] {
   if (eventUrl) {
     out.push({ key: "eventUrl", label: "Open URL", type: "link", href: eventUrl, tone: "ghost" });
   }
-  const gcalUrl = calendarActionUrl(ev);
-  if (gcalUrl) {
-    out.push({ key: "gcal", label: "Open in Google Calendar", type: "link", href: gcalUrl, tone: "ghost" });
-  }
-  out.push(openInCalendarAction());
   return out;
 }
 

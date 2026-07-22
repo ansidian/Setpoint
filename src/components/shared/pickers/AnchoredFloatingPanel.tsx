@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
+import { motion as Motion, useReducedMotion } from "motion/react";
+import { X } from "lucide-react";
 import { computePlacement } from "@/components/inbox/helpers";
 import useDismissablePortal from "@/hooks/useDismissablePortal";
 import useIsMobile from "@/hooks/useIsMobile";
@@ -23,6 +25,10 @@ export type AnchoredFloatingPanelProps = {
   forceMobileSheet?: boolean;
   mobileHeight?: string | null;
   hideTitle?: boolean;
+  animatePosition?: boolean;
+  draggable?: boolean;
+  dragHandleLabel?: string;
+  placementKey?: string;
   children: ReactNode;
 };
 
@@ -30,6 +36,20 @@ type PanelPosition = {
   top: number;
   left: number;
   width: number;
+};
+
+type ManualPanelPosition = PanelPosition & { placementKey: string };
+
+type PanelDragSession = {
+  pointerId: number;
+  placementKey: string;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+  startX: number;
+  startY: number;
+  moved: boolean;
 };
 
 // Public entry point: anchored popover on desktop, bottom sheet on mobile.
@@ -89,12 +109,22 @@ function AnchoredPanelDesktop({
   ariaLabel,
   style,
   dismissActive = true,
+  animatePosition = false,
+  draggable = false,
+  dragHandleLabel,
+  placementKey = "panel",
   children,
 }: AnchoredPanelDesktopProps) {
+  const reducedMotion = useReducedMotion() ?? false;
   const internalPanelRef = useRef<HTMLDivElement>(null);
   const resolvedPanelRef = panelRef || internalPanelRef;
   const positionRafRef = useRef(0);
+  const dragRafRef = useRef(0);
+  const dragSessionRef = useRef<PanelDragSession | null>(null);
+  const pendingDragPointRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const [pos, setPos] = useState<PanelPosition | null>(null);
+  const [manualPos, setManualPos] = useState<ManualPanelPosition | null>(null);
+  const [dragging, setDragging] = useState(false);
   // Stable "panel is mounted" gate: flips false->true once when the panel first
   // renders and stays true across repositions. Used so the ResizeObserver and
   // wheel listener bind once when the panel appears without rebinding on every
@@ -223,34 +253,170 @@ function AnchoredPanelDesktop({
     return () => wheelElement.removeEventListener("wheel", handleWheel);
   }, [panelMounted, resolvedPanelRef]);
 
+  const applyDragPosition = useCallback((clientX: number, clientY: number) => {
+    const session = dragSessionRef.current;
+    if (!session || session.placementKey !== placementKey) return;
+    const margin = 10;
+    const maxLeft = Math.max(margin, window.innerWidth - session.width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - session.height - margin);
+    const left = Math.min(maxLeft, Math.max(margin, clientX - session.offsetX));
+    const top = Math.min(maxTop, Math.max(margin, clientY - session.offsetY));
+    setManualPos({ left, top, width: session.width, placementKey: session.placementKey });
+  }, [placementKey]);
+
+  const scheduleDragPosition = useCallback((clientX: number, clientY: number) => {
+    pendingDragPointRef.current = { clientX, clientY };
+    if (dragRafRef.current) return;
+    dragRafRef.current = window.requestAnimationFrame(() => {
+      dragRafRef.current = 0;
+      const point = pendingDragPointRef.current;
+      pendingDragPointRef.current = null;
+      if (point) applyDragPosition(point.clientX, point.clientY);
+    });
+  }, [applyDragPosition]);
+
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ref.current access is intentionally excluded from deps
+  const handleDragPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggable || (event.button ?? 0) !== 0) return;
+    const rect = resolvedPanelRef.current?.getBoundingClientRect();
+    if (!rect || !placementKey) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragSessionRef.current = {
+      pointerId: event.pointerId,
+      placementKey,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+  }, [draggable, placementKey, resolvedPanelRef]);
+
+  const handleDragPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const session = dragSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId) return;
+    if (!session.moved && Math.hypot(event.clientX - session.startX, event.clientY - session.startY) < 2) return;
+    session.moved = true;
+    setDragging(true);
+    scheduleDragPosition(event.clientX, event.clientY);
+  }, [scheduleDragPosition]);
+
+  const finishDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const session = dragSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (dragRafRef.current) {
+      window.cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = 0;
+    }
+    pendingDragPointRef.current = null;
+    if (session.moved) applyDragPosition(event.clientX, event.clientY);
+    dragSessionRef.current = null;
+    setDragging(false);
+  }, [applyDragPosition]);
+
+  useEffect(() => () => {
+    if (dragRafRef.current) window.cancelAnimationFrame(dragRafRef.current);
+  }, []);
+
   if (!pos) return null;
 
-  return createPortal(
+  const activeManualPos = manualPos?.placementKey === placementKey ? manualPos : null;
+  const displayPos = activeManualPos || pos;
+  const floatingPanelStyle: CSSProperties = {
+    position: "fixed",
+    top: animatePosition || draggable ? 0 : displayPos.top,
+    left: animatePosition || draggable ? 0 : displayPos.left,
+    width: displayPos.width,
+    isolation: "isolate",
+    background: "var(--sp-panel)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+    zIndex: "var(--z-popover)",
+    ...style,
+    maxHeight: style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined),
+    overflow: style?.overflow === "hidden" ? undefined : style?.overflow,
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+  };
+
+  const dragHandle = draggable ? (
     <div
-      ref={resolvedPanelRef}
-      role={role}
-      aria-label={ariaLabel}
-      data-calendar-popover-panel="true"
+      data-testid="anchored-floating-panel-drag-handle"
+      onPointerDown={handleDragPointerDown}
+      onPointerMove={handleDragPointerMove}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
       style={{
-        position: "fixed",
-        top: pos.top,
-        left: pos.left,
-        width: pos.width,
-        isolation: "isolate",
-        background: "var(--sp-panel)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 12,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-        zIndex: "var(--z-popover)",
-        ...style,
-        maxHeight: style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined),
-        overflow: style?.overflow === "hidden" ? undefined : style?.overflow,
-        overflowY: "auto",
-        overscrollBehavior: "contain",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        minHeight: 36,
+        padding: "9px 10px 8px 12px",
+        cursor: dragging ? "grabbing" : "grab",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(255,255,255,0.018)",
+        userSelect: "none",
+        touchAction: "none",
       }}
     >
-      {children}
-    </div>,
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, letterSpacing: 1.7, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
+        {dragHandleLabel || ariaLabel}
+      </span>
+      {onClose ? (
+        <button
+          type="button"
+          aria-label={`Close ${String(dragHandleLabel || ariaLabel || "panel").toLowerCase()}`}
+          className="anchored-floating-panel-close"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={onClose}
+        >
+          <X size={13} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
+  return createPortal(
+    animatePosition || draggable ? (
+      <Motion.div
+        ref={resolvedPanelRef}
+        role={role}
+        aria-label={ariaLabel}
+        data-calendar-popover-panel="true"
+        data-floating-position-source={activeManualPos ? "drag" : "anchor"}
+        data-floating-left={displayPos.left}
+        data-floating-top={displayPos.top}
+        data-floating-dragging={dragging ? "true" : undefined}
+        initial={reducedMotion ? false : { opacity: 0, scale: 0.985, x: displayPos.left, y: displayPos.top + 6 }}
+        animate={{ opacity: 1, scale: dragging ? 1.01 : 1, x: displayPos.left, y: displayPos.top }}
+        transition={dragging || reducedMotion ? { duration: 0 } : {
+          x: { type: "spring", stiffness: 420, damping: 42, mass: 0.8 },
+          y: { type: "spring", stiffness: 420, damping: 42, mass: 0.8 },
+          opacity: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+          scale: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+        }}
+        style={floatingPanelStyle}
+      >
+        {dragHandle}
+        {children}
+      </Motion.div>
+    ) : (
+      <div
+        ref={resolvedPanelRef}
+        role={role}
+        aria-label={ariaLabel}
+        data-calendar-popover-panel="true"
+        style={floatingPanelStyle}
+      >
+        {children}
+      </div>
+    ),
     document.body,
   );
 }

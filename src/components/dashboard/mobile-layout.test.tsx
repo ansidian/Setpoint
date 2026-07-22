@@ -106,6 +106,7 @@ describe("TodayTimeline controls", () => {
       />,
     );
 
+    expect(screen.getByText("Today")).toBeTruthy();
     const deadlinesFilter = screen.getByRole("switch", { name: /deadlines/i });
     expect(deadlinesFilter.getAttribute("aria-checked")).toBe("true");
 
@@ -144,6 +145,37 @@ describe("TodayTimeline controls", () => {
 
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(timeline.textContent).toMatch(/Thursday review/);
+
+    fireEvent.click(toggle);
+
+    const closingContent = screen.getByTestId("rest-of-week-disclosure-content");
+    expect(closingContent.getAttribute("aria-hidden")).toBe("true");
+    expect(closingContent.hasAttribute("inert")).toBe(true);
+  });
+
+  it("uses one desktop spine offset for today, tomorrow, and rest of this week", () => {
+    // This exact offset is the shared scan-path contract across all three rails.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z").getTime());
+
+    render(
+      <TodayTimeline
+        accent="#cba6da"
+        events={[
+          { id: "tomorrow", title: "Tuesday review", startMs: new Date("2026-05-12T18:00:00.000Z").getTime(), endMs: new Date("2026-05-12T19:00:00.000Z").getTime() },
+          { id: "rest", title: "Thursday review", startMs: new Date("2026-05-14T18:00:00.000Z").getTime(), endMs: new Date("2026-05-14T19:00:00.000Z").getTime() },
+        ]}
+        deadlines={[]}
+        onJump={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^tomorrow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /rest of this week/i }));
+
+    const offsets = Array.from(document.querySelectorAll("[data-timeline-spine-offset]"))
+      .map((node) => node.getAttribute("data-timeline-spine-offset"));
+    expect(offsets).toEqual(["28", "28", "28"]);
   });
 
   it("renders a standalone NOW marker in a focus-window gap between events", () => {

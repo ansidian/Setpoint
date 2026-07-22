@@ -153,6 +153,56 @@ describe("AnchoredFloatingPanel", () => {
     });
   });
 
+  it("supports a draggable animated placement that resets to a new anchor", async () => {
+    const { rerender } = render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        width={300}
+        height={386}
+        role="dialog"
+        ariaLabel="Test anchored panel"
+        animatePosition
+        draggable
+        dragHandleLabel="Deadline"
+        placementKey="deadline:one"
+      >
+        <div style={{ height: 200 }}>Content</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    const panel = await screen.findByRole("dialog", { name: "Test anchored panel" });
+    const handle = screen.getByTestId("anchored-floating-panel-drag-handle");
+    await waitFor(() => expect(panel.getAttribute("data-floating-left")).toBe("100"));
+
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 7, clientX: 110, clientY: 384 });
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 310, clientY: 260 });
+    fireEvent.pointerUp(handle, { pointerId: 7, clientX: 310, clientY: 260 });
+
+    await waitFor(() => expect(panel.getAttribute("data-floating-position-source")).toBe("drag"));
+
+    rerender(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: alternateAnchor }}
+        width={300}
+        height={386}
+        role="dialog"
+        ariaLabel="Test anchored panel"
+        animatePosition
+        draggable
+        dragHandleLabel="Event"
+        placementKey="event:two"
+      >
+        <div style={{ height: 200 }}>Content</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    await waitFor(() => {
+      expect(panel.getAttribute("data-floating-position-source")).toBe("anchor");
+      expect(panel.getAttribute("data-floating-left")).toBe("820");
+      expect(panel.getAttribute("data-floating-top")).toBe("162");
+    });
+  });
+
   it("keeps scroll containment active even when callers pass overflow styles", async () => {
     render(
       <AnchoredFloatingPanel

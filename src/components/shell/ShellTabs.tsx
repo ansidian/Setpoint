@@ -73,7 +73,7 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount }: {
             aria-controls={`shell-tabpanel-${tabKey}`}
             aria-selected={tab === tabKey}
             tabIndex={tab === tabKey ? 0 : -1}
-            className="sp-focus-ring"
+            className="shell-tab sp-focus-ring"
             onClick={() => onTab(tabKey)}
             onKeyDown={handleKeyDown}
             style={{
@@ -91,7 +91,6 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount }: {
               alignItems: "center",
               justifyContent: "center",
               gap: 6,
-              transition: "background 150ms, color 150ms",
               minWidth: 0,
             }}
           >

@@ -46,6 +46,7 @@ export type DesktopReaderActionBarProps = {
   onAction: InboxActionDispatcher;
   onClose: () => void;
   onRemind?: () => void;
+  reminderOpen?: boolean;
   onAskAlfred?: () => void;
   snoozeAnchorRef: RefObject<HTMLButtonElement | null>;
   snoozeOpen: boolean;
@@ -240,6 +241,7 @@ export default function DesktopReaderActionBar({
   onAction,
   onClose,
   onRemind,
+  reminderOpen = false,
   onAskAlfred,
   snoozeAnchorRef,
   snoozeOpen,
@@ -284,8 +286,9 @@ export default function DesktopReaderActionBar({
           {onRemind && (
             <ToolbarButton
               icon={BellPlus}
-              label="Remind me"
+              label={reminderOpen ? "Hide reminder" : "Remind me"}
               adaptive
+              expanded={reminderOpen}
               onClick={onRemind}
             />
           )}

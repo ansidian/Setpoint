@@ -42,6 +42,7 @@ export default function MobileReader({
   onClose,
   showTriage,
   billOpen,
+  billMounted = billOpen,
   setBillOpen,
   onOpenRecordedBill,
   snoozeOpen,
@@ -223,9 +224,10 @@ export default function MobileReader({
           <EmailBodyPane state={bodyState} fallback={email.body || email.preview} isMobile />
         </div>
 
-        {billOpen && (
+        {billMounted && (
           <MobileBillDrawer
             email={email}
+            open={billOpen}
             billExpanded={billExpanded}
             setBillExpanded={setBillExpanded}
             bodyState={bodyState}
