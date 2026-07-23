@@ -107,7 +107,10 @@ function projectActualImportOutcome(
   if ((result.errors?.length || 0) > 0) {
     return { outcome: "failed", error: result.errors!.map((entry) => entry.message || "Actual import failed").join("; ") };
   }
-  return { outcome: "already_present", error: null };
+  if ((result.added?.length || 0) > 0) {
+    return { outcome: dryRun ? "would_add" : "added", error: null };
+  }
+  return { outcome: "failed", error: "Actual did not return a reconciliation outcome" };
 }
 
 export async function runActualTransactionImport({
@@ -145,6 +148,17 @@ export async function runActualTransactionImport({
     }
     throw error;
   }
-  if (!dryRun) await sync();
+  if (!dryRun) {
+    try {
+      await sync();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw Object.assign(new Error(`Actual import completed but sync failed: ${message}`), {
+        status: 503,
+        code: "ACTUAL_IMPORT_SYNC_UNCERTAIN",
+        cause: error,
+      });
+    }
+  }
   return { dryRun, groups: projectedGroups };
 }

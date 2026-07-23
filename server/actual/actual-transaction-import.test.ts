@@ -82,6 +82,26 @@ describe("Actual grouped transaction import", () => {
     ]);
   });
 
+  it("treats transactions returned only in Actual's added list as new", async () => {
+    api.importTransactions.mockResolvedValueOnce({
+      errors: [],
+      added: ["generated-transaction-id"],
+      updated: [],
+      updatedPreview: [],
+    });
+    const { importTransactionGroups } = await import("./actual-core.ts");
+
+    const result = await importTransactionGroups("owner-1", [{
+      accountId: "account-1",
+      transactions: [groups[0]!.transactions[0]!],
+    }], true);
+
+    expect(result.groups[0]!.items[0]).toMatchObject({
+      itemId: "new",
+      outcome: "would_add",
+    });
+  });
+
   it("imports every account group and syncs exactly once after all groups succeed", async () => {
     const { importTransactionGroups } = await import("./actual-core.ts");
     const result = await importTransactionGroups("owner-1", groups, false);
@@ -93,6 +113,16 @@ describe("Actual grouped transaction import", () => {
       expect.objectContaining({ itemId: "existing", outcome: "already_present" }),
       expect.objectContaining({ itemId: "update", outcome: "updated" }),
     ]);
+  });
+
+  it("distinguishes a post-import sync failure from an import rejection", async () => {
+    api.sync.mockRejectedValueOnce(new Error("out-of-sync"));
+    const { importTransactionGroups } = await import("./actual-core.ts");
+
+    await expect(importTransactionGroups("owner-1", groups, false)).rejects.toMatchObject({
+      code: "ACTUAL_IMPORT_SYNC_UNCERTAIN",
+      message: expect.stringContaining("out-of-sync"),
+    });
   });
 
   it("rejects invalid imported transactions before calling Actual", async () => {

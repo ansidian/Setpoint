@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const workerMock = vi.hoisted(() => ({
+  recoverAbandonedHistoricalRuns: vi.fn().mockResolvedValue({}),
   recoverStaleClaims: vi.fn().mockResolvedValue({}),
   processNextHistoricalPage: vi.fn(),
   processNextItemBatch: vi.fn().mockResolvedValue(false),
@@ -40,5 +41,20 @@ describe("transaction import runtime", () => {
     runtime.requestTransactionImportDrain();
     await vi.advanceTimersByTimeAsync(0);
     expect(workerMock.processNextHistoricalPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("reclaims abandoned Gmail scans at startup and keeps checking stale claims", async () => {
+    vi.useFakeTimers();
+    workerMock.processNextHistoricalPage.mockResolvedValue(false);
+    const runtime = await import("./transaction-import-runtime.ts");
+
+    await runtime.startTransactionImportWorker();
+    expect(workerMock.recoverAbandonedHistoricalRuns).toHaveBeenCalledTimes(1);
+    expect(workerMock.recoverStaleClaims).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(workerMock.recoverStaleClaims).toHaveBeenCalledTimes(3);
+
+    await runtime.stopTransactionImportWorker();
   });
 });

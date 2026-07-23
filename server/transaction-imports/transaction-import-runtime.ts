@@ -12,6 +12,7 @@ let stopping = false;
 async function drain(): Promise<void> {
   if (stopping || inFlight) return inFlight || Promise.resolve();
   inFlight = (async () => {
+    await transactionImportWorker.recoverStaleClaims();
     for (let index = 0; index < MAX_RUN_PAGES_PER_DRAIN && !stopping; index++) {
       if (!await transactionImportWorker.processNextHistoricalPage()) break;
     }
@@ -37,6 +38,7 @@ export function requestTransactionImportDrain(): void {
 
 export async function startTransactionImportWorker(): Promise<void> {
   stopping = false;
+  await transactionImportWorker.recoverAbandonedHistoricalRuns();
   await transactionImportWorker.recoverStaleClaims();
   if (interval) clearInterval(interval);
   interval = setInterval(() => void drain(), DRAIN_INTERVAL_MS);

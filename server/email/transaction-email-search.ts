@@ -70,8 +70,10 @@ const SOURCE_QUERY: Record<GmailTransactionSource, string> = {
   paypal: "(from:service@paypal.com OR from:service@intl.paypal.com) (subject:paid OR subject:sent OR subject:\"receipt for\" OR subject:\"submitted an order\" OR subject:USD OR subject:CAD OR subject:GBP OR subject:EUR)",
 };
 
-function formatSearchDate(value: string | number | Date): string {
-  return new Date(value).toISOString().slice(0, 10).replaceAll("-", "/");
+function formatSearchDate(value: string | number | Date, dayOffset: number): string {
+  const date = new Date(value);
+  date.setUTCDate(date.getUTCDate() + dayOffset);
+  return date.toISOString().slice(0, 10).replaceAll("-", "/");
 }
 
 function header(headers: GmailHeader[], name: string): string {
@@ -133,7 +135,10 @@ export async function fetchGmailTransactionEmailPage(
 ): Promise<GmailTransactionSearchPage> {
   const token = await getAccessToken(account);
   const listUrl = new URL("https://www.googleapis.com/gmail/v1/users/me/messages");
-  listUrl.searchParams.set("q", `${SOURCE_QUERY[options.source]} after:${formatSearchDate(options.start)} before:${formatSearchDate(options.end)}`);
+  listUrl.searchParams.set(
+    "q",
+    `${SOURCE_QUERY[options.source]} after:${formatSearchDate(options.start, -1)} before:${formatSearchDate(options.end, 1)}`,
+  );
   listUrl.searchParams.set("maxResults", String(options.maxResults));
   if (options.pageToken) listUrl.searchParams.set("pageToken", options.pageToken);
 

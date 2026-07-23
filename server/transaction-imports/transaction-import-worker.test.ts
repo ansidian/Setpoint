@@ -211,6 +211,50 @@ describe("transaction import worker", () => {
     expect(item).toMatchObject({ status: "already_present", importedId: uncertainImportedId });
   });
 
+  it.each([
+    "ACTUAL_IMPORT_SYNC_UNCERTAIN",
+    "ACTUAL_WORKER_TIMEOUT",
+  ])("reconciles after an uncertain Actual commit (%s)", async (errorCode) => {
+    const { store, service } = setup();
+    await mapping(store, "amazon", "automatic");
+    const arrival = await service.ingestArrivals("owner-1", [emailFixture()]);
+    const previewWorker = createTransactionImportWorker({
+      store,
+      dbClient: db,
+      importGroups: vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun)),
+      invalidateAfterCommit: vi.fn(),
+      createId,
+    });
+    await previewWorker.processNextItemBatch();
+    await db.execute({
+      sql: "UPDATE ea_transaction_import_items SET attempts = 4 WHERE run_id = ?",
+      args: [arrival.runId!],
+    });
+
+    const uncertainWorker = createTransactionImportWorker({
+      store,
+      dbClient: db,
+      importGroups: vi.fn().mockRejectedValue(Object.assign(
+        new Error("out-of-sync after import"),
+        { code: errorCode },
+      )),
+      invalidateAfterCommit: vi.fn(),
+      createId,
+      now: () => 10_000,
+    });
+    await uncertainWorker.processNextItemBatch();
+
+    expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
+      status: "queued",
+      lastError: expect.stringContaining(errorCode),
+    });
+    const stored = await db.execute({
+      sql: "SELECT next_attempt_at FROM ea_transaction_import_items WHERE run_id = ?",
+      args: [arrival.runId!],
+    });
+    expect(Number(stored.rows[0]!.next_attempt_at)).toBe(10_000);
+  });
+
   it("reconciles safely when persistence fails after Actual success", async () => {
     const { store, service } = setup();
     await mapping(store, "amazon", "automatic");

@@ -178,13 +178,19 @@ export function createTransactionImportWorker({
     const actionablePause = code === "ACTUAL_IMPORT_INCOMPATIBLE" || code === "ACTUAL_LOCAL_BUDGET_REQUIRED"
       || /not configured|auth|password|reauth/i.test(conciseError(error));
     for (const item of items) {
-      const retryStatus: TransactionImportItemStatus = item.status === "importing" ? "ready" : "queued";
-      const terminal = item.attempts >= MAX_ATTEMPTS;
+      const uncertainCommit = item.status === "importing"
+        && (code === "ACTUAL_IMPORT_SYNC_UNCERTAIN" || code === "ACTUAL_WORKER_TIMEOUT");
+      const retryStatus: TransactionImportItemStatus = uncertainCommit
+        ? "queued"
+        : item.status === "importing" ? "ready" : "queued";
+      const terminal = !uncertainCommit && item.attempts >= MAX_ATTEMPTS;
       await store.settleItem(item.userId, item.id, item.claimToken, {
         status: terminal ? "failed" : actionablePause ? "paused" : retryStatus,
         reconciliationStatus: terminal ? "failed" : null,
         lastError: code ? `${code}: ${conciseError(error)}` : conciseError(error),
-        nextAttemptAt: terminal || actionablePause ? null : now() + Math.min(2 ** item.attempts * RETRY_BASE_MS, 10 * 60_000),
+        nextAttemptAt: terminal || actionablePause
+          ? null
+          : uncertainCommit ? now() : now() + Math.min(2 ** item.attempts * RETRY_BASE_MS, 10 * 60_000),
       });
       if (terminal) await store.incrementRunOutcomes(item.userId, item.runId, { failed: 1 });
     }
@@ -267,7 +273,11 @@ export function createTransactionImportWorker({
     return store.recoverStaleClaims(now() - STALE_CLAIM_MS, MAX_ATTEMPTS);
   }
 
-  return { processNextHistoricalPage, processNextItemBatch, recoverStaleClaims };
+  async function recoverAbandonedHistoricalRuns(): Promise<Awaited<ReturnType<TransactionImportStore["recoverAbandonedHistoricalRuns"]>>> {
+    return store.recoverAbandonedHistoricalRuns();
+  }
+
+  return { processNextHistoricalPage, processNextItemBatch, recoverStaleClaims, recoverAbandonedHistoricalRuns };
 }
 
 export const transactionImportWorker = createTransactionImportWorker();

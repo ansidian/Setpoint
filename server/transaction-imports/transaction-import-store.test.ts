@@ -246,6 +246,26 @@ describe("transaction import store", () => {
     expect(detail!.items[0]).toMatchObject({ status: "failed", reconciliationStatus: "failed" });
   });
 
+  it("immediately reclaims an abandoned historical scan after restart without reclaiming Actual work", async () => {
+    await createRun();
+    const subject = store();
+    await subject.insertItem(itemInput());
+    await subject.claimNextRun("run-worker");
+    await subject.claimNextItem("item-worker");
+
+    now = 5_000;
+    await expect(subject.recoverAbandonedHistoricalRuns()).resolves.toEqual({
+      runsRecovered: 1,
+    });
+    expect(await subject.getRun("owner-1", "run-1")).toMatchObject({
+      status: "retry",
+      lastError: expect.stringContaining("server restart"),
+    });
+    expect((await subject.getRunDetail("owner-1", "run-1"))!.items[0]).toMatchObject({
+      status: "reconciling",
+    });
+  });
+
   it("recovers an interrupted pre-call import claim back to ready", async () => {
     await createRun();
     const subject = store();

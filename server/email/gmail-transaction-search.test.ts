@@ -67,7 +67,7 @@ describe("Gmail transaction search", () => {
 
     const listUrl = new URL(fetchMock.mock.calls[0]![0]);
     expect(listUrl.searchParams.get("q")).toBe(
-      "(from:auto-confirm@amazon.com OR from:digital-no-reply@amazon.com OR from:order-update@amazon.com) (subject:order OR subject:ordered) after:2026/07/01 before:2026/08/01",
+      "(from:auto-confirm@amazon.com OR from:digital-no-reply@amazon.com OR from:order-update@amazon.com) (subject:order OR subject:ordered) after:2026/06/30 before:2026/08/02",
     );
     expect(listUrl.searchParams.has("labelIds")).toBe(false);
     expect(listUrl.searchParams.get("pageToken")).toBe("cursor");
@@ -87,6 +87,20 @@ describe("Gmail transaction search", () => {
       resultSizeEstimate: 2,
       failures: [],
     });
+  });
+
+  it("searches the full selected date range, including both boundary dates", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+
+    await fetchGmailTransactionEmailPage(account, {
+      source: "amazon",
+      start: "2026-06-23",
+      end: "2026-07-23",
+      maxResults: 50,
+    });
+
+    const listUrl = new URL(fetchMock.mock.calls[0]![0]);
+    expect(listUrl.searchParams.get("q")).toContain("after:2026/06/22 before:2026/07/24");
   });
 
   it("deduplicates IDs within a page and supports an empty page", async () => {

@@ -544,6 +544,20 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     };
   }
 
+  async function recoverAbandonedHistoricalRuns(): Promise<{ runsRecovered: number }> {
+    const timestamp = now();
+    const recoveredRuns = await dbClient.execute({
+      sql: `UPDATE ea_transaction_import_runs
+            SET status = 'retry', claim_token = NULL, claimed_at = NULL,
+                last_error = 'Transaction import run resumed after server restart', updated_at = ?
+            WHERE trigger = 'historical_scan' AND status = 'running'`,
+      args: [timestamp],
+    });
+    return {
+      runsRecovered: numberValue(recoveredRuns.rowsAffected),
+    };
+  }
+
   return {
     listMappings,
     upsertMapping,
@@ -565,6 +579,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     claimNextItem,
     settleItem,
     recoverStaleClaims,
+    recoverAbandonedHistoricalRuns,
   };
 }
 
