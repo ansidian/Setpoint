@@ -6,6 +6,10 @@ import type { ActualWorkerOperation, ActualWorkerOptions } from "./actual-worker
 import type {
   ActualMetadata,
 } from "../../shared/types/actual.ts";
+import type {
+  ActualImportAccountGroup,
+  ActualImportBatchResult,
+} from "../../shared/types/transaction-imports.ts";
 
 export type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
 import type { ActualConnectionCandidate } from "./actual-connection-settings.ts";
@@ -170,5 +174,19 @@ export async function sendBill(billData: ActualBillWriteInput, userId: string): 
 export async function createQuickTxn(userId: string, payload: ActualQuickTransactionInput): Promise<ActualQuickTransactionResult> {
   const result = await callActual<ActualQuickTransactionResult>("createQuickTxn", [userId, payload], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
+  return result;
+}
+
+export async function importTransactionGroups(
+  userId: string,
+  groups: ActualImportAccountGroup[],
+  dryRun: boolean,
+): Promise<ActualImportBatchResult> {
+  const result = await callActual<ActualImportBatchResult>(
+    "importTransactionGroups",
+    [userId, groups, dryRun],
+    WRITE_OPERATION_WORKER_OPTIONS,
+  );
+  if (!dryRun) clearMetadataCache();
   return result;
 }

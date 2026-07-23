@@ -1,0 +1,139 @@
+import { Router } from "express";
+import * as billsService from "../../bills/bills-service.ts";
+import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
+import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
+import type { TransactionImportMode, TransactionImportSource } from "../../../shared/types/transaction-imports.ts";
+
+type HttpError = Error & { status?: number };
+type Service = typeof transactionImportService;
+
+const ownerUserId = (): string => process.env.EA_USER_ID!;
+const SOURCES = new Set<TransactionImportSource>(["amazon", "paypal"]);
+const MODES = new Set<TransactionImportMode>(["off", "observe", "automatic"]);
+
+function sourceParam(value: unknown): TransactionImportSource | null {
+  return typeof value === "string" && SOURCES.has(value as TransactionImportSource) ? value as TransactionImportSource : null;
+}
+
+function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: unknown): void {
+  const err = error as HttpError;
+  res.status(err.status || 500).json({ message: err.message || "Transaction import request failed" });
+}
+
+export function createTransactionImportRouter({
+  service = transactionImportService,
+  wake = requestTransactionImportDrain,
+  loadAccounts = billsService.listAccounts,
+  loadCategories = billsService.listCategories,
+}: {
+  service?: Service;
+  wake?: () => void;
+  loadAccounts?: typeof billsService.listAccounts;
+  loadCategories?: typeof billsService.listCategories;
+} = {}): Router {
+  const router = Router();
+
+  router.get("/transaction-imports/mappings", async (_req, res) => {
+    try {
+      res.json(await service.listMappings(ownerUserId()));
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.put("/transaction-imports/mappings/:source", async (req, res) => {
+    const source = sourceParam(req.params.source);
+    const { mode, actualAccountId = null, actualCategoryId = null } = req.body || {};
+    if (!source || !MODES.has(mode) || actualAccountId != null && typeof actualAccountId !== "string"
+      || actualCategoryId != null && typeof actualCategoryId !== "string") {
+      return res.status(400).json({ message: "Invalid transaction import mapping" });
+    }
+    if (mode !== "off" && (!actualAccountId || !actualAccountId.trim())) {
+      return res.status(400).json({ message: "An Actual account is required for observe or automatic mode" });
+    }
+    try {
+      if (actualAccountId) {
+        const accounts = await loadAccounts(ownerUserId()).catch(() => null);
+        if (accounts && !accounts.some((account) => account.id === actualAccountId)) {
+          return res.status(400).json({ message: "Actual account does not exist" });
+        }
+      }
+      if (actualCategoryId) {
+        const groups = await loadCategories(ownerUserId()).catch(() => null);
+        if (groups && !groups.some((group) => group.categories.some((category) => category.id === actualCategoryId))) {
+          return res.status(400).json({ message: "Actual category does not exist" });
+        }
+      }
+      res.json(await service.upsertMapping(ownerUserId(), {
+        source,
+        mode,
+        actualAccountId: actualAccountId?.trim() || null,
+        actualCategoryId: actualCategoryId?.trim() || null,
+      }));
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.post("/transaction-imports/runs", async (req, res) => {
+    const { gmailAccountIds, sources, startDate, endDate } = req.body || {};
+    if (!Array.isArray(gmailAccountIds) || !Array.isArray(sources)
+      || !gmailAccountIds.every((value) => typeof value === "string")
+      || !sources.every((value) => sourceParam(value))) {
+      return res.status(400).json({ message: "Invalid historical transaction import options" });
+    }
+    try {
+      const result = await service.startHistoricalScan(ownerUserId(), { gmailAccountIds, sources, startDate, endDate });
+      wake();
+      res.status(202).json(result);
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.get("/transaction-imports/runs/:runId", async (req, res) => {
+    try {
+      const run = await service.getRun(ownerUserId(), req.params.runId);
+      if (!run) return res.status(404).json({ message: "Transaction import run not found" });
+      res.json(run);
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.post("/transaction-imports/runs/:runId/commit", async (req, res) => {
+    if (!Array.isArray(req.body?.items)) return res.status(400).json({ message: "items are required" });
+    try {
+      const result = await service.commitItems(ownerUserId(), req.params.runId, req.body.items);
+      wake();
+      res.status(202).json(result);
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.post("/transaction-imports/items/:itemId/retry", async (req, res) => {
+    try {
+      const result = await service.retryItem(ownerUserId(), req.params.itemId);
+      if (!result.accepted) return res.status(409).json({ message: "Transaction import item is not retryable" });
+      wake();
+      res.status(202).json(result);
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.post("/transaction-imports/items/:itemId/dismiss", async (req, res) => {
+    try {
+      const result = await service.dismissItem(ownerUserId(), req.params.itemId);
+      if (!result.dismissed) return res.status(409).json({ message: "Transaction import item cannot be dismissed" });
+      res.json(result);
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  return router;
+}
+
+export default createTransactionImportRouter();

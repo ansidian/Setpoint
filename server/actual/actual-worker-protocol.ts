@@ -9,7 +9,8 @@ export type ActualWorkerOperation =
   | "getCalendarBillsRange"
   | "markBillPaid"
   | "sendBill"
-  | "createQuickTxn";
+  | "createQuickTxn"
+  | "importTransactionGroups";
 
 export interface ActualWorkerRequest {
   id: string;
@@ -61,6 +62,7 @@ const OPERATIONS: ReadonlySet<string> = new Set<ActualWorkerOperation>([
   "markBillPaid",
   "sendBill",
   "createQuickTxn",
+  "importTransactionGroups",
 ]);
 
 export function isActualWorkerOperation(value: unknown): value is ActualWorkerOperation {

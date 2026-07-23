@@ -230,3 +230,24 @@ Selection path:
 **Deep links:** base services use `/settings?tab=connections#<connection-id>`. Gmail realtime and Todoist advanced retain the owning connection hash and add an allowlisted `setup` query; deterministic legacy tab/card pairs are canonicalized, while ambiguous combined-card hashes are not guessed.
 
 **Separation:** capability degradation never reopens onboarding or changes persisted presentation progress. An unfinished checklist always keeps a return path from Connections, including when the active step is untouched or skipped; explicit finish removes that path. Finishing is permitted with every integration pending, and demo onboarding/Settings use the in-memory progress adapter without calling setup, provider, or onboarding endpoints.
+
+## 12. Email transaction discovery → durable Actual import
+
+**Triggers:** Gmail history sync indexes a newly arrived message (`server/email/gmail-sync.ts:syncGmailHistoryForAccount`), or an authenticated historical-scan request enters through `POST /api/briefing/transaction-imports/runs` (`server/routes/briefing/transaction-imports.ts`).
+
+1. `server/transaction-imports/transaction-import-arrivals.ts:ingestGmailTransactionArrivals` — receives only indexed message metadata plus the raw Gmail provider message ID; it never persists raw HTML and does not block Gmail sync completion.
+2. `server/transaction-imports/transaction-import-service.ts:createTransactionImportService` — loads the sender mapping, applies `off`/`observe`/`automatic` mode, parses the recognized merchant message, and persists either a candidate or a review-safe rejection.
+3. `server/transaction-imports/transaction-import-store.ts` — owns mapping snapshots, run/page cursors, candidate identity uniqueness, conditional claims, retry ceilings, stale-claim recovery, manual corrections, and owner-scoped reads in `ea_transaction_import_mappings`, `ea_transaction_import_runs`, and `ea_transaction_import_items`.
+4. `server/transaction-imports/transaction-import-runtime.ts` — admits immediate drains and runs the bounded 30-second reliability backstop; shutdown stops admission and awaits already-running work without rewriting durable state.
+5. `server/transaction-imports/transaction-import-worker.ts` — resumes Gmail page cursors for historical scans, prepares candidate batches, rejects missing mappings or unsupported currencies to review, and performs an Actual dry run before any commit.
+6. `server/actual/actual.ts:importTransactionGroups` → `server/actual/actual-core.ts:importTransactionGroups` — sends account-grouped transactions through the existing in-process/worker Actual runtime using `@actual-app/api.importTransactions`; imported IDs are preserved unchanged, including legacy Amazon and PayPal formats.
+7. `server/actual/actualTransactionImportModel.ts` — strictly validates grouped inputs, projects SDK rows, classifies compatible Actual outcomes, and keeps dry-run orchestration separate from commit orchestration.
+8. `server/transaction-imports/transaction-import-worker.ts` — settles items as ready, imported, already imported, review, or failed using claim tokens; observe mode stops before commit, and automatic mode commits only candidates that passed all safety gates.
+9. `server/bills/bills-service.ts:invalidateActualAfterTransactionImport` — after a changed commit batch, clears Actual metadata and schedules exactly one bills-mirror refresh fan-out.
+10. `server/routes/briefing/transaction-imports.ts` — exposes owner-scoped mapping, run, confirm, retry, dismiss, and resume controls behind briefing cookie authentication; clients poll durable run/item state.
+
+**Caches/state:** durable mapping/run/item tables from migration 041; Gmail provider page token on the run; Actual metadata caches and bills mirror invalidated only after a changed commit. Raw email HTML is never stored.
+
+**SSE:** none in phase 02. Imported Actual changes flow through the existing deferred bills-mirror refresh path.
+
+**UI:** none in phase 02; phase 03 will consume the authenticated transaction-import routes for Finance review and Inbox status.

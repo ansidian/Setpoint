@@ -44,11 +44,15 @@ describe("Actual worker call options", () => {
   });
 
   it("runs transaction bill-pay writes through the lightweight path and keeps other writes bounded", async () => {
-    const { sendBill, markBillPaid, createQuickTxn } = await import("./actual.ts");
+    const { sendBill, markBillPaid, createQuickTxn, importTransactionGroups } = await import("./actual.ts");
 
     await sendBill({ type: "expense", amount: 10, due_date: "2026-07-16" }, "u1");
     await markBillPaid("schedule-1", "u1");
     await createQuickTxn("u1", { accountName: "Checking", amount: 10, payee: "Store" });
+    await importTransactionGroups("u1", [{
+      accountId: "account-1",
+      transactions: [{ itemId: "item-1", importedId: "amazon-1", date: "2026-07-16", amountCents: -1000, payee: "Amazon", notes: "Order" }],
+    }], true);
 
     expect(lightweightWritesMock.sendBillLightweight).toHaveBeenCalledWith("u1", { type: "expense", amount: 10, due_date: "2026-07-16" });
     expect(workerMock.runActualWorkerOperation).toHaveBeenNthCalledWith(
@@ -61,6 +65,12 @@ describe("Actual worker call options", () => {
       2,
       "createQuickTxn",
       ["u1", { accountName: "Checking", amount: 10, payee: "Store" }],
+      expect.objectContaining({ shutdownAfterOperation: true, timeoutMs: 45_000 }),
+    );
+    expect(workerMock.runActualWorkerOperation).toHaveBeenNthCalledWith(
+      3,
+      "importTransactionGroups",
+      ["u1", expect.any(Array), true],
       expect.objectContaining({ shutdownAfterOperation: true, timeoutMs: 45_000 }),
     );
   });

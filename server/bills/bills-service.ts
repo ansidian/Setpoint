@@ -100,6 +100,11 @@ function invalidateActualMetadataInBackground(userId: string): void {
   });
 }
 
+export async function invalidateActualAfterTransactionImport(userId: string): Promise<void> {
+  await invalidateActualMetadata(userId);
+  await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 });
+}
+
 async function scheduleBillsMirrorRefreshInBackground(userId: string, delayMs: number) {
   return scheduleBillsMirrorRefresh(userId, { delayMs }).catch((err: unknown) => {
     console.error("[EA] Bills mirror delayed refresh scheduling failed:", errorMessage(err));

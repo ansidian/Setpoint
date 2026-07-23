@@ -17,6 +17,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/email-index.ts` — email index health checks, backfill queuing
 - `briefing/snapshot.ts` — snapshot fetch/sync, kanban lane reorder
 - `briefing/tasks.ts` — Todoist projects and labels listing
+- `briefing/transaction-imports.ts` — transaction-import mappings, scans, status, commit, retry, and dismiss
 - `briefing/dev.ts` — dev-only email re-indexing endpoint
 
 ### Domains + integrations

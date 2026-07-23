@@ -109,7 +109,7 @@ async function checkAreaMaps() {
     if (await exists(file)) files.push(file)
   }
   const mapDirs = files
-    .filter((f) => f.endsWith("/CLAUDE.md") && (f.startsWith("src/") || f.startsWith("server/")))
+    .filter((f) => f.endsWith("/CLAUDE.md") && (f.startsWith("src/") || f.startsWith("server/") || f.startsWith("shared/")))
     .map((f) => f.slice(0, -"/CLAUDE.md".length))
   const maps = await Promise.all(
     mapDirs.map(async (dir) => ({ dir, text: await readText(`${dir}/CLAUDE.md`) })),

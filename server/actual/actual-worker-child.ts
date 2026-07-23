@@ -20,6 +20,7 @@ const OPERATIONS = new Set([
   "markBillPaid",
   "sendBill",
   "createQuickTxn",
+  "importTransactionGroups",
 ].filter(isActualWorkerOperation));
 
 function serializeError(error: unknown): ActualWorkerErrorPayload {

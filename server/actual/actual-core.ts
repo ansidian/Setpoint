@@ -32,6 +32,15 @@ import type {
   ActualSchedule,
   ActualScheduleCondition,
 } from "../../shared/types/actual.ts";
+import type {
+  ActualImportAccountGroup,
+  ActualImportBatchResult,
+} from "../../shared/types/transaction-imports.ts";
+import {
+  runActualTransactionImport,
+  type SdkImportTransactionInput,
+  type SdkImportResult,
+} from "./actualTransactionImportModel.ts";
 
 type ActualError = Error & { status?: number; code?: string };
 interface SdkActualConfig extends ActualConfig {
@@ -96,6 +105,7 @@ interface ActualSdk {
   createPayee(input: { name: string }): Promise<string>;
   createSchedule(input: { name: string; date: string; amount: number }): Promise<string>;
   addTransactions(accountId: string, transactions: SdkTransactionInput[]): Promise<void>;
+  importTransactions(accountId: string, transactions: SdkImportTransactionInput[], options: { dryRun: boolean }): Promise<SdkImportResult>;
   sync(): Promise<void>;
   internal: { send(operation: string, payload: unknown): Promise<unknown> };
 }
@@ -668,6 +678,25 @@ export function createQuickTxn(userId: string, { accountName, amount, payee, typ
         date: txnDate,
         category: categoryName || null,
       };
+    });
+  });
+}
+
+export function importTransactionGroups(
+  userId: string,
+  groups: ActualImportAccountGroup[],
+  dryRun: boolean,
+): Promise<ActualImportBatchResult> {
+  return withLock(async () => {
+    return withActualBudget(userId, async () => {
+      const result = await runActualTransactionImport({
+        groups,
+        dryRun,
+        importTransactions: (accountId, transactions, options) => sdk.importTransactions(accountId, transactions, options),
+        sync: () => sdk.sync(),
+      });
+      if (!dryRun) clearMetadataCache();
+      return result;
     });
   });
 }

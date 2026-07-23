@@ -1,0 +1,15 @@
+# Shared Types Map
+
+Cross-layer, serializable contracts used by the server and client. Keep domain behavior out of this directory; runtime validation remains at route and service boundaries.
+
+## Files
+
+- `accounts.ts`, `settings.ts`, `setup.ts`, `instance-credentials.ts`, `canonical-url.ts`, `onboarding.ts`, `capabilities.ts` — owner setup, credentials, and integration settings contracts
+- `dashboard.ts`, `snapshots.ts`, `email.ts`, `calendar.ts`, `tasks.ts`, `reminders.ts`, `notes.ts`, `news.ts` — product surface read/write contracts
+- `actual.ts`, `bills.ts`, `transactions.ts`, `transaction-imports.ts` — Actual Budget, bills, transaction reads, and email transaction-import contracts
+- `alfred.ts` — Alfred assistant request and response contracts
+
+## Boundaries
+
+- Files here must remain serializable and side-effect free.
+- Provider SDK types and database row shapes stay in their owning server domains.

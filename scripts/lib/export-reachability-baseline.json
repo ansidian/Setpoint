@@ -16,8 +16,6 @@
     "server/transaction-imports/parsers/fixtures.ts:emailFixture": "Sanitized phase-01 parser fixture factory exported only for focused parser tests",
     "server/transaction-imports/parsers/fixtures.ts:paypalPaidText": "Sanitized phase-01 parser fixture exported only for focused parser tests",
     "server/transaction-imports/parsers/fixtures.ts:paypalSubmittedText": "Sanitized phase-01 parser fixture exported only for focused parser tests",
-    "server/transaction-imports/parsers/parser-registry.ts:parseTransactionEmail": "Phase-01 parser entry is directly contract-tested and will be consumed by phase-02 orchestration",
-    "server/transaction-imports/transaction-email-discovery.ts:scanTransactionEmails": "Bounded full-scan helper is directly contract-tested; phase-02 consumes the paged entry for durable progress",
-    "server/transaction-imports/transaction-import-types.ts:projectAutomaticSafety": "Phase-01 automatic-safety projection is directly contract-tested and will be consumed by phase-02 orchestration"
+    "server/transaction-imports/transaction-email-discovery.ts:scanTransactionEmails": "Bounded full-scan helper is directly contract-tested while durable orchestration consumes the paged entry"
   }
 }

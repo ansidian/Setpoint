@@ -40,6 +40,7 @@ vi.mock("../bills/bills-service.ts", () => ({
   hydrateActualCache: vi.fn(async () => ({ success: true, hydrated: true })),
   getActualCacheStatus: vi.fn(async () => ({ success: true, hydrated: true })),
   createQuickTxn: vi.fn(async () => ({ success: true, account: "Checking" })),
+  invalidateActualAfterTransactionImport: vi.fn(async () => undefined),
   extractBill: vi.fn(async () => ({ payee: "Power", amount: 42 })),
 }));
 vi.mock("../email/email-service.ts", () => ({

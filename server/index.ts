@@ -30,6 +30,7 @@ import { startTodoistMirrorSyncWorker, stopTodoistMirrorSyncWorker } from "./tas
 import { startBillsMirrorRefreshWorker, stopBillsMirrorRefreshWorker } from "./bills/bills-service.ts";
 import { startCalendarSearchMirrorSyncWorker, stopCalendarSearchMirrorSyncWorker } from "./calendar/calendar-search-mirror.ts";
 import { startNewsPollWorker, stopNewsPollWorker } from "./news/news-poller.ts";
+import { startTransactionImportWorker, stopTransactionImportWorker } from "./transaction-imports/transaction-import-runtime.ts";
 import { createGracefulShutdown } from "./shutdown.ts";
 import { migrate } from "./db/migrate.ts";
 import { migrateCbcEncryption } from "./db/migrate-encryption.ts";
@@ -166,6 +167,7 @@ function startOwnerRuntime(): void {
   scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
   scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
   scheduleStartupWorker("news-poll", startupDelays.news, () => startNewsPollWorker());
+  scheduleStartupWorker("transaction-imports", startupDelays.news, () => startTransactionImportWorker());
   startAlfredConversationSweeper();
 }
 
@@ -215,6 +217,7 @@ timeAsync("migrations", () => migrate())
         stopBillsMirrorRefreshWorker,         // Task 1
         stopCalendarSearchMirrorSyncWorker,   // calendar/calendar-search-mirror:159
         stopNewsPollWorker,                   // news/news-poller.js:249
+        stopTransactionImportWorker,          // durable transaction import drain
         stopAlfredConversationSweeper,        // Task 1
       ],
     });

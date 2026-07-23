@@ -11,6 +11,11 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `parsers/paypal.ts` — pure PayPal payment/order parser
 - `parsers/parser-registry.ts` — source routing and public parser entry point
 - `transaction-email-discovery.ts` — allowlisted Gmail historical-search adapter
+- `transaction-import-store.ts` — durable mapping, run, item, claim, and recovery persistence
+- `transaction-import-service.ts` — arrival preparation and historical-run admission
+- `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains
+- `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
+- `transaction-import-runtime.ts` — bounded drain admission, startup stale recovery, and graceful shutdown
 
 ## Local patterns
 

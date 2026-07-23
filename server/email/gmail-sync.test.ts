@@ -26,6 +26,7 @@ beforeEach(async () => {
       "006_email_search_embedding_state.sql",
       "007_email_search_ai_usage.sql",
       "028_provider_needs_reauth.sql",
+      "041_email_transaction_imports.sql",
     ],
   });
 });
@@ -35,6 +36,46 @@ afterEach(async () => {
 });
 
 describe("Gmail Pub/Sub sync ingestion", () => {
+  it("does not await or fail Gmail sync when transaction arrival ingestion is still pending", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "100"],
+    });
+    const email = {
+      uid: "gmail-gmail-work-msg-transaction",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      from: "Amazon.com <auto-confirm@amazon.com>",
+      subject: "Your Amazon.com order #111-2222222-3333333",
+      body_preview: "Order preview",
+      body_text: "Order 111-2222222-3333333 Order Total: $27.04",
+      date: "2026-05-03T12:01:00.000Z",
+      read: false,
+    };
+    const ingestTransactionArrivalsFn = vi.fn(() => new Promise(() => {}));
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work", user_id: "user-1", email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage: vi.fn(async () => ({
+        historyId: "105",
+        history: [{ messagesAdded: [{ message: { id: "msg-transaction", labelIds: ["INBOX"] } }] }],
+        nextPageToken: null,
+      })),
+      fetchEmailsByIdsFn: vi.fn(async () => [email]),
+      ingestTransactionArrivalsFn,
+      targetHistoryId: "105",
+      now: new Date("2026-05-03T12:15:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ indexed: 1, queued: 1 });
+    expect(ingestTransactionArrivalsFn).toHaveBeenCalledWith("user-1", "gmail-work", [email]);
+  });
+
   it("recovers an expired Gmail history cursor by indexing current inbox and advancing the target cursor", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
