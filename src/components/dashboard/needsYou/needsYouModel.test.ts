@@ -98,7 +98,7 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     expect(m.backfillCards.map((c) => c.title)).toEqual(["Walkthrough notes", "Demo Electric"]);
   });
 
-  it("shows every urgent card without pulling future backfill into an unbounded expansion", () => {
+  it("shows every urgent card and appends at most two future cards in an unbounded rail", () => {
     const m = buildNeedsYouModel({
       snapshotLanes: lanes(),
       liveDeadlines: deadlines,
@@ -107,7 +107,7 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     });
 
     expect(m.urgentCards).toHaveLength(5);
-    expect(m.backfillCards).toEqual([]);
+    expect(m.backfillCards.map((card) => card.title)).toEqual(["Walkthrough notes", "Demo Electric"]);
     expect(m.moreCount).toBe(0);
   });
 

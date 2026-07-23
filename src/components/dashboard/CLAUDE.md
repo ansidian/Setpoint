@@ -23,11 +23,11 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `layout/dashboard-scene-tokens.ts` — transition timings and stagger delays
 
 ### Tier 1 — Needs-you band
-- `needsYou/NeedsYouBand.tsx` — the band: a needs-you count plus the most urgent overdue/due-today/email priority cards
-- `needsYou/needsYouModel.ts` — classifies deadlines/bills/emails into urgent + backfill cards (overdue/due-today only; bills admit `days===0`)
+- `needsYou/NeedsYouBand.tsx` — the band: a needs-you count plus every overdue/due-today/email priority card; desktop switches to a wheel-scroll horizontal rail above five cards
+- `needsYou/needsYouModel.ts` — classifies deadlines/bills/emails into urgent cards plus up to two quiet upcoming backfill cards (overdue/due-today only; bills admit `days===0`)
 - `needsYou/NeedsYouCountBlock.tsx` — the leading count + breakdown block
 - `needsYou/PriorityCard.tsx` — a single priority card; deadline/bill bodies are click-to-open, emails open via their button
-- `needsYou/NeedsYouCarousel.tsx` — mobile-only horizontal scroll-snap carousel of the priority cards (full-width count header, fixed-width peeking slides, position dots, "Show all" last slide); `NeedsYouBand` renders it instead of the desktop row on phones
+- `needsYou/NeedsYouCarousel.tsx` — mobile-only horizontal scroll-snap carousel of every priority/backfill card (full-width count header, fixed-width peeking slides, position dots); `NeedsYouBand` renders it instead of the desktop row on phones
 
 ### Tier 2 — Timeline
 - `TodayTimeline.tsx` — merges events and deadlines chronologically with live now marker

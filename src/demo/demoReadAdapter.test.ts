@@ -38,12 +38,22 @@ describe("demo mode read adapter", () => {
     const billModels = await api.getBillExtractModels();
 
     expect(current.fetchedAt).toBe("2026-05-12T15:30:00.000Z");
-    expect(current.weather).toMatchObject({ temp: expect.any(Number), icon: expect.any(String) });
+    expect(current.weather).toMatchObject({
+      temp: expect.any(Number),
+      high: expect.any(Number),
+      low: expect.any(Number),
+      icon: expect.any(String),
+      hourly: expect.arrayContaining([expect.objectContaining({ now: true })]),
+      dailyForecast: expect.arrayContaining([expect.objectContaining({ dateKey: "2026-05-15" })]),
+    });
     expect(current.deadlines.upcoming[0]?.due_date).toBe("2026-05-13");
     expect(current.activeSnapshot.lanes.needs_attention[0]).toMatchObject({
       uid: "demo-email-budget",
       subject: expect.stringContaining("Budget"),
     });
+    expect(current.activeSnapshot.lanes.needs_attention.filter((email) => email.urgency === "high")).toHaveLength(3);
+    expect(current.activeSnapshot.lanes.needs_attention.filter((email) => email.urgency === "normal")).toHaveLength(2);
+    expect(current.deadlines.upcoming.find((task) => task.id === "demo-task-design-audit")?.due_date).toBe("2026-05-12");
     expect(snapshot).toEqual(current.activeSnapshot);
     expect("body" in emailBody ? emailBody.body : "").toContain("fictional demo");
     expect(calendarRange.events.some((event) => event.title === "Portfolio review prep")).toBe(true);
@@ -54,6 +64,8 @@ describe("demo mode read adapter", () => {
     });
     expect(deadlines.upcoming.some((task) => task.title === "Send portfolio demo link")).toBe(true);
     expect(bills.schedules.some((bill) => bill.payee === "Demo Electric")).toBe(true);
+    expect(bills.schedules.find((bill) => bill.payee === "Everyday Card")?.next_date).toBe("2026-05-12");
+    expect(bills.schedules.find((bill) => bill.payee === "Demo Electric")?.next_date).toBe("2026-05-13");
     expect(bills.transactions).toEqual(expect.arrayContaining([
       expect.objectContaining({ direction: "income", payee: "Northstar Payroll" }),
       expect.objectContaining({ direction: "expense", payee: "Corner Market" }),

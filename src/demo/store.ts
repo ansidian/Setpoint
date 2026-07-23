@@ -1,6 +1,6 @@
 import { buildDemoNews } from "./newsData.ts";
 import { buildDemoTransactions } from "./financeData.ts";
-
+import { buildDemoWeather } from "./weatherData.ts";
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
 const CAREER_COLOR = "#f5c2e7";
@@ -378,17 +378,17 @@ function makeDemoSeed(now = new Date()) {
     task({ id: "demo-deadline-recording", title: "Record two-minute product tour", day: later, points: 10, className: "Portfolio Systems", dueTime: "7pm", priority: 2 }),
     task({ id: "demo-task-link", title: "Send portfolio demo link", day: today, className: "Career", dueTime: "4pm", priority: 3 }),
     task({ id: "demo-task-budget", title: "Review mock bill-pay copy", day: soon, className: "Product", dueTime: "3pm", priority: 2 }),
-    task({ id: "demo-task-pr-review", title: "Respond to PR review on calendar source moves", day: tomorrow, className: "Engineering", dueTime: "1pm", priority: 4, description: "Reply to comments, rerun focused tests, and keep source edit behavior idempotent." }),
+    task({ id: "demo-task-pr-review", title: "Respond to PR review on calendar source moves", day: addDays(today, 2), className: "Engineering", dueTime: "1pm", priority: 4, description: "Reply to comments, rerun focused tests, and keep source edit behavior idempotent." }),
     task({ id: "demo-task-worker-runbook", title: "Update triage-worker retry runbook", day: addDays(today, 2), className: "Engineering", dueTime: "11am", priority: 2 }),
     task({ id: "demo-task-incident-postmortem", title: "Publish webhook retry postmortem", day: addDays(today, 4), className: "Engineering", dueTime: "5pm", points: 8, priority: 3 }),
     task({ id: "demo-task-product-metrics", title: "QA product metrics dashboard cards", day: addDays(today, 5), className: "Product", dueTime: "2pm", points: 5, priority: 2 }),
     task({ id: "demo-task-architecture-rfc", title: "Draft snapshot cache lifecycle RFC", day: addDays(today, 6), className: "Engineering", dueTime: "6pm", points: 13, priority: 3 }),
     task({ id: "demo-task-recruiter-packet", title: "Send recruiter follow-up packet", day: addDays(today, 9), className: "Career", dueTime: "10am", priority: 2 }),
-    task({ id: "demo-task-release-checklist", title: "Close static demo release checklist", day: monthDay(today, 20), className: "Engineering", dueTime: "4pm", points: 5, priority: 3 }),
-    task({ id: "demo-task-design-audit", title: "Audit hover and focus states before demo deploy", day: monthDay(today, 22), className: "Product", dueTime: "12pm", points: 3, priority: 2 }),
-    task({ id: "demo-task-interview-stories", title: "Polish SWE interview project stories", day: monthDay(today, 24), className: "Career", dueTime: "8pm", priority: 2 }),
+    task({ id: "demo-task-release-checklist", title: "Close static demo release checklist", day: addDays(today, 7), className: "Engineering", dueTime: "4pm", points: 5, priority: 3 }),
+    task({ id: "demo-task-design-audit", title: "Audit hover and focus states before demo deploy", day: today, className: "Product", dueTime: "12pm", points: 3, priority: 2 }),
+    task({ id: "demo-task-interview-stories", title: "Polish SWE interview project stories", day: addDays(today, 4), className: "Career", dueTime: "8pm", priority: 2 }),
     task({ id: "demo-task-dependency-review", title: "Clear dependency security review", day: monthDay(today, 26), status: "complete", className: "Engineering", dueTime: "5pm", priority: 1 }),
-    task({ id: "demo-task-monthly-retro", title: "Write monthly engineering retro notes", day: monthDay(today, 30), className: "Engineering", dueTime: "6pm", points: 5, priority: 1 }),
+    task({ id: "demo-task-monthly-retro", title: "Write monthly engineering retro notes", day: addDays(today, 10), className: "Engineering", dueTime: "6pm", points: 5, priority: 1 }),
   ];
 
   const deadlines = {
@@ -397,14 +397,14 @@ function makeDemoSeed(now = new Date()) {
   };
 
   const bills = [
-    bill({ id: "demo-electric", payee: "Demo Electric", day: soon, amount: 146.32 }),
+    bill({ id: "demo-electric", payee: "Demo Electric", day: tomorrow, amount: 146.32 }),
     bill({ id: "demo-water", payee: "Northstar Water", day: later, amount: 58.11 }),
     bill({ id: "demo-internet", payee: "Fiber Co-op", day: yesterday, amount: 79.99, paid: true }),
-    bill({ id: "demo-rent", payee: "Northstar Lofts", day: monthDay(today, 1), amount: 2450.00, paid: dateKey(monthDay(today, 1)) < dateKey(today) }),
-    bill({ id: "demo-phone", payee: "Signal Mobile", day: monthDay(today, 12), amount: 64.20, paid: dateKey(monthDay(today, 12)) < dateKey(today) }),
-    bill({ id: "demo-cloud", payee: "Cloud Sandbox", day: monthDay(today, 18), amount: 38.47 }),
-    bill({ id: "demo-card", payee: "Everyday Card", day: monthDay(today, 22), amount: 512.84 }),
-    bill({ id: "demo-student-loan", payee: "Student Loan Servicer", day: monthDay(today, 28), amount: 220.00 }),
+    bill({ id: "demo-rent", payee: "Northstar Lofts", day: monthDay(today, 1), amount: 2450.00, paid: true }),
+    bill({ id: "demo-phone", payee: "Signal Mobile", day: monthDay(today, 12), amount: 64.20, paid: true }),
+    bill({ id: "demo-cloud", payee: "Cloud Sandbox", day: addDays(today, 5), amount: 38.47 }),
+    bill({ id: "demo-card", payee: "Everyday Card", day: today, amount: 512.84 }),
+    bill({ id: "demo-student-loan", payee: "Student Loan Servicer", day: addDays(today, 6), amount: 220.00 }),
   ];
   const transactions = buildDemoTransactions(dateKey(today), dateKey(yesterday));
   const payeeMap = Object.fromEntries(bills.map((entry) => [entry.scheduleId, entry.payee]));
@@ -712,6 +712,8 @@ function makeDemoSeed(now = new Date()) {
       }),
     ],
   };
+  lanes.needs_attention[2]!.urgency = "normal";
+  lanes.needs_attention[3]!.urgency = "normal";
   const carryover = [
     snapshotEmail({
       itemId: 4,
@@ -784,7 +786,7 @@ function makeDemoSeed(now = new Date()) {
   return {
     dateKey: dateKey(today),
     currentDashboard: {
-      weather: { temp: 72, icon: "Sun", description: "Clear demo skies" },
+      weather: buildDemoWeather(today),
       calendar: calendarEvents,
       deadlines,
       bills,

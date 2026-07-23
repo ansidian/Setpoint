@@ -269,7 +269,7 @@ function DashboardBodyInner({
       snapshotLanes={activeSnapshot?.lanes}
       liveDeadlines={bandDeadlines}
       liveBills={bills}
-      maxCards={5}
+      railThreshold={5}
       isMobile={isMobile}
       onOpenEmail={onOpenEmail}
       onMarkHandled={handleMarkHandled}

@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { ArrowRight } from "lucide-react";
 import { PriorityCard } from "./PriorityCard";
 import type { CSSProperties } from "react";
 import type { NeedsYouCard } from "./needsYouModel";
@@ -10,11 +9,6 @@ const SLIDE: CSSProperties = { flex: "0 0 min(82vw, 300px)", scrollSnapAlign: "s
 interface NeedsYouCarouselProps {
   urgentCards: NeedsYouCard[];
   backfillCards: NeedsYouCard[];
-  moreCount: number;
-  moreLabel: string;
-  expanded?: boolean;
-  onShowAll?: () => void;
-  onCollapse?: () => void;
   onOpen?: (card: PriorityCardModel) => void;
   onMarkHandled?: (card: PriorityCardModel) => void;
   onComplete?: (card: PriorityCardModel) => void;
@@ -23,12 +17,12 @@ interface NeedsYouCarouselProps {
 
 // Mobile-only: the needs-you cards as a horizontal scroll-snap carousel. Each
 // card is a fixed-width snap slide with the next card peeking (~15%) as the swipe
-// affordance; position dots track the active slide; "Show all" is the last slide.
+// affordance; position dots track the active slide.
 // touch-action: pan-x pan-y allows both horizontal carousel swipes and vertical page scrolls, with the browser disambiguating by initial gesture direction.
-export function NeedsYouCarousel({ urgentCards, backfillCards, moreCount, moreLabel, expanded = false, onShowAll, onCollapse, onOpen, onMarkHandled, onComplete, onJump }: NeedsYouCarouselProps) {
+export function NeedsYouCarousel({ urgentCards, backfillCards, onOpen, onMarkHandled, onComplete, onJump }: NeedsYouCarouselProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState(0);
-  const slideCount = urgentCards.length + backfillCards.length + (moreCount > 0 || expanded ? 1 : 0);
+  const slideCount = urgentCards.length + backfillCards.length;
 
   const handleScroll = () => {
     const el = scrollerRef.current;
@@ -61,32 +55,6 @@ export function NeedsYouCarousel({ urgentCards, backfillCards, moreCount, moreLa
             <PriorityCard card={card} variant="backfill" isMobile onComplete={onComplete} onJump={onJump} />
           </div>
         ))}
-        {moreCount > 0 && (
-          <div style={SLIDE}>
-            <button
-              type="button"
-              className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
-              onClick={onShowAll}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 4, padding: "13px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", color: "inherit", font: "inherit", minHeight: "var(--sp-touch-min)" }}
-            >
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: 30, fontWeight: 700, letterSpacing: "-1.5px", lineHeight: 1, color: "rgba(205,214,244,0.85)", fontVariantNumeric: "tabular-nums" }}>+{moreCount}</span>
-              <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)", lineHeight: 1.3 }}>{moreLabel}</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, fontWeight: 600, color: "var(--sp-accent)" }}>Show all<ArrowRight size={12} color="var(--sp-accent)" /></span>
-            </button>
-          </div>
-        )}
-        {expanded && (
-          <div style={SLIDE}>
-            <button
-              type="button"
-              className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
-              onClick={onCollapse}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 4, padding: "13px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", color: "inherit", font: "inherit", minHeight: "var(--sp-touch-min)" }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "var(--sp-accent)" }}>Show less<ArrowRight size={12} color="var(--sp-accent)" style={{ transform: "rotate(180deg)" }} /></span>
-            </button>
-          </div>
-        )}
       </div>
       {slideCount > 1 && (
         <div data-testid="needs-you-carousel-dots" style={{ display: "flex", justifyContent: "center", gap: 6 }}>

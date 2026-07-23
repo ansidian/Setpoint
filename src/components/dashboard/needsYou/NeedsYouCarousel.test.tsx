@@ -47,9 +47,6 @@ describe("NeedsYouCarousel", () => {
       <NeedsYouCarousel
         urgentCards={[createUrgentCard(1), createUrgentCard(2)]}
         backfillCards={[]}
-        moreCount={0}
-        moreLabel=""
-        onShowAll={() => {}}
         onOpen={() => {}}
         onMarkHandled={() => {}}
         onComplete={() => {}}
@@ -71,9 +68,6 @@ describe("NeedsYouCarousel", () => {
           createUrgentCard(3, "Third card"),
         ]}
         backfillCards={[]}
-        moreCount={0}
-        moreLabel=""
-        onShowAll={() => {}}
         onOpen={() => {}}
         onMarkHandled={() => {}}
         onComplete={() => {}}
@@ -92,9 +86,6 @@ describe("NeedsYouCarousel", () => {
       <NeedsYouCarousel
         urgentCards={[createUrgentCard(1), createUrgentCard(2)]}
         backfillCards={[]}
-        moreCount={0}
-        moreLabel=""
-        onShowAll={() => {}}
         onOpen={() => {}}
         onMarkHandled={() => {}}
         onComplete={() => {}}

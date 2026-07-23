@@ -1,5 +1,5 @@
-import { memo, useMemo, useState, useCallback, useEffect } from "react";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { memo, useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel, collectNeedsYouCandidateIds } from "./needsYouModel";
 import { NeedsYouCountBlock } from "./NeedsYouCountBlock";
 import { PriorityCard } from "./PriorityCard";
@@ -10,26 +10,26 @@ export interface NeedsYouBandProps {
   snapshotLanes?: NeedsYouLanes | null;
   liveDeadlines?: NeedsYouDeadlines;
   liveBills?: NeedsYouBill[] | null;
-  maxCards?: number;
+  railThreshold?: number;
   isMobile?: boolean;
   onOpenEmail?: (uid: string | number) => void;
   onMarkHandled?: (snapshotItemId: number) => Promise<unknown> | unknown;
   onCompleteDeadline?: (id: string | number, data: unknown) => Promise<unknown> | unknown;
   onOpen?: (payload: { kind?: string | null; id?: string | number | null; date?: string | null; data?: unknown }, anchor?: HTMLElement) => void;
-  onShowAll?: () => void;
 }
 
 const ACTION_ERROR_TEXT = "Couldn't mark done — try again";
 
-function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards = 5, isMobile = false, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen, onShowAll }: NeedsYouBandProps) {
+function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThreshold = 5, isMobile = false, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen }: NeedsYouBandProps) {
   const [opened, setOpened] = useState<string[]>([]);
   const [handled, setHandled] = useState<string[]>([]);
-  const [expandAll, setExpandAll] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const desktopCardRowRef = useRef<HTMLDivElement | null>(null);
   const model = useMemo(
-    () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, opened, handled, maxCards: expandAll ? Infinity : maxCards }),
-    [snapshotLanes, liveDeadlines, liveBills, opened, handled, expandAll, maxCards],
+    () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, opened, handled, maxCards: Infinity }),
+    [snapshotLanes, liveDeadlines, liveBills, opened, handled],
   );
+  const useDesktopRail = model.urgentCards.length + model.backfillCards.length > railThreshold;
 
   // Stale-id pruning (ARCH-06): `opened`/`handled` only ever grow via the
   // handlers below, so a re-surfaced item (server sends the same id again
@@ -85,6 +85,31 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
     }
   }, [onCompleteDeadline]);
 
+  useEffect(() => {
+    const row = desktopCardRowRef.current;
+    if (!row || isMobile || !useDesktopRail) return;
+
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      const maxScrollLeft = Math.max(0, row.scrollWidth - row.clientWidth);
+      if (maxScrollLeft === 0) return;
+
+      const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? row.clientWidth
+          : 1;
+      const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, row.scrollLeft + (event.deltaY * deltaScale)));
+      if (nextScrollLeft === row.scrollLeft) return;
+
+      event.preventDefault();
+      row.scrollLeft = nextScrollLeft;
+    };
+
+    row.addEventListener("wheel", handleWheel, { passive: false });
+    return () => row.removeEventListener("wheel", handleWheel);
+  }, [isMobile, useDesktopRail]);
+
   const allClear = model.countN === 0;
 
   const allClearBlock = (
@@ -117,11 +142,6 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
         <NeedsYouCarousel
           urgentCards={model.urgentCards}
           backfillCards={model.backfillCards}
-          moreCount={model.moreCount}
-          moreLabel={model.moreLabel}
-          expanded={expandAll}
-          onShowAll={() => { setExpandAll(true); onShowAll?.(); }}
-          onCollapse={() => setExpandAll(false)}
           onOpen={handleOpen}
           onMarkHandled={handleMarkHandled}
           onComplete={handleComplete}
@@ -143,41 +163,30 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
         {header}
         {errorLine}
       </div>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 10, alignItems: "stretch" }}>
-        {model.urgentCards.map((card) => (
-          <PriorityCard key={card.id} card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
-        ))}
-        {model.backfillCards.map((card) => (
-          <PriorityCard key={card.id} card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} onJump={onOpen} />
-        ))}
-        {model.moreCount > 0 && (
-          <button
-            type="button"
-            onClick={() => { setExpandAll(true); onShowAll?.(); }}
-            style={{ flex: "0 0 124px", display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 4, padding: "13px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", color: "inherit", font: "inherit" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.025)"; e.currentTarget.style.transform = "none"; }}
-            onFocus={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-            onBlur={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.025)"; }}
-          >
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: 30, fontWeight: 700, letterSpacing: "-1.5px", lineHeight: 1, color: "rgba(205,214,244,0.85)", fontVariantNumeric: "tabular-nums" }}>+{model.moreCount}</span>
-            <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)", lineHeight: 1.3 }}>{model.moreLabel}</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, fontWeight: 600, color: "var(--sp-accent)" }}>Show all<ArrowRight size={12} color="var(--sp-accent)" /></span>
-          </button>
-        )}
-        {expandAll && (
-          <button
-            type="button"
-            onClick={() => setExpandAll(false)}
-            style={{ flex: "0 0 124px", display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 4, padding: "13px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", color: "inherit", font: "inherit" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.025)"; e.currentTarget.style.transform = "none"; }}
-            onFocus={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-            onBlur={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.025)"; }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "var(--sp-accent)" }}>Show less<ArrowRight size={12} color="var(--sp-accent)" style={{ transform: "rotate(180deg)" }} /></span>
-          </button>
-        )}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch" }}>
+        <div
+          ref={desktopCardRowRef}
+          data-testid="needs-you-card-row"
+          style={{
+            flex: 1, minWidth: 0, display: "flex", gap: 10, alignItems: "stretch",
+            overflowX: useDesktopRail ? "auto" : "visible", overflowY: "visible",
+            overscrollBehaviorX: "contain", scrollSnapType: "none",
+            scrollbarColor: "color-mix(in srgb, var(--sp-accent) 32%, transparent) transparent",
+            scrollbarWidth: useDesktopRail ? "thin" : "auto",
+            padding: useDesktopRail ? "3px 1px 6px" : 0,
+          }}
+        >
+          {model.urgentCards.map((card) => (
+            <div key={card.id} style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
+              <PriorityCard card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
+            </div>
+          ))}
+          {model.backfillCards.map((card) => (
+            <div key={card.id} style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
+              <PriorityCard card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} onJump={onOpen} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

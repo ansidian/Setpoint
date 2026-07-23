@@ -182,13 +182,14 @@ export function collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines, live
   return ids;
 }
 
-export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, handled = [], opened = [], maxCards = 5 }: {
+export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, handled = [], opened = [], maxCards = 5, backfillLimit = 2 }: {
   snapshotLanes?: NeedsYouLanes | null;
   liveDeadlines?: NeedsYouDeadlines;
   liveBills?: NeedsYouBill[] | null;
   handled?: string[];
   opened?: string[];
   maxCards?: number;
+  backfillLimit?: number;
 } = {}) {
   const rows = laneRows(snapshotLanes);
   const emailCards = rows.filter(isUrgentEmail)
@@ -219,8 +220,8 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
     const moreCount = Math.max(0, all.length - maxCards);
     const moreLabel = moreCount === 1 ? "more item needs you" : "more need you";
 
-    const slotsLeft = Number.isFinite(maxCards) && moreCount === 0
-      ? Math.max(0, maxCards - urgentVisible.length)
+    const slotsLeft = moreCount === 0
+      ? Math.min(backfillLimit, Number.isFinite(maxCards) ? Math.max(0, maxCards - urgentVisible.length) : backfillLimit)
       : 0;
     const upcoming = [
       ...(liveDeadlines?.upcoming || [])
