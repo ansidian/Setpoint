@@ -15,6 +15,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-date.ts` — email date header → ISO UTC
 - `email-ai-models.ts` — email AI model catalog with defaults and provider inference
 - `gmail.ts` — Gmail API client: list, fetch, search, mutate
+- `transaction-email-search.ts` — documented cross-domain entry for allowlisted, bounded all-mail transaction discovery
 - `gmail-oauth-url.ts` — combined Gmail + Calendar scope set and canonical Google authorization-URL construction
 - `gmail-sync.ts` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.ts` too)
 - `gmail-pubsub.ts` — hashed push-token lifecycle, runtime topic/status projection, callback generation, and explicit watch tests

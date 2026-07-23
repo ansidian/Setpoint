@@ -10,6 +10,14 @@
     "server/snapshots/snapshot-test-fixtures.ts:createMigratedDb": "Shared migrated database fixture consumed by snapshot, news, and pinned-email integration tests",
     "server/snapshots/snapshot-test-fixtures.ts:migrationSql": "Shared migration fixture consumed by snapshot integration tests",
     "server/snapshots/snapshot-test-fixtures.ts:seedSnapshotItem": "Shared snapshot row fixture consumed by lifecycle integration tests",
-    "src/components/todoist/add-task-panel/todoistReferenceCache.ts:invalidateTodoistReferenceCache": "Explicit client cache reset seam used to isolate Todoist reference-cache and panel tests"
+    "src/components/todoist/add-task-panel/todoistReferenceCache.ts:invalidateTodoistReferenceCache": "Explicit client cache reset seam used to isolate Todoist reference-cache and panel tests",
+    "server/transaction-imports/parsers/fixtures.ts:amazonMultiHtml": "Sanitized phase-01 parser fixture exported only for focused parser tests",
+    "server/transaction-imports/parsers/fixtures.ts:amazonSingleHtml": "Sanitized phase-01 parser fixture exported only for focused parser tests",
+    "server/transaction-imports/parsers/fixtures.ts:emailFixture": "Sanitized phase-01 parser fixture factory exported only for focused parser tests",
+    "server/transaction-imports/parsers/fixtures.ts:paypalPaidText": "Sanitized phase-01 parser fixture exported only for focused parser tests",
+    "server/transaction-imports/parsers/fixtures.ts:paypalSubmittedText": "Sanitized phase-01 parser fixture exported only for focused parser tests",
+    "server/transaction-imports/parsers/parser-registry.ts:parseTransactionEmail": "Phase-01 parser entry is directly contract-tested and will be consumed by phase-02 orchestration",
+    "server/transaction-imports/transaction-email-discovery.ts:scanTransactionEmails": "Bounded full-scan helper is directly contract-tested; phase-02 consumes the paged entry for durable progress",
+    "server/transaction-imports/transaction-import-types.ts:projectAutomaticSafety": "Phase-01 automatic-safety projection is directly contract-tested and will be consumed by phase-02 orchestration"
   }
 }

@@ -19,6 +19,7 @@
       "email-backfill-worker.ts",
       "gmail-pubsub.ts",
       "gmail-sync.ts",
+      "transaction-email-search.ts",
       "search/email-search-answer.ts",
       "search/email-search-embedding-worker.ts",
       "dev-service.ts"
