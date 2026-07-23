@@ -203,7 +203,7 @@ describe("DashboardShell mobile behavior", () => {
     expect(screen.queryByTestId("calendar-modal")).toBeNull();
   });
 
-  it("opens shell analytics immediately with no backdrop rasterization on the open path", async () => {
+  it("opens shell analytics from the A hotkey", async () => {
     mockIsMobile = false;
     renderShell();
 

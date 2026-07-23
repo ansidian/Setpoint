@@ -507,7 +507,7 @@ describe("EventsAgendaRail", () => {
     expect(mayTwelve.getAttribute("data-hover-preview-color")).toBe("#e44332");
   });
 
-  it("renders the full title in a selected solid all-day chip", () => {
+  it("keeps the complete selected all-day title in the chip's accessible name", () => {
     renderRail({
       selectedDateKey: "2026-05-05",
       selectedItemId: "all-day",
@@ -523,8 +523,9 @@ describe("EventsAgendaRail", () => {
       ],
     });
 
-    const chip = screen.getByTestId("calendar-agenda-event-chip");
-    expect(chip.textContent).toContain("Residency planning block with a long stable title");
+    expect(screen.getByRole("button", {
+      name: "Residency planning block with a long stable title",
+    })).toBe(screen.getByTestId("calendar-agenda-event-chip"));
   });
 
   it("uses normal sticky headers without terminal scroll affordances", () => {

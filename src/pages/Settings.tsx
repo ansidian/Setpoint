@@ -163,11 +163,11 @@ export default function Settings() {
   }, [loading, location.hash, location.search, suppressTargetReveal, tab]);
 
   let content = (
-    <>
+    <div role="status" aria-label="Loading settings" aria-busy="true">
       <SkeletonCard lines={3} />
       <SkeletonCard lines={2} />
       <SkeletonCard lines={2} />
-    </>
+    </div>
   );
 
   if (!loading) {

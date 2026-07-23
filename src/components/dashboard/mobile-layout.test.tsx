@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import TodayTimeline from "./TodayTimeline";
 import { DashboardProvider } from "../../context/DashboardContext";
@@ -75,23 +75,24 @@ function renderDashboardBody({ isMobile = false, onOpenEmail = () => {} } = {}) 
 }
 
 describe("mobile dashboard 3-tier layout", () => {
-  it("stacks the three tiers on mobile", () => {
-    renderDashboardBody({ isMobile: true });
-    const body = screen.getByTestId("dashboard-body-mobile");
-    expect(body.getAttribute("data-layout-mode")).toBe("mobile");
-    expect(screen.getByTestId("needs-you-band")).toBeTruthy();
-    expect(screen.getByTestId("today-timeline-mobile")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
-    expect(document.querySelector('[data-sect="deadlines"]')).toBeNull();
-    expect(document.querySelector('[data-sect="bills"]')).toBeNull();
-  });
-
-  it("renders the fixed desktop 3-tier layout", () => {
-    renderDashboardBody({ isMobile: false });
-    expect(document.querySelector('[data-layout-mode="desktop"]')).toBeTruthy();
-    expect(screen.getByTestId("needs-you-band")).toBeTruthy();
-    expect(screen.getByTestId("today-timeline")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
+  it("renders the owned three-tier composition for mobile and desktop", () => {
+    for (const { isMobile, rootId, timelineId, mode } of [
+      { isMobile: true, rootId: "dashboard-body-mobile", timelineId: "today-timeline-mobile", mode: "mobile" },
+      { isMobile: false, rootId: "dashboard-body-desktop", timelineId: "today-timeline", mode: "desktop" },
+    ]) {
+      const view = renderDashboardBody({ isMobile });
+      const body = screen.getByTestId(rootId);
+      const scoped = within(body);
+      expect(body.getAttribute("data-layout-mode")).toBe(mode);
+      expect(scoped.getByTestId("needs-you-band")).toBeTruthy();
+      expect(scoped.getByTestId(timelineId)).toBeTruthy();
+      expect(scoped.getByTestId("dashboard-context-column")).toBeTruthy();
+      if (isMobile) {
+        expect(body.querySelector('[data-sect="deadlines"]')).toBeNull();
+        expect(body.querySelector('[data-sect="bills"]')).toBeNull();
+      }
+      view.unmount();
+    }
   });
 });
 

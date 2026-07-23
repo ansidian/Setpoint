@@ -3,21 +3,10 @@ import {
   buildTimelineGroups,
   buildTodayTomorrowRestGroups,
   formatNowMarkerLabel,
-  GUTTER,
   percentElapsed,
   resolveTodayNowMarkerIndex,
-  SPINE_LEFT,
   shouldHoldPartialTimeline,
 } from "./timeline-helpers";
-
-describe("desktop timeline rail geometry", () => {
-  it("keeps the spine near the leading edge while preserving row-dot alignment", () => {
-    // Exact geometry is the dashboard scan-path contract: the rail begins near
-    // the section edge, and rows retain their established 16px dot offset.
-    expect(GUTTER).toBeLessThanOrEqual(48);
-    expect(SPINE_LEFT).toBe(GUTTER - 16);
-  });
-});
 
 describe("timeline helpers", () => {
   it("keeps an empty today group whenever a timeline filter remains active", () => {

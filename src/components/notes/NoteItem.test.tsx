@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { StrictMode } from "react";
 import { DndContext } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
@@ -40,29 +40,21 @@ describe("NoteItem inline edit", () => {
   afterEach(cleanup);
 
   it("stays in edit mode after opening edit via the context menu", () => {
-    const { container } = renderItem();
+    renderItem({ age: "3w" });
+    expect(screen.getByText(/buy milk and eggs/i)).toBeTruthy();
+    expect(screen.getByText("3w")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Edit note" })).toBeNull();
     fireEvent.click(screen.getByLabelText("Note actions"));
     fireEvent.click(screen.getByRole("menuitem", { name: /edit/i }));
     // With the teardown-blur bug, editing would immediately flip back to the read
     // view and the editor would be gone. The guard keeps it mounted.
-    expect(container.querySelector(".cm-editor")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Edit note" })).toBeTruthy();
   });
 
   it("stays in edit mode after entering edit via double-click", () => {
-    const { container } = renderItem();
+    renderItem();
     fireEvent.dblClick(screen.getByText(/buy milk and eggs/i));
-    expect(container.querySelector(".cm-editor")).toBeTruthy();
-  });
-
-  it("shows the read view (not an editor) at rest", () => {
-    const { container } = renderItem();
-    expect(container.querySelector(".cm-editor")).toBeNull();
-    expect(screen.getByText(/buy milk and eggs/i)).toBeTruthy();
-  });
-
-  it("renders the note's age", () => {
-    renderItem({ age: "3w" });
-    expect(within(document.body).getByText("3w")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Edit note" })).toBeTruthy();
   });
 
   it("surfaces #tags as footer chips and strips them from the body text", () => {

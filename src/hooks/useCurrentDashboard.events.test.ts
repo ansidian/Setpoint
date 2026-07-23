@@ -216,13 +216,15 @@ describe("useCurrentDashboard", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     getCurrentDashboardMock.mockResolvedValueOnce(currentPayload);
-    getActiveSnapshotMock.mockResolvedValueOnce({
-      ...currentPayload.activeSnapshot,
-      snapshot: { id: 77 },
-    });
 
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
+    let resolveSnapshot!: (value: typeof currentPayload.activeSnapshot) => void;
+    getActiveSnapshotMock.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveSnapshot = resolve;
+    }));
+    let controlledNow = 100;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => controlledNow);
 
     await act(async () => {
       FakeEventSource.instances[0]!.emit("dashboard-current-changed", {
@@ -231,6 +233,12 @@ describe("useCurrentDashboard", () => {
         details: {
           eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
         },
+      });
+      await Promise.resolve();
+      controlledNow = 145;
+      resolveSnapshot({
+        ...currentPayload.activeSnapshot,
+        snapshot: { ...currentPayload.activeSnapshot.snapshot!, id: 77 },
       });
       await Promise.resolve();
     });
@@ -247,8 +255,9 @@ describe("useCurrentDashboard", () => {
       reason: "email_triage_finalized",
       eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
       status: "ok",
-      ms: expect.any(Number),
+      ms: 45,
     });
+    nowSpy.mockRestore();
     logSpy.mockRestore();
     unmount();
   });

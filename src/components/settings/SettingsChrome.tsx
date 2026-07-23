@@ -11,9 +11,11 @@ export default function SettingsChrome() {
       activeTab={readTabFromURL()}
       headerAction={<SaveStatus status="idle" />}
     >
-      <SkeletonCard lines={3} />
-      <SkeletonCard lines={2} />
-      <SkeletonCard lines={2} />
+      <div role="status" aria-label="Loading settings" aria-busy="true">
+        <SkeletonCard lines={3} />
+        <SkeletonCard lines={2} />
+        <SkeletonCard lines={2} />
+      </div>
     </SettingsLayout>
   );
 }

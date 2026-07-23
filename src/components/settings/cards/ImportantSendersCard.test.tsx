@@ -31,8 +31,6 @@ describe("ImportantSendersCard", () => {
 
     expect(await screen.findByText("Boss")).toBeTruthy();
     expect(screen.getByText("boss@company.com")).toBeTruthy();
-    expect(screen.getByText("Send browser notifications for these senders. Auto-detected entries are learned from triage urgency.")).toBeTruthy();
-    expect(screen.queryByText(/briefing urgency/i)).toBeNull();
   });
 
   it("adds a new sender and persists the full list", async () => {

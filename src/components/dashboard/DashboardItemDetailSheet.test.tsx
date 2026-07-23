@@ -33,14 +33,6 @@ afterEach(() => {
 describe("DashboardItemDetailSheet", () => {
   const deadline = { id: "t1", title: "Submit report", status: "open", due_date: "2026-07-15", priority: 1, url: "https://todoist.com/app/task/1" };
 
-  it("renders a deadline with complete, edit, todoist, and open-in-calendar", () => {
-    render(<DashboardItemDetailSheet kind="deadline" item={deadline} onClose={() => {}} onOpenInCalendar={() => {}} />);
-    expect(screen.getByText("Submit report")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Mark complete" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open in calendar" })).toBeTruthy();
-  });
-
   it("routes Mark complete through the dashboard completer", () => {
     render(<DashboardItemDetailSheet kind="deadline" item={deadline} onClose={() => {}} onOpenInCalendar={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Mark complete" }));

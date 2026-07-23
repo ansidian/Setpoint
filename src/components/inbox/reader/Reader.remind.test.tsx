@@ -53,7 +53,7 @@ describe("Inbox Remind me workspace", () => {
     expect(drawer.style.pointerEvents).toBe("none");
   });
 
-  it("opens the shared editor as a mobile sheet", () => {
+  it("opens AddTaskPanel with the floating host on mobile", () => {
     render(<Harness mobile />);
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(within(screen.getByTestId("inbox-mobile-actions-menu")).getByRole("button", { name: "Remind me" }));

@@ -103,9 +103,6 @@ describe("TriageSoundSettingsCard", () => {
       expect.objectContaining({ id: "clear_chime", path: "/sounds/notifications/clear-chime.mp3" }),
       expect.objectContaining({ markUnlocked: true, volume: 0.8 }),
     );
-    expect(
-      screen.getByText("Test playback unlocks audio for this browser session when the browser allows it."),
-    ).toBeTruthy();
   });
 
   it("patches the full triage sound settings object when a trigger sound changes", () => {

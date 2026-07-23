@@ -19,11 +19,11 @@ it("renders Alfred hero metrics and per-tool breakdown", () => {
   // "12" is the value of two different fields (Queries metric and search_email's
   // call count). Scope each so a field-swap that routes the call count into the
   // Queries tile (or vice versa) is caught instead of passing on a stray match.
-  const queriesTile = screen.getByText(/Queries/i).closest("div")?.parentElement;
-  expect(within(queriesTile!).getByText("12")).toBeTruthy();
+  const queriesTile = screen.getByRole("group", { name: "Queries" });
+  expect(within(queriesTile).getByText("12")).toBeTruthy();
 
-  const searchRow = screen.getByText("search_email").closest("div");
-  expect(within(searchRow!).getByText("12")).toBeTruthy();
+  const searchRow = screen.getByRole("group", { name: "Tool search_email" });
+  expect(within(searchRow).getByText("12")).toBeTruthy();
 
   // Both tool rows render so the breakdown is present, not collapsed.
   expect(screen.getByText("get_calendar_events")).toBeTruthy();

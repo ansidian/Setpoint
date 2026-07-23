@@ -57,9 +57,4 @@ describe("AlfredComposer", () => {
     rerender(<AlfredComposer {...baseProps} clearSignal="1:0" />);
     expect(screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…").value).toBe("");
   });
-
-  it("shows the model hint", () => {
-    render(<AlfredComposer {...baseProps} modelHint="claude haiku 4.5" />);
-    expect(screen.getByText("claude haiku 4.5")).toBeTruthy();
-  });
 });

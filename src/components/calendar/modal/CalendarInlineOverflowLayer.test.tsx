@@ -61,7 +61,7 @@ describe("CalendarInlineOverflowLayer", () => {
     }));
   });
 
-  it("keeps selected inline overflow title metrics stable", () => {
+  it("keeps the selected and unselected inline title-fit policy equal", () => {
     render(
       <CalendarInlineOverflowLayer
         overflow={{
@@ -89,9 +89,18 @@ describe("CalendarInlineOverflowLayer", () => {
       .getAllByTestId("calendar-cell-item-chip")
       .map((chip) => chip.querySelector<HTMLElement>("[data-calendar-chip-title='true']"));
 
-    expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
-      titles[1]?.getAttribute("data-calendar-chip-title-fit"),
-    );
+    const titlePolicy = (title: HTMLElement | null | undefined) => {
+      const titleTextStyle = title?.querySelector<HTMLElement>("[data-calendar-chip-title-text='true']")?.style as
+        | (CSSStyleDeclaration & { WebkitLineClamp: string })
+        | undefined;
+      return {
+        fontSize: title?.style.fontSize,
+        lineHeight: title?.style.lineHeight,
+        lineClamp: titleTextStyle?.WebkitLineClamp,
+      };
+    };
+    expect(titlePolicy(titles[0])).toEqual(titlePolicy(titles[1]));
+    expect(titlePolicy(titles[0])).toEqual({ fontSize: "10px", lineHeight: "1.08", lineClamp: "2" });
   });
 
   it("moves focus to the clicked hidden item", () => {

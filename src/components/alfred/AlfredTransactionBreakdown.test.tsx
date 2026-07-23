@@ -10,7 +10,7 @@ describe("AlfredTransactionBreakdown", () => {
     { label: "Other", amount: 18, count: 5 },
   ];
 
-  it("renders category labels", () => {
+  it("renders the category breakdown composition", () => {
     render(
       <AlfredTransactionBreakdown
         buckets={buckets}
@@ -21,42 +21,9 @@ describe("AlfredTransactionBreakdown", () => {
     );
     expect(screen.getByText("Groceries")).toBeTruthy();
     expect(screen.getByText("Other")).toBeTruthy();
-  });
-
-  it("renders formatted amounts", () => {
-    render(
-      <AlfredTransactionBreakdown
-        buckets={buckets}
-        period={{ start: "2026-06-01", end: "2026-06-30" }}
-        group_by="category"
-        accent="#cba6da"
-      />,
-    );
     expect(screen.getByText("$82.00")).toBeTruthy();
     expect(screen.getByText("$18.00")).toBeTruthy();
-  });
-
-  it("renders the group label header", () => {
-    render(
-      <AlfredTransactionBreakdown
-        buckets={buckets}
-        period={{ start: "2026-06-01", end: "2026-06-30" }}
-        group_by="category"
-        accent="#cba6da"
-      />,
-    );
     expect(screen.getByText("BY CATEGORY")).toBeTruthy();
-  });
-
-  it("renders the period label", () => {
-    render(
-      <AlfredTransactionBreakdown
-        buckets={buckets}
-        period={{ start: "2026-06-01", end: "2026-06-30" }}
-        group_by="category"
-        accent="#cba6da"
-      />,
-    );
     expect(screen.getByText("Jun 2026")).toBeTruthy();
   });
 

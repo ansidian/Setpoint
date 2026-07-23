@@ -107,7 +107,7 @@ describe("TimelineRow", () => {
     // The exact input color is a domain-data contract: lower-priority Todoist
     // deadlines must preserve their source color instead of falling back to the
     // owner accent. This checks value propagation, not browser layout.
-    expect((screen.getByTestId("timeline-row-dot").firstElementChild as HTMLElement | null)?.style.background).toBe("#e44332");
+    expect(screen.getByTestId("timeline-row-dot").style.background).toBe("#e44332");
   });
 
   it("renders all-day events as all-day rather than timed live blocks", () => {

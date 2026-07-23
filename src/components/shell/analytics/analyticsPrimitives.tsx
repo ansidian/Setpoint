@@ -14,6 +14,8 @@ export function Metric({ label, value, icon: Icon, tone = "neutral" }: MetricPro
   const color = tone === "accent" ? "var(--sp-accent)" : tone === "success" ? "var(--sp-green)" : "var(--sp-subtext)";
   return (
     <div
+      role="group"
+      aria-label={label}
       className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3"
       style={{ minHeight: 82 }}
     >

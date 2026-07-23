@@ -57,8 +57,9 @@ describe("renderNoteMarkdown", () => {
   });
 
   it("keeps an inline #tag chip inside a heading line", () => {
-    const { container } = render(<div>{renderNoteMarkdown("# My #project notes")}</div>);
-    expect(container.querySelector('[data-note-tag="project"]')).toBeTruthy();
+    render(<div>{renderNoteMarkdown("# My #project notes")}</div>);
+    const heading = screen.getByRole("heading", { name: "My #project notes" });
+    expect(heading.querySelector('[data-note-tag="project"]')).toBeTruthy();
   });
 
   it("chips a numeric #tag like #5", () => {
