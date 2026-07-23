@@ -67,6 +67,7 @@ export interface TransactionImportItem {
   gmailAccountId: string;
   gmailMessageId: string;
   emailUid: string;
+  emailSubject: string;
   internetMessageId: string | null;
   source: TransactionImportSource;
   parserVersion: string;
@@ -94,6 +95,38 @@ export interface TransactionImportItem {
 
 export interface TransactionImportRunDetail extends TransactionImportRunSummary {
   items: TransactionImportItem[];
+}
+
+export interface TransactionImportRunListResponse {
+  runs: TransactionImportRunSummary[];
+}
+
+export interface TransactionImportEmailStatusResponse {
+  emailUid: string;
+  items: TransactionImportItem[];
+}
+
+export interface TransactionImportMappingUpdate {
+  mode: TransactionImportMode;
+  actualAccountId: string | null;
+  actualCategoryId: string | null;
+}
+
+export interface TransactionImportHistoricalScanRequest {
+  gmailAccountIds: string[];
+  sources: TransactionImportSource[];
+  startDate: string;
+  endDate: string;
+}
+
+export interface TransactionImportConfirmation {
+  itemId: string;
+  date?: string;
+  amountCents?: number;
+  payee?: string;
+  notes?: string;
+  actualAccountId?: string;
+  actualCategoryId?: string | null;
 }
 
 export interface ActualImportTransaction {

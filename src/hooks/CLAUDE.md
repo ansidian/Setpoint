@@ -30,6 +30,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useTriageNotificationSounds.ts` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
+- `settings/useTransactionImports.ts` — Finance transaction-import mappings, recent runs, stale-safe mutations, visibility refresh, and active-only polling
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
 

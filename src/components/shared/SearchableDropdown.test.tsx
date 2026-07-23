@@ -67,4 +67,24 @@ describe("SearchableDropdown", () => {
 
     expect(onCreateNew).toHaveBeenCalledWith("Rent");
   });
+
+  it("does not open or change when disabled", () => {
+    const onChange = vi.fn();
+
+    render(
+      <SearchableDropdown
+        options={[{ id: "checking", name: "Checking" }]}
+        value="checking"
+        onChange={onChange}
+        ariaLabel="Actual account"
+        disabled
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Actual account" }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+    fireEvent.click(trigger);
+    expect(screen.queryByPlaceholderText("Search...")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

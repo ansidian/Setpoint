@@ -3,6 +3,7 @@ import { parseTransactionEmail } from "./parsers/parser-registry.ts";
 import { projectAutomaticSafety, type TransactionEmailInput } from "./transaction-import-types.ts";
 import { transactionImportStore, type InsertItemInput, type TransactionImportStore } from "./transaction-import-store.ts";
 import type {
+  TransactionImportConfirmation,
   TransactionImportMapping,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
@@ -93,6 +94,7 @@ export function prepareTransactionImportItems(
         gmailAccountId: email.gmailAccountId,
         gmailMessageId: email.gmailMessageId,
         emailUid: email.uid,
+        emailSubject: email.subject.slice(0, 500),
         internetMessageId: email.internetMessageId ?? null,
         candidateKey: `rejected:${source}:${email.gmailMessageId}`,
         source,
@@ -128,6 +130,7 @@ export function prepareTransactionImportItems(
         gmailAccountId: candidate.gmailAccountId,
         gmailMessageId: candidate.gmailMessageId,
         emailUid: candidate.emailUid,
+        emailSubject: email.subject.slice(0, 500),
         internetMessageId: candidate.internetMessageId,
         candidateKey: candidate.importedId || `candidate:${candidate.gmailMessageId}:${candidateIndex}`,
         source: candidate.source,
@@ -206,15 +209,11 @@ export function createTransactionImportService({
     return { queued: Math.min(prepared.queued, inserted), review: prepared.review, runId };
   }
 
-  async function commitItems(userId: string, runId: string, confirmations: Array<{
-    itemId: string;
-    date?: string;
-    amountCents?: number;
-    payee?: string;
-    notes?: string;
-    actualAccountId?: string;
-    actualCategoryId?: string | null;
-  }>): Promise<{ accepted: number }> {
+  async function commitItems(
+    userId: string,
+    runId: string,
+    confirmations: TransactionImportConfirmation[],
+  ): Promise<{ accepted: number }> {
     if (!await store.getRun(userId, runId)) throw Object.assign(new Error("Transaction import run not found"), { status: 404 });
     if (!Array.isArray(confirmations) || !confirmations.length || confirmations.length > 100) {
       throw Object.assign(new Error("One to 100 transaction import items are required"), { status: 400 });
@@ -279,6 +278,8 @@ export function createTransactionImportService({
     startHistoricalScan,
     ingestArrivals,
     getRun: store.getRunDetail,
+    listRuns: store.listRuns,
+    listItemsForEmail: store.listItemsForEmail,
     listMappings: store.listMappings,
     upsertMapping: store.upsertMapping,
     commitItems,

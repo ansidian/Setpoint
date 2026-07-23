@@ -91,6 +91,30 @@ export function createTransactionImportRouter({
     }
   });
 
+  router.get("/transaction-imports/runs", async (req, res) => {
+    const rawLimit = Number(req.query.limit ?? 12);
+    if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 50) {
+      return res.status(400).json({ message: "Transaction import run limit must be between 1 and 50" });
+    }
+    try {
+      res.json({ runs: await service.listRuns(ownerUserId(), rawLimit) });
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.get("/transaction-imports/email-status", async (req, res) => {
+    const emailUid = typeof req.query.emailUid === "string" ? req.query.emailUid.trim() : "";
+    if (!emailUid || emailUid.length > 500) {
+      return res.status(400).json({ message: "A valid email UID is required" });
+    }
+    try {
+      res.json({ emailUid, items: await service.listItemsForEmail(ownerUserId(), emailUid) });
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
   router.get("/transaction-imports/runs/:runId", async (req, res) => {
     try {
       const run = await service.getRun(ownerUserId(), req.params.runId);

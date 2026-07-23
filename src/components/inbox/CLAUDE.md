@@ -55,6 +55,9 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `reader/useBillPayResolver.ts` — resolves bill extraction for the open email
 - `reader/ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
 - `reader/actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
+- `reader/TransactionImportStatus.tsx` — shared desktop/mobile Amazon/PayPal import status with focused Finance review routing
+- `reader/transactionImportStatusModel.ts` — pure durable item-to-reader status projection
+- `reader/useTransactionImportStatus.ts` — owner-scoped email status fetch with stale guards and active-only polling
 - `reader/billExtractionBody.ts` — body state for the bill-pay workflow
 - `reader/billSeedModel.ts` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
 - `reader/remindMeTaskSeedModel.ts` — pure persisted-triage/manual email-to-Todoist seed derivation, including Pacific due-date subtraction and bounded provenance

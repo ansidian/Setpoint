@@ -116,6 +116,7 @@ import type {
 import type { CapabilityStatusResponse } from "../shared/types/capabilities.ts";
 import type { InstanceCredentialMetadata, InstanceCredentialMetadataResponse } from "../shared/types/instance-credentials.ts";
 export { discardGoogleOAuthPending, discardInstanceCredentialPending } from "./lib/instanceCredentialPendingApi.ts";
+export * from "./lib/transactionImportApi.ts";
 
 type ApiId = string | number;
 export type AuthResponse = {

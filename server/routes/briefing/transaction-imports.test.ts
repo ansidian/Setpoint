@@ -21,6 +21,8 @@ function serviceMock() {
     listMappings: vi.fn().mockResolvedValue([]),
     upsertMapping: vi.fn(async (_userId, input) => input),
     startHistoricalScan: vi.fn().mockResolvedValue({ runId: "run-1", created: true }),
+    listRuns: vi.fn().mockResolvedValue([{ id: "run-1" }]),
+    listItemsForEmail: vi.fn().mockResolvedValue([{ id: "item-1" }]),
     getRun: vi.fn().mockResolvedValue({ id: "run-1", items: [] }),
     commitItems: vi.fn().mockResolvedValue({ accepted: 1 }),
     retryItem: vi.fn().mockResolvedValue({ accepted: true }),
@@ -109,5 +111,19 @@ describe("transaction import routes", () => {
     expect(dismissed.status).toBe(200);
     expect(dismissed.body).toEqual({ dismissed: true });
     expect(service.dismissItem).toHaveBeenCalledWith("owner-1", "item-1");
+  });
+
+  it("lists recent runs and email status through owner-scoped read paths", async () => {
+    const { app, service } = makeApp();
+    const runs = await authenticated(request(app).get("/api/briefing/transaction-imports/runs?limit=8"));
+    const status = await authenticated(request(app)
+      .get("/api/briefing/transaction-imports/email-status?emailUid=gmail-demo-message"));
+
+    expect(runs.status).toBe(200);
+    expect(runs.body).toEqual({ runs: [{ id: "run-1" }] });
+    expect(service.listRuns).toHaveBeenCalledWith("owner-1", 8);
+    expect(status.status).toBe(200);
+    expect(status.body).toEqual({ emailUid: "gmail-demo-message", items: [{ id: "item-1" }] });
+    expect(service.listItemsForEmail).toHaveBeenCalledWith("owner-1", "gmail-demo-message");
   });
 });

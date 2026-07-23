@@ -24,9 +24,10 @@ export type SearchableDropdownProps = {
   onCreateNew?: (name: string) => void;
   ariaLabel?: string;
   onOpen?: () => void;
+  disabled?: boolean;
 };
 
-export default function SearchableDropdown({ options, value, onChange, placeholder = "Select...", allowCreate = false, onCreateNew, ariaLabel, onOpen }: SearchableDropdownProps) {
+export default function SearchableDropdown({ options, value, onChange, placeholder = "Select...", allowCreate = false, onCreateNew, ariaLabel, onOpen, disabled = false }: SearchableDropdownProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -49,14 +50,19 @@ export default function SearchableDropdown({ options, value, onChange, placehold
       <Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) onOpen?.(); else setSearch(""); }} modal={false}>
         <PopoverTrigger
           aria-label={ariaLabel}
+          disabled={disabled}
           className={cn(
-            "flex w-full items-center justify-between rounded bg-input-bg px-2.5 py-1.5",
+            "flex min-h-9 w-full items-center justify-between rounded-md bg-input-bg px-2.5 py-1.5 text-left",
             "border border-white/[0.08] text-[13px] font-medium text-foreground",
-            "cursor-pointer transition-[border-color,box-shadow] duration-150",
-            "hover:border-white/[0.15]"
+            "cursor-pointer outline-none transition-[border-color,background-color,box-shadow,transform] duration-[var(--sp-motion-fast)]",
+            "hover:border-white/[0.15] hover:bg-white/[0.03] focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-px",
+            "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-white/[0.08] disabled:hover:bg-input-bg disabled:active:translate-y-0",
+            "motion-reduce:transition-none motion-reduce:transform-none",
           )}
         >
-          <span className="font-medium">{displayName || placeholder}</span>
+          <span className={cn("truncate font-medium", !displayName && "text-muted-foreground/75")}>
+            {displayName || placeholder}
+          </span>
           <svg
             width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"

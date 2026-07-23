@@ -29,6 +29,7 @@ import type { InboxActionKind } from "../useInboxActionDispatch";
 import type { ReaderSurfaceProps } from "./readerTypes";
 import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import ActualActionStatus from "./ActualActionStatus";
+import TransactionImportStatus from "./TransactionImportStatus";
 import {
   isActualActioned,
   resolveActualCalendarTarget,
@@ -192,6 +193,11 @@ export default function MobileReader({
           onAction={onAction}
           onSnooze={openSnoozePicker}
           snapshotPending={snapshotPending}
+        />
+
+        <TransactionImportStatus
+          emailUid={String(email.uid || email.email_id || "")}
+          style={{ margin: "0 16px 10px" }}
         />
 
         <ActualActionStatus

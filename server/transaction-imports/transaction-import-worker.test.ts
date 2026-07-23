@@ -21,7 +21,7 @@ describe("transaction import worker", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)

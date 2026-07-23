@@ -229,6 +229,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useMobileDashboardScrollRestoration` | `src/components/dashboard/useMobileDashboardScrollRestoration.ts` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.ts` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.ts` |
+| `useTransactionImportStatus` | `src/components/inbox/reader/useTransactionImportStatus.ts` |
 | `useInboxActionDispatch` | `src/components/inbox/useInboxActionDispatch.ts` |
 | `useInboxController` | `src/components/inbox/useInboxController.ts` |
 | `useInboxKeyboardCommands` | `src/components/inbox/useInboxKeyboardCommands.ts` |
@@ -265,6 +266,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useViewportWidth` | `src/hooks/calendar/useViewportWidth.ts` |
 | `useInboxSelectionHistory` | `src/hooks/email/useInboxSelectionHistory.ts` |
 | `useSettingsPage` | `src/hooks/settings/useSettingsPage.ts` |
+| `useTransactionImports` | `src/hooks/settings/useTransactionImports.ts` |
 | `useActiveSnapshot` | `src/hooks/useActiveSnapshot.ts` |
 | `useAutoRefresh` | `src/hooks/useAutoRefresh.ts` |
 | `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.ts` |
@@ -698,7 +700,7 @@ erDiagram
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
-| `ea_transaction_import_items` | `041_email_transaction_imports.sql` |
+| `ea_transaction_import_items` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql` |
 | `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
 | `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
@@ -828,10 +830,12 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/snapshot/sync` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/todoist/labels` | `server/routes/briefing/tasks.ts` |
 | GET | `/api/briefing/todoist/projects` | `server/routes/briefing/tasks.ts` |
+| GET | `/api/briefing/transaction-imports/email-status` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/items/:itemId/dismiss` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/items/:itemId/retry` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/transaction-imports/mappings` | `server/routes/briefing/transaction-imports.ts` |
 | PUT | `/api/briefing/transaction-imports/mappings/:source` | `server/routes/briefing/transaction-imports.ts` |
+| GET | `/api/briefing/transaction-imports/runs` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/runs` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/transaction-imports/runs/:runId` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/runs/:runId/commit` | `server/routes/briefing/transaction-imports.ts` |

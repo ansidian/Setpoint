@@ -5,6 +5,7 @@ import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenc
 import { allSnapshotRows, findSnapshotRow, mutateSnapshotRows } from "./snapshotRows.ts";
 import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.ts";
 import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
+import { handleDemoTransactionImportRequest, NO_DEMO_TRANSACTION_IMPORT_RESPONSE } from "./transactionImports.ts";
 import type { DemoSeed } from "./store.ts";
 import type { NewsSource } from "../../shared/types/news.ts";
 type DemoSnapshot = DemoSeed["activeSnapshot"];
@@ -12,7 +13,6 @@ type DemoSnapshotRow = DemoSnapshot["carryover"][number];
 type DemoLane = keyof DemoSnapshot["lanes"];
 type DemoTask = DemoSeed["deadlines"]["upcoming"][number];
 type DemoCalendarEvent = DemoSeed["calendarEvents"][number];
-
 interface DemoRequestBody extends Record<string, unknown> {
   archived?: boolean;
   allDay?: boolean;
@@ -57,7 +57,6 @@ interface DemoNotFoundError extends Error {
   code: "DEMO_NOT_FOUND";
   status: 404;
 }
-
 const clone = <T>(value: T): T => value == null ? value : structuredClone(value);
 
 function route(path: string): URL {
@@ -331,6 +330,8 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
 
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
+  const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body });
+  if (transactionImportResponse !== NO_DEMO_TRANSACTION_IMPORT_RESPONSE) return transactionImportResponse;
   if (pathname === "/api/briefing/email/mark-all-read" && method === "POST") {
     for (const uid of Array.isArray(body.uids) ? body.uids : []) {
       mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = true; });
@@ -807,7 +808,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     const rows = allSnapshotRows(seed.activeSnapshot);
     return { emails: rows, accountsById: {} };
   }
-
   return unsupported(path);
 }
 

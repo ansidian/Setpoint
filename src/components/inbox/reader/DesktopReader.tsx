@@ -13,6 +13,7 @@ import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 import ActualActionStatus from "./ActualActionStatus";
+import TransactionImportStatus from "./TransactionImportStatus";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActionGroups } from "./readerActionsModel";
 import { resolveBillSeed } from "./billSeedModel";
@@ -422,6 +423,11 @@ export default function DesktopReader({
         )}
 
         {email._untriaged && <LiveEmailNotice email={email} />}
+
+        <TransactionImportStatus
+          emailUid={String(email.uid || email.email_id || "")}
+          style={{ margin: "8px 20px 0" }}
+        />
 
         <ActualActionStatus
           resolution={billResolution}

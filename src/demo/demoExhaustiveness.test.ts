@@ -77,6 +77,7 @@ const ARGS: Partial<Record<ApiExportName, unknown[]>> = {
   updateCalendarEvent: ["demo-id", {}],
   updateDeadline: ["demo-id", {}],
   updateImportantSenders: [[]],
+  updateTransactionImportMapping: ["amazon", { mode: "observe", actualAccountId: "demo-checking", actualCategoryId: null }],
   updateNewsSource: ["demo-id", {}],
   updateNewsTopicMutedTerms: ["demo-id", []],
   updateNote: ["demo-id", "Demo note"],

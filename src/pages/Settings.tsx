@@ -194,6 +194,7 @@ export default function Settings() {
           setSettings={setSettings}
           patch={patch}
           connections={connections}
+          accounts={accounts}
         />
       );
     } else if (tab === "automation") {

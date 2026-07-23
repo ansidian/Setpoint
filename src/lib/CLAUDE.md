@@ -26,6 +26,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `triageSoundPlayback.ts` — Web Audio playback constants + the audio-unlock/gain/fade-out mechanics for triage sounds
 - `triageSoundRouter.ts` — resolves which triage sound plays for a given trigger against the user's sound settings
 - `triageSoundSettings.ts` — triage sound lane-scope constants + settings normalization
+- `transactionImportApi.ts` — typed transaction-import mapping, scan, review, mutation, and per-email status client calls
 - `utils.ts` — `cn()` — clsx + tailwind-merge className combinator
 
 (Tests are not listed: `X.test.ts(x)` covers `X` by convention.)

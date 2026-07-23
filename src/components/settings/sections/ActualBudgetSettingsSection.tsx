@@ -3,11 +3,13 @@ import { getActualMetadata } from "@/api";
 import BillPayMappingsCard from "@/components/settings/cards/BillPayMappingsCard";
 import BillPayMappingTestCard from "@/components/settings/cards/BillPayMappingTestCard";
 import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
+import EmailTransactionImportCard from "@/components/settings/cards/EmailTransactionImportCard";
 import ConnectionDependencyPrompt from "@/components/settings/ConnectionDependencyPrompt";
 import { projectFeatureDependencies } from "@/components/settings/featureDependencyModel";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { ConnectionRowView } from "../connectionModel";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
+import type { AccountSummary } from "../../../../shared/types/accounts";
 
 const EMPTY_METADATA: ActualMetadataResponse = { accounts: [], payees: [], categories: [] };
 
@@ -16,7 +18,8 @@ export default function ActualBudgetSettingsSection({
   setSettings,
   patch,
   connections,
-}: SettingsCardStateProps & { connections: readonly ConnectionRowView[] }) {
+  accounts,
+}: SettingsCardStateProps & { connections: readonly ConnectionRowView[]; accounts: AccountSummary[] }) {
   const dependency = projectFeatureDependencies(connections).finance;
   const [metadata, setMetadata] = useState<ActualMetadataResponse>(EMPTY_METADATA);
   const [metadataLoading, setMetadataLoading] = useState(false);
@@ -59,11 +62,20 @@ export default function ActualBudgetSettingsSection({
 
   if (!dependency.showSettings) {
     return (
-      <ConnectionDependencyPrompt
-        title="Connect Actual Budget"
-        description="Finance customization becomes available after Actual Budget is connected. Existing mappings and pay links remain saved while disconnected."
-        actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
-      />
+      <>
+        <ConnectionDependencyPrompt
+          title="Connect Actual Budget"
+          description="Finance customization becomes available after Actual Budget is connected. Existing mappings and pay links remain saved while disconnected."
+          actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
+        />
+        <EmailTransactionImportCard
+          metadata={EMPTY_METADATA}
+          metadataLoading={false}
+          onRequestMetadata={() => undefined}
+          gmailAccounts={accounts}
+          liveOperationsAvailable={false}
+        />
+      </>
     );
   }
 
@@ -77,6 +89,13 @@ export default function ActualBudgetSettingsSection({
           actions={[{ connectionId: "actual-budget", label: "Repair connection" }]}
         />
       ) : null}
+      <EmailTransactionImportCard
+        metadata={metadata}
+        metadataLoading={metadataLoading}
+        onRequestMetadata={requestMetadata}
+        gmailAccounts={accounts}
+        liveOperationsAvailable={dependency.allowLiveMetadata}
+      />
       <BillPayMappingsCard
         settings={settings}
         setSettings={setSettings}

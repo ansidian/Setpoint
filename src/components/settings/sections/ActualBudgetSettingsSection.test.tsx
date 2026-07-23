@@ -13,6 +13,9 @@ const mockApi = vi.hoisted(() => ({
   resolveBillPayMappingSample: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
+  getTransactionImportMappings: vi.fn(),
+  listTransactionImportRuns: vi.fn(),
+  getTransactionImportRun: vi.fn(),
 }));
 
 vi.mock("@/api", () => ({
@@ -22,6 +25,9 @@ vi.mock("@/api", () => ({
   resolveBillPayMappingSample: mockApi.resolveBillPayMappingSample,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
+  getTransactionImportMappings: mockApi.getTransactionImportMappings,
+  listTransactionImportRuns: mockApi.listTransactionImportRuns,
+  getTransactionImportRun: mockApi.getTransactionImportRun,
 }));
 
 vi.mock("@/components/shared/SearchableDropdown", () => ({
@@ -84,6 +90,7 @@ function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict
         setSettings={setSettings}
         patch={patch}
         connections={[actualConnection(state)]}
+        accounts={[]}
       />
     );
   }
@@ -145,6 +152,9 @@ beforeEach(() => {
       matchedProfiles: ["profile-citi"],
     },
   });
+  mockApi.getTransactionImportMappings.mockResolvedValue([]);
+  mockApi.listTransactionImportRuns.mockResolvedValue({ runs: [] });
+  mockApi.getTransactionImportRun.mockResolvedValue(null);
 });
 
 describe("ActualBudgetSettingsSection", () => {

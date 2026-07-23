@@ -15,7 +15,7 @@ describe("transaction import store", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute({
@@ -131,6 +131,25 @@ describe("transaction import store", () => {
     });
     expect(JSON.stringify(detail)).not.toMatch(/html|message body/i);
     await expect(subject.getRunDetail("different-owner", "run-1")).resolves.toBeNull();
+  });
+
+  it("lists recent runs and bounded subject-bearing email items by owner", async () => {
+    await createRun();
+    const subject = store();
+    await subject.insertItem(itemInput({
+      emailSubject: "Your Amazon.com order #111-222",
+    }));
+
+    await expect(subject.listRuns("owner-1", 5)).resolves.toEqual([
+      expect.objectContaining({ id: "run-1" }),
+    ]);
+    await expect(subject.listItemsForEmail("owner-1", "gmail-gmail-1-message-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "item-1",
+        emailSubject: "Your Amazon.com order #111-222",
+      }),
+    ]);
+    await expect(subject.listItemsForEmail("different-owner", "gmail-gmail-1-message-1")).resolves.toEqual([]);
   });
 
   it("snapshots mappings on items so later mapping changes do not rewrite queued work", async () => {

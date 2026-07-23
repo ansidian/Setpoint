@@ -33,6 +33,7 @@ export interface InsertItemInput {
   gmailAccountId: string;
   gmailMessageId: string;
   emailUid: string;
+  emailSubject?: string;
   internetMessageId?: string | null;
   candidateKey: string;
   source: TransactionImportSource;
@@ -125,6 +126,7 @@ function projectItem(row: Row): TransactionImportItem {
     gmailAccountId: String(row.gmail_account_id),
     gmailMessageId: String(row.gmail_message_id),
     emailUid: String(row.email_uid),
+    emailSubject: String(row.email_subject || ""),
     internetMessageId: nullableString(row.internet_message_id),
     source: String(row.source) as TransactionImportSource,
     parserVersion: String(row.parser_version),
@@ -228,6 +230,17 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     return result.rows[0] ? projectRun(result.rows[0]) : null;
   }
 
+  async function listRuns(userId: string, limit = 12): Promise<TransactionImportRunSummary[]> {
+    const result = await dbClient.execute({
+      sql: `SELECT * FROM ea_transaction_import_runs
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?`,
+      args: [userId, Math.max(1, Math.min(50, Math.trunc(limit)))],
+    });
+    return result.rows.map(projectRun);
+  }
+
   async function resumePausedRun(userId: string, runId: string): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_runs SET status = 'retry', last_error = NULL,
@@ -254,6 +267,17 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
       args: [userId, itemId],
     });
     return result.rows[0] ? projectItem(result.rows[0]) : null;
+  }
+
+  async function listItemsForEmail(userId: string, emailUid: string): Promise<TransactionImportItem[]> {
+    const result = await dbClient.execute({
+      sql: `SELECT * FROM ea_transaction_import_items
+            WHERE user_id = ? AND email_uid = ?
+            ORDER BY updated_at DESC, created_at DESC, id DESC
+            LIMIT 20`,
+      args: [userId, emailUid],
+    });
+    return result.rows.map(projectItem);
   }
 
   async function confirmItem(userId: string, runId: string, itemId: string, input: {
@@ -358,15 +382,15 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     const timestamp = now();
     const result = await dbClient.execute({
       sql: `INSERT OR IGNORE INTO ea_transaction_import_items
-              (id, run_id, user_id, gmail_account_id, gmail_message_id, email_uid,
+              (id, run_id, user_id, gmail_account_id, gmail_message_id, email_uid, email_subject,
                internet_message_id, candidate_key, source, parser_version, external_id,
                imported_id, transaction_date, amount_cents, currency, payee, notes,
                actual_account_id, actual_category_id, automation_mode, automatic_safe,
                blocking_warnings_json, evidence_json, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         input.id, input.runId, input.userId, input.gmailAccountId, input.gmailMessageId,
-        input.emailUid, input.internetMessageId ?? null, input.candidateKey, input.source,
+        input.emailUid, input.emailSubject ?? "", input.internetMessageId ?? null, input.candidateKey, input.source,
         input.parserVersion, input.externalId ?? null, input.importedId ?? null, input.date,
         input.amountCents, input.currency, input.payee, input.notes ?? "", input.actualAccountId ?? null,
         input.actualCategoryId ?? null, input.automationMode, input.automaticSafe ? 1 : 0,
@@ -525,9 +549,11 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     upsertMapping,
     createRun,
     getRun,
+    listRuns,
     resumePausedRun,
     getRunDetail,
     getItem,
+    listItemsForEmail,
     confirmItem,
     retryItem,
     dismissItem,
