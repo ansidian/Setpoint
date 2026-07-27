@@ -27,7 +27,10 @@ vi.mock("../db/connection.ts", () => ({
     execute: (statement: string | InStatement) => mockDb.execute(statement),
   },
 }));
-vi.mock("../platform/encryption.ts", () => ({ decrypt: () => "decrypted" }));
+vi.mock("../platform/encryption.ts", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, decrypt: () => "decrypted" };
+});
 vi.mock("./gmail.ts", () => ({
   fetchEmailBody: vi.fn(),
   markAsRead: vi.fn(),

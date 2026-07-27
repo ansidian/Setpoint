@@ -46,7 +46,10 @@ describe("demo mode in-memory mutations", () => {
     await api.completeDeadlineOccurrence(createdDeadline.id, "2026-05-16");
     expect((await api.getCurrentDashboard()).deadlines.upcoming.find((task) => task.id === createdDeadline.id)?.status).toBe("complete");
 
-    await api.markBillPaid("demo-electric:2026-05-15");
+    const electricBill = (await api.getCalendarBillsRange("2026-05-01", "2026-05-31"))
+      .schedules.find((bill) => bill.scheduleId === "demo-electric");
+    if (!electricBill) throw new Error("Demo Electric bill is missing from the requested range");
+    await api.markBillPaid(electricBill.id);
     expect((await api.getCalendarBillsRange("2026-05-01", "2026-05-31")).schedules.find((bill) => bill.scheduleId === "demo-electric")?.paid).toBe(true);
 
     expect(fetch).not.toHaveBeenCalled();
