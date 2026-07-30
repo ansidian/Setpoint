@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { History, Landmark, Loader2, RefreshCw, ScanSearch } from "lucide-react";
 import { SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import SearchableDropdown from "@/components/shared/SearchableDropdown";
@@ -138,6 +138,18 @@ export default function EmailTransactionImportCard({
 
   const selectedRun = imports.selectedRun;
   const error = localError || imports.error;
+  const hasPersistedAccountMapping = imports.mappings.some((mapping) => Boolean(mapping.actualAccountId));
+
+  useEffect(() => {
+    if (!liveOperationsAvailable || metadataLoading || !hasPersistedAccountMapping || actualAccounts.length) return;
+    void onRequestMetadata();
+  }, [
+    actualAccounts.length,
+    hasPersistedAccountMapping,
+    liveOperationsAvailable,
+    metadataLoading,
+    onRequestMetadata,
+  ]);
 
   return (
     <SettingsCard

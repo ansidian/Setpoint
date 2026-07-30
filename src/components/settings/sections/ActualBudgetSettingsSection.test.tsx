@@ -178,6 +178,23 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.queryByText("Actual Budget needs attention")).toBeNull();
   });
 
+  it("restores persisted transaction-import account labels on a fresh visit", async () => {
+    mockApi.getTransactionImportMappings.mockResolvedValueOnce([{
+      source: "amazon",
+      mode: "automatic",
+      actualAccountId: "acct-visa",
+      actualCategoryId: null,
+      createdAt: 1,
+      updatedAt: 2,
+    }]);
+
+    renderSection();
+
+    const account = await screen.findByLabelText<HTMLSelectElement>("Amazon Actual account");
+    await waitFor(() => expect(account.value).toBe("acct-visa"));
+    expect(mockApi.getActualMetadata).toHaveBeenCalledTimes(1);
+  });
+
   it("retains Finance settings but disables live operations while Actual needs attention", () => {
     renderSection({
       state: "needs_attention",
