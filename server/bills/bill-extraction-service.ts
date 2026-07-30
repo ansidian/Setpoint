@@ -5,7 +5,7 @@ import { OPENAI_PROVIDER } from "./bill-extractors/openai.ts";
 import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
-  isAllowedBillExtractModel,
+  resolveBillExtractModelConfig,
 } from "./bill-extractors/catalog.ts";
 import { resolveExtractedBillPay } from "./bill-pay-service.ts";
 import { EMPTY_ACTUAL_METADATA, getMetadata } from "../actual/actual-metadata-projection.ts";
@@ -30,13 +30,10 @@ export async function loadBillExtractChoice(userId: string): Promise<{ provider:
       args: [userId],
     });
     const row = result.rows?.[0];
-    let provider = typeof row?.bill_extract_provider === "string" ? row.bill_extract_provider : DEFAULT_BILL_EXTRACT_PROVIDER;
-    let model = typeof row?.bill_extract_model === "string" ? row.bill_extract_model : DEFAULT_BILL_EXTRACT_MODEL;
-    if (!isAllowedBillExtractModel(provider, model)) {
-      provider = DEFAULT_BILL_EXTRACT_PROVIDER;
-      model = DEFAULT_BILL_EXTRACT_MODEL;
-    }
-    return { provider, model };
+    return resolveBillExtractModelConfig({
+      provider: row?.bill_extract_provider,
+      model: row?.bill_extract_model,
+    });
   } catch {
     return { provider: DEFAULT_BILL_EXTRACT_PROVIDER, model: DEFAULT_BILL_EXTRACT_MODEL };
   }

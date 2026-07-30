@@ -1,9 +1,8 @@
 import db from "../db/connection.ts";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "../email/email-ai-models.ts";
 import {
-  DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
-  isAllowedBillExtractModel,
+  resolveBillExtractModelConfig,
 } from "../bills/bill-extractors/catalog.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey, type AiProvider } from "../ai-credentials.ts";
@@ -218,15 +217,10 @@ function modelChoiceFromEnv(tier: TriageModelTier, fallback: TriageModelChoice):
 }
 
 function normalizeBillExtractChoice(row: Record<string, unknown> = {}): TriageModelChoice {
-  const provider = String(row.bill_extract_provider || DEFAULT_BILL_EXTRACT_PROVIDER);
-  const model = String(row.bill_extract_model || DEFAULT_BILL_EXTRACT_MODEL);
-  if (!isAllowedBillExtractModel(provider, model)) {
-    return {
-      provider: DEFAULT_BILL_EXTRACT_PROVIDER,
-      model: DEFAULT_BILL_EXTRACT_MODEL,
-    };
-  }
-  return { provider, model };
+  return resolveBillExtractModelConfig({
+    provider: row.bill_extract_provider,
+    model: row.bill_extract_model,
+  });
 }
 
 export async function loadTriageModelConfig(userId: string, dbClient: TriageDb = db as unknown as TriageDb): Promise<TriageModelConfig> {

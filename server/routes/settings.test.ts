@@ -44,6 +44,10 @@ vi.mock("../middleware/auth.ts", () => ({
 vi.mock("../bills/bill-extractors/catalog.ts", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
+  resolveBillExtractModelConfig: vi.fn(({ provider, model }) => ({
+    provider: provider || "anthropic",
+    model: model || "haiku",
+  })),
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
   DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));

@@ -147,6 +147,7 @@ export interface ProviderModelAvailability {
   provider: string;
   label: string;
   envVar?: string;
+  pricingUrl?: string;
   available: boolean;
   defaultModel: string;
   models: ProviderModelOption[];

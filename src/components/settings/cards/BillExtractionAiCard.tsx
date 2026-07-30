@@ -9,29 +9,6 @@ import type { ProviderModelAvailability } from "../../../../shared/types/setting
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { ConnectionRowView } from "../connectionModel";
 
-const FALLBACK_PROVIDERS: ProviderModelAvailability[] = [
-  {
-    provider: "anthropic",
-    label: "Anthropic",
-    available: true,
-    defaultModel: "claude-haiku-4-5",
-    models: [{ id: "claude-haiku-4-5", label: "Haiku 4.5" }],
-  },
-  {
-    provider: "openai",
-    label: "OpenAI",
-    available: false,
-    envVar: "OPENAI_API_KEY",
-    defaultModel: "gpt-5.5",
-    models: [
-      { id: "gpt-5.5", label: "GPT-5.5" },
-      { id: "gpt-5.4", label: "GPT-5.4" },
-      { id: "gpt-5.4-mini", label: "GPT-5.4 mini" },
-      { id: "gpt-5.4-nano", label: "GPT-5.4 nano" },
-    ],
-  },
-];
-
 const DEMO_PROVIDERS: ProviderModelAvailability[] = [
   {
     provider: "demo",
@@ -53,17 +30,26 @@ export default function BillExtractionAiCard({
   showRepairLink?: boolean;
 }) {
   const demoMode = isDemoMode();
-  const [providers, setProviders] = useState(demoMode ? DEMO_PROVIDERS : FALLBACK_PROVIDERS);
+  const [providers, setProviders] = useState<ProviderModelAvailability[]>(
+    demoMode ? DEMO_PROVIDERS : [],
+  );
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     getBillExtractModels()
       .then((data) => {
         if (cancelled) return;
-        if (Array.isArray(data) && data.length) setProviders(data);
+        if (Array.isArray(data) && data.length) {
+          setProviders(data);
+        } else {
+          setLoadError(true);
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -108,16 +94,24 @@ export default function BillExtractionAiCard({
       description="Model used to extract payee, amount, due date, and category from bill emails. Runs separately from the email snapshot model."
     >
       <div className="flex flex-col gap-3">
-        <ProviderModelSelect
-          providers={selection.providers}
-          provider={selection.provider}
-          model={selection.model}
-          onChange={applyChange}
-          providerAriaLabel="Bill extraction provider"
-          modelAriaLabel="Bill extraction model"
-        />
+        {selection.providers.length ? (
+          <ProviderModelSelect
+            providers={selection.providers}
+            provider={selection.provider}
+            model={selection.model}
+            onChange={applyChange}
+            providerAriaLabel="Bill extraction provider"
+            modelAriaLabel="Bill extraction model"
+          />
+        ) : (
+          <div role="status">
+            <FieldHint>
+              {loadError ? "Model options are unavailable. Refresh Settings to retry." : "Loading providers…"}
+            </FieldHint>
+          </div>
+        )}
 
-        <div className="flex items-center gap-2">
+        {providerEntry ? <div className="flex items-center gap-2">
           {demoMode ? (
             <StatusPill tone="neutral">Demo-only model</StatusPill>
           ) : selection.repairConnectionId ? (
@@ -139,7 +133,7 @@ export default function BillExtractionAiCard({
             </StatusPill>
           )}
           {loading ? <FieldHint>Loading providers…</FieldHint> : null}
-        </div>
+        </div> : null}
       </div>
     </SettingsCard>
   );

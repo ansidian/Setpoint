@@ -9,32 +9,6 @@ import type { ProviderModelAvailability } from "../../../../shared/types/setting
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { ConnectionRowView } from "../connectionModel";
 
-const FALLBACK_PROVIDERS: ProviderModelAvailability[] = [
-  {
-    provider: "anthropic",
-    label: "Anthropic",
-    available: true,
-    envVar: "ANTHROPIC_API_KEY",
-    defaultModel: "claude-sonnet-4-6",
-    models: [
-      { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-    ],
-  },
-  {
-    provider: "openai",
-    label: "OpenAI",
-    available: false,
-    envVar: "OPENAI_API_KEY",
-    defaultModel: "gpt-5.5",
-    models: [
-      { id: "gpt-5.5", label: "GPT-5.5" },
-      { id: "gpt-5.4", label: "GPT-5.4" },
-      { id: "gpt-5.4-mini", label: "GPT-5.4 mini" },
-    ],
-  },
-];
-
 const DEMO_PROVIDERS: ProviderModelAvailability[] = [
   {
     provider: "demo",
@@ -61,17 +35,26 @@ export default function EmailAiModelCard({
   showRepairLink?: boolean;
 }) {
   const demoMode = isDemoMode();
-  const [providers, setProviders] = useState(demoMode ? DEMO_PROVIDERS : FALLBACK_PROVIDERS);
+  const [providers, setProviders] = useState<ProviderModelAvailability[]>(
+    demoMode ? DEMO_PROVIDERS : [],
+  );
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     getModels()
       .then((data) => {
         if (cancelled) return;
-        if (Array.isArray(data) && data.length) setProviders(data);
+        if (Array.isArray(data) && data.length) {
+          setProviders(data);
+        } else {
+          setLoadError(true);
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -123,16 +106,24 @@ export default function EmailAiModelCard({
       description="Model used for durable inbox triage. Bill extraction uses its own model."
     >
       <div className="flex flex-col gap-3">
-        <ProviderModelSelect
-          providers={selection.providers}
-          provider={selection.provider}
-          model={selection.model}
-          onChange={applyChange}
-          providerAriaLabel="Inbox triage provider"
-          modelAriaLabel="Inbox triage model"
-        />
+        {selection.providers.length ? (
+          <ProviderModelSelect
+            providers={selection.providers}
+            provider={selection.provider}
+            model={selection.model}
+            onChange={applyChange}
+            providerAriaLabel="Inbox triage provider"
+            modelAriaLabel="Inbox triage model"
+          />
+        ) : (
+          <div role="status">
+            <FieldHint>
+              {loadError ? "Model options are unavailable. Refresh Settings to retry." : "Loading providers…"}
+            </FieldHint>
+          </div>
+        )}
 
-        <div className="flex items-center gap-2">
+        {providerEntry ? <div className="flex items-center gap-2">
           {demoMode ? (
             <StatusPill tone="neutral">Demo-only model</StatusPill>
           ) : selection.repairConnectionId ? (
@@ -152,7 +143,7 @@ export default function EmailAiModelCard({
             <StatusPill tone="warning">Set {providerEntry?.envVar || "ANTHROPIC_API_KEY"}</StatusPill>
           )}
           {loading ? <FieldHint>Loading providers…</FieldHint> : null}
-        </div>
+        </div> : null}
       </div>
     </SettingsCard>
   );

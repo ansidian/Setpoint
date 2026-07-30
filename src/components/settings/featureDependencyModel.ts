@@ -25,6 +25,12 @@ const PROVIDER_CONNECTION_IDS: Record<string, ConnectionId> = {
   openai: "openai",
 };
 
+function modelMatchesProvider(provider: string | undefined, model: string): boolean {
+  if (provider === "openai") return model.startsWith("gpt-");
+  if (provider === "anthropic") return model.startsWith("claude-");
+  return true;
+}
+
 function dependencyState(
   connections: readonly ConnectionRowView[],
   ids: readonly ConnectionId[],
@@ -86,6 +92,7 @@ export function projectAiProviderSelection({
     ?? projectedProviders.find(({ available }) => available)
     ?? projectedProviders[0];
   const model = selectedEntry?.models.some(({ id }) => id === selectedModel)
+    || modelMatchesProvider(selectedEntry?.provider, selectedModel)
     ? selectedModel
     : selectedEntry?.defaultModel ?? selectedModel;
   const repairConnectionId = selectedEntry?.provider === selectedProvider

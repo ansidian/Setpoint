@@ -13,7 +13,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-persistence-types.ts` — local index/pin database client and raw-row contracts
 - `email-backfill-worker.ts` — paginated backward-in-time index backfill worker
 - `email-date.ts` — email date header → ISO UTC
-- `email-ai-models.ts` — email AI model catalog with defaults and provider inference
+- `email-ai-models.ts` — email-triage defaults, provider inference, and validation facade over the centralized AI model catalog
 - `gmail.ts` — Gmail API client: list, fetch, search, mutate
 - `transaction-email-search.ts` — documented cross-domain entry for allowlisted, bounded all-mail transaction discovery
 - `gmail-oauth-url.ts` — combined Gmail + Calendar scope set and canonical Google authorization-URL construction

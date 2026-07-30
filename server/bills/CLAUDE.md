@@ -7,7 +7,7 @@ Bill domain logic: AI extraction from emails, user bill-matching rules, and the 
 - `bills-service.ts` — public bills API; owns Actual-metadata invalidation fan-out on writes
 - `bill-extract.ts` — trims HTML email bodies to payee/amount/date context for AI
 - `bill-extraction-service.ts` — runs the LLM extractor, resolves category/account IDs
-- `bill-extractors/catalog.ts` — provider/model registry with env-key availability checks
+- `bill-extractors/catalog.ts` — bill-extraction defaults and validation facade over the centralized AI model catalog
 - `bill-extractors/anthropic.ts` — Claude tool-use extraction call
 - `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call
 - `bill-pay-mappings.ts` — schema for user bill-matching rules (profiles, behaviors, targets)

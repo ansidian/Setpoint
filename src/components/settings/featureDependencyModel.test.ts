@@ -170,6 +170,21 @@ describe("AI provider selection projection", () => {
     expect(result.repairConnectionId).toBe("openai");
   });
 
+  it("preserves a saved model that is not in the current provider catalog", () => {
+    const result = projectAiProviderSelection({
+      providers: PROVIDERS,
+      connections: [
+        connection("anthropic", "connected"),
+        connection("openai", "connected"),
+      ],
+      selectedProvider: "openai",
+      selectedModel: "gpt-previous",
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(result.model).toBe("gpt-previous");
+  });
+
   it("projects a display fallback without changing the saved selection or provider input", () => {
     const providers = structuredClone(PROVIDERS);
     const saved = { provider: "openai", model: "gpt-saved" };

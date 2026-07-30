@@ -9,6 +9,7 @@ const PROVIDERS = [
   {
     provider: "anthropic",
     label: "Anthropic",
+    pricingUrl: "https://platform.claude.com/docs/en/about-claude/pricing",
     available: true,
     defaultModel: "claude-sonnet-4-6",
     models: [
@@ -19,6 +20,7 @@ const PROVIDERS = [
   {
     provider: "openai",
     label: "OpenAI",
+    pricingUrl: "https://developers.openai.com/api/docs/pricing",
     available: true,
     defaultModel: "gpt-5.5",
     models: [
@@ -91,6 +93,25 @@ describe("ProviderModelSelect", () => {
     });
 
     expect(onChange).toHaveBeenCalledWith("openai", "gpt-5.4");
+  });
+
+  it("keeps a saved model visible when it is not in the current catalog", () => {
+    renderSelect({ provider: "openai", model: "gpt-5.3" });
+
+    expect(screen.getByLabelText<HTMLSelectElement>("AI model").value).toBe("gpt-5.3");
+    expect(screen.getByRole("option", {
+      name: "gpt-5.3 (saved; not currently listed)",
+    })).toBeTruthy();
+  });
+
+  it("links to pricing for the selected provider", () => {
+    renderSelect({ provider: "openai", model: "gpt-5.5" });
+
+    const link = screen.getByRole("link", {
+      name: "OpenAI API pricing (opens in a new tab)",
+    });
+    expect(link.getAttribute("href")).toBe("https://developers.openai.com/api/docs/pricing");
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 
   it("falls back to the first provider when the provided provider is unknown", () => {

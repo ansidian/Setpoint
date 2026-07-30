@@ -71,6 +71,7 @@ beforeEach(() => {
     {
       provider: "anthropic",
       label: "Anthropic",
+      pricingUrl: "https://platform.claude.com/docs/en/about-claude/pricing",
       available: true,
       envVar: "ANTHROPIC_API_KEY",
       defaultModel: "claude-sonnet-4-6",
@@ -79,6 +80,7 @@ beforeEach(() => {
     {
       provider: "openai",
       label: "OpenAI",
+      pricingUrl: "https://developers.openai.com/api/docs/pricing",
       available: true,
       envVar: "OPENAI_API_KEY",
       defaultModel: "gpt-5.5",
@@ -101,6 +103,9 @@ describe("EmailAiModelCard", () => {
     expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
     expect(screen.getByLabelText("Inbox triage provider")).toBeTruthy();
     expect(screen.getByLabelText("Inbox triage model")).toBeTruthy();
+    expect(screen.getByRole("link", {
+      name: "Anthropic API pricing (opens in a new tab)",
+    })).toBeTruthy();
   });
 
   it("a provider change reaches patch with the resolved provider/model", async () => {

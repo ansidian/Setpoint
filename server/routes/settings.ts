@@ -11,6 +11,7 @@ import {
   isAllowedBillExtractModel,
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
+  resolveBillExtractModelConfig,
 } from "../bills/bill-extractors/catalog.ts";
 import {
   emailAiModelAvailability,
@@ -165,8 +166,12 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     });
     safe.email_ai_provider = emailAiModel.provider;
     safe.email_ai_model = emailAiModel.model;
-    safe.bill_extract_provider = safe.bill_extract_provider || DEFAULT_BILL_EXTRACT_PROVIDER;
-    safe.bill_extract_model = safe.bill_extract_model || DEFAULT_BILL_EXTRACT_MODEL;
+    const billExtractModel = resolveBillExtractModelConfig({
+      provider: safe.bill_extract_provider,
+      model: safe.bill_extract_model,
+    });
+    safe.bill_extract_provider = billExtractModel.provider;
+    safe.bill_extract_model = billExtractModel.model;
     const triageMode = await getEmailTriageModeForUser(userId);
     safe.email_triage_mode = normalizeStoredEmailTriageMode(safe.email_triage_mode);
     safe.email_triage_effective_mode = triageMode.effective_email_triage_mode;
