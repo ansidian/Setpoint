@@ -137,7 +137,7 @@ export default function CalendarMonthBlock({
         setSelectedItemId={setSelectedItemId}
         eventQuickActions={eventQuickActions}
         deadlineQuickActions={deadlineQuickActions}
-        ghostPreview={isActive ? ghostPreview : null}
+        ghostPreview={ghostPreview}
         onOpenFloatingDetail={onOpenFloatingDetail}
         onCloseFloatingDetail={onCloseFloatingDetail}
         floatingDetailOpen={floatingDetailOpen}

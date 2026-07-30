@@ -2,8 +2,8 @@ import { getMonthData } from "../calendarDateUtils.ts";
 import { monthIndexToDate } from "../../../hooks/calendar/calendarScrollModel";
 
 // Months that do not start on Sunday render their leading cells from the
-// previous month, so its events must ride along in the preview. Shared ids
-// are deduped in favor of the current month's instance.
+// previous month, so its events and deadlines must ride along in the preview.
+// Shared identities are deduped in favor of the current month's instance.
 export interface CalendarPreviewEvent { id: unknown }
 
 export interface CalendarDeadlineOverlay<T = unknown> {
@@ -21,6 +21,7 @@ interface CalendarMonthPreviewInputs<TEvent extends CalendarPreviewEvent, TDeadl
   curEvents: TEvent[] | null;
   prevEvents: TEvent[] | null;
   monthDeadlines: TDeadline | null;
+  prevMonthDeadlines: TDeadline | null;
   wrapsDeadlines: boolean;
   enabled?: boolean;
   showCompleted?: boolean;
@@ -38,6 +39,55 @@ export function mergeAdjacentEventLists<TEvent extends CalendarPreviewEvent>(cur
     if (!seen.has(event.id)) merged.push(event);
   }
   return merged;
+}
+
+interface CalendarPreviewDeadlineItem {
+  id?: unknown;
+  todoist_id?: unknown;
+  url?: unknown;
+  title?: unknown;
+  due_date?: unknown;
+  dueDate?: unknown;
+  date?: unknown;
+}
+
+interface CalendarPreviewDeadlineData {
+  upcoming?: CalendarPreviewDeadlineItem[];
+}
+
+function deadlineIdentity(item: CalendarPreviewDeadlineItem): string {
+  const id = item.id ?? item.todoist_id ?? item.url ?? item.title;
+  const dueDate = item.due_date ?? item.dueDate ?? item.date;
+  return `${id ?? ""}:${dueDate ?? ""}`;
+}
+
+export function mergeAdjacentDeadlineData<TDeadline>(
+  currentMonthDeadlines: TDeadline | null | undefined,
+  previousMonthDeadlines: TDeadline | null | undefined,
+): TDeadline | null {
+  if (previousMonthDeadlines == null) return currentMonthDeadlines ?? null;
+  if (currentMonthDeadlines == null) return previousMonthDeadlines;
+
+  const current = currentMonthDeadlines as CalendarPreviewDeadlineData;
+  const previous = previousMonthDeadlines as CalendarPreviewDeadlineData;
+  if (!Array.isArray(current.upcoming) || !Array.isArray(previous.upcoming)) {
+    return currentMonthDeadlines;
+  }
+  if (!previous.upcoming.length) return currentMonthDeadlines;
+
+  const seen = new Set(current.upcoming.map(deadlineIdentity));
+  const upcoming = [...current.upcoming];
+  for (const deadline of previous.upcoming) {
+    const identity = deadlineIdentity(deadline);
+    if (!seen.has(identity)) {
+      seen.add(identity);
+      upcoming.push(deadline);
+    }
+  }
+  return {
+    ...current,
+    upcoming,
+  } as TDeadline;
 }
 
 function buildMonthDeadlineOverlay<TDeadline>(activeOverlay: CalendarDeadlineOverlay<TDeadline>, monthDeadlines: TDeadline | null): CalendarDeadlineOverlay<TDeadline> | null {
@@ -66,6 +116,7 @@ function sameInputs<TEvent extends CalendarPreviewEvent, TDeadline>(prior: Calen
   if (!sameEventList(recorded.curEvents, inputs.curEvents)) return false;
   if (!sameEventList(recorded.prevEvents, inputs.prevEvents)) return false;
   if (recorded.monthDeadlines !== inputs.monthDeadlines) return false;
+  if (recorded.prevMonthDeadlines !== inputs.prevMonthDeadlines) return false;
   if (recorded.wrapsDeadlines !== inputs.wrapsDeadlines) return false;
   if (inputs.wrapsDeadlines) {
     return recorded.enabled === inputs.enabled && recorded.showCompleted === inputs.showCompleted;
@@ -148,10 +199,14 @@ export function buildMonthPreviewEntries<TEvent extends CalendarPreviewEvent, TD
     const prevEvents = getMonthEvents && firstDay > 0 ? getMonthEvents(prevYear, prevMonth) : null;
     const wrapsDeadlines = !!(getMonthDeadlines && activeDeadlineOverlay?.enabled);
     const monthDeadlines = wrapsDeadlines ? getMonthDeadlines(year, month) : null;
+    const prevMonthDeadlines = wrapsDeadlines && firstDay > 0
+      ? getMonthDeadlines(prevYear, prevMonth)
+      : null;
     const inputs: CalendarMonthPreviewInputs<TEvent, TDeadline> = {
       curEvents,
       prevEvents,
       monthDeadlines,
+      prevMonthDeadlines,
       wrapsDeadlines,
       enabled: wrapsDeadlines ? activeDeadlineOverlay.enabled : undefined,
       showCompleted: wrapsDeadlines ? activeDeadlineOverlay.showCompleted : undefined,
@@ -167,7 +222,10 @@ export function buildMonthPreviewEntries<TEvent extends CalendarPreviewEvent, TD
     const entry = {
       events: getMonthEvents ? mergeAdjacentEventLists(curEvents, prevEvents) : null,
       deadlineOverlay: wrapsDeadlines
-        ? buildMonthDeadlineOverlay(activeDeadlineOverlay, monthDeadlines)
+        ? buildMonthDeadlineOverlay(
+            activeDeadlineOverlay,
+            mergeAdjacentDeadlineData(monthDeadlines, prevMonthDeadlines),
+          )
         : activeDeadlineOverlay,
     };
     entryInputs.set(entry, inputs as CalendarMonthPreviewInputs<CalendarPreviewEvent, unknown>);

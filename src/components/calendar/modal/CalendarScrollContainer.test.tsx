@@ -160,6 +160,113 @@ describe("CalendarScrollContainer", () => {
     expect(marchBlock?.textContent).toContain("Torbox");
   });
 
+  it("renders event and deadline ghosts in a trailing week owned by the next month block", () => {
+    const { container } = renderContainer({
+      viewMonth: 3,
+      activeView: eventsView,
+      viewData: { events: [], isLoading: false },
+      ghostPreview: {
+        kind: "mixed",
+        ghosts: [
+          {
+            id: "event-ghost",
+            kind: "event",
+            title: "Boundary event ghost",
+            startDate: "2026-04-29",
+            endDate: "2026-04-29",
+            allDay: true,
+            lane: 0,
+            conflictCount: 0,
+          },
+          {
+            id: "deadline-ghost",
+            kind: "deadline",
+            title: "Boundary deadline ghost",
+            startDate: "2026-04-30",
+            endDate: "2026-04-30",
+            lane: 1,
+            conflictCount: 0,
+          },
+        ],
+      },
+    });
+
+    const mayBlock = container.querySelector("[data-testid='month-block-2026-4']");
+    expect(mayBlock?.textContent).toContain("Boundary event ghost");
+    expect(mayBlock?.textContent).toContain("Boundary deadline ghost");
+  });
+
+  it("renders previous-month deadlines in a leading spillover week", () => {
+    const aprilDeadline = {
+      id: "todo-apr-boundary",
+      title: "April boundary deadline",
+      due_date: "2026-04-30",
+      status: "open",
+    };
+    const { container } = renderContainer({
+      viewMonth: 3,
+      activeView: eventsView,
+      viewData: {
+        events: [],
+        isLoading: false,
+        deadlineOverlay: {
+          enabled: true,
+          showCompleted: true,
+          data: { upcoming: [] },
+        },
+      },
+      getMonthDeadlines: (year, month) => ({
+        upcoming: year === 2026 && month === 3 ? [aprilDeadline] : [],
+      }),
+    });
+
+    const mayBlock = container.querySelector("[data-testid='month-block-2026-4']");
+    expect(mayBlock?.textContent).toContain("April boundary deadline");
+  });
+
+  it("rebuilds mounted deadline previews when only the deadline cache revision changes", () => {
+    let aprilDeadlineData = { upcoming: [] as Array<Record<string, unknown>> };
+    const emptyDeadlineData = { upcoming: [] };
+    const getMonthDeadlines = (year: number, month: number) => (
+      year === 2026 && month === 3 ? aprilDeadlineData : emptyDeadlineData
+    );
+    const sharedProps = {
+      viewMonth: 3,
+      activeView: eventsView,
+      viewData: {
+        events: [],
+        isLoading: false,
+        deadlineOverlay: {
+          enabled: true,
+          showCompleted: true,
+          data: { upcoming: [] },
+        },
+      },
+      getMonthDeadlines,
+    };
+    const { container, rerenderContainer } = renderContainer({
+      ...sharedProps,
+      dataRevision: 0,
+    });
+    expect(container.textContent).not.toContain("New boundary deadline");
+
+    aprilDeadlineData = {
+      upcoming: [{
+        id: "todo-apr-refresh",
+        title: "New boundary deadline",
+        due_date: "2026-04-30",
+        status: "open",
+      }],
+    };
+    rerenderContainer({
+      ...sharedProps,
+      dataRevision: 1,
+    });
+
+    const mayBlock = container.querySelector("[data-testid='month-block-2026-4']");
+    expect(mayBlock?.textContent).toContain("New boundary deadline");
+  });
+
   it("does not render a cached bills month through the events view after switching views", () => {
     const transaction = {
       id: "txn-may",

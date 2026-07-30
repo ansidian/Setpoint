@@ -7,7 +7,7 @@ const REF_YEAR = 2026;
 const REF_MONTH = 5;
 
 interface PreviewEvent { id: string; title?: string }
-interface PreviewDeadlineData { upcoming: Array<{ id: string }> }
+interface PreviewDeadlineData { upcoming: Array<{ id: string; due_date?: string }> }
 interface PreviewArgs {
   previous: Map<number, CalendarMonthPreviewEntry<PreviewEvent, PreviewDeadlineData>> | null;
   first: number;
@@ -93,7 +93,11 @@ describe("buildMonthPreviewEntries", () => {
       showCompleted: false,
       data: juneDeadlines,
     });
-    expect(withDeadlines.get(1)!.deadlineOverlay).toBeNull();
+    expect(withDeadlines.get(1)!.deadlineOverlay).toEqual({
+      enabled: true,
+      showCompleted: false,
+      data: juneDeadlines,
+    });
 
     const disabledOverlay = { enabled: false, showCompleted: false };
     const passthrough = buildMonthPreviewEntries(makeArgs({
@@ -101,6 +105,25 @@ describe("buildMonthPreviewEntries", () => {
       activeDeadlineOverlay: disabledOverlay,
     }));
     expect(passthrough.get(0)!.deadlineOverlay).toBe(disabledOverlay);
+  });
+
+  it("merges previous-month deadline data into a month with leading spillover cells", () => {
+    const juneDeadlines = { upcoming: [{ id: "d-june", due_date: "2026-06-30" }] };
+    const julyDeadlines = { upcoming: [{ id: "d-july", due_date: "2026-07-01" }] };
+    const result = buildMonthPreviewEntries(makeArgs({
+      getMonthDeadlines: (year, month) => {
+        if (year !== 2026) return null;
+        if (month === 5) return juneDeadlines;
+        if (month === 6) return julyDeadlines;
+        return null;
+      },
+      activeDeadlineOverlay: { enabled: true, showCompleted: false },
+    }));
+
+    expect(result.get(1)!.deadlineOverlay!.data!.upcoming).toEqual([
+      { id: "d-july", due_date: "2026-07-01" },
+      { id: "d-june", due_date: "2026-06-30" },
+    ]);
   });
 });
 
