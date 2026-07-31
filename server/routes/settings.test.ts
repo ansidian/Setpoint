@@ -41,7 +41,8 @@ vi.mock("../middleware/auth.ts", () => ({
       ? next()
       : res.status(403).json({ code: "PASSWORD_STEP_UP_REQUIRED", message: "Confirm your password" }),
 }));
-vi.mock("../bills/bill-extractors/catalog.ts", () => ({
+vi.mock("../bills/bill-extractors/catalog.ts", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
   resolveBillExtractModelConfig: vi.fn(({ provider, model }) => ({

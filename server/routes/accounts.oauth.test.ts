@@ -77,11 +77,10 @@ vi.mock("../email/email-backfill-worker.ts", () => ({
 vi.mock("../platform/account-canonical.ts", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows: unknown[]) => rows),
 }));
-vi.mock("../bills/bill-extractors/catalog.ts", () => ({
+vi.mock("../bills/bill-extractors/catalog.ts", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
-  DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
-  DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));
 
 process.env.EA_USER_ID = "user-1";

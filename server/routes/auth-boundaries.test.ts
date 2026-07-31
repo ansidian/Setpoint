@@ -93,11 +93,10 @@ vi.mock("../reminders/discord-reminders.ts", () => ({
   formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "Setpoint reminder test" }] })),
   sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
 }));
-vi.mock("../bills/bill-extractors/catalog.ts", () => ({
+vi.mock("../bills/bill-extractors/catalog.ts", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
-  DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
-  DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));
 vi.mock("../dashboard/current-service.ts", () => ({
   applyDeadlineCurrentStatus: vi.fn(async () => ({ updated: true })),
