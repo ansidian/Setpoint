@@ -12,21 +12,25 @@ vi.mock("../tasks/deadline-helpers.ts", () => ({
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
-vi.mock("../calendar/calendar.ts", () => ({
-  fetchCalendar: vi.fn(),
-  pacificDayBoundaries: vi.fn((date: Date) => ({ dayStart: date, dayEnd: date })),
-  getCalendarSourceGroups: vi.fn(),
-  createCalendarEvent: vi.fn(),
-  updateCalendarEvent: vi.fn(),
-  deleteCalendarEvent: vi.fn(),
-  formatCalendarRouteError: vi.fn((err: Error & { status?: number; code?: string }) => ({
-    status: err.status || 500,
-    body: { code: err.code || "unknown", message: err.message || "unknown" },
-  })),
-  validateCalendarRange: vi.fn(),
-  isCalendarSearchInputError: vi.fn(() => false),
-  searchCalendar: vi.fn(),
-}));
+vi.mock("../calendar/calendar.ts", async () => {
+  const { applyCalendarEventWriteEffects } = await import("../calendar/calendar-event-write-effects.ts");
+  return {
+    applyCalendarEventWriteEffects,
+    fetchCalendar: vi.fn(),
+    pacificDayBoundaries: vi.fn((date: Date) => ({ dayStart: date, dayEnd: date })),
+    getCalendarSourceGroups: vi.fn(),
+    createCalendarEvent: vi.fn(),
+    updateCalendarEvent: vi.fn(),
+    deleteCalendarEvent: vi.fn(),
+    formatCalendarRouteError: vi.fn((err: Error & { status?: number; code?: string }) => ({
+      status: err.status || 500,
+      body: { code: err.code || "unknown", message: err.message || "unknown" },
+    })),
+    validateCalendarRange: vi.fn(),
+    isCalendarSearchInputError: vi.fn(() => false),
+    searchCalendar: vi.fn(),
+  };
+});
 vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
   // Keep the real pure helpers (addMonthsIso powers the route's range helpers);
   // only the DB-touching functions are stubbed below.

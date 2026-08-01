@@ -4,9 +4,10 @@ Google Calendar integration: range reads, event mutations (including recurring s
 
 ## Files
 
-- `calendar.ts` — public calendar entry module: range fetch, conflicts, Google wrappers, mirror reads, and route-facing range/search re-exports
+- `calendar.ts` — public calendar entry module: range fetch, conflicts, Google wrappers, mirror reads, and route-facing range/search/write-effect re-exports
 - `calendar-google-client.ts` — Google Calendar HTTP client: auth refresh, error translation
 - `calendar-mutations.ts` — event CRUD incl. recurring scope (one/following/all), move, delete
+- `calendar-event-write-effects.ts` — successful create/update/delete follow-through: search-mirror write-through or dirty marking plus best-effort reminder reconciliation
 - `calendar-event-normalize.ts` — RRULE parse/serialize, display formatting, recurring-edit shaping (covered by `calendar-recurrence-roundtrip.test.ts`)
 - `calendar-range-model.ts` — pure month-clamped ISO arithmetic plus calendar HTTP-range validation, parsed dates, span limits, and rolling-history overlap policy
 - `calendar-search-service.ts` — calendar search use case: input policy, event/deadline and bill-mirror fanout, ranking envelope, and non-blocking mirror repair/refresh

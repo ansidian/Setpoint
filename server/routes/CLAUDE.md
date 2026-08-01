@@ -22,7 +22,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Domains + integrations
 - `alfred.ts` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
-- `calendar.ts` — calendar CRUD, deadline reads, event search, reminder hydration
+- `calendar.ts` — calendar CRUD validation/provider orchestration, deadline reads, event search, and reminder hydration; successful event-write effects delegate to the calendar domain
 - `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
 - `dashboard.ts` — dashboard state, current-data SSE stream, health checks
 - `notes.ts` — notes CRUD and reordering

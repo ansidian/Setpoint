@@ -1,27 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getGmailAuthUrl, listReminders } from "@/api";
-import {
-  deleteCalendarEventAction,
-  formatCalendarEditorError,
-  saveCalendarEventAction,
-} from "./calendarEventEditorActions";
 import useCalendarLocationSuggestions from "./useCalendarLocationSuggestions";
 import useCalendarSources from "./useCalendarSources";
+import useCalendarEditorHistory from "./useCalendarEditorHistory";
+import useCalendarEventEditorSession from "./useCalendarEventEditorSession";
+export type { CalendarEventEditorInput } from "./useCalendarEventEditorSession";
+import useCalendarEventMutations from "./useCalendarEventMutations";
 import useEventReminderDrafts from "./useEventReminderDrafts";
 import useEventRecurrenceDraft from "./useEventRecurrenceDraft";
 import useCalendarEventTitleComposer from "./useCalendarEventTitleComposer";
-import {
-  eventReminderSourceFromEvent,
-} from "./calendarEventReminderModel";
+import { getCalendarEditorErrorDetails } from "./calendarEventEditorErrors";
 import {
   type CalendarBatchDraft,
   type CalendarEventDraft,
   type CalendarManualOverrides,
   createManualOverrides,
   defaultDraft,
-  draftFromEvent,
   flattenWritableCalendars,
-  inferNoWritableReason,
   normalizeBatchDrafts,
   normalizeDraftForDirty,
   normalizeRecurrenceDraft,
@@ -36,7 +30,6 @@ import {
   applyCalendarTitleAssistToDraft,
   projectCalendarEventEditorValidation,
   removeCalendarEventBatchDraft,
-  seedCalendarEventDraftFromSources,
   updateCalendarEventBatchDraft,
 } from "./calendarEventEditorSessionModel";
 
@@ -57,23 +50,6 @@ export interface CalendarEventEditorOptions {
   onFocusDate?: (date: string) => void;
   onSaved?: (event: NormalizedCalendarEvent | null, metadata: Record<string, unknown>) => void;
   onDeleted?: (event: NormalizedCalendarEvent) => void;
-}
-
-export interface CalendarEventEditorInput extends Omit<Partial<NormalizedCalendarEvent>, "id" | "startMs" | "endMs"> {
-  id?: string | number | null;
-  startMs?: number | null;
-  endMs?: number | null;
-}
-
-function editorErrorDetails(error: unknown, fallback: string) {
-  if (error && typeof error === "object") {
-    const candidate = error as { message?: unknown; code?: unknown };
-    return {
-      message: typeof candidate.message === "string" && candidate.message ? candidate.message : fallback,
-      code: typeof candidate.code === "string" ? candidate.code : null,
-    };
-  }
-  return { message: fallback, code: null };
 }
 
 export default function useCalendarEventEditor({
@@ -109,22 +85,16 @@ export default function useCalendarEventEditor({
     eventReminderPresetStates,
   } = useEventReminderDrafts({ draft });
   const draftRef = useRef(draft);
-  draftRef.current = draft;
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
   const [batchDrafts, setBatchDrafts] = useState<CalendarBatchDraft[]>([]);
   const [recurringEditScope, setRecurringEditScope] = useState<CalendarRecurrenceScope | null>(null);
   const [createSeedDraft, setCreateSeedDraft] = useState(() => defaultDraft(null));
-  const pendingSaveRef = useRef(false);
-  // Synchronous in-flight guard (P1-1). `saving` state updates asynchronously
-  // and the Cmd/Ctrl+Enter hotkey bypasses the Save button's disabled state, so
-  // a ref is the only thing that can block a second synchronous save() before
-  // the first one's await resolves. Distinct from pendingSaveRef (debounce-flush
-  // re-fire), which is not a concurrency guard.
-  const savingRef = useRef(false);
   const [manualOverrides, setManualOverrides] = useState(() => createManualOverrides());
   const [editingEvent, setEditingEvent] = useState<NormalizedCalendarEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const deletingRef = useRef(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -143,7 +113,6 @@ export default function useCalendarEventEditor({
   } = useEventRecurrenceDraft({ draft, clearFieldError });
   const [touchedFields, setTouchedFields] = useState<TouchedCalendarFields>({});
   const [saveAttempted, setSaveAttempted] = useState(false);
-  const editorHistoryTokenRef = useRef<string | null>(null);
   const editorRequestIdRef = useRef(0);
   const selectLocationRef = useRef<((location: string) => void) | null>(null);
   // The parsed @token query a Places resolution has already answered. The
@@ -155,7 +124,7 @@ export default function useCalendarEventEditor({
     setErrorCode(null);
   }, []);
   const handleSourcesLoadError = useCallback((err: unknown) => {
-    const details = editorErrorDetails(err, "Failed to load calendar sources.");
+    const details = getCalendarEditorErrorDetails(err, "Failed to load calendar sources.");
     setError(details.message);
     setErrorCode(details.code);
   }, []);
@@ -196,7 +165,7 @@ export default function useCalendarEventEditor({
       if (!editingEvent?.accountId) return writable;
       return writable.filter((entry) => entry.accountId === editingEvent.accountId);
     },
-    [editingEvent?.accountId, sourceGroups],
+    [editingEvent, sourceGroups],
   );
   const isEditing = !!editingEvent;
   const isEditingRecurring = !!(editingEvent?.isRecurring);
@@ -252,10 +221,9 @@ export default function useCalendarEventEditor({
     saving,
     deleting,
   }), [batchDrafts, deleting, draft, editable, effectiveTitle, intentState.mode, isEditing, isEditingRecurring, recurrenceDraft, recurringEditScope, saveAttempted, saving, touchedFields.title]);
-  const dirtyBaselineRef = useRef<string | null>(null);
-
   useLayoutEffect(() => {
     if (!open || view !== "events") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the local editor session when its owning surface closes
       setMode("detail");
       setEditingEvent(null);
       setConfirmDelete(false);
@@ -300,6 +268,7 @@ export default function useCalendarEventEditor({
   useEffect(() => {
     if (mode !== "editor" || isEditing) return;
     if (intentState.mode === "batch") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- title intent is the source of truth for generated batch drafts
       setBatchDrafts(normalizeBatchDrafts(intentState.batchDrafts));
       return;
     }
@@ -351,122 +320,54 @@ export default function useCalendarEventEditor({
     resetLocationSuggestions();
   }, [clearTitleInput, resetLocationSuggestions, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
 
-  const openCreate = useCallback(async () => {
-    if (!editable) return;
-    const requestId = editorRequestIdRef.current + 1;
-    editorRequestIdRef.current = requestId;
-    const initialGroups = sourceGroupsRef.current;
-    const nextDraft = seedCalendarEventDraftFromSources(defaultDraft(selectedDate), initialGroups);
-    setDraft(nextDraft);
-    setCreateSeedDraft(nextDraft);
-    seedTitleInput("");
-    setManualOverrides(createManualOverrides());
-    setRecurrenceDraft(null);
-    setManualRecurrenceOverride(false);
-    setRecurringEditScope(null);
-    setEditingEvent(null);
-    setConfirmDelete(false);
-    setTouchedFields({});
-    setSaveAttempted(false);
-    setEventReminders([]);
-    setRemovedReminderIds([]);
-    setReminderError(null);
-    setCustomReminder({ date: nextDraft.startDate, time: nextDraft.startTime || "09:00" });
-    resetLocationSuggestions();
-    setMode("editor");
-    setError(null);
-    setErrorCode(null);
-    dirtyBaselineRef.current = normalizeDraftForDirty({
-      draft: nextDraft,
-      effectiveTitle: "",
-      titleInput: "",
-      intentMode: "single",
-      batchDrafts: [],
-      recurrenceDraft: null,
-      recurringEditScope: null,
-    });
+  const dirtySnapshot = useMemo(() => normalizeDraftForDirty({
+    draft,
+    effectiveTitle,
+    titleInput,
+    intentMode: intentState.mode,
+    batchDrafts,
+    recurrenceDraft,
+    recurringEditScope,
+  }), [batchDrafts, draft, effectiveTitle, intentState.mode, recurrenceDraft, recurringEditScope, titleInput]);
+  const { captureDirtyBaseline, isDirty } = useCalendarEditorHistory({
+    open,
+    view,
+    mode,
+    dirtySnapshot,
+    titleInputPending,
+    onPopState: clearEditorState,
+  });
 
-    const groups = await ensureSources();
-    if (editorRequestIdRef.current !== requestId) return;
-
-    setDraft((current) => {
-      const seeded = seedCalendarEventDraftFromSources(current, groups);
-      dirtyBaselineRef.current = normalizeDraftForDirty({
-        draft: seeded,
-        effectiveTitle: "",
-        titleInput: "",
-        intentMode: "single",
-        batchDrafts: [],
-        recurrenceDraft: null,
-        recurringEditScope: null,
-      });
-      return seeded;
-    });
-    setCreateSeedDraft((current) => seedCalendarEventDraftFromSources(current, groups));
-    if (!flattenWritableCalendars(groups).length) {
-      const reason = inferNoWritableReason(groups);
-      setError(reason === "calendar_reauth_required"
-        ? "Reconnect this Gmail account to edit calendar events."
-        : "No writable calendar sources are connected.");
-      setErrorCode(reason);
-      return;
-    }
-    setError(null);
-    setErrorCode(null);
-  }, [editable, ensureSources, resetLocationSuggestions, seedTitleInput, selectedDate, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds, sourceGroupsRef]);
-
-  const openEdit = useCallback(async (event: CalendarEventEditorInput) => {
-    if (
-      !editable
-      || !event?.writable
-      || event.id == null
-      || !Number.isFinite(event.startMs)
-      || !Number.isFinite(event.endMs)
-    ) return;
-    const normalizedEvent = event as NormalizedCalendarEvent;
-    const groups = await ensureSources();
-    const nextDraft = seedCalendarEventDraftFromSources(draftFromEvent(normalizedEvent), groups);
-    setDraft(nextDraft);
-    setCreateSeedDraft(nextDraft);
-    seedTitleInput(nextDraft.title);
-    setManualOverrides(createManualOverrides());
-    setBatchDrafts([]);
-    setRecurrenceDraft(normalizedEvent.isRecurring && normalizedEvent.recurrence ? normalizeRecurrenceDraft(normalizedEvent.recurrence, nextDraft) : null);
-    setManualRecurrenceOverride(false);
-    setRecurringEditScope(null);
-    setEditingEvent(normalizedEvent);
-    setConfirmDelete(false);
-    setTouchedFields({});
-    setSaveAttempted(false);
-    setEventReminders([]);
-    setRemovedReminderIds([]);
-    setReminderError(null);
-    setCustomReminder({ date: nextDraft.startDate, time: nextDraft.startTime || "09:00" });
-    resetLocationSuggestions();
-    setMode("editor");
-    setError(null);
-    setErrorCode(null);
-    try {
-      const source = eventReminderSourceFromEvent(normalizedEvent);
-      const result = await listReminders({
-        sourceType: source.sourceType,
-        sourceItemId: source.sourceItemId,
-        sourceOccurrenceId: source.sourceOccurrenceId,
-      });
-      setEventReminders(result.reminders || []);
-    } catch (err) {
-      setReminderError(editorErrorDetails(err, "Failed to load reminders.").message);
-    }
-    dirtyBaselineRef.current = normalizeDraftForDirty({
-      draft: nextDraft,
-      effectiveTitle: nextDraft.title,
-      titleInput: nextDraft.title,
-      intentMode: "single",
-      batchDrafts: [],
-      recurrenceDraft: normalizedEvent.isRecurring && normalizedEvent.recurrence ? normalizeRecurrenceDraft(normalizedEvent.recurrence, nextDraft) : null,
-      recurringEditScope: null,
-    });
-  }, [editable, ensureSources, resetLocationSuggestions, seedTitleInput, setCustomReminder, setEventReminders, setManualRecurrenceOverride, setRecurrenceDraft, setReminderError, setRemovedReminderIds]);
+  const { openCreate, openEdit } = useCalendarEventEditorSession({
+    editable,
+    selectedDate,
+    requestIdRef: editorRequestIdRef,
+    sourceGroupsRef,
+    ensureSources,
+    seedTitleInput,
+    resetLocationSuggestions,
+    captureDirtyBaseline,
+    setters: {
+      setMode,
+      setDraft,
+      setCreateSeedDraft,
+      setManualOverrides,
+      setBatchDrafts,
+      setRecurrenceDraft,
+      setManualRecurrenceOverride,
+      setRecurringEditScope,
+      setEditingEvent,
+      setConfirmDelete,
+      setTouchedFields,
+      setSaveAttempted,
+      setEventReminders,
+      setRemovedReminderIds,
+      setReminderError,
+      setCustomReminder,
+      setError,
+      setErrorCode,
+    },
+  });
 
   const closeEditor = useCallback(() => {
     clearEditorState();
@@ -568,212 +469,53 @@ export default function useCalendarEventEditor({
     setErrorCode(null);
   }, [batchDrafts, effectiveTitle, intentState.mode, seedTitleInput, titleAssist.cleanTitle, titleAssist.singleDraft, titleInput]);
 
-  const save = useCallback(async () => {
-    if (!editable) return;
-    if (flushPendingTitle()) {
-      pendingSaveRef.current = true;
-      setSaveAttempted(true);
-      return;
-    }
-    pendingSaveRef.current = false;
-    setSaveAttempted(true);
-    if (validationMessage) return;
-    // Placed AFTER the validation/debounce-flush early-returns so a press
-    // blocked by validation (or the deliberate debounce-flush bounce) never
-    // latches the ref. Protects the hotkey, button, and pendingSaveRef re-fire.
-    if (savingRef.current) return;
-    // An @token whose Places suggestion was never explicitly accepted would
-    // save the raw token text as the location. Resolve the active suggestion
-    // first and bounce the save (same pattern as the title debounce flush) so
-    // the re-fired save reads the resolved place from the draft. A dismissed
-    // panel (suggestions cleared) or failed details fetch falls through and
-    // saves the raw text.
-    if (titleAssist.locationQuery && draft.location === titleAssist.locationQuery) {
-      savingRef.current = true;
-      let resolvedLocation = null;
-      try {
-        resolvedLocation = await acceptActiveLocationSuggestion();
-      } finally {
-        savingRef.current = false;
-      }
-      if (resolvedLocation) {
-        pendingSaveRef.current = true;
-        return;
-      }
-    }
-    savingRef.current = true;
-    setSaving(true);
-    setError(null);
-    setErrorCode(null);
-
-    try {
-      const result = await saveCalendarEventAction({
-        draft,
-        batchDrafts,
-        effectiveTitle,
-        recurrenceDraft,
-        editingEvent,
-        isEditingRecurring,
-        recurringEditScope,
-        intentMode: (intentState.mode !== "batch" && recurrenceDraft
-          ? "recurring"
-          : intentState.mode) as "single" | "batch" | "recurring",
-        eventReminders: {
-          items: eventReminders,
-          removedIds: removedReminderIds,
-        },
-      });
-
-      if (result.kind === "batch-create") {
-        if (result.shouldRefresh && result.bounds) await refreshRange?.(result.bounds.start, result.bounds.end);
-        else if (result.shouldUpsert) upsertEvents?.(result.createdEvents);
-        if (result.focusDate) onFocusDate?.(result.focusDate);
-
-        if (result.failed.length) {
-          setBatchDrafts(result.failedDrafts);
-          setError(result.errorMessage);
-          setErrorCode(result.errorCode);
-          return;
-        }
-
-        setMode("detail");
-        setEditingEvent(null);
-        setConfirmDelete(false);
-        setBatchDrafts([]);
-        setEventReminders([]);
-        setRemovedReminderIds([]);
-        onSaved?.(result.createdEvents[0] || null, {
-          kind: "batch-create",
-          createdEvents: result.createdEvents,
-        });
-        return;
-      }
-
-      if (result.shouldRefresh && result.bounds) await refreshRange?.(result.bounds.start, result.bounds.end);
-      else if (result.shouldUpsert) upsertEvents?.(result.savedEvent);
-      if (result.focusDate) onFocusDate?.(result.focusDate);
-      setMode("detail");
-      setEditingEvent(null);
-      setConfirmDelete(false);
-      setEventReminders([]);
-      setRemovedReminderIds([]);
-      onSaved?.(result.savedEvent, {
-        kind: result.kind,
-      });
-    } catch (err) {
-      setError(formatCalendarEditorError(err, "Failed to save event."));
-      setErrorCode(editorErrorDetails(err, "Failed to save event.").code);
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, flushPendingTitle, intentState.mode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, setEventReminders, setRemovedReminderIds, titleAssist.locationQuery, upsertEvents, validationMessage]);
-
-  useEffect(() => {
-    if (!pendingSaveRef.current) return;
-    pendingSaveRef.current = false;
-    save();
+  const {
+    save,
+    reconnect,
+    confirmDeleteIntent,
+    cancelDelete,
+    remove,
+  } = useCalendarEventMutations({
+    editable,
+    state: {
+      draft,
+      batchDrafts,
+      effectiveTitle,
+      recurrenceDraft,
+      editingEvent,
+      isEditingRecurring,
+      recurringEditScope,
+      intentMode: intentState.mode,
+      eventReminders,
+      removedReminderIds,
+      validationMessage,
+      titleLocationQuery: titleAssist.locationQuery,
+    },
+    setters: {
+      setMode,
+      setEditingEvent,
+      setBatchDrafts,
+      setEventReminders,
+      setRemovedReminderIds,
+      setError,
+      setErrorCode,
+      setSaveAttempted,
+      setSaving,
+      setDeleting,
+      setConfirmDelete,
+    },
+    effects: {
+      flushPendingTitle,
+      acceptActiveLocationSuggestion,
+      refreshRange,
+      upsertEvents,
+      removeEvent,
+      onFocusDate,
+      onSaved,
+      onDeleted,
+      closeEditor,
+    },
   });
-
-  const reconnect = useCallback(async () => {
-    try {
-      const { url } = await getGmailAuthUrl();
-      window.location.href = url;
-    } catch (err) {
-      const details = editorErrorDetails(err, "Failed to start Gmail reconnect.");
-      setError(details.message);
-      setErrorCode(details.code);
-    }
-  }, []);
-
-  const confirmDeleteIntent = useCallback(() => {
-    if (isEditingRecurring && !recurringEditScope) return;
-    setConfirmDelete(true);
-    setError(null);
-    setErrorCode(null);
-  }, [isEditingRecurring, recurringEditScope]);
-
-  const cancelDelete = useCallback(() => {
-    setConfirmDelete(false);
-  }, []);
-
-  const remove = useCallback(async () => {
-    if (!editingEvent) return;
-    if (deletingRef.current) return;
-    deletingRef.current = true;
-    setDeleting(true);
-    setError(null);
-    setErrorCode(null);
-    try {
-      const result = await deleteCalendarEventAction({
-        editingEvent,
-        isEditingRecurring,
-        recurringEditScope,
-      });
-      if (result.shouldRefresh && result.bounds) {
-        await refreshRange?.(result.bounds.start, result.bounds.end);
-      } else if (result.shouldRemove) {
-        removeEvent?.(editingEvent.id);
-      }
-      onDeleted?.(editingEvent);
-      closeEditor();
-    } catch (err) {
-      const details = editorErrorDetails(err, "Failed to delete event.");
-      setError(details.message);
-      setErrorCode(details.code);
-    } finally {
-      deletingRef.current = false;
-      setDeleting(false);
-    }
-  }, [closeEditor, editingEvent, isEditingRecurring, onDeleted, recurringEditScope, refreshRange, removeEvent]);
-
-  const dirtySnapshot = useMemo(() => normalizeDraftForDirty({
-    draft,
-    effectiveTitle,
-    titleInput,
-    intentMode: intentState.mode,
-    batchDrafts,
-    recurrenceDraft,
-    recurringEditScope,
-  }), [batchDrafts, draft, effectiveTitle, intentState.mode, recurrenceDraft, recurringEditScope, titleInput]);
-  const isDirty = mode === "editor"
-    && !!dirtyBaselineRef.current
-    && (dirtyBaselineRef.current !== dirtySnapshot || titleInputPending);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    function handlePopState() {
-      if (!editorHistoryTokenRef.current) return;
-      editorHistoryTokenRef.current = null;
-      clearEditorState();
-    }
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [clearEditorState]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (mode === "editor" && open && view === "events") {
-      if (editorHistoryTokenRef.current) return;
-      const token = `ea-calendar-editor-${Date.now()}`;
-      const currentState = window.history.state && typeof window.history.state === "object"
-        ? window.history.state
-        : {};
-      window.history.pushState({ ...currentState, eaCalendarEditorToken: token }, "");
-      editorHistoryTokenRef.current = token;
-      return;
-    }
-
-    const token = editorHistoryTokenRef.current;
-    if (!token) return;
-    editorHistoryTokenRef.current = null;
-    if (window.history.state?.eaCalendarEditorToken === token) {
-      window.history.back();
-    }
-  }, [mode, open, view]);
 
   return {
     editable,

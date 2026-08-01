@@ -19,7 +19,7 @@ export type DeadlineEditorState =
   | { mode: "create"; seedDate: string | null }
   | { mode: "edit"; taskId: string };
 
-interface FloatingOpenOptions {
+export interface FloatingOpenOptions {
   dateKey?: string | null;
   anchorElement?: HTMLElement | null;
   sourceCellElement?: HTMLElement | null;

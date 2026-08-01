@@ -15,6 +15,7 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
+  applyCalendarEventWriteEffects,
   formatCalendarRouteError,
   isCalendarSearchInputError,
   searchCalendar,
@@ -26,30 +27,12 @@ import {
 } from "../platform/google-places.ts";
 import { placesLimiter } from "../middleware/rate-limits.ts";
 import {
-  deleteSourceReminders,
-  recomputeUnsentRemindersForSource,
-} from "../reminders/reminder-service.ts";
-import {
-  calendarEventAnchorAt,
   hydrateCalendarEventsWithReminderState,
 } from "../reminders/reminder-hydration.ts";
-import {
-  deleteCalendarSearchMirrorOccurrence,
-  markCalendarSearchMirrorDirty,
-  upsertCalendarSearchMirrorOccurrence,
-} from "../calendar/calendar-search-mirror.ts";
 import { readCalendarBillsRange } from "./calendar-bills-range.ts";
-import type {
-  CalendarRecurrenceScope,
-  NormalizedCalendarEvent,
-} from "../../shared/types/calendar.ts";
 import type { StoredCalendarAccount } from "../calendar/calendar-google-client.ts";
 
 type RouteError = Error & { status?: number; code?: string };
-type CalendarIdentityEvent = Partial<Pick<
-  NormalizedCalendarEvent,
-  "isRecurring" | "originalStartTime" | "recurringEventId" | "recurrence" | "accountId" | "calendarId" | "id"
->>;
 
 function calendarUserId(): string {
   return process.env.EA_USER_ID!;
@@ -183,101 +166,6 @@ function validateCalendarRange(
   if (result.ok) return result.value;
   res.status(400).json({ message: result.message });
   return null;
-}
-
-function eventOccurrenceIdentity({
-  event,
-  originalStartTime,
-  scope,
-}: {
-  event: CalendarIdentityEvent;
-  originalStartTime?: string | null;
-  scope?: CalendarRecurrenceScope;
-}) {
-  if (scope && scope !== "one") return undefined;
-  if (originalStartTime) return originalStartTime;
-  if (event?.isRecurring) {
-    if (event.originalStartTime) return event.originalStartTime;
-    return calendarEventAnchorAt(event);
-  }
-  return undefined;
-}
-
-function isRecurringCalendarMirrorWrite(
-  event: CalendarIdentityEvent | null,
-  {
-    scope,
-    recurringEventId,
-    originalStartTime,
-  }: {
-    scope?: CalendarRecurrenceScope;
-    recurringEventId?: string | null;
-    originalStartTime?: string | null;
-  } = {},
-) {
-  return !!(
-    event?.isRecurring
-    || event?.recurringEventId
-    || event?.recurrence
-    || scope
-    || recurringEventId
-    || originalStartTime
-  );
-}
-
-function scheduleCalendarMirrorDirty({
-  userId,
-  accountId,
-  calendarId,
-  reason = "calendar-write",
-}: { userId: string; accountId: string; calendarId: string; reason?: string }) {
-  markCalendarSearchMirrorDirty(userId, { accountId, calendarId, reason }).catch((err: unknown) => {
-    console.error("[Calendar] search mirror dirty marking failed:", routeError(err).message);
-  });
-}
-
-function scheduleCalendarMirrorUpsert(userId: string, event: NormalizedCalendarEvent) {
-  if (!event?.accountId || !event?.calendarId) return;
-  if (isRecurringCalendarMirrorWrite(event)) {
-    scheduleCalendarMirrorDirty({
-      userId,
-      accountId: event.accountId,
-      calendarId: event.calendarId,
-    });
-    return;
-  }
-  upsertCalendarSearchMirrorOccurrence(userId, event).catch((err: unknown) => {
-    console.error("[Calendar] search mirror write-through failed:", routeError(err).message);
-  });
-}
-
-function scheduleCalendarMirrorDelete(userId: string, {
-  accountId,
-  calendarId,
-  eventId,
-  scope,
-  recurringEventId,
-  originalStartTime,
-}: {
-  accountId?: string;
-  calendarId?: string;
-  eventId?: string;
-  scope?: CalendarRecurrenceScope;
-  recurringEventId?: string | null;
-  originalStartTime?: string | null;
-}) {
-  if (!accountId || !calendarId || !eventId) return;
-  if (isRecurringCalendarMirrorWrite(null, { scope, recurringEventId, originalStartTime })) {
-    scheduleCalendarMirrorDirty({ userId, accountId, calendarId });
-    return;
-  }
-  deleteCalendarSearchMirrorOccurrence(userId, {
-    accountId,
-    calendarId,
-    eventId,
-  }).catch((err: unknown) => {
-    console.error("[Calendar] search mirror delete write-through failed:", routeError(err).message);
-  });
 }
 
 router.get("/range", async (req, res) => {
@@ -430,7 +318,11 @@ router.post("/events", async (req, res) => {
       colorId,
       recurrence,
     });
-    scheduleCalendarMirrorUpsert(calendarUserId(), event);
+    await applyCalendarEventWriteEffects({
+      type: "created",
+      userId: calendarUserId(),
+      event,
+    });
     res.status(201).json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to create calendar event");
@@ -456,7 +348,11 @@ router.post("/events/batch", async (req, res) => {
       try {
         const account = resolveCalendarAccount(accounts, item.accountId);
         const event = await createCalendarEvent(account, item);
-        scheduleCalendarMirrorUpsert(calendarUserId(), event);
+        await applyCalendarEventWriteEffects({
+          type: "created",
+          userId: calendarUserId(),
+          event,
+        });
         created.push({ index, event });
       } catch (err) {
         const error = routeError(err);
@@ -526,33 +422,18 @@ router.patch("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
-    if (sourceCalendarId && sourceCalendarId !== calendarId && !isRecurringCalendarMirrorWrite(event, { scope, recurringEventId, originalStartTime })) {
-      scheduleCalendarMirrorDelete(calendarUserId(), {
-        accountId,
-        calendarId: sourceCalendarId,
-        eventId,
-      });
-    }
-    scheduleCalendarMirrorUpsert(calendarUserId(), event);
-    const anchorAt = calendarEventAnchorAt(event);
-    if (anchorAt) {
-      // Reminder bookkeeping runs AFTER Google has already applied the update.
-      // A failure here must not 500 the route — that would make the client revert
-      // an edit Google has kept (the inverse ghost). A stale/unsent reminder is
-      // benign next to a diverged UI, so log and still return the updated event.
-      try {
-        await recomputeUnsentRemindersForSource({
-          userId: calendarUserId(),
-          sourceType: "calendar_event",
-          sourceItemId: eventId,
-          sourceOccurrenceId: eventOccurrenceIdentity({ event, originalStartTime, scope }),
-          anchorKind: "event_start",
-          anchorAt,
-        });
-      } catch (err) {
-        console.error("[Calendar] reminder recompute after event update failed:", routeError(err).message);
-      }
-    }
+    await applyCalendarEventWriteEffects({
+      type: "updated",
+      userId: calendarUserId(),
+      eventId,
+      event,
+      accountId,
+      calendarId,
+      sourceCalendarId,
+      scope,
+      recurringEventId,
+      originalStartTime,
+    });
     res.json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to update calendar event");
@@ -571,7 +452,9 @@ router.delete("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
-    scheduleCalendarMirrorDelete(calendarUserId(), {
+    await applyCalendarEventWriteEffects({
+      type: "deleted",
+      userId: calendarUserId(),
       accountId,
       calendarId,
       eventId,
@@ -579,23 +462,6 @@ router.delete("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
-    // Google has already deleted the event; reminder cleanup is post-success
-    // bookkeeping. Never fail the response on it — a 500 here would revert a
-    // deletion Google has applied (the inverse ghost). Log and still return ok.
-    try {
-      await deleteSourceReminders({
-        userId: calendarUserId(),
-        sourceType: "calendar_event",
-        sourceItemId: eventId,
-        sourceOccurrenceId: eventOccurrenceIdentity({
-          event: { isRecurring: !!(recurringEventId || originalStartTime), originalStartTime },
-          originalStartTime,
-          scope,
-        }),
-      });
-    } catch (err) {
-      console.error("[Calendar] reminder cleanup after event delete failed:", routeError(err).message);
-    }
     res.json({ ok: true });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to delete calendar event");

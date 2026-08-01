@@ -9,8 +9,8 @@ import CalendarGridWeekHeader from "./CalendarGridWeekHeader";
 import CalendarScrollContainer from "./CalendarScrollContainer";
 import buildContextContent from "./buildContextContent";
 import CalendarModalAgendaRailContentBase from "./CalendarModalAgendaRailContent";
+import CalendarModalFrame from "./CalendarModalFrame";
 import CalendarModalHeader from "./CalendarModalHeader";
-import CalendarModalTexture from "./CalendarModalTexture";
 import CalendarSearchRail from "./CalendarSearchRail";
 import { getCalendarSearchLayoutMode } from "../calendarLayout.ts";
 import type useCalendarEventEditor from "../events/useCalendarEventEditor";
@@ -177,12 +177,6 @@ export interface CalendarModalShellProps {
   availableCalendarViews: string[];
 }
 
-// Memo boundaries for the heavier rail children (fe-global::shell-props-inline-
-// callbacks-churn). The shell re-renders on every calendar interaction; with the
-// inline callbacks below hoisted to useCallback and the data props stabilized
-// upstream, these wrappers let the agenda/floating rails skip re-rendering when
-// their inputs are unchanged. Wrapping at the import site avoids reshaping the
-// underlying component modules.
 const CalendarModalAgendaRailContent = memo(CalendarModalAgendaRailContentBase);
 const CalendarFloatingDetailContent = memo(CalendarFloatingDetailContentBase);
 
@@ -201,15 +195,7 @@ export default function CalendarModalShell({
   availableCalendarViews,
 }: CalendarModalShellProps) {
   const { panelRef, scrollRef, contextRailRef, agendaRailRef } = refs;
-  const {
-    view,
-    viewYear,
-    viewMonth,
-    currentYear,
-    currentMonth,
-    todayDate,
-    suppressFocusRing = false,
-  } = viewState;
+  const { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, suppressFocusRing = false } = viewState;
   const {
     panelWidth,
     layout,
@@ -275,15 +261,7 @@ export default function CalendarModalShell({
     onFloatingDeadlineSaved,
     onFloatingDeadlineDeleted,
   } = floating;
-  const {
-    navigateMonth,
-    jumpToMonth,
-    onViewChange,
-    focusDeadlineTask,
-    onDisplayMonthChange,
-    onLabelMonthChange,
-    onFetchSettle,
-  } = handlers;
+  const { navigateMonth, jumpToMonth, onViewChange, focusDeadlineTask, onDisplayMonthChange, onLabelMonthChange, onFetchSettle } = handlers;
   const floatingEditorOpen = !layout.stacked
     && !!floatingDetail?.open
     && (floatingDetail.mode === "edit" || floatingDetail.mode === "create");
@@ -461,206 +439,157 @@ export default function CalendarModalShell({
   );
 
   return (
-    <div
-      style={{
-        position: "relative",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        isolation: "isolate",
-        contain: "layout paint style",
-        overflow: "hidden",
+    <CalendarModalFrame
+      refs={{ panelRef, scrollRef }}
+      layout={{
+        panelWidth,
+        panelMaxWidth: layout.panelMaxWidth,
+        shellMaxHeight: layout.shellMaxHeight,
+        shellPadding: layout.shellPadding,
+        contentGap: layout.contentGap,
       }}
+      suppressFocusRing={suppressFocusRing}
     >
+      <CalendarModalHeader
+        view={view}
+        monthName={monthName}
+        monthYear={monthYear}
+        layout={layout}
+        canGoPrev={canGoPrev}
+        navigateMonth={navigateMonth}
+        jumpToMonth={jumpToMonth}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        onViewChange={onViewChange}
+        availableCalendarViews={availableCalendarViews}
+        HeaderExtras={HeaderExtras}
+        viewData={viewData}
+        computed={computed}
+        eventEditor={headerEventEditor}
+        selectedDay={selectedDay}
+        selectedDateKey={selectedDateKey}
+        viewYear={viewYear}
+        viewMonth={viewMonth}
+        setDeadlineEditor={(next: Record<string, unknown> | null) => {
+          if (!layout.stacked && next?.mode === "create") {
+            const seedDate = typeof next.seedDate === "string" ? next.seedDate : null;
+            onOpenFloatingDeadlineCreate?.(seedDate || selectedDateKey || null);
+          } else {
+            onCloseFloatingDetail?.();
+            setDeadlineEditor(next);
+          }
+        }}
+        viewLabel={activeView.label}
+        search={search}
+      />
+
       <div
-        ref={panelRef}
-        data-testid="calendar-modal-panel"
-        data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
-        className="isolate flex flex-col"
-        aria-labelledby="calendar-modal-title"
-        tabIndex={-1}
+        data-testid="calendar-modal-body"
+        data-search-layout={searchLayoutMode}
         style={{
-          position: "relative",
-          zIndex: 1,
-          // In-flow tab fill: flex:1 + minHeight:0 size the panel to the column's
-          // height; width/maxWidth cap it and margin:0 auto centers it horizontally.
+          display: "grid",
+          gridTemplateColumns: layout.stacked
+            ? "minmax(0, 1fr)"
+            : searchOpen && searchLayoutMode === "three-rail"
+              ? `${layout.searchWidth}px minmax(0, 1fr) ${contextWidth}px`
+              : searchOpen
+                ? `${layout.searchWidth}px minmax(0, 1fr)`
+                : `minmax(0, 1fr) ${contextWidth}px`,
+          gridTemplateRows: layout.stacked && searchOpen ? "auto minmax(0, 1fr)" : undefined,
+          gap: layout.contentGap,
+          alignItems: "stretch",
           flex: 1,
           minHeight: 0,
-          width: panelWidth,
-          maxWidth: layout.panelMaxWidth || undefined,
-          margin: "0 auto",
-          maxHeight: layout.shellMaxHeight || undefined,
-          overflow: "hidden",
-          backgroundColor: "var(--sp-panel)",
-          backgroundImage: [
-            "radial-gradient(circle at top left, color-mix(in srgb, var(--sp-accent) 14%, transparent), transparent 30%)",
-            "radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--sp-blue) 8%, transparent), transparent 24%)",
-            "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01) 18%, rgba(255,255,255,0.01) 82%, rgba(255,255,255,0.025))",
-          ].join(", "),
-          border: "1px solid rgba(255,255,255,0.06)",
-          outline: "none",
-          contain: "layout paint",
-          backfaceVisibility: "hidden",
-          transform: "translate3d(0, 0, 0)",
+          overflow: layout.stacked ? "visible" : "hidden",
         }}
       >
-        <CalendarModalTexture />
+        {showSearchRail ? (
+          <CalendarSearchRail search={search} layoutMode={searchLayoutMode} weatherData={weatherData} />
+        ) : null}
         <div
-          ref={scrollRef}
-          className="flex-1"
           style={{
-            position: "relative",
-            zIndex: 1,
+            minWidth: 0,
+            minHeight: 0,
             display: "flex",
             flexDirection: "column",
-            gap: layout.contentGap,
-            minHeight: 0,
-            height: "100%",
-            padding: layout.shellPadding,
+            overflow: "hidden",
           }}
         >
-          <CalendarModalHeader
+          <CalendarGridWeekHeader gap={layout.weekHeaderGap} />
+          <CalendarScrollContainer
             view={view}
-            monthName={monthName}
-            monthYear={monthYear}
+            activeView={activeView}
             layout={layout}
-            canGoPrev={canGoPrev}
-            navigateMonth={navigateMonth}
-            jumpToMonth={jumpToMonth}
             currentYear={currentYear}
             currentMonth={currentMonth}
-            onViewChange={onViewChange}
-            availableCalendarViews={availableCalendarViews}
-            HeaderExtras={HeaderExtras}
-            viewData={viewData}
-            computed={computed}
-            eventEditor={headerEventEditor}
-            selectedDay={selectedDay}
-            selectedDateKey={selectedDateKey}
+            todayDate={todayDate}
             viewYear={viewYear}
             viewMonth={viewMonth}
-            setDeadlineEditor={(next: Record<string, unknown> | null) => {
-              if (!layout.stacked && next?.mode === "create") {
-                const seedDate = typeof next.seedDate === "string" ? next.seedDate : null;
-                onOpenFloatingDeadlineCreate?.(seedDate || selectedDateKey || null);
-              } else {
-                onCloseFloatingDetail?.();
-                setDeadlineEditor(next);
-              }
-            }}
-            viewLabel={activeView.label}
-            search={search}
+            onDisplayMonthChange={onDisplayMonthChange}
+            onLabelMonthChange={onLabelMonthChange}
+            onFetchSettle={onFetchSettle}
+            viewData={viewData}
+            itemsByDay={itemsByDay}
+            itemsByDate={itemsByDate}
+            cellMetaByDate={cellMetaByDate}
+            selectedDay={selectedDay}
+            selectedDateKey={selectedDateKey}
+            selectedItemId={effectiveSelectedItemId}
+            showGridSkeleton={showGridSkeleton}
+            isMonthCached={isMonthCached}
+            getMonthEvents={getMonthEvents}
+            getMonthDeadlines={getMonthDeadlines}
+            dataRevision={dataRevision}
+            buildFallbackDayState={buildFallbackDayState}
+            closeEventEditor={closeEventEditor}
+            setSelectedDay={setSelectedDay}
+            setSelectedDateKey={setSelectedDateKey}
+            setSelectedItemId={setSelectedItemId}
+            eventQuickActions={eventQuickActions}
+            deadlineQuickActions={deadlineQuickActions}
+            ghostPreview={ghostPreview}
+            onOpenFloatingDetail={onOpenFloatingDetail}
+            onCloseFloatingDetail={onCloseFloatingDetail}
+            floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
+            floatingDetailItemId={floatingDetail?.itemId || null}
+            floatingDetailMode={floatingDetail?.mode || null}
+            floatingDetailDateKey={floatingDetailGridDateKey}
+            floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+            onCancelFloatingEditor={onCancelFloatingEditor}
+            onShakeFloatingEditor={onShakeFloatingEditor}
+            onDirectDateAction={onGridDateAction}
+            onDirectItemAction={onGridEventAction}
           />
-
-          <div
-            data-testid="calendar-modal-body"
-            data-search-layout={searchLayoutMode}
-            style={{
-              display: "grid",
-              gridTemplateColumns: layout.stacked
-                ? "minmax(0, 1fr)"
-                : searchOpen && searchLayoutMode === "three-rail"
-                  ? `${layout.searchWidth}px minmax(0, 1fr) ${contextWidth}px`
-                  : searchOpen
-                    ? `${layout.searchWidth}px minmax(0, 1fr)`
-                    : `minmax(0, 1fr) ${contextWidth}px`,
-              gridTemplateRows: layout.stacked && searchOpen ? "auto minmax(0, 1fr)" : undefined,
-              gap: layout.contentGap,
-              alignItems: "stretch",
-              flex: 1,
-              minHeight: 0,
-              overflow: layout.stacked ? "visible" : "hidden",
-            }}
-          >
-            {showSearchRail ? (
-              <CalendarSearchRail search={search} layoutMode={searchLayoutMode} weatherData={weatherData} />
-            ) : null}
-            <div
-              style={{
-                minWidth: 0,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }}
-            >
-              <CalendarGridWeekHeader gap={layout.weekHeaderGap} />
-              <CalendarScrollContainer
-                view={view}
-                activeView={activeView}
-                layout={layout}
-                currentYear={currentYear}
-                currentMonth={currentMonth}
-                todayDate={todayDate}
-                viewYear={viewYear}
-                viewMonth={viewMonth}
-                onDisplayMonthChange={onDisplayMonthChange}
-                onLabelMonthChange={onLabelMonthChange}
-                onFetchSettle={onFetchSettle}
-                viewData={viewData}
-                itemsByDay={itemsByDay}
-                itemsByDate={itemsByDate}
-                cellMetaByDate={cellMetaByDate}
-                selectedDay={selectedDay}
-                selectedDateKey={selectedDateKey}
-                selectedItemId={effectiveSelectedItemId}
-                showGridSkeleton={showGridSkeleton}
-                isMonthCached={isMonthCached}
-                getMonthEvents={getMonthEvents}
-                getMonthDeadlines={getMonthDeadlines}
-                dataRevision={dataRevision}
-                buildFallbackDayState={buildFallbackDayState}
-                closeEventEditor={closeEventEditor}
-                setSelectedDay={setSelectedDay}
-                setSelectedDateKey={setSelectedDateKey}
-                setSelectedItemId={setSelectedItemId}
-                eventQuickActions={eventQuickActions}
-                deadlineQuickActions={deadlineQuickActions}
-                ghostPreview={ghostPreview}
-                onOpenFloatingDetail={onOpenFloatingDetail}
-                onCloseFloatingDetail={onCloseFloatingDetail}
-                floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
-                floatingDetailItemId={floatingDetail?.itemId || null}
-                floatingDetailMode={floatingDetail?.mode || null}
-                floatingDetailDateKey={floatingDetailGridDateKey}
-                floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
-                onCancelFloatingEditor={onCancelFloatingEditor}
-                onShakeFloatingEditor={onShakeFloatingEditor}
-                onDirectDateAction={onGridDateAction}
-                onDirectItemAction={onGridEventAction}
-              />
-              {view === "events" ? (
-                <>
-                  <CalendarQuickActionLayer quickActions={eventQuickActions || null} />
-                  <DeadlineQuickActionLayer quickActions={deadlineQuickActions as unknown as ComponentProps<typeof DeadlineQuickActionLayer>["quickActions"]} />
-                </>
-              ) : null}
-            </div>
-
-            {showContextRail ? (
-              <CalendarModalContextRail
-                contextRailRef={contextRailRef}
-                layout={layout}
-                workspaceMode={workspaceMode}
-                contentKind={contentKind}
-                contentKey={contentKey}
-                contextContent={contextContent}
-              />
-            ) : null}
-          </div>
-          <CalendarFloatingDetailPanel
-            detail={floatingDetail}
-            label={floatingDetailLabel}
-            calendarPanelRef={panelRef}
-            railRef={contextRailRef}
-            suppressFocusRing={suppressFocusRing}
-            onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
-            onUserDraggedChange={onFloatingDetailDragged}
-          >
-            {floatingDetailContent}
-          </CalendarFloatingDetailPanel>
+          {view === "events" ? (
+            <>
+              <CalendarQuickActionLayer quickActions={eventQuickActions || null} />
+              <DeadlineQuickActionLayer quickActions={deadlineQuickActions as unknown as ComponentProps<typeof DeadlineQuickActionLayer>["quickActions"]} />
+            </>
+          ) : null}
         </div>
+
+        {showContextRail ? (
+          <CalendarModalContextRail
+            contextRailRef={contextRailRef}
+            layout={layout}
+            workspaceMode={workspaceMode}
+            contentKind={contentKind}
+            contentKey={contentKey}
+            contextContent={contextContent}
+          />
+        ) : null}
       </div>
-    </div>
+      <CalendarFloatingDetailPanel
+        detail={floatingDetail}
+        label={floatingDetailLabel}
+        calendarPanelRef={panelRef}
+        railRef={contextRailRef}
+        suppressFocusRing={suppressFocusRing}
+        onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
+        onUserDraggedChange={onFloatingDetailDragged}
+      >
+        {floatingDetailContent}
+      </CalendarFloatingDetailPanel>
+    </CalendarModalFrame>
   );
 }

@@ -24,6 +24,15 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ### Controller + view model
 - `calendarShellLoaders.tsx` — production lazy boundaries for the desktop shell and mobile agenda; Vitest resolves the same module paths eagerly to preserve synchronous behavior-test contracts
 - `useCalendarModalController.tsx` — main orchestrator wiring sub-hooks and editors
+- `useCalendarControllerViewData.ts` — memoized events-window and per-domain view-data projection behind the controller's data seam
+- `useCalendarAgendaScroll.ts` — agenda rail ref, imperative scroll command lifecycle, and entry-target release state
+- `useCalendarAgendaInteractions.ts` — active/passive agenda selection, mini-calendar activation, detail anchoring, and stable passive-sync forwarding
+- `useCalendarOpenRequestRouting.ts` — initial create requests and selection-sync snapshot effects for floating/stacked editor routing
+- `useCalendarControllerActions.ts` — event/deadline quick-action composition plus guarded workspace view routing
+- `useCalendarControllerHotkeys.ts` — typed adapter from controller state/bundles into the calendar hotkey hook
+- `useCalendarControllerLifecycle.ts` — source prefetch, completed-detail cleanup, bill relocation, domain range fetch, editor reconciliation, and mobile jump-to-today effects
+- `useCalendarControllerShell.tsx` — final shell-prop adapter and mobile/desktop lazy-shell rendering boundary
+- `useCalendarEditorScrollRouting.ts` — editor-aware scroll-sync checks plus floating editor route composition
 - `useCalendarModalViewModel.ts` — visible month data and shell prop building
 - `useCalendarModalSelection.ts` — view date, selected day, focus tracking per open request
 - `useCalendarMonthNavigation.ts` — grouped month commands and grid scroll coordination: clamp targets, editor-aware cleanup, direction/idle tracking, label crossing, and fetch settle
@@ -36,7 +45,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Floating detail + editor routing
 - `useCalendarFloatingDetail.ts` — floating detail anchoring, session memory, placement
-- `useFloatingEditorRouting.ts` — unified deadline/event editor routing, save→detail transitions
+- `useFloatingEditorRouting.ts` — unified deadline/event editor routing, save→detail transitions; exports its open-option contract for controller composition
 
 ### Domain state + lifecycle
 - `useCalendarRange.ts` — per-month event caching/fetching, prefetch radius, staleness

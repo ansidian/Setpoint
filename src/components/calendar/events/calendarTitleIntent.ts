@@ -1,6 +1,10 @@
 import { epochFromLa, laComponents } from "@/components/inbox/helpers";
+import {
+  matchCalendarRecurrenceClause,
+  type CalendarWeekdayCode,
+} from "./calendarRecurrenceClauseModel";
 
-export type CalendarWeekdayCode = "SU" | "MO" | "TU" | "WE" | "TH" | "FR" | "SA";
+export type { CalendarWeekdayCode } from "./calendarRecurrenceClauseModel";
 
 export interface ParsedCalendarDateTime {
   hasDate?: boolean;
@@ -43,8 +47,6 @@ interface CalendarIntentFallbacks {
   defaultStartTime?: string | null;
   defaultEndTime?: string | null;
 }
-
-interface MatchedIntentClause { index: number; length: number; text: string }
 
 const WEEKDAY_INDEX_BY_CODE: Record<CalendarWeekdayCode, number> = {
   SU: 0,
@@ -457,18 +459,6 @@ function parseExplicitDateBatchIntent(title: string, context: CalendarIntentCont
   };
 }
 
-const FREQUENCY_KEYWORDS: Record<string, "daily" | "weekly" | "monthly" | "yearly"> = {
-  daily: "daily",
-  day: "daily",
-  weekly: "weekly",
-  week: "weekly",
-  monthly: "monthly",
-  month: "monthly",
-  yearly: "yearly",
-  year: "yearly",
-  annually: "yearly",
-};
-
 function weekdayCodeFromDate(dateStr: string): CalendarWeekdayCode {
   const parts = parseYmd(dateStr);
   if (!parts) return "MO";
@@ -482,7 +472,7 @@ function buildGeneralRecurringResult(
   weekdays: CalendarWeekdayCode[],
   title: string,
   context: CalendarIntentContext,
-  matchedClause: MatchedIntentClause,
+  matchedClause: { index: number; length: number; text: string },
 ) {
   const titleWithoutRule = parseListClauseTitle(title, matchedClause.index, matchedClause.index + matchedClause.length);
   const temporal = context.parseTemporalTitle(titleWithoutRule, context);
@@ -535,94 +525,18 @@ function buildGeneralRecurringResult(
 }
 
 function parseGeneralRecurringIntent(title: string, context: CalendarIntentContext) {
-  // "biweekly" standalone keyword
-  const biweeklyMatch = title.match(/\bbiweekly\b/i);
-  if (biweeklyMatch) {
-    const dayCode = weekdayCodeFromDate(context.baseDate || currentPacificDate(context.now));
-    return buildGeneralRecurringResult("weekly", 2, [dayCode], title, context, {
-      index: biweeklyMatch.index ?? 0,
-      length: biweeklyMatch[0].length,
-      text: biweeklyMatch[0],
-    });
-  }
+  const baseDate = context.baseDate || currentPacificDate(context.now);
+  const match = matchCalendarRecurrenceClause(title, weekdayCodeFromDate(baseDate));
+  if (!match) return null;
 
-  // "every other <weekday>" → weekly, interval 2
-  const everyOtherMatch = title.match(/\bevery\s+other\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday|s)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/i);
-  if (everyOtherMatch) {
-    const weekdays = weekdaysFromListText(everyOtherMatch[1]);
-    if (weekdays.length) {
-      return buildGeneralRecurringResult("weekly", 2, weekdays, title, context, {
-        index: everyOtherMatch.index ?? 0,
-        length: everyOtherMatch[0].length,
-        text: everyOtherMatch[0],
-      });
-    }
-  }
-
-  // "every N <frequency>" → e.g. "every 2 weeks", "every 3 months"
-  const everyNMatch = title.match(/\bevery\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)\b/i);
-  if (everyNMatch) {
-    const interval = Number(everyNMatch[1]);
-    const freqToken = everyNMatch[2]!.toLowerCase().replace(/s$/, "");
-    const frequency = FREQUENCY_KEYWORDS[freqToken];
-    if (frequency && interval > 0) {
-      const weekdays = frequency === "weekly"
-        ? [weekdayCodeFromDate(context.baseDate || currentPacificDate(context.now))]
-        : [];
-      return buildGeneralRecurringResult(frequency, interval, weekdays, title, context, {
-        index: everyNMatch.index ?? 0,
-        length: everyNMatch[0].length,
-        text: everyNMatch[0],
-      });
-    }
-  }
-
-  // "first monday of every month" / "1st friday of every month"
-  const ordinalWeekdayMatch = title.match(/\b(first|1st|second|2nd|third|3rd|fourth|4th|last)\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday|s)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\s+(?:of\s+)?every\s+month\b/i);
-  if (ordinalWeekdayMatch) {
-    const weekdays = weekdaysFromListText(ordinalWeekdayMatch[2]);
-    if (weekdays.length) {
-      return buildGeneralRecurringResult("monthly", 1, [], title, context, {
-        index: ordinalWeekdayMatch.index ?? 0,
-        length: ordinalWeekdayMatch[0].length,
-        text: ordinalWeekdayMatch[0],
-      });
-    }
-  }
-
-  // Standalone frequency keywords: "daily", "weekly", "monthly", "yearly"
-  const standaloneMatch = title.match(/\b(daily|weekly|monthly|yearly|annually)\b/i);
-  if (standaloneMatch) {
-    const frequency = FREQUENCY_KEYWORDS[standaloneMatch[1]!.toLowerCase()];
-    if (frequency) {
-      const weekdays = frequency === "weekly"
-        ? [weekdayCodeFromDate(context.baseDate || currentPacificDate(context.now))]
-        : [];
-      return buildGeneralRecurringResult(frequency, 1, weekdays, title, context, {
-        index: standaloneMatch.index ?? 0,
-        length: standaloneMatch[0].length,
-        text: standaloneMatch[0],
-      });
-    }
-  }
-
-  // "every day", "every week", "every month", "every year"
-  const everyFreqMatch = title.match(/\bevery\s+(day|week|month|year)\b/i);
-  if (everyFreqMatch) {
-    const frequency = FREQUENCY_KEYWORDS[everyFreqMatch[1]!.toLowerCase()];
-    if (frequency) {
-      const weekdays = frequency === "weekly"
-        ? [weekdayCodeFromDate(context.baseDate || currentPacificDate(context.now))]
-        : [];
-      return buildGeneralRecurringResult(frequency, 1, weekdays, title, context, {
-        index: everyFreqMatch.index ?? 0,
-        length: everyFreqMatch[0].length,
-        text: everyFreqMatch[0],
-      });
-    }
-  }
-
-  return null;
+  return buildGeneralRecurringResult(
+    match.frequency,
+    match.interval,
+    match.weekdays,
+    title,
+    context,
+    match.clause,
+  );
 }
 
 export function parseCalendarIntent(title: string, context: CalendarIntentContext) {

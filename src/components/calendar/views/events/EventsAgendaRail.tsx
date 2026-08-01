@@ -1,15 +1,16 @@
-import { forwardRef, memo, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
-import type { ForwardedRef, MutableRefObject } from "react";
-import { ChevronDown } from "lucide-react";
-import { parseYmd, ymdFromParts } from "../../calendarDateUtils.ts";
+import { forwardRef, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
+import type { ForwardedRef } from "react";
+import { ymdFromParts } from "../../calendarDateUtils.ts";
 import AgendaMonthScrollContainer from "../agenda/AgendaMonthScrollContainer.tsx";
-import AgendaRailShell from "../agenda/AgendaRailShell.tsx";
 import MiniCalendar, { AgendaRailWithMiniCalendar } from "../agenda/MiniCalendar.tsx";
-import EventsAgendaDeadlineRow from "./EventsAgendaDeadlineRow.tsx";
-import { AllDayChip, TimedRow } from "./EventsAgendaEventRows.tsx";
-import { AgendaSkeleton, EmptyEventDay, WeatherHeader } from "./EventsAgendaRailParts.tsx";
+import EventsAgendaMonthSection from "./EventsAgendaMonthSection.tsx";
+import type {
+  AgendaSelectAnchorKind,
+  EventsAgendaRailQuickActions,
+  PreviewKind,
+} from "./EventsAgendaMonthSection.tsx";
+import { AgendaSkeleton } from "./EventsAgendaRailParts.tsx";
 import {
-  agendaHasSelectedHiddenAllDay,
   buildEventsAgendaGroups,
   buildEventsMiniCalendarActivityItems,
   reuseMultiMonthAgendaGroups,
@@ -23,19 +24,9 @@ import type {
   AgendaScrollCommand,
   AgendaScrollMonth,
 } from "../agenda/AgendaMonthScrollContainer";
-import type { AgendaEvent, AgendaDeadline, EventsAgendaGroup, EventsAgendaMonthResult } from "./eventsAgendaModel";
-import type { EventsAgendaQuickActions } from "./EventsAgendaEventRows";
+import type { AgendaEvent, AgendaDeadline, EventsAgendaMonthResult } from "./eventsAgendaModel";
 import type { CalendarDeadlineOverlay, CalendarItemLike, CalendarWeatherData } from "../calendarViewTypes";
 
-interface EventsAgendaRailQuickActions extends EventsAgendaQuickActions {
-  draggingEventId?: string | null;
-  dropTargetDate?: string | null;
-  enterDropTarget?: (dateKey: string) => void;
-  leaveDropTarget?: (dateKey: string) => void;
-  dropEvent?: (input: { event: AgendaEvent | null; targetDate: string; anchorRect: DOMRect }) => void;
-}
-type PreviewKind = "event" | "deadline";
-type AgendaSelectAnchorKind = "agenda-chip" | "agenda-row";
 interface EventActionPayload {
   event: CalendarItemLike;
   item?: CalendarItemLike;
@@ -47,14 +38,6 @@ interface EventActionPayload {
 }
 
 const EVENT_SCROLL_TOP_OFFSET = 44;
-function keyForEvent(event: AgendaEvent, dateKey: string): string {
-  return `${event.agendaItemId || event.id}-${dateKey}`;
-}
-
-function isSelectedAgendaEvent(event: AgendaEvent, dateKey: string, selectedItemId: unknown, selectedDateKey?: string | null): boolean {
-  return String(selectedItemId || "") === String(event.agendaItemId || "")
-    && selectedDateKey === dateKey;
-}
 
 function previewSourceKey(item: CalendarItemLike | null | undefined): string {
   return `${item?.agendaItemId || item?.id || ""}:${item?.agendaDateKey || item?.dateKey || ""}`;
@@ -82,284 +65,10 @@ function previewItemForAgenda(item: CalendarItemLike, kind: PreviewKind): Calend
   };
 }
 
-function groupDate(group: Pick<EventsAgendaGroup, "dateKey">): Date | null {
-  const parsed = parseYmd(group.dateKey);
-  return parsed ? new Date(parsed.year, parsed.month, parsed.day) : null;
-}
-
-function AgendaHeader({
-  group,
-  todayKey,
-  onActivate,
-  registerHeader,
-  dropActive,
-  quickActions,
-}: {
-  group: EventsAgendaGroup;
-  todayKey: string;
-  onActivate: (dateKey: string) => void;
-  registerHeader: (dateKey: string, node: HTMLElement | null) => void;
-  dropActive: boolean;
-  quickActions?: EventsAgendaRailQuickActions | null;
-}) {
-  const date = groupDate(group);
-  return (
-    <button
-      type="button"
-      ref={(node) => registerHeader(group.dateKey, node)}
-      data-agenda-date-header="true"
-      data-date-key={group.dateKey}
-      aria-label={`Select ${date ? date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : group.dateKey}`}
-      onClick={() => onActivate(group.dateKey)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onActivate(group.dateKey);
-        }
-      }}
-      onDragEnter={() => quickActions?.enterDropTarget?.(group.dateKey)}
-      onDragOver={(event) => {
-        if (!quickActions?.draggingEventId) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-      }}
-      onDragLeave={() => quickActions?.leaveDropTarget?.(group.dateKey)}
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 4,
-        width: "calc(100% + 20px)",
-        margin: "0 -10px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        minHeight: 34,
-        padding: "8px 10px 7px",
-        border: "0",
-        borderRadius: 0,
-        background: dropActive
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel)"
-          : "var(--sp-panel)",
-        boxShadow: dropActive ? "inset 0 0 0 1px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
-        color: group.dateKey === todayKey ? "#0495FF" : "#B1B1B3",
-        fontSize: 12,
-        fontWeight: 800,
-        letterSpacing: 1.35,
-        lineHeight: 1,
-        textAlign: "left",
-        textTransform: "uppercase",
-        cursor: "pointer",
-        transition: "background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1)",
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.background = dropActive
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 18%, transparent), color-mix(in srgb, var(--sp-accent) 9%, transparent)), var(--sp-panel)"
-          : "var(--sp-panel)";
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.background = dropActive
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel)"
-          : "var(--sp-panel)";
-      }}
-    >
-      <span>{group.headerLabel}</span>
-      <WeatherHeader weather={group.weather} />
-    </button>
-  );
-}
-
 function parseMonthKey(mk: string): { year: number; month: number } {
   const [y, m] = mk.split("-").map(Number);
   return { year: y || 0, month: (m || 1) - 1 };
 }
-
-interface MonthAgendaSectionProps extends AgendaRegistrationCallbacks {
-  month: EventsAgendaMonthResult;
-  todayKey: string;
-  selectedDateKey?: string | null;
-  selectedItemId?: unknown;
-  eventQuickActions?: EventsAgendaRailQuickActions | null;
-  expandedDays: Set<string>;
-  onExpandDay: (dateKey: string) => void;
-  onDateAction: (dateKey: string) => void;
-  onEventSelect: (event: AgendaEvent, element: HTMLElement, anchorKind: AgendaSelectAnchorKind) => void;
-  onDeadlineSelect: (deadline: AgendaDeadline, element: HTMLElement) => void;
-  onDirtyBlocked: () => boolean;
-  onPreviewStart: (item: CalendarItemLike, kind: PreviewKind) => void;
-  onPreviewEnd: (item: CalendarItemLike) => void;
-  dragEventRef: MutableRefObject<AgendaEvent | null>;
-  mobileAgenda: boolean;
-}
-
-// Month sections bail out of re-rendering whenever their month's group
-// object identity is unchanged (reuseMultiMonthAgendaGroups) and the shared
-// props are stable — only the months a batch actually touched re-render.
-const MonthAgendaSection = memo(function MonthAgendaSection({
-  month,
-  registerHeader,
-  registerSection,
-  registerRow,
-  registerContent,
-  todayKey,
-  selectedDateKey,
-  selectedItemId,
-  eventQuickActions,
-  expandedDays,
-  onExpandDay,
-  onDateAction,
-  onEventSelect,
-  onDeadlineSelect,
-  onDirtyBlocked,
-  onPreviewStart,
-  onPreviewEnd,
-  dragEventRef,
-  mobileAgenda,
-}: MonthAgendaSectionProps) {
-  return (
-    <AgendaRailShell
-      groups={month.visibleGroups}
-      registerHeader={registerHeader}
-      registerSection={registerSection}
-      registerRow={registerRow}
-      registerContent={registerContent}
-      getSectionProps={(group) => ({
-        onDragEnter: () => eventQuickActions?.enterDropTarget?.(group.dateKey),
-        onDragOver: (event) => {
-          if (!eventQuickActions?.draggingEventId) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-        },
-        onDragLeave: () => eventQuickActions?.leaveDropTarget?.(group.dateKey),
-        onDrop: (dropEvent) => {
-          if (!eventQuickActions?.draggingEventId) return;
-          dropEvent.preventDefault();
-          eventQuickActions.dropEvent?.({
-            event: dragEventRef.current,
-            targetDate: group.dateKey,
-            anchorRect: dropEvent.currentTarget.getBoundingClientRect(),
-          });
-        },
-      })}
-      renderHeader={({ group: g, registerHeader: regHeader }) => (
-        <AgendaHeader
-          group={g}
-          todayKey={todayKey}
-          registerHeader={regHeader}
-          onActivate={onDateAction}
-          dropActive={eventQuickActions?.dropTargetDate === g.dateKey}
-          quickActions={eventQuickActions}
-        />
-      )}
-      renderGroup={({ group: g, registerRow: regRow, registerContent: regContent }) => {
-        // Auto-expand (without persisting) when the selected item is a hidden
-        // all-day chip, so it renders and registers its row ref for highlight/scroll.
-        const expanded = expandedDays.has(g.dateKey)
-          || agendaHasSelectedHiddenAllDay(g, 2, selectedItemId, selectedDateKey);
-        const visibleAllDay = expanded ? g.allDay : g.allDay.slice(0, 2);
-        const hiddenAllDayCount = g.allDay.length - visibleAllDay.length;
-        const showNoEvents = !g.hasEvents && (g.isFallback || selectedDateKey === g.dateKey || todayKey === g.dateKey);
-        return (
-          <>
-            {g.allDay.length ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, minWidth: 0 }}>
-                {visibleAllDay.map((event) => (
-                  <span
-                    key={keyForEvent(event, g.dateKey)}
-                    ref={(node) => regRow(keyForEvent(event, g.dateKey), node, g.dateKey)}
-                    style={{ minWidth: 0, maxWidth: "100%" }}
-                    onDragStart={() => {
-                      dragEventRef.current = event;
-                    }}
-                  >
-                    <AllDayChip
-                      event={event}
-                      selected={isSelectedAgendaEvent(event, g.dateKey, selectedItemId, selectedDateKey)}
-                      onSelect={onEventSelect}
-                      quickActions={eventQuickActions}
-                      onDirtyBlocked={onDirtyBlocked}
-                      onPreviewStart={(item) => onPreviewStart(item, "event")}
-                      onPreviewEnd={onPreviewEnd}
-                    />
-                  </span>
-                ))}
-                {hiddenAllDayCount > 0 ? (
-                  <button
-                    type="button"
-                    className="sp-agenda-touch sp-mobile-agenda-control"
-                    onClick={() => onExpandDay(g.dateKey)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      minHeight: 24,
-                      padding: "4px 8px",
-                      borderRadius: 7,
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: "rgba(255,255,255,0.035)",
-                      color: "rgba(205,214,244,0.74)",
-                      fontSize: 11,
-                      fontWeight: 750,
-                      cursor: "pointer",
-                    }}
-                  >
-                    +{hiddenAllDayCount}
-                    <ChevronDown size={12} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            {g.timed.map((event) => (
-              <span
-                key={keyForEvent(event, g.dateKey)}
-                ref={(node) => regRow(keyForEvent(event, g.dateKey), node, g.dateKey)}
-                onDragStart={() => {
-                  dragEventRef.current = event;
-                }}
-              >
-                <TimedRow
-                  event={event}
-                  dateKey={g.dateKey}
-                  todayKey={todayKey}
-                  selected={isSelectedAgendaEvent(event, g.dateKey, selectedItemId, selectedDateKey)}
-                  onSelect={onEventSelect}
-                  quickActions={eventQuickActions}
-                  onDirtyBlocked={onDirtyBlocked}
-                  onPreviewStart={(item) => onPreviewStart(item, "event")}
-                  onPreviewEnd={onPreviewEnd}
-                />
-              </span>
-            ))}
-            {g.deadlines.map((deadline) => {
-              const selected = String(selectedItemId || "") === String(deadline.agendaItemId || "")
-                && selectedDateKey === g.dateKey;
-              return (
-                <EventsAgendaDeadlineRow
-                  key={`deadline-${deadline.agendaItemId}-${g.dateKey}`}
-                  deadline={deadline}
-                  dateKey={g.dateKey}
-                  selected={selected}
-                  registerRow={regRow}
-                  onSelect={onDeadlineSelect}
-                  onPreviewStart={(item) => onPreviewStart(item, "deadline")}
-                  onPreviewEnd={onPreviewEnd}
-                />
-              );
-            })}
-            {showNoEvents ? (
-              <EmptyEventDay
-                contentRef={(node) => regContent(g.dateKey, node)}
-                fallback={g.isFallback}
-                mobileAgenda={mobileAgenda}
-                monthName={groupDate(g)?.toLocaleDateString("en-US", { month: "long" }) || "this month"}
-              />
-            ) : null}
-          </>
-        );
-      }}
-    />
-  );
-});
 
 export interface EventsAgendaRailProps {
   viewYear: number;
@@ -597,7 +306,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   }, [onPassiveDateChange]);
 
   const renderMonth = useCallback((month: AgendaScrollMonth, { registerHeader, registerSection, registerRow, registerContent }: AgendaRegistrationCallbacks) => (
-    <MonthAgendaSection
+    <EventsAgendaMonthSection
       month={month as EventsAgendaMonthResult}
       registerHeader={registerHeader}
       registerSection={registerSection}

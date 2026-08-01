@@ -5,7 +5,11 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 ## Files
 
 ### Editor core
-- `useCalendarEventEditor.ts` — orchestrates editor state, validation, persistence, lifecycle
+- `useCalendarEventEditor.ts` — composes editor draft/picker/reminder/source state with the focused mutation, history, and open-session hooks; preserves the caller-facing editor controller
+- `useCalendarEventMutations.ts` — save/delete/reconnect mutation lifecycle: duplicate guards, batch/partial failures, reminder reconciliation, validation projection, and recurring scopes
+- `useCalendarEditorHistory.ts` — browser-history ownership, dirty-state tracking, and cancel/pop coordination for the editor
+- `useCalendarEventEditorSession.ts` — open create/edit lifecycle: request cancellation, source seeding, existing-event draft/reminder hydration, and location state
+- `calendarEventEditorErrors.ts` — editor error detail projection shared by the editor orchestrator and mutation hook
 - `useCalendarEditorPickers.ts` — floating panel visibility and field anchor refs
 - `calendarEventEditorModel.ts` — draft normalization, validation, recurrence serialization, batch ops
 - `calendarEventEditorSessionModel.ts` — pure editor-session projections and transitions (validation visibility, title-assist draft sync, source seeding, batch edits)
@@ -24,7 +28,8 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarEventTitleField.tsx` — title input with placeholder hints
 - `CalendarEventTitleAssistPanel.tsx` — parsed location/calendar queries from the title
 - `parseCalendarTitle.ts` — natural-language date/time extraction (Chrono, weekday patterns)
-- `calendarTitleIntent.ts` — classifies title intent: batch, recurring, single
+- `calendarTitleIntent.ts` — classifies title intent and builds batch/recurring/single drafts over the recurrence clause matcher
+- `calendarRecurrenceClauseModel.ts` — pure general recurrence-clause recognition for biweekly/every-other, every-N, ordinal-weekday, and standalone-frequency phrases
 - `useCalendarEventTitleComposer.ts` — title input debounce/flush, Chrono readiness, parse projection, and uncontrolled-input synchronization
 
 ### Schedule + recurrence
@@ -50,7 +55,8 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarEventCompactCorrectionToolbar.tsx` — quick per-draft adjustments in batch mode
 - `CalendarDraftPreviewPanel.tsx` — read-only draft summary with conflict count
 - `CalendarQuickActionLayer.tsx` — portal context menu for duplication and shortcuts
-- `useCalendarQuickActions.ts` — clipboard paste, cloning, quick-create workflows
+- `useCalendarQuickActions.ts` — stable drag, prompt, context-menu, selection, and clipboard coordinator
+- `useCalendarEventQuickActionMutations.ts` — optimistic reschedule/delete/clone/paste/color mutation lifecycles, shared create-race tracking, rollback, and stale-range marking
 - `calendarQuickActionModel.ts` — pure reschedule/clone/paste/color/delete payload + date-math builders (DST-safe, Pacific epoch) consumed by `useCalendarQuickActions.ts`
 - `quickActionColorModel.ts` — pure color-id resolution + check-icon contrast for the quick-action color grid
 - `quickActionMenuLayout.ts` — viewport-clamped menu positioning (`clampMenuPosition`, shared with the deadline quick-action menu in `views/deadlines/`) + focus/roving/tab helpers for the quick-action context menu (focus logic wired through `useDismissablePortal`)

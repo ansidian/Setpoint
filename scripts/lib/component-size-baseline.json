@@ -2,16 +2,5 @@
   "_comment": "Ratcheting size guardrail for check:harness. Files above the threshold are grandfathered at their recorded allowance and may not grow beyond it.",
   "_justifications": {},
   "threshold": 600,
-  "files": {
-    "src/hooks/calendar/useCalendarModalController.tsx": 1134,
-    "src/components/calendar/modal/CalendarModalShell.tsx": 666,
-    "src/components/calendar/modal/CalendarCellItemChip.tsx": 662,
-    "src/components/calendar/modal/CalendarGrid.tsx": 626,
-    "src/components/calendar/modal/CalendarCellOverflowPopover.tsx": 604,
-    "src/components/calendar/views/events/EventsAgendaRail.tsx": 666,
-    "src/components/calendar/events/useCalendarEventEditor.ts": 842,
-    "src/components/calendar/events/useCalendarQuickActions.ts": 805,
-    "src/components/calendar/events/calendarTitleIntent.ts": 659,
-    "server/routes/calendar.ts": 605,
-  }
+  "files": {}
 }

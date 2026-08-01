@@ -44,6 +44,7 @@ export {
   updateCalendarEvent,
   deleteCalendarEvent,
 } from "./calendar-mutations.ts";
+export { applyCalendarEventWriteEffects } from "./calendar-event-write-effects.ts";
 export { validateCalendarRange } from "./calendar-range-model.ts";
 export {
   isCalendarSearchInputError,

@@ -246,8 +246,16 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useTodoistReminderDrafts` | `src/components/todoist/add-task-panel/useTodoistReminderDrafts.ts` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.ts` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.ts` |
+| `useCalendarAgendaInteractions` | `src/hooks/calendar/useCalendarAgendaInteractions.ts` |
+| `useCalendarAgendaScroll` | `src/hooks/calendar/useCalendarAgendaScroll.ts` |
+| `useCalendarControllerActions` | `src/hooks/calendar/useCalendarControllerActions.ts` |
+| `useCalendarControllerHotkeys` | `src/hooks/calendar/useCalendarControllerHotkeys.ts` |
+| `useCalendarControllerLifecycle` | `src/hooks/calendar/useCalendarControllerLifecycle.ts` |
+| `useCalendarControllerShell` | `src/hooks/calendar/useCalendarControllerShell.tsx` |
+| `useCalendarControllerViewData` | `src/hooks/calendar/useCalendarControllerViewData.ts` |
 | `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.ts` |
 | `useCalendarDomainRange` | `src/hooks/calendar/useCalendarDomainRange.ts` |
+| `useCalendarEditorScrollRouting` | `src/hooks/calendar/useCalendarEditorScrollRouting.ts` |
 | `useCalendarEventSelectionSet` | `src/hooks/calendar/useCalendarEventSelectionSet.ts` |
 | `useCalendarFloatingDetail` | `src/hooks/calendar/useCalendarFloatingDetail.ts` |
 | `useCalendarModalController` | `src/hooks/calendar/useCalendarModalController.tsx` |
@@ -256,6 +264,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useCalendarModalSelection` | `src/hooks/calendar/useCalendarModalSelection.ts` |
 | `useCalendarModalViewModel` | `src/hooks/calendar/useCalendarModalViewModel.ts` |
 | `useCalendarMonthNavigation` | `src/hooks/calendar/useCalendarMonthNavigation.ts` |
+| `useCalendarOpenRequestRouting` | `src/hooks/calendar/useCalendarOpenRequestRouting.ts` |
 | `useCalendarRange` | `src/hooks/calendar/useCalendarRange.ts` |
 | `useCalendarScrollSync` | `src/hooks/calendar/useCalendarScrollSync.ts` |
 | `useCalendarScrollViewport` | `src/hooks/calendar/useCalendarScrollViewport.ts` |

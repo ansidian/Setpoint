@@ -3,7 +3,8 @@ import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover";
 import { parseYmd } from "../calendarDateUtils.ts";
 import {
   buildCalendarEventSpanLayout,
-  isPinnedCalendarGhost,
+  calendarSpanLayoutGhostSignature,
+  calendarSpanLayoutGhostsFromSignature,
 } from "./calendarEventSpanLayout";
 import { getEventSelectionId } from "../../../lib/shell-helpers";
 import CalendarGridCells from "./CalendarGridCells";
@@ -26,7 +27,6 @@ import type {
 import type {
   CalendarEventSpanLayout,
   CalendarSpanEvent,
-  CalendarSpanGhost,
   CalendarSpanSegment,
 } from "./calendarEventSpanLayout";
 import type { CalendarGhostLike } from "./calendarGridUtils";
@@ -121,6 +121,8 @@ interface CalendarGridInteractionState {
   resolvedOverflow: CalendarGridOverflowState | null;
   suppressedSelectedHiddenAutoOpenKey: string | null;
 }
+
+const emptyEvents: CalendarSpanEvent[] = [];
 
 export default memo(function CalendarGrid({
   view,
@@ -589,38 +591,7 @@ export default memo(function CalendarGrid({
   );
 });
 
-const emptyEvents: CalendarSpanEvent[] = [];
-
-function useStableSpanLayoutGhosts(ghosts?: CalendarGhostLike[]): CalendarSpanGhost[] {
-  const signature = spanLayoutGhostSignature(ghosts);
-  return useMemo(() => (
-    signature ? JSON.parse(signature) : emptyEvents
-  ), [signature]);
-}
-
-function selectSpanLayoutGhosts(ghosts?: CalendarGhostLike[]): CalendarGhostLike[] {
-  const pinnedGhosts = (ghosts || []).filter((ghost) => (
-    ghost?.kind === "event" && isPinnedCalendarGhost(ghost)
-  ));
-  return pinnedGhosts.length ? pinnedGhosts : emptyEvents;
-}
-
-function spanLayoutGhostSignature(ghosts?: CalendarGhostLike[]): string {
-  const pinnedGhosts = selectSpanLayoutGhosts(ghosts);
-  if (!pinnedGhosts.length) return "";
-  return JSON.stringify(pinnedGhosts.map((ghost) => ({
-    id: ghost?.id || "",
-    kind: "event",
-    title: ghost?.title || "",
-    startDate: ghost?.startDate || "",
-    endDate: ghost?.endDate || "",
-    startTime: ghost?.startTime || "",
-    endTime: ghost?.endTime || "",
-    allDay: !!ghost?.allDay,
-    color: ghost?.color || "",
-    sourceColor: ghost?.sourceColor || "",
-    isRecurring: !!ghost?.isRecurring,
-    recurring: !!ghost?.recurring,
-    startMs: ghost?.startMs || null,
-  })));
+function useStableSpanLayoutGhosts(ghosts?: CalendarGhostLike[]) {
+  const signature = calendarSpanLayoutGhostSignature(ghosts);
+  return useMemo(() => calendarSpanLayoutGhostsFromSignature(signature), [signature]);
 }

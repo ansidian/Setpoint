@@ -11,7 +11,7 @@ import {
 } from "../googleSpecialDateModel.ts";
 import type { TimelineEvent } from "../../../lib/shell-helpers";
 import type { CalendarLayoutTier } from "./calendarCellItemMetrics";
-import type { CalendarMonthCell } from "./calendarGridUtils";
+import type { CalendarGhostLike, CalendarMonthCell } from "./calendarGridUtils";
 
 export interface CalendarSpanEvent extends TimelineEvent {
   id?: unknown;
@@ -177,6 +177,34 @@ export function isPinnedCalendarGhost(ghost: CalendarSpanGhost | null | undefine
   const range = visualGhostDateRange(ghost);
   if (!range) return false;
   return !!ghost?.allDay || range.startDate !== range.endDate;
+}
+
+const emptySpanLayoutGhosts: CalendarSpanGhost[] = [];
+
+export function calendarSpanLayoutGhostSignature(ghosts?: CalendarGhostLike[]): string {
+  const pinnedGhosts = (ghosts || []).filter((ghost) => (
+    ghost?.kind === "event" && isPinnedCalendarGhost(ghost)
+  ));
+  if (!pinnedGhosts.length) return "";
+  return JSON.stringify(pinnedGhosts.map((ghost) => ({
+    id: ghost?.id || "",
+    kind: "event",
+    title: ghost?.title || "",
+    startDate: ghost?.startDate || "",
+    endDate: ghost?.endDate || "",
+    startTime: ghost?.startTime || "",
+    endTime: ghost?.endTime || "",
+    allDay: !!ghost?.allDay,
+    color: ghost?.color || "",
+    sourceColor: ghost?.sourceColor || "",
+    isRecurring: !!ghost?.isRecurring,
+    recurring: !!ghost?.recurring,
+    startMs: ghost?.startMs || null,
+  })));
+}
+
+export function calendarSpanLayoutGhostsFromSignature(signature: string): CalendarSpanGhost[] {
+  return signature ? JSON.parse(signature) as CalendarSpanGhost[] : emptySpanLayoutGhosts;
 }
 
 function eventSpanId(event: CalendarSpanEvent): string | null {

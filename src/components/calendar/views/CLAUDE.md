@@ -18,7 +18,8 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `agenda/miniCalendarModel.ts` — mini-calendar cells, marker colors, item dedup
 
 ### events
-- `events/EventsAgendaRail.tsx` — combined timeline (events + deadline overlays) with weather
+- `events/EventsAgendaRail.tsx` — multi-month timeline orchestration, scroll shell, and shared agenda state
+- `events/EventsAgendaMonthSection.tsx` — memoized month/date sections with headers, event/deadline rows, preview forwarding, and drag/drop
 - `events/EventsAgendaRailParts.tsx` — weather header and skeleton loader
 - `events/EventsAgendaEventRows.tsx` — all-day and timed event rows with location/reminders
 - `events/EventsAgendaDeadlineRow.tsx` — task-like agenda row with deadline status

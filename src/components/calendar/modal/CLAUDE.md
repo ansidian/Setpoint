@@ -5,7 +5,8 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 ## Files
 
 ### Shell + header
-- `CalendarModalShell.tsx` — three-rail in-flow layout (calendar tab fill), floating detail
+- `CalendarModalShell.tsx` — three-rail content orchestration (search, calendar, context, floating detail)
+- `CalendarModalFrame.tsx` — outer panel, texture, containment, and inner-canvas DOM/style frame shared by the shell content
 - `CalendarModalHeader.tsx` — month/year title, view toggle, search, close
 - `CalendarJumpToMonth.tsx` — month/year jump picker popover with crossfade transitions
 - `CalendarModalTexture.tsx` — decorative noise overlay
@@ -16,7 +17,7 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `CalendarScrollContainer.tsx` — thin scroll-viewport shell: hosts `useCalendarScrollViewport` + `useEditorCancelOnScroll`, maps the mounted window to `CalendarMonthBlock`s + spacers
 - `CalendarMonthBlock.tsx` — one mounted month: derives block state (`calendarMonthBlockModel`), resolves data/preview, renders the headerless `CalendarGrid`
 - `calendarMonthBlockModel.ts` — per-block active/cached/full-data/skeleton derivation (pure)
-- `CalendarGrid.tsx` — month grid orchestration: cells, overlays, selection handlers
+- `CalendarGrid.tsx` — month grid orchestration: cells, overlays, selection handlers, and memoized span-layout calls
 - `CalendarGridCells.tsx` — renders day cells, derives per-cell state
 - `CalendarCell.tsx` — single day cell: styling, header, weather, drag-drop targets
 - `CalendarGridWeekHeader.tsx` — weekday header row
@@ -28,19 +29,20 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `calendarMonthPreviewModel.ts` — preview entries for mounted non-active months, reused while inputs are unchanged
 
 ### Chips, stacks, overflow
-- `CalendarCellItemChip.tsx` — item chip button with metrics-driven sizing
-- `CalendarCellItemChipModel.ts` — chip label compacting, leading-column width estimation
+- `CalendarCellItemChip.tsx` — item chip button rendering over the pure metrics/content presentation model
+- `CalendarCellItemChipModel.ts` — chip label compacting, leading-column width estimation, presentation styling, and content-fit projection
 - `CalendarCellItemStack.tsx` — visible/hidden item split with layout measurement
 - `CalendarCellItemStackModel.ts` — stack height calculation and visibility split
 - `calendarCellItemMetrics.ts` — per-tier item capacity for cells
-- `CalendarCellOverflowPopover.tsx` — portal popover for hidden items
+- `CalendarCellOverflowPopover.tsx` — portal shell, focus, positioning, and keyboard navigation for hidden items
+- `CalendarCellOverflowItem.tsx` — one overflow item row: selection/modifier selection, context menu, drag payload, metadata, reminders/status, and active styling
 - `CalendarCellOverflowPopover.position.ts` — popover viewport clamping from trigger rect
 - `CalendarInlineOverflowLayer.tsx` — inline overflow panel when space permits
 - `useCalendarGridOverflow.ts` — overflow state machine: popover vs inline, reanchor on scroll
 
 ### Spans + boundaries
 - `CalendarEventSpanOverlay.tsx` — multi-day events as pinned row-spanning segments
-- `calendarEventSpanLayout.ts` — span lane allocation, segment splitting, lane height single-source
+- `calendarEventSpanLayout.ts` — span lane allocation, segment splitting, lane height single-source, and stable pinned-ghost signature projection
 
 ### Floating detail
 - `CalendarFloatingDetailPanel.tsx` — anchored floating panel shell: Motion portal, caret, frame, editor autofocus/shake
