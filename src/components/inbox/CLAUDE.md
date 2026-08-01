@@ -2,6 +2,10 @@
 
 The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface).
 
+## Sub-maps
+
+- `reader/` — desktop/mobile detail pane, bodies, triage, bill and transaction-import actions (see `reader/CLAUDE.md`)
+
 ## Files
 
 ### Views + orchestration
@@ -41,34 +45,6 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `indexedSearchModel.ts` — normalizes indexed search results, merges read state
 - `useIndexedSearch.ts` — debounced indexed-search hook: query effect, stale-response guard, local read-override reconciliation (`updateIndexedSearchRead`/`markIndexedSearchReadBulk`)
 
-### Reader
-- `reader/Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
-- `reader/DesktopReader.tsx` — desktop detail layout with triage panel
-- `reader/DesktopReaderActionBar.tsx` — desktop reader action clusters, grouped menus, and adaptive label collapse
-- `reader/DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
-- `reader/EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
-- `reader/TriagePanel.tsx` — AI summary, bullets, urgency, lane tag display
-- `reader/DraftReply.tsx` — AI-drafted reply with send/discard
-- `reader/ReaderShared.tsx` — section accordion and empty-state primitives
-- `reader/readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
-- `reader/useEmailBody.ts` — fetches and caches body HTML, preview fallback
-- `reader/useBillPayResolver.ts` — resolves bill extraction for the open email
-- `reader/ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
-- `reader/actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
-- `reader/TransactionImportStatus.tsx` — shared desktop/mobile Amazon/PayPal import status with focused Finance review routing
-- `reader/transactionImportStatusModel.ts` — pure durable item-to-reader status projection
-- `reader/useTransactionImportStatus.ts` — owner-scoped email status fetch with stale guards and active-only polling
-- `reader/billExtractionBody.ts` — body state for the bill-pay workflow
-- `reader/billSeedModel.ts` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
-- `reader/remindMeTaskSeedModel.ts` — pure persisted-triage/manual email-to-Todoist seed derivation, including Pacific due-date subtraction and bounded provenance
-- `reader/MobileReader.tsx` — mobile detail pane with action row
-- `reader/MobileBillDrawer.tsx` — mobile slide-up bill-pay sheet (expand/collapse affordance) extracted from MobileReader
-- `reader/MobileReaderHeader.tsx` — mobile reader subject/sender/status-pills/briefing-triage header block extracted from MobileReader
-- `reader/MobileActionRow.tsx` — single-row mobile action buttons
-- `reader/MobileTriageBar.tsx` — always-visible mobile reader bar for primary one-tap triage verbs
-- `reader/MobileReaderControls.tsx` — pill badges and inline mobile controls
-- `reader/readerActionsModel.ts` — shared action visibility for both reader panes; delegates snapshot lifecycle gating to `activeSnapshotWorkflowModel` so buttons match the hotkeys/dispatch (incl. the `snapshot_item_id` guard)
-
 ### Mobile
 - `mobile/MobileInboxView.tsx` — mobile layout: chip filter bar, compact rows, reader
 - `mobile/MobileFilterSheet.tsx` — dismissible account/lane filter sheet
@@ -97,3 +73,4 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `server/routes/briefing/` — email/snapshot endpoints this UI calls
 - `src/lib/triageSoundGate.ts` — sound dedup gate for triage events
 - `src/components/alfred/` — Alfred Panel; receives the inbox ⌘Enter / Sparkles handoff
+- `reader/` — detail-pane sub-area (see its map)
