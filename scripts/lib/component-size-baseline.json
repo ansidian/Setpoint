@@ -1,7 +1,6 @@
 {
   "_comment": "Ratcheting size guardrail for check:harness. Files above the threshold are grandfathered at their recorded allowance and may not grow beyond it.",
   "_justifications": {
-    "server/actual/actual-core.ts": "Grouped import keeps only the SDK session/lock orchestration here; validation and reconciliation were extracted to actualTransactionImportModel.ts.",
     "server/email/gmail-sync.ts": "The bounded growth is the injected fire-and-forget arrival hook at the two existing Gmail indexing exits; import behavior remains in transaction-imports."
   },
   "threshold": 600,
@@ -18,7 +17,6 @@
     "src/components/calendar/events/calendarTitleIntent.ts": 659,
     "server/email/gmail.ts": 631,
     "server/email/gmail-sync.ts": 664,
-    "server/actual/actual-core.ts": 702,
     "server/routes/calendar.ts": 605,
     "src/components/todoist/add-task-panel/useAddTaskPanelController.ts": 616,
     "src/components/dashboard/DashboardShell.tsx": 638

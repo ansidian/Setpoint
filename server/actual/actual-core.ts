@@ -11,9 +11,6 @@ import {
 import {
   actualSessionKey,
   classifySchedules,
-  findScheduleByPayee,
-  findScheduleByName,
-  buildDateCondition,
   mapOpenBillInstances,
   transactionSearchStart,
   projectSdkMetadata,
@@ -30,7 +27,6 @@ import type {
   ActualPayee,
   ActualRecentTransaction,
   ActualSchedule,
-  ActualScheduleCondition,
 } from "../../shared/types/actual.ts";
 import type {
   ActualImportAccountGroup,
@@ -41,6 +37,11 @@ import {
   type SdkImportTransactionInput,
   type SdkImportResult,
 } from "./actualTransactionImportModel.ts";
+import {
+  createActualSdkScheduleWrites,
+  type ActualBillData,
+  type ActualSdkSchedulePort,
+} from "./actualSdkScheduleWrites.ts";
 
 type ActualError = Error & { status?: number; code?: string };
 interface SdkActualConfig extends ActualConfig {
@@ -56,18 +57,6 @@ interface ActualConnectionOverrides {
   serverURL?: string;
   syncId?: string;
   password?: string | null;
-}
-interface ActualBillData {
-  amount: number;
-  due_date: string;
-  payee: string;
-  type: string;
-  account_id?: string | null;
-  category_id?: string | null;
-  from_account_id?: string | null;
-  to_account_id?: string | null;
-  schedule_name?: string | null;
-  notes?: string | null;
 }
 interface QuickTransactionInput {
   accountName?: string;
@@ -91,7 +80,7 @@ interface QueryBuilder {
   filter(value: unknown): QueryBuilder;
   select(fields: string[]): QueryBuilder;
 }
-interface ActualSdk {
+interface ActualSdk extends ActualSdkSchedulePort {
   init(options: { serverURL: string; password?: string | null; dataDir?: string }): Promise<void>;
   shutdown(): Promise<void>;
   loadBudget(id: string): Promise<{ error?: string } | void>;
@@ -99,11 +88,8 @@ interface ActualSdk {
   getAccounts(): Promise<ActualAccount[]>;
   getPayees(): Promise<ActualPayee[]>;
   getCategoryGroups(): Promise<ActualCategoryGroup[]>;
-  getRules(): Promise<Array<{ id: string; conditions?: ActualScheduleCondition[] }>>;
   q(dataset: string): QueryBuilder;
   runQuery(query: QueryBuilder): Promise<{ data: unknown[] }>;
-  createPayee(input: { name: string }): Promise<string>;
-  createSchedule(input: { name: string; date: string; amount: number }): Promise<string>;
   addTransactions(accountId: string, transactions: SdkTransactionInput[]): Promise<void>;
   importTransactions(accountId: string, transactions: SdkImportTransactionInput[], options: { dryRun: boolean }): Promise<SdkImportResult>;
   sync(): Promise<void>;
@@ -111,6 +97,7 @@ interface ActualSdk {
 }
 
 const sdk = actualApi as unknown as ActualSdk;
+const scheduleWrites = createActualSdkScheduleWrites(sdk);
 
 export { isSchedulePaid } from "./actual-bill-occurrences.ts";
 
@@ -306,7 +293,7 @@ async function getMetadataInner(userId: string, { forceRefresh = false }: { forc
         sdk.getAccounts(),
         sdk.getPayees(),
         sdk.getCategoryGroups(),
-        getSchedulesWithConditions().catch(() => []),
+        scheduleWrites.readSchedules().catch(() => []),
         sdk.runQuery(
           sdk.q("transactions")
             .filter({ date: { $gte: monthAgo } })
@@ -341,177 +328,7 @@ export async function getCategories(userId: string): Promise<ActualCategoryGroup
   return categories;
 }
 
-// --- Schedule helpers (ported from actual-helper.mjs) ---
 
-async function getSchedulesWithConditions({ includeCompleted = false }: { includeCompleted?: boolean } = {}): Promise<ActualSchedule[]> {
-  const rows = (await sdk.runQuery(
-    sdk.q('schedules').select(['id', 'name', 'rule', 'next_date', 'completed'])
-  )).data;
-  const rules = await sdk.getRules();
-  const ruleMap = Object.fromEntries(rules.map((r) => [r.id, r]));
-  return rows
-    .filter((s) => includeCompleted || !(s as ActualSchedule).completed)
-    .map((s) => {
-      const schedule = s as ActualSchedule;
-      const ruleId = typeof schedule.rule === "string" ? schedule.rule : "";
-      return { ...schedule, conditions: ruleMap[ruleId]?.conditions || [] };
-    });
-}
-
-async function resolvePayee(payeeName: string | null | undefined): Promise<string | null> {
-  if (!payeeName) return null;
-  const payees = await sdk.getPayees();
-  const match = payees.find(p => p.name?.toLowerCase() === payeeName.toLowerCase());
-  return match ? match.id : await sdk.createPayee({ name: payeeName });
-}
-
-// --- Shared schedule helpers ---
-
-async function findExistingSchedule(payeeId: string | null, accountId: string | null, amount: number, name: string | null): Promise<string | null> {
-  if (payeeId) {
-    const schedules = await getSchedulesWithConditions();
-    const existing = findScheduleByPayee(schedules, payeeId, accountId, Math.abs(amount));
-    if (existing?.id) return existing.id;
-  }
-  if (name) {
-    const allSchedules = await getSchedulesWithConditions({ includeCompleted: true });
-    // Name fallback with the cross-type sign guard (bill <-> transfer). The amount read
-    // routes through actual-amount-condition.ts so an `isbetween` range is interpreted,
-    // not skipped, and a transfer can't clobber a same-named range bill (P3-76).
-    const byName = findScheduleByName(allSchedules, name, amount);
-    if (byName?.id) return byName.id;
-  }
-  return null;
-}
-
-async function updateExistingSchedule(existingId: string, newDueDate: string, amount: number, extraConditions: ActualScheduleCondition[] = []): Promise<string | null | undefined> {
-  const allSchedules = await getSchedulesWithConditions({ includeCompleted: true });
-  const existing = allSchedules.find(s => s.id === existingId);
-  const oldConditions = existing?.conditions || [];
-
-  const newConditions = [
-    buildDateCondition(oldConditions, newDueDate),
-    { op: "is", field: "amount", value: amount },
-    ...extraConditions,
-  ];
-
-  // Preserve non-date, non-amount conditions that aren't in extraConditions
-  const extraFields = new Set(extraConditions.map(c => c.field));
-  for (const c of oldConditions) {
-    if (c.field !== "date" && c.field !== "amount" && !extraFields.has(c.field)) {
-      newConditions.push(c);
-    }
-  }
-
-  await sdk.internal.send("schedule/update", {
-    schedule: { id: existingId, completed: false },
-    conditions: newConditions,
-  });
-  return existing?.name;
-}
-
-async function createOrReuseSchedule(name: string, dueDate: string, amount: number, conditions: ActualScheduleCondition[]): Promise<{ reused: boolean; name: string }> {
-  const allSchedules = await getSchedulesWithConditions({ includeCompleted: true });
-  // Preserve the P3-76 cross-type sign guard on this last-resort name fallback;
-  // amount conditions, including `isbetween`, are interpreted by the shared model.
-  const byName = findScheduleByName(allSchedules, name, amount);
-  if (byName) {
-    await sdk.internal.send("schedule/update", {
-      schedule: { id: byName.id || "", completed: false },
-      conditions,
-    });
-    return { reused: true, name };
-  }
-  const id = await sdk.createSchedule({ name, date: dueDate, amount });
-  await sdk.internal.send("schedule/update", { schedule: { id, name }, conditions });
-  return { reused: false, name };
-}
-
-async function upsertSchedule(billData: ActualBillData, targetAccountId: string) {
-  const amountCents = -Math.round(billData.amount * 100);
-  const isIncome = billData.type === "income";
-  const signedAmount = isIncome ? Math.abs(amountCents) : amountCents;
-  const name = billData.payee;
-
-  // Past-date: create posted transaction instead
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  if (billData.due_date <= today) {
-    const txn: SdkTransactionInput = { date: billData.due_date, amount: signedAmount, cleared: false };
-    const payeeId = await resolvePayee(billData.payee);
-    if (payeeId) txn.payee = payeeId;
-    if (billData.category_id) txn.category = billData.category_id;
-    await sdk.addTransactions(targetAccountId, [txn]);
-    return { success: true, message: `Transaction "${name}" created (date is today or past)` };
-  }
-
-  const payeeId = await resolvePayee(billData.payee);
-  const existingId = await findExistingSchedule(payeeId, targetAccountId, amountCents, name);
-
-  if (existingId) {
-    const existingName = await updateExistingSchedule(existingId, billData.due_date, signedAmount);
-    return { success: true, message: `Updated schedule "${existingName || name}"` };
-  }
-
-  const conditions: ActualScheduleCondition[] = [
-    { op: "is", field: "date", value: billData.due_date },
-    { op: "is", field: "amount", value: signedAmount },
-  ];
-  if (payeeId) conditions.push({ op: "is", field: "payee", value: payeeId });
-  if (targetAccountId) conditions.push({ op: "is", field: "account", value: targetAccountId });
-
-  const result = await createOrReuseSchedule(name, billData.due_date, signedAmount, conditions);
-  return { success: true, message: result.reused ? `Updated existing schedule "${name}"` : `Schedule "${name}" created` };
-}
-
-async function upsertTransferSchedule(billData: ActualBillData) {
-  if (!billData.to_account_id || !billData.schedule_name) {
-    throw Object.assign(new Error("Transfer requires to_account_id and schedule_name"), { status: 400 });
-  }
-  const amountCents = Math.round(billData.amount * 100); // positive for transfers into account
-
-  // Find the transfer payee (special payee linked to from_account)
-  const payees = await sdk.getPayees();
-  const transferPayee = payees.find(p => p.transfer_acct === billData.from_account_id);
-  if (!transferPayee) {
-    const err: ActualError = new Error("No transfer payee found for selected source account");
-    err.status = 400;
-    throw err;
-  }
-
-  // Past-date: create posted transfer transaction
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  if (billData.due_date <= today) {
-    await sdk.addTransactions(billData.to_account_id, [{
-      date: billData.due_date,
-      amount: amountCents,
-      payee: transferPayee.id,
-      cleared: false,
-    }]);
-    return { success: true, message: `Transfer created as transaction (date is today or past)` };
-  }
-
-  const name = billData.schedule_name;
-  const extraConditions: ActualScheduleCondition[] = [
-    { op: "is", field: "payee", value: transferPayee.id },
-    { op: "is", field: "account", value: billData.to_account_id },
-  ];
-
-  const existingId = await findExistingSchedule(transferPayee.id, billData.to_account_id, amountCents, name);
-
-  if (existingId) {
-    const existingName = await updateExistingSchedule(existingId, billData.due_date, amountCents, extraConditions);
-    return { success: true, message: `Updated transfer schedule "${existingName || name}"` };
-  }
-
-  const conditions: ActualScheduleCondition[] = [
-    { op: "is", field: "date", value: billData.due_date },
-    { op: "is", field: "amount", value: amountCents },
-    ...extraConditions,
-  ];
-
-  const result = await createOrReuseSchedule(name, billData.due_date, amountCents, conditions);
-  return { success: true, message: result.reused ? `Updated existing transfer schedule "${name}"` : `Transfer schedule "${name}" created` };
-}
 
 async function getRecentTransactionsForSchedules(schedules: ActualSchedule[], payeeMap: Record<string, string>): Promise<ActualRecentTransaction[]> {
   const start = transactionSearchStart(schedules);
@@ -538,7 +355,7 @@ export function getCalendarBillsRange(userId: string, { start, end }: { start: s
     return withActualBudget(userId, async ({ serverURL }) => {
       const [rawPayees, schedules] = await Promise.all([
         sdk.getPayees(),
-        getSchedulesWithConditions(),
+        scheduleWrites.readSchedules(),
       ]);
 
       const payeeMap = Object.fromEntries(rawPayees.map((p) => [p.id, p.name]));
@@ -570,51 +387,7 @@ export function markBillPaid(scheduleId: string, userId: string) {
 export function sendBill(billData: ActualBillData, userId: string) {
   return withLock(async () => {
     return withActualBudget(userId, async () => {
-      const accounts = await sdk.getAccounts();
-
-      // Use user-selected account if provided, otherwise auto-detect
-      const resolveAccount = () => {
-        if (billData.account_id) {
-          const selected = accounts.find((a) => a.id === billData.account_id);
-          if (selected) return selected;
-        }
-        return accounts.find((a) => a.type === "checking" || a.name.toLowerCase().includes("checking")) || accounts[0];
-      };
-
-      const targetAccount = resolveAccount();
-      const amountCents = Math.round(billData.amount * 100);
-      const isIncome = billData.type === "income";
-
-      let result;
-
-      if (billData.type === "transfer") {
-        // Transfer: use from/to account IDs for schedule upsert
-        if (!billData.from_account_id || !billData.to_account_id || !billData.schedule_name) {
-          const err: ActualError = new Error("Transfer requires from_account_id, to_account_id, and schedule_name");
-          err.status = 400;
-          throw err;
-        }
-        result = await upsertTransferSchedule(billData);
-      } else if (billData.type === "bill") {
-        // Bill: upsert schedule with category
-        if (!targetAccount) throw Object.assign(new Error("No open Actual account found"), { status: 400 });
-        result = await upsertSchedule(billData, targetAccount.id);
-      } else {
-        // Expense / Income: one-time transaction (existing behavior + category support)
-        if (!targetAccount) throw Object.assign(new Error("No open Actual account found"), { status: 400 });
-        const txn: SdkTransactionInput = {
-          date: billData.due_date,
-          amount: isIncome ? amountCents : -amountCents,
-          payee_name: billData.payee,
-          notes: billData.notes == null || String(billData.notes).trim() === ""
-            ? ""
-            : String(billData.notes),
-        };
-        if (billData.category_id) txn.category = billData.category_id;
-        await sdk.addTransactions(targetAccount.id, [txn]);
-        result = { success: true, message: `Sent ${billData.payee} $${billData.amount} to Actual Budget` };
-      }
-
+      const result = await scheduleWrites.writeBill(billData);
       await sdk.sync();
       clearMetadataCache();
       return result;
