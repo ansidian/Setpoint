@@ -19,6 +19,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarControllerHelpers.ts` — pure controller helpers (month math, event dedupe, range/overlay matching, item-location/focus resolution, search-result mapping) extracted from `useCalendarModalController.tsx`
 - `calendarEntryReadinessModel.ts` — entry-readiness projection (events-range loading + agenda-entry-ready gate over committed/seeded/current deadline overlay data) extracted from the `viewData` memo in `useCalendarModalController.tsx`
 - `calendarBillsViewDataModel.ts` — pure bills view-data precedence/status projection: visible range data, broad schedules, pay links, loading/pending/error metadata
+- `calendarDomainRangeDataModel.ts` — pure deadline/bill month slicing, range projection/deduplication, stats recalculation, and represented-month discovery for `useCalendarDomainRange`
 
 ### Controller + view model
 - `calendarShellLoaders.tsx` — production lazy boundaries for the desktop shell and mobile agenda; Vitest resolves the same module paths eagerly to preserve synchronous behavior-test contracts
@@ -39,7 +40,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Domain state + lifecycle
 - `useCalendarRange.ts` — per-month event caching/fetching, prefetch radius, staleness
-- `useCalendarDomainRange.ts` — deadline/bill prefetch planning from visible bounds
+- `useCalendarDomainRange.ts` — deadline/bill range cache, fetch, seed, stale, and prefetch orchestration over the domain-range data model
 - `useAgendaFetch.ts` — agenda month fetching: initial mount fetch, scroll-driven prefetch
 - `useCalendarScrollSync.ts` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands
 - `useCalendarScrollViewport.ts` — the infinite multi-month scroll state machine (user-vs-programmatic refs, settle lifecycle via `calendarSettleModel`, mount centering, rAF scroll handler, prop-driven nav/crossfade) extracted from `CalendarScrollContainer`; returns `{containerRef, refYear, refMonth, wFirst, wLast, getHeight}`
