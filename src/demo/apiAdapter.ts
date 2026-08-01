@@ -1,62 +1,23 @@
 import { createDemoApiError } from "./config.ts";
+import {
+  NO_DEMO_API_RESPONSE,
+  demoNotFound as notFound,
+  demoPathSegment as pathSegment,
+  type DemoApiRequest,
+  type DemoRequestBody,
+} from "./apiHandler.ts";
 import { demoDateRange } from "./dateRange.ts";
 import { buildDemoCalendarBillsRange } from "./financeData.ts";
+import { handleDemoNewsRequest } from "./newsAdapter.ts";
+import { handleDemoNotesRequest } from "./notesAdapter.ts";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.ts";
-import { allSnapshotRows, findSnapshotRow, mutateSnapshotRows } from "./snapshotRows.ts";
+import { handleDemoSnapshotRequest } from "./snapshotAdapter.ts";
 import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.ts";
 import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
 import { handleDemoTransactionImportRequest, NO_DEMO_TRANSACTION_IMPORT_RESPONSE } from "./transactionImports.ts";
 import type { DemoSeed } from "./store.ts";
-import type { NewsSource } from "../../shared/types/news.ts";
-type DemoSnapshot = DemoSeed["activeSnapshot"];
-type DemoSnapshotRow = DemoSnapshot["carryover"][number];
-type DemoLane = keyof DemoSnapshot["lanes"];
 type DemoTask = DemoSeed["deadlines"]["upcoming"][number];
 type DemoCalendarEvent = DemoSeed["calendarEvents"][number];
-interface DemoRequestBody extends Record<string, unknown> {
-  archived?: boolean;
-  allDay?: boolean;
-  at?: string;
-  calendarId?: string;
-  content?: string;
-  description?: string;
-  due_date?: string;
-  dueDate?: string;
-  due_time?: string;
-  dueTime?: string;
-  end?: string;
-  endIso?: string;
-  endDate?: string;
-  endDateTime?: string;
-  endTime?: string;
-  feedUrl?: string;
-  hnQuery?: string;
-  ids?: Array<string | number>;
-  items?: DemoRequestBody[];
-  kind?: "rss" | "hn";
-  lane?: DemoLane;
-  location?: string;
-  minPoints?: number;
-  name?: string;
-  noteIds?: Array<string | number>;
-  q?: string;
-  senders?: DemoSeed["importantSenders"];
-  siteUrl?: string | null;
-  start?: string;
-  startIso?: string;
-  startDate?: string;
-  startDateTime?: string;
-  startTime?: string;
-  status?: string;
-  title?: string;
-  topicId?: number;
-  uids?: string[];
-}
-
-interface DemoNotFoundError extends Error {
-  code: "DEMO_NOT_FOUND";
-  status: 404;
-}
 const clone = <T>(value: T): T => value == null ? value : structuredClone(value);
 
 function route(path: string): URL {
@@ -65,13 +26,6 @@ function route(path: string): URL {
 
 function unsupported(path: string): never {
   throw createDemoApiError(path);
-}
-
-function notFound(path: string): never {
-  const error = new Error(`Demo data not found for ${path}.`) as DemoNotFoundError;
-  error.code = "DEMO_NOT_FOUND";
-  error.status = 404;
-  throw error;
 }
 
 function parseBody(options: RequestInit = {}): DemoRequestBody {
@@ -84,72 +38,6 @@ function parseBody(options: RequestInit = {}): DemoRequestBody {
     }
   }
   return options.body as unknown as DemoRequestBody;
-}
-
-function pathSegment(pathname: string, fromEnd: number): string {
-  const segments = pathname.split("/");
-  return segments[segments.length - fromEnd] ?? "";
-}
-
-function refreshLaneCounts(snapshot: DemoSnapshot): void {
-  snapshot.laneCounts = {
-    queued: snapshot.lanes.queued?.length || 0,
-    needs_attention: snapshot.lanes.needs_attention?.length || 0,
-    catch_up: snapshot.lanes.catch_up?.length || 0,
-    fyi: snapshot.lanes.fyi?.length || 0,
-    handled: snapshot.lanes.handled?.length || 0,
-    untriaged_read: snapshot.lanes.untriaged_read?.length || 0,
-    noise: snapshot.lanes.noise?.length || 0,
-    carryover: snapshot.carryover?.length || 0,
-  };
-}
-
-function findSnapshotRowLane(snapshot: DemoSnapshot, uid: string): DemoLane | "carryover" | null {
-  for (const [lane, rows] of Object.entries(snapshot.lanes) as Array<[DemoLane, DemoSnapshotRow[]]>) {
-    if (rows.some((row) => String(row.uid || row.email_id) === String(uid))) return lane;
-  }
-  if ((snapshot.carryover || []).some((row) => String(row.uid || row.email_id) === String(uid))) return "carryover";
-  return null;
-}
-
-function removeSnapshotRow(snapshot: DemoSnapshot, uid: string): void {
-  for (const [lane, rows] of Object.entries(snapshot.lanes) as Array<[DemoLane, DemoSnapshotRow[]]>) {
-    snapshot.lanes[lane] = rows.filter((row) => String(row.uid || row.email_id) !== String(uid));
-  }
-  snapshot.carryover = (snapshot.carryover || []).filter((row) => String(row.uid || row.email_id) !== String(uid));
-  refreshLaneCounts(snapshot);
-}
-
-function moveSnapshotRow(snapshot: DemoSnapshot, itemId: string, lane: DemoLane): DemoSnapshotRow | null {
-  let found: DemoSnapshotRow | null = null;
-  removeSnapshotRow(snapshot, `__no_match_${itemId}`);
-  for (const [currentLane, rows] of Object.entries(snapshot.lanes) as Array<[DemoLane, DemoSnapshotRow[]]>) {
-    const index = rows.findIndex((row) => String(row.snapshot_item_id || row.id) === String(itemId));
-    if (index >= 0) {
-      found = rows.splice(index, 1)[0] ?? null;
-      if (!found) break;
-      found.lane = lane;
-      (found as DemoSnapshotRow & { _lane?: DemoLane })._lane = lane;
-      break;
-    }
-    if (currentLane) continue;
-  }
-  if (!found) {
-    const index = (snapshot.carryover || []).findIndex((row) => String(row.snapshot_item_id || row.id) === String(itemId));
-    if (index >= 0) {
-      found = snapshot.carryover.splice(index, 1)[0] ?? null;
-      if (found) {
-        found.lane = lane;
-        (found as DemoSnapshotRow & { _lane?: DemoLane })._lane = lane;
-      }
-    }
-  }
-  if (found) {
-    if (!snapshot.lanes[lane]) snapshot.lanes[lane] = [];
-    snapshot.lanes[lane].unshift(found);
-  }
-  refreshLaneCounts(snapshot);
-  return found;
 }
 
 function mutateTask(seed: DemoSeed, taskId: string, updater: (task: DemoTask) => void): void {
@@ -332,94 +220,13 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
   const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body });
   if (transactionImportResponse !== NO_DEMO_TRANSACTION_IMPORT_RESPONSE) return transactionImportResponse;
-  if (pathname === "/api/briefing/email/mark-all-read" && method === "POST") {
-    for (const uid of Array.isArray(body.uids) ? body.uids : []) {
-      mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = true; });
-    }
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/mark-read$/) && method === "POST") {
-    const uid = decodeURIComponent(pathSegment(pathname, 2));
-    mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = true; });
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/mark-unread$/) && method === "POST") {
-    const uid = decodeURIComponent(pathSegment(pathname, 2));
-    mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = false; });
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/pin$/) && (method === "POST" || method === "DELETE")) {
-    const uid = decodeURIComponent(pathSegment(pathname, 2));
-    mutateSnapshotRows(seed.activeSnapshot, uid, (row) => {
-      (row as DemoSnapshotRow & { pinned?: boolean }).pinned = method === "POST";
-    });
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/trash$/) && method === "POST") {
-    const uid = decodeURIComponent(pathSegment(pathname, 2));
-    removeSnapshotRow(seed.activeSnapshot, uid);
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/snooze$/) && method === "POST") {
-    const uid = decodeURIComponent(pathSegment(pathname, 2));
-    const row = findSnapshotRow(seed.activeSnapshot, uid);
-    if (row) {
-      // Stash the row + its lane so unsnooze (undo) can restore it truthfully.
-      seed.snoozedEmails = seed.snoozedEmails || {};
-      seed.snoozedEmails[uid] = { row: clone(row), lane: findSnapshotRowLane(seed.activeSnapshot, uid) };
-      removeSnapshotRow(seed.activeSnapshot, uid);
-    }
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/snooze$/) && method === "DELETE") {
-    const uid = decodeURIComponent(pathSegment(pathname, 2));
-    const stashed = seed.snoozedEmails?.[uid];
-    if (stashed) {
-      if (stashed.lane === "carryover") {
-        seed.activeSnapshot.carryover = [...(seed.activeSnapshot.carryover || []), stashed.row];
-      } else {
-        const lane = stashed.lane && seed.activeSnapshot.lanes[stashed.lane] ? stashed.lane : "needs_attention";
-        seed.activeSnapshot.lanes[lane] = [...(seed.activeSnapshot.lanes[lane] || []), stashed.row];
-      }
-      refreshLaneCounts(seed.activeSnapshot);
-      delete seed.snoozedEmails[uid];
-    }
-    return { ok: true };
-  }
-
-  if (pathname.startsWith("/api/briefing/dismiss/") && method === "POST") {
-    removeSnapshotRow(seed.activeSnapshot, decodeURIComponent(pathSegment(pathname, 1)));
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/lane$/) && method === "PATCH") {
-    const itemId = decodeURIComponent(pathSegment(pathname, 2));
-    return clone(moveSnapshotRow(seed.activeSnapshot, itemId, body.lane || "fyi") || { ok: true });
-  }
-
-  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/(dismiss|handled)$/) && method === "POST") {
-    const itemId = decodeURIComponent(pathSegment(pathname, 2));
-    const row = moveSnapshotRow(seed.activeSnapshot, itemId, "handled");
-    return clone(row || { ok: true });
-  }
-
-  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/restore$/) && method === "POST") {
-    const itemId = decodeURIComponent(pathSegment(pathname, 2));
-    const row = moveSnapshotRow(seed.activeSnapshot, itemId, "needs_attention");
-    return clone(row || { ok: true });
-  }
-
-  if (pathname.match(/^\/api\/briefing\/snapshot\/items\/[^/]+\/reopen$/) && method === "POST") {
-    const itemId = decodeURIComponent(pathSegment(pathname, 2));
-    const row = moveSnapshotRow(seed.activeSnapshot, itemId, "needs_attention");
-    return clone(row || { ok: true });
-  }
+  const request: DemoApiRequest = { path, url, pathname, method, seed, body };
+  const snapshotResponse = handleDemoSnapshotRequest(request);
+  if (snapshotResponse !== NO_DEMO_API_RESPONSE) return snapshotResponse;
+  const notesResponse = handleDemoNotesRequest(request);
+  if (notesResponse !== NO_DEMO_API_RESPONSE) return notesResponse;
+  const newsResponse = handleDemoNewsRequest(request);
+  if (newsResponse !== NO_DEMO_API_RESPONSE) return newsResponse;
 
   if (pathname.startsWith("/api/briefing/complete-task/") && method === "POST") {
     mutateTask(seed, decodeURIComponent(pathSegment(pathname, 1)), (task) => { task.status = "complete"; });
@@ -511,127 +318,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     return { ok: true };
   }
 
-  if (pathname === "/api/notes" && method === "POST") {
-    const note = {
-      id: `demo-note-${Date.now()}`,
-      user_id: "demo-user",
-      content: body.content || "",
-      sort_order: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      archived_at: null,
-    };
-    seed.notes.unshift(note);
-    seed.notes.forEach((entry, index) => { entry.sort_order = index + 1; });
-    return clone(note);
-  }
-
-  if (pathname === "/api/notes/reorder" && method === "PATCH") {
-    const order = Array.isArray(body.noteIds) ? body.noteIds.map(String) : [];
-    const byId = new Map(seed.notes.map((note) => [String(note.id), note]));
-    const ordered = order.map((id) => byId.get(id)).filter((note): note is DemoSeed["notes"][number] => Boolean(note));
-    const remaining = seed.notes.filter((note) => !order.includes(String(note.id)));
-    seed.notes = [...ordered, ...remaining];
-    seed.notes.forEach((entry, index) => { entry.sort_order = index + 1; });
-    return clone(seed.notes);
-  }
-
-  if (pathname.match(/^\/api\/notes\/[^/]+\/archive$/) && method === "PATCH") {
-    const noteId = decodeURIComponent(pathSegment(pathname, 2));
-    const note = seed.notes.find((entry) => String(entry.id) === String(noteId));
-    if (!note) return notFound(path);
-    note.archived_at = body.archived ? new Date().toISOString() : null;
-    note.updated_at = new Date().toISOString();
-    return { success: true };
-  }
-
-  if (pathname.match(/^\/api\/notes\/[^/]+$/) && method === "PATCH") {
-    const noteId = decodeURIComponent(pathSegment(pathname, 1));
-    const note = seed.notes.find((entry) => String(entry.id) === String(noteId));
-    if (!note) return notFound(path);
-    note.content = body.content ?? note.content;
-    note.updated_at = new Date().toISOString();
-    return clone(note);
-  }
-
-  if (pathname.match(/^\/api\/notes\/[^/]+$/) && method === "DELETE") {
-    const noteId = decodeURIComponent(pathSegment(pathname, 1));
-    seed.notes = seed.notes.filter((entry) => String(entry.id) !== String(noteId));
-    return { ok: true };
-  }
-
-  if (pathname === "/api/news/seen" && method === "POST") {
-    seed.news.lastSeenAt = body.at || new Date().toISOString();
-    return { ok: true, at: seed.news.lastSeenAt };
-  }
-
-  if (pathname === "/api/news/refresh" && method === "POST") {
-    return { swept: 0, throttled: false };
-  }
-
-  if (pathname === "/api/news/topics" && method === "POST") {
-    const name = body.name || "Demo topic";
-    const id = Math.max(0, ...seed.news.topics.map((t) => t.id)) + 1;
-    seed.news.topics.push({ id, name, position: seed.news.topics.length, sources: [], items: [], mutedTerms: [] });
-    return { id, name };
-  }
-
-  if (pathname === "/api/news/topics/reorder" && method === "POST") {
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-    seed.news.topics.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-    seed.news.topics.forEach((topic, index) => { topic.position = index; });
-    return { ok: true };
-  }
-
-  if (pathname === "/api/news/topics/import-starter" && method === "POST") {
-    return { imported: body.names || [] };
-  }
-
-  if (pathname.match(/^\/api\/news\/topics\/[^/]+$/) && method === "PATCH") {
-    const id = Number(pathSegment(pathname, 1));
-    const topic = seed.news.topics.find((t) => t.id === id);
-    if (topic) topic.name = body.name || topic.name;
-    if (topic && Array.isArray(body.mutedTerms)) topic.mutedTerms = body.mutedTerms;
-    return { ok: true };
-  }
-
-  if (pathname.match(/^\/api\/news\/topics\/[^/]+$/) && method === "DELETE") {
-    const id = Number(pathSegment(pathname, 1));
-    seed.news.topics = seed.news.topics.filter((t) => t.id !== id);
-    return { ok: true };
-  }
-
-  if (pathname === "/api/news/sources/preview" && method === "POST") {
-    return { feedUrl: "https://demo.example/feed", title: "Demo Feed", sampleTitles: ["Sample headline"] };
-  }
-
-  if (pathname === "/api/news/sources" && method === "POST") {
-    const topic = seed.news.topics.find((t) => t.id === Number(body.topicId));
-    const id = Date.now() % 100000;
-    const source: NewsSource = {
-      id, topicId: body.topicId ?? 0, kind: body.kind || "rss", title: body.title || "Demo source",
-      feedUrl: body.feedUrl || "https://demo.example/feed", siteUrl: body.siteUrl || null,
-      enabled: true, hnQuery: body.hnQuery ?? null, minPoints: body.minPoints ?? null,
-      lastStatus: null, lastFetchAt: null, consecutiveFailures: 0,
-    };
-    if (topic) topic.sources.push(source);
-    return { source };
-  }
-
-  if (pathname.match(/^\/api\/news\/sources\/[^/]+$/) && (method === "PATCH" || method === "DELETE")) {
-    const id = Number(pathSegment(pathname, 1));
-    for (const topic of seed.news.topics) {
-      if (method === "DELETE") {
-        topic.sources = topic.sources.filter((s) => s.id !== id);
-        topic.items = topic.items.filter((i) => i.sourceId !== id);
-      } else {
-        const source = topic.sources.find((s) => s.id === id);
-        if (source) Object.assign(source, body);
-      }
-    }
-    return { ok: true };
-  }
-
   if (pathname === "/api/ea/settings" && method === "PUT") {
     Object.assign(seed.settings, body);
     return clone(seed.settings);
@@ -647,33 +333,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     || pathname === "/api/dashboard/current/sync"
     || pathname === "/api/dashboard/health") {
     return pathname === "/api/dashboard/health" ? clone(seed.currentDashboard.providerHealth) : clone(seed.currentDashboard);
-  }
-
-  if (pathname === "/api/briefing/snapshot/active" || pathname === "/api/briefing/snapshot/sync") {
-    return clone(seed.activeSnapshot);
-  }
-
-  if (pathname === "/api/briefing/snapshot/history") {
-    return {
-      snapshots: [{
-        ...clone(seed.activeSnapshot.snapshot),
-        laneCounts: clone(seed.activeSnapshot.laneCounts),
-        item_count: Object.values(seed.activeSnapshot.laneCounts).reduce((sum, count) => sum + Number(count || 0), 0),
-      }],
-    };
-  }
-
-  if (pathname.startsWith("/api/briefing/snapshot/")) {
-    return clone(seed.activeSnapshot);
-  }
-
-  const briefingEmailParts = pathname.split("/").filter(Boolean);
-  if (briefingEmailParts.length === 4
-    && briefingEmailParts[0] === "api"
-    && briefingEmailParts[1] === "briefing"
-    && briefingEmailParts[2] === "email") {
-    const uid = decodeURIComponent(briefingEmailParts[3]!);
-    return clone(seed.emailBodies[uid] || notFound(path));
   }
 
   if (pathname === "/api/calendar/range") {
@@ -774,11 +433,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
       demo: true,
     };
   }
-  if (pathname === "/api/notes") return clone(seed.notes);
-  if (pathname === "/api/news") return clone(seed.news);
-  if (pathname === "/api/news/catalog") {
-    return { topics: [{ name: "3D Printing", sources: [] }, { name: "AI", sources: [] }] };
-  }
   if (pathname === "/api/ea/models" || pathname === "/api/ea/bill-extract-models") {
     return [{
       provider: "demo",
@@ -804,10 +458,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   // See P3-18.
   if (pathname === "/api/calendar/places/suggest") return { places: [] };
   if (pathname.match(/^\/api\/calendar\/places\/[^/]+$/)) return { place: null };
-  if (pathname === "/api/briefing/email-search") {
-    const rows = allSnapshotRows(seed.activeSnapshot);
-    return { emails: rows, accountsById: {} };
-  }
   return unsupported(path);
 }
 
