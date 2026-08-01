@@ -6,7 +6,8 @@ AI search pipeline over the email index: hybrid retrieval (FTS + embeddings) and
 
 - `email-search-query.ts` — parses search strings: intent, date range, sender
 - `email-search-date-window.ts` — decides the search lookback window from email age/relevance
-- `email-search-retrieval.ts` — retrieval chain: FTS → embeddings → ranking → dedupe/limit
+- `email-search-retrieval.ts` — hybrid retrieval orchestration: lexical + embeddings → fusion → evidence gate → paging
+- `email-search-lexical-retrieval.ts` — local-index retrieval: bounded FTS/fallback passes, plan filters, snapshot hydration, and UID hydration
 - `email-search-ranking.ts` — re-ranks by BM25, recency, sender match
 - `email-search-evidence.ts` — evidence gate: vector floor, lexical floor, field matches
 - `email-search-embeddings.ts` — embedding model config: dimension, version, pricing
