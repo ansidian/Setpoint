@@ -59,7 +59,6 @@
     "server/dashboard/current-service.ts -> server/reminders/reminder-hydration.ts",
     "server/dashboard/current-service.ts -> server/tasks/deadline-helpers.ts",
     "server/dashboard/current-service.ts -> server/tasks/todoist.ts",
-    "server/email/email-service.ts -> server/snapshots/snapshot-lifecycle.ts",
     "server/email/gmailTriageStatements.ts -> server/snapshots/arrival-grace.ts",
     "server/routes/accounts.ts -> server/email/email-index.ts",
     "server/routes/accounts.ts -> server/email/email-provider-types.ts",

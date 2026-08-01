@@ -42,6 +42,7 @@ import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
 import { errorMessage } from "./snapshot-types.ts";
 
 export { activeSnapshotWindow } from "./snapshot-lifecycle.ts";
+export { normalizeBillCandidate } from "./snapshot-lifecycle.ts";
 export { CARRYOVER_MAX_DEPTH } from "./snapshotStore.ts";
 export {
   attachArrivalGraceEmailToActiveSnapshot,

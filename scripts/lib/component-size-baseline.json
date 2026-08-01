@@ -16,7 +16,6 @@
     "src/components/calendar/events/useCalendarEventEditor.ts": 842,
     "src/components/calendar/events/useCalendarQuickActions.ts": 805,
     "src/components/calendar/events/calendarTitleIntent.ts": 659,
-    "server/email/email-service.ts": 653,
     "server/email/gmail.ts": 631,
     "server/email/gmail-sync.ts": 664,
     "server/actual/actual-core.ts": 702,
