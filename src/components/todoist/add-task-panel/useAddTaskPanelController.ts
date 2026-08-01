@@ -5,7 +5,6 @@ import {
   createReminder,
   deleteDeadline,
   deleteReminder,
-  listReminders,
   updateDeadline,
 } from "../../../api";
 import useIsMobile from "../../../hooks/useIsMobile";
@@ -15,7 +14,6 @@ import {
   buildManualDue,
   getInitialDueEpoch,
   buildSeededDue,
-  displayTimeToInputValue,
   buildSeededDueDisplay,
 } from "./due";
 import {
@@ -30,26 +28,17 @@ import { canSubmitTask } from "./submitPayload";
 import { submitAddTaskFlow } from "./submitAddTaskFlow";
 import useAddTaskPanelPlacement from "./useAddTaskPanelPlacement";
 import useDirtyCloseConfirmation from "./useDirtyCloseConfirmation";
+import useTodoistReminderDrafts from "./useTodoistReminderDrafts";
 import {
   getCachedTodoistLabels,
   getCachedTodoistProjects,
 } from "./todoistReferenceCache";
-import {
-  createTodoistReminderDraftFromCustom,
-  createTodoistReminderDraftFromOffset,
-  getTodoistReminderPresetState,
-  TODOIST_REMINDER_PRESETS,
-} from "./todoistReminderModel";
 import type { TodoistLabel, TodoistPriority, TodoistProject, TodoistTask } from "../../../../shared/types/tasks";
 import type {
   AddTaskOverrides,
   AddTaskPanelProps,
   AutocompleteType,
-  CustomReminder,
   ManualDue,
-  TodoistReminderDraftResult,
-  TodoistReminderEntry,
-  TodoistReminderPresetState,
 } from "./types";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -119,13 +108,6 @@ export default function useAddTaskPanelController({
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [todoistReminders, setTodoistReminders] = useState<TodoistReminderEntry[]>([]);
-  const [removedReminderIds, setRemovedReminderIds] = useState<string[]>([]);
-  const [reminderError, setReminderError] = useState<string | null>(null);
-  const [customReminder, setCustomReminder] = useState<CustomReminder>(() => ({
-    date: editingTask?.due_date || initialDueDate || "",
-    time: displayTimeToInputValue(editingTask?.due_time),
-  }));
   const isMobile = useIsMobile();
   const [autocompleteType, setAutocompleteType] = useState<AutocompleteType>(null);
   const [cursorPos, setCursorPos] = useState(0);
@@ -219,27 +201,6 @@ export default function useAddTaskPanelController({
     });
   }, [editingTask, labels]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setTodoistReminders([]);
-    setRemovedReminderIds([]);
-    setReminderError(null);
-    if (!editingTask?.id) return undefined;
-    listReminders({
-      sourceType: "todoist_task",
-      sourceItemId: editingTask.id,
-    })
-      .then((result) => {
-        if (!cancelled) setTodoistReminders(result.reminders || []);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setReminderError(errorMessage(err, "Failed to load reminders."));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [editingTask?.id]);
-
   const seededNlpDueDate = !editingTask ? initialDueDate : null;
   const parsed = useMemo(
     () => parseTokens(input, projects, labels, { seededDueDate: seededNlpDueDate }),
@@ -277,26 +238,15 @@ export default function useAddTaskPanelController({
     [editingTask?.due_date, editingTask?.due_time, editingTask?.title, input, isEdit, manualDue?.epochMs, overrides.due, parsed.duePreview, parsed.stripped, resolvedPriority, seededDueEpoch],
   );
 
-  const reminderDraftTask = useMemo(() => ({
-    ...(editingTask || {}),
-    id: editingTask?.id || null,
-    title: parsed.stripped || input.trim() || editingTask?.title || "",
-    due_date: draftPreview?.dueDate || editingTask?.due_date || null,
-    due_time: draftPreview?.dueTime || editingTask?.due_time || null,
-    class_name: resolvedProject?.name || editingTask?.class_name || editingTask?.project_name || "Todoist",
-    class_color: resolvedProject?.color || editingTask?.class_color || null,
-    url: editingTask?.url || null,
-  }), [draftPreview?.dueDate, draftPreview?.dueTime, editingTask, input, parsed.stripped, resolvedProject?.color, resolvedProject?.name]);
-  const hasReminderAnchor = !!reminderDraftTask.due_date;
-
-  useEffect(() => {
-    const dueDate = reminderDraftTask.due_date;
-    if (!dueDate) return;
-    setCustomReminder((current) => ({
-      date: current.date || dueDate,
-      time: current.time || displayTimeToInputValue(reminderDraftTask.due_time),
-    }));
-  }, [reminderDraftTask.due_date, reminderDraftTask.due_time]);
+  const reminderDrafts = useTodoistReminderDrafts({
+    editingTask,
+    initialDueDate,
+    draftPreview,
+    input,
+    parsedTitle: parsed.stripped,
+    resolvedProject,
+  });
+  const { todoistReminders, removedReminderIds } = reminderDrafts;
 
   const originalDueValue = useMemo(
     () => buildOriginalDueValue({ editingTask, seededDueString: seededCreateDue?.dueString }),
@@ -345,67 +295,6 @@ export default function useAddTaskPanelController({
 
   const closeDuePicker = useCallback(() => {
     setDuePickerOpen(false);
-  }, []);
-
-  const updateCustomReminder = useCallback((patch: Partial<CustomReminder>) => {
-    setCustomReminder((current) => ({ ...current, ...patch }));
-    setReminderError(null);
-  }, []);
-
-  const addTodoistReminderDraft = useCallback((nextReminder: TodoistReminderDraftResult) => {
-    if (nextReminder.blocked) {
-      setReminderError(nextReminder.blockReason === "duplicate"
-        ? "That reminder is already on this task."
-        : nextReminder.blockReason === "past"
-          ? "Choose a future reminder time."
-          : "Choose a due date before adding a reminder.");
-      return;
-    }
-    setTodoistReminders((current) => [...current, nextReminder]);
-    setReminderError(null);
-  }, []);
-
-  const addTodoistReminderPreset = useCallback((offsetMinutes: number) => {
-    addTodoistReminderDraft(createTodoistReminderDraftFromOffset({
-      task: reminderDraftTask,
-      offsetMinutes,
-      existingReminders: todoistReminders,
-    }));
-  }, [addTodoistReminderDraft, reminderDraftTask, todoistReminders]);
-
-  const addCustomTodoistReminder = useCallback((selection: CustomReminder | null = null) => {
-    const reminderSelection = selection || customReminder;
-    addTodoistReminderDraft(createTodoistReminderDraftFromCustom({
-      task: reminderDraftTask,
-      reminderDate: reminderSelection.date,
-      reminderTime: reminderSelection.time,
-      existingReminders: todoistReminders,
-    }));
-  }, [addTodoistReminderDraft, customReminder, reminderDraftTask, todoistReminders]);
-
-  const todoistReminderPresetStates = useMemo<Record<number, TodoistReminderPresetState>>(() => {
-    return Object.fromEntries(TODOIST_REMINDER_PRESETS.map((preset) => [
-      preset.offsetMinutes,
-      getTodoistReminderPresetState({
-        task: reminderDraftTask,
-        offsetMinutes: preset.offsetMinutes,
-        existingReminders: todoistReminders,
-      }),
-    ]));
-  }, [reminderDraftTask, todoistReminders]);
-
-  const removeTodoistReminder = useCallback((reminder: TodoistReminderEntry) => {
-    const reminderId = reminder.id;
-    if (reminderId) {
-      setRemovedReminderIds((current) => (
-        current.includes(reminderId) ? current : [...current, reminderId]
-      ));
-    }
-    setTodoistReminders((current) => current.filter((entry) => {
-      if (reminder?.id) return entry.id !== reminder.id;
-      return entry.clientId !== reminder?.clientId;
-    }));
-    setReminderError(null);
   }, []);
 
   const handleDueSelect = useCallback((epochMs: number) => {
@@ -510,11 +399,7 @@ export default function useAddTaskPanelController({
         // Deadline saved, but some reminders did not. Keep the panel open and
         // surface the reminder failure so the user can retry/reconcile rather than
         // closing on a half-applied state with stale badges.
-        setReminderError(
-          created + deleted > 0
-            ? "Task saved, but some reminders could not be updated."
-            : "Task saved, but reminders could not be updated.",
-        );
+        reminderDrafts.reportReminderMutationFailure(created + deleted > 0);
         return;
       }
       closeWithoutDirtyConfirmation();
@@ -587,14 +472,14 @@ export default function useAddTaskPanelController({
     duePickerOpen,
     duePickerNow,
     todoistReminders,
-    todoistReminderPresetStates,
-    reminderError,
-    customReminder,
-    hasReminderAnchor,
-    updateCustomReminder,
-    addTodoistReminderPreset,
-    addCustomTodoistReminder,
-    removeTodoistReminder,
+    todoistReminderPresetStates: reminderDrafts.todoistReminderPresetStates,
+    reminderError: reminderDrafts.reminderError,
+    customReminder: reminderDrafts.customReminder,
+    hasReminderAnchor: reminderDrafts.hasReminderAnchor,
+    updateCustomReminder: reminderDrafts.updateCustomReminder,
+    addTodoistReminderPreset: reminderDrafts.addTodoistReminderPreset,
+    addCustomTodoistReminder: reminderDrafts.addCustomTodoistReminder,
+    removeTodoistReminder: reminderDrafts.removeTodoistReminder,
     openDuePicker,
     closeDuePicker,
     handleDueSelect,

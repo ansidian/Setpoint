@@ -4,9 +4,10 @@ This directory owns the Todoist create/edit panel used by Notes promotion, Dashb
 
 ## Files
 
-- `useAddTaskPanelController.ts` — form, parser, reference-cache, reminder, submit, delete, and dirty/preview state orchestration.
+- `useAddTaskPanelController.ts` — form, parser, reference-cache, submit, delete, and dirty/preview state orchestration.
 - `useAddTaskPanelPlacement.ts` — anchored/modal/mobile/inline placement, focus, dismissal, keyboard offset, scroll lock, and wheel containment.
 - `useDirtyCloseConfirmation.ts` — optional inline dirty-exit confirmation state used by embedded workspaces.
+- `useTodoistReminderDrafts.ts` — reminder loading, task-anchor projection, draft validation, removal, and reconciliation-error state.
 - `AddTaskPanelView.tsx` — chooses the inline editor or the portaled floating editor.
 - `AddTaskPanelFloatingEditor.tsx` / `AddTaskPanelInlineEditor.tsx` — host-specific render trees; both consume the same controller.
 - `AddTaskPanelShared.tsx`, `controls.tsx`, `styles.ts` — shared editor fields, action controls, floating menus, and style projections.

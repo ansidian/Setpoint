@@ -206,8 +206,12 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 |--------|------|
 | `useAlfredChat` | `src/components/alfred/useAlfredChat.ts` |
 | `useBillBadgeForm` | `src/components/bills/useBillBadgeForm.ts` |
+| `useCalendarEditorHistory` | `src/components/calendar/events/useCalendarEditorHistory.ts` |
 | `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.ts` |
 | `useCalendarEventEditor` | `src/components/calendar/events/useCalendarEventEditor.ts` |
+| `useCalendarEventEditorSession` | `src/components/calendar/events/useCalendarEventEditorSession.ts` |
+| `useCalendarEventMutations` | `src/components/calendar/events/useCalendarEventMutations.ts` |
+| `useCalendarEventQuickActionMutations` | `src/components/calendar/events/useCalendarEventQuickActionMutations.ts` |
 | `useCalendarEventTitleComposer` | `src/components/calendar/events/useCalendarEventTitleComposer.ts` |
 | `useCalendarLocationSuggestions` | `src/components/calendar/events/useCalendarLocationSuggestions.ts` |
 | `useCalendarQuickActions` | `src/components/calendar/events/useCalendarQuickActions.ts` |
@@ -239,6 +243,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.ts` |
 | `useAddTaskPanelPlacement` | `src/components/todoist/add-task-panel/useAddTaskPanelPlacement.ts` |
 | `useDirtyCloseConfirmation` | `src/components/todoist/add-task-panel/useDirtyCloseConfirmation.ts` |
+| `useTodoistReminderDrafts` | `src/components/todoist/add-task-panel/useTodoistReminderDrafts.ts` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.ts` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.ts` |
 | `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.ts` |

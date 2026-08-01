@@ -13,6 +13,5 @@
     "src/components/calendar/events/useCalendarQuickActions.ts": 805,
     "src/components/calendar/events/calendarTitleIntent.ts": 659,
     "server/routes/calendar.ts": 605,
-    "src/components/todoist/add-task-panel/useAddTaskPanelController.ts": 616
   }
 }
