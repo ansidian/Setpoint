@@ -72,7 +72,11 @@ describe("demo mode read adapter", () => {
     ]));
     expect(bills.transactionsTruncated).toBe(false);
     expect("recentTransactions" in bills).toBe(false);
-    expect(settings).toMatchObject({ email_triage_mode: "auto", demo: true });
+    expect(settings).toMatchObject({
+      email_triage_mode: "auto",
+      email_triage_classify_read_arrivals: false,
+      demo: true,
+    });
     const accountList = Array.isArray(accounts) ? accounts : accounts.accounts;
     expect(accountList).toHaveLength(2);
     expect(actual.accounts?.[0]).toMatchObject({ name: "Demo Checking" });
@@ -88,6 +92,19 @@ describe("demo mode read adapter", () => {
     expect(billModels[0]).toMatchObject({
       provider: "demo",
       defaultModel: "demo-bill-extract-model",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("mutates the read-arrivals triage setting in memory", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const api = await importDemoApi();
+
+    await api.updateSettings({ email_triage_classify_read_arrivals: true });
+
+    expect(await api.getSettings()).toMatchObject({
+      email_triage_classify_read_arrivals: true,
     });
     expect(fetch).not.toHaveBeenCalled();
   });

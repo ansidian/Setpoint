@@ -113,8 +113,7 @@ src/
 │   ├── email/
 │   └── settings/
 ├── lib/
-├── pages/
-└── test/
+└── pages/
 
 server/
 ├── actual/
@@ -692,7 +691,7 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |

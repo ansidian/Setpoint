@@ -173,6 +173,7 @@ export interface SettingsResponse {
   bill_extract_model: string;
   email_triage_mode: StoredEmailTriageMode;
   email_triage_effective_mode: EffectiveEmailTriageMode;
+  email_triage_classify_read_arrivals: boolean;
   discord_user_id: string | null;
   todoist_needs_reauth: boolean;
   actual_budget_configured: boolean;
@@ -213,6 +214,7 @@ export interface SettingsPatchRequest {
   bill_extract_provider?: string;
   bill_extract_model?: string;
   email_triage_mode?: StoredEmailTriageMode;
+  email_triage_classify_read_arrivals?: boolean;
   triage_sound_settings?: TriageSoundSettings;
   bill_pay_mappings?: BillPayMappings;
   discord_webhook_url?: string;

@@ -41,6 +41,7 @@ function renderCard(initialSettings: SettingsState = {}) {
     const [settings, setSettings] = useState<SettingsState | null>({
       email_triage_mode: "auto",
       email_triage_effective_mode: "no_model",
+      email_triage_classify_read_arrivals: false,
       ...initialSettings,
     });
     const setSettingsWithSpy = (updater: SetStateAction<SettingsState | null>) => {
@@ -104,6 +105,19 @@ describe("EmailTriageModeCard", () => {
 
     expect(screen.getByText("Stored: Auto")).toBeTruthy();
     expect(screen.getByText("Effective: No model")).toBeTruthy();
+  });
+
+  it("enables triage for read arrivals through the settings patch flow", () => {
+    const { patch, setSettings } = renderCard();
+    const toggle = screen.getByRole("switch", { name: "Triage read arrivals" });
+
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+
+    expect(setSettings).toHaveBeenCalled();
+    expect(patch).toHaveBeenCalledWith({ email_triage_classify_read_arrivals: true });
+    expect(screen.getByRole("switch", { name: "Triage read arrivals" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/Preflight rules still apply\./)).toBeTruthy();
   });
 
   it("shows the triage call count without a cache hit or savings line", async () => {

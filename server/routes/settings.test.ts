@@ -74,6 +74,7 @@ async function createMigratedDb() {
       email_interests_json TEXT,
       important_senders_json TEXT DEFAULT '[]',
       email_triage_mode TEXT DEFAULT 'auto',
+      email_triage_classify_read_arrivals INTEGER NOT NULL DEFAULT 0,
       email_lookback_hours INTEGER DEFAULT 16,
       weather_lat REAL DEFAULT 34.0686,
       weather_lng REAL DEFAULT -118.0276,
@@ -164,6 +165,35 @@ describe("GET /settings todoist_needs_reauth", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.todoist_needs_reauth).toBe(true);
+  });
+});
+
+describe("email triage read-arrivals setting", () => {
+  it("returns false by default and persists a boolean update", async () => {
+    const initial = await request(makeApp()).get("/api/ea/settings");
+
+    expect(initial.status).toBe(200);
+    expect(initial.body.email_triage_classify_read_arrivals).toBe(false);
+
+    const update = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ email_triage_classify_read_arrivals: true });
+
+    expect(update.status).toBe(200);
+    expect((await getSettingsRow()).email_triage_classify_read_arrivals).toBe(1);
+
+    const refreshed = await request(makeApp()).get("/api/ea/settings");
+    expect(refreshed.body.email_triage_classify_read_arrivals).toBe(true);
+  });
+
+  it("rejects non-boolean values without changing the setting", async () => {
+    const response = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ email_triage_classify_read_arrivals: 1 });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("email_triage_classify_read_arrivals must be a boolean");
+    expect((await getSettingsRow()).email_triage_classify_read_arrivals).toBe(0);
   });
 });
 

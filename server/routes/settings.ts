@@ -89,6 +89,7 @@ const SETTINGS_PUBLIC_FIELDS = [
   "bill_extract_provider",
   "bill_extract_model",
   "email_triage_mode",
+  "email_triage_classify_read_arrivals",
   "discord_user_id",
   "todoist_needs_reauth",
   "todoist_connection_mode",
@@ -175,6 +176,7 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     const triageMode = await getEmailTriageModeForUser(userId);
     safe.email_triage_mode = normalizeStoredEmailTriageMode(safe.email_triage_mode);
     safe.email_triage_effective_mode = triageMode.effective_email_triage_mode;
+    safe.email_triage_classify_read_arrivals = !!safe.email_triage_classify_read_arrivals;
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
     safe.bill_pay_mappings = parseBillPayMappingsJson(bill_pay_mappings_json);
@@ -209,7 +211,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -279,6 +281,13 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
       updates.push("email_triage_mode = ?");
       args.push(email_triage_mode);
+    }
+    if (email_triage_classify_read_arrivals !== undefined) {
+      if (typeof email_triage_classify_read_arrivals !== "boolean") {
+        return res.status(400).json({ message: "email_triage_classify_read_arrivals must be a boolean" });
+      }
+      updates.push("email_triage_classify_read_arrivals = ?");
+      args.push(email_triage_classify_read_arrivals ? 1 : 0);
     }
     if (triage_sound_settings !== undefined) {
       const validation = validateTriageSoundSettings(triage_sound_settings);

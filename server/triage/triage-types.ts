@@ -214,6 +214,7 @@ export interface TriageModeResult {
 
 export interface TriageBatchContext {
   getMode(userId: string): Promise<TriageModeResult>;
+  getClassifyReadArrivals(userId: string): Promise<boolean>;
   getRules(userId: string): Promise<TriageRule[]>;
   getInterests(userId: string): Promise<string[]>;
   getModelClient(userId: string): Promise<TriageModelClient>;

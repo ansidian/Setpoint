@@ -759,7 +759,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     return buildDemoCalendarBillsRange(seed, url);
   }
   if (pathname === "/api/ea/accounts") return clone(seed.accounts);
-  if (pathname === "/api/ea/settings") return clone(seed.settings);
+  if (pathname === "/api/ea/settings") return clone({ email_triage_classify_read_arrivals: false, ...seed.settings });
   if (pathname === "/api/capabilities") return getDemoCapabilityStatus();
   if (pathname === "/api/instance-credentials") return getDemoInstanceCredentialMetadata();
   if (pathname === "/api/briefing/actual/metadata") return clone(seed.actualMetadata);

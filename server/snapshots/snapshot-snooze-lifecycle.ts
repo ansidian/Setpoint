@@ -23,6 +23,7 @@ import {
 import { resurfacedTriageLane } from "./snapshot-state-machine.ts";
 import { completeEmailTriageJobsForEmail } from "./snapshot-triage-attachment.ts";
 import { getOrCreateActiveSnapshot } from "./snapshot-service.ts";
+import { getEmailTriageClassifyReadArrivalsForUser } from "../platform/config-service.ts";
 import type { SnapshotItem, SnapshotTriageLane } from "../../shared/types/snapshots.ts";
 import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
 
@@ -306,6 +307,9 @@ export async function settleReadArrivalGraceRows(userId: string, {
   now = new Date(),
   emailIds = null,
 }: { dbClient?: SnapshotWriteDb; now?: Date; emailIds?: string[] | null } = {}): Promise<{ settled: number; emailIds: string[] }> {
+  if (await getEmailTriageClassifyReadArrivalsForUser(userId, { dbClient })) {
+    return { settled: 0, emailIds: [] };
+  }
   const ids = Array.isArray(emailIds) ? [...new Set(emailIds.filter(Boolean))] : null;
   const emailFilter = ids?.length
     ? `AND t.email_id IN (${ids.map(() => "?").join(", ")})`

@@ -121,6 +121,22 @@ describe("database migrations", () => {
     expect(columnByName.get("bill_pay_mappings_json")!.dflt_value).toBe("NULL");
   });
 
+  it("adds the read-arrivals triage preference with the current behavior as default", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "043_email_triage_classify_read_arrivals.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_settings')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+    const preference = columnByName.get("email_triage_classify_read_arrivals")!;
+
+    expect(preference.type).toBe("INTEGER");
+    expect(preference.notnull).toBe(1);
+    expect(preference.dflt_value).toBe("0");
+  });
+
   it("adds Actual metadata projection storage", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, [

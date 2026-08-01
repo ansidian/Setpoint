@@ -4,7 +4,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 
 ## Files
 
-- `config-service.ts` — loads canonical accounts and settings from `ea_accounts`/`ea_settings`
+- `config-service.ts` — loads canonical accounts/settings and tolerant scalar preferences from `ea_accounts`/`ea_settings`
 - `account-canonical.ts` — dedupes configured accounts, resolves canonical Gmail account
 - `settings-schemas.ts` — write-boundary validation for `ea_settings` JSON blobs
 - `encryption.ts` — secret encrypt/decrypt for stored credentials

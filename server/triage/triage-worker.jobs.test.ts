@@ -150,6 +150,7 @@ describe("email triage worker jobs", () => {
     // Repeated lookups for the same user return the SAME in-flight promise, so
     // the underlying ea_settings / ea_triage_rules read happens once per batch.
     expect(batch.getMode("user-1")).toBe(batch.getMode("user-1"));
+    expect(batch.getClassifyReadArrivals("user-1")).toBe(batch.getClassifyReadArrivals("user-1"));
     expect(batch.getRules("user-1")).toBe(batch.getRules("user-1"));
     expect(batch.getInterests("user-1")).toBe(batch.getInterests("user-1"));
     expect(batch.getModelClient("user-1")).toBe(batch.getModelClient("user-1"));
@@ -159,6 +160,7 @@ describe("email triage worker jobs", () => {
 
     await Promise.allSettled([
       batch.getMode("user-1"),
+      batch.getClassifyReadArrivals("user-1"),
       batch.getRules("user-1"),
       batch.getInterests("user-1"),
       batch.getModelClient("user-1"),

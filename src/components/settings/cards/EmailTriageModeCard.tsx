@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Bot, PauseCircle, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { getTriageCacheStats } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { StoredEmailTriageMode, TriageCacheStatsResponse } from "../../../../shared/types/settings";
@@ -78,6 +79,7 @@ function TriageCacheGlance({ stats, loading, error }: { stats: TriageCacheStatsR
 export default function EmailTriageModeCard({ settings, setSettings, patch }: SettingsCardStateProps) {
   const storedMode = settings?.email_triage_mode || "auto";
   const effectiveMode = effectiveModeForStoredMode(storedMode);
+  const classifyReadArrivals = !!settings?.email_triage_classify_read_arrivals;
   const [cacheStats, setCacheStats] = useState<TriageCacheStatsResponse | null>(null);
   const [cacheStatsState, setCacheStatsState] = useState<"loading" | "ready" | "error">("loading");
 
@@ -146,6 +148,27 @@ export default function EmailTriageModeCard({ settings, setSettings, patch }: Se
         <FieldHint>
           {MODE_OPTIONS.find((option) => option.value === effectiveMode)?.description}
         </FieldHint>
+
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3">
+          <div className="min-w-0">
+            <div className="text-[12px] font-medium text-foreground">Triage read arrivals</div>
+            <FieldHint className="mt-1 max-w-[68ch]">
+              After the 30-second queue window, keep mail in the normal triage pipeline even if you read it in Setpoint or at your email provider. Preflight rules still apply.
+            </FieldHint>
+          </div>
+          <Switch
+            checked={classifyReadArrivals}
+            onCheckedChange={(checked) => {
+              setSettings((current) => ({
+                ...(current || {}),
+                email_triage_classify_read_arrivals: checked,
+              }));
+              patch({ email_triage_classify_read_arrivals: checked });
+            }}
+            aria-label="Triage read arrivals"
+            className="mt-0.5 hover:border-white/20 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100"
+          />
+        </div>
 
         <TriageCacheGlance
           stats={cacheStats}

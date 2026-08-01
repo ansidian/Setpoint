@@ -195,4 +195,56 @@ describe("snapshot snooze lifecycle", () => {
 
     expect(view.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
   });
+
+  it("leaves read arrival-grace rows queued when read-arrivals classification is enabled", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-03T16:00:00.000Z");
+    await dbClient.batch([
+      {
+        sql: `INSERT INTO ea_settings (user_id, email_triage_classify_read_arrivals)
+              VALUES ('user-1', 1)`,
+        args: [],
+      },
+      {
+        sql: `INSERT INTO ea_email_index
+                (uid, user_id, account_id, account_label, account_email,
+                 from_name, from_address, subject, body_snippet, body_text, email_date, read)
+              VALUES ('msg-keep-queued', 'user-1', 'gmail-work', 'Work', 'work@example.com',
+                      'Reader', 'reader@example.com', 'Keep queued', 'Read it',
+                      'Read it', '2026-05-03T15:58:00.000Z', 1)`,
+        args: [],
+      },
+      {
+        sql: `INSERT INTO ea_email_triage
+                (user_id, account_id, email_id, triage_status, triage_source)
+              VALUES ('user-1', 'gmail-work', 'msg-keep-queued', 'pending', 'arrival_grace')`,
+        args: [],
+      },
+      {
+        sql: `INSERT INTO ea_triage_jobs
+                (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+              VALUES ('user-1', 'gmail-work', 'msg-keep-queued', 'email_triage', 'queued',
+                      '2026-05-03T16:03:00.000Z', 'email_triage:user-1:gmail-work:msg-keep-queued')`,
+        args: [],
+      },
+    ]);
+
+    await expect(settleReadArrivalGraceRows("user-1", { dbClient, now })).resolves.toEqual({
+      settled: 0,
+      emailIds: [],
+    });
+
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status, t.triage_source, j.status AS job_status
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.email_id = t.email_id
+            WHERE t.email_id = 'msg-keep-queued'`,
+      args: [],
+    });
+    expect(rows.rows).toEqual([{
+      triage_status: "pending",
+      triage_source: "arrival_grace",
+      job_status: "queued",
+    }]);
+  });
 });

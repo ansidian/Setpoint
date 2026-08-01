@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+import { getEmailTriageClassifyReadArrivalsForUser } from "../platform/config-service.ts";
 import { getEmailTriageModeForUser } from "./triage-mode.ts";
 import { ARRIVAL_GRACE_SOURCE } from "../snapshots/arrival-grace.ts";
 import {
@@ -89,9 +90,10 @@ async function classifyWithModel(getModelClient: () => Promise<TriageModelClient
   return normalizeModelDecision(await client.classify({ tier, email, reason }), tier);
 }
 
-// P1-7: per-batch, per-user memo so a backlog drain resolves mode, rules,
-// interests, and the model client ONCE per user instead of re-reading ea_settings
-// / ea_triage_rules and rebuilding the model client for every job in the tick.
+// P1-7: per-batch, per-user memo so a backlog drain resolves mode, the
+// read-arrivals preference, rules, interests, and the model client ONCE per user
+// instead of re-reading ea_settings / ea_triage_rules and rebuilding the model
+// client for every job in the tick.
 // Pass the returned context to processNextEmailTriageJob({ batch }). Each getter
 // caches the in-flight promise, so the value is loaded at most once per user.
 //
@@ -107,11 +109,17 @@ export function createTriageBatchContext({ dbClient = db as unknown as TriageDb 
     return cache.get(key)!;
   };
   const modes = new Map<string, ReturnType<TriageBatchContext["getMode"]>>();
+  const classifyReadArrivals = new Map<string, ReturnType<TriageBatchContext["getClassifyReadArrivals"]>>();
   const rules = new Map<string, ReturnType<TriageBatchContext["getRules"]>>();
   const interests = new Map<string, ReturnType<TriageBatchContext["getInterests"]>>();
   const modelClients = new Map<string, ReturnType<TriageBatchContext["getModelClient"]>>();
   return {
     getMode: (userId) => memo(modes, userId, () => getEmailTriageModeForUser(userId, { dbClient })),
+    getClassifyReadArrivals: (userId) => memo(
+      classifyReadArrivals,
+      userId,
+      () => getEmailTriageClassifyReadArrivalsForUser(userId, { dbClient }),
+    ),
     getRules: (userId) => memo(rules, userId, () => loadRules(userId, dbClient)),
     getInterests: (userId) => memo(interests, userId, () => loadEmailInterests(userId, dbClient)),
     getModelClient: (userId) => memo(modelClients, userId, async () =>
@@ -242,6 +250,9 @@ export async function processNextEmailTriageJob({
       ...mode,
     };
   }
+  const classifyReadArrivals = batch
+    ? await batch.getClassifyReadArrivals(job.user_id)
+    : await getEmailTriageClassifyReadArrivalsForUser(job.user_id, { dbClient });
 
   const email = await loadEmailForJob(job, dbClient);
   if (!email) {
@@ -280,7 +291,7 @@ export async function processNextEmailTriageJob({
       };
     }
 
-    if (email.triage_source === ARRIVAL_GRACE_SOURCE && email.read) {
+    if (email.triage_source === ARRIVAL_GRACE_SOURCE && email.read && !classifyReadArrivals) {
       const nextCheckAt = new Date(now.getTime() + ARRIVAL_GRACE_READ_EXIT_DEFER_MS).toISOString();
       await deferJob(job, dbClient, nextCheckAt, "Waiting for Inbox exit before settling read arrival-grace email");
       return {
