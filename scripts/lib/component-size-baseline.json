@@ -14,7 +14,6 @@
     "src/components/calendar/views/events/EventsAgendaRail.tsx": 666,
     "src/hooks/calendar/useCalendarDomainRange.ts": 605,
     "src/components/calendar/events/useCalendarEventEditor.ts": 842,
-    "src/demo/store.ts": 867,
     "src/components/calendar/events/useCalendarQuickActions.ts": 805,
     "src/components/calendar/events/calendarTitleIntent.ts": 659,
     "server/email/email-service.ts": 653,
