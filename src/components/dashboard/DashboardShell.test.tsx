@@ -7,10 +7,8 @@ import useIsMobile from "../../hooks/useIsMobile";
 
 // This file isolates the tabpanel<->tab ARIA linkage added by A11Y-05. Every
 // heavy child (lazy tab content, calendar workspace state, alfred, overlays) is
-// stubbed so the only thing under test is DashboardShell's own JSX: each
-// KeepAliveTab's thin `role="tabpanel"` wrapper (see KeepAliveTab.tsx for why a
-// wrapper element was needed — Activity/FrozenWhenHidden render no DOM node of
-// their own) and ShellTabs' tab semantics wiring them together via
+// stubbed so the only thing under test is the shell's DashboardTabPanel seam and
+// ShellTabs' tab semantics wiring them together via
 // id="shell-tab-{key}" / aria-labelledby (desktop) or aria-label (mobile, where
 // ShellTabs — and thus the ids it would link to — doesn't render at all).
 

@@ -5,7 +5,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ## Files
 
 ### Shell + layout
-- `DashboardShell.tsx` — orchestrates state and tab switching; mounts the dashboard, inbox, calendar, and notes as four `KeepAliveTab`s
+- `DashboardShell.tsx` — orchestrates state and tab switching; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`
+- `DashboardTabPanel.tsx` — dashboard-specific tab seam combining keep-alive/freeze behavior with the responsive `tabpanel` ID and accessible name contract
 - `DashboardBody.tsx` — renders the three tiers (NeedsYouBand / TodayTimeline / ContextColumn) through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.tsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch

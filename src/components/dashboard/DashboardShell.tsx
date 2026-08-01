@@ -3,7 +3,6 @@ import type { ComponentType, Dispatch, RefObject, SetStateAction } from "react";
 import { useNavigate } from "react-router";
 import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav";
-import { TAB_LABELS } from "../shell/ShellTabs";
 import { useDashboard } from "../../context/DashboardContext";
 import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage";
 import useIsMobile from "../../hooks/useIsMobile";
@@ -12,7 +11,7 @@ import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays";
 import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendarModalMount";
 import InboxMountFallback from "./InboxMountFallback";
-import KeepAliveTab from "./KeepAliveTab";
+import DashboardTabPanel from "./DashboardTabPanel";
 import useWarmImport from "../../hooks/useWarmImport";
 import { useUtilityPayLinks } from "../../hooks/useUtilityPayLinks";
 import { buildDashboardEventsData } from "./dashboardShellModel";
@@ -72,17 +71,6 @@ const SHELL_PREFS = Object.freeze({
   showInboxPeek: true,
   showPreview: true,
 });
-
-// ShellTabs (the tablist owning id="shell-tab-{key}") only renders on desktop
-// (see ShellHeader's `{!isMobile && <ShellTabs ... />}`), so on mobile the
-// id a tabpanel's aria-labelledby would point at doesn't exist — a dangling
-// IDREF. Fall back to a plain aria-label built from the same TAB_LABELS the
-// desktop tabs already use, rather than introducing a second label table.
-function tabPanelA11yProps(key: DashboardTab, isMobile: boolean) {
-  return isMobile
-    ? { "aria-label": TAB_LABELS[key] }
-    : { "aria-labelledby": `shell-tab-${key}` };
-}
 
 export interface DashboardShellProps {
   bd: Partial<CurrentDashboardHookResult["briefingData"]> & { briefing: CurrentDashboardHookResult["briefingData"]["briefing"]; refreshing: boolean };
@@ -477,115 +465,66 @@ export function DashboardShell({
             "linear-gradient(180deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0) 12%)",
         }}
       >
-        {/* Both tabs stay mounted via KeepAliveTab (Activity + freeze-when-hidden)
-            instead of a ternary that unmounts/remounts per switch — fixes the
-            switch freeze + "scroll into blank", and keeps a dashboard data
-            refresh from reconciling the hidden tab. */}
-        {/* role="tabpanel" wrapper per panel, named via tabPanelA11yProps
-            (A11Y-05): aria-labelledby the desktop ShellTabs button when it
-            exists, else (mobile, where ShellTabs doesn't render) a plain
-            aria-label from the same TAB_LABELS — a dangling aria-labelledby
-            otherwise. KeepAliveTab renders no DOM node of its own (Activity +
-            a memo pass-through), so the wrapper lives INSIDE it, as a direct
-            child of Activity — Activity hides a subtree by setting
-            display:none!important on each host instance within it, so this
-            wrapper's display:contents is hidden/restored right along with the
-            rest of an inactive tab's DOM. Does not touch KeepAliveTab itself. */}
-        <KeepAliveTab active={tab === "dashboard"}>
-          <div
-            role="tabpanel"
-            id="shell-tabpanel-dashboard"
-            {...tabPanelA11yProps("dashboard", isMobile)}
-            style={{ display: "contents" }}
-          >
-            <DashboardBody
-              liveData={liveData}
-              activeSnapshot={activeSnapshot?.snapshot}
-              calendarRange={calendarRange}
+        <DashboardTabPanel tab="dashboard" active={tab === "dashboard"} isMobile={isMobile}>
+          <DashboardBody
+            liveData={liveData}
+            activeSnapshot={activeSnapshot?.snapshot}
+            calendarRange={calendarRange}
+            accent={accent}
+            isMobile={isMobile}
+            calendarDeadlines={dashboardCalendarDeadlines}
+            calendarDeadlinesLoading={calendarDeadlinesLoading}
+            calendarDeadlinesError={!!calendarDeadlinesError}
+            domainRefreshing={domainRefreshing}
+            onOpenEmail={openEmailInInbox}
+            onOpenDeadline={openDashboardDeadline}
+            onOpenBillsCalendar={openDashboardBill}
+            onOpenEventsCalendar={openDashboardEvent}
+          />
+        </DashboardTabPanel>
+        <DashboardTabPanel tab="inbox" active={tab === "inbox"} isMobile={isMobile}>
+          <Suspense fallback={<InboxMountFallback />}>
+            <InboxView
               accent={accent}
+              customize={SHELL_PREFS}
+              emailAccounts={[]}
+              briefingSummary=""
+              briefingGeneratedAt={undefined}
+              liveEmails={liveData.liveEmails}
+              liveEmailsLoading={liveEmailsLoading}
+              activeSnapshot={inboxActiveSnapshot}
+              liveReadOverrides={liveReadOverrides}
+              onLiveReadOverrideChange={handleLiveReadOverrideChange}
+              snoozedEntries={liveData.snoozedEntries}
+              resurfacedEntries={liveData.resurfacedEntries}
+              onOpenDashboard={() => setShellTab("dashboard")}
+              onOpenRecordedBill={handleInboxOpenRecordedBill}
+              onRefresh={onQuickRefresh}
+              commitPendingUndoSignal={calendarOpenRequestId}
               isMobile={isMobile}
-              calendarDeadlines={dashboardCalendarDeadlines}
-              calendarDeadlinesLoading={calendarDeadlinesLoading}
-              calendarDeadlinesError={!!calendarDeadlinesError}
-              domainRefreshing={domainRefreshing}
-              onOpenEmail={openEmailInInbox}
-              onOpenDeadline={openDashboardDeadline}
-              onOpenBillsCalendar={openDashboardBill}
-              onOpenEventsCalendar={openDashboardEvent}
+              onAskAlfred={askAlfred}
             />
-          </div>
-        </KeepAliveTab>
-        <KeepAliveTab active={tab === "inbox"}>
-          <div
-            role="tabpanel"
-            id="shell-tabpanel-inbox"
-            {...tabPanelA11yProps("inbox", isMobile)}
-            style={{ display: "contents" }}
-          >
-            <Suspense fallback={<InboxMountFallback />}>
-              <InboxView
-                accent={accent}
-                customize={SHELL_PREFS}
-                emailAccounts={[]}
-                briefingSummary=""
-                briefingGeneratedAt={undefined}
-                liveEmails={liveData.liveEmails}
-                liveEmailsLoading={liveEmailsLoading}
-                activeSnapshot={inboxActiveSnapshot}
-                liveReadOverrides={liveReadOverrides}
-                onLiveReadOverrideChange={handleLiveReadOverrideChange}
-                snoozedEntries={liveData.snoozedEntries}
-                resurfacedEntries={liveData.resurfacedEntries}
-                onOpenDashboard={() => setShellTab("dashboard")}
-                onOpenRecordedBill={handleInboxOpenRecordedBill}
-                onRefresh={onQuickRefresh}
-                commitPendingUndoSignal={calendarOpenRequestId}
-                isMobile={isMobile}
-                onAskAlfred={askAlfred}
-              />
-            </Suspense>
-          </div>
-        </KeepAliveTab>
-        <KeepAliveTab active={tab === "calendar"}>
-          <div
-            role="tabpanel"
-            id="shell-tabpanel-calendar"
-            {...tabPanelA11yProps("calendar", isMobile)}
-            style={{ display: "contents" }}
-          >
-            {calendarMounted ? (
-              <Suspense fallback={null}>
-                <DashboardCalendarModalMount {...calendarMountProps} />
-              </Suspense>
-            ) : null}
-          </div>
-        </KeepAliveTab>
-        <KeepAliveTab active={tab === "notes"}>
-          <div
-            role="tabpanel"
-            id="shell-tabpanel-notes"
-            {...tabPanelA11yProps("notes", isMobile)}
-            style={{ display: "contents" }}
-          >
+          </Suspense>
+        </DashboardTabPanel>
+        <DashboardTabPanel tab="calendar" active={tab === "calendar"} isMobile={isMobile}>
+          {calendarMounted ? (
             <Suspense fallback={null}>
-              <NotesTab accent={accent} isMobile={isMobile} />
+              <DashboardCalendarModalMount {...calendarMountProps} />
             </Suspense>
-          </div>
-        </KeepAliveTab>
-        <KeepAliveTab active={tab === "news"}>
-          <div
-            role="tabpanel"
-            id="shell-tabpanel-news"
-            {...tabPanelA11yProps("news", isMobile)}
-            style={{ display: "contents" }}
-          >
-            {newsMounted ? (
-              <Suspense fallback={null}>
-                <NewsTab active={tab === "news"} />
-              </Suspense>
-            ) : null}
-          </div>
-        </KeepAliveTab>
+          ) : null}
+        </DashboardTabPanel>
+        <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
+          <Suspense fallback={null}>
+            <NotesTab accent={accent} isMobile={isMobile} />
+          </Suspense>
+        </DashboardTabPanel>
+        <DashboardTabPanel tab="news" active={tab === "news"} isMobile={isMobile}>
+          {newsMounted ? (
+            <Suspense fallback={null}>
+              <NewsTab active={tab === "news"} />
+            </Suspense>
+          ) : null}
+        </DashboardTabPanel>
       </div>
 
       {isMobile && (
