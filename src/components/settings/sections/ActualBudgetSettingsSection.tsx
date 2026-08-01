@@ -62,20 +62,11 @@ export default function ActualBudgetSettingsSection({
 
   if (!dependency.showSettings) {
     return (
-      <>
-        <ConnectionDependencyPrompt
-          title="Connect Actual Budget"
-          description="Finance customization becomes available after Actual Budget is connected. Existing mappings and pay links remain saved while disconnected."
-          actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
-        />
-        <EmailTransactionImportCard
-          metadata={EMPTY_METADATA}
-          metadataLoading={false}
-          onRequestMetadata={() => undefined}
-          gmailAccounts={accounts}
-          liveOperationsAvailable={false}
-        />
-      </>
+      <ConnectionDependencyPrompt
+        title="Connect Actual Budget"
+        description="Finance customization becomes available after Actual Budget is connected. Existing mappings and pay links remain saved while disconnected."
+        actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
+      />
     );
   }
 

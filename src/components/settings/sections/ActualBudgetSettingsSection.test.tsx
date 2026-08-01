@@ -167,6 +167,7 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.queryByText("Bill Pay Mappings")).toBeNull();
     expect(screen.queryByText("Mapping Test")).toBeNull();
     expect(screen.queryByText("Utility Pay Links")).toBeNull();
+    expect(screen.queryByText("Email Transaction Imports")).toBeNull();
   });
 
   it("shows full Finance controls when Actual is connected", () => {
