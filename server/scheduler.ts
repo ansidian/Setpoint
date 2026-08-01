@@ -4,7 +4,6 @@ import db from "./db/connection.ts";
 import { loadUserConfig } from "./platform/config-service.ts";
 import { fetchAllEmails } from "./email/email-fetch.ts";
 import { indexEmails } from "./email/email-index.ts";
-import { advanceSnapshotBoundary } from "./snapshots/snapshot-service.ts";
 import {
   enqueueEmailTriageForEmails,
   processNextGmailHistorySyncJob,
@@ -18,6 +17,7 @@ import {
 } from "./triage/triage-worker.ts";
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.ts";
 import { processDueReminderBatch } from "./reminders/reminder-scheduler.ts";
+import { createSnapshotBoundaryScheduler } from "./scheduler-snapshot-boundaries.ts";
 import { createSchedulerWorkRegistry } from "./scheduler-work-registry.ts";
 import {
   createEmailTriageDeadlineController,
@@ -26,14 +26,6 @@ import {
 } from "./scheduler-email-triage-drain.ts";
 import type { EmailTriageScheduledFor } from "./scheduler-email-triage-drain.ts";
 export { requestEmailTriageDrainAt } from "./scheduler-email-triage-drain.ts";
-
-interface SavedSchedule {
-  enabled?: unknown;
-  label: string;
-  time: string;
-  tz?: string;
-  skipped_until?: string;
-}
 
 interface EmailTriageJobResult {
   processed?: boolean;
@@ -51,12 +43,6 @@ type TriageBatchContext = ReturnType<typeof createTriageBatchContext>;
 const processNextEmailTriageJobAtBoundary = processNextEmailTriageJob as unknown as (
   options: { batch: TriageBatchContext },
 ) => Promise<EmailTriageJobResult>;
-const advanceSnapshotBoundaryAtBoundary = advanceSnapshotBoundary as unknown as (
-  userId: string,
-  options: { timeZone: string; scheduleLabel: string },
-) => Promise<unknown>;
-
-const activeJobs: ScheduledTask[] = [];
 const schedulerWork = createSchedulerWorkRegistry();
 const schedulerTimeouts = new Set<NodeJS.Timeout>();
 const schedulerImmediates = new Set<NodeJS.Immediate>();
@@ -74,6 +60,10 @@ let triageJobPruneJob: ScheduledTask | null = null;
 let reminderSchedulerTimer: NodeJS.Timeout | null = null;
 let schedulerStopping = false;
 let stopSchedulerInFlight: Promise<void> | null = null;
+const snapshotBoundaryScheduler = createSnapshotBoundaryScheduler({
+  runWork: schedulerWork.run,
+  isStopping: () => schedulerStopping,
+});
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
 const INDEXER_LOOKBACK_HOURS = 2;
@@ -100,34 +90,6 @@ let emailTriageSelfRescheduleCount = 0;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function asSavedSchedule(value: unknown): SavedSchedule | null {
-  if (typeof value !== "object" || value === null) return null;
-  const record = value as Record<string, unknown>;
-  if (!record.enabled) {
-    return {
-      enabled: record.enabled,
-      label: typeof record.label === "string" ? record.label : "",
-      time: typeof record.time === "string" ? record.time : "",
-    };
-  }
-  if (typeof record.time !== "string" || typeof record.label !== "string") {
-    throw new Error("schedule time and label must be strings");
-  }
-  return {
-    enabled: record.enabled,
-    label: record.label,
-    time: record.time,
-    ...(typeof record.tz === "string" ? { tz: record.tz } : {}),
-    ...(typeof record.skipped_until === "string" ? { skipped_until: record.skipped_until } : {}),
-  };
-}
-
-function parseSavedSchedules(value: unknown): unknown[] {
-  const parsed: unknown = JSON.parse(String(value || "[]"));
-  if (!Array.isArray(parsed)) throw new Error("schedules_json is not an array");
-  return parsed;
 }
 
 function scheduleSchedulerTimeout(task: () => void, delayMs: number): NodeJS.Timeout | null {
@@ -164,150 +126,8 @@ const emailTriageDeadlineController = createEmailTriageDeadlineController({
 });
 registerEmailTriageDrainRequester(emailTriageDeadlineController.request);
 
-function isMissingTableError(err: unknown): boolean {
-  // libsql surfaces a missing table as "no such table: ..." in the message;
-  // mirror the repo pattern used in migrate-encryption.ts / snapshot-service.ts.
-  return /no such table/i.test(errorMessage(err));
-}
-
-// P3-56 per-row-isolation init body. Invoked by the P2-28 serialization wrapper
-// initScheduler() below, which coalesces concurrent re-inits to avoid the
-// clear-then-await-then-push window double-registering every cron job.
-async function runInitScheduler(): Promise<void> {
-  // Clear any existing jobs (in case of re-init)
-  for (const job of activeJobs) job.stop();
-  activeJobs.length = 0;
-
-  let result;
-  try {
-    result = await db.execute(
-      "SELECT user_id, schedules_json FROM ea_settings WHERE schedules_json IS NOT NULL",
-    );
-  } catch (err) {
-    if (isMissingTableError(err)) {
-      // ea_settings table may not exist yet on first run before migration
-      console.log("[EA Scheduler] Skipping — ea_settings not yet available");
-      return;
-    }
-    // Any other read failure is a real error: surface it instead of silently
-    // disabling every schedule behind a misleading "not yet available" log.
-    console.error("[EA Scheduler] Failed to load schedules:", errorMessage(err));
-    return;
-  }
-
-  if (schedulerStopping) return;
-
-  for (const row of result.rows) {
-    let schedules: unknown[];
-    try {
-      schedules = parseSavedSchedules(row.schedules_json);
-    } catch (err) {
-      // One malformed row must not suppress every other user's schedules.
-      console.error(
-        `[EA Scheduler] Skipping unparseable schedules for user ${row.user_id}:`,
-        errorMessage(err),
-      );
-      continue;
-    }
-
-    for (const rawSchedule of schedules) {
-      try {
-        const schedule = asSavedSchedule(rawSchedule);
-        if (!schedule?.enabled) continue;
-
-        const [hour = "", minute = ""] = schedule.time.split(":");
-        const cronExpr = `${parseInt(minute)} ${parseInt(hour)} * * *`;
-        const userId = String(row.user_id ?? "");
-
-        const job = cron.schedule(
-          cronExpr,
-          () => {
-            if (schedulerStopping) return Promise.resolve();
-            return schedulerWork.run(
-              `snapshot-boundary:${userId}:${schedule.label}:${schedule.time}`,
-              async () => {
-                // Check if this schedule is skipped (re-read from DB for freshness)
-                try {
-                  const fresh = await db.execute({
-                    sql: "SELECT schedules_json FROM ea_settings WHERE user_id = ?",
-                    args: [userId],
-                  });
-                  const freshSchedules = parseSavedSchedules(fresh.rows[0]?.schedules_json)
-                    .map(asSavedSchedule);
-                  const match = freshSchedules.find(
-                    (candidate) => candidate?.time === schedule.time && candidate.label === schedule.label,
-                  );
-                  if (match?.skipped_until && new Date(match.skipped_until) > new Date()) {
-                    console.log(
-                      `[EA Scheduler] Skipping ${schedule.label} snapshot boundary — skipped until ${match.skipped_until}`,
-                    );
-                    return;
-                  }
-                } catch (err) {
-                  console.error("[EA Scheduler] Error checking skip status:", errorMessage(err));
-                }
-
-                console.log(
-                  `[EA Scheduler] Advancing ${schedule.label} snapshot boundary for user ${row.user_id}`,
-                );
-                try {
-                  await advanceSnapshotBoundaryAtBoundary(userId, {
-                    timeZone: schedule.tz || "America/Los_Angeles",
-                    scheduleLabel: schedule.label,
-                  });
-                  console.log(
-                    `[EA Scheduler] ${schedule.label} snapshot boundary ready`,
-                  );
-                } catch (err) {
-                  console.error(
-                    `[EA Scheduler] ${schedule.label} snapshot boundary failed:`,
-                    errorMessage(err),
-                  );
-                }
-              },
-            );
-          },
-          { timezone: schedule.tz || "America/Los_Angeles" },
-        );
-
-        activeJobs.push(job);
-        console.log(
-          `[EA Scheduler] Scheduled ${schedule.label} snapshot boundary at ${schedule.time} ${schedule.tz || "America/Los_Angeles"} for user ${row.user_id}`,
-        );
-      } catch (err) {
-        // A bad cron expression or registration failure on one entry must not
-        // abort the remaining schedules for this or any other user.
-        const scheduleLabel = typeof rawSchedule === "object" && rawSchedule !== null
-          ? (rawSchedule as Record<string, unknown>).label
-          : undefined;
-        console.error(
-          `[EA Scheduler] Failed to register schedule "${String(scheduleLabel)}" for user ${row.user_id}:`,
-          errorMessage(err),
-        );
-      }
-    }
-  }
-
-  if (activeJobs.length === 0) {
-    console.log("[EA Scheduler] No enabled schedules found");
-  }
-}
-
-let initSchedulerRerun = false;
-
-// Serialize concurrent init calls (startup + un-awaited settings-PUT re-inits).
-// Coalescing into one in-flight run prevents the clear-then-await-then-push window
-// from double-registering every cron job; the rerun flag guarantees a caller that
-// arrived mid-run still gets a fresh re-init afterward (so no schedule change is missed).
 export function initScheduler(): Promise<void> {
-  if (schedulerStopping) return Promise.resolve();
-  initSchedulerRerun = true;
-  return schedulerWork.run("scheduler-init", async () => {
-    do {
-      initSchedulerRerun = false;
-      await runInitScheduler();
-    } while (initSchedulerRerun && !schedulerStopping);
-  }, { singleFlight: true });
+  return snapshotBoundaryScheduler.init();
 }
 
 // Passive email indexer: sweeps every account's inbox every 10 minutes and
@@ -611,14 +431,11 @@ export function startReminderSchedulerWorker(): void {
 export function stopScheduler(): Promise<void> {
   if (stopSchedulerInFlight) return stopSchedulerInFlight;
   schedulerStopping = true;
-  initSchedulerRerun = false;
   gmailHistorySyncRerun = false;
   emailTriageSelfRescheduleCount = 0;
   emailTriageDeadlineFollowupRequested = false;
   emailTriageDeadlineController.stop();
-
-  for (const job of activeJobs) job.stop?.();
-  activeJobs.length = 0;
+  snapshotBoundaryScheduler.stop();
   for (const job of [
     indexerJob,
     gmailWatchRenewalJob,

@@ -20,7 +20,6 @@
     "server/email/gmail.ts": 631,
     "server/email/gmail-sync.ts": 664,
     "server/actual/actual-core.ts": 702,
-    "server/scheduler.ts": 655,
     "server/routes/calendar.ts": 605,
     "src/components/todoist/add-task-panel/useAddTaskPanelController.ts": 616,
     "src/components/dashboard/DashboardShell.tsx": 638

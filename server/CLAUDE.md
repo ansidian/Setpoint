@@ -7,6 +7,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 ### Root
 - `index.ts` — Express app assembly; wires middleware, routes, and background workers; owns the HTTP server instance
 - `scheduler.ts` — cron composition root; starts/stops all background workers across domains
+- `scheduler-snapshot-boundaries.ts` — saved-schedule snapshot-boundary lifecycle: parsing, cron registration, hot-reload coalescing, skip rechecks, and stop behavior
 - `scheduler-work-registry.ts` — shared admission/single-flight registry that lets scheduler shutdown await every admitted task
 - `scheduler-email-triage-drain.ts` — scheduler-owned earliest-deadline controller and request seam for durable email-triage jobs
 - `shutdown.ts` — generic, injectable graceful-shutdown sequencer (`createGracefulShutdown`); pure sequencing logic over an injected `server` + `stopFns` array, no knowledge of which workers it's draining
