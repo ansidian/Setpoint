@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import ConnectionsSettingsSection from "@/components/settings/sections/ConnectionsSettingsSection";
 import ActualBudgetSettingsSection from "@/components/settings/sections/ActualBudgetSettingsSection";
 import EmailAutomationSettingsSection from "@/components/settings/sections/EmailAutomationSettingsSection";

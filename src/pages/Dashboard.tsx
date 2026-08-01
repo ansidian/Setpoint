@@ -3,7 +3,7 @@ import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange 
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
 import { Sun } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { DashboardProvider } from "../context/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import Dashboard from "./Dashboard";
 import type { ReactNode } from "react";
 import type { CurrentDashboardEventInput } from "../../shared/types/dashboard";

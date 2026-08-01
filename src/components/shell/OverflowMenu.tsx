@@ -7,7 +7,7 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Kbd } from "./Kbd";
 
 interface MenuItemProps {

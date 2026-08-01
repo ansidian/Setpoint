@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { getAccounts, getCapabilities, getInstanceCredentials, getSettings, updateSettings } from "@/api";
 import {
   normalizeSettingsTab,

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Circle, CircleDashed } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router";
 import { cn } from "@/lib/utils";
 import { onboardingContinueHref } from "@/lib/onboardingModel";
 import type { OnboardingProgress } from "../../../shared/types/onboarding";

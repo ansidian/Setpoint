@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ChevronLeft, Check, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TABS } from "@/components/settings/settings-core";

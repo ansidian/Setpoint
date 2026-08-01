@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // own chunks for better deploy cache granularity. Everything else (including the
 // app entry) returns undefined and falls back to Rolldown's default chunking.
 // Matching is on node_modules path segments to avoid substring false positives
-// (e.g. "react" must not catch "@base-ui/react" or "react-router-dom").
+// (e.g. "react" must not catch "@base-ui/react").
 const CODEMIRROR_PACKAGE_PATHS = [
   "/node_modules/@codemirror/",
   "/node_modules/@lezer/",
@@ -33,7 +33,6 @@ export function manualChunks(id: string): string | undefined {
   if (normalized.includes("/node_modules/react/")
     || normalized.includes("/node_modules/react-dom/")
     || normalized.includes("/node_modules/react-router/")
-    || normalized.includes("/node_modules/react-router-dom/")
     || normalized.includes("/node_modules/scheduler/")) {
     return "react-vendor";
   }

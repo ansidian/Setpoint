@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import ConnectionPanelContent from "@/components/settings/ConnectionPanelContent";
 import ConnectionsDirectory from "@/components/settings/ConnectionsDirectory";
 import { connectionSetupTargetFromSearch } from "@/components/settings/connectionDirectoryModel";

@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import type { ComponentType, Dispatch, RefObject, SetStateAction } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav";
 import { TAB_LABELS } from "../shell/ShellTabs";

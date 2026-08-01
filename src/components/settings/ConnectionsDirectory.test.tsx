@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import { CONNECTIONS, CONNECTION_GROUPS } from "./connectionModel";
 import type { ConnectionRowView, ConnectionState } from "./connectionModel";
 import ConnectionsDirectory from "./ConnectionsDirectory";

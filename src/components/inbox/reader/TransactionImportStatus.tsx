@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import useTransactionImportStatus from "./useTransactionImportStatus";
 import { resolveTransactionImportStatus } from "./transactionImportStatusModel";
 import type { CSSProperties } from "react";

@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import type { ReactElement } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router";
 import { checkAuth, prefetchCurrentDashboard } from "./api";
 import { getOnboardingProgress } from "./lib/onboardingApi";
 import { getSetupStatus } from "./setupApi";

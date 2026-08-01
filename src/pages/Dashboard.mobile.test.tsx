@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../context/DashboardContext";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import { resetInboxSession } from "../components/inbox/useInboxSessionState";
 import type { DashboardShellProps } from "../components/dashboard/DashboardShell";
 

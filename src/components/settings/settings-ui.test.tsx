@@ -1,5 +1,5 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { SettingsLayout } from "./settings-ui";
 import { TABS } from "./settings-core";

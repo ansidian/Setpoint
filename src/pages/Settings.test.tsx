@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import type { SettingsPatch } from "@/components/settings/settingsTypes";
 import type { TriageSoundSettings } from "../../shared/types/settings";
 import type { OnboardingProgress } from "../../shared/types/onboarding";
