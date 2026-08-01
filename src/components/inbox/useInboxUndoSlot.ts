@@ -141,6 +141,11 @@ export default function useInboxUndoSlot({ onActiveSnapshotRefresh }: {
   }, [onActiveSnapshotRefresh, showError]);
 
   useEffect(() => () => {
+    // React Activity runs effect cleanup when the Inbox keep-alive tab is
+    // hidden but preserves component state. Clear every presentation here —
+    // including slot-less error toasts — so returning to Inbox cannot restore
+    // a toast whose action timer was already settled on leave.
+    setUndo(null);
     settleUndoSlotRef.current?.(undoSlotRef.current, {
       clearUi: false,
       reportErrors: false,

@@ -197,6 +197,12 @@ function TodayTimeline({
                 onJump={onJump}
                 isFirst
                 isMobile={false}
+                showEmptyState={filters.events || filters.deadlines}
+                emptyDescription={filters.events && filters.deadlines
+                  ? "No events or deadlines scheduled."
+                  : filters.events
+                    ? "No events scheduled."
+                    : "No deadlines due."}
               />
               <div
                 style={{
@@ -250,6 +256,8 @@ function TodayTimeline({
           : ttr.today.length === 0
             && ttr.tomorrow.length === 0
             && ttr.restCount === 0
+            && !filters.events
+            && !filters.deadlines
             && !showEventSkeletons && (
             <div
               style={{

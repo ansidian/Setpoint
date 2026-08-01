@@ -37,6 +37,31 @@ describe("CommandPalette", () => {
     expect(screen.queryByText("Generate fresh briefing")).toBeNull();
   });
 
+  it("routes Bills and Deadlines to calendar destinations", () => {
+    const onAction = vi.fn();
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={onAction}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Go to Deadlines"));
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({
+      kind: "calendar-view",
+      payload: "deadlines",
+    }));
+
+    fireEvent.click(screen.getByText("Go to Bills"));
+    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({
+      kind: "calendar-view",
+      payload: "bills",
+    }));
+  });
+
+
   it("labels the history affordance as snapshots", () => {
     render(
       <CommandPalette
@@ -263,14 +288,14 @@ describe("CommandPalette", () => {
     );
 
     // Hover a command far from the default first-item cursor.
-    fireEvent.mouseEnter(screen.getByText("Bills"));
+    fireEvent.mouseEnter(screen.getByText("Go to Bills"));
     fireEvent.keyDown(screen.getByPlaceholderText("Jump to anything…"), {
       key: "Enter",
     });
 
     expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
       id: "bills",
-      kind: "scroll",
+      kind: "calendar-view",
       payload: "bills",
     }));
   });

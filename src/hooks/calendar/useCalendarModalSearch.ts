@@ -47,6 +47,10 @@ export interface CalendarSearchRequest {
 
 export type CalendarSearchApi = (request: CalendarSearchRequest) => Promise<CalendarSearchPayload>;
 
+const defaultCalendarSearchApi: CalendarSearchApi = (request) => (
+  getCalendarSearch(request) as Promise<CalendarSearchPayload>
+);
+
 export interface CalendarSearchActivationContext {
   anchorElement?: Element | null;
   sourceCellElement?: Element | null;
@@ -91,7 +95,7 @@ function resultStableId(result?: CalendarSearchResultLike) {
 export default function useCalendarModalSearch({
   modalOpen,
   view,
-  searchApi = (request) => getCalendarSearch(request) as Promise<CalendarSearchPayload>,
+  searchApi = defaultCalendarSearchApi,
   onActivateResult,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   limit = DEFAULT_LIMIT,

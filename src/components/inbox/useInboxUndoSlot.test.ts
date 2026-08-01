@@ -1,4 +1,5 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { Activity, createElement, Fragment } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import useInboxUndoSlot from "./useInboxUndoSlot";
 
@@ -17,6 +18,53 @@ afterEach(() => {
 });
 
 describe("useInboxUndoSlot", () => {
+  it("dismisses a settled toast when its keep-alive view is hidden", async () => {
+    const commit = vi.fn().mockResolvedValue({});
+
+    function Harness() {
+      const controller = useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() });
+      return createElement(
+        Fragment,
+        null,
+        createElement(
+          "button",
+          {
+            type: "button",
+            onClick: () => controller.replaceUndoSlot({
+              type: "trash",
+              message: "Email moved to trash",
+              commit,
+            }),
+          },
+          "Trash email",
+        ),
+        controller.undo ? createElement("div", null, controller.undo.message) : null,
+      );
+    }
+
+    const visibleTree = createElement(
+      Activity,
+      { mode: "visible", children: createElement(Harness) },
+    );
+    const hiddenTree = createElement(
+      Activity,
+      { mode: "hidden", children: createElement(Harness) },
+    );
+    const { rerender } = render(visibleTree);
+
+    fireEvent.click(screen.getByRole("button", { name: "Trash email" }));
+    expect(screen.getByText("Email moved to trash")).toBeTruthy();
+
+    rerender(hiddenTree);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    rerender(visibleTree);
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Email moved to trash")).toBeNull();
+  });
+
   it("surfaces a ready slot then auto-commits once the undo window elapses", async () => {
     const commit = vi.fn().mockResolvedValue({});
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));

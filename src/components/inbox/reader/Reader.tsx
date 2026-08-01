@@ -76,6 +76,12 @@ export default function Reader({
     const timer = window.setTimeout(() => setToast(null), 3000);
     return () => window.clearTimeout(timer);
   }, [toast]);
+  useEffect(() => () => {
+    // The Inbox is Activity-hidden rather than unmounted on a tab change.
+    // Dismiss this action confirmation on leave instead of restoring stale
+    // feedback and restarting its timer when the user returns.
+    setToast(null);
+  }, []);
 
   if (!email) return <ReaderEmptyState />;
 

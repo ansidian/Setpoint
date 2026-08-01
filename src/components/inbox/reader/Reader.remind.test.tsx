@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useState } from "react";
+import { Activity, useState } from "react";
 import Reader from "./Reader";
 import type { AddTaskPanelProps } from "../../todoist/add-task-panel/types";
 
@@ -90,5 +90,30 @@ describe("Inbox Remind me workspace", () => {
     expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByRole("status").textContent).toBe("Reminder added");
     expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it("dismisses the reminder toast when the inbox view is hidden", () => {
+    const { rerender } = render(
+      <Activity mode="visible">
+        <Harness />
+      </Activity>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save task" }));
+    expect(screen.getByRole("status").textContent).toBe("Reminder added");
+
+    rerender(
+      <Activity mode="hidden">
+        <Harness />
+      </Activity>,
+    );
+    rerender(
+      <Activity mode="visible">
+        <Harness />
+      </Activity>,
+    );
+
+    expect(screen.queryByText("Reminder added")).toBeNull();
   });
 });

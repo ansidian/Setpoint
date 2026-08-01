@@ -359,6 +359,10 @@ export function DashboardShell({
   const handlePaletteAction = useCallback((item: { kind: string; payload?: string }) => {
     if (item.kind === "tab" && item.payload) setShellTab(item.payload as DashboardTab);
     else if (item.kind === "scroll" && item.payload) jumpToSection(item.payload);
+    else if (item.kind === "calendar-view" && item.payload === "deadlines") {
+      openCalendar("events", null, null, { forceDeadlineOverlay: true });
+    }
+    else if (item.kind === "calendar-view" && item.payload === "bills") openCalendar("bills");
     else if (item.kind === "deadline-create") openDeadlineCreate();
     else if (item.kind === "event") openCalendar("events", null, "new");
     else if (item.kind === "analytics") {

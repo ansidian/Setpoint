@@ -5,6 +5,14 @@ import useCalendarModalSearch, {
   type CalendarSearchPayload,
 } from "./useCalendarModalSearch";
 
+const apiMocks = vi.hoisted(() => ({
+  getCalendarSearch: vi.fn(),
+}));
+
+vi.mock("../../api", () => ({
+  getCalendarSearch: apiMocks.getCalendarSearch,
+}));
+
 function deferred<T = CalendarSearchPayload>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -30,6 +38,27 @@ describe("useCalendarModalSearch", () => {
     vi.clearAllMocks();
     vi.useRealTimers();
   });
+
+  it("keeps the default search API stable across pending-state renders", async () => {
+    apiMocks.getCalendarSearch.mockResolvedValue({ results: [] });
+    const { result } = renderHook(() => useCalendarModalSearch({
+      modalOpen: true,
+      view: "events",
+      debounceMs: 0,
+    }));
+
+    act(() => {
+      result.current.openSearch();
+      result.current.setQuery("final");
+    });
+
+    await waitFor(() => expect(apiMocks.getCalendarSearch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    await flushPromises();
+
+    expect(apiMocks.getCalendarSearch).toHaveBeenCalledTimes(1);
+  });
+
 
   it("debounces typeahead, clears changed-query results, and ignores stale responses", async () => {
     const first = deferred();

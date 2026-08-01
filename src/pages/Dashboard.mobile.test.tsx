@@ -69,15 +69,31 @@ vi.mock("../components/briefing/BriefingHistoryPanel", () => ({
 }));
 
 vi.mock("../components/shell/CommandPalette", () => ({
-  default: function CommandPaletteMock({ open, onAction }: { open: boolean; onAction: (action: { kind: string }) => void }) {
+  default: function CommandPaletteMock({ open, onAction }: { open: boolean; onAction: (action: { kind: string; payload?: string }) => void }) {
     return open ? (
-      <button
-        type="button"
-        data-testid="command-palette-analytics-action"
-        onClick={() => onAction({ kind: "analytics" })}
-      >
-        Analytics action
-      </button>
+      <>
+        <button
+          type="button"
+          data-testid="command-palette-analytics-action"
+          onClick={() => onAction({ kind: "analytics" })}
+        >
+          Analytics action
+        </button>
+        <button
+          type="button"
+          data-testid="command-palette-deadlines-action"
+          onClick={() => onAction({ kind: "calendar-view", payload: "deadlines" })}
+        >
+          Deadlines action
+        </button>
+        <button
+          type="button"
+          data-testid="command-palette-bills-action"
+          onClick={() => onAction({ kind: "calendar-view", payload: "bills" })}
+        >
+          Bills action
+        </button>
+      </>
     ) : null;
   },
 }));
@@ -222,6 +238,40 @@ describe("DashboardShell mobile behavior", () => {
     fireEvent.click(await screen.findByTestId("command-palette-analytics-action"));
 
     expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
+  });
+
+  it("opens the calendar destinations from command palette Bills and Deadlines actions", async () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    const { unmount } = render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <DashboardShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(await screen.findByTestId("command-palette-deadlines-action"));
+    const deadlinesCalendar = await screen.findByTestId("calendar-modal");
+    expect(deadlinesCalendar.getAttribute("data-view")).toBe("events");
+    expect(deadlinesCalendar.getAttribute("data-force-deadline-overlay")).toBe("true");
+    expect(props.loadCalendarDeadlines).toHaveBeenCalledTimes(1);
+
+    unmount();
+    window.localStorage.removeItem("ea:tab");
+    const billsProps = makeProps();
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={billsProps.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <DashboardShell {...billsProps} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(await screen.findByTestId("command-palette-bills-action"));
+    expect((await screen.findByTestId("calendar-modal")).getAttribute("data-view")).toBe("bills");
+    expect(billsProps.loadCalendarBills).toHaveBeenCalledWith({ refreshLive: true });
   });
 
   it("ignores a stale persisted calendar view", async () => {

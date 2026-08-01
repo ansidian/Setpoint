@@ -24,6 +24,8 @@ export default function TimelineDayGroup({
   items,
   now,
   onJump,
+  showEmptyState = true,
+  emptyDescription = "No events or deadlines scheduled.",
 }: {
   accent: string;
   day: number;
@@ -33,6 +35,8 @@ export default function TimelineDayGroup({
   items: DashboardTimelineItem[];
   now: number;
   onJump?: (payload: TimelineRowJumpPayload, anchor: HTMLElement) => void;
+  showEmptyState?: boolean;
+  emptyDescription?: string;
 }) {
   const label = dayBucketLabel(day, now);
   const hideHeader = hideDayHeader || (isFirst && day === 0);
@@ -137,6 +141,41 @@ export default function TimelineDayGroup({
             />
           </Fragment>
         ))}
+        {isToday && items.length === 0 && showEmptyState ? (
+          <div
+            data-testid="timeline-today-empty"
+            style={{
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+              minHeight: 44,
+              justifyContent: "center",
+              padding: "3px 0 7px",
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: spineLeft - gutter - 3,
+                top: 18,
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                border: `1px solid ${accent}99`,
+                background: "var(--sp-page)",
+                boxShadow: `0 0 6px ${accent}30`,
+              }}
+            />
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: "rgba(205,214,244,0.78)" }}>
+              Today is clear
+            </span>
+            <span style={{ fontSize: 10.5, color: "var(--color-text-faint)" }}>
+              {emptyDescription}
+            </span>
+          </div>
+        ) : null}
         {nowMarkerIndex === items.length && <TimelineNowMarker now={now} accent={accent} />}
       </div>
     </div>
