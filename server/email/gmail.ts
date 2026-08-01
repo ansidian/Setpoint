@@ -1,39 +1,10 @@
 import { simpleParser } from "mailparser";
-import db from "../db/connection.ts";
-import { encrypt, decrypt } from "../platform/encryption.ts";
-import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import { htmlToPlainText } from "./html-to-text.ts";
-import { findCanonicalGmailAccount, normalizeEmailAddress } from "../platform/account-canonical.ts";
-import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
-import { isInvalidGrantError, markAccountNeedsReauth, clearAccountNeedsReauth } from "../platform/provider-reauth.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
-import { emailErrorMessage } from "./email-provider-types.ts";
-import { canonicalUrlService } from "../platform/canonical-url.ts";
-import {
-  googleOAuthCredentialManager,
-  type GoogleOAuthApplicationCredentials,
-} from "../google-oauth-credentials.ts";
-import { GOOGLE_COMBINED_SCOPES } from "./gmail-oauth-url.ts";
+import { getAccessToken } from "./gmail-credentials.ts";
+export { getAccessToken, handleCallback } from "./gmail-credentials.ts";
 export { getAuthUrl } from "./gmail-oauth-url.ts";
-
-interface GmailCredentials {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  scopes: string[];
-}
-
-interface GmailTokenResponse {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  scope?: string;
-}
-
-interface GmailProfileResponse {
-  emailAddress?: string;
-}
 
 interface GmailHeader {
   name: string;
@@ -79,169 +50,6 @@ interface GmailRangeOptions {
   maxResults?: number;
 }
 
-const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
-const PROFILE_FETCH_TIMEOUT_MS = 30_000;
-const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
-
-// Google's OAuth token responses normally carry expires_in (seconds), but a
-// malformed/partial response can omit it. Defaulting to this TTL keeps
-// expires_at finite so the refresh guard stays deterministic instead of
-// computing NaN (NaN < anything is false, which would silently wedge refresh).
-const DEFAULT_TOKEN_TTL_SECONDS = 3600;
-
-// Compute an absolute expiry (ms epoch) from a token response's expires_in,
-// falling back to DEFAULT_TOKEN_TTL_SECONDS when it is missing or non-finite.
-function computeExpiresAt(expiresIn: unknown, now = Date.now()): number {
-  const ttl = typeof expiresIn === "number" && Number.isFinite(expiresIn)
-    ? expiresIn
-    : DEFAULT_TOKEN_TTL_SECONDS;
-  return now + ttl * 1000;
-}
-
-export async function handleCallback(
-  code: string,
-  _accountId: string | null | undefined,
-  userId: string,
-  applicationCredentials: GoogleOAuthApplicationCredentials,
-  onValidated?: () => Promise<void>,
-): Promise<{ email: string; accountId: string }> {
-  const redirectUri = await canonicalUrlService.resolveProviderCallbackUrl("googleOAuth");
-  const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: applicationCredentials.clientId,
-      client_secret: applicationCredentials.clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code",
-    }),
-  }, { timeoutMs: TOKEN_EXCHANGE_TIMEOUT_MS });
-
-  if (!res.ok) {
-    throw new Error(`Google OAuth token exchange failed (${res.status})`);
-  }
-
-  const tokens = await res.json() as GmailTokenResponse;
-  const credentials: GmailCredentials = {
-    access_token: tokens.access_token || "",
-    refresh_token: tokens.refresh_token || "",
-    expires_at: computeExpiresAt(tokens.expires_in),
-    scopes: tokens.scope ? tokens.scope.split(" ").filter(Boolean) : GOOGLE_COMBINED_SCOPES,
-  };
-
-  // Fetch the user's email address for the label
-  const profileRes = await fetchWithTimeout(
-    "https://www.googleapis.com/gmail/v1/users/me/profile",
-    { headers: { Authorization: `Bearer ${credentials.access_token}` } },
-    { timeoutMs: PROFILE_FETCH_TIMEOUT_MS },
-  );
-  if (!profileRes.ok) {
-    throw new Error(`Google OAuth profile validation failed (${profileRes.status})`);
-  }
-  const profile = await profileRes.json() as GmailProfileResponse;
-  const email = profile.emailAddress || "";
-  if (!email) throw new Error("Google OAuth profile did not include an email address");
-  await onValidated?.();
-
-  const existingAccounts = await db.execute({
-    sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail' ORDER BY sort_order ASC, created_at ASC",
-    args: [userId],
-  });
-  const canonical = findCanonicalGmailAccount(existingAccounts.rows, email) as unknown as ConfiguredEmailAccount | null;
-  const targetAccountId = canonical?.id || `gmail-${normalizeEmailAddress(email)}`;
-
-  let nextSort = canonical?.sort_order;
-  if (nextSort == null) {
-    const maxSort = await db.execute({
-      sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM ea_accounts WHERE user_id = ?",
-      args: [userId],
-    });
-    nextSort = Number(maxSort.rows[0]?.next);
-  }
-
-  await db.execute({
-    sql: `INSERT INTO ea_accounts (id, user_id, type, email, label, credentials_encrypted, sort_order)
-          VALUES (?, ?, 'gmail', ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            credentials_encrypted = excluded.credentials_encrypted,
-            email = excluded.email,
-            needs_reauth = 0,
-            updated_at = datetime('now')`,
-    args: [
-      targetAccountId,
-      userId,
-      email,
-      canonical?.label || email,
-      encrypt(JSON.stringify(credentials), accountCredentialContext(targetAccountId)),
-      nextSort,
-    ],
-  });
-
-  return { email, accountId: targetAccountId };
-}
-
-async function getValidToken(account: ConfiguredEmailAccount): Promise<string> {
-  const canonicalAccountId = account.canonical_id || account.id;
-  const credentials = JSON.parse(
-    decrypt(account.credentials_encrypted, accountCredentialContext(canonicalAccountId)),
-  ) as GmailCredentials;
-
-  // Refresh if the token expires within 5 minutes. Treat a non-finite/null
-  // expires_at as already-expired so a malformed stored credential forces a
-  // refresh rather than passing the guard (NaN < anything is false, which
-  // would otherwise wedge refresh and 401 forever).
-  const expiresAt = credentials.expires_at;
-  const isExpiring = !Number.isFinite(expiresAt) || expiresAt < Date.now() + 5 * 60 * 1000;
-  if (isExpiring) {
-    const applicationCredentials = await googleOAuthCredentialManager.resolveActive();
-    const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: applicationCredentials.clientId,
-        client_secret: applicationCredentials.clientSecret,
-        refresh_token: credentials.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    }, { timeoutMs: TOKEN_REFRESH_TIMEOUT_MS });
-
-    if (!res.ok) {
-      const text = await res.text();
-      if (isInvalidGrantError(text)) {
-        await markAccountNeedsReauth(canonicalAccountId).catch((error: unknown) =>
-          console.error("[Gmail] Failed to mark needs_reauth:", emailErrorMessage(error)));
-      }
-      throw new Error(`Token refresh failed for ${account.email}: ${text}`);
-    }
-
-    const data = await res.json() as GmailTokenResponse;
-    credentials.access_token = data.access_token || "";
-    credentials.expires_at = computeExpiresAt(data.expires_in);
-    // refresh_token is not always returned on refresh
-    if (data.refresh_token) credentials.refresh_token = data.refresh_token;
-    if (data.scope) credentials.scopes = data.scope.split(" ").filter(Boolean);
-
-    await db.execute({
-      sql: `UPDATE ea_accounts SET credentials_encrypted = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [
-        encrypt(JSON.stringify(credentials), accountCredentialContext(canonicalAccountId)),
-        canonicalAccountId,
-      ],
-    });
-
-    if (account.needs_reauth) {
-      await clearAccountNeedsReauth(canonicalAccountId).catch((error: unknown) =>
-        console.error("[Gmail] Failed to clear needs_reauth:", emailErrorMessage(error)));
-    }
-  }
-
-  return credentials.access_token;
-}
-
-export async function getAccessToken(account: ConfiguredEmailAccount): Promise<string> {
-  return getValidToken(account);
-}
 
 // Extract dollar amounts from text for bill detection
 function extractAmounts(text: string): string {
@@ -308,7 +116,7 @@ function formatGmailSearchDate(value: string | number | Date): string {
 }
 
 export async function fetchEmails(account: ConfiguredEmailAccount, hoursBack: number): Promise<NormalizedFetchedEmail[]> {
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
 
   // Page through message IDs until nextPageToken is exhausted
   const messageIds: string[] = [];
@@ -357,7 +165,7 @@ export async function fetchEmailsInRange(account: ConfiguredEmailAccount, {
     throw new Error("Gmail range fetch requires start and end dates");
   }
 
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const listUrl = new URL(
     "https://www.googleapis.com/gmail/v1/users/me/messages",
   );
@@ -386,7 +194,7 @@ export async function fetchEmailsInRange(account: ConfiguredEmailAccount, {
 
 export async function fetchEmailsByIds(account: ConfiguredEmailAccount, messageIds: string[]): Promise<NormalizedFetchedEmail[]> {
   if (!messageIds?.length) return [];
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const messages = await fetchMessages(token, messageIds);
   return messages.map((msg) => normalizeMessage(account, msg));
 }
@@ -431,7 +239,7 @@ export async function fetchMessages(token: string, messageIds: string[]): Promis
 
 export async function fetchEmailBody(account: ConfiguredEmailAccount, uid: string): Promise<EmailBody> {
   const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
 
   // Fetch raw RFC 2822 message and parse with mailparser for reliable decoding
   const res = await fetch(
@@ -464,7 +272,7 @@ function extractMessageId(account: ConfiguredEmailAccount, uid: string): string 
 export async function isMessageRead(account: ConfiguredEmailAccount, uid: string): Promise<boolean | null> {
   try {
     const messageId = extractMessageId(account, uid);
-    const token = await getValidToken(account);
+    const token = await getAccessToken(account);
     const res = await fetch(
       `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata&fields=labelIds`,
       { headers: { Authorization: `Bearer ${token}` } },
@@ -479,7 +287,7 @@ export async function isMessageRead(account: ConfiguredEmailAccount, uid: string
 
 export async function markAsRead(account: ConfiguredEmailAccount, uid: string): Promise<void> {
   const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const res = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
     {
@@ -493,7 +301,7 @@ export async function markAsRead(account: ConfiguredEmailAccount, uid: string): 
 
 export async function markAsUnread(account: ConfiguredEmailAccount, uid: string): Promise<void> {
   const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const res = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
     {
@@ -507,7 +315,7 @@ export async function markAsUnread(account: ConfiguredEmailAccount, uid: string)
 
 export async function trashMessage(account: ConfiguredEmailAccount, uid: string): Promise<void> {
   const messageId = extractMessageId(account, uid);
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const res = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
     {
@@ -530,7 +338,7 @@ async function getOrCreateLabel(account: ConfiguredEmailAccount, name: string): 
   const cache = labelIdCache.get(cacheKey) || {};
   if (cache[name]) return cache[name];
 
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const listRes = await fetch(
     "https://www.googleapis.com/gmail/v1/users/me/labels",
     { headers: { Authorization: `Bearer ${token}` } },
@@ -569,7 +377,7 @@ async function getOrCreateLabel(account: ConfiguredEmailAccount, name: string): 
 export async function snoozeAtGmail(account: ConfiguredEmailAccount, uid: string): Promise<void> {
   const messageId = extractMessageId(account, uid);
   const labelId = await getOrCreateLabel(account, SNOOZE_LABEL_NAME);
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const res = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
     {
@@ -589,7 +397,7 @@ export async function snoozeAtGmail(account: ConfiguredEmailAccount, uid: string
 export async function wakeAtGmail(account: ConfiguredEmailAccount, uid: string): Promise<void> {
   const messageId = extractMessageId(account, uid);
   const labelId = await getOrCreateLabel(account, SNOOZE_LABEL_NAME);
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const res = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
     {
@@ -605,7 +413,7 @@ export async function wakeAtGmail(account: ConfiguredEmailAccount, uid: string):
 }
 
 export async function batchMarkAsRead(account: ConfiguredEmailAccount, uids: string[]): Promise<void> {
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const ids = uids.map((uid) => extractMessageId(account, uid));
   const res = await fetch(
     "https://www.googleapis.com/gmail/v1/users/me/messages/batchModify",
@@ -621,7 +429,7 @@ export async function batchMarkAsRead(account: ConfiguredEmailAccount, uids: str
 // --- Connection test ---
 
 export async function testConnection(account: ConfiguredEmailAccount): Promise<boolean> {
-  const token = await getValidToken(account);
+  const token = await getAccessToken(account);
   const res = await fetch(
     "https://www.googleapis.com/gmail/v1/users/me/profile",
     { headers: { Authorization: `Bearer ${token}` } },
