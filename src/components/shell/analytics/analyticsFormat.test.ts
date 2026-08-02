@@ -53,16 +53,14 @@ describe("formatCompactNumber", () => {
 });
 
 describe("formatModelName", () => {
-  it("maps a known Claude id to a scannable family + version label", () => {
+  it("maps known provider ids to scannable family + version labels", () => {
     expect(formatModelName("claude-sonnet-4-6")).toBe("Sonnet 4.6");
-  });
-
-  it("derives the label from the family/version regardless of a date suffix", () => {
     expect(formatModelName("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
+    expect(formatModelName("gpt-5.6-sol")).toBe("GPT-5.6 Sol");
   });
 
   it("passes an unrecognized id through unchanged", () => {
-    expect(formatModelName("gpt-5.4")).toBe("gpt-5.4");
+    expect(formatModelName("custom-model")).toBe("custom-model");
   });
 
   it("falls back to 'unknown' when no id is supplied", () => {

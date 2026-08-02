@@ -1,21 +1,16 @@
-import { consumeAnthropicStream } from "./anthropic-stream.ts";
-import { ALFRED_TOOL_DEFINITIONS, DEFAULT_SEARCH_LIMIT, alfredToolSummary, executeAlfredTool } from "./alfred-tools.ts";
+import { DEFAULT_SEARCH_LIMIT, alfredToolSummary, executeAlfredTool } from "./alfred-tools.ts";
 import { buildAlfredSystemPrompt } from "./alfred-prompt.ts";
 import { recordAlfredUsage } from "./alfred-usage.ts";
 import type { AlfredToolName, AlfredToolResultBase } from "../../shared/types/alfred.ts";
 import type {
-  AnthropicContentBlock,
-  AnthropicMessage,
-  AnthropicToolResultBlock,
+  AlfredProviderToolResult,
   RunAlfredOptions,
 } from "./alfred-types.ts";
 import { errorMessage } from "./alfred-types.ts";
 import { resolveAiApiKey } from "../ai-credentials.ts";
+import { getAlfredModelAdapter } from "./alfred-provider.ts";
 
-const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_TOOL_ITERATIONS = 12;
-const MAX_TOKENS = 2000;
 
 // Cite-by-reference backstop (ADR 0006): smaller models sometimes retype item
 // details instead of calling show_items. When a run retrieved a small, almost
@@ -57,40 +52,30 @@ function citableRowCount(result: AlfredToolResultBase): number {
   return 0;
 }
 
-// Multi-turn prompt caching: mark the last block of the last message so the
-// cached prefix covers tools + system + the whole transcript. Only the outgoing
-// request copy is marked — the stored transcript keeps its plain shapes.
-function withCacheBreakpoint(messages: AnthropicMessage[]): AnthropicMessage[] {
-  const last = messages.at(-1);
-  if (!last) return messages;
-  const blocks: AnthropicContentBlock[] = typeof last.content === "string"
-    ? [{ type: "text", text: last.content }]
-    : last.content.map((block) => ({ ...block }));
-  const finalBlock = blocks.at(-1);
-  if (!finalBlock) return messages;
-  blocks[blocks.length - 1] = { ...finalBlock, cache_control: { type: "ephemeral" } };
-  return [...messages.slice(0, -1), { ...last, content: blocks }];
-}
-
 async function runAlfredInner({
   userId,
   conversation,
   message,
-  model,
   emit,
   signal = null,
   fetchImpl = globalThis.fetch,
   apiKey,
-  credentialResolver = () => resolveAiApiKey("anthropic"),
+  credentialResolver = (provider) => resolveAiApiKey(provider),
   deps,
   recordUsage = recordAlfredUsage,
   now = () => new Date(),
   transcriptCheckpoint = 0,
 }: RunAlfredOptions & { transcriptCheckpoint: number }): Promise<void> {
-  conversation.messages.push({ role: "user", content: String(message) });
+  const adapter = getAlfredModelAdapter(conversation.provider);
+  adapter.appendUserText(conversation, String(message));
   const system = buildAlfredSystemPrompt({ now: now() });
-  const currentApiKey = apiKey === undefined ? await credentialResolver() : apiKey;
-  if (!currentApiKey) throw Object.assign(new Error("Anthropic API key is not configured"), { status: 503 });
+  const currentApiKey = apiKey === undefined
+    ? await credentialResolver(conversation.provider)
+    : apiKey;
+  if (!currentApiKey) {
+    const label = conversation.provider === "openai" ? "OpenAI" : "Anthropic";
+    throw Object.assign(new Error(`${label} API key is not configured`), { status: 503 });
+  }
 
   let retrievedCount = 0;
   let showItemsCalled = false;
@@ -102,57 +87,35 @@ async function runAlfredInner({
   const groupIntent = looksLikeGroupingQuestion(message);
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
-    const body: Record<string, unknown> = {
-      model,
-      max_tokens: MAX_TOKENS,
-      stream: true,
-      system,
-      tools: ALFRED_TOOL_DEFINITIONS,
-      messages: withCacheBreakpoint(conversation.messages),
-    };
     // Deterministic grouping backstop: after the group nudge, pin the breakdown
     // tool for one turn so a split question can't end as prose again when Haiku
     // ignores the soft reminder. tool_choice is request-only (outside the cached
     // prefix), so toggling it per turn doesn't disturb prompt caching. One-shot:
     // reset immediately so the follow-up turn can produce the prose takeaway.
-    if (forceGroupItems) body.tool_choice = { type: "tool", name: "group_items" };
+    const forceTool = forceGroupItems ? "group_items" as const : null;
     forceGroupItems = false;
-    const res = await fetchImpl(ANTHROPIC_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": currentApiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
-    if (!res.ok) {
-      await res.text?.().catch(() => "");
-      const err = Object.assign(
-        new Error(`Anthropic API error (${res.status})`),
-        { status: res.status },
-      );
-      throw err;
-    }
-
-    if (!res.body) throw new Error("Anthropic response stream was empty");
-    const turn = await consumeAnthropicStream(res.body, {
+    const turn = await adapter.runTurn({
+      conversation,
+      system,
+      apiKey: currentApiKey,
+      forceTool,
+      signal,
+      fetchImpl,
       onTextDelta: (text: string) => emit({ type: "text_delta", text }),
     });
 
     recordUsage(userId, {
       eventType: "alfred_run_turn",
-      model: turn.model || model,
+      model: turn.model || conversation.model,
       usage: turn.usage,
-      metadata: { iteration, conversation_id: conversation.id },
+      metadata: { iteration, conversation_id: conversation.id, provider: conversation.provider },
     }).catch((err) => {
       console.error("[Alfred] usage recording failed:", errorMessage(err, "usage recording failed"));
     });
 
-    conversation.messages.push({ role: "assistant", content: turn.content });
+    adapter.appendAssistantTurn(conversation, turn);
 
-    const toolUses = turn.content.filter((block) => block.type === "tool_use");
+    const toolUses = turn.toolCalls;
     if (turn.stopReason !== "tool_use" || !toolUses.length) {
       // A split/categorize question answered as prose with no card → nudge toward
       // group_items first (the right surface for a multi-bucket answer), ahead of
@@ -163,19 +126,19 @@ async function runAlfredInner({
       if (!nudgedGroup && groupIntent && !groupItemsCalled && !summarizeCalled && retrievedCount > 0) {
         nudgedGroup = true;
         forceGroupItems = true;
-        conversation.messages.push({ role: "user", content: GROUP_ITEMS_NUDGE });
+        adapter.appendUserText(conversation, GROUP_ITEMS_NUDGE);
         continue;
       }
       if (!nudged && !showItemsCalled && !groupItemsCalled && retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS) {
         nudged = true;
-        conversation.messages.push({ role: "user", content: SHOW_ITEMS_NUDGE });
+        adapter.appendUserText(conversation, SHOW_ITEMS_NUDGE);
         continue;
       }
       emit({ type: "run_end", stop_reason: turn.stopReason || "end_turn" });
       return;
     }
 
-    const toolResults: AnthropicToolResultBlock[] = [];
+    const toolResults: AlfredProviderToolResult[] = [];
     for (const toolUse of toolUses) {
       const toolName = toolUse.name as AlfredToolName;
       emit({ type: "tool_start", tool_id: toolUse.id, name: toolName });
@@ -193,13 +156,14 @@ async function runAlfredInner({
       }
       recordUsage(userId, {
         eventType: "alfred_tool_call",
-        model: turn.model || model,
+        model: turn.model || conversation.model,
         usage: {},
         metadata: {
           tool: toolUse.name,
           ok: !result?.error,
           duration_ms: Math.max(0, now().getTime() - toolStartedAt),
           conversation_id: conversation.id,
+          provider: conversation.provider,
         },
       }).catch((err) => {
         console.error("[Alfred] tool usage recording failed:", errorMessage(err, "tool usage recording failed"));
@@ -223,14 +187,9 @@ async function runAlfredInner({
         ok: !result?.error,
         summary: alfredToolSummary(toolName, result),
       });
-      toolResults.push({
-        type: "tool_result",
-        tool_use_id: toolUse.id,
-        content: JSON.stringify(result),
-        ...(result?.error ? { is_error: true } : {}),
-      });
+      toolResults.push({ toolId: toolUse.id, name: toolName, result });
     }
-    conversation.messages.push({ role: "user", content: toolResults });
+    adapter.appendToolResults(conversation, toolResults);
   }
 
   // Tool-call limit reached: revert so the conversation doesn't end on a dangling

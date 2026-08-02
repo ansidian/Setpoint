@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  ALFRED_MODELS,
-  alfredModelByKey,
   alfredPriorityLabel,
   alfredScrollKey,
   alfredToolRunningLabel,
@@ -10,6 +8,7 @@ import {
   formatAlfredAbsolute,
   formatAlfredAgo,
   formatAlfredDate,
+  formatAlfredModelHint,
   isNearBottom,
   spendingBreakdownRows,
   splitSayText,
@@ -185,7 +184,7 @@ describe("applyAlfredEvent", () => {
 
   it("ignores run_start and unknown events", () => {
     expect(play([
-      { type: "run_start", conversation_id: "c", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "mystery" } as unknown as AlfredRunEvent,
     ])).toEqual([]);
   });
@@ -215,13 +214,9 @@ describe("splitSayText", () => {
 });
 
 describe("helpers", () => {
-  it("maps model keys to allowlisted ids", () => {
-    expect(ALFRED_MODELS.map((m) => m.id)).toEqual([
-      "claude-haiku-4-5-20251001",
-      "claude-sonnet-4-6",
-    ]);
-    expect(alfredModelByKey("haiku").id).toBe("claude-haiku-4-5-20251001");
-    expect(alfredModelByKey("nope").key).toBe("sonnet");
+  it("formats provider-aware model hints", () => {
+    expect(formatAlfredModelHint("anthropic", "claude-sonnet-4-6")).toBe("Anthropic · Claude Sonnet 4.6");
+    expect(formatAlfredModelHint("openai", "gpt-5.6-sol")).toBe("OpenAI · GPT-5.6 Sol");
   });
 
   it("labels running tools quietly", () => {

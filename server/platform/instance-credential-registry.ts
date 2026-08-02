@@ -10,7 +10,7 @@ export type InstanceCredentialDefinition = {
 
 const DEFINITIONS = [
   { key: "ai.anthropic_api_key", handling: "secret", envAliases: ["ANTHROPIC_API_KEY"], validatorOwner: "ai", capabilities: ["email_triage", "bill_extraction", "alfred"] },
-  { key: "ai.openai_api_key", handling: "secret", envAliases: ["OPENAI_API_KEY"], validatorOwner: "ai", capabilities: ["email_triage", "bill_extraction", "semantic_email_search"] },
+  { key: "ai.openai_api_key", handling: "secret", envAliases: ["OPENAI_API_KEY"], validatorOwner: "ai", capabilities: ["email_triage", "bill_extraction", "semantic_email_search", "alfred"] },
   { key: "calendar.google_places_api_key", handling: "secret", envAliases: ["GOOGLE_PLACES_API_KEY", "GOOGLE_MAPS_API_KEY"], validatorOwner: "calendar", capabilities: ["calendar"] },
   { key: "gmail.pubsub_topic", handling: "non_secret", envAliases: ["GMAIL_PUBSUB_TOPIC"], validatorOwner: "email", capabilities: ["email"] },
   { key: "google.oauth_client_id", handling: "non_secret", envAliases: ["GOOGLE_CLIENT_ID"], validatorOwner: "google", capabilities: ["email", "calendar"] },

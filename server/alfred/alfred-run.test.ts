@@ -102,7 +102,7 @@ describe("runAlfred", () => {
   it("reverts a dangling user turn when a run throws, keeping the conversation reusable (P2-19)", async () => {
     const overloaded = vi.fn<AlfredFetch>(async () => ({ ok: false, status: 529, text: async () => "overloaded" }));
     await expect(runAlfred({
-      userId: "user-1", conversation, message: "first question", model: "claude-sonnet-4-6",
+      userId: "user-1", conversation, message: "first question",
       emit, fetchImpl: overloaded, apiKey: "key", deps: testDeps(), recordUsage,
     })).rejects.toThrow();
     // The just-pushed user turn must be removed so reuse doesn't send two
@@ -112,7 +112,7 @@ describe("runAlfred", () => {
     // A retry on the same conversation then produces a valid alternating transcript.
     const ok = fetchScript([textTurn("Recovered.")]);
     await runAlfred({
-      userId: "user-1", conversation, message: "second question", model: "claude-sonnet-4-6",
+      userId: "user-1", conversation, message: "second question",
       emit, fetchImpl: ok, apiKey: "key", deps: testDeps(), recordUsage,
     });
     const roles = conversation.messages.map((m) => m.role);
@@ -127,7 +127,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "What's left today?",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -158,7 +157,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "Any bills coming up?",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -203,7 +201,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "Any bills coming up?",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -229,7 +226,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "What's left today?",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -259,7 +255,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "Any bills coming up?",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -294,7 +289,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "When is my car insurance due?",
-      model: "claude-haiku-4-5-20251001",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -328,7 +322,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "how many deadlines do I have?",
-      model: "claude-haiku-4-5-20251001",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -355,7 +348,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "group my bills by status",
-      model: "claude-haiku-4-5-20251001",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -396,7 +388,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "how many of my deadlines are overdue, and how many are upcoming?",
-      model: "claude-haiku-4-5-20251001",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -431,7 +422,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "how much did I spend on coffee?",
-      model: "claude-haiku-4-5-20251001",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -456,7 +446,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "loop forever",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -479,7 +468,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "open it",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",
@@ -501,7 +489,6 @@ describe("runAlfred", () => {
       userId: "user-1",
       conversation,
       message: "hi",
-      model: "claude-sonnet-4-6",
       emit,
       fetchImpl,
       apiKey: "key",

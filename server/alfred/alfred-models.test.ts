@@ -1,20 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { ALFRED_MODELS, DEFAULT_ALFRED_MODEL, resolveAlfredModel } from "./alfred-models.ts";
+import {
+  DEFAULT_ALFRED_MODEL,
+  isAllowedAlfredModel,
+  loadAlfredModelConfig,
+  resolveAlfredModelConfig,
+} from "./alfred-models.ts";
 
-describe("resolveAlfredModel", () => {
-  it("returns the default when nothing requested", () => {
-    expect(resolveAlfredModel(undefined)).toBe(DEFAULT_ALFRED_MODEL);
-    expect(resolveAlfredModel("")).toBe(DEFAULT_ALFRED_MODEL);
+describe("Alfred model configuration", () => {
+  it("returns the Anthropic default when storage is empty", () => {
+    expect(resolveAlfredModelConfig()).toEqual({ provider: "anthropic", model: DEFAULT_ALFRED_MODEL });
   });
 
-  it("accepts exactly the allowlisted ids", () => {
-    for (const model of ALFRED_MODELS) {
-      expect(resolveAlfredModel(model.id)).toBe(model.id);
-    }
+  it("accepts discovered Anthropic and curated OpenAI models", () => {
+    expect(isAllowedAlfredModel("anthropic", "claude-haiku-4-5-20251001")).toBe(true);
+    expect(isAllowedAlfredModel("openai", "gpt-5.6-sol")).toBe(true);
   });
 
-  it("rejects unknown ids", () => {
-    expect(resolveAlfredModel("gpt-5.5")).toBeNull();
-    expect(resolveAlfredModel("claude-opus-4-8")).toBeNull();
+  it("falls back to the selected provider's default when its stored model is invalid", () => {
+    expect(resolveAlfredModelConfig({ provider: "openai", model: "claude-sonnet-4-6" }))
+      .toEqual({ provider: "openai", model: "gpt-5.6-sol" });
+  });
+
+  it("loads and normalizes the persisted pair", async () => {
+    const db = {
+      execute: async () => ({ rows: [{ alfred_provider: "openai", alfred_model: "gpt-5.6-sol" }] }),
+    };
+    await expect(loadAlfredModelConfig("user-1", db as never))
+      .resolves.toEqual({ provider: "openai", model: "gpt-5.6-sol" });
   });
 });

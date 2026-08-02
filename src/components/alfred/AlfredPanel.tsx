@@ -7,10 +7,9 @@ import type { UIEvent } from "react";
 import { createPortal } from "react-dom";
 import { RotateCcw, X } from "lucide-react";
 import useAlfredChat from "./useAlfredChat";
-import { alfredModelByKey, alfredScrollKey, isNearBottom } from "./alfredPanelModel";
+import { alfredScrollKey, formatAlfredModelHint, isNearBottom } from "./alfredPanelModel";
 import {
   ErrorLine,
-  ModelToggle,
   SayBlock,
   SuggestionList,
   ToolSteps,
@@ -39,7 +38,7 @@ export interface AlfredPanelProps {
 }
 
 function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalendarItem }: AlfredPanelProps) {
-  const { messages, busy, modelKey, setModelKey, submit, newChat } = useAlfredChat();
+  const { messages, busy, activeModel, submit, newChat } = useAlfredChat();
   const [previewItem, setPreviewItem] = useState<AlfredEmailItem | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   // Header-button new-chats bump this; combined with the external newChatTick it
@@ -188,12 +187,15 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
           Alfred
         </span>
         <span style={{ flex: 1 }} />
-        <ModelToggle modelKey={modelKey} onChange={setModelKey} accent={accent} />
         <button type="button" title="New chat (⌘⇧\)" onClick={handleHeaderNewChat}
+          aria-label="Start a new Alfred chat"
+          className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 active:bg-white/[0.07] motion-reduce:transition-none motion-reduce:transform-none"
           style={{ display: "inline-flex", padding: "4px 7px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
           <RotateCcw size={11} />
         </button>
         <button type="button" title="Close (esc)" onClick={onClose}
+          aria-label="Close Alfred"
+          className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 active:bg-white/[0.07] motion-reduce:transition-none motion-reduce:transform-none"
           style={{ display: "inline-flex", padding: "4px 7px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
           <X size={12} />
         </button>
@@ -237,7 +239,9 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
         open={open}
         busy={busy}
         accent={accent}
-        modelHint={alfredModelByKey(modelKey).hint}
+        modelHint={activeModel
+          ? formatAlfredModelHint(activeModel.provider, activeModel.model)
+          : "Settings default"}
         clearSignal={composerClearSignal}
         onSubmit={submit}
       />

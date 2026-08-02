@@ -36,7 +36,7 @@ describe("AlfredPanel", () => {
 
   it("submits the draft on Enter and renders the streamed answer", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "tool_start", tool_id: "t1", name: "get_upcoming_bills" },
       { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 1 upcoming" },
       { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
@@ -66,7 +66,7 @@ describe("AlfredPanel", () => {
     // resolves into the serif line.
     const narration = 'Let me read a few more confirmation emails to better understand what constitutes "nothing after applied," and check for more rejections.';
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "text_delta", text: "Let me search your mail." },
       { type: "tool_start", tool_id: "t1", name: "search_email" },
       { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 12 matches" },
@@ -105,7 +105,7 @@ describe("AlfredPanel", () => {
 
   it("renders a run error produced by the panel model", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "run_error", message: "Alfred could not complete this run." },
     ]);
     render(<AlfredPanel {...baseProps} />);
@@ -120,12 +120,12 @@ describe("AlfredPanel", () => {
     let resolveFirst: () => void = () => {};
     api.runAlfredStream
       .mockImplementationOnce(async ({ onEvent }: { onEvent: (event: AlfredRunEvent) => void }) => {
-        onEvent({ type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" });
+        onEvent({ type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" });
         await new Promise<void>((resolve) => { resolveFirst = resolve; });
         onEvent({ type: "run_end", stop_reason: "end_turn" });
       })
       .mockImplementation(async ({ onEvent }: { onEvent: (event: AlfredRunEvent) => void }) => {
-        onEvent({ type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" });
+        onEvent({ type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" });
         onEvent({ type: "run_end", stop_reason: "end_turn" });
       });
 
@@ -160,7 +160,7 @@ describe("AlfredPanel", () => {
 
   it("clears the conversation when newChatTick changes", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "text_delta", text: "Hello." },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
@@ -177,16 +177,22 @@ describe("AlfredPanel", () => {
     expect(screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…").value).toBe("");
   });
 
-  it("shows the model hint for the selected model", () => {
+  it("shows the active conversation model as a read-only hint", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "openai", model: "gpt-5.6-sol" },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
     render(<AlfredPanel {...baseProps} />);
-    expect(screen.getByText("claude sonnet 4.6")).toBeTruthy();
-    fireEvent.click(screen.getByText("haiku"));
-    expect(screen.getByText("claude haiku 4.5")).toBeTruthy();
+    expect(screen.getByText("Settings default")).toBeTruthy();
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "hi" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("OpenAI · GPT-5.6 Sol")).toBeTruthy());
   });
 
   it("dispatches a calendar request when a bill chip is clicked", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
@@ -205,7 +211,7 @@ describe("AlfredPanel", () => {
 
   it("opens the read-only preview when an email chip is clicked", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
@@ -221,7 +227,7 @@ describe("AlfredPanel", () => {
 
   it("clears the preview when the panel closes", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
@@ -239,7 +245,7 @@ describe("AlfredPanel", () => {
 
   it("Escape closes the preview first, then the panel", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
       { type: "run_end", stop_reason: "end_turn" },
     ]);

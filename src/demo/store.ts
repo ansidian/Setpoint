@@ -302,6 +302,8 @@ function makeDemoSeed(now = new Date()) {
     discord_reminder_webhook_url: "",
     actual_budget_url: "https://actual.example.invalid/demo",
     actual_configured: true,
+    alfred_provider: "demo",
+    alfred_model: "demo-alfred-model",
   };
 
   return {

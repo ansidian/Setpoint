@@ -68,6 +68,21 @@ describe("AI model catalog", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("omits non-streaming OpenAI models from Alfred availability", async () => {
+    const service = createAiModelCatalogService({
+      fetchImpl: vi.fn(),
+      getCredentialMetadata: async (provider) => credential(provider, false),
+      resolveApiKey: async () => null,
+    });
+
+    const providers = await service.availability("alfred");
+    const openai = providers.find((entry) => entry.provider === "openai");
+
+    expect(openai?.models.map(({ id }) => id)).not.toContain("gpt-5.5-pro");
+    expect(isSelectableAiModel("openai", "gpt-5.5-pro", "alfred")).toBe(false);
+    expect(isSelectableAiModel("openai", "gpt-5.5-pro", "email_triage")).toBe(true);
+  });
+
   it("discovers Anthropic display names once within the cache TTL", async () => {
     const fetchImpl = vi.fn(async () => response({
       data: [

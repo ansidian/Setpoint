@@ -3,8 +3,8 @@ import type { NormalizedCalendarEvent } from "./calendar.ts";
 import type { DeadlineOccurrence } from "./tasks.ts";
 import type { TransactionRecord, TransactionSummaryBucket, TransactionGroupBy } from "./transactions.ts";
 
-export type AlfredModelKey = "haiku" | "sonnet";
-export type AlfredModelId = "claude-haiku-4-5-20251001" | "claude-sonnet-4-6";
+export type AlfredProvider = "anthropic" | "openai";
+export type AlfredModelId = string;
 
 export type AlfredToolName =
   | "search_email"
@@ -57,6 +57,7 @@ export type AlfredItem = AlfredItemMap[AlfredItemKind] & Record<string, unknown>
 export interface AlfredRunStartEvent {
   type: "run_start";
   conversation_id: string;
+  provider: AlfredProvider;
   model: AlfredModelId;
 }
 
@@ -136,7 +137,6 @@ export type AlfredRunEvent =
 export interface AlfredStreamOptions {
   message: string;
   conversationId?: string | null;
-  model?: AlfredModelId;
   signal?: AbortSignal;
   onEvent: (event: AlfredRunEvent) => void;
 }

@@ -1,14 +1,47 @@
-import type { AlfredModelId } from "../../shared/types/alfred.ts";
+import type { Client } from "@libsql/client";
+import db from "../db/connection.ts";
+import {
+  aiModelCatalogService,
+  getDefaultAiModel,
+  isSelectableAiModel,
+  resolveStoredAiModelConfig,
+} from "../ai-model-catalog.ts";
+import type { AiProvider } from "../ai-credentials.ts";
 
-export const ALFRED_MODELS = [
-  { id: "claude-sonnet-4-6", label: "Sonnet" },
-  { id: "claude-haiku-4-5-20251001", label: "Haiku" },
- ] as const satisfies ReadonlyArray<{ id: AlfredModelId; label: string }>;
+export const DEFAULT_ALFRED_PROVIDER: AiProvider = "anthropic";
+export const DEFAULT_ALFRED_MODEL = getDefaultAiModel(DEFAULT_ALFRED_PROVIDER, "alfred");
 
-export const DEFAULT_ALFRED_MODEL: AlfredModelId = "claude-sonnet-4-6";
+export function isAllowedAlfredModel(provider: unknown, model: unknown): boolean {
+  return isSelectableAiModel(provider, model, "alfred");
+}
 
-export function resolveAlfredModel(requested: unknown): AlfredModelId | null {
-  if (!requested) return DEFAULT_ALFRED_MODEL;
-  const match = ALFRED_MODELS.find((model) => model.id === requested);
-  return match ? match.id : null;
+export function resolveAlfredModelConfig({
+  provider,
+  model,
+}: { provider?: unknown; model?: unknown } = {}): { provider: AiProvider; model: string } {
+  return resolveStoredAiModelConfig({
+    provider,
+    model,
+    useCase: "alfred",
+    defaultProvider: DEFAULT_ALFRED_PROVIDER,
+  });
+}
+
+export function alfredModelAvailability() {
+  return aiModelCatalogService.availability("alfred");
+}
+
+export async function loadAlfredModelConfig(
+  userId: string,
+  dbClient: Pick<Client, "execute"> = db,
+): Promise<{ provider: AiProvider; model: string }> {
+  const result = await dbClient.execute({
+    sql: "SELECT alfred_provider, alfred_model FROM ea_settings WHERE user_id = ?",
+    args: [userId],
+  });
+  const row = result.rows[0];
+  return resolveAlfredModelConfig({
+    provider: row?.alfred_provider,
+    model: row?.alfred_model,
+  });
 }

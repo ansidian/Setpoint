@@ -11,6 +11,7 @@ import type { RunAlfredOptions } from "../alfred/alfred-types.ts";
 const testState = vi.hoisted(() => ({
   db: { current: null as Client | null },
   run: vi.fn<(options: RunAlfredOptions) => Promise<void>>(),
+  modelConfig: { provider: "anthropic" as "anthropic" | "openai", model: "claude-sonnet-4-6" },
 }));
 
 vi.mock("../db/connection.ts", () => ({
@@ -64,7 +65,10 @@ function buildApp(): express.Express {
   app.use(cookieParser());
   app.use("/api/alfred", createAlfredRouter({
     run: testState.run,
-    credentialResolver: async () => process.env.ANTHROPIC_API_KEY || null,
+    credentialResolver: async (provider) => (
+      provider === "openai" ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
+    ) || null,
+    modelConfigResolver: async () => testState.modelConfig,
   }));
   return app;
 }
@@ -77,6 +81,8 @@ describe("alfred routes", () => {
   beforeEach(async () => {
     vi.stubEnv("EA_USER_ID", "user-1");
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+    testState.modelConfig = { provider: "anthropic", model: "claude-sonnet-4-6" };
     testState.db.current = await createMigratedDb();
     testState.run.mockReset();
     clearAlfredConversations();
@@ -110,12 +116,13 @@ describe("alfred routes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rejects unknown models", async () => {
+  it("ignores deprecated client model input and uses Settings", async () => {
     const res = await auth(request(buildApp()).post("/api/alfred/run")).send({
       message: "hi",
       model: "gpt-5.5",
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(testState.run.mock.calls[0]?.[0].conversation.model).toBe("claude-sonnet-4-6");
   });
 
   it("returns 503 when ANTHROPIC_API_KEY is missing", async () => {
@@ -142,12 +149,28 @@ describe("alfred routes", () => {
       res.text.split("\n\n").find((frame: string) => frame.includes("run_start"))!.split("data: ")[1]!,
     );
     expect(startEvent.conversation_id).toBeTruthy();
+    expect(startEvent.provider).toBe("anthropic");
     expect(startEvent.model).toBe("claude-sonnet-4-6");
     expect(testState.run).toHaveBeenCalledWith(expect.objectContaining({
       userId: "user-1",
       message: "What's left?",
-      model: "claude-sonnet-4-6",
     }));
+  });
+
+  it("uses the OpenAI provider and credential selected in Settings", async () => {
+    testState.modelConfig = { provider: "openai", model: "gpt-5.6-sol" };
+    testState.run.mockImplementation(async ({ emit }) => {
+      emit({ type: "run_end", stop_reason: "completed" });
+    });
+
+    const res = await auth(request(buildApp()).post("/api/alfred/run")).send({ message: "hi" });
+
+    expect(res.status).toBe(200);
+    const startEvent = JSON.parse(
+      res.text.split("\n\n").find((frame: string) => frame.includes("run_start"))!.split("data: ")[1]!,
+    );
+    expect(startEvent).toMatchObject({ provider: "openai", model: "gpt-5.6-sol" });
+    expect(testState.run.mock.calls[0]?.[0].apiKey).toBe("openai-test-key");
   });
 
   it("reuses an existing conversation when conversationId is supplied", async () => {
@@ -158,6 +181,8 @@ describe("alfred routes", () => {
     });
     const app = buildApp();
     await auth(request(app).post("/api/alfred/run")).send({ message: "first" });
+
+    testState.modelConfig = { provider: "openai", model: "gpt-5.6-sol" };
 
     let secondConversationId: string | undefined;
     testState.run.mockImplementation(async ({ emit, conversation }) => {
@@ -170,6 +195,10 @@ describe("alfred routes", () => {
     });
 
     expect(secondConversationId).toBe(firstConversationId);
+    expect(testState.run.mock.calls[1]?.[0].conversation).toMatchObject({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+    });
   });
 
   it("emits run_error when the run loop throws", async () => {

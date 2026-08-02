@@ -185,7 +185,7 @@ describe("AI provider selection projection", () => {
     expect(result.model).toBe("gpt-previous");
   });
 
-  it("projects a display fallback without changing the saved selection or provider input", () => {
+  it("keeps a disconnected saved provider visible instead of displaying an unsaved fallback", () => {
     const providers = structuredClone(PROVIDERS);
     const saved = { provider: "openai", model: "gpt-saved" };
 
@@ -199,7 +199,11 @@ describe("AI provider selection projection", () => {
       selectedModel: saved.model,
     });
 
-    expect(result).toMatchObject({ provider: "anthropic", model: "claude-sonnet" });
+    expect(result).toMatchObject({ provider: "openai", model: "gpt-saved" });
+    expect(result.providers).toEqual([
+      PROVIDERS[0],
+      { ...PROVIDERS[1], available: false },
+    ]);
     expect(saved).toEqual({ provider: "openai", model: "gpt-saved" });
     expect(providers).toEqual(PROVIDERS);
   });

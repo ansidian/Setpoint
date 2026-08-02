@@ -251,3 +251,16 @@ Selection path:
 **SSE:** none in phase 02. Imported Actual changes flow through the existing deferred bills-mirror refresh path.
 
 **UI:** none in phase 02; phase 03 will consume the authenticated transaction-import routes for Finance review and Inbox status.
+
+## 13. Alfred Settings selection → conversation-bound provider run
+
+**Trigger:** the owner saves an Alfred provider/model in Settings, then starts a new Alfred chat.
+
+1. `GET /api/ea/alfred-models` projects the centralized Alfred catalog with Anthropic discovery, curated OpenAI models, and credential availability.
+2. `AlfredAiModelCard` writes `alfred_provider` and `alfred_model` together through the Settings autosave contract.
+3. On the first `POST /api/alfred/run` without a live conversation, the route resolves the persisted pair, creates the in-memory conversation, and resolves that provider's credential.
+4. `run_start` reports the bound provider/model; the panel shows it read-only. Later turns reuse the conversation ID and therefore keep the same pair even if Settings changes.
+5. `alfred-run.ts` delegates each model turn to the bound Anthropic Messages or OpenAI Responses adapter while retaining the shared read-only tool execution, citation/grouping backstops, SSE events, and usage recording.
+6. New chat deletes the old ephemeral conversation; the next first turn resolves Settings again. OpenAI runs use `store: false` and replay returned output/reasoning items locally rather than coupling to remote conversation state.
+
+**Failure boundary:** a provider error rolls the local transcript back to the pre-run boundary. A missing credential is reported for the conversation's bound provider and never causes a silent cross-provider fallback.

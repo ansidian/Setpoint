@@ -19,6 +19,11 @@ import {
   resolveEmailAiModelConfig,
 } from "../email/email-ai-models.ts";
 import {
+  alfredModelAvailability,
+  isAllowedAlfredModel,
+  resolveAlfredModelConfig,
+} from "../alfred/alfred-models.ts";
+import {
   getEmailTriageModeForUser,
   isAllowedStoredEmailTriageMode,
   normalizeStoredEmailTriageMode,
@@ -86,6 +91,8 @@ const SETTINGS_PUBLIC_FIELDS = [
   "actual_budget_sync_id",
   "email_ai_provider",
   "email_ai_model",
+  "alfred_provider",
+  "alfred_model",
   "bill_extract_provider",
   "bill_extract_model",
   "email_triage_mode",
@@ -167,6 +174,12 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     });
     safe.email_ai_provider = emailAiModel.provider;
     safe.email_ai_model = emailAiModel.model;
+    const alfredModel = resolveAlfredModelConfig({
+      provider: safe.alfred_provider,
+      model: safe.alfred_model,
+    });
+    safe.alfred_provider = alfredModel.provider;
+    safe.alfred_model = alfredModel.model;
     const billExtractModel = resolveBillExtractModelConfig({
       provider: safe.bill_extract_provider,
       model: safe.bill_extract_model,
@@ -211,7 +224,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -274,6 +287,19 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
       updates.push("email_interests_json = ?");
       args.push(JSON.stringify(validation.value));
+    }
+    if (alfred_provider !== undefined || alfred_model !== undefined) {
+      const resolved = resolveAlfredModelConfig({
+        provider: alfred_provider,
+        model: alfred_model,
+      });
+      if (!isAllowedAlfredModel(resolved.provider, resolved.model)) {
+        return res.status(400).json({ message: "Invalid alfred_provider/model combination" });
+      }
+      updates.push("alfred_provider = ?");
+      args.push(resolved.provider);
+      updates.push("alfred_model = ?");
+      args.push(resolved.model);
     }
     if (email_triage_mode !== undefined) {
       if (!isAllowedStoredEmailTriageMode(email_triage_mode)) {
@@ -436,6 +462,15 @@ router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("
     // P3-54: fixed user-facing string; raw error message stays in the log only.
     console.error("Error fetching bill-extract catalog:", errorMessage(err));
     res.status(500).json({ message: "Failed to fetch bill-extract models" });
+  }
+});
+
+router.get<Record<string, never>, ProviderModelAvailability[] | ErrorResponse>("/alfred-models", async (_req, res) => {
+  try {
+    res.json(await alfredModelAvailability());
+  } catch (err) {
+    console.error("Error fetching Alfred model catalog:", errorMessage(err));
+    res.status(500).json({ message: "Failed to fetch Alfred models" });
   }
 });
 

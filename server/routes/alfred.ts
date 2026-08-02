@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.ts";
 import { alfredRunLimiter } from "../middleware/rate-limits.ts";
-import { resolveAlfredModel } from "../alfred/alfred-models.ts";
+import { loadAlfredModelConfig } from "../alfred/alfred-models.ts";
 import {
   createAlfredConversation,
   deleteAlfredConversation,
@@ -21,6 +21,7 @@ import type { AlfredRunEvent } from "../../shared/types/alfred.ts";
 import type { AlfredDependencies } from "../alfred/alfred-types.ts";
 import { errorMessage } from "../alfred/alfred-types.ts";
 import { resolveAiApiKey } from "../ai-credentials.ts";
+import type { AlfredProvider } from "../../shared/types/alfred.ts";
 
 const ALFRED_DEPS = {
   retrieve: retrieveInboxAiSearch,
@@ -38,11 +39,13 @@ const ALFRED_DEPS = {
 export function createAlfredRouter({
   deps = ALFRED_DEPS,
   run = runAlfred,
-  credentialResolver = () => resolveAiApiKey("anthropic"),
+  credentialResolver = (provider) => resolveAiApiKey(provider),
+  modelConfigResolver = (userId) => loadAlfredModelConfig(userId),
 }: {
   deps?: AlfredDependencies;
   run?: typeof runAlfred;
-  credentialResolver?: () => Promise<string | null>;
+  credentialResolver?: (provider: AlfredProvider) => Promise<string | null>;
+  modelConfigResolver?: (userId: string) => Promise<{ provider: AlfredProvider; model: string }>;
 } = {}) {
   const router = Router();
   router.use(requireCookieSession);
@@ -51,15 +54,18 @@ export function createAlfredRouter({
     const userId = process.env.EA_USER_ID as string;
     const message = String(req.body?.message || "").trim();
     if (!message) return res.status(400).json({ message: "message is required" });
-    const model = resolveAlfredModel(req.body?.model);
-    if (!model) return res.status(400).json({ message: "Unknown model" });
-    const apiKey = await credentialResolver();
-    if (!apiKey) {
-      return res.status(503).json({ message: "ANTHROPIC_API_KEY is not configured" });
-    }
 
     const requestedId = req.body?.conversationId;
-    const conversation = (requestedId && getAlfredConversation(requestedId)) || createAlfredConversation();
+    let conversation = requestedId ? getAlfredConversation(requestedId) : null;
+    if (!conversation) {
+      const selection = await modelConfigResolver(userId);
+      conversation = createAlfredConversation(selection);
+    }
+    const apiKey = await credentialResolver(conversation.provider);
+    if (!apiKey) {
+      const envVar = conversation.provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+      return res.status(503).json({ message: `${envVar} is not configured` });
+    }
 
     res.status(200);
     res.set({
@@ -76,14 +82,18 @@ export function createAlfredRouter({
     const emit = (event: AlfredRunEvent): void => {
       res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     };
-    emit({ type: "run_start", conversation_id: conversation.id, model });
+    emit({
+      type: "run_start",
+      conversation_id: conversation.id,
+      provider: conversation.provider,
+      model: conversation.model,
+    });
 
     try {
       await run({
         userId,
         conversation,
         message,
-        model,
         emit,
         signal: abort.signal,
         apiKey,

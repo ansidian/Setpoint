@@ -52,6 +52,23 @@ vi.mock("../bills/bill-extractors/catalog.ts", async (importOriginal) => ({
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
   DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));
+vi.mock("../alfred/alfred-models.ts", () => ({
+  alfredModelAvailability: vi.fn(async () => [{
+    provider: "openai",
+    label: "OpenAI",
+    available: true,
+    defaultModel: "gpt-5.6-sol",
+    models: [{ id: "gpt-5.6-sol", label: "GPT-5.6 Sol" }],
+  }]),
+  isAllowedAlfredModel: vi.fn((provider, model) => (
+    (provider === "anthropic" && model === "claude-sonnet-4-6")
+    || (provider === "openai" && model === "gpt-5.6-sol")
+  )),
+  resolveAlfredModelConfig: vi.fn(({ provider, model }) => ({
+    provider: provider || "anthropic",
+    model: model || (provider === "openai" ? "gpt-5.6-sol" : "claude-sonnet-4-6"),
+  })),
+}));
 
 process.env.EA_USER_ID = "user-1";
 
@@ -76,6 +93,8 @@ async function createMigratedDb() {
       email_triage_mode TEXT DEFAULT 'auto',
       email_triage_classify_read_arrivals INTEGER NOT NULL DEFAULT 0,
       email_lookback_hours INTEGER DEFAULT 16,
+      alfred_provider TEXT NOT NULL DEFAULT 'anthropic',
+      alfred_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
       weather_lat REAL DEFAULT 34.0686,
       weather_lng REAL DEFAULT -118.0276,
       weather_location TEXT,
@@ -165,6 +184,45 @@ describe("GET /settings todoist_needs_reauth", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.todoist_needs_reauth).toBe(true);
+  });
+});
+
+describe("Alfred model settings", () => {
+  it("returns the normalized default selection", async () => {
+    const res = await request(makeApp()).get("/api/ea/settings");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      alfred_provider: "anthropic",
+      alfred_model: "claude-sonnet-4-6",
+    });
+  });
+
+  it("persists a valid provider/model pair together", async () => {
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ alfred_provider: "openai", alfred_model: "gpt-5.6-sol" });
+
+    expect(res.status).toBe(200);
+    expect(await getSettingsRow()).toMatchObject({
+      alfred_provider: "openai",
+      alfred_model: "gpt-5.6-sol",
+    });
+  });
+
+  it("rejects an invalid provider/model pair", async () => {
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ alfred_provider: "openai", alfred_model: "claude-sonnet-4-6" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("exposes Alfred-specific provider discovery", async () => {
+    const res = await request(makeApp()).get("/api/ea/alfred-models");
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toMatchObject({ provider: "openai", defaultModel: "gpt-5.6-sol" });
   });
 });
 

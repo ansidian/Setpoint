@@ -433,16 +433,18 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
       demo: true,
     };
   }
-  if (pathname === "/api/ea/models" || pathname === "/api/ea/bill-extract-models") {
+  if (pathname === "/api/ea/models" || pathname === "/api/ea/bill-extract-models" || pathname === "/api/ea/alfred-models") {
+    const demoModel = pathname === "/api/ea/models"
+      ? { id: "demo-triage-model", label: "Demo triage model" }
+      : pathname === "/api/ea/bill-extract-models"
+        ? { id: "demo-bill-extract-model", label: "Demo bill model" }
+        : { id: "demo-alfred-model", label: "Demo Alfred model" };
     return [{
       provider: "demo",
       label: "Demo",
       available: true,
-      defaultModel: pathname === "/api/ea/models" ? "demo-triage-model" : "demo-bill-extract-model",
-      models: [{
-        id: pathname === "/api/ea/models" ? "demo-triage-model" : "demo-bill-extract-model",
-        label: pathname === "/api/ea/models" ? "Demo triage model" : "Demo bill model",
-      }],
+      defaultModel: demoModel.id,
+      models: [demoModel],
     }];
   }
   if (pathname === "/api/ea/important-senders") return clone(seed.importantSenders);

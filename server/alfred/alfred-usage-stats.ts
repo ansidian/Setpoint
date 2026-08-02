@@ -9,21 +9,31 @@ import type {
 
 const DEFAULT_WINDOW_DAYS = 7;
 
-// Anthropic pricing per 1M tokens. cachedInput ≈ 0.1× input (cache-read economics).
+// Standard text pricing per 1M tokens. Long-context and regional uplifts remain
+// outside this estimate, matching the existing analytics contract.
 type ModelPrice = { input: number; cachedInput: number; output: number };
-const ANTHROPIC_PRICE_PER_MILLION: Record<string, ModelPrice> = {
+const MODEL_PRICE_PER_MILLION: Record<string, ModelPrice> = {
   "claude-sonnet-4-6": { input: 3.00, cachedInput: 0.30, output: 15.00 },
   "claude-haiku-4-5": { input: 1.00, cachedInput: 0.10, output: 5.00 },
+  "gpt-5.6-sol": { input: 5.00, cachedInput: 0.50, output: 30.00 },
+  "gpt-5.6-terra": { input: 2.50, cachedInput: 0.25, output: 15.00 },
+  "gpt-5.6-luna": { input: 1.00, cachedInput: 0.10, output: 6.00 },
+  "gpt-5.5": { input: 5.00, cachedInput: 0.50, output: 30.00 },
+  "gpt-5.5-pro": { input: 30.00, cachedInput: 30.00, output: 180.00 },
+  "gpt-5.4": { input: 2.50, cachedInput: 0.25, output: 15.00 },
+  "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.50 },
+  "gpt-5.4-nano": { input: 0.20, cachedInput: 0.02, output: 1.25 },
+  "gpt-5.4-pro": { input: 30.00, cachedInput: 30.00, output: 180.00 },
 };
-const PRICE_MODEL_KEYS = Object.keys(ANTHROPIC_PRICE_PER_MILLION)
+const PRICE_MODEL_KEYS = Object.keys(MODEL_PRICE_PER_MILLION)
   .sort((left, right) => right.length - left.length);
 
 function priceForModel(model: unknown): ModelPrice | null {
   const modelId = String(model || "");
-  const exact = ANTHROPIC_PRICE_PER_MILLION[modelId];
+  const exact = MODEL_PRICE_PER_MILLION[modelId];
   if (exact) return exact;
   const base = PRICE_MODEL_KEYS.find((key) => modelId.startsWith(`${key}-`));
-  return base ? (ANTHROPIC_PRICE_PER_MILLION[base] || null) : null;
+  return base ? (MODEL_PRICE_PER_MILLION[base] || null) : null;
 }
 
 function safeJson(value: unknown, fallback: Record<string, unknown> = {}): Record<string, unknown> {

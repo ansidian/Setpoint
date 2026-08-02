@@ -25,7 +25,7 @@ describe("runAlfredStream", () => {
   it("POSTs with CSRF header and streams events to onEvent", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(sseResponse([
-      'event: run_start\ndata: {"type":"run_start","conversation_id":"c1","model":"claude-sonnet-4-6"}\n\n',
+      'event: run_start\ndata: {"type":"run_start","conversation_id":"c1","provider":"anthropic","model":"claude-sonnet-4-6"}\n\n',
       'event: run_end\ndata: {"type":"run_end","stop_reason":"end_turn"}\n\n',
     ]));
     const onEvent = vi.fn();
@@ -33,7 +33,6 @@ describe("runAlfredStream", () => {
     await runAlfredStream({
       message: "hi",
       conversationId: "c1",
-      model: "claude-sonnet-4-6",
       onEvent,
     });
 
@@ -45,7 +44,6 @@ describe("runAlfredStream", () => {
     expect(JSON.parse(init.body)).toEqual({
       message: "hi",
       conversationId: "c1",
-      model: "claude-sonnet-4-6",
     });
     expect(onEvent.mock.calls.map(([e]) => e.type)).toEqual(["run_start", "run_end"]);
   });

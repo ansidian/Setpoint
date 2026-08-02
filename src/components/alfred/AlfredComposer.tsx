@@ -94,6 +94,8 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
           disabled={busy || !draft.trim()}
           onClick={send}
           title="Send"
+          aria-label="Send message to Alfred"
+          className="transition-[filter,transform] duration-150 enabled:hover:-translate-y-px enabled:hover:brightness-110 enabled:focus-visible:outline-none enabled:focus-visible:ring-2 enabled:focus-visible:ring-[color:var(--ea-accent)]/60 enabled:active:translate-y-0 enabled:active:brightness-95 motion-reduce:transition-none motion-reduce:transform-none"
           style={{
             display: "inline-flex", padding: "8px 10px", borderRadius: 8, border: "none",
             cursor: busy || !draft.trim() ? "default" : "pointer",

@@ -81,8 +81,8 @@ export function projectAiProviderSelection({
     const connectionId = PROVIDER_CONNECTION_IDS[provider.provider];
     const state = connectionId ? stateById.get(connectionId) : undefined;
     if (!connectionId) return [{ ...provider }];
-    const isSelectedRepair = provider.provider === selectedProvider && state === "needs_attention";
-    if (state !== "connected" && !isSelectedRepair) return [];
+    const isSelectedProvider = provider.provider === selectedProvider;
+    if (state !== "connected" && !isSelectedProvider) return [];
     return [{
       ...provider,
       available: state === "connected" && provider.available,

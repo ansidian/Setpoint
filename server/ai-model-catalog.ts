@@ -7,7 +7,7 @@ import {
 import { fetchWithTimeout, type FetchFunction } from "./platform/fetch-with-timeout.ts";
 import type { InstanceCredentialMetadata } from "../shared/types/instance-credentials.ts";
 
-export type AiModelUseCase = "email_triage" | "bill_extraction";
+export type AiModelUseCase = "email_triage" | "bill_extraction" | "alfred";
 
 type ProviderDefaults = Record<AiModelUseCase, string>;
 
@@ -42,6 +42,7 @@ const PROVIDERS: Record<AiProvider, ProviderDefinition> = {
     defaults: {
       email_triage: "claude-sonnet-4-6",
       bill_extraction: "claude-haiku-4-5",
+      alfred: "claude-sonnet-4-6",
     },
   },
   openai: {
@@ -52,6 +53,7 @@ const PROVIDERS: Record<AiProvider, ProviderDefinition> = {
     defaults: {
       email_triage: "gpt-5.5",
       bill_extraction: "gpt-5.5",
+      alfred: "gpt-5.6-sol",
     },
   },
 };
@@ -67,6 +69,14 @@ export const OPENAI_MODELS: readonly ProviderModelOption[] = [
   { id: "gpt-5.4-nano", label: "GPT-5.4 nano" },
   { id: "gpt-5.4-pro", label: "GPT-5.4 Pro" },
 ];
+
+// Alfred requires SSE streaming for its visible text/tool trail. GPT-5.5 Pro is
+// valid for non-streaming Responses workloads but does not support streaming.
+const OPENAI_ALFRED_MODELS = OPENAI_MODELS.filter(({ id }) => id !== "gpt-5.5-pro");
+
+function openAiModelsForUseCase(useCase: AiModelUseCase): readonly ProviderModelOption[] {
+  return useCase === "alfred" ? OPENAI_ALFRED_MODELS : OPENAI_MODELS;
+}
 
 export const ANTHROPIC_FALLBACK_MODELS: readonly ProviderModelOption[] = [
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
@@ -139,7 +149,7 @@ export function isSelectableAiModel(
   _useCase: AiModelUseCase,
 ): boolean {
   if (provider === "openai") {
-    return OPENAI_MODELS.some((entry) => entry.id === model);
+    return openAiModelsForUseCase(_useCase).some((entry) => entry.id === model);
   }
   return provider === "anthropic" && isSafeAnthropicModelId(model);
 }
@@ -259,7 +269,7 @@ export function createAiModelCatalogService({
         pricingUrl: PROVIDERS.openai.pricingUrl,
         available: openAiMetadata.activeConfigured,
         defaultModel: getDefaultAiModel("openai", useCase),
-        models: [...OPENAI_MODELS],
+        models: [...openAiModelsForUseCase(useCase)],
       },
     ];
   }

@@ -468,6 +468,12 @@ Email interests from settings influence classification. Scheduled payments from 
 
 Model selection is user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence; OpenAI triage uses structured Responses API output with cache-key hints where supported.
 
+### Alfred AI
+
+Settings is the durable authority for Alfred's provider/model selection through `ea_settings.alfred_provider` and `alfred_model`; `/api/ea/alfred-models` projects the centralized catalog and provider availability. `POST /api/alfred/run` resolves that selection only when creating a conversation, then binds the provider/model to the in-memory conversation so later Settings changes apply after New chat rather than mid-thread.
+
+`server/alfred/alfred-run.ts` owns the provider-neutral read-only tool loop. Anthropic uses the Messages adapter and transient cache breakpoints. OpenAI uses the Responses adapter with SSE, function tools, `store: false`, and full returned output/reasoning-item replay for stateless tool continuation. Both adapters normalize text, tool calls, stop state, and token usage into the existing Alfred SSE and analytics contracts.
+
 ### Key Optimizations
 
 **Durable Triage Queue** — Provider sync creates pending triage rows and deduped jobs. Workers can resume from durable rows after process restarts. Arrival-grace jobs retain their 30-second durable `scheduled_for`; successful writes also arm one process-local earliest-deadline wake-up so healthy processes do not add cron-boundary jitter. The unchanged 30-second cron remains the restart and missed-timer fallback.
@@ -494,6 +500,7 @@ The fifth shell tab: RSS/Atom headlines only, no AI classification or summarizat
 | Actual Budget | `server/actual/actual.ts` + `server/bills/bills-service.ts` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
 | Email triage AI | `server/triage/triage-worker.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
 | Bill extraction AI | `server/bills/bill-extract.ts` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
+| Alfred AI | `server/alfred/` | Anthropic Messages API or OpenAI Responses API | Conversation-bound provider API key | Current run emits an error; conversation transcript rolls back to its prior valid boundary |
 All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage and bill extraction failures are isolated to durable jobs or the specific bill-signal request.
 
 ## Database Schema
@@ -705,7 +712,7 @@ erDiagram
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |
@@ -1064,6 +1071,7 @@ Remote cache hydration streams the archive through a 128 MiB download cap, then 
 | POST | `/api/gmail/push` | Pub/Sub webhook; requires `GMAIL_PUBSUB_PUSH_TOKEN`, decodes Gmail `emailAddress`/`historyId`, and queues `gmail_history_sync` |
 | POST | `/api/ea/schedules/skip` | Skip scheduled snapshot boundary |
 | GET | `/api/ea/models` | Available email AI providers and models |
+| GET | `/api/ea/alfred-models` | Available Alfred AI providers and models |
 | GET | `/api/ea/geocode` | Location string to lat/lng |
 | GET | `/api/ea/important-senders` | Get important senders |
 | PUT | `/api/ea/important-senders` | Update important senders |

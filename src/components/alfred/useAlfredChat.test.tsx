@@ -18,31 +18,12 @@ function scriptedRun(events: AlfredRunEvent[]) {
 
 afterEach(() => {
   vi.clearAllMocks();
-  localStorage.clear();
-});
-
-describe("model persistence", () => {
-  it("restores the saved model and persists changes", () => {
-    localStorage.setItem("alfred:model", "haiku");
-    const { result } = renderHook(() => useAlfredChat());
-    expect(result.current.modelKey).toBe("haiku");
-
-    act(() => result.current.setModelKey("sonnet"));
-    expect(result.current.modelKey).toBe("sonnet");
-    expect(localStorage.getItem("alfred:model")).toBe("sonnet");
-  });
-
-  it("falls back to the default for unknown saved keys", () => {
-    localStorage.setItem("alfred:model", "gpt-9");
-    const { result } = renderHook(() => useAlfredChat());
-    expect(result.current.modelKey).toBe("sonnet");
-  });
 });
 
 describe("useAlfredChat", () => {
   it("submits a message, streams events, and tracks the conversation id", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "text_delta", text: "All clear." },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
@@ -52,6 +33,7 @@ describe("useAlfredChat", () => {
 
     expect(result.current.messages.map((m) => m.type)).toEqual(["user", "say"]);
     expect(result.current.messages[1]).toMatchObject({ type: "say", text: "All clear." });
+    expect(result.current.activeModel).toEqual({ provider: "anthropic", model: "claude-sonnet-4-6" });
     expect(result.current.busy).toBe(false);
 
     // Follow-up reuses the conversation id from run_start
@@ -60,12 +42,11 @@ describe("useAlfredChat", () => {
     expect(api.runAlfredStream.mock.calls[1]![0].conversationId).toBe("c1");
   });
 
-  it("sends the selected model id", async () => {
+  it("does not send a client-selected model", async () => {
     scriptedRun([{ type: "run_end", stop_reason: "end_turn" }]);
     const { result } = renderHook(() => useAlfredChat());
-    act(() => result.current.setModelKey("haiku"));
     await act(async () => { await result.current.submit("hi"); });
-    expect(api.runAlfredStream.mock.calls[0]![0].model).toBe("claude-haiku-4-5-20251001");
+    expect(api.runAlfredStream.mock.calls[0]![0]).not.toHaveProperty("model");
   });
 
   it("appends an error line when the run throws", async () => {
@@ -89,7 +70,7 @@ describe("useAlfredChat", () => {
 
   it("new chat aborts, deletes the server conversation, and clears messages", async () => {
     scriptedRun([
-      { type: "run_start", conversation_id: "c9", model: "claude-sonnet-4-6" },
+      { type: "run_start", conversation_id: "c9", provider: "openai", model: "gpt-5.6-sol" },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     const { result } = renderHook(() => useAlfredChat());
@@ -98,6 +79,7 @@ describe("useAlfredChat", () => {
     act(() => result.current.newChat());
 
     expect(result.current.messages).toEqual([]);
+    expect(result.current.activeModel).toBeNull();
     expect(result.current.busy).toBe(false);
     expect(api.deleteAlfredConversation).toHaveBeenCalledWith("c9");
   });

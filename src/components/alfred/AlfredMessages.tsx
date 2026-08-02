@@ -7,7 +7,6 @@
 // streamed token / keystroke and only the active say block re-renders. Props are
 // primitive/stable (text, tools, accent, done).
 import { memo, useMemo, useState } from "react";
-import type { AlfredModelKey } from "../../../shared/types/alfred";
 import type { AlfredSuggestion, AlfredToolEntry } from "./alfredPanelModel";
 import {
   AlertCircle,
@@ -24,7 +23,6 @@ import {
   Sun,
 } from "lucide-react";
 import {
-  ALFRED_MODELS,
   ALFRED_SUGGESTIONS,
   alfredToolRunningLabel,
   splitSayText,
@@ -211,35 +209,5 @@ function SuggestionRow({ suggestion, onPick, accent }: { suggestion: AlfredSugge
         <ArrowRight size={11} color={dimmer} />
       </span>
     </button>
-  );
-}
-
-export function ModelToggle({ modelKey, onChange, accent }: { modelKey: AlfredModelKey; onChange: (key: AlfredModelKey) => void; accent: string }) {
-  return (
-    <div style={{
-      display: "flex", gap: 2, padding: 2, borderRadius: 7,
-      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-    }}>
-      {ALFRED_MODELS.map((m) => {
-        const selected = modelKey === m.key;
-        return (
-          <button
-            key={m.key}
-            type="button"
-            className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
-            onClick={() => onChange(m.key)}
-            title={m.key === "haiku" ? "Claude Haiku — fastest" : "Claude Sonnet — most capable"}
-            style={{
-              padding: "2px 8px", borderRadius: 5, border: "none", cursor: "pointer",
-              fontSize: 9, fontWeight: 600, letterSpacing: 0.4, textTransform: "capitalize",
-              fontFamily: "inherit",
-              background: selected ? `${accent}24` : "transparent",
-              color: selected ? accent : "var(--color-text-faint)",
-              transition: "background 150ms ease-out, color 150ms ease-out",
-            }}
-          >{m.label}</button>
-        );
-      })}
-    </div>
   );
 }

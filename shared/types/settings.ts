@@ -169,6 +169,8 @@ export interface SettingsResponse {
   actual_budget_sync_id: string | null;
   email_ai_provider: string;
   email_ai_model: string;
+  alfred_provider: string;
+  alfred_model: string;
   bill_extract_provider: string;
   bill_extract_model: string;
   email_triage_mode: StoredEmailTriageMode;
@@ -208,6 +210,8 @@ export interface SettingsPatchRequest {
   actual_budget_sync_id?: string;
   email_ai_provider?: string;
   email_ai_model?: string;
+  alfred_provider?: string;
+  alfred_model?: string;
   email_interests_json?: string[] | string;
   todoist_api_token?: string;
   todoist_oauth_token_response?: TodoistOAuthTokenResponse | string;

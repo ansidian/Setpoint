@@ -1,23 +1,15 @@
 // Pure model for the Alfred Panel: maps server SSE run events onto the
-// message list, plus the model catalog, copy, and row formatters.
+// message list, plus copy and row formatters.
 // No React, no fetch — everything here is unit-testable.
 import type {
   AlfredBreakdownBucket,
   AlfredItem,
   AlfredItemKind,
-  AlfredModelId,
-  AlfredModelKey,
+  AlfredProvider,
   AlfredRunEvent,
   AlfredToolName,
 } from "../../../shared/types/alfred";
 import type { TransactionGroupBy, TransactionSummaryBucket } from "../../../shared/types/transactions";
-
-export interface AlfredModelOption {
-  key: AlfredModelKey;
-  id: AlfredModelId;
-  label: string;
-  hint: string;
-}
 
 export type AlfredToolState = "running" | "done" | "error";
 export interface AlfredToolEntry {
@@ -44,16 +36,20 @@ function nextId(): string {
   return `am${++alfredMsgSeq}`;
 }
 
-export const ALFRED_MODELS: AlfredModelOption[] = [
-  { key: "haiku", id: "claude-haiku-4-5-20251001", label: "haiku", hint: "claude haiku 4.5" },
-  { key: "sonnet", id: "claude-sonnet-4-6", label: "sonnet", hint: "claude sonnet 4.6" },
-];
-
-export const DEFAULT_ALFRED_MODEL_KEY: AlfredModelKey = "sonnet";
-
-export function alfredModelByKey(key: unknown): AlfredModelOption {
-  return ALFRED_MODELS.find((m) => m.key === key)
-    || ALFRED_MODELS.find((m) => m.key === DEFAULT_ALFRED_MODEL_KEY)!;
+export function formatAlfredModelHint(provider: AlfredProvider, model: string): string {
+  const claude = model.match(/^claude-(haiku|sonnet|opus)-(\d+)-(\d+)/i);
+  if (claude) {
+    const family = `${claude[1]?.[0]?.toUpperCase()}${claude[1]?.slice(1).toLowerCase()}`;
+    return `Anthropic · Claude ${family} ${claude[2]}.${claude[3]}`;
+  }
+  const gpt = model.match(/^gpt-(\d+)[.-](\d+)(?:-([a-z0-9-]+))?/i);
+  if (gpt) {
+    const suffix = gpt[3]
+      ? ` ${gpt[3].split("-").map((part) => `${part[0]?.toUpperCase()}${part.slice(1)}`).join(" ")}`
+      : "";
+    return `OpenAI · GPT-${gpt[1]}.${gpt[2]}${suffix}`;
+  }
+  return `${provider === "openai" ? "OpenAI" : "Anthropic"} · ${model}`;
 }
 
 const TOOL_RUNNING_LABELS: Partial<Record<AlfredToolName, string>> = {

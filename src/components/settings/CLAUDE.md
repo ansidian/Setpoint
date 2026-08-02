@@ -26,6 +26,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens
 
 ### Cards: AI + automation
+- `cards/AlfredAiModelCard.tsx` — Alfred provider/model selection for new conversations; remains available without an email connection
 - `cards/EmailAiModelCard.tsx` — email triage LLM provider/model selection with fallbacks
 - `cards/EmailTriageModeCard.tsx` — triage automation toggle (auto/real/no-model/paused) with cache stats
 - `cards/BillExtractionAiCard.tsx` — bill extraction model choice, separate from triage model

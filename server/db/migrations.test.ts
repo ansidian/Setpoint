@@ -137,6 +137,20 @@ describe("database migrations", () => {
     expect(preference.dflt_value).toBe("0");
   });
 
+  it("adds persisted Alfred provider and model defaults", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "044_alfred_model_settings.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_settings')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+
+    expect(columnByName.get("alfred_provider")!.dflt_value).toBe("'anthropic'");
+    expect(columnByName.get("alfred_model")!.dflt_value).toBe("'claude-sonnet-4-6'");
+  });
+
   it("adds Actual metadata projection storage", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, [

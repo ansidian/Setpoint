@@ -30,10 +30,18 @@ export function formatUsdEstimate(value: unknown): string {
   }).format(number);
 }
 
-// "claude-haiku-4-5-20251001" → "Haiku 4.5". Keeps the exact id in a title attr
-// for precision while the row stays scannable.
+// Provider model ids stay compact in analytics rows; the exact id remains in the
+// row title for precision.
 export function formatModelName(id: unknown): string {
-  const match = String(id || "").match(/claude-(haiku|sonnet|opus)-(\d+)-(\d+)/);
-  if (match) return `${match[1]?.[0]?.toUpperCase()}${match[1]?.slice(1)} ${match[2]}.${match[3]}`;
-  return String(id || "unknown");
+  const model = String(id || "");
+  const claude = model.match(/claude-(haiku|sonnet|opus)-(\d+)-(\d+)/);
+  if (claude) return `${claude[1]?.[0]?.toUpperCase()}${claude[1]?.slice(1)} ${claude[2]}.${claude[3]}`;
+  const gpt = model.match(/^gpt-(\d+)[.-](\d+)(?:-([a-z0-9-]+))?/i);
+  if (gpt) {
+    const suffix = gpt[3]
+      ? ` ${gpt[3].split("-").map((part) => `${part[0]?.toUpperCase()}${part.slice(1)}`).join(" ")}`
+      : "";
+    return `GPT-${gpt[1]}.${gpt[2]}${suffix}`;
+  }
+  return model || "unknown";
 }

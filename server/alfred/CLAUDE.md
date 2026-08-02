@@ -4,14 +4,16 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 
 ## Files
 
-- `alfred-run.ts` — streaming Anthropic tool-use loop; emits the SSE run-event contract
+- `alfred-run.ts` — provider-neutral tool orchestration loop; emits the SSE run-event contract
+- `alfred-provider.ts` — selects the conversation-bound provider adapter
+- `anthropic-adapter.ts` / `openai-adapter.ts` — provider request, transcript, tool-result, and usage translation
+- `anthropic-stream.ts` / `openai-stream.ts` — provider SSE stream parsers
 - `alfred-tools.ts` — read-only tool definitions/executors over email, calendar, deadlines, bills, transactions/spending; `show_items` emits cached rows by reference
 - `alfred-email-content.ts` — email-content shaping for tool results: `<email_content>` trust fencing, sender formatting, quoted-chain stripping, the compact search-candidate row
 - `alfred-conversations.ts` — in-memory conversation store (TTL) and per-conversation item cache
-- `alfred-types.ts` — server-local Anthropic, conversation, dependency, usage, and run-loop contracts
-- `anthropic-stream.ts` — Anthropic Messages SSE stream parser
+- `alfred-types.ts` — server-local provider, conversation, dependency, usage, and run-loop contracts
 - `alfred-prompt.ts` — system prompt: Pacific date anchor, coverage, trust rules
-- `alfred-models.ts` — model allowlist (Sonnet default, Haiku toggle)
+- `alfred-models.ts` — centralized catalog facade plus persisted Settings resolution
 - `alfred-usage.ts` — usage rows into `ea_alfred_usage` (run turns + per-tool calls)
 - `alfred-usage-stats.ts` — aggregates `ea_alfred_usage` into the Alfred analytics summary (queries, cache hit, savings, model split, per-tool latency/errors)
 
@@ -24,6 +26,7 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 - Tools receive injectable `deps`; the route (`server/routes/alfred.ts`) provides real services, tests provide fakes.
 - Email content in tool results is wrapped in `<email_content>` tags; the prompt declares it untrusted data.
 - Conversations are ephemeral by design (CONTEXT.md: **Alfred Conversation**); do not add durable history without revisiting that decision.
+- Provider/model is bound when the conversation is created. Settings changes apply only after New chat; clients never submit model overrides.
 
 ## Related
 

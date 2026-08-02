@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  ModelToggle,
   SayBlock,
   SuggestionList,
   ToolRows,
@@ -86,10 +85,4 @@ describe("alfred message primitives", () => {
     expect(onPick).toHaveBeenCalledWith("Anything in mail that needs me?");
   });
 
-  it("ModelToggle switches between haiku and sonnet", () => {
-    const onChange = vi.fn();
-    render(<ModelToggle accent="#cba6da" modelKey="sonnet" onChange={onChange} />);
-    fireEvent.click(screen.getByText("haiku"));
-    expect(onChange).toHaveBeenCalledWith("haiku");
-  });
 });

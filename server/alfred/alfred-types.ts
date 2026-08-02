@@ -5,8 +5,10 @@ import type { ActualBillOccurrence } from "../../shared/types/actual.ts";
 import type { TransactionQueryResult, TransactionSummaryResult } from "../../shared/types/transactions.ts";
 import type {
   AlfredItem,
-  AlfredModelId,
+  AlfredProvider,
   AlfredRunEvent,
+  AlfredToolName,
+  AlfredToolResultBase,
 } from "../../shared/types/alfred.ts";
 
 export interface AnthropicTextBlock {
@@ -40,7 +42,9 @@ export interface AnthropicMessage {
 
 export interface AlfredConversation {
   id: string;
-  messages: AnthropicMessage[];
+  provider: AlfredProvider;
+  model: string;
+  messages: Array<AnthropicMessage | Record<string, unknown>>;
   items: Map<string, AlfredItem | Record<string, unknown>>;
   touchedAt: number;
 }
@@ -103,6 +107,43 @@ export interface AlfredUsageInput {
   metadata: Record<string, unknown>;
 }
 
+export interface AlfredProviderToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface AlfredProviderToolResult {
+  toolId: string;
+  name: AlfredToolName;
+  result: AlfredToolResultBase;
+}
+
+export interface AlfredProviderTurn {
+  model: string | null;
+  stopReason: string | null;
+  toolCalls: AlfredProviderToolCall[];
+  usage: Record<string, unknown>;
+  providerState: unknown;
+}
+
+export interface RunAlfredProviderTurnOptions {
+  conversation: AlfredConversation;
+  system: string;
+  apiKey: string;
+  forceTool?: AlfredToolName | null;
+  signal?: AbortSignal | null;
+  fetchImpl: AlfredFetch;
+  onTextDelta: (text: string) => void;
+}
+
+export interface AlfredModelAdapter {
+  appendUserText(conversation: AlfredConversation, text: string): void;
+  runTurn(options: RunAlfredProviderTurnOptions): Promise<AlfredProviderTurn>;
+  appendAssistantTurn(conversation: AlfredConversation, turn: AlfredProviderTurn): void;
+  appendToolResults(conversation: AlfredConversation, results: AlfredProviderToolResult[]): void;
+}
+
 export type AlfredUsageRecorder = (userId: string, input: AlfredUsageInput) => Promise<unknown>;
 
 export interface AlfredFetchResponse {
@@ -121,12 +162,11 @@ export interface RunAlfredOptions {
   userId: string;
   conversation: AlfredConversation;
   message: string;
-  model: AlfredModelId;
   emit: AlfredEmit;
   signal?: AbortSignal | null;
   fetchImpl?: AlfredFetch;
   apiKey?: string;
-  credentialResolver?: () => Promise<string | null>;
+  credentialResolver?: (provider: AlfredProvider) => Promise<string | null>;
   deps: AlfredDependencies;
   recordUsage?: AlfredUsageRecorder;
   now?: () => Date;
@@ -144,6 +184,14 @@ export interface AnthropicTurn {
   stopReason: string | null;
   usage: Record<string, unknown>;
   model: string | null;
+}
+
+export interface OpenAiTurn {
+  output: Record<string, unknown>[];
+  stopReason: string | null;
+  usage: Record<string, unknown>;
+  model: string | null;
+  toolCalls: AlfredProviderToolCall[];
 }
 
 export function errorMessage(error: unknown, fallback = "tool failed"): string {

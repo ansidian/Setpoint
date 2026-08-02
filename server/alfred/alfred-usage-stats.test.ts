@@ -132,6 +132,19 @@ it("prices a dated Haiku model id via the prefix fallback", async () => {
   expect(stats.byModel["claude-haiku-4-5-20251001"]!.calls).toBe(1);
 });
 
+it("prices OpenAI input, cached input, and output tokens", async () => {
+  const at = "2026-06-13T12:00:00Z";
+  const db = fakeDb([
+    turn({ conv: "o", model: "gpt-5.6-sol", input: 1000, cached: 600, output: 100, at }),
+  ]);
+
+  const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
+
+  // 400 fresh * $5/M + 600 cached * $0.50/M + 100 output * $30/M.
+  expect(stats.estimatedCostUsd).toBe(0.0053);
+  expect(stats.estimatedSavingsUsd).toBe(0.0027);
+});
+
 it("populates the month-to-date comparison window", async () => {
   const at = "2026-06-10T12:00:00Z";
   const db = fakeDb([

@@ -1,6 +1,7 @@
 import crypto from "crypto";
-import type { AlfredItem, AlfredItemKind } from "../../shared/types/alfred.ts";
+import type { AlfredItem, AlfredItemKind, AlfredProvider } from "../../shared/types/alfred.ts";
 import type { AlfredConversation } from "./alfred-types.ts";
+import { DEFAULT_ALFRED_MODEL, DEFAULT_ALFRED_PROVIDER } from "./alfred-models.ts";
 
 const TTL_MS = 4 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
@@ -8,13 +9,19 @@ const MAX_CONVERSATIONS = 20;
 
 const conversations = new Map<string, AlfredConversation>();
 
-export function createAlfredConversation({ now = Date.now() }: { now?: number } = {}): AlfredConversation {
+export function createAlfredConversation({
+  now = Date.now(),
+  provider = DEFAULT_ALFRED_PROVIDER,
+  model = DEFAULT_ALFRED_MODEL,
+}: { now?: number; provider?: AlfredProvider; model?: string } = {}): AlfredConversation {
   if (conversations.size >= MAX_CONVERSATIONS) {
     const oldest = [...conversations.values()].sort((a, b) => a.touchedAt - b.touchedAt)[0];
     if (oldest) conversations.delete(oldest.id);
   }
   const conversation = {
     id: crypto.randomUUID(),
+    provider,
+    model,
     messages: [],
     items: new Map(),
     touchedAt: now,

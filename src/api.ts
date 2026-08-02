@@ -517,6 +517,7 @@ export const geocodeLocation = (q: string): Promise<GeocodeResult[]> => apiFetch
 export const skipSchedule = (index: number, skip = true): Promise<ScheduleSkipResponse> => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
 export const getModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/models");
 export const getBillExtractModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/bill-extract-models");
+export const getAlfredModels = (): Promise<ProviderModelAvailability[]> => apiFetch("/api/ea/alfred-models");
 
 export const searchEmails = (query: string, limit?: string | number, { signal }: SignalOptions = {}): Promise<EmailSearchClientResponse> => {
   const params = new URLSearchParams({ q: query });
@@ -526,7 +527,7 @@ export const searchEmails = (query: string, limit?: string | number, { signal }:
 
 // Alfred — streaming run + conversation reset. Not apiFetch: the response is
 // an SSE stream, not JSON.
-export async function runAlfredStream({ message, conversationId, model, signal, onEvent }: AlfredStreamOptions): Promise<void> {
+export async function runAlfredStream({ message, conversationId, signal, onEvent }: AlfredStreamOptions): Promise<void> {
   if (isDemoMode()) {
     throw new Error("Alfred is not available in the demo");
   }
@@ -539,7 +540,6 @@ export async function runAlfredStream({ message, conversationId, model, signal, 
     body: JSON.stringify({
       message,
       ...(conversationId ? { conversationId } : {}),
-      ...(model ? { model } : {}),
     }),
     ...(signal ? { signal } : {}),
   });

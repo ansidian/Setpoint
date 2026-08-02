@@ -16,6 +16,12 @@ vi.mock("@/components/settings/cards/EmailAiModelCard", () => ({
   },
 }));
 
+vi.mock("@/components/settings/cards/AlfredAiModelCard", () => ({
+  default: function AlfredAiModelCardMock() {
+    return <div data-testid="alfred-ai-model-card" />;
+  },
+}));
+
 vi.mock("@/components/settings/cards/TriageSoundSettingsCard", () => ({
   default: function TriageSoundSettingsCardMock() {
     return <div data-testid="triage-sound-settings-card" />;
@@ -123,6 +129,25 @@ describe("EmailAutomationSettingsSection", () => {
       .toBe("/settings?tab=connections#icloud-mail");
     expect(screen.queryByTestId("email-triage-mode-card")).toBeNull();
     expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
+    expect(screen.queryByTestId("alfred-ai-model-card")).toBeNull();
+  });
+
+  it("keeps Alfred model settings available when AI is connected but email is not", () => {
+    render(
+      <Harness
+        patch={vi.fn()}
+        connections={[
+          connection("google-workspace", "not_connected"),
+          connection("icloud-mail", "not_connected"),
+          connection("anthropic", "connected"),
+          connection("openai", "not_connected"),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("alfred-ai-model-card")).toBeTruthy();
+    expect(screen.getByText("Connect an email source")).toBeTruthy();
+    expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
   });
 
   it("shows email behavior plus an AI setup prompt when only email is connected", () => {
@@ -142,6 +167,7 @@ describe("EmailAutomationSettingsSection", () => {
     expect(screen.getByText("Connect an AI provider")).toBeTruthy();
     expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
     expect(screen.queryByTestId("bill-extraction-card")).toBeNull();
+    expect(screen.queryByTestId("alfred-ai-model-card")).toBeNull();
   });
 
   it("shows email and AI behavior when both dependency groups are connected", () => {
@@ -149,6 +175,7 @@ describe("EmailAutomationSettingsSection", () => {
 
     expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
     expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
+    expect(screen.getByTestId("alfred-ai-model-card")).toBeTruthy();
     expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
     expect(screen.queryByText("Connect an AI provider")).toBeNull();
   });
@@ -175,6 +202,7 @@ describe("EmailAutomationSettingsSection", () => {
     expect(screen.getByRole("link", { name: "Repair OpenAI" }).getAttribute("href"))
       .toBe("/settings?tab=connections#openai");
     expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
+    expect(screen.getByTestId("alfred-ai-model-card")).toBeTruthy();
     expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
   });
 

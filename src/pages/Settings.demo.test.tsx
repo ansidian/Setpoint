@@ -31,7 +31,7 @@ describe("Settings demo mode", () => {
     expect(await screen.findByText("Email Triage Automation")).toBeTruthy();
     expect(await screen.findByText("Morgan Lee")).toBeTruthy();
     expect(screen.getByText("morgan@northstar.example")).toBeTruthy();
-    expect(screen.getAllByText("Demo-only model")).toHaveLength(2);
+    expect(screen.getAllByText("Demo-only model")).toHaveLength(3);
     expect(screen.queryByText(/key configured/i)).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   }, 30000);

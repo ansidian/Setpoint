@@ -10,6 +10,7 @@ import EmailTriageModeCard from "@/components/settings/cards/EmailTriageModeCard
 import TriageSoundSettingsCard from "@/components/settings/cards/TriageSoundSettingsCard";
 import EmailAiModelCard from "@/components/settings/cards/EmailAiModelCard";
 import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCard";
+import AlfredAiModelCard from "@/components/settings/cards/AlfredAiModelCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
 import type { SettingsCardStateProps } from "../settingsTypes";
@@ -27,56 +28,72 @@ export default function EmailAutomationSettingsSection({
   const emailInterests = settings?.email_interests || [];
   const dependencies = projectFeatureDependencies(connections).automation;
 
-  if (!dependencies.showEmailControls) {
-    const brokenEmailConnections = connections.filter(({ id, state }) =>
-      (id === "google-workspace" || id === "icloud-mail") && state === "needs_attention");
-    return (
-      <ConnectionDependencyPrompt
-        title={dependencies.email === "needs_attention" ? "Repair an email connection" : "Connect an email source"}
-        description="Automation needs a working Gmail or iCloud Mail connection before email behavior can be customized. Saved settings will return unchanged after reconnection."
-        attention={dependencies.email === "needs_attention"}
-        actions={brokenEmailConnections.length
-          ? brokenEmailConnections.map((connection) => ({
+  const brokenAiConnections = connections.filter(({ id, state }) =>
+    (id === "openai" || id === "anthropic") && state === "needs_attention");
+  const brokenEmailConnections = connections.filter(({ id, state }) =>
+    (id === "google-workspace" || id === "icloud-mail") && state === "needs_attention");
+
+  const alfredControls = dependencies.ai === "not_connected" ? (
+    <ConnectionDependencyPrompt
+      title="Connect an AI provider"
+      description="Add OpenAI or Anthropic to choose a model for Alfred and other model-backed automation."
+      actions={[
+        { connectionId: "openai", label: "OpenAI" },
+        { connectionId: "anthropic", label: "Anthropic" },
+      ]}
+    />
+  ) : (
+    <>
+      {dependencies.ai === "needs_attention" ? (
+        <ConnectionDependencyPrompt
+          title={`${brokenAiConnections.map(({ label }) => label).join(" and ")} needs attention`}
+          description="Repair the adopted AI connection to resume model-backed features. Saved provider and model choices remain unchanged."
+          attention
+          actions={brokenAiConnections.map((connection) => ({
             connectionId: connection.id,
             label: `Repair ${connection.label}`,
-          }))
-          : [
-            { connectionId: "google-workspace", label: "Google Workspace" },
-            { connectionId: "icloud-mail", label: "iCloud Mail" },
-          ]}
+          }))}
+        />
+      ) : null}
+      <AlfredAiModelCard
+        settings={settings}
+        setSettings={setSettings}
+        patch={patch}
+        connections={connections}
+        showRepairLink={dependencies.ai === "connected"}
       />
+    </>
+  );
+
+  if (!dependencies.showEmailControls) {
+    return (
+      <>
+        {alfredControls}
+        <ConnectionDependencyPrompt
+          title={dependencies.email === "needs_attention" ? "Repair an email connection" : "Connect an email source"}
+          description="Email automation needs a working Gmail or iCloud Mail connection. Alfred's other read-only tools remain available."
+          attention={dependencies.email === "needs_attention"}
+          actions={brokenEmailConnections.length
+            ? brokenEmailConnections.map((connection) => ({
+              connectionId: connection.id,
+              label: `Repair ${connection.label}`,
+            }))
+            : [
+              { connectionId: "google-workspace", label: "Google Workspace" },
+              { connectionId: "icloud-mail", label: "iCloud Mail" },
+            ]}
+        />
+      </>
     );
   }
 
-  const brokenAiConnections = connections.filter(({ id, state }) =>
-    (id === "openai" || id === "anthropic") && state === "needs_attention");
-
   return (
     <>
+      {alfredControls}
       <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
       <TriageSoundSettingsCard settings={settings} setSettings={setSettings} patch={patch} />
-      {dependencies.ai === "not_connected" ? (
-        <ConnectionDependencyPrompt
-          title="Connect an AI provider"
-          description="Add OpenAI or Anthropic to choose models for inbox triage and bill extraction. Other email automation remains available."
-          actions={[
-            { connectionId: "openai", label: "OpenAI" },
-            { connectionId: "anthropic", label: "Anthropic" },
-          ]}
-        />
-      ) : (
+      {dependencies.ai !== "not_connected" ? (
         <>
-          {dependencies.ai === "needs_attention" ? (
-            <ConnectionDependencyPrompt
-              title={`${brokenAiConnections.map(({ label }) => label).join(" and ")} needs attention`}
-              description="Repair the adopted AI connection to resume its model-backed automation. The saved provider and model remain unchanged."
-              attention
-              actions={brokenAiConnections.map((connection) => ({
-                connectionId: connection.id,
-                label: `Repair ${connection.label}`,
-              }))}
-            />
-          ) : null}
           <EmailAiModelCard
             settings={settings}
             setSettings={setSettings}
@@ -92,7 +109,7 @@ export default function EmailAutomationSettingsSection({
             showRepairLink={dependencies.ai === "connected"}
           />
         </>
-      )}
+      ) : null}
 
       <SettingsCard
         title="Email Lookback"
