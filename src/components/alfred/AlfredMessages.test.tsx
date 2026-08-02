@@ -31,6 +31,13 @@ describe("alfred message primitives", () => {
     expect(screen.queryByText("The rest can wait.")).toBeNull(); // not split out yet
   });
 
+  it("SayBlock uses Setpoint's sans-serif face for the completed answer", () => {
+    render(<SayBlock text="Clanker is due August 9, 2026." done />);
+
+    expect(screen.getByText("Clanker is due August 9, 2026.").style.fontFamily)
+      .toBe("var(--font-sans)");
+  });
+
   it("ToolSteps shows the full step trail and live count while the run is in flight", () => {
     render(<ToolSteps accent="#cba6da" done={false} tools={[
       { toolId: "t1", name: "search_email", state: "done", summary: "Mail · 4 matches" },

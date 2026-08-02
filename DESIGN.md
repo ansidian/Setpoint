@@ -171,7 +171,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 **Body Font:** Montserrat, with the system sans-serif stack as backup.
 **Label/Mono Font:** Fira Code for keyboard hints and tabular technical labels.
 
-**Character:** The type pairing gives assistant summaries a human voice while leaving operational UI exact and compact. Serif type should feel like the assistant speaking; sans-serif type should feel like the workspace operating.
+**Character:** The type pairing gives high-level assistant summaries a human voice while leaving operational UI exact and compact. Serif type should feel editorial; sans-serif type should feel like the workspace operating.
 
 ### Hierarchy
 - **Display** (400, 48px, 1 line-height): Hero greeting, snapshot summary, and triage summary.
@@ -183,7 +183,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 ### Named Rules
 
-**The Voice Split Rule.** Use display serif only where the product is summarizing or speaking. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).
+**The Voice Split Rule.** Use display serif only for high-level summaries with a deliberately editorial role. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, conversational panel responses such as Alfred answers, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).
 
 ## 4. Elevation
 

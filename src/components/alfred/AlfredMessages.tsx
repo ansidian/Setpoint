@@ -83,13 +83,13 @@ export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: {
   // when `done` flips false→true on the same block.
   const { lead, body: rest } = useMemo(() => splitSayText(body), [body]);
 
-  // Render quietly as one block — don't promote the first sentence to the serif
+  // Render quietly as one block — don't promote the first sentence to the answer
   // lead — when the say is either (a) still streaming, or (b) a settled between-
   // tool preamble. A preamble is Alfred narrating what it's about to do; it
   // persists in the thread as plain prose (like any agentic tool) rather than
   // flashing as a header. Rendering it identically to its streaming state means
   // there's no visual jump when the next tool_start settles it. Only the finished
-  // answer (done && !preamble) resolves into the serif title line.
+  // answer (done && !preamble) resolves into the emphasized answer line.
   if (!done || preamble) {
     return (
       <div
@@ -102,7 +102,7 @@ export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: {
     <div data-alfred-message-kind="answer" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="ea-display" style={{
         fontSize: 17, lineHeight: 1.3, color: text,
-        fontFamily: "var(--serif-choice, 'Instrument Serif', serif)",
+        fontFamily: "var(--font-sans)",
       }}>{lead}</div>
       {rest ? (
         <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.72)" }}>{rest}</div>

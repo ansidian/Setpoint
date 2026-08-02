@@ -44,11 +44,11 @@
     "typographyMeta": {
       "display": {
         "displayName": "Assistant Voice",
-        "purpose": "Hero greeting, snapshot summary, email triage summary, and email reader subjects."
+        "purpose": "Hero greeting, snapshot summary, email triage summary, and other deliberately editorial summaries."
       },
       "body": {
         "displayName": "Operational Body",
-        "purpose": "Dense repeated UI, cards, controls, labels, and summaries."
+        "purpose": "Dense repeated UI, cards, controls, labels, conversational panel responses, and supporting summaries."
       }
     },
     "shadows": [
