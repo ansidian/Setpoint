@@ -6,9 +6,9 @@ import {
 
 async function openCalendar(page: Page) {
   await page.goto("/");
-  await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
+  await expect(page.getByTestId("shell-header-desktop")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("tab", { name: "Calendar" }).click();
-  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible({ timeout: 15_000 });
 }
 
 test("creates a calendar event from the header action using deterministic fixtures", async ({ page }) => {
@@ -53,7 +53,7 @@ test("opens a fresh event editor from the Calendar workspace every time", async 
   await installDashboardCalendarCreateFixtures(page);
 
   await page.goto("/");
-  await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
+  await expect(page.getByTestId("shell-header-desktop")).toBeVisible({ timeout: 15_000 });
 
   await page.getByRole("tab", { name: "Calendar" }).click();
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();

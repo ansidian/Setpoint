@@ -39,6 +39,7 @@ describe("OPENAI_PROVIDER.extract", () => {
 
     await OPENAI_PROVIDER.extract({ model: "gpt-5.5", systemPrompt: "extract", content: "bill text" });
 
+    // test-architecture: allow-boundary-interaction -- OpenAI fetch is an outbound AI-provider boundary; timeout propagation is observable only on the request signal.
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

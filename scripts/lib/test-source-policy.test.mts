@@ -74,6 +74,17 @@ describe("findTestSourcePolicyViolations", () => {
     )).toEqual([])
   })
 
+  it("does not preserve deleted Calendar owners in the reviewed allowlist", () => {
+    const source = 'import CalendarModal from "../../components/calendar/CalendarModal.tsx"'
+
+    expect(findTestSourcePolicyViolations(
+      source,
+      "src/hooks/calendar/useCalendarModalHotkeys.test.tsx",
+    )).toEqual([
+      expect.objectContaining({ kind: "full-calendar-test-harness", line: 1 }),
+    ])
+  })
+
   it("allows the focused event-editor harness without review", () => {
     const source = 'import { renderEventEditor } from "./events/CalendarEventEditor.test-utils.tsx"'
 

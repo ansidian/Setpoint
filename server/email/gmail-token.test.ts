@@ -128,7 +128,9 @@ describe("getValidToken expires_at handling (P3-48)", () => {
     expect(token).toBe("refreshed");
     // test-architecture: allow-boundary-interaction -- Google OAuth refresh is the outbound provider boundary; one expired token may trigger exactly one refresh exchange.
     expect(fetch).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Google OAuth refresh fetch is an outbound credential-provider boundary; endpoint, encoded credential body, and timeout signal are the security contract.
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://oauth2.googleapis.com/token");
+    // test-architecture: allow-boundary-interaction -- Google OAuth refresh fetch is an outbound credential-provider boundary; endpoint, encoded credential body, and timeout signal are the security contract.
     const refreshBody = fetchMock.mock.calls[0]?.[1]?.body;
     expect(String(refreshBody)).toContain("grant_type=refresh_token");
 
@@ -164,6 +166,7 @@ describe("getValidToken expires_at handling (P3-48)", () => {
 
     await getAccessToken(account);
 
+    // test-architecture: allow-boundary-interaction -- Google OAuth refresh fetch is an outbound credential-provider boundary; endpoint, encoded credential body, and timeout signal are the security contract.
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

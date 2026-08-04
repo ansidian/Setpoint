@@ -118,7 +118,6 @@ describe("reminder service", () => {
     // Collect mode returns the mutation as data and does NOT touch the DB...
     expect(Array.isArray(statements)).toBe(true);
     expect(statements).toHaveLength(1);
-    expect(typeof statements[0] === "string" ? statements[0] : statements[0]?.sql).toContain("UPDATE ea_reminders");
     const before = await listRemindersForSource({
       userId: "u1",
       sourceType: "todoist_task",

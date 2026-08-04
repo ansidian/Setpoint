@@ -42,6 +42,7 @@ describe("google-places fetch deadlines", () => {
 
     await suggestGooglePlaces("123 Main", { lat: 1.1, lng: 2.2 }, credentials("test-places-key") as never);
 
+    // test-architecture: allow-boundary-interaction -- Google Places fetch is an outbound provider boundary; credential rotation, headers, and timeout signals are the provider compatibility contract.
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -56,6 +57,7 @@ describe("google-places fetch deadlines", () => {
 
     await getGooglePlaceDetails("place-1", {}, credentials("test-places-key") as never);
 
+    // test-architecture: allow-boundary-interaction -- Google Places fetch is an outbound provider boundary; credential rotation, headers, and timeout signals are the provider compatibility contract.
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -65,7 +67,9 @@ describe("google-places fetch deadlines", () => {
     await suggestGooglePlaces("coffee", {}, credentials("first-key") as never);
     await suggestGooglePlaces("coffee", {}, credentials("rotated-key") as never);
 
+    // test-architecture: allow-boundary-interaction -- Google Places fetch is an outbound provider boundary; credential rotation, headers, and timeout signals are the provider compatibility contract.
     expect(fetchMock.mock.calls[0]![1]?.headers).toMatchObject({ "X-Goog-Api-Key": "first-key" });
+    // test-architecture: allow-boundary-interaction -- Google Places fetch is an outbound provider boundary; credential rotation, headers, and timeout signals are the provider compatibility contract.
     expect(fetchMock.mock.calls[1]![1]?.headers).toMatchObject({ "X-Goog-Api-Key": "rotated-key" });
   });
 

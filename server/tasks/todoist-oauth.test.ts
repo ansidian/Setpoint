@@ -118,6 +118,7 @@ describe("Todoist OAuth service", () => {
       browserBindHash: "browser-hash",
     });
 
+    // test-architecture: allow-boundary-interaction -- Todoist OAuth and credential promotion are outbound credential/process boundaries; request data and promotion ordering are the security protocol contract.
     const [, init] = fetchFn.mock.calls[0]! as unknown as [string, RequestInit];
     const body = init.body as URLSearchParams;
     expect(body.get("client_secret")).toBe("candidate-client-secret");
@@ -129,7 +130,9 @@ describe("Todoist OAuth service", () => {
       "owner-1",
       expect.objectContaining({ access_token: "oauth-access-token", refresh_token: "oauth-refresh-token" }),
     );
+    // test-architecture: allow-boundary-interaction -- Todoist OAuth and credential promotion are outbound credential/process boundaries; request data and promotion ordering are the security protocol contract.
     expect(fetchFn.mock.invocationCallOrder[0]).toBeLessThan(
+      // test-architecture: allow-boundary-interaction -- Todoist OAuth and credential promotion are outbound credential/process boundaries; request data and promotion ordering are the security protocol contract.
       credentialManager.promoteCandidate.mock.invocationCallOrder[0]!,
     );
   });

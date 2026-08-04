@@ -309,10 +309,12 @@ describe("CalendarModal event grid behavior", () => {
     });
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Calendar range loading crosses the provider-fetch boundary; duplicate admission is not distinguishable from the rendered ready state.
       expect(ensureRange.mock.calls.length).toBeGreaterThanOrEqual(1);
       expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
     });
 
+    // test-architecture: allow-boundary-interaction -- Calendar range loading crosses the provider-fetch boundary; duplicate admission is not distinguishable from the rendered ready state.
     const initialCallCount = ensureRange.mock.calls.length;
 
     rerender(renderModal());

@@ -232,6 +232,7 @@ describe("runAlfred", () => {
       recordUsage,
     });
 
+    // test-architecture: allow-boundary-interaction -- Alfred model fetch is an outbound AI-provider boundary; request payload and continuation state are the compatibility contract.
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
     const lastMessage = body.messages.at(-1);
     expect(lastMessage.content).toEqual([
@@ -261,6 +262,7 @@ describe("runAlfred", () => {
       recordUsage,
     });
 
+    // test-architecture: allow-boundary-interaction -- Alfred model fetch is an outbound AI-provider boundary; request payload and continuation state are the compatibility contract.
     const secondBody = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body));
     const lastMessage = secondBody.messages.at(-1);
     expect(lastMessage.content.at(-1)).toEqual(expect.objectContaining({

@@ -180,6 +180,7 @@ describe("syncNewsSource", () => {
     const fetch304 = vi.fn<NewsFetch>().mockResolvedValue(mockResponse({ status: 304 }));
     const second = await syncNewsSource(updated, { dbClient: db, fetchImpl: fetch304 });
     expect(second).toMatchObject({ ok: true, status: "304" });
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     expect((fetch304.mock.calls[0]![1]?.headers as Record<string, string>)["If-None-Match"]).toBe('"v1"');
     const count = (await db.execute("SELECT COUNT(*) AS n FROM ea_news_items")).rows[0]!.n;
     expect(Number(count)).toBe(2);
@@ -301,6 +302,7 @@ describe("sweepNewsSources + worker", () => {
     const fetchImpl = vi.fn<NewsFetch>().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
     const result = await sweepNewsSources({ dbClient: db, fetchImpl, staggerMs: 0 });
     expect(result.swept).toBe(2);
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     const fetchedUrls = fetchImpl.mock.calls.map(([url]) => url);
     expect(fetchedUrls.filter((url) => url.includes("reddit.com"))).toHaveLength(1);
     expect(fetchedUrls).toContain("https://site.test/feed");
@@ -349,6 +351,7 @@ describe("sweepNewsSources + worker", () => {
       dbClient: db, fetchImpl, now: new Date("2026-07-04T13:00:00.000Z"), staggerMs: 0,
     });
     expect(duringCooldown.swept).toBe(1);
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(["https://site.test/feed"]);
 
     fetchImpl.mockClear();
@@ -356,6 +359,7 @@ describe("sweepNewsSources + worker", () => {
       dbClient: db, fetchImpl, now: new Date("2026-07-04T18:00:00.000Z"), staggerMs: 0,
     });
     expect(afterCooldown.swept).toBe(2);
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     const resumedUrls = fetchImpl.mock.calls.map(([url]) => url);
     expect(resumedUrls.filter((url) => url.includes("reddit.com")))
       .toEqual(["https://www.reddit.com/r/politics/.rss"]);
@@ -392,12 +396,14 @@ describe("sweepNewsSources + worker", () => {
     await sweepNewsSources({
       dbClient: db, fetchImpl, now: new Date("2026-07-04T12:01:00.000Z"), staggerMs: 0,
     });
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(["https://site.test/feed"]);
 
     fetchImpl.mockClear();
     await sweepNewsSources({
       dbClient: db, fetchImpl, now: new Date("2026-07-04T12:02:01.000Z"), staggerMs: 0,
     });
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     const resumedUrls = fetchImpl.mock.calls.map(([url]) => url);
     expect(resumedUrls.filter((url) => url.includes("reddit.com")))
       .toEqual(["https://www.reddit.com/r/politics/.rss"]);
@@ -443,6 +449,7 @@ describe("sweepNewsSources + worker", () => {
     const fetchImpl = vi.fn<NewsFetch>().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
     const result = await sweepNewsSources({ dbClient: db, fetchImpl, staggerMs: 0 });
     expect(result.swept).toBe(1);
+    // test-architecture: allow-boundary-interaction -- Feed fetch is an outbound provider boundary; conditional headers, pause/resume admission, URL selection, and dedup are transport contracts.
     expect(fetchImpl.mock.calls[0]![0]).toBe("https://www.reddit.com/r/politics/.rss");
   });
 

@@ -152,18 +152,21 @@ describe("useCalendarModalSearch", () => {
     });
     // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the first active-scope request must exist before its abort signal can be inspected.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
     const firstEventSignal = searchApi.mock.calls[0]![0].signal!;
 
     rerender({ view: "bills" });
     act(() => result.current.setQuery("rent"));
     // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; switching scopes must start the bills request before inspecting cross-scope cancellation.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
+    // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
     const billSignal = searchApi.mock.calls[1]![0].signal!;
 
     rerender({ view: "events" });
     act(() => result.current.setQuery("final event"));
     // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; restoring events must start one replacement request before inspecting all three signals.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
+    // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
     const secondEventSignal = searchApi.mock.calls[2]![0].signal!;
 
     expect(firstEventSignal.aborted).toBe(true);
@@ -186,6 +189,7 @@ describe("useCalendarModalSearch", () => {
     });
     // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; close-search cancellation is observable only after the active request exposes its signal.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    // test-architecture: allow-boundary-interaction -- Calendar search crosses the browser HTTP boundary; cancellation is observable only through the active request's AbortSignal.
     const signal = searchApi.mock.calls[0]![0].signal!;
 
     act(() => result.current.closeSearch());

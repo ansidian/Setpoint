@@ -138,6 +138,7 @@ describe("fetchWeather caching", () => {
 
     await fetchWeather(4.04, 4.04, credentials("test-key") as never);
 
+    // test-architecture: allow-boundary-interaction -- Weather fetch is an outbound provider boundary; credential rotation, URL isolation, and timeout signals are the provider compatibility contract.
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -151,7 +152,9 @@ describe("fetchWeather caching", () => {
     expect((await fetchWeather(5.05, 5.05, firstService as never)).temp).toBe(60);
     expect((await fetchWeather(5.05, 5.05, rotatedService as never)).temp).toBe(75);
 
+    // test-architecture: allow-boundary-interaction -- Weather fetch is an outbound provider boundary; credential rotation, URL isolation, and timeout signals are the provider compatibility contract.
     expect(String(fetchMock.mock.calls[0]![0])).toContain("first-secret");
+    // test-architecture: allow-boundary-interaction -- Weather fetch is an outbound provider boundary; credential rotation, URL isolation, and timeout signals are the provider compatibility contract.
     expect(String(fetchMock.mock.calls[1]![0])).toContain("rotated-secret");
   });
 
@@ -178,6 +181,7 @@ describe("geocodeLocation", () => {
 
     await geocodeLocation("Somewhere");
 
+    // test-architecture: allow-boundary-interaction -- Weather fetch is an outbound provider boundary; credential rotation, URL isolation, and timeout signals are the provider compatibility contract.
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

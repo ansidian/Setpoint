@@ -112,6 +112,7 @@ describe("InboxView durable trash workflows", () => {
 
     fireEvent.click(await screen.findByText("Fresh live ping"));
     fireEvent.click(screen.getByRole("button", { name: "Trash" }));
+    // test-architecture: allow-boundary-interaction -- Active-snapshot refresh is an authenticated HTTP boundary; the pre-commit count distinguishes the one required reconciliation after the provider write.
     const beforeCommitRefreshes = vi.mocked(api.getActiveSnapshot).mock.calls.length;
     view.rerenderInbox({ commitPendingUndoSignal: 1 });
 

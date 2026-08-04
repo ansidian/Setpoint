@@ -138,6 +138,7 @@ describe("extractBill (Anthropic)", () => {
       model: "claude-haiku-4-5",
       mapping: { status: "unmapped", reason: "no_profile_match", matchedProfiles: [] },
     });
+    // test-architecture: allow-boundary-interaction -- Bill extraction fetch is an outbound document/provider boundary; source URL and model payload are the compatibility contract.
     const fetchUrl = fetchMock.mock.calls[0]![0];
     expect(fetchUrl).toContain("anthropic.com");
   });
@@ -198,7 +199,9 @@ describe("extractBill (OpenAI)", () => {
         model,
         mapping: { status: "unmapped", reason: "no_profile_match", matchedProfiles: [] },
       });
+      // test-architecture: allow-boundary-interaction -- Bill extraction fetch is an outbound document/provider boundary; source URL and model payload are the compatibility contract.
       const fetchUrl = fetchMock.mock.calls[0]![0];
+      // test-architecture: allow-boundary-interaction -- Bill extraction fetch is an outbound document/provider boundary; source URL and model payload are the compatibility contract.
       const body = JSON.parse(String(fetchMock.mock.calls[0]![1].body));
       expect(fetchUrl).toContain("openai.com/v1/responses");
       expect(body.text.format.type).toBe("json_schema");

@@ -49,6 +49,7 @@ describe("Actual worker runner", () => {
 
     const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: request.id,
@@ -73,6 +74,7 @@ describe("Actual worker runner", () => {
     // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; only one request may be admitted before the active request completes.
     expect(child.send).toHaveBeenCalledTimes(1);
 
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const firstRequest = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: firstRequest.id,
@@ -83,6 +85,7 @@ describe("Actual worker runner", () => {
 
     // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; completion must admit exactly the queued follow-up request.
     expect(child.send).toHaveBeenCalledTimes(2);
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const secondRequest = child.send.mock.calls[1]![0];
     child.emit("message", {
       id: secondRequest.id,
@@ -121,6 +124,7 @@ describe("Actual worker runner", () => {
 
     const second = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const secondRequest = secondChild.send.mock.calls[0]![0];
     secondChild.emit("message", {
       id: secondRequest.id,
@@ -139,6 +143,7 @@ describe("Actual worker runner", () => {
 
     const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: request.id,
@@ -164,6 +169,7 @@ describe("Actual worker runner", () => {
       timeoutMs: 1000,
     });
     await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: request.id,
@@ -203,6 +209,7 @@ describe("Actual worker runner", () => {
     // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; an unresponsive timed-out worker must escalate to SIGKILL after grace.
     expect(firstChild.kill).toHaveBeenCalledWith("SIGKILL");
 
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const secondRequest = secondChild.send.mock.calls[0]![0];
     secondChild.emit("message", {
       id: secondRequest.id,
@@ -220,7 +227,9 @@ describe("Actual worker runner", () => {
     const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
 
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     expect(forkMock.mock.calls[0]![2]!.execArgv).toEqual(["--max-old-space-size=192"]);
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: request.id,
@@ -239,7 +248,9 @@ describe("Actual worker runner", () => {
     const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
 
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     expect(forkMock.mock.calls[0]![2]!.execArgv).toEqual(["--max-old-space-size=128"]);
+    // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const request = child.send.mock.calls[0]![0];
     child.emit("message", {
       id: request.id,

@@ -490,6 +490,7 @@ describe("processNextGmailHistorySyncJob bounded retry (CORR-L08)", () => {
       attempts: 1,
       errorKind: "sync_error",
     }));
+    // test-architecture: allow-boundary-interaction -- Sync timing logs are a process telemetry boundary; redaction is observable only through emitted logger payloads.
     expect(JSON.stringify(logTimingFn.mock.calls)).not.toContain("temporarily unavailable");
   });
 

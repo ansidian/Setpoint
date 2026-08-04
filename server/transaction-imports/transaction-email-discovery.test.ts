@@ -49,6 +49,7 @@ describe("transaction email discovery", () => {
     expect(result.pages).toBe(2);
     expect(result.emails).toHaveLength(75);
     expect(new Set(result.emails.map((email) => email.gmailMessageId)).size).toBe(75);
+    // test-architecture: allow-boundary-interaction -- Email page fetching is an outbound provider boundary; continuation tokens are the pagination protocol contract.
     expect(fetchPage.mock.calls[1]![1]).toMatchObject({ pageToken: "page-2" });
   });
 

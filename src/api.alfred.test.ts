@@ -36,6 +36,7 @@ describe("runAlfredStream", () => {
       onEvent,
     });
 
+    // test-architecture: allow-boundary-interaction -- Alfred HTTP/SSE transport is an outbound browser boundary; request and event wire data are the API facade's observable contract.
     const [url, init] = fetchMock.mock.calls[0]!;
     if (!init || typeof init.body !== "string") throw new Error("Expected Alfred request init");
     expect(url).toBe("/api/alfred/run");
@@ -45,6 +46,7 @@ describe("runAlfredStream", () => {
       message: "hi",
       conversationId: "c1",
     });
+    // test-architecture: allow-boundary-interaction -- Alfred HTTP/SSE transport is an outbound browser boundary; request and event wire data are the API facade's observable contract.
     expect(onEvent.mock.calls.map(([e]) => e.type)).toEqual(["run_start", "run_end"]);
   });
 

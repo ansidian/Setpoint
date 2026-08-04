@@ -112,6 +112,7 @@ describe("email search embedding client", () => {
         }),
       }),
     );
+    // test-architecture: allow-boundary-interaction -- Embedding fetch is an outbound AI-provider boundary; credential rotation, headers, and request body are the provider compatibility contract.
     const requestBody = fetchImpl.mock.calls[0]?.[1]?.body;
     expect(JSON.parse(String(requestBody))).toEqual({
       model: EMAIL_SEARCH_EMBEDDING_MODEL,
@@ -160,7 +161,9 @@ describe("email search embedding client", () => {
     currentKey = "rotated-key";
     await client.embed(["second"]);
 
+    // test-architecture: allow-boundary-interaction -- Embedding fetch is an outbound AI-provider boundary; credential rotation, headers, and request body are the provider compatibility contract.
     expect(fetchImpl.mock.calls[0]?.[1]?.headers).toMatchObject({ Authorization: "Bearer first-key" });
+    // test-architecture: allow-boundary-interaction -- Embedding fetch is an outbound AI-provider boundary; credential rotation, headers, and request body are the provider compatibility contract.
     expect(fetchImpl.mock.calls[1]?.[1]?.headers).toMatchObject({ Authorization: "Bearer rotated-key" });
   });
 });

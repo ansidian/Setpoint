@@ -345,6 +345,7 @@ describe("processNextBackfillWindow", () => {
     });
 
     // The per-window fetch is capped (limit passed) rather than unbounded.
+    // test-architecture: allow-boundary-interaction -- iCloud range fetch is an outbound provider boundary; page options and continuation admission are the provider protocol contract.
     const [, , options] = icloudApi.fetchEmailsInRange.mock.calls[0]!;
     expect(options).toMatchObject({
       start: "2026-04-25T12:00:00.000Z",
@@ -388,6 +389,7 @@ describe("processNextBackfillWindow", () => {
 
     await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
 
+    // test-architecture: allow-boundary-interaction -- iCloud range fetch is an outbound provider boundary; page options and continuation admission are the provider protocol contract.
     const [, , options] = icloudApi.fetchEmailsInRange.mock.calls[0]!;
     expect(options.cursor).toBe("uid:42");
   });

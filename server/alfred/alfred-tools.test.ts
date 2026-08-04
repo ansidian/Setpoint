@@ -239,6 +239,7 @@ describe("get_calendar_events", () => {
 
     // test-architecture: allow-boundary-interaction -- Calendar fetch is the outbound Google provider boundary; enabled-account filtering must admit exactly one provider read.
     expect(fetchCalendar).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Calendar fetch is an outbound provider tool boundary; the requested interval is the tool protocol contract.
     expect(fetchCalendar.mock.calls[0]![0]).toEqual([
       { id: "g1", type: "gmail", calendar_enabled: true },
     ]);

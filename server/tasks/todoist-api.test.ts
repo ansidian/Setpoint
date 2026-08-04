@@ -41,6 +41,7 @@ describe("fetchTodoistSyncResources", () => {
       fetchFn,
     });
 
+    // test-architecture: allow-boundary-interaction -- Todoist fetch is an outbound provider boundary; request initialization is the provider protocol contract.
     const [, init] = fetchFn.mock.calls[0]! as unknown as [unknown, RequestInit];
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });

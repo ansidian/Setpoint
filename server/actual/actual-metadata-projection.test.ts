@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { createClient, type Client } from "@libsql/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockActual = {
   sendBill: vi.fn(),
@@ -12,59 +14,62 @@ const mockActualLocal = {
   hydrateLocalActualCache: vi.fn(),
   readLocalActualMetadata: vi.fn(),
 };
-const mockDb = { execute: vi.fn(), batch: vi.fn() };
-// Actual metadata, its local filesystem cache, and the projection database are
-// genuine provider/filesystem/database boundaries. These tests assert the
-// projected outcome and durable degraded marker, not which reader was called.
+// Actual metadata and its local filesystem cache are genuine provider/filesystem
+// boundaries. Projection persistence executes the real migration below.
 // test-architecture: allow-boundary-mock -- Actual metadata provider boundary is injected to return compatible and failed metadata reads.
 vi.mock("./actual.ts", () => mockActual);
 // test-architecture: allow-boundary-mock -- The local Actual cache is a filesystem/provider boundary; projection tests inject its read result.
 vi.mock("./actual-local-metadata.ts", () => mockActualLocal);
-// test-architecture: allow-boundary-mock -- The metadata projection database is an external persistence boundary for this focused suite.
-vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 
 const {
   readActualMetadataProjection,
   refreshActualMetadataProjection,
   loadActualMetadataForProjection,
-  upsertMetadataProjectionQuery,
 } = await import("./actual-metadata-projection.ts");
 
 const NOW = new Date("2026-06-10T12:00:00.000Z");
 const TS = NOW.toISOString();
+const projectionMigration = readFileSync(
+  new URL("../db/migrations/009_actual_metadata_mirror.sql", import.meta.url),
+  "utf8",
+);
+let db: Client;
 
-beforeEach(() => {
+beforeEach(async () => {
   Object.values(mockActual).forEach((fn) => fn.mockReset());
   Object.values(mockActualLocal).forEach((fn) => fn.mockReset());
-  mockDb.execute.mockReset();
-  mockDb.batch.mockReset();
-  mockDb.execute.mockResolvedValue({ rows: [] });
+  db = createClient({ url: "file::memory:" });
+  await db.executeMultiple(projectionMigration);
+});
+
+afterEach(async () => {
+  await db.close();
+  vi.restoreAllMocks();
 });
 
 describe("readActualMetadataProjection", () => {
   it("returns null when no projection row exists", async () => {
-    const projection = await readActualMetadataProjection("user-1");
+    const projection = await readActualMetadataProjection("user-1", { dbClient: db });
     expect(projection).toBeNull();
-    const [{ sql, args }] = mockDb.execute.mock.calls[0]!;
-    expect(sql).toMatch(/ea_actual_metadata_mirror/);
-    expect(args).toEqual(["user-1"]);
   });
 
   it("maps a stored row into normalized metadata with payeeMap and sync health", async () => {
-    mockDb.execute.mockResolvedValue({
-      rows: [{
-        status: "current",
-        accounts_json: JSON.stringify([{ id: "a1", name: "Checking" }]),
-        payees_json: JSON.stringify([{ id: "p1", name: "Comcast" }]),
-        categories_json: null,
-        schedules_json: JSON.stringify([{ id: "s1" }]),
-        recent_transactions_json: "not-json",
-        last_success_at: "2026-06-09T00:00:00.000Z",
-        last_attempt_at: "2026-06-10T00:00:00.000Z",
-        last_error: null,
-      }],
+    await db.execute({
+      sql: `INSERT INTO ea_actual_metadata_mirror
+              (user_id, status, accounts_json, payees_json, categories_json,
+               schedules_json, recent_transactions_json, last_success_at,
+               last_attempt_at, last_error)
+            VALUES (?, 'current', ?, ?, 'null', ?, 'not-json', ?, ?, NULL)`,
+      args: [
+        "user-1",
+        JSON.stringify([{ id: "a1", name: "Checking" }]),
+        JSON.stringify([{ id: "p1", name: "Comcast" }]),
+        JSON.stringify([{ id: "s1" }]),
+        "2026-06-09T00:00:00.000Z",
+        "2026-06-10T00:00:00.000Z",
+      ],
     });
-    const projection = await readActualMetadataProjection("user-1");
+    const projection = await readActualMetadataProjection("user-1", { dbClient: db });
     expect(projection!.accounts).toEqual([{ id: "a1", name: "Checking" }]);
     expect(projection!.payeeMap).toEqual({ p1: "Comcast" });
     expect(projection!.categories).toEqual([]);
@@ -79,27 +84,12 @@ describe("readActualMetadataProjection", () => {
   });
 });
 
-describe("upsertMetadataProjectionQuery", () => {
-  it("builds a current-status upsert carrying the normalized payees and timestamps", () => {
-    const { sql, args } = upsertMetadataProjectionQuery(
-      "user-1",
-      { payees: [{ id: "p1", name: "Comcast" }] },
-      TS,
-    );
-    // The table + 'current' marker are the behavioral signal of this builder.
-    expect(sql).toMatch(/INSERT INTO ea_actual_metadata_mirror/);
-    expect(sql).toMatch(/'current'/);
-    expect(args[0]).toBe("user-1");
-    expect(args[2]).toBe(JSON.stringify([{ id: "p1", name: "Comcast" }]));
-    expect(args).toContain(TS);
-  });
-});
-
 describe("refreshActualMetadataProjection", () => {
   it("upserts supplied metadata as current and returns current sync health", async () => {
     const result = await refreshActualMetadataProjection("user-1", {
       now: NOW,
       metadata: { payees: [{ id: "p1", name: "Comcast" }] },
+      dbClient: db,
     });
     expect(result.payeeMap).toEqual({ p1: "Comcast" });
     expect(result.syncHealth).toEqual({
@@ -108,6 +98,11 @@ describe("refreshActualMetadataProjection", () => {
       lastAttemptAt: TS,
       lastError: null,
     });
+    const persisted = await readActualMetadataProjection("user-1", { dbClient: db });
+    expect(persisted).toMatchObject({
+      payeeMap: { p1: "Comcast" },
+      syncHealth: { state: "current", lastSuccessAt: TS, lastError: null },
+    });
   });
 
   it("loads cached local metadata when none is supplied", async () => {
@@ -115,7 +110,7 @@ describe("refreshActualMetadataProjection", () => {
       accounts: [{ id: "a1", name: "Checking" }],
       payees: [],
     });
-    const result = await refreshActualMetadataProjection("user-1", { now: NOW });
+    const result = await refreshActualMetadataProjection("user-1", { now: NOW, dbClient: db });
     expect(result.accounts).toEqual([{ id: "a1", name: "Checking" }]);
   });
 
@@ -125,7 +120,7 @@ describe("refreshActualMetadataProjection", () => {
       .mockRejectedValueOnce(new Error("no cache"))
       .mockRejectedValueOnce(new Error("lightweight failed"));
     mockActual.getMetadata.mockResolvedValue({ payees: [{ id: "p9", name: "PG&E" }] });
-    const result = await refreshActualMetadataProjection("user-1", { now: NOW });
+    const result = await refreshActualMetadataProjection("user-1", { now: NOW, dbClient: db });
     // Worker payee surviving in the result proves the worker path won the fallback.
     expect(result.payeeMap).toEqual({ p9: "PG&E" });
   });
@@ -141,30 +136,13 @@ describe("refreshActualMetadataProjection", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("no cache"));
     mockActual.getMetadata.mockRejectedValue(new Error("worker down"));
-    await expect(refreshActualMetadataProjection("user-1", { now: NOW }))
+    await expect(refreshActualMetadataProjection("user-1", { now: NOW, dbClient: db }))
       .rejects.toThrow("worker down");
 
-    // The failed refresh persisted the worker error to the projection.
-    const degradedWrite = mockDb.execute.mock.calls.at(-1)![0];
-    expect(degradedWrite.args).toContain("user-1");
-    expect(degradedWrite.args).toContain("worker down");
-
-    // The persisted degraded row surfaces through the public read API.
-    mockDb.execute.mockResolvedValue({
-      rows: [{
-        status: "degraded",
-        accounts_json: null,
-        payees_json: null,
-        categories_json: null,
-        schedules_json: null,
-        recent_transactions_json: null,
-        last_success_at: null,
-        last_attempt_at: TS,
-        last_error: "worker down",
-      }],
-    });
-    const projection = await readActualMetadataProjection("user-1");
+    // The same migrated database surfaces the row written by the failed refresh.
+    const projection = await readActualMetadataProjection("user-1", { dbClient: db });
     expect(projection!.syncHealth.state).toBe("degraded");
+    expect(projection!.syncHealth.lastAttemptAt).toBe(TS);
     expect(projection!.syncHealth.lastError).toBe("worker down");
   });
 });

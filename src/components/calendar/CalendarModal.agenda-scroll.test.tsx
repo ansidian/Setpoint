@@ -460,6 +460,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       await flushAnimationFrame();
       await flushAnimationFrame();
 
+      // test-architecture: allow-boundary-interaction -- Native scrollTo is a browser-imperative boundary; happy-dom cannot expose the requested smooth-scroll target as resulting layout state.
       const itemScrollCall = scrollTo.mock.calls.find(([options]) => (
         options?.behavior === "smooth" && options.top! > 0
       ));

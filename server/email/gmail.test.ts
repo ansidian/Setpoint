@@ -172,6 +172,7 @@ describe("fetchEmailsInRange", () => {
       maxResults: 25,
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail list fetch is an outbound provider boundary; query encoding is the provider protocol contract.
     const listUrl = new URL(fetchMock.mock.calls[0]![0]);
     expect(listUrl.searchParams.get("q")).toBe("after:2026/04/25 before:2026/05/02");
     expect(listUrl.searchParams.get("labelIds")).toBe("INBOX");

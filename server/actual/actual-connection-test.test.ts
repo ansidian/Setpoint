@@ -105,7 +105,9 @@ describe("testActualConnectionHttp", () => {
     }, dependencies(fetchFn));
 
     expect(result.budgetFound).toBe(true);
+    // test-architecture: allow-boundary-interaction -- Actual login fetch is an outbound provider boundary; endpoint, credential payload, timeout signal, and redacted logging are observable only at that boundary.
     expect(vi.mocked(fetchFn).mock.calls[0]![0]).toBe("https://stored.example.com/actual/account/login");
+    // test-architecture: allow-boundary-interaction -- Actual login fetch is an outbound provider boundary; endpoint, credential payload, timeout signal, and redacted logging are observable only at that boundary.
     expect(vi.mocked(fetchFn).mock.calls[0]![1]).toEqual(expect.objectContaining({
       body: JSON.stringify({ password: "decrypted:ciphertext", loginMethod: "password" }),
     }));
@@ -126,6 +128,7 @@ describe("testActualConnectionHttp", () => {
     expect(caught).not.toBeNull();
     expect(caught).toBeInstanceOf(Error);
     expect((caught as Error).message).not.toContain("internal-banner-xyz");
+    // test-architecture: allow-boundary-interaction -- Actual login fetch is an outbound provider boundary; endpoint, credential payload, timeout signal, and redacted logging are observable only at that boundary.
     expect(JSON.stringify(errorLog.mock.calls)).not.toContain("internal-banner-xyz");
   });
 

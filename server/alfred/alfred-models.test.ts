@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { createClient } from "@libsql/client";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ALFRED_MODEL,
@@ -22,10 +24,25 @@ describe("Alfred model configuration", () => {
   });
 
   it("loads and normalizes the persisted pair", async () => {
-    const db = {
-      execute: async () => ({ rows: [{ alfred_provider: "openai", alfred_model: "gpt-5.6-sol" }] }),
-    };
-    await expect(loadAlfredModelConfig("user-1", db as never))
-      .resolves.toEqual({ provider: "openai", model: "gpt-5.6-sol" });
+    const db = createClient({ url: "file::memory:" });
+    try {
+      await db.executeMultiple(readFileSync(
+        new URL("../db/migrations/001_ea_tables.sql", import.meta.url),
+        "utf8",
+      ));
+      await db.executeMultiple(readFileSync(
+        new URL("../db/migrations/044_alfred_model_settings.sql", import.meta.url),
+        "utf8",
+      ));
+      await db.execute({
+        sql: `INSERT INTO ea_settings (user_id, alfred_provider, alfred_model)
+              VALUES ('user-1', 'openai', 'gpt-5.6-sol')`,
+      });
+
+      await expect(loadAlfredModelConfig("user-1", db))
+        .resolves.toEqual({ provider: "openai", model: "gpt-5.6-sol" });
+    } finally {
+      await db.close();
+    }
   });
 });

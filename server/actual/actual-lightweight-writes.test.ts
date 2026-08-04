@@ -213,6 +213,7 @@ describe("sendBillLightweight", () => {
         }),
       }),
     );
+    // test-architecture: allow-boundary-interaction -- Actual sync fetch is an irreversible financial-write provider boundary; encoded sync bytes are the compatibility contract.
     const syncBody = (fetchMock.mock.calls[1]![1] as RequestInit).body as Uint8Array;
     const request = fromBinary(SyncRequestSchema, syncBody);
     expect(request.groupId).toBe("sync-123");

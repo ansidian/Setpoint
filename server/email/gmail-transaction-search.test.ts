@@ -67,6 +67,7 @@ describe("Gmail transaction search", () => {
       maxResults: 50,
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail list fetch is an outbound provider boundary; encoded search query and pagination route are the provider protocol contract.
     const listUrl = new URL(fetchMock.mock.calls[0]![0]);
     expect(listUrl.searchParams.get("q")).toBe(
       "(from:auto-confirm@amazon.com OR from:digital-no-reply@amazon.com OR from:order-update@amazon.com) (subject:order OR subject:ordered) after:2026/06/30 before:2026/08/02",
@@ -101,6 +102,7 @@ describe("Gmail transaction search", () => {
       maxResults: 50,
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail list fetch is an outbound provider boundary; encoded search query and pagination route are the provider protocol contract.
     const listUrl = new URL(fetchMock.mock.calls[0]![0]);
     expect(listUrl.searchParams.get("q")).toContain("after:2026/06/22 before:2026/07/24");
   });

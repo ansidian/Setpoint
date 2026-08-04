@@ -44,6 +44,7 @@ describe("triage sound playback", () => {
     );
 
     expect(result).toBe(true);
+    // test-architecture: allow-boundary-interaction -- Audio is a browser constructor boundary; configured instance volume is observable only on the constructed browser object.
     expect(vi.mocked(globalThis.Audio).mock.instances[0]!.volume).toBe(1);
     expect(gain.gain.value).toBe(TRIAGE_SOUND_GAIN_MULTIPLIER);
     expect(sourceDestination).toBe(gain);
@@ -76,6 +77,7 @@ describe("triage sound playback", () => {
       { volume: 0.4 },
     );
 
+    // test-architecture: allow-boundary-interaction -- Audio is a browser constructor boundary; configured instance volume is observable only on the constructed browser object.
     expect(vi.mocked(globalThis.Audio).mock.instances[0]!.volume).toBe(0.4);
     expect(gain.gain.value).toBeCloseTo(1.2);
   });
@@ -301,6 +303,7 @@ describe("triage sound playback", () => {
     );
 
     expect(result).toBe(true);
+    // test-architecture: allow-boundary-interaction -- Audio is a browser constructor boundary; configured instance volume is observable only on the constructed browser object.
     expect(vi.mocked(globalThis.Audio).mock.instances[0]!.volume).toBe(1);
     expect(playCount).toBe(1);
   });

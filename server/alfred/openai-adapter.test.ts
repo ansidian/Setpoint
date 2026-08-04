@@ -82,7 +82,9 @@ describe("OpenAI Alfred adapter", () => {
     ]);
     expect(events[1]).toMatchObject({ ok: false, tool_id: "call-1" });
 
+    // test-architecture: allow-boundary-interaction -- OpenAI fetch and usage recording are outbound provider and financial-ledger boundaries; model payload and billable usage are their stable contracts.
     const firstRequest = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    // test-architecture: allow-boundary-interaction -- OpenAI fetch and usage recording are outbound provider and financial-ledger boundaries; model payload and billable usage are their stable contracts.
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/responses");
     expect(firstRequest).toMatchObject({
       model: "gpt-5.6-sol",
@@ -92,11 +94,13 @@ describe("OpenAI Alfred adapter", () => {
     });
     expect(firstRequest.tools[0]).toMatchObject({ type: "function", name: expect.any(String) });
 
+    // test-architecture: allow-boundary-interaction -- OpenAI fetch and usage recording are outbound provider and financial-ledger boundaries; model payload and billable usage are their stable contracts.
     const secondRequest = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body));
     expect(secondRequest.input.map((item: { type?: string; role?: string }) => item.type || item.role))
       .toEqual(["user", "function_call", "function_call_output"]);
     expect(secondRequest.input[2]).toMatchObject({ call_id: "call-1" });
 
+    // test-architecture: allow-boundary-interaction -- OpenAI fetch and usage recording are outbound provider and financial-ledger boundaries; model payload and billable usage are their stable contracts.
     const runUsage = recordUsage.mock.calls.map((entry) => entry[1])
       .filter((entry) => entry.eventType === "alfred_run_turn");
     expect(runUsage[0]?.usage).toMatchObject({

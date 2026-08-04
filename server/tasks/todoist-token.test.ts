@@ -146,6 +146,7 @@ describe("getTodoistApiToken", () => {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       }),
     );
+    // test-architecture: allow-boundary-interaction -- Todoist token fetch is an outbound credential-provider boundary; request initialization is the OAuth protocol contract.
     const [, init] = fetchFn.mock.calls[0]! as unknown as [unknown, RequestInit];
     const body = init.body as URLSearchParams;
     expect(body.get("client_id")).toBe("runtime-client-id");

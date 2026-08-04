@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "mode": "enforced",
+  "interactionObservations": {},
+  "persistenceCandidates": {
+    "server/actual/actual-hydration-security.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The database supplies encrypted owner configuration to the filesystem hydration facade; configuration persistence is outside the behavior under test."
+    },
+    "server/actual/actual-lightweight-writes.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The database supplies encrypted owner configuration to the outbound Actual financial-write facade; app persistence is outside the behavior under test."
+    },
+    "server/actual/actual-local-metadata.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The database supplies encrypted owner configuration to the provider-owned local-cache facade; app persistence is outside the behavior under test."
+    },
+    "server/actual/actual-transactions-read.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The database supplies owner configuration to a reader of Actual provider-owned SQLite; app persistence is outside the behavior under test."
+    },
+    "server/actual/actualMetadataSync.test.ts": {
+      "owner": "03",
+      "classification": "retained-contract",
+      "signals": [
+        "positional-db-args-assertion",
+        "sql-shape-assertion"
+      ],
+      "reason": "Actual provider-owned CRDT storage requires the asserted messages_crdt statement and positional wire tuple."
+    },
+    "server/actual/actualWriteDb.test.ts": {
+      "owner": "03",
+      "classification": "retained-contract",
+      "signals": [
+        "positional-db-args-assertion",
+        "sql-shape-assertion"
+      ],
+      "reason": "Actual provider-owned SQLite compatibility requires allowlisted quoted identifiers and stable placeholder ordering."
+    },
+    "server/alfred/alfred-usage-stats.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake",
+        "named-fake-database"
+      ],
+      "reason": "Fixed database rows exercise the dense pricing/window aggregation, while a migrated libSQL case owns cutoff and user-isolation query behavior."
+    },
+    "server/bills/bill-extraction-service.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "named-fake-database"
+      ],
+      "reason": "The injected database is the settings/mapping input boundary for provider extraction behavior; those stores have separate persistence owners."
+    },
+    "server/bills/bills-service.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "named-fake-database"
+      ],
+      "reason": "The database seam delegates reconciliation to ephemeral libSQL or supplies controlled metadata-projection boundary rows for the bills facade."
+    },
+    "server/dashboard/current-service.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/email/email-backfill-worker.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/email/email-index.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/email/email-service.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake",
+        "named-fake-database"
+      ],
+      "reason": "The database is an external routing/read-state boundary; durability cases use migrated libSQL and the remaining controlled failures exercise partial provider writes."
+    },
+    "server/email/gmail-callback.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/email/gmail-pubsub.test.ts": {
+      "owner": "03",
+      "classification": "retained-contract",
+      "signals": [
+        "mock-execute-observation",
+        "sql-shape-assertion"
+      ],
+      "reason": "Gmail Pub/Sub authorization has a named single-read hot-path contract over the minimal token columns."
+    },
+    "server/email/gmail-sync.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/email/gmail-token.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/middleware/auth.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/accounts.oauth.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/alfred.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/auth-boundaries.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/auth.passkeys.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/auth.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/briefing/email-index.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "named-fake-database"
+      ],
+      "reason": "Cookie-session SQL is an authentication boundary for an HTTP route whose domain dependencies are injected and asserted through responses."
+    },
+    "server/routes/briefing/transaction-imports.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "named-fake-database"
+      ],
+      "reason": "Cookie-session SQL is an authentication boundary for an HTTP route whose transaction-import behavior is owned by injected use cases."
+    },
+    "server/routes/calendar.deadlines-mutations.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/calendar.events.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/calendar.range.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/calendar.search.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/dashboard.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/routes/settings.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/scheduler.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The injected database handler is an external scheduler dependency; the suite owns cron admission, shutdown, and orchestration rather than persistence."
+    },
+    "server/snapshots/snapshot-item-mutations.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "Execute delegates to migrated libSQL; the controlled failing batch is the genuine transaction rollback boundary."
+    },
+    "server/tasks/tasks-service.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/tasks/todoist-mirror-defaults.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/tasks/todoist-mirror.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/tasks/todoist-token.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/tasks/tombstones.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
+    "server/triage/triage-cache-stats.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake",
+        "named-fake-database"
+      ],
+      "reason": "Fixed database rows exercise dense pricing aggregation, while a migrated libSQL case owns cutoff and user-isolation query behavior."
+    }
+  }
+}

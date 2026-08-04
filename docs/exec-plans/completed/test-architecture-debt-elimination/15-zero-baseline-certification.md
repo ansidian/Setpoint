@@ -100,16 +100,16 @@ The certification specifically re-reviewed module names that could be mistaken f
 | `FLOWS.md` flow | Primary developer-test owner | Preserved contract/risk |
 | --- | --- | --- |
 | 1. Bills write to dashboard | `server/bills/bills-service.test.ts` plus `src/hooks/useCurrentDashboard.events.test.ts` for joined SSE/cache behavior | Financial write, deferred refresh, cache invalidation, provider fallback |
-| 2. Gmail push to inbox | `server/email/gmail-sync-service.test.ts` | Authorization, provider compatibility, retry/idempotent sync |
+| 2. Gmail push to inbox | `server/email/gmail-sync.test.ts` | Authorization, provider compatibility, retry/idempotent sync |
 | 3. Briefing to historical snapshot | `server/snapshots/snapshot-service.test.ts` | Durable snapshot identity, redaction, historical immutability |
 | 4. Calendar search | `src/components/calendar/CalendarModal.search-workflow.test.tsx` | Search/range admission, stale-result safety, rendered selection |
 | 5. Calendar multi-selection | `src/components/calendar/CalendarModal.events.test.tsx` | Modifier semantics, overflow surfaces, keyboard/browser safety |
 | 6. Graceful shutdown | `server/shutdown.test.ts` | Drain ordering, bounded exit, stale-work recovery |
 | 7. First-run owner claim | `server/routes/auth.test.ts` | Singleton authorization claim, bootstrap/session safety |
-| 8. Security transition | `server/routes/security.test.ts` | Step-up authorization, passkeys, recovery/redaction |
+| 8. Security transition | `server/routes/auth.test.ts` with passkey ceremony support in `server/routes/auth.passkeys.test.ts` | Step-up authorization, passkeys, recovery/redaction |
 | 9. Todoist OAuth | `server/routes/todoist-oauth.test.ts` | State/token security, webhook/provider compatibility |
-| 10. Capability status | `server/capabilities/capability-status-service.test.ts` | Credential redaction, cache/health projection |
-| 11. Onboarding progress | `server/onboarding/onboarding-progress-store.test.ts` | Durable progress and authenticated projection |
+| 10. Capability status | `server/capability-status-service.test.ts` | Credential redaction, cache/health projection |
+| 11. Onboarding progress | `server/onboarding-progress-store.test.ts` | Durable progress and authenticated projection |
 | 12. Transaction import | `server/transaction-imports/transaction-import-worker.test.ts` | Migration, idempotency, financial write, retry/durable review state |
 | 13. Alfred provider run | `server/routes/alfred.test.ts` | Conversation binding, credential isolation, no cross-provider fallback |
 

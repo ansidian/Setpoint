@@ -14,16 +14,22 @@ import {
   checkTestArchitectureBaseline,
   checkTestArchitectureBaselineEmpty,
   checkTestArchitectureBaselineGrowth,
+  checkTestArchitectureMockMetadataObservations,
+  collectPersistenceHeuristicSignals,
   collectTestArchitectureMetrics,
   normalizeTestArchitecturePath,
 } from './lib/test-architecture-policy.mts'
-import { checkTestArchitectureOwnership } from './lib/test-architecture-ownership.mts'
+import {
+  checkTestArchitectureOwnership,
+  checkTestArchitectureSemanticInventory,
+} from './lib/test-architecture-ownership.mts'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
 const testSizeBaselinePath = 'scripts/lib/test-size-baseline.json'
 const testArchitectureBaselinePath = 'scripts/lib/test-architecture-baseline.json'
 const testArchitectureApprovalsPath = 'scripts/lib/test-architecture-baseline-approvals.json'
+const testArchitectureSemanticInventoryPath = 'scripts/lib/test-architecture-semantic-inventory.json'
 
 const failures: string[] = []
 const warnings: string[] = []
@@ -276,18 +282,47 @@ async function checkTestArchitecture() {
     ...await collectFiles('server', isSizeCheckedTest),
     ...await collectFiles('scripts', isSizeCheckedTest),
   ]
-  const files = Object.fromEntries(await Promise.all(testFiles.map(async (file) => [
+  const sources: Record<string, string> = Object.fromEntries(await Promise.all(testFiles.map(async (file) => [
     normalizeTestArchitecturePath(file),
-    collectTestArchitectureMetrics(await readText(file)),
+    await readText(file),
   ])))
+  const files: Record<string, ReturnType<typeof collectTestArchitectureMetrics>> = Object.fromEntries(Object.entries(sources).map(([file, source]) => [
+    file,
+    collectTestArchitectureMetrics(source),
+  ]))
   const baseline = JSON.parse(await readText(testArchitectureBaselinePath))
   const approvals = JSON.parse(await readText(testArchitectureApprovalsPath))
+  const semanticInventory = JSON.parse(await readText(testArchitectureSemanticInventoryPath))
   failures.push(...checkTestArchitectureApprovalsEmpty(approvals))
   failures.push(...checkTestArchitectureBaselineEmpty(baseline))
   failures.push(...checkTestArchitectureOwnership(baseline).failures)
   const result = checkTestArchitectureBaseline({ files, baseline })
   failures.push(...result.failures)
   warnings.push(...result.warnings)
+
+  const semanticInteractions = Object.fromEntries(
+    Object.entries(files)
+      .filter(([, metrics]) => metrics.mockMetadataObservations > 0)
+      .map(([file, metrics]) => [file, metrics.mockMetadataObservations]),
+  )
+  const persistenceCandidates = Object.fromEntries(
+    Object.entries(sources)
+      .map(([file, source]) => [file, collectPersistenceHeuristicSignals(source)] as const)
+      .filter(([, signals]) => signals.length > 0),
+  )
+  failures.push(...checkTestArchitectureSemanticInventory({
+    inventory: semanticInventory,
+    interactionObservations: semanticInteractions,
+    persistenceCandidates,
+  }))
+  if (semanticInventory.mode === "enforced") {
+    failures.push(...checkTestArchitectureMockMetadataObservations(files))
+  }
+  const semanticObservationCount = Object.values(semanticInteractions)
+    .reduce((sum, count) => sum + count, 0)
+  warnings.push(
+    `${semanticInventory.mode === "enforced" ? "Enforced" : "Report-only"} test-architecture semantic inventory: ${semanticObservationCount} mock-metadata observation(s) in ${Object.keys(semanticInteractions).length} file(s); ${Object.keys(persistenceCandidates).length} classified persistence heuristic file(s)`,
+  )
 
   const configuredRef = process.env.TEST_ARCHITECTURE_BASE_REF?.trim()
   const localBaselineChanged = !configuredRef && execFileSync(

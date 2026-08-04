@@ -1,4 +1,116 @@
 import type { TestArchitectureBaseline } from "./test-architecture-policy.mts"
+import type { PersistenceHeuristicSignal } from "./test-architecture-policy.mts"
+
+export type SemanticInteractionOwner = "02a" | "02b" | "03"
+
+const PERSISTENCE_INTERACTION_OWNERS = new Set([
+  "server/actual/actual-metadata-projection.test.ts",
+])
+
+export interface TestArchitectureSemanticInventory {
+  schemaVersion: 1
+  mode: "report-only" | "enforced"
+  interactionObservations: Record<string, {
+    owner: SemanticInteractionOwner
+    observations: number
+  }>
+  persistenceCandidates: Record<string, {
+    owner: "03"
+    classification: "candidate" | "false-positive" | "retained-contract"
+    signals: PersistenceHeuristicSignal[]
+    reason?: string
+  }>
+}
+
+export function semanticInteractionOwners(file: string): SemanticInteractionOwner[] {
+  if (PERSISTENCE_INTERACTION_OWNERS.has(file)) return ["03"]
+  if (file.startsWith("src/")) return ["02a"]
+  if (file.startsWith("server/")) return ["02b"]
+  return []
+}
+
+export function checkTestArchitectureSemanticInventory({
+  inventory,
+  interactionObservations,
+  persistenceCandidates,
+  ownersForInteraction = semanticInteractionOwners,
+}: {
+  inventory: TestArchitectureSemanticInventory
+  interactionObservations: Record<string, number>
+  persistenceCandidates: Record<string, PersistenceHeuristicSignal[]>
+  ownersForInteraction?: (file: string) => SemanticInteractionOwner[]
+}): string[] {
+  const failures: string[] = []
+  if (inventory.schemaVersion !== 1) failures.push("test-architecture semantic inventory schemaVersion must be 1")
+  if (inventory.mode !== "report-only" && inventory.mode !== "enforced") {
+    failures.push("test-architecture semantic inventory mode must be report-only or enforced")
+  }
+
+  const interactionFiles = new Set([
+    ...Object.keys(interactionObservations),
+    ...Object.keys(inventory.interactionObservations),
+  ])
+  for (const file of [...interactionFiles].sort()) {
+    const current = interactionObservations[file]
+    const recorded = inventory.interactionObservations[file]
+    if (current === undefined) {
+      failures.push(`${file} is stale in the semantic interaction inventory`)
+      continue
+    }
+    if (recorded === undefined) {
+      failures.push(`${file} has ${current} unowned semantic interaction observation(s)`)
+      continue
+    }
+    const owners = ownersForInteraction(file)
+    if (owners.length === 0) {
+      failures.push(`${file} has no semantic interaction remediation owner`)
+    } else if (owners.length > 1) {
+      failures.push(`${file} has multiple semantic interaction remediation owners: ${owners.join(", ")}`)
+    } else if (recorded.owner !== owners[0]) {
+      failures.push(`${file} is assigned to ${recorded.owner}, expected ${owners[0]}`)
+    }
+    if (recorded.observations !== current) {
+      failures.push(`${file} records ${recorded.observations} semantic interaction observation(s), current source has ${current}`)
+    }
+  }
+
+  const persistenceFiles = new Set([
+    ...Object.keys(persistenceCandidates),
+    ...Object.keys(inventory.persistenceCandidates),
+  ])
+  for (const file of [...persistenceFiles].sort()) {
+    const current = persistenceCandidates[file]
+    const recorded = inventory.persistenceCandidates[file]
+    if (current === undefined) {
+      failures.push(`${file} is stale in the persistence candidate inventory`)
+      continue
+    }
+    if (recorded === undefined) {
+      failures.push(`${file} is an unowned persistence heuristic candidate`)
+      continue
+    }
+    if (recorded.owner !== "03") {
+      failures.push(`${file} persistence disposition must be owned by child 03`)
+    }
+    if (recorded.classification !== "candidate" && !recorded.reason?.trim()) {
+      failures.push(`${file} ${recorded.classification} persistence disposition requires a reason`)
+    }
+    if (JSON.stringify(recorded.signals) !== JSON.stringify(current)) {
+      failures.push(`${file} persistence signals are stale: recorded ${recorded.signals.join(", ")}; current ${current.join(", ")}`)
+    }
+  }
+
+  if (inventory.mode === "enforced") {
+    const candidates = Object.entries(inventory.persistenceCandidates)
+      .filter(([, entry]) => entry.classification === "candidate")
+      .map(([file]) => file)
+    if (candidates.length > 0) {
+      failures.push(`enforced semantic inventory has unresolved persistence candidates: ${candidates.join(", ")}`)
+    }
+  }
+
+  return failures
+}
 
 export const TEST_ARCHITECTURE_CHILD_IDS = [
   "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14",

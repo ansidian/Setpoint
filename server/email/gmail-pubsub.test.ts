@@ -82,6 +82,7 @@ describe("Gmail Pub/Sub configuration", () => {
 
     // test-architecture: allow-boundary-interaction -- Token verification is an authorization database boundary; every delivery must perform exactly one authoritative read with no cache window.
     expect(dbClient.execute).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Pub/Sub authorization performs an authoritative database read; query shape and single-read admission are the named authorization hot-path contract.
     const statement = dbClient.execute.mock.calls[0]?.[0];
     expect(statement).toMatchObject({ args: [] });
     const sql = typeof statement === "string" ? statement : statement?.sql ?? "";
@@ -106,6 +107,7 @@ describe("Gmail Pub/Sub configuration", () => {
 
     await service.getStatus();
 
+    // test-architecture: allow-boundary-interaction -- Pub/Sub authorization performs an authoritative database read; query shape and single-read admission are the named authorization hot-path contract.
     const configReads = dbClient.execute.mock.calls.filter(([statement]) => {
       const sql = typeof statement === "string" ? statement : statement.sql;
       return sql.includes("FROM ea_gmail_pubsub_config");

@@ -123,6 +123,7 @@ describe("alfred routes", () => {
       model: "gpt-5.5",
     });
     expect(res.status).toBe(200);
+    // test-architecture: allow-boundary-interaction -- The route-to-Alfred runner handoff crosses the AI-provider use-case boundary; selected model, isolated key, and continuation are the request contract.
     expect(testState.run.mock.calls[0]?.[0].conversation.model).toBe("claude-sonnet-4-6");
   });
 
@@ -177,6 +178,7 @@ describe("alfred routes", () => {
       res.text.split("\n\n").find((frame: string) => frame.includes("run_start"))!.split("data: ")[1]!,
     );
     expect(startEvent).toMatchObject({ provider: "openai", model: "gpt-5.6-sol" });
+    // test-architecture: allow-boundary-interaction -- The route-to-Alfred runner handoff crosses the AI-provider use-case boundary; selected model, isolated key, and continuation are the request contract.
     expect(testState.run.mock.calls[0]?.[0].apiKey).toBe("openai-test-key");
   });
 
@@ -202,6 +204,7 @@ describe("alfred routes", () => {
     });
 
     expect(secondConversationId).toBe(firstConversationId);
+    // test-architecture: allow-boundary-interaction -- The route-to-Alfred runner handoff crosses the AI-provider use-case boundary; selected model, isolated key, and continuation are the request contract.
     expect(testState.run.mock.calls[1]?.[0].conversation).toMatchObject({
       provider: "anthropic",
       model: "claude-sonnet-4-6",

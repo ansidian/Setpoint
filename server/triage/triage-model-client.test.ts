@@ -94,6 +94,7 @@ describe("triage model client", () => {
 
     const result = await client.classify({ tier: "strong", email, reason: "hard_risk_override" });
 
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const [url, options] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     expect((options!.headers as Record<string, string>)["x-api-key"]).toBe("test-anthropic-key");
@@ -128,6 +129,7 @@ describe("triage model client", () => {
 
     const result = await client.classify({ tier: "cheap", email, reason: "no_preflight_match" });
 
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const [url, options] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect((options!.headers as Record<string, string>).Authorization).toBe("Bearer test-openai-key");
@@ -156,6 +158,7 @@ describe("triage model client", () => {
     await client.classify({ tier: "cheap", email, reason: "" });
     await client.classify({ tier: "strong", email, reason: "" });
 
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const models = fetchImpl.mock.calls.map(([, options]) => JSON.parse(String(options!.body)).model);
     expect(models).toEqual(["claude-haiku-4-5-20251001", "claude-sonnet-4-6"]);
   });
@@ -178,6 +181,7 @@ describe("triage model client", () => {
 
     await client.classify({ tier: "strong", email, reason: "hard_risk_override" });
 
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     expect(fetchImpl.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -195,6 +199,7 @@ describe("triage model client", () => {
 
     await client.classify({ tier: "cheap", email, reason: "no_preflight_match" });
 
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     expect(fetchImpl.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -221,13 +226,16 @@ describe("triage model client", () => {
 
     // test-architecture: allow-boundary-interaction -- OpenAI fetch is outbound; an unsupported cache-field response permits exactly one compatibility retry without those fields.
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const firstBody = JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body));
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const retryBody = JSON.parse(String(fetchImpl.mock.calls[1]![1]!.body));
     expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
     expect(firstBody.prompt_cache_retention).toBe("24h");
     expect(retryBody.store).toBe(false);
     expect(retryBody.prompt_cache_key).toBeUndefined();
     expect(retryBody.prompt_cache_retention).toBeUndefined();
+    // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     expect(fetchImpl.mock.calls[1]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 });

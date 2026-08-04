@@ -293,11 +293,12 @@ describe("Calendar Search Mirror service", () => {
       syncClient,
       now: new Date("2026-05-12T20:00:00.000Z"),
     });
-
+    // test-architecture: allow-boundary-interaction -- Search-index synchronization is a durable storage boundary; write admission and payloads are not observable through the source calendar result.
     expect(syncClient.mock.calls[1]![0]).toMatchObject({
       mode: "incremental",
       syncToken: "sync-1",
     });
+    // test-architecture: allow-boundary-interaction -- Search-index synchronization is a durable storage boundary; write admission and payloads are not observable through the source calendar result.
     expect(syncClient.mock.calls[2]![0]).toMatchObject({
       mode: "full",
       syncToken: null,
@@ -374,11 +375,12 @@ describe("Calendar Search Mirror service", () => {
       syncClient,
       now: new Date("2026-05-12T20:00:00.000Z"),
     });
-
+    // test-architecture: allow-boundary-interaction -- Search-index synchronization is a durable storage boundary; write admission and payloads are not observable through the source calendar result.
     expect(syncClient.mock.calls[1]![0]).toMatchObject({
       mode: "incremental",
       syncToken: "sync-1",
     });
+    // test-architecture: allow-boundary-interaction -- Search-index synchronization is a durable storage boundary; write admission and payloads are not observable through the source calendar result.
     expect(syncClient.mock.calls[2]![0]).toMatchObject({
       mode: "full",
       syncToken: null,

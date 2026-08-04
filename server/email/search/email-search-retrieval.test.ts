@@ -151,6 +151,7 @@ describe("retrieveInboxAiSearch", () => {
       recordUsage,
     });
 
+    // test-architecture: allow-boundary-interaction -- Usage recording is a financial-ledger boundary; billable retrieval usage is observable only through the recorded provider charge.
     const call = recordUsage.mock.calls
       .map((c) => c[1])
       .find((a) => a?.eventType === "query_embedding");

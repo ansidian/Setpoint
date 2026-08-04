@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
+import { createClient } from "@libsql/client";
 import { describe, expect, it } from "vitest";
-import type { InStatement } from "@libsql/client";
 import { getTriageCacheStats } from "./triage-cache-stats.ts";
 
 // Deterministic in-memory db stub: returns a fixed row set regardless of the
@@ -227,22 +228,46 @@ describe("getTriageCacheStats", () => {
     expect(stats.comparisonWindows.monthToDate.openaiCalls).toBe(1);
   });
 
-  it("passes the wider of the two cutoffs to the SQL query", async () => {
-    let capturedArgs: unknown[] = [];
-    const dbClient = {
-      execute: async (statement: string | InStatement) => {
-        capturedArgs = typeof statement === "string" || !Array.isArray(statement.args)
-          ? []
-          : [...statement.args];
-        return { rows: [] };
-      },
-    };
+  it("queries the durable wider cutoff without leaking another user's rows", async () => {
+    const db = createClient({ url: "file::memory:" });
+    try {
+      await db.executeMultiple(readFileSync(
+        new URL("../db/migrations/001_ea_tables.sql", import.meta.url),
+        "utf8",
+      ));
+      const atCutoff = cheapRow({ lastTriagedAt: "2026-04-30T12:00:00.000Z" });
+      const beforeCutoff = cheapRow({ lastTriagedAt: "2026-04-30T11:59:59.000Z" });
+      await db.batch([
+        {
+          sql: `INSERT INTO ea_email_triage
+                  (user_id, account_id, email_id, last_triaged_at, model_usage_json,
+                   cheap_model_result_json, strong_model_result_json)
+                VALUES ('user-42', 'gmail', 'at-cutoff', ?, ?, ?, ?)`,
+          args: [atCutoff.last_triaged_at, atCutoff.model_usage_json, atCutoff.cheap_model_result_json, null],
+        },
+        {
+          sql: `INSERT INTO ea_email_triage
+                  (user_id, account_id, email_id, last_triaged_at, model_usage_json,
+                   cheap_model_result_json, strong_model_result_json)
+                VALUES ('user-42', 'gmail', 'before-cutoff', ?, ?, ?, ?)`,
+          args: [beforeCutoff.last_triaged_at, beforeCutoff.model_usage_json, beforeCutoff.cheap_model_result_json, null],
+        },
+        {
+          sql: `INSERT INTO ea_email_triage
+                  (user_id, account_id, email_id, last_triaged_at, model_usage_json,
+                   cheap_model_result_json, strong_model_result_json)
+                VALUES ('other-user', 'gmail', 'other', ?, ?, ?, ?)`,
+          args: [atCutoff.last_triaged_at, atCutoff.model_usage_json, atCutoff.cheap_model_result_json, null],
+        },
+      ]);
 
-    await getTriageCacheStats("user-42", { dbClient, windowDays: 7, now: NOW });
+      const stats = await getTriageCacheStats("user-42", { dbClient: db, windowDays: 7, now: NOW });
 
-    // queryCutoff = min(rolling 2026-04-30T12:00, month 2026-05-01T00:00)
-    //             = 2026-04-30T12:00 (the rolling cutoff is wider this month).
-    expect(capturedArgs[0]).toBe("user-42");
-    expect(capturedArgs[1]).toBe("2026-04-30T12:00:00.000Z");
+      // queryCutoff = min(rolling 2026-04-30T12:00, month 2026-05-01T00:00).
+      expect(stats.openaiCalls).toBe(1);
+      expect(stats.comparisonWindows.monthToDate.openaiCalls).toBe(0);
+    } finally {
+      await db.close();
+    }
   });
 });

@@ -164,6 +164,7 @@ describe("email triage worker model routing", () => {
       source: "strong_model",
       model_calls: ["cheap", "strong"],
     });
+    // test-architecture: allow-boundary-interaction -- Model classification is an outbound AI-provider boundary; tier routing order is the cost/quality protocol contract.
     expect(modelClient.classify.mock.calls.map(([call]) => call.tier)).toEqual(["cheap", "strong"]);
 
     const rows = await dbClient.execute({

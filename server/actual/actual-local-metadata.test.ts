@@ -326,6 +326,7 @@ describe("readLocalActualMetadata", () => {
         }),
       }),
     );
+    // test-architecture: allow-boundary-interaction -- Actual metadata fetch is an outbound provider boundary; request initialization is observable only on the SDK-compatible transport.
     const requestInit = fetchMock.mock.calls[0]![1] as RequestInit;
     const request = fromBinary(SyncRequestSchema, requestInit.body as Uint8Array);
     expect(request.since).toBe(baseTimestamp);

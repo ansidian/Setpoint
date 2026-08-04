@@ -95,8 +95,11 @@ describe("messageInsertQuery", () => {
       column: "amount",
       value: "N:-1888",
     });
+    // test-architecture: allow-sql-contract -- Actual's provider-owned CRDT schema requires messages_crdt inserts with a text timestamp and exact dataset/row/column/value positions.
     expect(query.sql).toContain("INSERT OR IGNORE INTO messages_crdt");
+    // test-architecture: allow-sql-contract -- Actual's CRDT message timestamp is a provider wire value and must remain string encoded.
     expect(query.args[0]).toBe(String(query.args[0]));
+    // test-architecture: allow-sql-contract -- Actual's provider-owned CRDT column protocol fixes this positional dataset/row/column/value tuple.
     expect(query.args.slice(1)).toEqual(["transactions", "txn-1", "amount", "N:-1888"]);
   });
 });

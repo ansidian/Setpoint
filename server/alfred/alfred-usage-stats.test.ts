@@ -1,4 +1,6 @@
-import { it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { createClient } from "@libsql/client";
+import { expect, it } from "vitest";
 import { getAlfredUsageStats } from "./alfred-usage-stats.ts";
 import type { AlfredUsageStatsDb } from "./alfred-usage-stats.ts";
 
@@ -83,10 +85,14 @@ it("aggregates queries, tokens, cache hit, savings, model split, and tools", asy
 });
 
 it("returns an empty summary when the table is missing", async () => {
-  const db = { execute: async () => { throw new Error("no such table: ea_alfred_usage"); } };
-  const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
-  expect(stats.queries).toBe(0);
-  expect(stats.tools.totalCalls).toBe(0);
+  const db = createClient({ url: "file::memory:" });
+  try {
+    const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
+    expect(stats.queries).toBe(0);
+    expect(stats.tools.totalCalls).toBe(0);
+  } finally {
+    await db.close();
+  }
 });
 
 it("scopes a same-month row older than the rolling window to month-to-date only", async () => {
@@ -162,4 +168,46 @@ it("populates the month-to-date comparison window", async () => {
   expect(mtd.inputTokens).toBe(2000);
   expect(mtd.cachedInputTokens).toBe(1500);
   expect(mtd.cacheHitRate).toBeCloseTo(1500 / 2000, 4);
+});
+
+it("queries durable usage with owner and wider-cutoff isolation", async () => {
+  const db = createClient({ url: "file::memory:" });
+  try {
+    await db.executeMultiple(readFileSync(
+      new URL("../db/migrations/016_alfred_usage.sql", import.meta.url),
+      "utf8",
+    ));
+    const recent = turn({ conv: "owned", input: 100, at: "2026-06-13T12:00:00Z" });
+    const beforeCutoff = turn({ conv: "old", input: 900, at: "2026-05-31T23:59:59Z" });
+    const statements = [
+      { userId: "u1", row: recent },
+      { userId: "u1", row: beforeCutoff },
+      { userId: "other-user", row: recent },
+    ].map(({ userId, row }) => ({
+      sql: `INSERT INTO ea_alfred_usage
+              (user_id, event_type, model, input_tokens, cached_input_tokens,
+               output_tokens, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        userId,
+        row.event_type,
+        row.model,
+        row.input_tokens,
+        row.cached_input_tokens,
+        row.output_tokens,
+        row.metadata_json,
+        row.created_at,
+      ],
+    }));
+    await db.batch(statements);
+
+    const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
+
+    expect(stats.queries).toBe(1);
+    expect(stats.turns).toBe(1);
+    expect(stats.inputTokens).toBe(100);
+    expect(stats.comparisonWindows.monthToDate.turns).toBe(1);
+  } finally {
+    await db.close();
+  }
 });

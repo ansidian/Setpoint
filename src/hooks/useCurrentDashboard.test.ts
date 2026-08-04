@@ -164,6 +164,7 @@ describe("useCurrentDashboard", () => {
 
     await act(async () => {});
 
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
     expect(result.current.briefingData.briefing).toMatchObject({
       weather: { temp: 72, icon: "Sun" },
@@ -227,6 +228,7 @@ describe("useCurrentDashboard", () => {
     await act(async () => {
       await result.current.refresh();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current).toBe(firstCurrent);
     expect(result.current.liveData.liveCalendar).toBe(firstCalendar);
@@ -247,14 +249,19 @@ describe("useCurrentDashboard", () => {
     await act(async () => {
       await result.current.liveData.refreshNow();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(requestCurrentDashboardRefresh.mock.calls).toHaveLength(0);
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(syncCurrentDashboard.mock.calls).toHaveLength(0);
 
     await act(async () => {
       await result.current.activeSnapshot.sync();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(requestCurrentDashboardRefresh.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(syncCurrentDashboard.mock.calls).toHaveLength(0);
     expect(result.current.liveData.liveWeather).toEqual({ temp: 80, icon: "Sun" });
     expect(result.current.activeSnapshot.snapshot!.snapshot).toEqual({ id: 99 });
@@ -262,6 +269,7 @@ describe("useCurrentDashboard", () => {
     await act(async () => {
       await result.current.forceSync();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(syncCurrentDashboard.mock.calls).toHaveLength(1);
     expect(result.current.liveData.liveWeather).toEqual({ temp: 85, icon: "Sun" });
     expect(result.current.activeSnapshot.snapshot!.snapshot).toEqual({ id: 100 });
@@ -309,6 +317,7 @@ describe("useCurrentDashboard", () => {
     await act(async () => {
       syncPromise = result.current.activeSnapshot.sync();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(requestCurrentDashboardRefresh.mock.calls).toHaveLength(1);
 
     await act(async () => {
@@ -316,6 +325,7 @@ describe("useCurrentDashboard", () => {
       await syncPromise;
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.liveData.liveWeather).toEqual({ temp: 81, icon: "Sun" });
     unmount();
@@ -445,7 +455,9 @@ describe("useCurrentDashboard", () => {
       await result.current.activeSnapshot.sync();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(requestCurrentDashboardRefresh.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
     unmount();
   });

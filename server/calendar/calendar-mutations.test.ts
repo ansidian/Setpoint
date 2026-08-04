@@ -113,6 +113,7 @@ function findFetchCall(
   method: string,
   eventId: string,
 ): [string | URL | Request, RequestInit] | undefined {
+  // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
   const call = fetchMock.mock.calls.find(([url, init = {}]) => {
     return (init.method || "GET") === method && String(url).includes(`/events/${eventId}`);
   });
@@ -202,10 +203,12 @@ describe("calendar recurring mutations", () => {
 
     expect(updated.calendarId).toBe("school");
     expect(updated.calendarName).toBe("School");
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     const moveCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "POST" && String(url).includes("/events/event-1/move");
     });
     expect(new Headers(moveCall?.[1]?.headers).get("If-Match")).toBe('"source-current"');
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
@@ -263,9 +266,11 @@ describe("calendar recurring mutations", () => {
 
     expect(updated.calendarId).toBe("school");
     expect(updated.title).toBe("Planning moved");
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     expect(fetchMock.mock.calls.some(([url, init = {}]) => {
       return (init.method || "GET") === "POST" && String(url).includes("/events/event-1/move");
     })).toBe(false);
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
@@ -331,6 +336,7 @@ describe("calendar recurring mutations", () => {
     });
 
     expect(updated.calendarId).toBe("school");
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     const patchCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
@@ -425,6 +431,7 @@ describe("calendar recurring mutations", () => {
       code: "calendar_event_read_only",
     });
 
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     expect(fetchMock.mock.calls.some(([url, init = {}]) => {
       const method = init.method || "GET";
       return ["PATCH", "DELETE"].includes(method) && String(url).includes("/events/birthday-1");
@@ -461,6 +468,7 @@ describe("calendar recurring mutations", () => {
       colorId: "9",
     });
 
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     const createCall = fetchMock.mock.calls.find(([url, init = {}]) => {
       return (init.method || "GET") === "POST" && String(url).includes("/calendars/primary/events");
     });
@@ -546,6 +554,7 @@ describe("calendar recurring mutations", () => {
 
     const [, init] = findFetchCall("PATCH", "series-1")!;
     expect(new Headers(init.headers).get("If-Match")).toBe('"parent-current"');
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an irreversible provider-write boundary; method, route, payload selection, and negative writes are the compatibility contract.
     expect(fetchMock.mock.calls.some(([url, callInit = {}]) => {
       return (callInit.method || "GET") === "POST" && String(url).endsWith("/events");
     })).toBe(false);

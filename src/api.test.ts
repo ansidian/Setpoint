@@ -16,6 +16,7 @@ function jsonOk(payload: unknown): Response {
 }
 
 function currentCalls(fetch: Mock<TestFetch>) {
+  // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
   return fetch.mock.calls.filter(([path]) => path === "/api/dashboard/current");
 }
 
@@ -131,7 +132,9 @@ describe("apiFetch calendar mutation timeouts", () => {
     await api.updateCalendarEvent("id", {});
     await api.deleteCalendarEvent("id", {});
 
+    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
     expect(fetch.mock.calls).toHaveLength(4);
+    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
     for (const [, options] of fetch.mock.calls) {
       expect(options?.signal).toBeInstanceOf(AbortSignal);
     }
@@ -171,6 +174,7 @@ describe("path-interpolated ids", () => {
 
     await api.dismissTombstone("abc/def?x=1");
 
+    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
     expect(fetch.mock.calls[0]).toEqual([
       "/api/briefing/tombstone/abc%2Fdef%3Fx%3D1",
       expect.objectContaining({ method: "DELETE" }),
@@ -184,6 +188,7 @@ describe("path-interpolated ids", () => {
 
     await api.updateNote("note/one", "updated");
 
+    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
     expect(fetch.mock.calls[0]![0]).toBe("/api/notes/note%2Fone");
   });
 
@@ -194,6 +199,7 @@ describe("path-interpolated ids", () => {
 
     await api.renameNewsTopic("topic?one", "Renamed");
 
+    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
     expect(fetch.mock.calls[0]![0]).toBe("/api/news/topics/topic%3Fone");
   });
 });

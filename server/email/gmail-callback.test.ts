@@ -126,6 +126,7 @@ describe("gmail callback canonicalization", () => {
       refresh_token: "rtok",
       scopes: ["https://www.googleapis.com/auth/gmail.modify"],
     });
+    // test-architecture: allow-boundary-interaction -- Google OAuth token fetch is an outbound credential-provider boundary; encoded credentials, retry signal, and exchange selection are the security contract.
     const tokenBody = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
     expect(tokenBody.get("client_id")).toBe("client-id");
     expect(tokenBody.get("client_secret")).toBe("client-secret");
@@ -185,7 +186,9 @@ describe("gmail callback canonicalization", () => {
       clientSecret: "client-secret",
     });
 
+    // test-architecture: allow-boundary-interaction -- Google OAuth token fetch is an outbound credential-provider boundary; encoded credentials, retry signal, and exchange selection are the security contract.
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    // test-architecture: allow-boundary-interaction -- Google OAuth token fetch is an outbound credential-provider boundary; encoded credentials, retry signal, and exchange selection are the security contract.
     expect(fetchMock.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -209,6 +212,7 @@ describe("gmail callback canonicalization", () => {
       clientSecret: "client-secret",
     });
 
+    // test-architecture: allow-boundary-interaction -- Google OAuth token fetch is an outbound credential-provider boundary; encoded credentials, retry signal, and exchange selection are the security contract.
     const body = fetchMock.mock.calls[0]?.[1]?.body as URLSearchParams;
     expect(body.get("redirect_uri")).toBe("https://setpoint.example.com/api/ea/accounts/gmail/callback");
   });

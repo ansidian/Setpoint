@@ -24,9 +24,11 @@ describe("readSseStream", () => {
       frame("run_end", { stop_reason: "end_turn" }),
     ]), onEvent);
 
+    // test-architecture: allow-boundary-interaction -- The SSE consumer callback is this parser facade's outbound boundary; ordered frame payloads have no separate durable state.
     expect(onEvent.mock.calls.map(([e]) => e.type)).toEqual([
       "run_start", "text_delta", "run_end",
     ]);
+    // test-architecture: allow-boundary-interaction -- The SSE consumer callback is this parser facade's outbound boundary; ordered frame payloads have no separate durable state.
     expect(onEvent.mock.calls[1]![0].text).toBe("Hi");
   });
 
@@ -52,6 +54,7 @@ describe("readSseStream", () => {
       frame("run_end", { stop_reason: "end_turn" }),
     ]), onEvent);
 
+    // test-architecture: allow-boundary-interaction -- The SSE consumer callback is this parser facade's outbound boundary; ordered frame payloads have no separate durable state.
     expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
       "run_start", "run_end",
     ]);

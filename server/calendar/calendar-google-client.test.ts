@@ -67,6 +67,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function fetchCall(index: number): [string | URL | Request, RequestInit] {
+  // test-architecture: allow-boundary-interaction -- Google Calendar fetch is an outbound provider boundary; request URL and initialization are the provider protocol contract.
   const [input, init] = fetchMock.mock.calls[index]!;
   return [input, init || {}];
 }

@@ -44,13 +44,18 @@ describe("transaction import API helpers", () => {
     }]);
     await api.getTransactionImportEmailStatus("gmail-1/message 1");
 
+    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
     expect(fetch.mock.calls[0]?.[0]).toBe("/api/briefing/transaction-imports/mappings/amazon");
+    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({
       method: "PUT",
       body: JSON.stringify({ mode: "observe", actualAccountId: "account-1", actualCategoryId: null }),
     });
+    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
     expect(fetch.mock.calls[1]?.[0]).toBe("/api/briefing/transaction-imports/runs");
+    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
     expect(fetch.mock.calls[2]?.[0]).toBe("/api/briefing/transaction-imports/runs/run-1/commit");
+    // test-architecture: allow-boundary-interaction -- Transaction-import fetch is an irreversible HTTP boundary; the encoded route and write payload are the stable wire contract.
     expect(fetch.mock.calls[3]?.[0]).toBe("/api/briefing/transaction-imports/email-status?emailUid=gmail-1%2Fmessage%201");
   });
 });

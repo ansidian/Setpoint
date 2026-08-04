@@ -4,6 +4,8 @@ import {
   checkTestArchitectureBaseline,
   checkTestArchitectureBaselineEmpty,
   checkTestArchitectureBaselineGrowth,
+  checkTestArchitectureMockMetadataObservations,
+  collectPersistenceHeuristicSignals,
   collectTestArchitectureMetrics,
   normalizeTestArchitecturePath,
 } from "./test-architecture-policy.mts"
@@ -26,6 +28,7 @@ describe("collectTestArchitectureMetrics", () => {
         "../multiline.ts": 1,
       },
       interactionAssertions: 2,
+      mockMetadataObservations: 0,
       exemptionViolations: [],
     })
   })
@@ -42,6 +45,7 @@ describe("collectTestArchitectureMetrics", () => {
     expect(collectTestArchitectureMetrics(source)).toEqual({
       localModuleMocks: { "../unreasoned.ts": 1 },
       interactionAssertions: 0,
+      mockMetadataObservations: 0,
       exemptionViolations: ["line 5 has an empty test-architecture boundary rationale"],
     })
   })
@@ -57,10 +61,74 @@ describe("collectTestArchitectureMetrics", () => {
     expect(collectTestArchitectureMetrics(source)).toEqual({
       localModuleMocks: { "../provider.ts": 1 },
       interactionAssertions: 0,
+      mockMetadataObservations: 0,
       exemptionViolations: [
         "line 1 has a test-architecture exemption that is not beside its exact construct",
         "line 4 applies one test-architecture exemption to 2 constructs",
       ],
+    })
+  })
+
+  it("reports direct and extracted mock metadata independently of matcher syntax", () => {
+    const source = [
+      "expect(send.mock.calls).toHaveLength(1)",
+      "expect(send.mock.lastCall).toEqual([{ ok: true }])",
+      "expect(send.mock.invocationCallOrder[0]).toBeLessThan(save.mock.invocationCallOrder[0])",
+      "expect(send.mock.results[0]?.value).toBe(true)",
+      "expect(send.mock.settledResults?.[0]?.value).toBe(true)",
+      "expect(send.mock.instances[0]).toBeDefined()",
+      "expect(send.mock.contexts[0]).toBeDefined()",
+      "const extracted = send.mock.calls",
+      "expect(extracted).toHaveLength(1)",
+    ].join("\n")
+
+    expect(collectTestArchitectureMetrics(source)).toMatchObject({
+      interactionAssertions: 0,
+      mockMetadataObservations: 9,
+      exemptionViolations: [],
+    })
+  })
+
+  it("reports optional, indexed, vi.mocked, destructured, and statically aliased metadata", () => {
+    const source = [
+      "expect(send.mock?.calls).toHaveLength(1)",
+      'expect(send["mock"]["calls"]).toHaveLength(1)',
+      "expect(vi.mocked(send).mock.calls).toHaveLength(1)",
+      "const { calls: extractedCalls, results } = send.mock",
+      "const state = vi.mocked(send).mock",
+      "const aliasedState = state",
+      "expect(aliasedState.lastCall).toEqual([])",
+      "let assigned",
+      "assigned = send.mock",
+      "expect(assigned.contexts).toEqual([])",
+    ].join("\n")
+
+    expect(collectTestArchitectureMetrics(source)).toMatchObject({
+      mockMetadataObservations: 7,
+      exemptionViolations: [],
+    })
+  })
+
+  it("applies interaction exemptions to the exact metadata observation", () => {
+    const source = [
+      "// test-architecture: allow-boundary-interaction -- outbound provider payload is the contract",
+      "const calls = send.mock.calls",
+      "// test-architecture: allow-boundary-interaction -- browser constructor state is observable only on the fake",
+      "expect(Audio.mock.instances[0]).toBeDefined()",
+    ].join("\n")
+
+    expect(collectTestArchitectureMetrics(source)).toMatchObject({
+      mockMetadataObservations: 0,
+      exemptionViolations: [],
+    })
+  })
+
+  it("rejects the dashboard syntax substitution that escaped matcher enforcement", () => {
+    expect(collectTestArchitectureMetrics(
+      "expect(getCurrentDashboard.mock.calls).toHaveLength(2)",
+    )).toMatchObject({
+      interactionAssertions: 0,
+      mockMetadataObservations: 1,
     })
   })
 })
@@ -69,8 +137,8 @@ describe("checkTestArchitectureBaseline", () => {
   it("rejects new debt and warns when existing debt falls", () => {
     const result = checkTestArchitectureBaseline({
       files: {
-        "src/new.test.ts": { localModuleMocks: { "../new.ts": 1 }, interactionAssertions: 0 },
-        "src/legacy.test.ts": { localModuleMocks: { "../old.ts": 1 }, interactionAssertions: 2 },
+        "src/new.test.ts": { localModuleMocks: { "../new.ts": 1 }, interactionAssertions: 0, mockMetadataObservations: 0 },
+        "src/legacy.test.ts": { localModuleMocks: { "../old.ts": 1 }, interactionAssertions: 2, mockMetadataObservations: 0 },
       },
       baseline: {
         localModuleMocks: { "src/legacy.test.ts": { "../old.ts": 2 } },
@@ -89,7 +157,7 @@ describe("checkTestArchitectureBaseline", () => {
   it("rejects swapping an allowed local mock for a new internal edge", () => {
     const result = checkTestArchitectureBaseline({
       files: {
-        "src/legacy.test.ts": { localModuleMocks: { "../replacement.ts": 1 }, interactionAssertions: 0 },
+        "src/legacy.test.ts": { localModuleMocks: { "../replacement.ts": 1 }, interactionAssertions: 0, mockMetadataObservations: 0 },
       },
       baseline: {
         localModuleMocks: { "src/legacy.test.ts": { "../old.ts": 1 } },
@@ -106,6 +174,52 @@ describe("checkTestArchitectureBaseline", () => {
 
   it("normalizes Windows paths", () => {
     expect(normalizeTestArchitecturePath("src\\hooks\\thing.test.ts")).toBe("src/hooks/thing.test.ts")
+  })
+})
+
+describe("checkTestArchitectureMockMetadataObservations", () => {
+  it("enforces zero unreviewed metadata observations without a baseline", () => {
+    expect(checkTestArchitectureMockMetadataObservations({
+      "src/escaped.test.ts": {
+        localModuleMocks: {},
+        interactionAssertions: 0,
+        mockMetadataObservations: 2,
+      },
+      "src/reviewed.test.ts": {
+        localModuleMocks: {},
+        interactionAssertions: 0,
+        mockMetadataObservations: 0,
+      },
+    })).toEqual([
+      "src/escaped.test.ts has 2 unreviewed mock-metadata observation(s); remove them or add exact construct-local boundary rationales",
+    ])
+  })
+})
+
+describe("collectPersistenceHeuristicSignals", () => {
+  it("reports hand-written database substitutes and SQL-shape observations", () => {
+    const source = [
+      "const mockDb = { execute: async (query) => ({ rows: [] }) }",
+      "const statement = mockDb.execute.mock.calls[0]?.[0]",
+      "expect(statement.sql).toMatch(/INSERT/)",
+      "expect(statement.args).toEqual([\"user-1\"])",
+    ].join("\n")
+
+    expect(collectPersistenceHeuristicSignals(source)).toEqual([
+      "manual-execute-fake",
+      "mock-execute-observation",
+      "named-fake-database",
+      "positional-db-args-assertion",
+      "sql-shape-assertion",
+    ])
+  })
+
+  it("does not mistake ordinary operation or process arguments for database shape", () => {
+    expect(collectPersistenceHeuristicSignals([
+      "const args = buildFfmpegArgs()",
+      "expect(args).toContain(\"-af\")",
+      "expect(operations.creates).toEqual([])",
+    ].join("\n"))).toEqual([])
   })
 })
 

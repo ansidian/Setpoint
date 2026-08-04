@@ -233,6 +233,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard and snapshot loading cross browser HTTP boundaries; source-specific admission cannot be inferred from the merged final state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.briefingData.briefing!.deadlines.upcoming).toEqual([{ id: "deadline-live" }]);
     expect(result.current.refreshing).toBe(false);
@@ -262,7 +263,9 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(dashboardEvents).toEqual([payload]);
+    // test-architecture: allow-boundary-interaction -- Dashboard and snapshot loading cross browser HTTP boundaries; source-specific admission cannot be inferred from the merged final state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard and snapshot loading cross browser HTTP boundaries; source-specific admission cannot be inferred from the merged final state.
     expect(getActiveSnapshot.mock.calls).toHaveLength(1);
     unmount();
   });
@@ -299,6 +302,7 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(result.current.current!.activeSnapshot.snapshot!.id).toBe(77);
+    // test-architecture: allow-boundary-interaction -- Console timing output is a process telemetry boundary; emission or suppression is observable only through the logger call.
     const timingLine = logSpy.mock.calls
       .map(([line]) => line)
       .find((line) => String(line).startsWith("[EA Timing] "));
@@ -351,7 +355,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard and snapshot loading cross browser HTTP boundaries; source-specific admission cannot be inferred from the merged final state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard and snapshot loading cross browser HTTP boundaries; source-specific admission cannot be inferred from the merged final state.
     expect(getActiveSnapshot.mock.calls).toHaveLength(1);
     expect(result.current.activeSnapshot.snapshot!.lanes.queued).toEqual(queuedSnapshot.lanes.queued);
     unmount();

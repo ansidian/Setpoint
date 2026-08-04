@@ -202,6 +202,7 @@ describe("InboxView session state", () => {
     expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
     // test-architecture: allow-boundary-interaction -- hiding Inbox must flush arrival-grace work through the authenticated API; no DOM state exposes that exit-side provider write.
     expect(settleArrivalGrace).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Inbox exit reconciliation crosses the authenticated HTTP boundary; no retained DOM state exposes the required refresh admission.
     await waitFor(() => expect(activeSnapshotRefresh.mock.calls.length).toBe(1));
   });
 

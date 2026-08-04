@@ -35,7 +35,6 @@ const reviewedFullCalendarTestOwners = new Set([
   "src/components/calendar/CalendarModal.workspace-create.test.tsx",
   "src/components/calendar/CalendarModal.workspace-edit.test.tsx",
   "src/components/calendar/CalendarModal.workspace-parking.test.tsx",
-  "src/hooks/calendar/useCalendarModalHotkeys.test.tsx",
 ])
 
 function normalizeFilePath(filePath: string): string {

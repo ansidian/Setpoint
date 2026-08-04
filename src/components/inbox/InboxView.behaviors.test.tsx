@@ -311,6 +311,7 @@ describe("InboxView search workflows", () => {
       30,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ));
+    // test-architecture: allow-boundary-interaction -- Indexed search crosses the browser HTTP boundary; cancellation is observable only through the superseded request's AbortSignal.
     const supersededSignal = vi.mocked(api.searchEmails).mock.calls[0]?.[2]?.signal;
     expect(supersededSignal).toBeInstanceOf(AbortSignal);
     expect(supersededSignal!.aborted).toBe(true);

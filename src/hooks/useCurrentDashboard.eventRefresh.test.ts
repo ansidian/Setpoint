@@ -181,6 +181,7 @@ describe("useCurrentDashboard", () => {
       });
       await Promise.resolve();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current!.fetchedAt).toBe("2026-05-04T12:00:00.000Z");
 
@@ -190,6 +191,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(3);
     expect(result.current.current!.fetchedAt).toBe("2026-05-05T00:25:00.000Z");
     unmount();
@@ -216,7 +218,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getActiveSnapshot.mock.calls).toHaveLength(1);
     expect(result.current.current!.activeSnapshot.snapshot!.id).toBe(88);
 
@@ -226,6 +230,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
     unmount();
   });
@@ -251,12 +256,14 @@ describe("useCurrentDashboard", () => {
       FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "todoist" });
       await Promise.resolve();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
 
     await act(async () => {
       FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "todoist" });
       await Promise.resolve();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
 
     await act(async () => {
@@ -268,6 +275,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(3);
     expect(result.current.current!.fetchedAt).toBe("2026-05-05T00:30:00.000Z");
     unmount();
@@ -306,7 +314,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getActiveSnapshot.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current!.weather!.temp).toBe(81);
     unmount();
@@ -335,7 +345,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getActiveSnapshot.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current!.activeSnapshot.snapshot!.id).toBe(101);
     unmount();
@@ -355,6 +367,7 @@ describe("useCurrentDashboard", () => {
 
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(1);
 
     // Older request starts via SSE, then a newer request starts concurrently
@@ -366,6 +379,7 @@ describe("useCurrentDashboard", () => {
     await act(async () => {
       refreshPromise = result.current.liveData.refreshNow();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(3);
 
     const fresh = { ...currentPayload, weather: { temp: 80, icon: "Sun" }, fetchedAt: "2026-05-05T01:00:00.000Z" };
@@ -385,6 +399,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
     expect(result.current.liveData.liveWeather).toEqual({ temp: 80, icon: "Sun" });
+    // test-architecture: allow-boundary-interaction -- Console timing output is a process telemetry boundary; emission or suppression is observable only through the logger call.
     expect(logSpy.mock.calls.filter(([line]) => String(line).includes("dashboard-event-refetch"))).toHaveLength(0);
 
     logSpy.mockRestore();
@@ -439,6 +454,7 @@ describe("useCurrentDashboard", () => {
       });
       await Promise.resolve();
     });
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.briefingData.briefing!.deadlines.upcoming).toEqual([{ id: "deadline-1" }]);
     expect(result.current.refreshing).toBe(false);
@@ -447,6 +463,7 @@ describe("useCurrentDashboard", () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
 
+    // test-architecture: allow-boundary-interaction -- Dashboard loading crosses the browser HTTP boundary; request admission and coalescing cannot be inferred from identical final dashboard state.
     expect(getCurrentDashboard.mock.calls).toHaveLength(3);
     expect(result.current.briefingData.briefing!.deadlines.upcoming).toEqual([{ id: "deadline-live" }]);
     expect(result.current.refreshing).toBe(false);

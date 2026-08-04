@@ -161,6 +161,7 @@ describe("AgendaRailShell", () => {
     expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({
       behavior: "auto",
     }));
+    // test-architecture: allow-boundary-interaction -- Native scrollTo is a browser-imperative boundary; duplicate entry commands are not reflected in happy-dom geometry.
     const entryScrollCalls = scrollTo.mock.calls.length;
 
     await advanceRailTime(760);

@@ -96,6 +96,7 @@ describe("Todoist write mirror coherence", () => {
     });
     await createTodoistTask("u1", { content: "Draft essay", due_string: "" });
 
+    // test-architecture: allow-boundary-interaction -- Todoist fetch is an irreversible provider-write boundary; task payloads are the compatibility contract.
     const taskBodies = testState.fetchFn.mock.calls
       .filter(([url]) => url.endsWith("/tasks"))
       .map(([, options]) => JSON.parse(options.body));
@@ -142,6 +143,7 @@ describe("Todoist write mirror coherence", () => {
     });
     await updateTodoistTask("u1", "task-1", { content: "Revised essay", due_string: "" });
 
+    // test-architecture: allow-boundary-interaction -- Todoist fetch is an irreversible provider-write boundary; task payloads are the compatibility contract.
     const taskBodies = testState.fetchFn.mock.calls
       .filter(([url]) => url.endsWith("/tasks/task-1"))
       .map(([, options]) => JSON.parse(options.body));

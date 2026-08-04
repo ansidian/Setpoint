@@ -100,6 +100,7 @@ describe("email search embedding worker", () => {
       failed: 0,
       semantic_status: "active",
     });
+    // test-architecture: allow-boundary-interaction -- Embedding calls are outbound AI-provider boundaries; batching limits are observable only through provider request admission.
     expect(embed.mock.calls.map(([texts]) => texts.length)).toEqual([2, 1]);
 
     const stored = await db.execute(

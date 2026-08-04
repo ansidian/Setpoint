@@ -75,6 +75,7 @@ describe("Discord reminder delivery", () => {
 
     await sendDiscordWebhook("https://discord.example/webhook", { embeds: [] }, { fetchFn });
 
+    // test-architecture: allow-boundary-interaction -- Discord fetch is an outbound provider boundary; timeout propagation is observable only through the request signal.
     expect(fetchFn.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 
