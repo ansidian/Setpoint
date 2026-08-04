@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { logTiming } from "./timing.ts";
 
 describe("timing logs", () => {
   it("uses console-compatible log functions", () => {
-    const logger = vi.fn();
+    const messages: string[] = [];
+    const logger = (message: string) => { messages.push(message); };
 
     logTiming({ event: "boot", phase: "listen", ms: 1.6 }, logger);
 
-    expect(logger).toHaveBeenCalledWith('[EA Timing] {"event":"boot","phase":"listen","ms":2}');
+    expect(messages).toEqual(['[EA Timing] {"event":"boot","phase":"listen","ms":2}']);
   });
 });

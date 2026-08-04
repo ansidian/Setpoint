@@ -1,11 +1,22 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { RowsBlock } from "./AlfredRows";
 import type { AlfredItemKind } from "../../../shared/types/alfred";
 
 afterEach(cleanup);
 
 describe("RowsBlock", () => {
+  function InteractiveRows({ kind = "bill" as AlfredItemKind }) {
+    const [actions, setActions] = useState<string[]>([]);
+    const items = kind === "email"
+      ? [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }]
+      : [{ id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false }];
+    return <>
+      <RowsBlock accent="#cba6da" kind={kind} items={items} onActivateItem={(action) => setActions((current) => [...current, action.type === "email" ? String(action.item.uid) : `${action.type}:${action.request.focusItemId}`])} />
+      <output>{actions.join(",") || "none"}</output>
+    </>;
+  }
   it("renders bill rows with tabular amount, due date, and paid chip", () => {
     render(<RowsBlock accent="#cba6da" kind="bill" items={[
       { id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false },
@@ -67,28 +78,17 @@ describe("RowsBlock", () => {
   });
 
   it("activates a chip on click and Enter with the resolved action", () => {
-    const onActivateItem = vi.fn();
-    render(<RowsBlock accent="#cba6da" kind="bill" onActivateItem={onActivateItem} items={[
-      { id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false },
-    ]} />);
+    render(<InteractiveRows />);
     const chip = screen.getByRole("button");
     fireEvent.click(chip);
     fireEvent.keyDown(chip, { key: "Enter" });
-    expect(onActivateItem).toHaveBeenCalledTimes(2);
-    expect(onActivateItem.mock.calls[0]![0].type).toBe("calendar");
-    expect(onActivateItem.mock.calls[0]![0].request.focusItemId).toBe("b1");
+    expect(screen.getByText("calendar:b1,calendar:b1")).toBeTruthy();
   });
 
   it("emits an email action for email chips", () => {
-    const onActivateItem = vi.fn();
-    render(<RowsBlock accent="#cba6da" kind="email" onActivateItem={onActivateItem} items={[
-      { uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" },
-    ]} />);
+    render(<InteractiveRows kind="email" />);
     fireEvent.click(screen.getByRole("button"));
-    expect(onActivateItem.mock.calls[0]![0]).toEqual({
-      type: "email",
-      item: expect.objectContaining({ uid: "m1" }),
-    });
+    expect(screen.getByText("m1")).toBeTruthy();
   });
 
   it("renders rows non-interactive without an onActivateItem handler", () => {
@@ -99,8 +99,7 @@ describe("RowsBlock", () => {
   });
 
   it("renders a chip non-interactive when no action resolves", () => {
-    const onActivateItem = vi.fn();
-    render(<RowsBlock accent="#cba6da" kind="email" onActivateItem={onActivateItem} items={[
+    render(<RowsBlock accent="#cba6da" kind="email" onActivateItem={() => {}} items={[
       { subject: "No uid", from: { name: "X" }, email_date: "2026-06-12T17:30:00.000Z" },
     ]} />);
     expect(screen.queryByRole("button")).toBeNull();

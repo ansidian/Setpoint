@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import ContextColumn from "./ContextColumn";
@@ -16,17 +17,24 @@ const baseProps = {
   snapshotLanes: { needs_attention: [], fyi: [], carryover: [] },
   emailAccounts: [],
   accent: "#cba6da",
-  onJump: vi.fn(),
-  onOpenInbox: vi.fn(),
+  onJump: () => {},
+  onOpenInbox: () => {},
 };
 
 describe("ContextColumn", () => {
   it("jumps with the deadline payload contract when a coming-up deadline row is clicked", () => {
     freezeJan15();
-    const onJump = vi.fn();
-    render(<ContextColumn {...baseProps} onJump={onJump} />);
+    function JumpProbe() {
+      const [selection, setSelection] = useState("none");
+      return (
+        <>
+          <ContextColumn {...baseProps} onJump={(item) => setSelection(`${item.kind}:${item.id}`)} />
+          <output aria-label="selected coming-up item">{selection}</output>
+        </>
+      );
+    }
+    render(<JumpProbe />);
     fireEvent.click(screen.getByText("Finalize notes"));
-    // Second arg is the clicked element (the desktop glance-sheet anchor).
-    expect(onJump).toHaveBeenCalledWith(expect.objectContaining({ kind: "deadline", id: "d1" }), expect.anything());
+    expect(screen.getByRole("status", { name: "selected coming-up item" }).textContent).toBe("deadline:d1");
   });
 });

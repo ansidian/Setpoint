@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import AlfredBreakdown from "./AlfredBreakdown";
 
 afterEach(cleanup);
@@ -19,6 +20,15 @@ function renderCard(props = {}) {
       buckets={buckets} accent="#94e2d5" onActivateItem={() => {}} {...props}
     />,
   );
+}
+
+function InteractiveCard() {
+  const [selected, setSelected] = useState("none");
+  return <>
+    <AlfredBreakdown kind="email" title="By status" caption="last 3 months" total={8}
+      buckets={buckets} accent="#94e2d5" onActivateItem={(action) => setSelected(action.type === "email" ? String(action.item.uid) : action.type)} />
+    <output>{selected}</output>
+  </>;
 }
 
 describe("AlfredBreakdown", () => {
@@ -46,10 +56,9 @@ describe("AlfredBreakdown", () => {
   });
 
   it("invokes onActivateItem with the resolved action when a chip is clicked", () => {
-    const onActivateItem = vi.fn();
-    renderCard({ onActivateItem });
+    render(<InteractiveCard />);
     fireEvent.click(screen.getByText("rej-0"));
-    expect(onActivateItem).toHaveBeenCalledWith({ type: "email", item: expect.objectContaining({ uid: "r0", subject: "rej-0" }) });
+    expect(screen.getByText("r0")).toBeTruthy();
   });
 
   it("renders nothing (returns null) when there are no buckets", () => {

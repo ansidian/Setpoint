@@ -20,6 +20,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
 
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     expect((screen.getByTestId("calendar-event-source") as HTMLInputElement).value).toBe("");
+    // test-architecture: allow-boundary-interaction -- Calendar sources are fetched from the server; exact-once loading protects against duplicate provider reads while the editor opens eagerly.
     expect(mockGetCalendarSources).toHaveBeenCalledTimes(1);
 
     resolveSources?.({
@@ -108,7 +109,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       writable: true,
       allDay: false,
     };
-    const { upsertEvents } = renderEventEditor({ event });
+    renderEventEditor({ event });
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(getActiveEventSourceTrigger());
@@ -118,6 +119,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Moving across calendars requires original and target identities plus the etag on the outbound Calendar request; the saved event contains only the target.
       expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-move", expect.objectContaining({
         accountId: "gmail-main",
         calendarId: "school",
@@ -125,10 +127,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
         sourceCalendarId: "primary",
         etag: '"etag-move"',
       }));
-      expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
-        id: "event-move",
-        calendarId: "school",
-      }));
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain('"calendarId":"school"');
     });
   });
 
@@ -157,7 +156,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.click(await screen.findByRole("button", { name: /^McDonald's 123 Main St/i }, { timeout: 5000 }));
 
     await waitFor(() => {
-      expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-1", expect.any(String));
       expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("McDonald's, 123 Main St, Los Angeles, CA 90012, USA");
     });
   });
@@ -202,7 +200,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.keyDown(locationInput, { key: "Enter" });
 
     await waitFor(() => {
-      expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-2", expect.any(String));
       expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("McDonald's El Monte, 456 Valley Blvd, El Monte, CA 91731, USA");
     });
   });
@@ -285,7 +282,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
 
     await waitFor(() => {
       expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("McDonald's");
-      expect(mockGetCalendarPlaceSuggestions).toHaveBeenCalledWith("McDonald's", expect.any(String));
       expect(screen.getByRole("button", { name: /McDonald's South El Monte/i })).toBeTruthy();
     });
 
@@ -293,7 +289,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.keyDown(titleInput, { key: "Enter" });
 
     await waitFor(() => {
-      expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-2", expect.any(String));
       expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("McDonald's El Monte, 456 Valley Blvd, El Monte, CA 91731, USA");
       expect((screen.getByTestId("calendar-event-title") as HTMLInputElement).value).toBe("Dinner 5pm ");
       expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/5:00 pm/i);
@@ -336,11 +331,11 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.click(screen.getByTestId("calendar-event-save"));
 
     await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
+      // test-architecture: allow-boundary-interaction -- Saving an unaccepted Places suggestion must send the resolved address, not the visible raw token, across the outbound Calendar API boundary.
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        location: "C&C Collision, 800 W Main St, Alhambra, CA 91801, USA",
+      }));
     }, { timeout: 5000 });
-    expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-cc", expect.any(String));
-    expect(mockCreateCalendarEvent.mock.calls[0]![0].location)
-      .toBe("C&C Collision, 800 W Main St, Alhambra, CA 91801, USA");
   });
 
   it("keeps the resolved place when details arrive slower than the title debounce", async () => {
@@ -385,9 +380,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
 
     fireEvent.keyDown(titleInput, { key: "Enter" });
 
-    await waitFor(() => {
-      expect(mockGetCalendarPlaceDetails).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(resolvePlaceDetails).toBeTypeOf("function"));
     resolvePlaceDetails?.(placeDetails);
 
     await waitFor(() => {
@@ -449,7 +442,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("saves with mod+enter", async () => {
-    const { upsertEvents } = renderEventEditor();
+    renderEventEditor();
     const savedEvent = {
       id: "event-hotkey",
       title: "Planning block",
@@ -470,6 +463,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.keyDown(document, { key: "Enter", metaKey: true });
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- The hotkey requirement includes the complete outbound Calendar payload; cache/UI state cannot reveal omitted request fields.
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
         accountId: "gmail-main",
         calendarId: "primary",
@@ -480,7 +474,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
         startTime: "09:00",
         endTime: "09:30",
       }));
-      expect(upsertEvents).toHaveBeenCalledWith(savedEvent);
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain(savedEvent.id);
     });
   });
 
@@ -512,7 +506,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.click(screen.getByTestId("calendar-event-save"));
 
     await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalled();
+      expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
     });
   });

@@ -234,8 +234,6 @@ describe("email triage worker jobs", () => {
       email_triage_mode: "paused",
       effective_email_triage_mode: "paused",
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const jobs = await dbClient.execute({
       sql: "SELECT status, attempts, locked_at FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-1"],
@@ -274,8 +272,6 @@ describe("email triage worker jobs", () => {
       email_id: "msg-1",
       skipped: true,
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const snapshots = await dbClient.execute({
       sql: "SELECT * FROM ea_briefing_snapshot_items WHERE email_id = ?",
       args: ["msg-1"],

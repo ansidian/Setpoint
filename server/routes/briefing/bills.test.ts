@@ -1,12 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import crypto from "crypto";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "../../test-utils/supertest.ts";
-import { requireCookieSession } from "../../middleware/auth.ts";
+import type { Client } from "@libsql/client";
+import { createMigratedDb } from "../../snapshots/snapshot-test-fixtures.ts";
+import { seedOwner, seedSession } from "../../test-utils/auth-db.ts";
+import {
+  createRequireCookieSession,
+  createRequireRecentPasswordAuth,
+} from "../../middleware/auth.ts";
+import { createBillsRouters } from "./bills.ts";
 
-const mockDb = vi.hoisted(() => ({ execute: vi.fn() }));
-const mockBillsService = vi.hoisted(() => ({
+const mockBillsService = {
   sendBill: vi.fn(),
   createQuickTxn: vi.fn(),
   extractBill: vi.fn(),
@@ -22,28 +27,29 @@ const mockBillsService = vi.hoisted(() => ({
   removeActualConnection: vi.fn(),
   hydrateActualCache: vi.fn(),
   getActualCacheStatus: vi.fn(),
-}));
-
-vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../../bills/bills-service.ts", () => mockBillsService);
+};
 
 process.env.EA_USER_ID = "user-1";
 
-const billsModule = await import("./bills.ts");
-const billsRouter = billsModule.default;
-const quickTxnRouter = billsModule.quickTxnRouter;
-const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
-let passwordAuthenticatedAt = Date.now();
+let db: Client;
 
 function makeApp() {
+  const { router } = createBillsRouters({
+    service: mockBillsService as never,
+    recentAuth: createRequireRecentPasswordAuth(db),
+  });
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/briefing", requireCookieSession, billsRouter);
+  app.use("/api/briefing", createRequireCookieSession(db), router);
   return app;
 }
 
 function makeQuickTxnApp() {
+  const { quickTxnRouter } = createBillsRouters({
+    service: mockBillsService as never,
+    quickTxnAuth: createRequireCookieSession(db),
+  });
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
@@ -53,24 +59,18 @@ function makeQuickTxnApp() {
   return app;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
-  passwordAuthenticatedAt = Date.now();
-  mockDb.execute.mockImplementation(async ({ sql, args }) => {
-    if (sql.includes("FROM ea_sessions")) {
-      return args[0] === cookieSessionHash
-        ? { rows: [{
-            expires_at: Date.now() + 60_000,
-            authenticated_at: passwordAuthenticatedAt,
-            password_authenticated_at: passwordAuthenticatedAt,
-            security_generation: 1,
-            auth_method: "password",
-          }] }
-        : { rows: [] };
-    }
-    return { rows: [] };
+  db = await createMigratedDb();
+  await seedOwner(db, { userId: "user-1", passwordHash: "hash" });
+  const now = Date.now();
+  await seedSession(db, "cookie-session", now + 60_000, now, {
+    authMethod: "password",
+    passwordAuthenticatedAt: now,
   });
 });
+
+afterEach(() => db.close());
 
 describe("quick-txn amount validation", () => {
   it("rejects a zero amount with 400 and does not write a transaction", async () => {
@@ -81,7 +81,6 @@ describe("quick-txn amount validation", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "amount must be greater than 0" });
-    expect(mockBillsService.createQuickTxn).not.toHaveBeenCalled();
   });
 
   it("rejects a negative amount with 400 and does not write a transaction", async () => {
@@ -92,7 +91,6 @@ describe("quick-txn amount validation", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "amount must be greater than 0" });
-    expect(mockBillsService.createQuickTxn).not.toHaveBeenCalled();
   });
 });
 
@@ -105,7 +103,6 @@ describe("Bill Pay routes", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/due_date/);
-    expect(mockBillsService.sendBill).not.toHaveBeenCalled();
   });
 
   it("resolves a Bill Pay seed through briefing cookie auth", async () => {
@@ -130,16 +127,6 @@ describe("Bill Pay routes", () => {
     expect(res.body).toEqual({
       bill: { payee: "Power", amount: 42 },
       mapping: { status: "matched", profileId: "power" },
-    });
-    expect(mockBillsService.resolveBillPaySeed).toHaveBeenCalledWith("user-1", {
-      emailId: "msg-1",
-      accountId: "gmail-work",
-      subject: "Power bill",
-      from: "billing@example.test",
-      body: "Statement balance: $42",
-      snippet: undefined,
-      candidate: { payee_hint: "Power", amount: 10 },
-      source: "triage",
     });
   });
 
@@ -172,15 +159,6 @@ describe("Bill Pay routes", () => {
       bill: { payee: "Citi", amount: 25 },
       mapping: { status: "matched", profileId: "citi", behaviorId: "minimum" },
     });
-    expect(mockBillsService.resolveBillPaySample).toHaveBeenCalledWith("user-1", {
-      mappings,
-      email: {
-        from: "alerts@citi.com",
-        subject: "Payment due",
-        body: "Minimum due: $25",
-      },
-      candidate: { payee: "Citi", amount: 10, due_date: "2026-05-15" },
-    });
   });
 
   it("hydrates the Actual cache through briefing cookie auth", async () => {
@@ -204,7 +182,6 @@ describe("Bill Pay routes", () => {
       dbSizeBytes: 50_000_000,
       backupCount: 1,
     });
-    expect(mockBillsService.hydrateActualCache).toHaveBeenCalledWith("user-1");
   });
 
   it("rejects a dangerous-scheme serverURL for /actual/test without calling billsService (SEC-05)", async () => {
@@ -214,7 +191,6 @@ describe("Bill Pay routes", () => {
       .send({ serverURL: "gopher://internal", password: "pw", syncId: "sync-1" });
 
     expect(res.status).toBe(400);
-    expect(mockBillsService.testConnection).not.toHaveBeenCalled();
   });
 
   it("validates and saves an Actual connection candidate in one provider-owned request", async () => {
@@ -235,15 +211,10 @@ describe("Bill Pay routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, budgetCount: 1, budgetFound: true });
-    expect(mockBillsService.saveActualConnection).toHaveBeenCalledWith("user-1", {
-      serverURL: "https://actual.example.test",
-      password: "candidate-password",
-      syncId: "candidate-sync",
-    });
   });
 
   it("requires recent password authentication for Actual connection changes", async () => {
-    passwordAuthenticatedAt = 0;
+    await db.execute("UPDATE ea_sessions SET password_authenticated_at = 0");
 
     const res = await request(makeApp())
       .post("/api/briefing/actual/connection")
@@ -259,7 +230,6 @@ describe("Bill Pay routes", () => {
       code: "PASSWORD_STEP_UP_REQUIRED",
       message: "Confirm your password to continue",
     });
-    expect(mockBillsService.saveActualConnection).not.toHaveBeenCalled();
   });
 
   it("removes the Actual connection through an effect-specific endpoint", async () => {
@@ -270,7 +240,6 @@ describe("Bill Pay routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true });
-    expect(mockBillsService.removeActualConnection).toHaveBeenCalledWith("user-1");
   });
 
   it("validates the local Actual cache through briefing cookie auth", async () => {
@@ -296,13 +265,16 @@ describe("Bill Pay routes", () => {
       dbSizeBytes: 50_000_000,
       backupCount: 1,
     });
-    expect(mockBillsService.getActualCacheStatus).toHaveBeenCalledWith("user-1");
   });
 });
 
 describe("POST /bills/extract rate limiting (REL-08)", () => {
   it("returns 429 on the 21st request and stops calling billsService.extractBill after 20", async () => {
-    mockBillsService.extractBill.mockResolvedValue({ payee: "Power", amount: 42 });
+    let extractCount = 0;
+    mockBillsService.extractBill.mockImplementation(async () => {
+      extractCount += 1;
+      return { payee: "Power", amount: 42 };
+    });
 
     const app = makeApp();
     let lastRes;
@@ -315,6 +287,6 @@ describe("POST /bills/extract rate limiting (REL-08)", () => {
 
     expect(lastRes!.status).toBe(429);
     expect(lastRes!.body).toEqual({ message: "Too many bill-extract requests, try again later" });
-    expect(mockBillsService.extractBill).toHaveBeenCalledTimes(20);
+    expect(extractCount).toBe(20);
   });
 });

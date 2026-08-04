@@ -54,6 +54,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ### Data + details
 - `calendarBillsData.ts` — transforms live data into calendar-compatible bill shape
+- `dashboardCalendarModalModel.ts` — pure deadline projection for seeding the calendar workspace from current dashboard data
 - `inboxBadgeModel.ts` — unread signal count with read-state overrides
 - `DashboardItemDetailSheet.tsx` — unified glance sheet for a dashboard item tap (deadline/bill/event): full detail via the reused calendar cards (`DeadlineDetailCard`/`BillSelectedCard`/`EventSelectedCard`) + per-type action + "Open in calendar" deep-link; anchored panel on desktop, bottom sheet on mobile (via `AnchoredFloatingPanel`). Carries the deadline inline edit (`AddTaskPanel`) + mark-complete. Replaces the old DeadlineDetailPopover + CalendarItemDetailSheet
 - `glanceActionsModel.ts` — pure per-type action descriptors for the glance sheet (deadline: complete/edit/todoist; bill: actual/pay; event: zoom/url/gcal; all: open-in-calendar)

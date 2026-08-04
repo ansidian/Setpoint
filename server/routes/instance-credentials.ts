@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Response } from "express";
+import type { RequestHandler, Response } from "express";
 import { requireCookieSession, requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import {
@@ -71,15 +71,19 @@ export function createInstanceCredentialsRouter(
   googleOAuthManager: GoogleOAuthCredentialManager = googleOAuthCredentialManager,
   gmailPubSubManager: GmailPubSubService = gmailPubSubService,
   todoistOAuthManager: TodoistOAuthCredentialManager = todoistOAuthCredentialManager,
+  auth: { cookie: RequestHandler; recent: RequestHandler } = {
+    cookie: requireCookieSession,
+    recent: requireRecentPasswordAuth,
+  },
 ) {
   const router = Router();
   wrapRouterAsync(router);
 
-  router.get("/", requireCookieSession, async (_req, res) => {
+  router.get("/", auth.cookie, async (_req, res) => {
     return res.json(await service.getMetadata());
   });
 
-  router.put("/google-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
+  router.put("/google-oauth/pending", auth.recent, async (req, res) => {
     const clientId = candidateValue(req.body?.clientId);
     const clientSecret = candidateValue(req.body?.clientSecret);
     if (clientId === null || clientSecret === null) {
@@ -88,25 +92,25 @@ export function createInstanceCredentialsRouter(
     return res.json(await googleOAuthManager.stageCandidate({ clientId, clientSecret }));
   });
 
-  router.delete("/google-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
+  router.delete("/google-oauth/pending", auth.recent, async (req, res) => {
     const versions = candidateVersions(req.body?.candidateVersions);
     if (!versions) return res.status(400).json({ message: "Expected Google candidate versions are required" });
     return res.json({ credentials: await googleOAuthManager.discardCandidate(versions) });
   });
 
-  router.post("/google-oauth/import-environment", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/google-oauth/import-environment", auth.recent, async (_req, res) => {
     return res.json({ credentials: await googleOAuthManager.importEnvironment() });
   });
 
-  router.post("/google-oauth/disable", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/google-oauth/disable", auth.recent, async (_req, res) => {
     return res.json({ credentials: await googleOAuthManager.disable() });
   });
 
-  router.post("/google-oauth/use-host", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/google-oauth/use-host", auth.recent, async (_req, res) => {
     return res.json({ credentials: await googleOAuthManager.useHostValues() });
   });
 
-  router.put("/todoist-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
+  router.put("/todoist-oauth/pending", auth.recent, async (req, res) => {
     const clientId = candidateValue(req.body?.clientId);
     const clientSecret = candidateValue(req.body?.clientSecret);
     if (clientId === null || clientSecret === null) {
@@ -115,62 +119,62 @@ export function createInstanceCredentialsRouter(
     return res.json(await todoistOAuthManager.stageCandidate({ clientId, clientSecret }));
   });
 
-  router.delete("/todoist-oauth/pending", requireRecentPasswordAuth, async (req, res) => {
+  router.delete("/todoist-oauth/pending", auth.recent, async (req, res) => {
     const versions = candidateVersions(req.body?.candidateVersions);
     if (!versions) return res.status(400).json({ message: "Expected Todoist candidate versions are required" });
     return res.json({ credentials: await todoistOAuthManager.discardCandidate(versions) });
   });
 
-  router.post("/todoist-oauth/import-environment", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/todoist-oauth/import-environment", auth.recent, async (_req, res) => {
     return res.json({ credentials: await todoistOAuthManager.importEnvironment() });
   });
 
-  router.get("/gmail-pubsub", requireCookieSession, async (_req, res) => {
+  router.get("/gmail-pubsub", auth.cookie, async (_req, res) => {
     return res.json(await gmailPubSubManager.getStatus());
   });
 
-  router.put("/gmail-pubsub/topic", requireRecentPasswordAuth, async (req, res) => {
+  router.put("/gmail-pubsub/topic", auth.recent, async (req, res) => {
     const value = candidateValue(req.body?.value);
     if (value === null) return res.status(400).json({ message: "Pub/Sub topic is required" });
     return res.json(await gmailPubSubManager.setTopic(value));
   });
 
-  router.post("/gmail-pubsub/generate-callback", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/gmail-pubsub/generate-callback", auth.recent, async (_req, res) => {
     return res.json(await gmailPubSubManager.generateCallback());
   });
 
-  router.post("/gmail-pubsub/import-environment-token", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/gmail-pubsub/import-environment-token", auth.recent, async (_req, res) => {
     return res.json(await gmailPubSubManager.importEnvironmentToken());
   });
 
-  router.post("/gmail-pubsub/use-host-token", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/gmail-pubsub/use-host-token", auth.recent, async (_req, res) => {
     return res.json(await gmailPubSubManager.useHostToken());
   });
 
-  router.post("/gmail-pubsub/revoke-token", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/gmail-pubsub/revoke-token", auth.recent, async (_req, res) => {
     return res.json(await gmailPubSubManager.revokeToken());
   });
 
-  router.post("/gmail-pubsub/test-watches", requireRecentPasswordAuth, async (_req, res) => {
+  router.post("/gmail-pubsub/test-watches", auth.recent, async (_req, res) => {
     const result = await gmailPubSubManager.testWatches();
     return res.status(result.ok ? 200 : 422).json(result);
   });
 
-  router.put("/:key/pending", requireRecentPasswordAuth, async (req, res) => {
+  router.put("/:key/pending", auth.recent, async (req, res) => {
     if (rejectGenericGroupMutation(req.params.key!, res)) return;
     const value = candidateValue(req.body?.value);
     if (value === null) return res.status(400).json({ message: "Credential value is required" });
     return res.json(await service.stagePending(req.params.key!, value));
   });
 
-  router.delete("/:key/pending", requireRecentPasswordAuth, async (req, res) => {
+  router.delete("/:key/pending", auth.recent, async (req, res) => {
     if (rejectGenericGroupMutation(req.params.key!, res)) return;
     const version = expectedVersion(req.body?.expectedVersion);
     if (version === null) return res.status(400).json({ message: "Expected credential version is required" });
     return res.json(await service.discardPending(req.params.key!, version));
   });
 
-  router.post("/:key/test", requireRecentPasswordAuth, async (req, res) => {
+  router.post("/:key/test", auth.recent, async (req, res) => {
     const key = req.params.key!;
     if (rejectGenericGroupMutation(key, res)) return;
     const result = key === "weather.pirate_weather_api_key" || key === "calendar.google_places_api_key"
@@ -179,17 +183,17 @@ export function createInstanceCredentialsRouter(
     return res.status(result.ok ? 200 : 422).json(result);
   });
 
-  router.post("/:key/import-environment", requireRecentPasswordAuth, async (req, res) => {
+  router.post("/:key/import-environment", auth.recent, async (req, res) => {
     if (rejectGenericGroupMutation(req.params.key!, res)) return;
     return res.json(await service.importEnvironment(req.params.key!));
   });
 
-  router.post("/:key/disable", requireRecentPasswordAuth, async (req, res) => {
+  router.post("/:key/disable", auth.recent, async (req, res) => {
     if (rejectGenericGroupMutation(req.params.key!, res)) return;
     return res.json(await service.disable(req.params.key!));
   });
 
-  router.post("/:key/use-host", requireRecentPasswordAuth, async (req, res) => {
+  router.post("/:key/use-host", auth.recent, async (req, res) => {
     if (rejectGenericGroupMutation(req.params.key!, res)) return;
     return res.json(await service.useHostValue(req.params.key!));
   });

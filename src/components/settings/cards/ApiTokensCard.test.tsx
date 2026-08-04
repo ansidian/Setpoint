@@ -7,6 +7,7 @@ const mockApi = vi.hoisted(() => ({
   revokeApiToken: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- API-token list/create/revoke calls cross the authenticated HTTP boundary while the one-time-secret workflow renders normally.
 vi.mock("@/api", () => ({
   listApiTokens: mockApi.listApiTokens,
   createApiToken: mockApi.createApiToken,
@@ -66,6 +67,7 @@ describe("ApiTokensCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- token label and powerful Actual-write scope are outbound authorization inputs not recoverable from the one-time secret response.
       expect(mockApi.createApiToken).toHaveBeenCalledWith("Phone", ["actual:write"]);
     });
     expect(screen.getByText("secret-token")).toBeTruthy();
@@ -98,6 +100,7 @@ describe("ApiTokensCard", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- revocation is an outbound destructive mutation whose exact opaque token identity is not present after the row disappears.
       expect(mockApi.revokeApiToken).toHaveBeenCalledWith("token-1");
     });
     expect(screen.queryByText("Phone")).toBeNull();

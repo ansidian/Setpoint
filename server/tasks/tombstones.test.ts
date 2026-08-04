@@ -10,6 +10,7 @@ const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
 }));
 
+// test-architecture: allow-boundary-mock -- Tombstone lifecycle runs against a migrated in-memory database redirected through the shared production connection seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement | string) => testState.db.current.execute(statement),

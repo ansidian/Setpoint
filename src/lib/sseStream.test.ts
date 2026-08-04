@@ -32,16 +32,15 @@ describe("readSseStream", () => {
 
   it("handles frames split across chunk boundaries", async () => {
     const whole = frame("text_delta", { text: "split me" });
-    const onEvent = vi.fn();
-    await readSseStream(streamOf([whole.slice(0, 21), whole.slice(21)]), onEvent);
-    expect(onEvent).toHaveBeenCalledTimes(1);
-    expect(onEvent.mock.calls[0]![0].text).toBe("split me");
+    const events: unknown[] = [];
+    await readSseStream(streamOf([whole.slice(0, 21), whole.slice(21)]), (event) => events.push(event));
+    expect(events).toEqual([expect.objectContaining({ text: "split me" })]);
   });
 
   it("ignores frames without a data line", async () => {
-    const onEvent = vi.fn();
-    await readSseStream(streamOf([": keepalive\n\n", frame("run_end", {})]), onEvent);
-    expect(onEvent).toHaveBeenCalledTimes(1);
+    const events: unknown[] = [];
+    await readSseStream(streamOf([": keepalive\n\n", frame("run_end", {})]), (event) => events.push(event));
+    expect(events).toEqual([expect.objectContaining({ type: "run_end" })]);
   });
 
   it("skips a malformed frame and continues reading later events", async () => {

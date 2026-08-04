@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalendarQuickActionEvent } from "./calendarQuickActionModel";
 
+// test-architecture: allow-boundary-mock -- Paste-race tests fake the outbound Calendar HTTP adapter while exercising the real optimistic-create reconciliation state machine.
 vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
   createCalendarEventsBatch: vi.fn(),
@@ -27,6 +28,32 @@ afterEach(() => {
 });
 
 describe("useCalendarQuickActions clipboard paste delete-during-create race", () => {
+  function createObservedHandlers() {
+    const state = {
+      upserts: [] as CalendarQuickActionEvent[],
+      removals: [] as Array<string | number>,
+      selections: [] as Array<[string | null, string]>,
+      reconciliations: [] as Array<[string | null, string | null]>,
+    };
+    return {
+      state,
+      handlers: {
+        upsertEvents: (input: CalendarQuickActionEvent | CalendarQuickActionEvent[]) => {
+          state.upserts.push(...(Array.isArray(input) ? input : [input]));
+        },
+        removeEvent: (id: string | number | null | undefined) => {
+          if (id !== null && id !== undefined) state.removals.push(id);
+        },
+        onSelectEvent: (id: string | null, day: string) => {
+          state.selections.push([id, day]);
+        },
+        onReconcileSelection: (before: string | null, after: string | null) => {
+          state.reconciliations.push([before, after]);
+        },
+      },
+    };
+  }
+
   function makeSource(
     overrides: Partial<CalendarQuickActionEvent> & Pick<CalendarQuickActionEvent, "id">,
   ): CalendarQuickActionEvent {
@@ -51,21 +78,16 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
     const clipboard = createCalendarEventClipboard(
       createCalendarEventSelectionSet([makeSource({ id: "event-paste-race" })]),
     );
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
-    const onEventDeleted = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      onSelectEvent: vi.fn(),
-      onEventDeleted,
+      ...observed.handlers,
     }));
 
     act(() => {
       result.current.pasteEvent(clipboard, "2026-04-22");
     });
-    const optimisticEvent = upsertEvents.mock.calls[0]![0];
+    const optimisticEvent = observed.state.upserts[0]!;
     expect(optimisticEvent.id).toMatch(/^optimistic-calendar-copy-/);
 
     // Delete the optimistic paste row while its create is still in flight.
@@ -81,8 +103,9 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
 
     // No server delete of the optimistic id (nothing exists on Google yet), and
     // the optimistic row is pulled from the grid.
+    // test-architecture: allow-boundary-interaction -- Deleting an in-flight paste must never send its temporary client id to the outbound Calendar delete endpoint.
     expect(deleteCalendarEvent).not.toHaveBeenCalledWith(optimisticEvent.id, expect.anything());
-    expect(removeEvent).toHaveBeenCalledWith(optimisticEvent.id);
+    expect(observed.state.removals).toContain(optimisticEvent.id);
 
     // The create lands after the delete: the event must be deleted on Google,
     // NOT resurrected in the grid (the ghost-delete inverse).
@@ -96,7 +119,8 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
       });
     });
 
-    expect(upsertEvents).not.toHaveBeenCalledWith(expect.objectContaining({ id: "google-created-paste" }));
+    expect(observed.state.upserts.map((event) => event.id)).not.toContain("google-created-paste");
+    // test-architecture: allow-boundary-interaction -- A provider create that lands after cancellation must be compensated with the real id and etag at the outbound Calendar boundary.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("google-created-paste", expect.objectContaining({
       accountId: "gmail-main",
       calendarId: "primary",
@@ -123,15 +147,10 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
     const clipboard = createCalendarEventClipboard(
       createCalendarEventSelectionSet([makeSource({ id: "event-paste-late" })]),
     );
-    const onSelectEvent = vi.fn();
-    const onReconcileSelection = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents: vi.fn(),
-      removeEvent: vi.fn(),
-      onSelectEvent,
-      onReconcileSelection,
-      onEventDeleted: vi.fn(),
+      ...observed.handlers,
     }));
 
     // Let the create resolve and reconcile the optimistic row into a real event.
@@ -139,11 +158,11 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
       await result.current.pasteEvent(clipboard, "2026-04-22");
     });
 
-    expect(onSelectEvent.mock.calls).toHaveLength(1);
-    const [optimisticId, optimisticDay] = onSelectEvent.mock.calls[0]!;
+    expect(observed.state.selections).toHaveLength(1);
+    const [optimisticId, optimisticDay] = observed.state.selections[0]!;
     expect(optimisticId).toMatch(/^optimistic-calendar-copy-/);
     expect(optimisticDay).toBe("2026-04-22");
-    expect(onReconcileSelection.mock.calls).toEqual([[optimisticId, "google-created-paste-late"]]);
+    expect(observed.state.reconciliations).toEqual([[optimisticId, "google-created-paste-late"]]);
 
     // Deleting the reconciled (non-optimistic) event takes the ordinary delete
     // path — a guard that reconciliation does not leave the event flagged optimistic.
@@ -168,6 +187,7 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
       await result.current.confirmContextDelete();
     });
 
+    // test-architecture: allow-boundary-interaction -- After reconciliation, ordinary deletion must send the provider id and etag to the outbound Calendar delete API.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("google-created-paste-late", expect.objectContaining({
       etag: '"etag-late"',
     }));
@@ -192,21 +212,16 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
       endMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
     });
     const clipboard = createCalendarEventClipboard(createCalendarEventSelectionSet([first, second]));
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      onSelectEvent: vi.fn(),
-      onEventDeleted: vi.fn(),
+      ...observed.handlers,
     }));
 
     act(() => {
       result.current.pasteEvent(clipboard, "2026-04-22");
     });
-    const optimisticEvents = upsertEvents.mock.calls
-      .map(([event]) => event)
+    const optimisticEvents = observed.state.upserts
       .filter((event) => String(event.id).startsWith("optimistic-calendar-copy-"));
     expect(optimisticEvents).toHaveLength(2);
     const secondOptimistic = optimisticEvents[1];
@@ -235,9 +250,11 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
 
     // Row #1 upserts as a live event; row #2's created event is deleted on the
     // server (not resurrected), and row #1's is never touched.
-    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({ id: "google-batch-a" }));
-    expect(upsertEvents).not.toHaveBeenCalledWith(expect.objectContaining({ id: "google-batch-b" }));
+    expect(observed.state.upserts.map((event) => event.id)).toContain("google-batch-a");
+    expect(observed.state.upserts.map((event) => event.id)).not.toContain("google-batch-b");
+    // test-architecture: allow-boundary-interaction -- Only the mid-flight-cancelled batch row may emit a compensating outbound delete with its provider etag.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("google-batch-b", expect.objectContaining({ etag: '"etag-b"' }));
+    // test-architecture: allow-boundary-interaction -- The live batch row must never be deleted at the outbound provider boundary while its sibling is cancelled.
     expect(deleteCalendarEvent).not.toHaveBeenCalledWith("google-batch-a", expect.anything());
   });
 });

@@ -32,12 +32,17 @@ const SCHEMA = {
   required: ["payee", "amount", "due_date", "type", "category_code", "category_name", "to_account_code"],
 };
 
-export const OPENAI_PROVIDER: BillExtractionProvider & { id: string; envVar: string } = {
+export function createOpenAiProvider({
+  resolveApiKey = resolveAiApiKey,
+}: {
+  resolveApiKey?: typeof resolveAiApiKey;
+} = {}): BillExtractionProvider & { id: string; envVar: string } {
+  return {
   id: "openai",
   envVar: "OPENAI_API_KEY",
 
   async extract({ model, systemPrompt, content }: BillExtractionRequest) {
-    const apiKey = await resolveAiApiKey("openai");
+    const apiKey = await resolveApiKey("openai");
     if (!apiKey) {
       const err: HttpError = new Error("OPENAI_API_KEY not set");
       err.status = 503;
@@ -95,7 +100,10 @@ export const OPENAI_PROVIDER: BillExtractionProvider & { id: string; envVar: str
 
     return { fields, usage: data.usage || {} };
   },
-};
+  };
+}
+
+export const OPENAI_PROVIDER = createOpenAiProvider();
 
 function extractOutputText(data: OpenAiResponse): string | null {
   if (typeof data.output_text === "string" && data.output_text.length) {

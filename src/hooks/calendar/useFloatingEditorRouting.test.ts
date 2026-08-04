@@ -63,12 +63,16 @@ describe("useFloatingEditorRouting deadline editor state ownership", () => {
   });
 
   it("closes an open event editor when switching to deadline create, so no event ghost lingers", () => {
-    const closeEditor = vi.fn();
-    const eventEditorRef = { current: { closeEditor } };
+    const eventEditorRef = {
+      current: {
+        closed: false,
+        closeEditor() { this.closed = true; },
+      },
+    };
     const { result } = renderHook(() => useFloatingEditorRouting(routingProps({ eventEditorRef })));
 
     act(() => result.current.openFloatingDeadlineCreate("2026-05-01"));
-    expect(closeEditor).toHaveBeenCalled();
+    expect(eventEditorRef.current.closed).toBe(true);
   });
 
   it("clears leftover deadline editor state when switching to event create", () => {

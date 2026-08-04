@@ -15,6 +15,7 @@ describe("fetchTodoistSyncResources", () => {
       fetchFn,
     });
 
+    // test-architecture: allow-boundary-interaction -- Todoist Sync HTTP is the outbound provider boundary; endpoint version and request framing are the compatibility contract.
     expect(fetchFn).toHaveBeenCalledWith(
       "https://api.todoist.com/api/v1/sync",
       expect.objectContaining({

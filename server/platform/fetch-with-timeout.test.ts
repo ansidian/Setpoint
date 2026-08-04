@@ -17,7 +17,6 @@ describe("fetchWithTimeout", () => {
     const result = await fetchWithTimeout("http://example.com", {}, { timeoutMs: 5000, fetchFn: mockFetchFn });
 
     expect(result).toBe(mockResponse);
-    expect(mockFetchFn).toHaveBeenCalledWith("http://example.com", expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it("rejects and aborts the signal when fetchFn does not settle within timeoutMs", async () => {
@@ -60,6 +59,7 @@ describe("fetchWithTimeout", () => {
 
     await fetchWithTimeout("http://example.com", options, { timeoutMs: 5000, fetchFn: mockFetchFn });
 
+    // test-architecture: allow-boundary-interaction -- The injected fetch function is the outbound HTTP boundary; preserving the request payload while adding a signal is the boundary contract.
     expect(mockFetchFn).toHaveBeenCalledWith(
       "http://example.com",
       expect.objectContaining({
@@ -114,8 +114,6 @@ describe("withTimeout", () => {
 
   it("clears the timeout timer when the promise settles", async () => {
     vi.useFakeTimers();
-    const timeoutSpy = vi.spyOn(global, "setTimeout");
-    const clearTimeoutSpy = vi.spyOn(global, "clearTimeout");
 
     const value = { data: "test" };
     const promise = Promise.resolve(value);
@@ -123,8 +121,7 @@ describe("withTimeout", () => {
     const result = await withTimeout(promise, 5000, "test operation");
 
     expect(result).toBe(value);
-    expect(timeoutSpy).toHaveBeenCalled();
-    expect(clearTimeoutSpy).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
 
     vi.useRealTimers();
   });

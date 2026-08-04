@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import db from "../db/connection.ts";
+import type { Client } from "@libsql/client";
 import type { Request, RequestHandler } from "express";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -135,12 +136,13 @@ function mapSessionContext(row: Record<string, unknown> | undefined): SessionSec
 
 export async function getSessionSecurityContext(
   token: string | null | undefined,
+  dbClient: Pick<Client, "execute"> = db,
 ): Promise<SessionSecurityContext | null> {
   if (!token) return null;
   const hashedToken = hashSessionToken(token);
   const nowMs = Date.now();
 
-  const selectSession = async (storedToken: string) => db.execute({
+  const selectSession = async (storedToken: string) => dbClient.execute({
     sql: `SELECT s.expires_at, s.authenticated_at, s.password_authenticated_at,
                  s.security_generation, s.auth_method
             FROM ea_sessions s
@@ -160,11 +162,11 @@ export async function getSessionSecurityContext(
   const context = mapSessionContext(result.rows[0] as Record<string, unknown> | undefined);
   if (!context) return null;
   if (nowMs > context.expiresAt) {
-    await db.execute({ sql: "DELETE FROM ea_sessions WHERE token = ?", args: [storedToken] });
+    await dbClient.execute({ sql: "DELETE FROM ea_sessions WHERE token = ?", args: [storedToken] });
     return null;
   }
   if (storedToken === token) {
-    await db.execute({
+    await dbClient.execute({
       sql: "UPDATE ea_sessions SET token = ? WHERE token = ?",
       args: [hashedToken, token],
     }).catch((err: unknown) => console.error("[EA] session hash migration failed:", errorMessage(err)));
@@ -174,9 +176,13 @@ export async function getSessionSecurityContext(
 
 export async function hasRecentPasswordAuth(
   token: string | null | undefined,
-  { now = Date.now(), maxAgeMs = RECENT_AUTH_MAX_AGE_MS }: { now?: number; maxAgeMs?: number } = {},
+  {
+    now = Date.now(),
+    maxAgeMs = RECENT_AUTH_MAX_AGE_MS,
+    dbClient = db,
+  }: { now?: number; maxAgeMs?: number; dbClient?: Pick<Client, "execute"> } = {},
 ): Promise<boolean> {
-  const context = await getSessionSecurityContext(token);
+  const context = await getSessionSecurityContext(token, dbClient);
   if (!context) return false;
   const { expiresAt, passwordAuthenticatedAt } = context;
   return Boolean(
@@ -308,9 +314,12 @@ function getBearerToken(req: Request) {
   return authHeader.slice(7).trim();
 }
 
-export const requireCookieSession: RequestHandler = async (req, res, next) => {
+export function createRequireCookieSession(
+  dbClient: Pick<Client, "execute"> = db,
+): RequestHandler {
+  return async (req, res, next) => {
   try {
-    const context = await getSessionSecurityContext(req.cookies?.ea_session);
+    const context = await getSessionSecurityContext(req.cookies?.ea_session, dbClient);
     if (context) {
       res.locals.authSession = context;
       return next();
@@ -323,16 +332,22 @@ export const requireCookieSession: RequestHandler = async (req, res, next) => {
     // handler, so async middleware must guard itself (P1-12).
     return next(err);
   }
-};
+  };
+}
 
-export const requireRecentPasswordAuth: RequestHandler = async (req, res, next) => {
+export const requireCookieSession = createRequireCookieSession();
+
+export function createRequireRecentPasswordAuth(
+  dbClient: Pick<Client, "execute"> = db,
+): RequestHandler {
+  return async (req, res, next) => {
   try {
     const token = req.cookies?.ea_session;
-    const context = await getSessionSecurityContext(token);
+    const context = await getSessionSecurityContext(token, dbClient);
     if (!context) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    if (!await hasRecentPasswordAuth(token)) {
+    if (!await hasRecentPasswordAuth(token, { dbClient })) {
       return res.status(403).json({
         code: "PASSWORD_STEP_UP_REQUIRED",
         message: "Confirm your password to continue",
@@ -343,7 +358,10 @@ export const requireRecentPasswordAuth: RequestHandler = async (req, res, next) 
   } catch (err) {
     return next(err);
   }
-};
+  };
+}
+
+export const requireRecentPasswordAuth = createRequireRecentPasswordAuth();
 
 export function requireCookieSessionOrApiTokenScope(requiredScope: string): RequestHandler {
   return async function requireCookieOrScopedToken(req, res, next) {

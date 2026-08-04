@@ -34,6 +34,7 @@ describe("snapshot triage attachment", () => {
     );
 
     expect(scheduledFor).toBe("2026-05-03T16:00:30.000Z");
+    // test-architecture: allow-boundary-interaction -- Scheduler wake-up is the process-timer boundary; its exact deadline is not durable state and must occur only after the job write resolves.
     expect(requestEmailTriageDrainAtFn).toHaveBeenCalledWith(scheduledFor);
     const row = await dbClient.execute({
       sql: "SELECT status, scheduled_for FROM ea_triage_jobs WHERE email_id = ?",

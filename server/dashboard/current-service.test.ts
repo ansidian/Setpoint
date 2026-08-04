@@ -10,7 +10,6 @@ interface CurrentServiceTestState {
   fetchTodoistTasks: TestMock;
   getTodoistSyncHealth: TestMock;
   hydrateRecurringTombstones: TestMock;
-  filterCompletedTodoistTasks: TestMock;
   readLocalActualMetadata: TestMock;
   getActiveSnapshotView: TestMock;
   syncActiveSnapshot: TestMock;
@@ -24,12 +23,12 @@ const testState = vi.hoisted((): CurrentServiceTestState => ({
   fetchTodoistTasks: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
-  filterCompletedTodoistTasks: vi.fn(),
   readLocalActualMetadata: vi.fn(),
   getActiveSnapshotView: vi.fn(),
   syncActiveSnapshot: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Dashboard cache persistence is exercised through a migrated in-memory database redirected at the shared production connection seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => testState.db.current.execute(statement),
@@ -37,6 +36,7 @@ vi.mock("../db/connection.ts", () => ({
     batch: (statements: InStatement[]) => testState.db.current.batch(statements),
   },
 }));
+// test-architecture: allow-boundary-mock -- Owner configuration is a database/secret-backed input boundary to dashboard provider composition; cases supply one redacted configured owner.
 vi.mock("../platform/config-service.ts", () => ({
   loadUserConfig: vi.fn(async () => ({
     accounts: [
@@ -50,17 +50,15 @@ vi.mock("../platform/config-service.ts", () => ({
     },
   })),
 }));
-vi.mock("../tasks/deadline-helpers.ts", () => ({
-  loadCompletedTaskIds: vi.fn(async () => new Set()),
-  filterCompletedTodoistTasks: (...args: unknown[]) => testState.filterCompletedTodoistTasks(...args),
-  computeDeadlineStats: vi.fn((items: unknown[]) => ({ total: items.length })),
-}));
+// test-architecture: allow-boundary-mock -- Pirate Weather is an outbound provider boundary; dashboard orchestration cases inject its success, failure, and stall outcomes.
 vi.mock("../platform/weather.ts", () => ({
   fetchWeather: (...args: unknown[]) => testState.fetchWeather(...args),
 }));
+// test-architecture: allow-boundary-mock -- Google Calendar is an outbound provider boundary; dashboard orchestration cases inject its normalized current payload.
 vi.mock("../calendar/calendar.ts", () => ({
   fetchCalendar: (...args: unknown[]) => testState.fetchCalendar(...args),
 }));
+// test-architecture: allow-boundary-mock -- The Todoist mirror/provider facade is the durable external-task boundary consumed by dashboard current-data refreshes.
 vi.mock("../tasks/todoist.ts", () => ({
   fetchTodoistDueTaskIdSet: (...args: unknown[]) => testState.fetchTodoistDueTaskIdSet(...args),
   fetchTodoistTasks: (...args: unknown[]) => testState.fetchTodoistTasks(...args),
@@ -68,6 +66,7 @@ vi.mock("../tasks/todoist.ts", () => ({
   fetchTodoistTasksRange: (...args: unknown[]) => testState.fetchTodoistTasks(...args),
   getTodoistSyncHealth: (...args: unknown[]) => testState.getTodoistSyncHealth(...args),
 }));
+// test-architecture: allow-boundary-mock -- Completed-occurrence tombstones are a separate durable task-history boundary; composition cases inject their projected rows rather than their SQL lifecycle.
 vi.mock("../tasks/tombstones.ts", () => ({
   hydrateRecurringTombstones: (...args: unknown[]) => testState.hydrateRecurringTombstones(...args),
 }));
@@ -75,6 +74,7 @@ vi.mock("../tasks/tombstones.ts", () => ({
 vi.mock("../actual/actual-local-metadata.ts", () => ({
   readLocalActualMetadata: (...args: unknown[]) => testState.readLocalActualMetadata(...args),
 }));
+// test-architecture: allow-boundary-mock -- Active snapshots are a separately persisted briefing boundary; dashboard tests compose controlled snapshot views while snapshot lifecycle suites own their durable behavior.
 vi.mock("../snapshots/snapshot-service.ts", () => ({
   getActiveSnapshotView: (...args: unknown[]) => testState.getActiveSnapshotView(...args),
   syncActiveSnapshot: (...args: unknown[]) => testState.syncActiveSnapshot(...args),
@@ -277,11 +277,6 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchCalendar.mockReset().mockResolvedValue([]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
     testState.fetchTodoistDueTaskIdSet.mockReset().mockResolvedValue(new Set());
-    testState.filterCompletedTodoistTasks.mockReset().mockImplementation((...args: unknown[]) => {
-      const tasks = Array.isArray(args[0]) ? args[0] as Array<Record<string, unknown>> : [];
-      const completedIds = args[1] instanceof Set ? args[1] : new Set<unknown>();
-      return tasks.filter((task) => !completedIds.has(task.id) && !completedIds.has(String(task.id)));
-    });
     testState.getTodoistSyncHealth.mockReset().mockResolvedValue({
       state: "current",
       configured: true,

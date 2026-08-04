@@ -1,13 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import EmailRow from "./EmailRow";
 import { makeInboxEmail } from "./test-utils/inboxFixtures";
-
-vi.mock("./primitives", () => ({
-  Avatar: function AvatarMock() {
-    return null;
-  },
-}));
 
 function makePendingGraceRow(graceAtIso: string) {
   return makeInboxEmail({

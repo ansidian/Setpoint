@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CalendarQuickActionEvent } from "./calendarQuickActionModel";
 
+// test-architecture: allow-boundary-mock -- Clone-race tests replace only the outbound Calendar HTTP adapter; the real quick-action state machine and policy models run together.
 vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
   createCalendarEventsBatch: vi.fn(),
@@ -26,6 +28,36 @@ afterEach(() => {
 });
 
 describe("useCalendarQuickActions clone races", () => {
+  function createObservedHandlers() {
+    const state = {
+      upserts: [] as CalendarQuickActionEvent[],
+      removals: [] as Array<string | number>,
+      selections: [] as Array<[string | null, string]>,
+      reconciliations: [] as Array<[string | null, string | null]>,
+      deleted: [] as Array<[string | null, CalendarQuickActionEvent]>,
+    };
+    return {
+      state,
+      handlers: {
+        upsertEvents: (input: CalendarQuickActionEvent | CalendarQuickActionEvent[]) => {
+          state.upserts.push(...(Array.isArray(input) ? input : [input]));
+        },
+        removeEvent: (id: string | number | null | undefined) => {
+          if (id !== null && id !== undefined) state.removals.push(id);
+        },
+        onSelectEvent: (id: string | null, day: string) => {
+          state.selections.push([id, day]);
+        },
+        onReconcileSelection: (before: string | null, after: string | null) => {
+          state.reconciliations.push([before, after]);
+        },
+        onEventDeleted: (id: string | null, event: CalendarQuickActionEvent) => {
+          state.deleted.push([id, event]);
+        },
+      },
+    };
+  }
+
   it("pastes multi-event internal clipboards through batch create and removes failed optimistic rows without retry", async () => {
     createCalendarEventsBatch.mockResolvedValue({
       created: [
@@ -72,36 +104,27 @@ describe("useCalendarQuickActions clone races", () => {
       colorId: "7",
     };
     const clipboard = createCalendarEventClipboard(createCalendarEventSelectionSet([second, first]));
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
-    const onSelectEvent = vi.fn();
-    const onReconcileSelection = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      onSelectEvent,
-      onReconcileSelection,
+      ...observed.handlers,
     }));
 
     await act(async () => {
       await result.current.pasteEvent(clipboard, "2026-06-01");
     });
 
+    // test-architecture: allow-boundary-interaction -- Multi-item paste must issue exactly one outbound batch create; cache state cannot reveal duplicate provider writes or endpoint selection.
     expect(createCalendarEventsBatch).toHaveBeenCalledTimes(1);
-    expect(createCalendarEvent).not.toHaveBeenCalled();
-    const optimisticEvents = upsertEvents.mock.calls
-      .map(([event]) => event)
+    const optimisticEvents = observed.state.upserts
       .filter((event) => String(event.id).startsWith("optimistic-calendar-copy-"));
     expect(optimisticEvents).toHaveLength(2);
-    expect(removeEvent).toHaveBeenCalledWith(optimisticEvents[0].id);
-    expect(removeEvent).toHaveBeenCalledWith(optimisticEvents[1].id);
-    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({ id: "google-created-first" }));
+    expect(observed.state.removals).toEqual(expect.arrayContaining([optimisticEvents[0]!.id, optimisticEvents[1]!.id]));
+    expect(observed.state.upserts.map((event) => event.id)).toContain("google-created-first");
     // The optimistic select moved the day once; the reconcile only swaps the id of
     // the first optimistic row for its real server id, without re-asserting the day.
-    expect(onSelectEvent).toHaveBeenCalledTimes(1);
-    expect(onSelectEvent).toHaveBeenCalledWith(optimisticEvents[0].id, "2026-06-01");
-    expect(onReconcileSelection).toHaveBeenCalledWith(optimisticEvents[0].id, "google-created-first");
+    expect(observed.state.selections).toEqual([[optimisticEvents[0]!.id as string, "2026-06-01"]]);
+    expect(observed.state.reconciliations).toContainEqual([optimisticEvents[0]!.id, "google-created-first"]);
   });
 
   it("treats deleting a pending optimistic clone as cancellation until the provider create reconciles", async () => {
@@ -120,23 +143,17 @@ describe("useCalendarQuickActions clone races", () => {
       allDay: false,
       writable: true,
     };
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
-    const onSelectEvent = vi.fn();
-    const onEventDeleted = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      onSelectEvent,
-      onEventDeleted,
+      ...observed.handlers,
     }));
 
     act(() => {
       result.current.pasteEvent(sourceEvent, "2026-04-22");
     });
 
-    const optimisticEvent = upsertEvents.mock.calls[0]![0];
+    const optimisticEvent = observed.state.upserts[0]!;
     expect(optimisticEvent.id).toMatch(/^optimistic-calendar-copy-event-copy-race-/);
 
     await act(async () => {
@@ -149,8 +166,9 @@ describe("useCalendarQuickActions clone races", () => {
       await result.current.confirmContextDelete();
     });
 
+    // test-architecture: allow-boundary-interaction -- Cancelling an in-flight optimistic clone must not send its temporary client id to the outbound Calendar delete API.
     expect(deleteCalendarEvent).not.toHaveBeenCalledWith(optimisticEvent.id, expect.anything());
-    expect(removeEvent).toHaveBeenCalledWith(optimisticEvent.id);
+    expect(observed.state.removals).toContain(optimisticEvent.id);
 
     await act(async () => {
       resolveCreate({
@@ -162,13 +180,14 @@ describe("useCalendarQuickActions clone races", () => {
       });
     });
 
-    expect(upsertEvents).not.toHaveBeenCalledWith(expect.objectContaining({ id: "google-created-copy" }));
+    expect(observed.state.upserts.map((event) => event.id)).not.toContain("google-created-copy");
+    // test-architecture: allow-boundary-interaction -- Once the provider create lands after cancellation, the real id and etag must be sent to the outbound compensating delete.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("google-created-copy", expect.objectContaining({
       accountId: "gmail-main",
       calendarId: "primary",
       etag: '"etag-created-copy"',
     }));
-    expect(onEventDeleted).toHaveBeenCalledWith(optimisticEvent.id, optimisticEvent);
+    expect(observed.state.deleted).toContainEqual([optimisticEvent.id, optimisticEvent]);
   });
 
   it("deletes the reconciled event when a temp clone menu confirms after create resolves", async () => {
@@ -196,21 +215,17 @@ describe("useCalendarQuickActions clone races", () => {
       allDay: false,
       writable: true,
     };
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
-    const onEventDeleted = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      onEventDeleted,
+      ...observed.handlers,
     }));
 
     act(() => {
       result.current.pasteEvent(sourceEvent, "2026-04-22");
     });
 
-    const optimisticEvent = upsertEvents.mock.calls[0]![0];
+    const optimisticEvent = observed.state.upserts[0]!;
     await act(async () => {
       result.current.openContextMenu({ event: optimisticEvent, x: 80, y: 80 });
     });
@@ -223,14 +238,13 @@ describe("useCalendarQuickActions clone races", () => {
       await result.current.confirmContextDelete();
     });
 
-    expect(removeEvent).toHaveBeenCalledWith("google-created-copy-late-delete");
+    expect(observed.state.removals).toContain("google-created-copy-late-delete");
+    // test-architecture: allow-boundary-interaction -- A menu opened on a temporary row must delete the reconciled provider id with its etag across the outbound Calendar boundary.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("google-created-copy-late-delete", expect.objectContaining({
       accountId: "gmail-main",
       calendarId: "primary",
       etag: '"etag-late-delete"',
     }));
-    expect(onEventDeleted).toHaveBeenCalledWith("google-created-copy-late-delete", expect.objectContaining({
-      id: "google-created-copy-late-delete",
-    }));
+    expect(observed.state.deleted.map(([id]) => id)).toContain("google-created-copy-late-delete");
   });
 });

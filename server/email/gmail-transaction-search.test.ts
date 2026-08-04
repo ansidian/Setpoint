@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// test-architecture: allow-boundary-mock -- Gmail token decryption is the cryptographic boundary; provider protocol cases use one controlled valid token.
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify({
     access_token: "tok",
@@ -8,6 +9,7 @@ vi.mock("../platform/encryption.ts", () => ({
   }),
   encrypt: (value: string) => value,
 }));
+// test-architecture: allow-boundary-mock -- Google application credentials are a write-only secret boundary used only if the controlled token needs refresh.
 vi.mock("../google-oauth-credentials.ts", () => ({
   googleOAuthCredentialManager: {
     resolveActive: vi.fn(async () => ({ clientId: "client-id", clientSecret: "client-secret" })),
@@ -111,6 +113,7 @@ describe("Gmail transaction search", () => {
       source: "paypal", start: "2026-07-01", end: "2026-08-01", maxResults: 25,
     });
     expect(first.emails).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Gmail search/message HTTP is outbound; one page must issue exactly the list request and its bounded message hydration request.
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     fetchMock.mockReset().mockResolvedValueOnce({ ok: true, json: async () => ({}) });

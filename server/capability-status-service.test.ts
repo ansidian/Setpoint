@@ -19,9 +19,16 @@ const metadata = [{
   }];
 
 function metadataResolver() {
-  return vi.fn(async (key: string) => metadata.find((item) => item.key === key) ?? ({
-    ...metadata[0]!, key, source: "absent" as const, activeConfigured: false,
-  }));
+  let reads = 0;
+  return {
+    resolve: async (key: string) => {
+      reads += 1;
+      return metadata.find((item) => item.key === key) ?? ({
+        ...metadata[0]!, key, source: "absent" as const, activeConfigured: false,
+      });
+    },
+    readCount: () => reads,
+  };
 }
 
 function evidence() {
@@ -86,10 +93,10 @@ describe("capability status service", () => {
   });
 
   it("caches metadata-only projections and supports explicit refresh", async () => {
-    const getCredentialMetadata = metadataResolver();
+    const metadataReads = metadataResolver();
     const loadEvidence = vi.fn(async () => evidence());
     const service = createCapabilityStatusService({
-      credentialService: { getCredentialMetadata, subscribe: vi.fn(() => () => {}) },
+      credentialService: { getCredentialMetadata: metadataReads.resolve, subscribe: vi.fn(() => () => {}) },
       loadEvidence,
       now: () => 1_000,
       cacheTtlMs: 5_000,
@@ -97,17 +104,17 @@ describe("capability status service", () => {
 
     await service.getStatus();
     await service.getStatus();
-    expect(getCredentialMetadata).toHaveBeenCalledTimes(9);
+    expect(metadataReads.readCount()).toBe(9);
     await service.getStatus({ refresh: true });
-    expect(getCredentialMetadata).toHaveBeenCalledTimes(18);
+    expect(metadataReads.readCount()).toBe(18);
   });
 
   it("invalidates cached status when credential metadata changes", async () => {
     let onChange: (() => void) | undefined;
-    const getCredentialMetadata = metadataResolver();
+    const metadataReads = metadataResolver();
     const service = createCapabilityStatusService({
       credentialService: {
-        getCredentialMetadata,
+        getCredentialMetadata: metadataReads.resolve,
         subscribe: vi.fn((listener: (event: never) => void) => { onChange = () => listener(undefined as never); return () => {}; }),
       },
       loadEvidence: vi.fn(async () => evidence()),
@@ -117,12 +124,12 @@ describe("capability status service", () => {
     await service.getStatus();
     onChange?.();
     await service.getStatus();
-    expect(getCredentialMetadata).toHaveBeenCalledTimes(18);
+    expect(metadataReads.readCount()).toBe(18);
   });
 
   it("returns no registry keys, root-key metadata, ciphertext, or raw errors", async () => {
     const response = await createCapabilityStatusService({
-      credentialService: { getCredentialMetadata: metadataResolver(), subscribe: vi.fn(() => () => {}) },
+      credentialService: { getCredentialMetadata: metadataResolver().resolve, subscribe: vi.fn(() => () => {}) },
       loadEvidence: vi.fn(async () => ({
         ...evidence(),
         actual: { status: "failed", lastSucceededAt: null, lastFailedAt: "2026-07-18T00:00:00.000Z", rawError: "secret-bearing provider body" },

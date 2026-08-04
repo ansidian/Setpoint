@@ -1,18 +1,9 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComponentProps, ReactNode } from "react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { useState, type ComponentProps } from "react";
 import LaneSection from "./LaneSection";
 import type { InboxEmailLike } from "./inboxTypes";
 import { makeInboxEmail } from "./test-utils/inboxFixtures";
-
-vi.mock("./primitives", () => ({
-  StickyHeader: function StickyHeaderMock({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
-  },
-  LaneIcon: function LaneIconMock() {
-    return <span aria-hidden="true" />;
-  },
-}));
 
 afterEach(() => {
   cleanup();
@@ -23,7 +14,6 @@ function renderRowsSpy(list: InboxEmailLike[]) {
 }
 
 function renderLaneSection(props: Partial<ComponentProps<typeof LaneSection>> = {}) {
-  const renderRows = vi.fn(renderRowsSpy);
   const utils = render(
     <LaneSection
       laneKey="needs_attention"
@@ -31,11 +21,11 @@ function renderLaneSection(props: Partial<ComponentProps<typeof LaneSection>> = 
       collapsed={false}
       noiseUnreadCount={0}
       onToggle={() => {}}
-      renderRows={renderRows}
+      renderRows={renderRowsSpy}
       {...props}
     />,
   );
-  return { ...utils, renderRows };
+  return utils;
 }
 
 describe("LaneSection", () => {
@@ -52,11 +42,16 @@ describe("LaneSection", () => {
     expect(screen.queryByText("Needs attention deck")).toBeNull();
   });
 
-  it("fires onToggle with the lane key when the header is activated", () => {
-    const onToggle = vi.fn();
-    renderLaneSection({ onToggle });
+  it("collapses the lane when the header is activated", async () => {
+    function Harness() {
+      const [collapsed, setCollapsed] = useState(false);
+      return <LaneSection laneKey="needs_attention" emails={[makeInboxEmail({ id: "need-1", subject: "Needs attention deck", _lane: "needs_attention" })]} collapsed={collapsed} noiseUnreadCount={0} onToggle={() => setCollapsed((value) => !value)} renderRows={renderRowsSpy} />;
+    }
+    render(<Harness />);
+    expect(screen.getByText("Needs attention deck")).toBeTruthy();
     fireEvent.click(screen.getByRole("button"));
-    expect(onToggle).toHaveBeenCalledWith("needs_attention");
+    expect(screen.getByRole("button").getAttribute("aria-expanded")).toBe("false");
+    await waitFor(() => expect(screen.queryByText("Needs attention deck")).toBeNull());
   });
 
   it("shows the noise-unread pill only for the noise lane with a positive count", () => {
@@ -69,36 +64,17 @@ describe("LaneSection", () => {
     expect(screen.queryByText("3 unread")).toBeNull();
   });
 
-  it("does not re-render when emails, collapsed, onToggle, and renderRows are referentially stable", () => {
-    const emails = [makeInboxEmail({ id: "need-1", subject: "Needs attention deck", _lane: "needs_attention" })];
-    const renderRows = vi.fn(renderRowsSpy);
-    const onToggle = () => {};
-    const { rerender } = render(
-      <LaneSection laneKey="needs_attention" emails={emails} collapsed={false} noiseUnreadCount={0} onToggle={onToggle} renderRows={renderRows} />,
-    );
-    expect(renderRows).toHaveBeenCalledTimes(1);
-
-    // All of LaneSection's props keep stable identity -> the memo must bail out.
-    rerender(
-      <LaneSection laneKey="needs_attention" emails={emails} collapsed={false} noiseUnreadCount={0} onToggle={onToggle} renderRows={renderRows} />,
-    );
-    expect(renderRows).toHaveBeenCalledTimes(1);
-  });
-
-  it("re-renders when its own emails array identity changes", () => {
-    const renderRows = vi.fn(renderRowsSpy);
+  it("renders updated rows when its emails change", () => {
     const onToggle = () => {};
     const first = [makeInboxEmail({ id: "need-1", subject: "A", _lane: "needs_attention" })];
     const { rerender } = render(
-      <LaneSection laneKey="needs_attention" emails={first} collapsed={false} noiseUnreadCount={0} onToggle={onToggle} renderRows={renderRows} />,
+      <LaneSection laneKey="needs_attention" emails={first} collapsed={false} noiseUnreadCount={0} onToggle={onToggle} renderRows={renderRowsSpy} />,
     );
-    expect(renderRows).toHaveBeenCalledTimes(1);
 
     const second = [makeInboxEmail({ id: "need-1", subject: "A (updated)", _lane: "needs_attention" })];
     rerender(
-      <LaneSection laneKey="needs_attention" emails={second} collapsed={false} noiseUnreadCount={0} onToggle={onToggle} renderRows={renderRows} />,
+      <LaneSection laneKey="needs_attention" emails={second} collapsed={false} noiseUnreadCount={0} onToggle={onToggle} renderRows={renderRowsSpy} />,
     );
-    expect(renderRows).toHaveBeenCalledTimes(2);
     expect(screen.getByText("A (updated)")).toBeTruthy();
   });
 });

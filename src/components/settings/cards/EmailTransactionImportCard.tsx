@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import useTransactionImports from "@/hooks/settings/useTransactionImports";
 import TransactionImportReviewList from "./transaction-import/TransactionImportReviewList";
 import TransactionImportDateField from "./transaction-import/TransactionImportDateField";
-import { runPhase } from "./transaction-import/transactionImportReviewModel";
+import { automaticImportConfirmation, runPhase } from "./transaction-import/transactionImportReviewModel";
 import type { AccountSummary } from "../../../../shared/types/accounts";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 import type {
@@ -107,12 +107,8 @@ export default function EmailTransactionImportCard({
       setLocalError(`Choose an Actual account before enabling ${next.mode === "automatic" ? "Automatic" : "Observe only"} mode.`);
       return;
     }
-    if (next.mode === "automatic" && current.mode !== "automatic") {
-      const confirmed = window.confirm(
-        `Enable automatic ${source === "amazon" ? "Amazon" : "PayPal"} imports? Eligible messages will write to Actual without another click.`,
-      );
-      if (!confirmed) return;
-    }
+    const confirmation = automaticImportConfirmation(source, current.mode, next.mode);
+    if (confirmation && !window.confirm(confirmation)) return;
     setLocalError("");
     await imports.saveMapping(source, {
       mode: next.mode,

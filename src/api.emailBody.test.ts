@@ -23,19 +23,19 @@ describe("email body TTL cache eviction", () => {
   });
 
   it("serves a cached body without re-fetching for the same uid", async () => {
-    const fetch = vi.fn().mockResolvedValue(okJson({ html: "<p>hi</p>" }));
-    vi.stubGlobal("fetch", fetch);
+    let fetchCount = 0;
+    vi.stubGlobal("fetch", () => { fetchCount += 1; return Promise.resolve(okJson({ html: "<p>hi</p>" })); });
     const api = await importApi();
 
     await api.getEmailBody("uid-1");
     await api.getEmailBody("uid-1");
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetchCount).toBe(1);
   });
 
   it("evicts the least-recently-inserted uid once the cap is exceeded so it re-fetches", async () => {
-    const fetch = vi.fn().mockImplementation((url) => okJson({ url }));
-    vi.stubGlobal("fetch", fetch);
+    let fetchCount = 0;
+    vi.stubGlobal("fetch", (url: RequestInfo | URL) => { fetchCount += 1; return Promise.resolve(okJson({ url })); });
     const api = await importApi();
 
     // Fill the cache past its 50-entry cap. The first uid inserted (uid-0)
@@ -43,15 +43,15 @@ describe("email body TTL cache eviction", () => {
     for (let i = 0; i < 51; i += 1) {
       await api.getEmailBody(`uid-${i}`);
     }
-    expect(fetch).toHaveBeenCalledTimes(51);
+    expect(fetchCount).toBe(51);
 
     // uid-0 was evicted → re-opening it re-fetches.
     await api.getEmailBody("uid-0");
-    expect(fetch).toHaveBeenCalledTimes(52);
+    expect(fetchCount).toBe(52);
 
     // A still-cached recent uid does not re-fetch.
     await api.getEmailBody("uid-50");
-    expect(fetch).toHaveBeenCalledTimes(52);
+    expect(fetchCount).toBe(52);
   });
 
   it("sweeps expired entries on insert", async () => {

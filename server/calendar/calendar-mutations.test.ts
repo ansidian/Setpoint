@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// test-architecture: allow-boundary-mock -- The shared account store is a database boundary needed only to load the controlled Google credential used by mutation adapter cases.
 vi.mock("../db/connection.ts", () => ({ default: { execute: vi.fn() } }));
+// test-architecture: allow-boundary-mock -- Credential encryption is the cryptographic storage boundary; mutation protocol cases use one controlled decrypted Google credential.
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify({
     access_token: "token-1",

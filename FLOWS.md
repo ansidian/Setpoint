@@ -136,6 +136,12 @@ Selection path:
 12. `src/components/calendar/modal/CalendarGrid.tsx:handleSelectDay` — plain clicks clear the selection set unless the anchor preserves it (`handleSelectItem` likewise)
 13. `src/hooks/calendar/useCalendarEventSelectionSet.ts:requestSelectedCalendarEventDelete` — Delete/Backspace batch-deletes the set; cmd+C copies via `copySelectedCalendarEvent`
 
+**State:** the multi-selection set lives in `src/hooks/calendar/useCalendarEventSelectionSet.ts` (React state + ref mirror, hosted by the controller), shaped by `src/components/calendar/events/calendarEventSelectionModel.ts`; client-only, never persisted. The single day/item focus is separate, owned by `src/hooks/calendar/useCalendarModalSelection.ts` + `src/hooks/calendar/calendarModalSelectionModel.ts`.
+
+**SSE:** none — purely client-side state.
+
+**UI:** selected chips get the selection accent border/wash on every surface; first modifier-click closes any open detail/editor; bare cmd/ctrl promotes-or-dismisses; plain click anywhere clears the set.
+
 ## 6. Process shutdown → scheduler drain
 
 **Trigger:** SIGTERM/SIGINT enters `server/shutdown.ts:createGracefulShutdown` through `server/index.ts`.
@@ -146,12 +152,6 @@ Selection path:
 4. `server/shutdown.ts:createGracefulShutdown` — exits cleanly after all stop functions settle; a stuck task remains bounded by the existing force-exit timer
 
 **Durability:** shutdown does not rewrite queue state. Forced exits continue to recover through the existing stale-lock and durable cron fallback paths.
-
-**State:** the multi-selection set lives in `src/hooks/calendar/useCalendarEventSelectionSet.ts` (React state + ref mirror, hosted by the controller), shaped by `src/components/calendar/events/calendarEventSelectionModel.ts`; client-only, never persisted. The single day/item focus is separate, owned by `src/hooks/calendar/useCalendarModalSelection.ts` + `src/hooks/calendar/calendarModalSelectionModel.ts`.
-
-**SSE:** none — purely client-side state.
-
-**UI:** selected chips get the selection accent border/wash on every surface; first modifier-click closes any open detail/editor; bare cmd/ctrl promotes-or-dismisses; plain click anywhere clears the set.
 
 ## 7. First-run owner claim → authenticated runtime
 
@@ -250,7 +250,7 @@ Selection path:
 
 **SSE:** none in phase 02. Imported Actual changes flow through the existing deferred bills-mirror refresh path.
 
-**UI:** none in phase 02; phase 03 will consume the authenticated transaction-import routes for Finance review and Inbox status.
+**UI:** Inbox reader status and review actions (`src/components/inbox/reader/TransactionImportStatus.tsx`) plus the Settings mapping/run/review workflow (`src/components/settings/cards/EmailTransactionImportCard.tsx` and `src/components/settings/cards/transaction-import/TransactionImportReviewList.tsx`) consume the authenticated transaction-import routes.
 
 ## 13. Alfred Settings selection → conversation-bound provider run
 

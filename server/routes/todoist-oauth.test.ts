@@ -1,51 +1,77 @@
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "../test-utils/supertest.ts";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoistOAuthService } from "../tasks/todoist-oauth.ts";
+import type { Client } from "@libsql/client";
+import { createAuthTestDb, seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import {
+  createRequireCookieSession,
+  createRequireRecentPasswordAuth,
+  hashToken,
+} from "../middleware/auth.ts";
+import { createTodoistOAuthRouter } from "./todoist-oauth.ts";
 
-vi.mock("../middleware/auth.ts", () => ({
-  hashToken: (value: string) => `hash:${value}`,
-  requireCookieSession: (req: express.Request, res: express.Response, next: express.NextFunction) =>
-    req.cookies?.ea_session === "valid" || req.cookies?.ea_session === "stale"
-      ? next()
-      : res.status(401).json({ message: "Not authenticated" }),
-  requireRecentPasswordAuth: (req: express.Request, res: express.Response, next: express.NextFunction) =>
-    req.cookies?.ea_session === "valid"
-      ? next()
-      : req.cookies?.ea_session === "stale"
-        ? res.status(403).json({ code: "PASSWORD_STEP_UP_REQUIRED", message: "Confirm your password" })
-        : res.status(401).json({ message: "Not authenticated" }),
-}));
-
-const { createTodoistOAuthRouter } = await import("./todoist-oauth.ts");
+let authDb: Client;
 
 function makeApp(serviceOverrides: Partial<TodoistOAuthService> = {}, personalTokenOverrides = {}) {
   const service = {
-    beginAuthorization: vi.fn(async () => ({ url: "https://app.todoist.com/oauth/authorize?state=opaque" })),
-    completeAuthorization: vi.fn(async () => ({ connected: true as const })),
-    getStatus: vi.fn(async () => ({ mode: "personal_token", configured: true })),
+    beginAuthorization: async (userId: string, browserBindHash: string) => ({
+      url: `https://app.todoist.com/oauth/authorize?state=${userId}:${browserBindHash}`,
+    }),
+    completeAuthorization: async (input: { code: string; state: string; browserBindHash: string }) => {
+      if (JSON.stringify(input) !== JSON.stringify({
+        code: "provider-code",
+        state: "opaque",
+        browserBindHash: hashToken("browser-bind"),
+      })) throw new Error("Callback inputs changed");
+      return { connected: true as const };
+    },
+    getStatus: async (userId: string) => ({ mode: "personal_token", configured: userId === "owner-1" }),
     ...serviceOverrides,
   } as unknown as TodoistOAuthService;
   const personalTokenService = {
-    saveCandidate: vi.fn(async () => ({ success: true as const, verifiedAt: "2026-07-19T18:00:00.000Z" })),
-    disconnect: vi.fn(async () => ({ success: true as const })),
+    saveCandidate: async (userId: string, token: string) => ({
+      success: true as const,
+      verifiedAt: `${userId}:${token.length}`,
+    }),
+    disconnect: async () => ({ success: true as const }),
     ...personalTokenOverrides,
   };
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/ea", createTodoistOAuthRouter(service, () => "browser-bind", personalTokenService));
+  app.use("/api/ea", createTodoistOAuthRouter(
+    service,
+    () => "browser-bind",
+    personalTokenService,
+    {
+      cookie: createRequireCookieSession(authDb),
+      recent: createRequireRecentPasswordAuth(authDb),
+    },
+  ));
   return { app, service, personalTokenService };
 }
 
 describe("Todoist OAuth routes", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     process.env.EA_USER_ID = "owner-1";
+    authDb = await createAuthTestDb();
+    await seedOwner(authDb, { userId: "owner-1", passwordHash: "hash" });
+    await seedSession(authDb, "valid", Date.now() + 60_000, Date.now(), {
+      authMethod: "password",
+      passwordAuthenticatedAt: Date.now(),
+    });
+    await seedSession(authDb, "stale", Date.now() + 60_000, 0, {
+      authMethod: "legacy",
+      passwordAuthenticatedAt: 0,
+    });
   });
 
+  afterEach(() => authDb.close());
+
   it("requires authentication to begin and sets a callback-scoped HttpOnly binding", async () => {
-    const { app, service } = makeApp();
+    const { app } = makeApp();
     expect((await request(app).get("/api/ea/accounts/todoist/auth")).status).toBe(401);
 
     const response = await request(app)
@@ -53,26 +79,22 @@ describe("Todoist OAuth routes", () => {
       .set("Cookie", "ea_session=valid");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ url: "https://app.todoist.com/oauth/authorize?state=opaque" });
+    expect(response.body).toEqual({
+      url: `https://app.todoist.com/oauth/authorize?state=owner-1:${hashToken("browser-bind")}`,
+    });
     expect(response.headers["set-cookie"]?.[0]).toContain("ea_todoist_oauth_bind=browser-bind");
     expect(response.headers["set-cookie"]?.[0]).toContain("HttpOnly");
     expect(response.headers["set-cookie"]?.[0]).toContain("Path=/api/ea/accounts/todoist/callback");
-    expect(service.beginAuthorization).toHaveBeenCalledWith("owner-1", "hash:browser-bind");
   });
 
   it("completes only with the callback browser binding and redirects without token data", async () => {
-    const { app, service } = makeApp();
+    const { app } = makeApp();
     const response = await request(app)
       .get("/api/ea/accounts/todoist/callback?code=provider-code&state=opaque")
       .set("Cookie", "ea_todoist_oauth_bind=browser-bind");
 
     expect(response.status).toBe(302);
     expect(response.headers.location).toBe("http://localhost:5173/settings?todoist_connected=1");
-    expect(service.completeAuthorization).toHaveBeenCalledWith({
-      code: "provider-code",
-      state: "opaque",
-      browserBindHash: "hash:browser-bind",
-    });
     expect(response.text).not.toContain("provider-code");
   });
 
@@ -94,7 +116,7 @@ describe("Todoist OAuth routes", () => {
   });
 
   it("returns redacted Todoist mode metadata only to an authenticated owner", async () => {
-    const { app, service } = makeApp();
+    const { app } = makeApp();
     expect((await request(app).get("/api/ea/accounts/todoist/status")).status).toBe(401);
 
     const response = await request(app)
@@ -103,11 +125,10 @@ describe("Todoist OAuth routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ mode: "personal_token", configured: true });
-    expect(service.getStatus).toHaveBeenCalledWith("owner-1");
   });
 
   it("allows stale sessions to read status but rejects every credential-changing action", async () => {
-    const { app, service, personalTokenService } = makeApp();
+    const { app } = makeApp();
 
     expect((await request(app)
       .get("/api/ea/accounts/todoist/status")
@@ -122,32 +143,27 @@ describe("Todoist OAuth routes", () => {
     expect((await request(app)
       .delete("/api/ea/accounts/todoist/connection")
       .set("Cookie", "ea_session=stale")).status).toBe(403);
-    expect(service.beginAuthorization).not.toHaveBeenCalled();
-    expect(personalTokenService.saveCandidate).not.toHaveBeenCalled();
-    expect(personalTokenService.disconnect).not.toHaveBeenCalled();
   });
 
   it("validates and saves a personal-token candidate without returning the token", async () => {
-    const { app, personalTokenService } = makeApp();
+    const { app } = makeApp();
     const response = await request(app)
       .post("/api/ea/accounts/todoist/personal-token")
       .set("Cookie", "ea_session=valid")
       .send({ token: "candidate-token" });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true, verifiedAt: "2026-07-19T18:00:00.000Z" });
+    expect(response.body).toEqual({ success: true, verifiedAt: "owner-1:15" });
     expect(response.text).not.toContain("candidate-token");
-    expect(personalTokenService.saveCandidate).toHaveBeenCalledWith("owner-1", "candidate-token");
   });
 
   it("disconnects the active Todoist mode through an effect-specific endpoint", async () => {
-    const { app, personalTokenService } = makeApp();
+    const { app } = makeApp();
     const response = await request(app)
       .delete("/api/ea/accounts/todoist/connection")
       .set("Cookie", "ea_session=valid");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
-    expect(personalTokenService.disconnect).toHaveBeenCalledWith("owner-1");
   });
 });

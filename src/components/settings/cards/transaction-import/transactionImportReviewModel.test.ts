@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  automaticImportConfirmation,
   formatImportAmount,
   isBulkSelectable,
   itemToConfirmation,
@@ -60,5 +61,13 @@ describe("transaction import review model", () => {
       payee: "Corrected",
       actualAccountId: "account-1",
     });
+  });
+
+  it("requires explicit unattended-write confirmation only when entering automatic mode", () => {
+    expect(automaticImportConfirmation("amazon", "observe", "automatic")).toBe(
+      "Enable automatic Amazon imports? Eligible messages will write to Actual without another click.",
+    );
+    expect(automaticImportConfirmation("paypal", "automatic", "automatic")).toBeNull();
+    expect(automaticImportConfirmation("paypal", "observe", "off")).toBeNull();
   });
 });

@@ -33,6 +33,7 @@ describe("Settings demo mode", () => {
     expect(screen.getByText("morgan@northstar.example")).toBeTruthy();
     expect(screen.getAllByText("Demo-only model")).toHaveLength(3);
     expect(screen.queryByText(/key configured/i)).toBeNull();
+    // test-architecture: allow-boundary-interaction -- rendered demo data cannot prove the imported Settings tree made no real browser network request.
     expect(fetch).not.toHaveBeenCalled();
   }, 30000);
 });

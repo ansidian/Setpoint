@@ -18,8 +18,8 @@ describe("demo mode read adapter", () => {
   });
 
   it("returns stable rolling demo data for the core portfolio surfaces without fetch", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+    let networkAttempted = false;
+    vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
     const api = await importDemoApi();
 
     const current = await api.getCurrentDashboard();
@@ -93,12 +93,12 @@ describe("demo mode read adapter", () => {
       provider: "demo",
       defaultModel: "demo-bill-extract-model",
     });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 
   it("mutates the read-arrivals triage setting in memory", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+    let networkAttempted = false;
+    vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
     const api = await importDemoApi();
 
     await api.updateSettings({ email_triage_classify_read_arrivals: true });
@@ -106,7 +106,7 @@ describe("demo mode read adapter", () => {
     expect(await api.getSettings()).toMatchObject({
       email_triage_classify_read_arrivals: true,
     });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 
   it("keeps the portfolio demo populated like a busy SWE month", async () => {

@@ -14,6 +14,7 @@ const testState = vi.hoisted(() => ({
   modelConfig: { provider: "anthropic" as "anthropic" | "openai", model: "claude-sonnet-4-6" },
 }));
 
+// test-architecture: allow-boundary-mock -- Redirects the auth and Alfred usage database singleton to ephemeral libSQL; real session SQL gates the HTTP/SSE route and no database behavior is stubbed.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement) => testState.db.current!.execute(statement),
@@ -131,10 +132,20 @@ describe("alfred routes", () => {
     expect(res.status).toBe(503);
   });
 
+  it("does not fall back to Anthropic when the selected OpenAI credential is missing", async () => {
+    testState.modelConfig = { provider: "openai", model: "gpt-5.6-sol" };
+    vi.stubEnv("OPENAI_API_KEY", "");
+
+    const res = await auth(request(buildApp()).post("/api/alfred/run")).send({ message: "hi" });
+
+    expect(res.status).toBe(503);
+    expect(JSON.stringify(res.body)).toContain("OPENAI_API_KEY");
+  });
+
   it("streams run events as SSE and reports the conversation id", async () => {
-    testState.run.mockImplementation(async ({ emit, conversation }) => {
+    testState.run.mockImplementation(async ({ emit, conversation, userId, message }) => {
       expect(conversation.messages).toEqual([]);
-      emit({ type: "text_delta", text: "All clear." });
+      emit({ type: "text_delta", text: `${userId}:${message}` });
       emit({ type: "run_end", stop_reason: "end_turn" });
     });
 
@@ -143,7 +154,7 @@ describe("alfred routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("text/event-stream");
     expect(res.text).toContain("event: run_start");
-    expect(res.text).toContain('"text":"All clear."');
+    expect(res.text).toContain('"text":"user-1:What\'s left?"');
     expect(res.text).toContain("event: run_end");
     const startEvent = JSON.parse(
       res.text.split("\n\n").find((frame: string) => frame.includes("run_start"))!.split("data: ")[1]!,
@@ -151,10 +162,6 @@ describe("alfred routes", () => {
     expect(startEvent.conversation_id).toBeTruthy();
     expect(startEvent.provider).toBe("anthropic");
     expect(startEvent.model).toBe("claude-sonnet-4-6");
-    expect(testState.run).toHaveBeenCalledWith(expect.objectContaining({
-      userId: "user-1",
-      message: "What's left?",
-    }));
   });
 
   it("uses the OpenAI provider and credential selected in Settings", async () => {

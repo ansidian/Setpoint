@@ -1,21 +1,18 @@
 import { createClient, type Client } from "@libsql/client";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 // These suites guard the boot-loop bug: runMigration must apply a migration's
 // body and its ledger row atomically, so a partial failure leaves NO schema
 // change and NO ledger row and the next boot can cleanly re-run it. The suites
 // exercise the migration runner directly with an ephemeral libsql database.
 //
-// The runner imports the db singleton; stub it so importing migrate.ts doesn't
-// open a real connection. Every test passes its own dbClient explicitly. A real
-// file-backed libSQL DB (not :memory:) is required so the runner's transaction
+// Every test passes its own dbClient explicitly. A real file-backed libSQL DB
+// (not :memory:) is required so the runner's transaction
 // connection shares the same database — :memory: gives each connection a
 // distinct database and would not exercise commit/rollback visibility.
-vi.mock("./connection.ts", () => ({ default: {} }));
-
-const { runMigration } = await import("./migration-runner.ts");
+import { runMigration } from "./migration-runner.ts";
 
 describe("runMigration atomicity (P1-8)", () => {
   let db: Client | null = null;

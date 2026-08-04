@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- Test helpers intentionally co-locate a private harness with non-component exports. */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { expect, vi } from "vitest";
 import "../CalendarEventEditor.test-setup.ts";
 import { buildEventGhostPreview } from "../ghostPreview.ts";
@@ -46,6 +46,21 @@ function EditorHarness({
   onDeleted,
   editorRef,
 }: EditorHarnessProps) {
+  const [upsertedEvents, setUpsertedEvents] = useState<unknown[]>([]);
+  const [removedEventIds, setRemovedEventIds] = useState<string[]>([]);
+  const [refreshedBounds, setRefreshedBounds] = useState<Array<[string, string]>>([]);
+  const observeRefreshRange = useCallback<RefreshRange>(async (start, end) => {
+    setRefreshedBounds((current) => [...current, [start, end]]);
+    return refreshRange(start, end);
+  }, [refreshRange]);
+  const observeUpsertEvents = useCallback<UpsertEvents>((input) => {
+    setUpsertedEvents((current) => [...current, input]);
+    return upsertEvents(input);
+  }, [upsertEvents]);
+  const observeRemoveEvent = useCallback<RemoveEvent>((id) => {
+    setRemovedEventIds((current) => [...current, id]);
+    return removeEvent(id);
+  }, [removeEvent]);
   const editor = useCalendarEventEditor({
     open: true,
     view: "events",
@@ -53,9 +68,9 @@ function EditorHarness({
     selectedDate: focusDate,
     viewYear: Number(focusDate.slice(0, 4)),
     viewMonth: Number(focusDate.slice(5, 7)) - 1,
-    refreshRange,
-    upsertEvents,
-    removeEvent,
+    refreshRange: observeRefreshRange,
+    upsertEvents: observeUpsertEvents,
+    removeEvent: observeRemoveEvent,
     onFocusDate,
     onSaved,
     onDeleted,
@@ -75,16 +90,21 @@ function EditorHarness({
     void (event ? editor.openEdit(event) : editor.openCreate());
   }, [editor, event]);
 
-  if (!editor.isEditorOpen) return null;
-
   // The production ghost adapter serializes this hook result into the narrower
   // EventEditorLike shape. The focused harness can pass the same runtime data
   // directly; these casts bridge only nullable/index-signature differences.
-  const ghostPreview = buildEventGhostPreview({
+  const ghostPreview = editor.isEditorOpen ? buildEventGhostPreview({
     editor: editor as unknown as EventEditorLike,
     events,
-  }) as CalendarDraftGhostPreview | null;
-  return <CalendarEventEditorRail editor={editor} ghostPreview={ghostPreview} host="floating" />;
+  }) as CalendarDraftGhostPreview | null : null;
+  return (
+    <>
+      <output data-testid="calendar-editor-observed-upserts">{JSON.stringify(upsertedEvents)}</output>
+      <output data-testid="calendar-editor-observed-removals">{JSON.stringify(removedEventIds)}</output>
+      <output data-testid="calendar-editor-observed-refreshes">{JSON.stringify(refreshedBounds)}</output>
+      {editor.isEditorOpen ? <CalendarEventEditorRail editor={editor} ghostPreview={ghostPreview} host="floating" /> : null}
+    </>
+  );
 }
 
 export function renderEventEditor({

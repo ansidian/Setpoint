@@ -11,6 +11,7 @@ const mockApi = vi.hoisted(() => ({
   updateAccount: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- account connection, OAuth URL, and provider-backed account mutations cross the authenticated HTTP boundary.
 vi.mock("@/api", () => mockApi);
 
 const { default: GoogleWorkspaceAccountsPanel } = await import("./GoogleWorkspaceAccountsPanel");
@@ -57,6 +58,7 @@ describe("connection account panels", () => {
     mockApi.getAccounts.mockResolvedValue({ accounts });
     fireEvent.click(screen.getByRole("button", { name: "Connect iCloud" }));
 
+    // test-architecture: allow-boundary-interaction -- the write-only app password and canonical email are outbound provider-connection inputs unavailable after the form clears.
     await waitFor(() => expect(mockApi.addICloudAccount).toHaveBeenCalledWith("owner@icloud.com", "app-password"));
   });
 });

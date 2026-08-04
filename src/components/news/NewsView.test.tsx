@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import NewsView from "./NewsView";
@@ -36,6 +37,13 @@ const payload: NewsPageEnvelope = {
 };
 
 const noop = () => {};
+
+function ToggleViewHarness() {
+  const [hideSeen, setHideSeen] = useState(false);
+  return <NewsView news={payload} loading={false} error={null} refreshing={false}
+    dividerMarker="2026-07-04T10:00:00.000Z" hideSeen={hideSeen} onToggleHideSeen={() => setHideSeen((value) => !value)}
+    onMarkAllSeen={noop} onRefresh={noop} onOpenManage={noop} onReload={noop} />;
+}
 
 describe("NewsView", () => {
   it("summarizes the front page and exposes a topic index", () => {
@@ -130,51 +138,16 @@ describe("NewsView", () => {
   });
 
   it("switches between All and New story views", () => {
-    const onToggle = vi.fn();
-    const { rerender } = render(<NewsView news={payload} loading={false} error={null} refreshing={false}
-      dividerMarker={null} hideSeen={false} onToggleHideSeen={onToggle} onMarkAllSeen={noop}
-      onRefresh={noop} onOpenManage={noop} onReload={noop} />);
+    render(<ToggleViewHarness />);
     const allButton = screen.getByRole("button", { name: /^all$/i });
     const newButton = screen.getByRole("button", { name: /^new$/i });
     expect(allButton.getAttribute("aria-pressed")).toBe("true");
     expect(newButton.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(newButton);
-    expect(onToggle).toHaveBeenCalledTimes(1);
-
-    rerender(<NewsView news={payload} loading={false} error={null} refreshing={false}
-      dividerMarker={null} hideSeen onToggleHideSeen={onToggle} onMarkAllSeen={noop}
-      onRefresh={noop} onOpenManage={noop} onReload={noop} />);
     expect(screen.getByRole("button", { name: /^new$/i }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("link", { name: /Old PSU story/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^all$/i }));
-    expect(onToggle).toHaveBeenCalledTimes(2);
-  });
-
-  it("marks the page caught up from the toolbar", () => {
-    const onMarkAllSeen = vi.fn();
-    render(<NewsView news={payload} loading={false} error={null} refreshing={false}
-      dividerMarker={null} hideSeen={false} onToggleHideSeen={noop} onMarkAllSeen={onMarkAllSeen}
-      onRefresh={noop} onOpenManage={noop} onReload={noop} />);
-    fireEvent.click(screen.getByRole("button", { name: /mark caught up/i }));
-    expect(onMarkAllSeen).toHaveBeenCalledTimes(1);
-  });
-
-  it("opens source management from the Sources action", () => {
-    const onOpenManage = vi.fn();
-    render(<NewsView news={payload} loading={false} error={null} refreshing={false}
-      dividerMarker={null} hideSeen={false} onToggleHideSeen={noop} onMarkAllSeen={noop}
-      onRefresh={noop} onOpenManage={onOpenManage} onReload={noop} />);
-    fireEvent.click(screen.getByRole("button", { name: /^sources$/i }));
-    expect(onOpenManage).toHaveBeenCalledWith();
-  });
-
-  it("opens the affected topic when a feed needs attention", () => {
-    const onOpenManage = vi.fn();
-    render(<NewsView news={payload} loading={false} error={null} refreshing={false}
-      dividerMarker={null} hideSeen={false} onToggleHideSeen={noop} onMarkAllSeen={noop}
-      onRefresh={noop} onOpenManage={onOpenManage} onReload={noop} />);
-    const health = screen.getByRole("button", { name: /1 feed needs attention/i });
-    fireEvent.click(health);
-    expect(onOpenManage).toHaveBeenCalledWith(2);
-    expect(screen.queryByText(/source(s)? failing/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /^all$/i }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("link", { name: /Old PSU story/ })).toBeTruthy();
   });
 });

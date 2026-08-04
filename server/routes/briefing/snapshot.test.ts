@@ -1,15 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import cookieParser from "cookie-parser";
-import crypto from "crypto";
 import request from "../../test-utils/supertest.ts";
 import { errorHandler } from "../../middleware/async-handler.ts";
 import type { HttpError } from "../../snapshots/snapshot-types.ts";
+import type { Client } from "@libsql/client";
+import { createMigratedDb } from "../../snapshots/snapshot-test-fixtures.ts";
+import { seedOwner, seedSession } from "../../test-utils/auth-db.ts";
+import { createRequireCookieSession } from "../../middleware/auth.ts";
+import { createSnapshotRouter } from "./snapshot.ts";
 
-const mockDb = { execute: vi.fn() };
-
-vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../../snapshots/snapshot-service.ts", () => ({
+const snapshotService = {
   getSnapshotHistory: vi.fn(async () => ({
     snapshots: [{ id: 1, status: "active", readOnly: false }],
   })),
@@ -51,19 +52,25 @@ vi.mock("../../snapshots/snapshot-service.ts", () => ({
     handled_at: null,
     lane: "needs_attention",
   })),
-}));
+};
 
 process.env.EA_USER_ID = "user-1";
 
-const snapshotService = await import("../../snapshots/snapshot-service.ts");
-const briefingRoutes = (await import("./index.ts")).default;
-const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
+let db: Client;
 
-function makeApp() {
+function makeApp({ authenticated = true }: { authenticated?: boolean } = {}) {
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => {
+    if (authenticated) req.headers.cookie = "ea_session=cookie-session";
+    next();
+  });
   app.use(cookieParser());
-  app.use("/api/briefing", briefingRoutes);
+  app.use(
+    "/api/briefing",
+    createRequireCookieSession(db),
+    createSnapshotRouter(snapshotService as never),
+  );
   // Production parity (server/index.ts mounts a terminal errorHandler). A no-route
   // fall-through here returns a distinguishable JSON body instead of finalhandler's
   // text/html "Cannot POST", so any future 404 self-identifies its source via
@@ -80,27 +87,18 @@ function authCookie() {
   return ["ea_session=cookie-session"];
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
-  mockDb.execute.mockImplementation(async ({ sql, args }) => {
-    if (sql.includes("FROM ea_sessions")) {
-      return args[0] === cookieSessionHash
-        ? { rows: [{
-            expires_at: Date.now() + 60_000,
-            authenticated_at: 0,
-            password_authenticated_at: 0,
-            security_generation: 1,
-            auth_method: "legacy",
-          }] }
-        : { rows: [] };
-    }
-    return { rows: [] };
-  });
+  db = await createMigratedDb();
+  await seedOwner(db, { userId: "user-1", passwordHash: "hash" });
+  await seedSession(db, "cookie-session");
 });
+
+afterEach(() => db.close());
 
 describe("snapshot routes", () => {
   it("rejects snapshot requests without briefing cookie auth", async () => {
-    const res = await request(makeApp()).get("/api/briefing/snapshot/active");
+    const res = await request(makeApp({ authenticated: false })).get("/api/briefing/snapshot/active");
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ message: "Not authenticated" });

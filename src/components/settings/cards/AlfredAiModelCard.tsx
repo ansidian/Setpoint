@@ -3,7 +3,7 @@ import { MessageCircleMore } from "lucide-react";
 import { getAlfredModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
-import { projectAiProviderSelection } from "@/components/settings/featureDependencyModel";
+import { projectAiProviderSelection, projectAiSettingsSelectionPatch } from "@/components/settings/featureDependencyModel";
 import { isDemoMode } from "@/demo/config";
 import type { ProviderModelAvailability } from "../../../../shared/types/settings";
 import type { SettingsCardStateProps } from "../settingsTypes";
@@ -84,12 +84,12 @@ export default function AlfredAiModelCard({
     const model = next.models.some((entry) => entry.id === nextModel)
       ? nextModel
       : next.defaultModel;
+    const update = projectAiSettingsSelectionPatch("alfred", nextProvider, model);
     setSettings((current) => ({
       ...(current || {}),
-      alfred_provider: nextProvider,
-      alfred_model: model,
+      ...update,
     }));
-    patch({ alfred_provider: nextProvider, alfred_model: model });
+    patch(update);
   }
 
   return (

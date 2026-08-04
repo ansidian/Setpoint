@@ -92,6 +92,7 @@ describe("saveActualConnectionCandidate", () => {
       status: 400,
     });
 
+    // test-architecture: allow-boundary-interaction -- Connection validation is the outbound Actual HTTP boundary; a changed server without a new password must fail before any credential-bearing request.
     expect(testConnection).not.toHaveBeenCalled();
     const stored = await db.execute({
       sql: `SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id

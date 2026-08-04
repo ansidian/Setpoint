@@ -10,11 +10,14 @@ import {
 import { findForbiddenSourcePatterns } from './lib/design-policy.mts'
 import { findTestSourcePolicyViolations } from './lib/test-source-policy.mts'
 import {
+  checkTestArchitectureApprovalsEmpty,
   checkTestArchitectureBaseline,
+  checkTestArchitectureBaselineEmpty,
   checkTestArchitectureBaselineGrowth,
   collectTestArchitectureMetrics,
   normalizeTestArchitecturePath,
 } from './lib/test-architecture-policy.mts'
+import { checkTestArchitectureOwnership } from './lib/test-architecture-ownership.mts'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
@@ -279,6 +282,9 @@ async function checkTestArchitecture() {
   ])))
   const baseline = JSON.parse(await readText(testArchitectureBaselinePath))
   const approvals = JSON.parse(await readText(testArchitectureApprovalsPath))
+  failures.push(...checkTestArchitectureApprovalsEmpty(approvals))
+  failures.push(...checkTestArchitectureBaselineEmpty(baseline))
+  failures.push(...checkTestArchitectureOwnership(baseline).failures)
   const result = checkTestArchitectureBaseline({ files, baseline })
   failures.push(...result.failures)
   warnings.push(...result.warnings)
@@ -314,7 +320,7 @@ async function checkTestArchitecture() {
     if (previousBaselineSource) {
       try {
         const previousBaseline = JSON.parse(previousBaselineSource)
-        failures.push(...checkTestArchitectureBaselineGrowth({ previousBaseline, baseline, approvals }))
+        failures.push(...checkTestArchitectureBaselineGrowth({ previousBaseline, baseline }))
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error)
         failures.push(`could not parse the test-architecture baseline from ${comparisonRef}: ${detail}`)

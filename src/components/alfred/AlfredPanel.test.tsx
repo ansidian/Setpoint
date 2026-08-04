@@ -1,26 +1,52 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
+import AlfredPanel from "./AlfredPanel";
 
-const api = vi.hoisted(() => ({
-  runAlfredStream: vi.fn(),
-  deleteAlfredConversation: vi.fn().mockResolvedValue({ ok: true }),
-  getEmailBody: vi.fn().mockResolvedValue({ body: "Body" }),
-  peekEmailBody: vi.fn(() => null),
-}));
-vi.mock("../../api", () => api);
-
-const { default: AlfredPanel } = await import("./AlfredPanel");
+let runs: Response[] = [];
 
 function scriptedRun(events: AlfredRunEvent[]) {
-  api.runAlfredStream.mockImplementation(async ({ onEvent }: { onEvent: (event: AlfredRunEvent) => void }) => {
-    for (const e of events) onEvent(e);
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
+      controller.close();
+    },
   });
+  runs.push(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }));
 }
+
+function deferredRun(events: AlfredRunEvent[]): { response: Response; finish: () => void } {
+  const encoder = new TextEncoder();
+  let closeStream = () => {};
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
+      closeStream = () => {
+        controller.enqueue(encoder.encode('event: run_end\ndata: {"type":"run_end","stop_reason":"end_turn"}\n\n'));
+        controller.close();
+      };
+    },
+  });
+  return { response: new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }), finish: () => closeStream() };
+}
+
+beforeEach(() => {
+  runs = [];
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const path = new URL(String(input), "https://setpoint.test").pathname;
+    if (path === "/api/alfred/run") return runs.shift() ?? new Response(null, { status: 200 });
+    if (path.startsWith("/api/briefing/email/")) {
+      return new Response(JSON.stringify({ body: "Body" }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+  });
+});
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const baseProps = { open: true, onClose: () => {}, accent: "#cba6da", handoff: null, newChatTick: 0 };
@@ -117,45 +143,43 @@ describe("AlfredPanel", () => {
   });
 
   it("retries a handoff that arrived during an in-flight run instead of dropping it (P2-3)", async () => {
-    let resolveFirst: () => void = () => {};
-    api.runAlfredStream
-      .mockImplementationOnce(async ({ onEvent }: { onEvent: (event: AlfredRunEvent) => void }) => {
-        onEvent({ type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" });
-        await new Promise<void>((resolve) => { resolveFirst = resolve; });
-        onEvent({ type: "run_end", stop_reason: "end_turn" });
-      })
-      .mockImplementation(async ({ onEvent }: { onEvent: (event: AlfredRunEvent) => void }) => {
-        onEvent({ type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" });
-        onEvent({ type: "run_end", stop_reason: "end_turn" });
-      });
+    const pending = deferredRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+    ]);
+    runs.push(pending.response);
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
 
     const { rerender } = render(<AlfredPanel {...baseProps} handoff={null} />);
     rerender(<AlfredPanel {...baseProps} handoff={{ id: "h1", query: "first handoff" }} />);
-    await waitFor(() => expect(api.runAlfredStream).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText("first handoff")).toBeTruthy());
 
     // A second handoff arrives while the first run is still streaming (busy).
     rerender(<AlfredPanel {...baseProps} handoff={{ id: "h2", query: "second handoff" }} />);
-    expect(api.runAlfredStream).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("second handoff")).toBeNull();
 
     // When the first run finishes, the dropped handoff must fire — not vanish.
-    resolveFirst();
-    await waitFor(() => expect(api.runAlfredStream).toHaveBeenCalledTimes(2));
-    expect(api.runAlfredStream.mock.calls[1]![0].message).toBe("second handoff");
+    pending.finish();
+    await waitFor(() => expect(screen.getByText("second handoff")).toBeTruthy());
   });
 
   it("closes on Escape in the composer", () => {
-    const onClose = vi.fn();
-    render(<AlfredPanel {...baseProps} onClose={onClose} />);
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return <><AlfredPanel {...baseProps} open={open} onClose={() => setOpen(false)} /><output>{open ? "panel open" : "panel closed"}</output></>;
+    }
+    render(<Harness />);
     fireEvent.keyDown(screen.getByPlaceholderText("Ask about your day…"), { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
+    expect(screen.getByText("panel closed")).toBeTruthy();
   });
 
   it("submits a handoff query when the handoff prop changes", async () => {
     scriptedRun([{ type: "run_end", stop_reason: "end_turn" }]);
     const { rerender } = render(<AlfredPanel {...baseProps} />);
     rerender(<AlfredPanel {...baseProps} handoff={{ id: 1, query: "car insurance email" }} />);
-    await waitFor(() => expect(api.runAlfredStream).toHaveBeenCalledTimes(1));
-    expect(api.runAlfredStream.mock.calls[0]![0].message).toBe("car insurance email");
+    await waitFor(() => expect(screen.getByText("car insurance email")).toBeTruthy());
   });
 
   it("clears the conversation when newChatTick changes", async () => {
@@ -196,17 +220,18 @@ describe("AlfredPanel", () => {
       { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
-    const onOpenCalendarItem = vi.fn();
-    render(<AlfredPanel {...baseProps} onOpenCalendarItem={onOpenCalendarItem} />);
+    function Harness() {
+      const [request, setRequest] = useState("none");
+      return <><AlfredPanel {...baseProps} onOpenCalendarItem={(next) => setRequest(`${next.viewKey}:${next.focusItemId}`)} /><output>{request}</output></>;
+    }
+    render(<Harness />);
     const input = screen.getByPlaceholderText("Ask about your day…");
     fireEvent.change(input, { target: { value: "Any bills?" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Rent")).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: /Rent/ }));
-    expect(onOpenCalendarItem).toHaveBeenCalledTimes(1);
-    expect(onOpenCalendarItem.mock.calls[0]![0].viewKey).toBe("bills");
-    expect(onOpenCalendarItem.mock.calls[0]![0].focusItemId).toBe("b1");
+    expect(screen.getByText("bills:b1")).toBeTruthy();
   });
 
   it("opens the read-only preview when an email chip is clicked", async () => {
@@ -249,8 +274,11 @@ describe("AlfredPanel", () => {
       { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
-    const onClose = vi.fn();
-    render(<AlfredPanel {...baseProps} onClose={onClose} />);
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return <><AlfredPanel {...baseProps} open={open} onClose={() => setOpen(false)} /><output>{open ? "panel open" : "panel closed"}</output></>;
+    }
+    render(<Harness />);
     const input = screen.getByPlaceholderText("Ask about your day…");
     fireEvent.change(input, { target: { value: "find it" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -260,9 +288,9 @@ describe("AlfredPanel", () => {
 
     fireEvent.keyDown(document.body, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Email preview" })).toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText("panel open")).toBeTruthy();
 
     fireEvent.keyDown(document.body, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("panel closed")).toBeTruthy();
   });
 });

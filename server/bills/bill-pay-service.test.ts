@@ -23,18 +23,29 @@ describe("resolveBillPaySeed Actual reconciliation", () => {
       payeeMap: { "payee-acme": "Acme Utilities" },
       syncHealth: { state: "current", lastSuccessAt: "2026-07-16T16:00:00.000Z" },
     });
-    const occurrenceReader = vi.fn().mockResolvedValue({
-      schedules: [{
-        scheduleId: "schedule-acme",
-        name: "Acme Utilities",
-        amount: 142.31,
-        next_date: "2026-08-12",
-        paid: false,
-        type: "bill",
-      }],
+    const occurrenceReader = async (
+      userId: string,
+      range: { start: string; end: string },
+      options: { dbClient: unknown },
+    ) => ({
+      schedules: userId === "u1"
+        && range.start === "2026-08-12"
+        && range.end === "2026-08-12"
+        && options.dbClient === dbClient
+        ? [{
+            scheduleId: "schedule-acme",
+            name: "Acme Utilities",
+            amount: 142.31,
+            next_date: "2026-08-12",
+            paid: false,
+            type: "bill",
+          }]
+        : [],
       syncHealth: { state: "current", lastSuccessAt: "2026-07-16T16:00:00.000Z" },
     });
-    const transactionReader = vi.fn();
+    const transactionReader = async () => {
+      throw new Error("future scheduled bills must not read exact transactions");
+    };
 
     const result = await resolveBillPaySeed("u1", {
       candidate: {
@@ -58,11 +69,5 @@ describe("resolveBillPaySeed Actual reconciliation", () => {
       status: "already_scheduled",
       evidence: { scheduleId: "schedule-acme" },
     });
-    expect(occurrenceReader).toHaveBeenCalledWith(
-      "u1",
-      { start: "2026-08-12", end: "2026-08-12" },
-      { dbClient },
-    );
-    expect(transactionReader).not.toHaveBeenCalled();
   });
 });

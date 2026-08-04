@@ -1,6 +1,13 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MobileBottomNav } from "./MobileBottomNav";
+import type { DashboardTab } from "../dashboard/dashboardShellModel";
+
+function NavHarness({ initialTab = "dashboard" }: { initialTab?: DashboardTab }) {
+  const [tab, setTab] = useState<DashboardTab>(initialTab);
+  return <MobileBottomNav tab={tab} onTab={setTab} inboxUnreadSignalCount={0} />;
+}
 
 afterEach(cleanup);
 
@@ -11,45 +18,18 @@ describe("MobileBottomNav", () => {
     expect(labels).toEqual(["Dashboard", "Inbox", "Calendar", "Notes"]);
   });
 
-  it("fires onTab('calendar') when the Calendar tab is tapped", () => {
-    const onTab = vi.fn();
-    render(<MobileBottomNav tab="dashboard" onTab={onTab} inboxUnreadSignalCount={0} />);
+  it("selects Calendar when its tab is tapped", () => {
+    render(<NavHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
-    expect(onTab).toHaveBeenCalledWith("calendar");
+    expect(screen.getByRole("button", { name: "Calendar" }).getAttribute("aria-current")).toBe("page");
   });
 
-  it("marks the active tab with aria-current and fires onTab with the tab key", () => {
-    const onTab = vi.fn();
-    render(<MobileBottomNav tab="inbox" onTab={onTab} inboxUnreadSignalCount={0} />);
+  it("marks the active tab with aria-current and moves selection to another tab", () => {
+    render(<NavHarness initialTab="inbox" />);
     expect(screen.getByRole("button", { name: "Inbox" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("button", { name: "Dashboard" }).getAttribute("aria-current")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Notes" }));
-    expect(onTab).toHaveBeenCalledWith("notes");
-  });
-
-  it("fires onRetap (not onTab) when the active tab is re-tapped", () => {
-    const onTab = vi.fn();
-    const onRetap = vi.fn();
-    render(<MobileBottomNav tab="calendar" onTab={onTab} onRetap={onRetap} inboxUnreadSignalCount={0} />);
-    fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
-    expect(onRetap).toHaveBeenCalledWith("calendar");
-    expect(onTab).not.toHaveBeenCalled();
-  });
-
-  it("still fires onTab for a non-active tab even when onRetap is provided", () => {
-    const onTab = vi.fn();
-    const onRetap = vi.fn();
-    render(<MobileBottomNav tab="calendar" onTab={onTab} onRetap={onRetap} inboxUnreadSignalCount={0} />);
-    fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
-    expect(onTab).toHaveBeenCalledWith("dashboard");
-    expect(onRetap).not.toHaveBeenCalled();
-  });
-
-  it("falls back to onTab when the active tab is re-tapped without onRetap", () => {
-    const onTab = vi.fn();
-    render(<MobileBottomNav tab="calendar" onTab={onTab} inboxUnreadSignalCount={0} />);
-    fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
-    expect(onTab).toHaveBeenCalledWith("calendar");
+    expect(screen.getByRole("button", { name: "Notes" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("shows the inbox unread badge only when count > 0 and clamps > 99 to 99+", () => {

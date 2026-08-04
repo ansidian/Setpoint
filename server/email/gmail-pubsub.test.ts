@@ -80,6 +80,7 @@ describe("Gmail Pub/Sub configuration", () => {
 
     await expect(service.verifyToken("legacy-secret")).resolves.toBe(true);
 
+    // test-architecture: allow-boundary-interaction -- Token verification is an authorization database boundary; every delivery must perform exactly one authoritative read with no cache window.
     expect(dbClient.execute).toHaveBeenCalledTimes(1);
     const statement = dbClient.execute.mock.calls[0]?.[0];
     expect(statement).toMatchObject({ args: [] });
@@ -96,6 +97,7 @@ describe("Gmail Pub/Sub configuration", () => {
 
     await expect(service.verifyToken("")).resolves.toBe(false);
 
+    // test-architecture: allow-boundary-interaction -- Token verification is an authorization database boundary; even an empty candidate must perform the one authoritative revocation read.
     expect(dbClient.execute).toHaveBeenCalledTimes(1);
   });
 

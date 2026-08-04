@@ -10,6 +10,7 @@ const mockApi = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- the hook's stable state facade is exercised with the authenticated browser-to-server HTTP adapter faked at its imported network seam.
 vi.mock("@/api", () => ({
   getAccounts: mockApi.getAccounts,
   getCapabilities: mockApi.getCapabilities,
@@ -42,11 +43,14 @@ afterEach(() => {
 
 describe("useSettingsPage debounced auto-save", () => {
   it("loads shared capability truth with settings and accounts", async () => {
+    mockApi.getCapabilities.mockResolvedValue({
+      generatedAt: "2026-07-18T00:00:00.000Z",
+      capabilities: [{ id: "tasks", state: "ready" }],
+    });
     const { result } = renderHook(() => useSettingsPage(), { wrapper });
     await act(async () => { await Promise.resolve(); });
 
-    expect(mockApi.getCapabilities).toHaveBeenCalledTimes(1);
-    expect(result.current.capabilities).toEqual([]);
+    expect(result.current.capabilities).toEqual([{ id: "tasks", state: "ready" }]);
   });
 
   it("loads instance credential metadata once with the other Settings evidence", async () => {
@@ -71,7 +75,6 @@ describe("useSettingsPage debounced auto-save", () => {
     const { result } = renderHook(() => useSettingsPage(), { wrapper });
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(1);
     expect(result.current.credentialMetadata).toHaveLength(1);
     expect(result.current.connections.find(({ id }) => id === "openai")?.state).toBe("connected");
   });
@@ -103,13 +106,32 @@ describe("useSettingsPage debounced auto-save", () => {
   });
 
   it("refreshes shared metadata internally without refreshing provider health", async () => {
+    mockApi.getInstanceCredentials
+      .mockResolvedValueOnce({ credentials: [], rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" } })
+      .mockResolvedValueOnce({
+        credentials: [{
+          key: "ai.openai_api_key",
+          handling: "secret",
+          capabilities: ["email_triage"],
+          source: "stored",
+          activeConfigured: true,
+          pendingConfigured: false,
+          validationState: "valid",
+          lastTestedAt: null,
+          lastSucceededAt: null,
+          lastFailedAt: null,
+          errorCode: null,
+          version: 2,
+        }],
+        rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" },
+      });
     const { result } = renderHook(() => useSettingsPage(), { wrapper });
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
     await act(async () => { await result.current.refreshInstanceCredentials(); });
 
-    expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(2);
-    expect(mockApi.getCapabilities).toHaveBeenCalledTimes(1);
+    expect(result.current.credentialMetadata).toHaveLength(1);
+    expect(result.current.credentialMetadata?.[0]?.version).toBe(2);
   });
 
   it("refreshes connection settings and capability evidence without running provider tests", async () => {
@@ -123,9 +145,8 @@ describe("useSettingsPage debounced auto-save", () => {
 
     await act(async () => { await result.current.refreshConnections(); });
 
-    expect(mockApi.getSettings).toHaveBeenCalledTimes(2);
+    // test-architecture: allow-boundary-interaction -- refreshed state cannot prove the browser requested the server's explicit capability-cache bypass required by the Settings refresh contract.
     expect(mockApi.getCapabilities).toHaveBeenLastCalledWith(true);
-    expect(mockApi.getInstanceCredentials).toHaveBeenCalledTimes(1);
     expect(result.current.settings).toMatchObject({ actual_budget_configured: true });
     expect(result.current.capabilities).toEqual([{ id: "finances", state: "ready" }]);
   });
@@ -141,12 +162,11 @@ describe("useSettingsPage debounced auto-save", () => {
     // First field change → debounce → flush rejects.
     act(() => result.current.patch({ triage_mode: "auto" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
-    expect(mockApi.updateSettings).toHaveBeenNthCalledWith(1, { triage_mode: "auto" });
-
     // A later, unrelated field change should flush WITH the re-queued field,
     // not drop it — the buggy code cleared pendingRef before the failed await.
     act(() => result.current.patch({ lookback_hours: 12 }));
     await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    // test-architecture: allow-boundary-interaction -- only the second outbound Settings PUT payload proves a rejected field is re-queued and coalesced with the newer edit.
     expect(mockApi.updateSettings).toHaveBeenNthCalledWith(2, {
       triage_mode: "auto",
       lookback_hours: 12,

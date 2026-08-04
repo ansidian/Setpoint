@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import TimePickerView from "./TimePickerView";
 
 afterEach(() => {
@@ -20,10 +20,10 @@ describe("TimePickerView", () => {
   });
 
   it("switches to PM with the p hotkey and keeps the event from bubbling", () => {
-    const onKeyDown = vi.fn();
+    let bubbled = false;
 
     render(
-      <div onKeyDown={onKeyDown}>
+      <div onKeyDown={() => { bubbled = true; }}>
         <TimePickerView
           initialTime="09:00"
           onSelect={() => {}}
@@ -35,7 +35,7 @@ describe("TimePickerView", () => {
     fireEvent.keyDown(screen.getByLabelText("hour"), { key: "p" });
 
     expect(screen.getByRole("button", { name: "PM" }).getAttribute("aria-pressed")).toBe("true");
-    expect(onKeyDown).not.toHaveBeenCalled();
+    expect(bubbled).toBe(false);
   });
 
   it("switches to AM with the a hotkey from the minute field", () => {
@@ -54,19 +54,19 @@ describe("TimePickerView", () => {
   });
 
   it("submits the current time when enter is pressed from a number field", () => {
-    const onSelect = vi.fn();
+    let selectedTime: string | null = null;
 
     cleanup();
     render(
       <TimePickerView
         initialTime="15:00"
-        onSelect={onSelect}
+        onSelect={(time) => { selectedTime = time; }}
         onBack={() => {}}
       />,
     );
 
     fireEvent.keyDown(screen.getByLabelText("hour"), { key: "Enter" });
 
-    expect(onSelect).toHaveBeenCalledWith("15:00");
+    expect(selectedTime).toBe("15:00");
   });
 });

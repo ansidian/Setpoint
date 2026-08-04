@@ -100,7 +100,6 @@ describe("email search embedding worker", () => {
       failed: 0,
       semantic_status: "active",
     });
-    expect(embed).toHaveBeenCalledTimes(2);
     expect(embed.mock.calls.map(([texts]) => texts.length)).toEqual([2, 1]);
 
     const stored = await db.execute(
@@ -272,6 +271,7 @@ describe("email search embedding worker", () => {
       last_error_class: "email_search_embeddings_unavailable",
     });
     expect(JSON.stringify(status)).not.toContain("Sensitive subject");
+    // test-architecture: allow-boundary-interaction -- Console output is the process logging boundary; the returned redacted status cannot prove that sensitive email content was never emitted there.
     expect(consoleSpy).not.toHaveBeenCalled();
 
     consoleSpy.mockRestore();

@@ -32,8 +32,6 @@ describe("email triage worker rule finalization", () => {
       source: "no_model_heuristic",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: `SELECT lane, category, urgency, escalation_badge, triage_status,
                    triage_source, summary, action, model_usage_json,
@@ -101,8 +99,6 @@ describe("email triage worker rule finalization", () => {
       source: "rule",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: `SELECT lane, category, triage_source, summary, action, decision_metadata_json
             FROM ea_email_triage WHERE email_id = ?`,
@@ -154,8 +150,6 @@ describe("email triage worker rule finalization", () => {
       source: "rule",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: `SELECT lane, category, decision_metadata_json
             FROM ea_email_triage
@@ -221,8 +215,6 @@ describe("email triage worker rule finalization", () => {
       source: "rule",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: "SELECT lane, category, confidence, triage_source, rule_id FROM ea_email_triage WHERE email_id = ?",
       args: ["msg-1"],

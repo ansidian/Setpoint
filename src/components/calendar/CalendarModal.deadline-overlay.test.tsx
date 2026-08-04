@@ -90,15 +90,13 @@ describe("CalendarModal deadline overlay behavior", () => {
     window.innerWidth = 1900;
     window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
     window.localStorage.setItem("calendar:eventsCompletedDeadlines", "false");
-    const onViewChange = vi.fn();
-
     render(wrapWithDashboard(
       <CalendarModal
         open
         openRequestId={1}
         onClose={() => {}}
         view="events"
-        onViewChange={onViewChange}
+        onViewChange={() => {}}
         focusDate="2026-04-20"
         focusItemId="todo-1"
         focusOpenDetail
@@ -121,7 +119,7 @@ describe("CalendarModal deadline overlay behavior", () => {
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
     expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
     expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
-    expect(onViewChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/Calendar Workspace/).textContent).toContain("Events");
   });
 
   it("renders seeded deadline overlay data before the range refresh resolves", () => {

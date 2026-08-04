@@ -1,6 +1,7 @@
 import { decrypt } from "../platform/encryption.ts";
 import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import db from "../db/connection.ts";
+import type { Client } from "@libsql/client";
 import type { ActualConfig } from "../../shared/types/actual.ts";
 
 interface ActualConnectionOverrides {
@@ -15,6 +16,12 @@ interface ActualErrorBody {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+
+interface ActualConnectionHttpDependencies {
+  dbClient?: Pick<Client, "execute">;
+  decryptValue?: typeof decrypt;
+  fetchFn?: typeof fetch;
+}
 
 export class ActualPasswordRequiredForServerChangeError extends Error {
   readonly code = "ACTUAL_PASSWORD_REQUIRED_FOR_SERVER_CHANGE";
@@ -53,8 +60,11 @@ function timeoutMs(): number {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
 }
 
-async function getActualConfig(userId: string): Promise<ActualConfig> {
-  const result = await db.execute({
+async function getActualConfig(
+  userId: string,
+  { dbClient = db, decryptValue = decrypt }: ActualConnectionHttpDependencies = {},
+): Promise<ActualConfig> {
+  const result = await dbClient.execute({
     sql: "SELECT actual_budget_url, actual_budget_password_encrypted, actual_budget_sync_id FROM ea_settings WHERE user_id = ?",
     args: [userId],
   });
@@ -65,7 +75,7 @@ async function getActualConfig(userId: string): Promise<ActualConfig> {
   return {
     serverURL: trimServerUrl(settings.actual_budget_url),
     password: settings.actual_budget_password_encrypted
-      ? decrypt(
+      ? decryptValue(
           String(settings.actual_budget_password_encrypted),
           settingsCredentialContext(userId, "actual_budget_password_encrypted"),
         )
@@ -74,13 +84,17 @@ async function getActualConfig(userId: string): Promise<ActualConfig> {
   };
 }
 
-async function fetchJson<T = unknown>(url: string, options: RequestInit = {}): Promise<T> {
+async function fetchJson<T = unknown>(
+  url: string,
+  options: RequestInit = {},
+  fetchFn: typeof fetch = fetch,
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs());
   let response: Response;
   let bodyText = "";
   try {
-    response = await fetch(url, {
+    response = await fetchFn(url, {
       ...options,
       redirect: "manual",
       signal: controller.signal,
@@ -117,10 +131,15 @@ async function fetchJson<T = unknown>(url: string, options: RequestInit = {}): P
   return body as T;
 }
 
-export async function testActualConnectionHttp(userId: string, overrides: ActualConnectionOverrides | null = null): Promise<{ success: true; budgetCount: number; budgetFound: boolean }> {
+export async function testActualConnectionHttp(
+  userId: string,
+  overrides: ActualConnectionOverrides | null = null,
+  dependencies: ActualConnectionHttpDependencies = {},
+): Promise<{ success: true; budgetCount: number; budgetFound: boolean }> {
+  const fetchFn = dependencies.fetchFn ?? fetch;
   const stored = overrides?.serverURL && overrides?.syncId
-    ? await getActualConfig(userId).catch(() => null)
-    : await getActualConfig(userId);
+    ? await getActualConfig(userId, dependencies).catch(() => null)
+    : await getActualConfig(userId, dependencies);
   const serverURL = trimServerUrl(overrides?.serverURL || stored?.serverURL);
   const syncId = String(overrides?.syncId || stored?.syncId || "").trim();
   const suppliedPassword = overrides?.password || null;
@@ -142,7 +161,7 @@ export async function testActualConnectionHttp(userId: string, overrides: Actual
   const login = await fetchJson<{ data?: { token?: string } }>(joinUrl(serverURL, "/account/login"), {
     method: "POST",
     body: JSON.stringify({ password, loginMethod: "password" }),
-  });
+  }, fetchFn);
   const token = login?.data?.token;
   if (!token) {
     throw Object.assign(new Error("Actual Budget login did not return a session token"), { status: 502 });
@@ -150,7 +169,7 @@ export async function testActualConnectionHttp(userId: string, overrides: Actual
 
   const files = await fetchJson<{ data?: Array<{ groupId?: string }> }>(joinUrl(serverURL, "/sync/list-user-files"), {
     headers: { "X-ACTUAL-TOKEN": token },
-  });
+  }, fetchFn);
   const budgets = Array.isArray(files?.data) ? files.data : [];
   return {
     success: true,

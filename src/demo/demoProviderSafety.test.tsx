@@ -11,6 +11,7 @@ describe("demo mode provider and external navigation safety", () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    localStorage.clear();
   });
 
   it("hides Gmail URLs in demo mode", () => {
@@ -34,26 +35,23 @@ describe("demo mode provider and external navigation safety", () => {
 
   it("blocks imperative external navigation in demo mode", () => {
     vi.stubEnv("VITE_EA_DEMO", "1");
-    const open = vi.fn();
-    vi.stubGlobal("open", open);
+    let openedUrl: string | null = null;
+    vi.stubGlobal("open", (url: string | URL | undefined) => { openedUrl = String(url); return null; });
 
     openInNewTab("https://provider.example.test");
 
-    expect(open).not.toHaveBeenCalled();
+    expect(openedUrl).toBeNull();
   });
 
   it("suppresses UI preference storage reads and writes in demo mode", () => {
     vi.stubEnv("VITE_EA_DEMO", "1");
-    const getItem = vi.spyOn(Storage.prototype, "getItem");
-    const setItem = vi.spyOn(Storage.prototype, "setItem");
     const keys = ["ea:tab", "ea:inboxSidebarCompact", "calendar:lastView", "alfred:model"];
 
     for (const key of keys) {
+      localStorage.setItem(key, "persisted-value");
       expect(readDemoSafeLocalStorage(key)).toBe(null);
       writeDemoSafeLocalStorage(key, "demo-value");
+      expect(localStorage.getItem(key)).toBe("persisted-value");
     }
-
-    expect(getItem).not.toHaveBeenCalled();
-    expect(setItem).not.toHaveBeenCalled();
   });
 });

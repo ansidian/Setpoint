@@ -8,15 +8,10 @@ import {
 import { SectionLabel } from "@/components/settings/settings-ui";
 import { ExternalLink } from "lucide-react";
 import type { ProviderModelAvailability } from "../../../../shared/types/settings";
+import { projectProviderModelControl } from "../featureDependencyModel";
 
 const SELECT_CONTENT_CLASS = "bg-[var(--sp-panel)] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
 const SELECT_TRIGGER_CLASS = "w-full bg-input/30 transition-colors hover:bg-input/50";
-
-function modelMatchesProvider(provider: string | undefined, model: string): boolean {
-  if (provider === "openai") return model.startsWith("gpt-");
-  if (provider === "anthropic") return model.startsWith("claude-");
-  return true;
-}
 
 export default function ProviderModelSelect({
   providers,
@@ -39,23 +34,12 @@ export default function ProviderModelSelect({
   providerAriaLabel?: string;
   modelAriaLabel?: string;
 }) {
-  const selectedProvider = providers.find((entry) => entry.provider === provider) || providers[0];
-  const listedModel = selectedProvider?.models.find((entry) => entry.id === model);
-  const preserveUnlistedModel = Boolean(
-    model && selectedProvider && modelMatchesProvider(selectedProvider.provider, model),
-  );
-  const selectedModel = listedModel || preserveUnlistedModel
-    ? model
-    : selectedProvider?.defaultModel || "";
-  const modelOptions = selectedProvider && selectedModel && !listedModel && preserveUnlistedModel
-    ? [
-      {
-        id: selectedModel,
-        label: `${selectedModel} (saved; not currently listed)`,
-      },
-      ...selectedProvider.models,
-    ]
-    : selectedProvider?.models || [];
+  const { selectedProvider, selectedModel, modelOptions } = projectProviderModelControl({
+    providers,
+    provider,
+    model,
+  });
+  const listedModel = selectedProvider?.models.find((entry) => entry.id === selectedModel);
   const selectedModelLabel = listedModel?.label
     || modelOptions.find((entry) => entry.id === selectedModel)?.label
     || selectedModel;

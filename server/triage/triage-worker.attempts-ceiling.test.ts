@@ -180,8 +180,6 @@ describe("email triage worker snooze join is account-scoped (P3-68)", () => {
     // Account B's job must NOT be deferred as snoozed — it should run normally.
     expect(result.source).not.toBe("snoozed_pending");
     expect(result).toMatchObject({ processed: true, email_id: "msg-1" });
-    expect(modelClient.classify).toHaveBeenCalled();
-
     const job = await dbClient.execute({
       sql: "SELECT status FROM ea_triage_jobs WHERE account_id = 'icloud-home' AND email_id = 'msg-1'",
       args: [],
@@ -213,6 +211,5 @@ describe("email triage worker snooze join is account-scoped (P3-68)", () => {
       source: "snoozed_pending",
       scheduled_for: "2026-05-04T17:46:40.000Z",
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
   });
 });

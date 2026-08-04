@@ -24,6 +24,9 @@ type RunSchedulerWork = <T>(
 interface SnapshotBoundarySchedulerOptions {
   runWork: RunSchedulerWork;
   isStopping: () => boolean;
+  dbClient?: Pick<typeof db, "execute">;
+  scheduleCron?: typeof cron.schedule;
+  advanceBoundary?: typeof advanceSnapshotBoundary;
 }
 
 function errorMessage(error: unknown): string {
@@ -67,6 +70,9 @@ function isMissingTableError(err: unknown): boolean {
 export function createSnapshotBoundaryScheduler({
   runWork,
   isStopping,
+  dbClient = db,
+  scheduleCron = cron.schedule,
+  advanceBoundary = advanceSnapshotBoundary,
 }: SnapshotBoundarySchedulerOptions) {
   const activeJobs: ScheduledTask[] = [];
   let initRerun = false;
@@ -79,7 +85,7 @@ export function createSnapshotBoundaryScheduler({
 
     let result;
     try {
-      result = await db.execute(
+      result = await dbClient.execute(
         "SELECT user_id, schedules_json FROM ea_settings WHERE schedules_json IS NOT NULL",
       );
     } catch (err) {
@@ -115,7 +121,7 @@ export function createSnapshotBoundaryScheduler({
           const cronExpr = `${parseInt(minute)} ${parseInt(hour)} * * *`;
           const userId = String(row.user_id ?? "");
 
-          const job = cron.schedule(
+          const job = scheduleCron(
             cronExpr,
             () => {
               if (isStopping()) return Promise.resolve();
@@ -124,7 +130,7 @@ export function createSnapshotBoundaryScheduler({
                 async () => {
                   // Re-read the schedule so skip changes take effect without re-init.
                   try {
-                    const fresh = await db.execute({
+                    const fresh = await dbClient.execute({
                       sql: "SELECT schedules_json FROM ea_settings WHERE user_id = ?",
                       args: [userId],
                     });
@@ -148,7 +154,7 @@ export function createSnapshotBoundaryScheduler({
                     `[EA Scheduler] Advancing ${schedule.label} snapshot boundary for user ${row.user_id}`,
                   );
                   try {
-                    await advanceSnapshotBoundary(userId, {
+                    await advanceBoundary(userId, {
                       timeZone: schedule.tz || "America/Los_Angeles",
                       scheduleLabel: schedule.label,
                     });

@@ -82,6 +82,7 @@ describe("calendarEventEditorActions", () => {
       intentMode: "batch",
     }, client);
 
+    // test-architecture: allow-boundary-interaction -- The injected client is the outbound Calendar HTTP boundary; the batch request shape is not present in the returned domain result.
     expect(client.createBatch).toHaveBeenCalledWith([
       expect.objectContaining({
         accountId: "gmail-main",
@@ -219,7 +220,9 @@ describe("calendarEventEditorActions", () => {
       },
     }, client);
 
+    // test-architecture: allow-boundary-interaction -- The provider event must be created exactly once before reminders are written; the result cannot prove duplicate outbound writes did not occur.
     expect(client.create).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Reminder anchoring is an outbound reminders API contract whose payload is not returned by the action facade.
     expect(client.createReminder).toHaveBeenCalledWith(expect.objectContaining({
       sourceType: "calendar_event",
       sourceItemId: "event-with-reminder",
@@ -259,6 +262,7 @@ describe("calendarEventEditorActions", () => {
       },
     }, client)).rejects.toThrow("Google Calendar failed");
 
+    // test-architecture: allow-boundary-interaction -- A failed provider create must not emit the separate outbound reminder write; no result exists on this rejection path.
     expect(client.createReminder).not.toHaveBeenCalled();
   });
 
@@ -295,6 +299,7 @@ describe("calendarEventEditorActions", () => {
       },
     }, client);
 
+    // test-architecture: allow-boundary-interaction -- Deleting the persisted reminder is an outbound API side effect not represented in the saved event projection.
     expect(client.deleteReminder).toHaveBeenCalledWith("removed-1");
     expect(result.savedEvent).toMatchObject({
       hasUpcomingReminder: false,
@@ -391,6 +396,7 @@ describe("calendarEventEditorActions", () => {
       intentMode: "single",
     }, client);
 
+    // test-architecture: allow-boundary-interaction -- Recurrence scope and optimistic-concurrency metadata are outbound Google Calendar request requirements absent from the returned event.
     expect(client.update).toHaveBeenCalledWith("event-1", expect.objectContaining({
       title: "Work",
       sourceAccountId: "gmail-main",
@@ -438,6 +444,7 @@ describe("calendarEventEditorActions", () => {
       recurringEditScope: "all",
     }, client);
 
+    // test-architecture: allow-boundary-interaction -- Recurring deletion scope and etag are outbound Google Calendar request requirements with no durable client-side state to inspect.
     expect(client.remove).toHaveBeenCalledWith("event-delete", {
       accountId: "gmail-main",
       calendarId: "primary",

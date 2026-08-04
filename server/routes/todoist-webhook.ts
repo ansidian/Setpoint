@@ -1,8 +1,6 @@
 import { Router } from "express";
 import { handleTodoistWebhookDelivery } from "../tasks/todoist-webhook.ts";
 
-const router = Router();
-
 function errorDetails(error: unknown): { message: string; status?: number } {
   if (error instanceof Error) {
     return {
@@ -13,9 +11,14 @@ function errorDetails(error: unknown): { message: string; status?: number } {
   return { message: String(error) };
 }
 
+export function createTodoistWebhookRouter(
+  handleDelivery: typeof handleTodoistWebhookDelivery = handleTodoistWebhookDelivery,
+) {
+  const router = Router();
+
 router.post("/", async (req, res) => {
   try {
-    const result = await handleTodoistWebhookDelivery({
+    const result = await handleDelivery({
       userId: process.env.EA_USER_ID,
       rawBody: Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || ""),
       headers: req.headers,
@@ -37,4 +40,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-export default router;
+  return router;
+}
+
+export default createTodoistWebhookRouter();

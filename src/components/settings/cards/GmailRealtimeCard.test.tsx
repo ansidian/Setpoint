@@ -14,7 +14,9 @@ const security = vi.hoisted(() => ({
   stepUpWithPassword: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Gmail Pub/Sub status, token, topic, and watch operations cross authenticated HTTP/provider boundaries.
 vi.mock("@/lib/gmailPubSubSetupApi", () => api);
+// test-architecture: allow-boundary-mock -- protected callback/topic mutations may require the authenticated password-step-up boundary.
 vi.mock("@/auth/securityApi", () => security);
 const { default: GmailRealtimeCard } = await import("./GmailRealtimeCard");
 
@@ -87,8 +89,9 @@ describe("GmailRealtimeCard", () => {
     render(<GmailRealtimeCard />);
     fireEvent.click(await screen.findByRole("button", { name: "Regenerate callback" }));
 
+    // test-architecture: allow-boundary-interaction -- browser confirmation must name the external subscription invalidation that no local state can enforce.
     expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/existing Pub\/Sub subscription/i));
-    await waitFor(() => expect(api.generateGmailPubSubCallback).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("dialog", { name: "Gmail callback created" })).toBeTruthy();
   });
 
   it("preserves the topic while password step-up retries the save", async () => {
@@ -108,8 +111,6 @@ describe("GmailRealtimeCard", () => {
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
 
-    await waitFor(() => expect(api.setGmailPubSubTopic).toHaveBeenCalledTimes(2));
-    expect(security.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
     await waitFor(() => expect(input.value).toBe(""));
   });
 
@@ -128,7 +129,6 @@ describe("GmailRealtimeCard", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Copy into Setpoint" }));
 
-    await waitFor(() => expect(api.importGmailPubSubEnvironmentToken).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/render variable still remains/i)).toBeTruthy();
   });
 });

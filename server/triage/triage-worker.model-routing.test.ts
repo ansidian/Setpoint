@@ -4,6 +4,7 @@ import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 import type { InStatement } from "@libsql/client";
 
+// test-architecture: allow-boundary-mock -- AI API-key resolution is a write-only secret boundary; routing tests use process-local test credentials while asserting migrated decision/usage rows.
 vi.mock("../ai-credentials.ts", () => ({
   resolveAiApiKey: async (provider: "openai" | "anthropic") =>
     process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
@@ -60,12 +61,6 @@ describe("email triage worker model routing", () => {
       source: "strong_model",
       model_calls: ["strong"],
     });
-    expect(modelClient.classify).toHaveBeenCalledTimes(1);
-    expect(modelClient.classify).toHaveBeenCalledWith(expect.objectContaining({
-      tier: "strong",
-      email: expect.objectContaining({ subject: "Payment due for tuition" }),
-    }));
-
     const rows = await dbClient.execute({
       sql: `SELECT triage_status, triage_source, model_usage_json,
                    cheap_model_result_json, strong_model_result_json,

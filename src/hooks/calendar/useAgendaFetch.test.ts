@@ -35,7 +35,7 @@ describe("useAgendaFetch", () => {
   it("does not fetch when disabled", () => {
     const domainRange = mockDomainRange();
 
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useAgendaFetch({
         topmostMonth: null,
         domainRange,
@@ -45,7 +45,7 @@ describe("useAgendaFetch", () => {
       }),
     );
 
-    expect(domainRange.ensureRange).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({ initialReady: false, loadedMonths: [] });
   });
 
   it("only records months the events cache actually has after a fetch resolves", async () => {
@@ -114,10 +114,14 @@ describe("useAgendaFetch", () => {
     });
     const loadedAfterInitial = result.current.loadedMonths;
 
-    domainRange.ensureRange.mockRejectedValueOnce(new Error("transient"));
+    let failedPlanSettled = false;
+    domainRange.ensureRange.mockImplementationOnce(async () => {
+      failedPlanSettled = true;
+      throw new Error("transient");
+    });
     rerender({ topmostMonth: "2026-06" });
     await vi.waitFor(() => {
-      expect(domainRange.ensureRange).toHaveBeenCalledTimes(2);
+      expect(failedPlanSettled).toBe(true);
     });
     expect(result.current.loadedMonths).toEqual(loadedAfterInitial);
 

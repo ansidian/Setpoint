@@ -11,39 +11,22 @@ const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
 }));
 
+// test-architecture: allow-boundary-mock -- Todoist mirror durability is exercised through a migrated in-memory database redirected at the shared connection seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement | string) => testState.db.current.execute(statement),
     batch: (statements: InStatement[]) => testState.db.current.batch(statements),
   },
 }));
+// test-architecture: allow-boundary-mock -- Token encryption is the cryptographic storage boundary; mirror protocol cases use one controlled decrypted provider token.
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value: unknown) => value }));
-vi.mock("../reminders/reminder-service.ts", () => ({
-  deleteSourceReminders: vi.fn(),
-  recomputeUnsentRemindersForSource: vi.fn(),
-}));
-
-type TestMock = ReturnType<typeof vi.fn>;
-const reminderService = await import("../reminders/reminder-service.ts") as unknown as {
-  deleteSourceReminders: TestMock;
-  recomputeUnsentRemindersForSource: TestMock;
-};
-const {
-  getTodoistMirrorHealth,
-  listTodoistMirrorActiveTasks,
-  listTodoistMirrorLabels,
-  listTodoistMirrorProjects,
-  recordTodoistSyncRequest,
-  syncTodoistMirror,
-} = await import("./todoist-mirror.ts");
-const {
-  clearCurrentDashboardEventSubscribers,
-  subscribeCurrentDashboardEvents,
-} = await import("../dashboard/current-events.ts");
+const { getTodoistMirrorHealth, listTodoistMirrorActiveTasks, listTodoistMirrorLabels, listTodoistMirrorProjects, recordTodoistSyncRequest, syncTodoistMirror } = await import("./todoist-mirror.ts");
+const { clearCurrentDashboardEventSubscribers, subscribeCurrentDashboardEvents } = await import("../dashboard/current-events.ts");
 
 async function createTodoistMirrorTestDb() {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
+  await db.executeMultiple(readFileSync(join(migrationsDir, "010_discord_reminders.sql"), "utf8"));
   return db;
 }
 
@@ -113,7 +96,6 @@ async function listCompletedOccurrences(userId = "u1") {
 
 beforeEach(async () => {
   testState.db.current = await createTodoistMirrorTestDb();
-  Object.values(reminderService).forEach((fn) => fn.mockReset?.());
 });
 
 afterEach(async () => {
@@ -124,8 +106,8 @@ afterEach(async () => {
 
 describe("recordTodoistSyncRequest", () => {
   it("publishes a current-dashboard refetch hint when pending Todoist work is recorded", async () => {
-    const listener = vi.fn();
-    subscribeCurrentDashboardEvents("u1", listener);
+    const events: unknown[] = [];
+    subscribeCurrentDashboardEvents("u1", (event) => events.push(event));
 
     await recordTodoistSyncRequest("u1", {
       dbClient: testState.db.current,
@@ -133,13 +115,13 @@ describe("recordTodoistSyncRequest", () => {
       now: new Date("2026-05-05T00:10:00.000Z"),
     });
 
-    expect(listener).toHaveBeenCalledWith({
+    expect(events).toEqual([{
       type: "dashboard_current_changed",
       source: "todoist",
       reason: "todoist-webhook",
       state: "needs_sync",
       occurredAt: "2026-05-05T00:10:00.000Z",
-    });
+    }]);
   });
 });
 
@@ -234,6 +216,7 @@ describe("syncTodoistMirror", () => {
       syncApiClient,
       now: new Date("2026-05-04T15:05:00.000Z"),
     });
+    // test-architecture: allow-boundary-interaction -- Todoist Sync HTTP is the outbound provider boundary; incremental sync must send the exact stored cursor and requested resource types.
     expect(syncApiClient).toHaveBeenCalledWith({
       token: "todoist-token",
       syncToken: "sync-token-1",
@@ -379,11 +362,13 @@ describe("syncTodoistMirror", () => {
       now: new Date("2026-05-04T15:10:00.000Z"),
     });
 
+    // test-architecture: allow-boundary-interaction -- Todoist Sync HTTP is the outbound provider boundary; an expired cursor must first be attempted exactly as stored.
     expect(syncApiClient).toHaveBeenNthCalledWith(1, {
       token: "todoist-token",
       syncToken: "expired-sync-token",
       resourceTypes: ["items", "projects", "labels"],
     });
+    // test-architecture: allow-boundary-interaction -- Todoist compatibility recovery requires one full-sync retry using the '*' cursor after provider rejection.
     expect(syncApiClient).toHaveBeenNthCalledWith(2, {
       token: "todoist-token",
       syncToken: "*",
@@ -427,6 +412,7 @@ describe("syncTodoistMirror", () => {
       now: new Date("2026-05-04T15:15:00.000Z"),
     })).rejects.toThrow("Todoist API 502");
 
+    // test-architecture: allow-boundary-interaction -- Todoist Sync HTTP is outbound; cursor rejection permits exactly one full retry before durable degradation.
     expect(syncApiClient).toHaveBeenCalledTimes(2);
 
     const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
@@ -487,6 +473,7 @@ describe("syncTodoistMirror", () => {
     releaseFetch!();
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
+    // test-architecture: allow-boundary-interaction -- Todoist Sync HTTP is outbound provider work protected by per-user single-flight admission.
     expect(syncApiClient).toHaveBeenCalledTimes(1);
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toMatchObject({
@@ -494,7 +481,6 @@ describe("syncTodoistMirror", () => {
       syncToken: "coalesced-sync-token",
     });
 
-    // The in-flight entry is cleared on settle: a later trigger runs a fresh sync.
     const followUp = vi.fn(async () => ({
       full_sync: false,
       sync_token: "follow-up-token",
@@ -507,6 +493,7 @@ describe("syncTodoistMirror", () => {
       syncApiClient: followUp,
       now: new Date("2026-05-04T15:11:00.000Z"),
     });
+    // test-architecture: allow-boundary-interaction -- Coalesced follow-up admission is a background-process boundary; concurrent triggers must schedule one later sync.
     expect(followUp).toHaveBeenCalledTimes(1);
   });
 });
@@ -515,7 +502,6 @@ describe("syncTodoistMirror completed-occurrence reconciliation", () => {
   it("clears the stale completion tombstone when a non-recurring task is reopened in Todoist", async () => {
     await seedTodoistToken();
     await seedSyncState({ lastSuccessAt: "2026-06-20T18:00:00.000Z" });
-    // Completed in Setpoint earlier (tombstone written), then reopened in Todoist.
     await seedCompletedOccurrence({ todoistId: "chore-1", dueDate: "2026-06-20" });
 
     const syncApiClient = vi.fn(async () => ({
@@ -568,8 +554,6 @@ describe("syncTodoistMirror completed-occurrence reconciliation", () => {
   it("heals a pre-existing stale tombstone for a task the mirror already holds as active, even when it is absent from this sync's delta", async () => {
     await seedTodoistToken();
     await seedSyncState({ lastSuccessAt: "2026-06-20T18:00:00.000Z" });
-    // The reopen landed in an earlier sync (mirror already checked=0); the stale
-    // tombstone predates the fix and will never reappear in an incremental delta.
     await testState.db.current.execute({
       sql: `INSERT INTO ea_todoist_items
               (user_id, item_id, content, checked, is_deleted, due_date, due_is_recurring, synced_at, updated_at)

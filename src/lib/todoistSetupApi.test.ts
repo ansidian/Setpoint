@@ -9,8 +9,8 @@ describe("Todoist setup API demo contract", () => {
 
   it("returns inert status and rejects provider actions without network access", async () => {
     vi.stubEnv("VITE_EA_DEMO", "1");
-    const fetchFn = vi.fn();
-    vi.stubGlobal("fetch", fetchFn);
+    let networkAttempted = false;
+    vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
     const api = await import("./todoistSetupApi.ts");
 
     await expect(api.getTodoistConnectionStatus()).resolves.toMatchObject({
@@ -21,6 +21,6 @@ describe("Todoist setup API demo contract", () => {
     await expect(api.beginTodoistOAuth()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.stageTodoistOAuthApplication({ clientId: "id", clientSecret: "secret" }))
       .rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
-    expect(fetchFn).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 });

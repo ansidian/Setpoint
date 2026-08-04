@@ -6,7 +6,7 @@ import { queryTransactions } from "../transactions/transactions-service.ts";
 import { parseBillPayMappingsJson } from "./bill-pay-mappings.ts";
 import { resolveBillPayMapping } from "./bill-pay-resolver.ts";
 import { resolveStatementActualStatus } from "./statementActualStatusModel.ts";
-import type { InStatement } from "@libsql/client";
+import type { Client, InStatement } from "@libsql/client";
 import type { ActualMetadata } from "../../shared/types/actual.ts";
 import type { BillsMirrorHealth } from "../../shared/types/bills.ts";
 import type { TransactionQueryResult } from "../../shared/types/transactions.ts";
@@ -278,9 +278,15 @@ export async function resolveExtractedBillPay(userId: string, {
   extracted,
   metadata,
   email,
-}: { extracted?: BillCandidate; metadata?: BillPayMetadata; email?: BillEmailContext } = {}): Promise<BillPayResolution> {
+  dbClient = db,
+}: {
+  extracted?: BillCandidate;
+  metadata?: BillPayMetadata;
+  email?: BillEmailContext;
+  dbClient?: Pick<Client, "execute">;
+} = {}): Promise<BillPayResolution> {
   return resolveBillPayMapping({
-    mappings: await loadBillPayMappings(userId),
+    mappings: await loadBillPayMappings(userId, { dbClient }),
     metadata,
     source: "extract",
     email,

@@ -12,7 +12,15 @@ function bearerToken(req: Request): string {
   return "";
 }
 
-export function createGmailPushRouter(pubSubService: GmailPubSubService = gmailPubSubService) {
+export function createGmailPushRouter({
+  pubSubService = gmailPubSubService,
+  enqueue = enqueueHistorySyncFromPubSub,
+  requestDrain = requestGmailHistorySyncDrain,
+}: {
+  pubSubService?: GmailPubSubService;
+  enqueue?: typeof enqueueHistorySyncFromPubSub;
+  requestDrain?: typeof requestGmailHistorySyncDrain;
+} = {}) {
   const router = Router();
   router.post("/push", async (req, res) => {
     let verified = false;
@@ -27,9 +35,9 @@ export function createGmailPushRouter(pubSubService: GmailPubSubService = gmailP
     }
 
     try {
-      const queued = await enqueueHistorySyncFromPubSub(req.body);
+      const queued = await enqueue(req.body);
       res.json({ ok: true, ...queued });
-      requestGmailHistorySyncDrain();
+      requestDrain();
     } catch (err) {
       console.error("[Gmail Push] Failed to queue history sync:", err instanceof Error ? err.message : String(err));
       res.status(400).json({ message: "Invalid Gmail Pub/Sub notification" });

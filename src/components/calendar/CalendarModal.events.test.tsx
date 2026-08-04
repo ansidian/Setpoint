@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
@@ -96,7 +97,45 @@ describe("CalendarModal event grid behavior", () => {
     });
   });
 
-  it("dismisses the floating detail on modifier-clicked birthday chips without touching the selection set", async () => {
+  it("promotes the focused event into the selection set on bare Meta", async () => {
+    window.innerWidth = 1900;
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([{
+            id: "event-1",
+            title: "Design review",
+            accountId: "gmail-main",
+            calendarId: "primary",
+            startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+            allDay: false,
+            color: "#4285f4",
+            writable: true,
+          }]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    fireEvent.click(chip);
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Meta" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+      expect(chip.getAttribute("data-calendar-event-selection")).toBe("true");
+    });
+  });
+
+  it("dismisses an identity-less birthday detail on bare Control without touching the selection set", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -143,7 +182,10 @@ describe("CalendarModal event grid behavior", () => {
 
     const birthdaySpan = screen.getByTestId("calendar-event-span-segment");
     expect(birthdaySpan.textContent).toContain("Maya's birthday");
-    fireEvent.click(birthdaySpan, { metaKey: true });
+    fireEvent.click(birthdaySpan);
+    expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-event-title").textContent).toContain("Maya's birthday");
+
+    fireEvent.keyDown(document, { key: "Control" });
 
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
@@ -279,6 +321,7 @@ describe("CalendarModal event grid behavior", () => {
     });
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- This regression protects range-load admission across wrapper identity churn; readiness UI cannot reveal a duplicate cache/fetch admission.
       expect(ensureRange).toHaveBeenCalledTimes(initialCallCount);
       expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
     });
@@ -375,7 +418,6 @@ describe("CalendarModal event grid behavior", () => {
     vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z"));
     try {
       window.innerWidth = 1900;
-      const onEventsVisibleRangeChange = vi.fn();
       const eventsData = {
         editable: true,
         ensureRange: vi.fn().mockResolvedValue([]),
@@ -383,29 +425,36 @@ describe("CalendarModal event grid behavior", () => {
         revision: 0,
       };
 
-      render(wrapWithDashboard(
-        <CalendarModal
-          open
-          onClose={() => {}}
-          view="events"
-          onViewChange={() => {}}
-          eventsData={eventsData}
-          onEventsVisibleRangeChange={onEventsVisibleRangeChange}
-          billsData={{}}
-          deadlinesData={{}}
-        />,
-      ));
+      function VisibleRangeHarness() {
+        const [visibleRange, setVisibleRange] = useState<{ start: string; end: string } | null>(null);
+        return wrapWithDashboard(
+          <>
+            <output data-testid="calendar-observed-visible-range">{JSON.stringify(visibleRange)}</output>
+            <CalendarModal
+              open
+              onClose={() => {}}
+              view="events"
+              onViewChange={() => {}}
+              eventsData={eventsData}
+              onEventsVisibleRangeChange={setVisibleRange}
+              billsData={{}}
+              deadlinesData={{}}
+            />
+          </>,
+        );
+      }
+
+      render(<VisibleRangeHarness />);
 
       const scrollEl = await screen.findByTestId("calendar-scroll-container");
-      await waitFor(() => expect(onEventsVisibleRangeChange).toHaveBeenCalled());
-      onEventsVisibleRangeChange.mockClear();
+      await waitFor(() => expect(screen.getByTestId("calendar-observed-visible-range").textContent).not.toBe("null"));
 
       // Chevron navigation to June opens the 900ms grid↔agenda suppression
       // window (the same window agenda-driven scrolling opens).
       fireEvent.click(screen.getByRole("button", { name: "Next month" }));
       await waitFor(() => {
         const { start, end } = getVisibleGridRange(2026, 5);
-        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
+        expect(screen.getByTestId("calendar-observed-visible-range").textContent).toBe(JSON.stringify({ start, end }));
       });
 
       // The user grabs the grid inside that window and scrolls on into July.
@@ -428,7 +477,7 @@ describe("CalendarModal event grid behavior", () => {
       // settled month even while agenda rail re-targeting stays suppressed.
       await waitFor(() => {
         const { start, end } = getVisibleGridRange(2026, 6);
-        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
+        expect(screen.getByTestId("calendar-observed-visible-range").textContent).toBe(JSON.stringify({ start, end }));
       });
     } finally {
       vi.useRealTimers();

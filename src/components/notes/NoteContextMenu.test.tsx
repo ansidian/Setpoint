@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { afterEach, describe, expect, it } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import NoteContextMenu from "./NoteContextMenu";
 import type { NoteContextMenuProps } from "./NoteContextMenu";
@@ -6,40 +7,43 @@ import type { NoteContextMenuProps } from "./NoteContextMenu";
 describe("NoteContextMenu", () => {
   afterEach(cleanup); // menu renders into a body portal — unmount it between tests
 
-  const items = (overrides: Partial<NoteContextMenuProps> = {}): NoteContextMenuProps => ({
-    x: 100, y: 100, onClose: vi.fn(),
-    onEdit: vi.fn(), onPromote: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(),
-    ...overrides,
-  });
+  function MenuHarness({ unarchive = false, count }: { unarchive?: boolean; count?: number }) {
+    const [open, setOpen] = useState(true);
+    const [action, setAction] = useState("none");
+    const actionProps: Partial<NoteContextMenuProps> = unarchive
+      ? { onUnarchive: () => setAction("unarchived") }
+      : { onArchive: () => setAction("archived") };
+    return <>
+      {open ? <NoteContextMenu x={100} y={100} onClose={() => setOpen(false)}
+        onEdit={() => setAction("edited")} onPromote={() => setAction("promoted")}
+        onDelete={() => setAction("deleted")} count={count} {...actionProps} /> : null}
+      <output>{`${action}:${open ? "open" : "closed"}`}</output>
+    </>;
+  }
 
   it("renders the four actions and fires the chosen one then closes", () => {
-    const props = items();
-    render(<NoteContextMenu {...props} />);
+    render(<MenuHarness />);
     fireEvent.click(screen.getByRole("menuitem", { name: /archive/i }));
-    expect(props.onArchive).toHaveBeenCalledTimes(1);
-    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("archived:closed")).toBeTruthy();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("closes on Escape", () => {
-    const props = items();
-    render(<NoteContextMenu {...props} />);
+    render(<MenuHarness />);
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(props.onClose).toHaveBeenCalled();
+    expect(screen.getByText("none:closed")).toBeTruthy();
   });
 
   it("renders Unarchive (not Archive) when onUnarchive is provided and fires it", () => {
-    const props = items({ onArchive: undefined, onUnarchive: vi.fn() });
-    render(<NoteContextMenu {...props} />);
+    render(<MenuHarness unarchive />);
     // anchored: a plain "Archive" string also substring-matches "Unarchive"
     expect(screen.queryByRole("menuitem", { name: /^Archive$/ })).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: /^Unarchive$/ }));
-    expect(props.onUnarchive!).toHaveBeenCalledTimes(1);
-    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("unarchived:closed")).toBeTruthy();
   });
 
   it("suffixes bulk action labels with the count", () => {
-    const props = items({ onEdit: undefined, onPromote: undefined, count: 3 });
-    render(<NoteContextMenu {...props} />);
+    render(<MenuHarness count={3} />);
     expect(screen.getByRole("menuitem", { name: "Archive 3" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Delete 3" })).toBeTruthy();
   });

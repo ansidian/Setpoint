@@ -102,6 +102,20 @@ export function dashboardBillCalendarRequest(date?: string | null, itemId?: stri
   };
 }
 
+export function dashboardEventCalendarRequest(date?: string | null, itemId?: string | number | null): CalendarOpenRequest {
+  const focusItemId = itemId ? String(itemId) : null;
+  return {
+    viewKey: "events",
+    focusDate: date || null,
+    focusItemId,
+    options: {
+      source: "dashboard",
+      openDetail: !!focusItemId && focusItemId !== "new",
+      forceEventOverlay: !!focusItemId && focusItemId !== "new",
+    },
+  };
+}
+
 // Identity key for a glance-sheet descriptor. Bills and events carry an explicit
 // itemId; deadlines carry the task object (keyed by its id). One key fn so a
 // re-tap of the same card toggles the sheet shut for every kind — not only

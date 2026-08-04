@@ -171,10 +171,12 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
         Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
       }
 
+      // test-architecture: allow-boundary-interaction -- Initial agenda positioning is an imperative browser scroll contract; DOM layout state in happy-dom does not change when scrollTo is invoked.
       expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
         top: 100,
         behavior: "auto",
       }));
+      // test-architecture: allow-boundary-interaction -- The entry-ready path must avoid the competing item-offset browser scroll; happy-dom cannot expose an unintended scroll through layout state.
       expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({
         top: 756,
       }));
@@ -447,6 +449,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       agendaRail.scrollTop = 0;
       await flushAnimationFrame();
 
+      // test-architecture: allow-boundary-interaction -- Agenda initialization owns an imperative browser scroll command whose requested top and behavior are not reflected by happy-dom.
       expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
         top: 360,
         behavior: "auto",
@@ -461,6 +464,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
         options?.behavior === "smooth" && options.top! > 0
       ));
       expect(itemScrollCall).toBeTruthy();
+      // test-architecture: allow-boundary-interaction -- Selecting an item must not replay the initial browser scroll command; the browser mock has no resulting layout state to inspect.
       expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({
         top: 360,
         behavior: "auto",

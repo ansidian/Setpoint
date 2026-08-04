@@ -6,6 +6,15 @@ async function importApiWithDemoMode(value: string) {
   return import("../api");
 }
 
+function installRecordingFetch(payload: unknown, status = 200) {
+  const requests: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push([input, init]);
+    return Promise.resolve({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(payload) } as Response);
+  });
+  return requests;
+}
+
 describe("demo mode API network guard", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -14,10 +23,10 @@ describe("demo mode API network guard", () => {
   });
 
   it("keeps auth local and blocks API fetches before network in demo mode", async () => {
-    const fetch = vi.fn();
-    const sendBeacon = vi.fn(() => true);
-    vi.stubGlobal("fetch", fetch);
-    vi.stubGlobal("navigator", { sendBeacon });
+    let networkAttempted = false;
+    let beaconAttempted = false;
+    vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
+    vi.stubGlobal("navigator", { sendBeacon: () => { beaconAttempted = true; return true; } });
 
     const api = await importApiWithDemoMode("1");
 
@@ -30,36 +39,24 @@ describe("demo mode API network guard", () => {
 
     api.settleArrivalGraceOnExit();
 
-    expect(fetch).not.toHaveBeenCalled();
-    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
+    expect(beaconAttempted).toBe(false);
   });
 
   it("keeps normal API fetch behavior outside demo mode", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ authenticated: true }),
-    });
-    vi.stubGlobal("fetch", fetch);
+    const requests = installRecordingFetch({ authenticated: true });
 
     const api = await importApiWithDemoMode("");
 
     await expect(api.checkAuth()).resolves.toEqual({ authenticated: true });
 
-    expect(fetch).toHaveBeenCalledWith("/api/auth/check", expect.objectContaining({
-      headers: expect.objectContaining({
-        "X-Requested-With": "Setpoint",
-      }),
-    }));
+    expect(requests).toEqual([["/api/auth/check", expect.objectContaining({
+      headers: expect.objectContaining({ "X-Requested-With": "Setpoint" }),
+    })]]);
   });
 
   it("routes passkey auth helpers through explicit auth endpoints", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ ok: true }),
-    });
-    vi.stubGlobal("fetch", fetch);
+    const requests = installRecordingFetch({ ok: true });
 
     const api = await importApiWithDemoMode("");
 
@@ -67,26 +64,23 @@ describe("demo mode API network guard", () => {
     await api.verifyPasskeyAuthentication({ id: "credential-1" } as Parameters<typeof api.verifyPasskeyAuthentication>[0]);
     await api.cancelPasskeyAuthentication();
 
-    expect(fetch).toHaveBeenNthCalledWith(1, "/api/auth/passkey/authentication/options", expect.objectContaining({
+    expect(requests).toEqual([
+      ["/api/auth/passkey/authentication/options", expect.objectContaining({
       method: "POST",
       headers: expect.objectContaining({ "X-Requested-With": "Setpoint" }),
-    }));
-    expect(fetch).toHaveBeenNthCalledWith(2, "/api/auth/passkey/authentication/verify", expect.objectContaining({
+      })],
+      ["/api/auth/passkey/authentication/verify", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ id: "credential-1" }),
-    }));
-    expect(fetch).toHaveBeenNthCalledWith(3, "/api/auth/passkey/authentication/cancel", expect.objectContaining({
+      })],
+      ["/api/auth/passkey/authentication/cancel", expect.objectContaining({
       method: "POST",
-    }));
+      })],
+    ]);
   });
 
   it("routes passkey management helpers through explicit settings endpoints", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ ok: true }),
-    });
-    vi.stubGlobal("fetch", fetch);
+    const requests = installRecordingFetch({ ok: true });
 
     const api = await importApiWithDemoMode("");
 
@@ -95,25 +89,27 @@ describe("demo mode API network guard", () => {
     await api.verifyPasskeyRegistration({ id: "credential-1", label: "MacBook Touch ID" } as Parameters<typeof api.verifyPasskeyRegistration>[0]);
     await api.deletePasskeyCredential("credential-1");
 
-    expect(fetch).toHaveBeenNthCalledWith(1, "/api/auth/passkeys", expect.objectContaining({
+    expect(requests).toEqual([
+      ["/api/auth/passkeys", expect.objectContaining({
       headers: expect.objectContaining({ "X-Requested-With": "Setpoint" }),
-    }));
-    expect(fetch).toHaveBeenNthCalledWith(2, "/api/auth/passkeys/registration/options", expect.objectContaining({
+      })],
+      ["/api/auth/passkeys/registration/options", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ label: "MacBook Touch ID" }),
-    }));
-    expect(fetch).toHaveBeenNthCalledWith(3, "/api/auth/passkeys/registration/verify", expect.objectContaining({
+      })],
+      ["/api/auth/passkeys/registration/verify", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ id: "credential-1", label: "MacBook Touch ID" }),
-    }));
-    expect(fetch).toHaveBeenNthCalledWith(4, "/api/auth/passkeys/credential-1", expect.objectContaining({
+      })],
+      ["/api/auth/passkeys/credential-1", expect.objectContaining({
       method: "DELETE",
-    }));
+      })],
+    ]);
   });
 
   it("keeps passkey management unavailable in demo mode before network", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+    let networkAttempted = false;
+    vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
 
     const api = await importApiWithDemoMode("1");
 
@@ -121,7 +117,7 @@ describe("demo mode API network guard", () => {
     await expect(api.getPasskeyRegistrationOptions("MacBook Touch ID"))
       .rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 
   it("does not redirect the login page on passkey verification 401 responses", async () => {

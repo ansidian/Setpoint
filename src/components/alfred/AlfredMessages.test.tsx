@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   SayBlock,
   SuggestionList,
@@ -86,10 +87,13 @@ describe("alfred message primitives", () => {
   });
 
   it("SuggestionList submits the picked suggestion", () => {
-    const onPick = vi.fn();
-    render(<SuggestionList accent="#cba6da" onPick={onPick} />);
+    function Harness() {
+      const [picked, setPicked] = useState("none");
+      return <><SuggestionList accent="#cba6da" onPick={setPicked} /><output>{picked}</output></>;
+    }
+    render(<Harness />);
     fireEvent.click(screen.getByText("Anything in mail that needs me?"));
-    expect(onPick).toHaveBeenCalledWith("Anything in mail that needs me?");
+    expect(screen.getAllByText("Anything in mail that needs me?")).toHaveLength(2);
   });
 
 });

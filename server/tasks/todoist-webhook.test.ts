@@ -80,6 +80,7 @@ describe("handleTodoistWebhookDelivery", () => {
       requestSync: vi.fn(),
     });
 
+    // test-architecture: allow-boundary-interaction -- Webhook HMAC verification uses the write-only credential boundary; every delivery must resolve the currently active secret.
     expect(resolveClientSecret).toHaveBeenCalledTimes(1);
   });
 
@@ -104,6 +105,7 @@ describe("handleTodoistWebhookDelivery", () => {
     });
 
     expect(result).toEqual({ accepted: true, duplicate: false });
+    // test-architecture: allow-boundary-interaction -- Verified webhook delivery crosses the background-worker boundary and must enqueue the exact event reason.
     expect(requestSync).toHaveBeenCalledWith("u1", {
       reason: "todoist-webhook",
     });
@@ -153,6 +155,7 @@ describe("handleTodoistWebhookDelivery", () => {
     });
 
     expect(duplicate).toEqual({ accepted: true, duplicate: true });
+    // test-architecture: allow-boundary-interaction -- Durable delivery-id idempotency must admit exactly one background mirror wake-up for duplicate webhooks.
     expect(requestSync).toHaveBeenCalledTimes(1);
   });
 
@@ -173,6 +176,7 @@ describe("handleTodoistWebhookDelivery", () => {
 
     const rows = await testDb.execute("SELECT * FROM ea_todoist_webhook_deliveries");
     expect(rows.rows).toEqual([]);
+    // test-architecture: allow-boundary-interaction -- Invalid provider HMACs must never cross the background mirror-worker boundary.
     expect(requestSync).not.toHaveBeenCalled();
   });
 
@@ -229,6 +233,7 @@ describe("requestTodoistMirrorSync", () => {
 
     await vi.advanceTimersByTimeAsync(50);
 
+    // test-architecture: allow-boundary-interaction -- Debounced mirror sync is outbound background work; repeated wakeups before the timer must admit one run.
     expect(syncFn).toHaveBeenCalledTimes(1);
   });
 
@@ -243,6 +248,7 @@ describe("requestTodoistMirrorSync", () => {
 
     requestTodoistMirrorSync("u1", { debounceMs: 0, syncFn });
     await vi.advanceTimersByTimeAsync(0);
+    // test-architecture: allow-boundary-interaction -- A wake-up during active provider sync must not re-enter the outbound worker concurrently.
     expect(syncFn).toHaveBeenCalledTimes(1);
 
     requestTodoistMirrorSync("u1", { debounceMs: 0, syncFn });
@@ -250,46 +256,47 @@ describe("requestTodoistMirrorSync", () => {
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(0);
 
+    // test-architecture: allow-boundary-interaction -- After active provider sync settles, the coalesced wake-up must admit exactly one follow-up run.
     expect(syncFn).toHaveBeenCalledTimes(2);
   });
 
   it("publishes a current-dashboard refetch hint when requested sync settles", async () => {
     vi.useFakeTimers();
-    const listener = vi.fn();
+    const events: unknown[] = [];
     const syncFn = vi.fn(async () => ({ status: "current" }));
-    subscribeCurrentDashboardEvents("u1", listener);
+    subscribeCurrentDashboardEvents("u1", (event) => events.push(event));
 
     requestTodoistMirrorSync("u1", { debounceMs: 0, syncFn });
     await vi.advanceTimersByTimeAsync(0);
     await Promise.resolve();
 
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+    expect(events).toEqual([expect.objectContaining({
       type: "dashboard_current_changed",
       source: "todoist",
       reason: "sync_settled",
       state: "current",
-    }));
+    })]);
   });
 
   it("publishes a degraded refetch hint when requested sync fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.useFakeTimers();
-    const listener = vi.fn();
+    const events: unknown[] = [];
     const syncFn = vi.fn(async () => {
       throw new Error("Todoist unavailable");
     });
-    subscribeCurrentDashboardEvents("u1", listener);
+    subscribeCurrentDashboardEvents("u1", (event) => events.push(event));
 
     requestTodoistMirrorSync("u1", { debounceMs: 0, syncFn });
     await vi.advanceTimersByTimeAsync(0);
     await Promise.resolve();
 
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+    expect(events).toEqual([expect.objectContaining({
       type: "dashboard_current_changed",
       source: "todoist",
       reason: "sync_settled",
       state: "degraded",
-    }));
+    })]);
   });
 });
 
@@ -311,6 +318,7 @@ describe("startTodoistMirrorSyncWorker", () => {
     });
     await Promise.resolve();
 
+    // test-architecture: allow-boundary-interaction -- Startup sync admission is a process-worker boundary and must carry the explicit startup reason.
     expect(requestSyncFn).toHaveBeenCalledWith("u1", {
       reason: "todoist-startup",
       debounceMs: 0,
@@ -331,6 +339,7 @@ describe("startTodoistMirrorSyncWorker", () => {
     });
     await vi.advanceTimersByTimeAsync(300_000);
 
+    // test-architecture: allow-boundary-interaction -- Backstop interval admission is a process-worker boundary and must carry the explicit interval reason.
     expect(requestSyncFn).toHaveBeenCalledWith("u1", {
       reason: "todoist-backstop",
     });

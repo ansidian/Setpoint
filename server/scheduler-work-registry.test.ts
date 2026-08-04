@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createSchedulerWorkRegistry } from "./scheduler-work-registry.ts";
 
 describe("scheduler work registry", () => {
@@ -27,23 +27,28 @@ describe("scheduler work registry", () => {
   it("shares single-flight work and permits a new run after cleanup", async () => {
     const registry = createSchedulerWorkRegistry();
     let resolveFirst: ((value: string) => void) | undefined;
-    const task = vi.fn<() => Promise<string>>()
-      .mockReturnValueOnce(new Promise<string>((resolve) => {
-        resolveFirst = resolve;
-      }))
-      .mockResolvedValueOnce("second");
+    let runCount = 0;
+    const task = () => {
+      runCount += 1;
+      if (runCount === 1) {
+        return new Promise<string>((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return Promise.resolve("second");
+    };
 
     const first = registry.run("triage", task, { singleFlight: true });
     const duplicate = registry.run("triage", task, { singleFlight: true });
     expect(duplicate).toBe(first);
-    expect(task).toHaveBeenCalledTimes(1);
+    expect(runCount).toBe(1);
 
     resolveFirst?.("first");
     await first;
     await Promise.resolve();
 
     await expect(registry.run("triage", task, { singleFlight: true })).resolves.toBe("second");
-    expect(task).toHaveBeenCalledTimes(2);
+    expect(runCount).toBe(2);
   });
 
   it("drains rejected work without rejecting", async () => {

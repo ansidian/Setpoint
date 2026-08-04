@@ -22,10 +22,8 @@ import { createSchedulerWorkRegistry } from "./scheduler-work-registry.ts";
 import {
   createEmailTriageDeadlineController,
   registerEmailTriageDrainRequester,
-  requestEmailTriageDrainAt,
 } from "./scheduler-email-triage-drain.ts";
 import type { EmailTriageScheduledFor } from "./scheduler-email-triage-drain.ts";
-export { requestEmailTriageDrainAt } from "./scheduler-email-triage-drain.ts";
 
 interface EmailTriageJobResult {
   processed?: boolean;
@@ -40,7 +38,45 @@ interface EmailTriageWorkerOptions {
 
 type TriageBatchContext = ReturnType<typeof createTriageBatchContext>;
 
-const processNextEmailTriageJobAtBoundary = processNextEmailTriageJob as unknown as (
+export interface SchedulerRuntimeDependencies {
+  cronSchedule?: typeof cron.schedule;
+  dbClient?: Pick<typeof db, "execute">;
+  loadConfig?: typeof loadUserConfig;
+  fetchEmails?: typeof fetchAllEmails;
+  indexEmailRows?: typeof indexEmails;
+  enqueueTriage?: typeof enqueueEmailTriageForEmails;
+  processHistoryJob?: typeof processNextGmailHistorySyncJob;
+  renewWatches?: typeof renewDueGmailWatches;
+  processTriageJob?: typeof processNextEmailTriageJob;
+  recoverTriageJobs?: typeof recoverStaleRunningTriageJobs;
+  createTriageContext?: typeof createTriageBatchContext;
+  pruneTriageJobs?: typeof pruneCompletedTriageJobs;
+  processEmbeddings?: typeof processEmailSearchEmbeddingBatchesForAllUsers;
+  processReminders?: typeof processDueReminderBatch;
+  advanceSnapshot?: Parameters<typeof createSnapshotBoundaryScheduler>[0]["advanceBoundary"];
+}
+
+export function createSchedulerRuntime(dependencies: SchedulerRuntimeDependencies = {}) {
+  const runtime = {
+    cronSchedule: cron.schedule,
+    dbClient: db,
+    loadConfig: loadUserConfig,
+    fetchEmails: fetchAllEmails,
+    indexEmailRows: indexEmails,
+    enqueueTriage: enqueueEmailTriageForEmails,
+    processHistoryJob: processNextGmailHistorySyncJob,
+    renewWatches: renewDueGmailWatches,
+    processTriageJob: processNextEmailTriageJob,
+    recoverTriageJobs: recoverStaleRunningTriageJobs,
+    createTriageContext: createTriageBatchContext,
+    pruneTriageJobs: pruneCompletedTriageJobs,
+    processEmbeddings: processEmailSearchEmbeddingBatchesForAllUsers,
+    processReminders: processDueReminderBatch,
+    advanceSnapshot: undefined,
+    ...dependencies,
+  };
+
+const processNextEmailTriageJobAtBoundary = runtime.processTriageJob as unknown as (
   options: { batch: TriageBatchContext },
 ) => Promise<EmailTriageJobResult>;
 const schedulerWork = createSchedulerWorkRegistry();
@@ -63,6 +99,9 @@ let stopSchedulerInFlight: Promise<void> | null = null;
 const snapshotBoundaryScheduler = createSnapshotBoundaryScheduler({
   runWork: schedulerWork.run,
   isStopping: () => schedulerStopping,
+  dbClient: runtime.dbClient,
+  scheduleCron: runtime.cronSchedule,
+  ...(runtime.advanceSnapshot ? { advanceBoundary: runtime.advanceSnapshot } : {}),
 });
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
@@ -126,7 +165,7 @@ const emailTriageDeadlineController = createEmailTriageDeadlineController({
 });
 registerEmailTriageDrainRequester(emailTriageDeadlineController.request);
 
-export function initScheduler(): Promise<void> {
+function initScheduler(): Promise<void> {
   return snapshotBoundaryScheduler.init();
 }
 
@@ -138,24 +177,24 @@ function sweepIndex(): Promise<void> {
   if (schedulerStopping) return Promise.resolve();
   return schedulerWork.run("email-index-sweep", async () => {
     try {
-      const result = await db.execute(
+      const result = await runtime.dbClient.execute(
         "SELECT DISTINCT user_id FROM ea_accounts",
       );
       for (const row of result.rows) {
         try {
           const userId = String(row.user_id ?? "");
-          const { accounts } = await loadUserConfig(userId);
+          const { accounts } = await runtime.loadConfig(userId);
           const hasEmail = accounts.some(
             (a) => a.type === "gmail" || a.type === "icloud",
           );
           if (!hasEmail) continue;
-          const emails = await fetchAllEmails(
+          const emails = await runtime.fetchEmails(
             accounts,
             INDEXER_LOOKBACK_HOURS,
           );
           if (emails.length) {
-            await indexEmails(userId, emails);
-            await enqueueEmailTriageForEmails(userId, emails);
+            await runtime.indexEmailRows(userId, emails);
+            await runtime.enqueueTriage(userId, emails);
           }
         } catch (err) {
           console.error(
@@ -174,7 +213,7 @@ function runGmailWatchRenewal(): Promise<void> {
   if (schedulerStopping) return Promise.resolve();
   return schedulerWork.run("gmail-watch-renewal", async () => {
     try {
-      await renewDueGmailWatches();
+      await runtime.renewWatches();
     } catch (err) {
       console.error("[Gmail Watch] Renewal sweep failed:", errorMessage(err));
     }
@@ -193,7 +232,7 @@ function runGmailHistorySyncWorker(): Promise<void> {
       do {
         gmailHistorySyncRerun = false;
         for (let i = 0; i < 10; i++) {
-          const result = await processNextGmailHistorySyncJob();
+          const result = await runtime.processHistoryJob();
           if (!result.processed) break;
           processed++;
         }
@@ -209,13 +248,13 @@ function runGmailHistorySyncWorker(): Promise<void> {
 // job. The per-minute cron remains the reliability fallback if this process
 // exits before the scheduled turn runs. The worker's single-flight guard
 // coalesces push bursts without making the webhook wait on Gmail API work.
-export function requestGmailHistorySyncDrain(): void {
+function requestGmailHistorySyncDrain(): void {
   scheduleSchedulerImmediate(() => {
     void runGmailHistorySyncWorker();
   });
 }
 
-export function runEmailTriageWorker({
+function runEmailTriageWorker({
   selfRescheduled = false,
   deadlineWake = false,
 }: EmailTriageWorkerOptions = {}): Promise<void> {
@@ -231,13 +270,13 @@ export function runEmailTriageWorker({
     try {
       // Stale-job recovery is the per-minute responsibility; an immediate
       // self-reschedule within the same drain skips it (it already ran this tick).
-      if (!selfRescheduled) await recoverStaleRunningTriageJobs();
+      if (!selfRescheduled) await runtime.recoverTriageJobs();
       // P1-7: one batch context resolves mode/rules/interests/model-client once per
       // user for the whole drain instead of re-reading them on every job.
-      const batch = createTriageBatchContext();
+      const batch = runtime.createTriageContext();
       for (let i = 0; i < EMAIL_TRIAGE_BATCH_SIZE; i++) {
         const result = await processNextEmailTriageJobAtBoundary({ batch });
-        if (result.scheduled_for) requestEmailTriageDrainAt(result.scheduled_for);
+        if (result.scheduled_for) emailTriageDeadlineController.request(result.scheduled_for);
         if (result.paused) break;
         if (!result.processed) break;
         processed++;
@@ -284,11 +323,11 @@ export function runEmailTriageWorker({
   return runPromise;
 }
 
-export function runEmailSearchEmbeddingWorker(): Promise<void> {
+function runEmailSearchEmbeddingWorker(): Promise<void> {
   if (EMAIL_SEARCH_EMBEDDINGS_DISABLED || schedulerStopping) return Promise.resolve();
   return schedulerWork.run("email-search-embeddings", async () => {
     try {
-      const result = await processEmailSearchEmbeddingBatchesForAllUsers();
+      const result = await runtime.processEmbeddings();
       const embedded = result.users.reduce((sum, user) => sum + Number(user.embedded || 0), 0);
       if (embedded) console.log(`[Email Search Embeddings] Embedded ${embedded} indexed email(s)`);
     } catch (err) {
@@ -301,7 +340,7 @@ function runTriageJobPruneWorker(): Promise<void> {
   if (schedulerStopping) return Promise.resolve();
   return schedulerWork.run("triage-job-prune", async () => {
     try {
-      const pruned = await pruneCompletedTriageJobs();
+      const pruned = await runtime.pruneTriageJobs();
       if (pruned) console.log(`[Email Triage] Pruned ${pruned} completed triage job(s)`);
     } catch (err) {
       console.error("[Email Triage] Completed-job prune failed:", errorMessage(err));
@@ -309,13 +348,13 @@ function runTriageJobPruneWorker(): Promise<void> {
   });
 }
 
-export function startBackgroundIndexer(): void {
+function startBackgroundIndexer(): void {
   if (schedulerStopping) return;
   if (indexerJob) {
     indexerJob.stop();
     indexerJob = null;
   }
-  indexerJob = cron.schedule(INDEXER_CRON, sweepIndex);
+  indexerJob = runtime.cronSchedule(INDEXER_CRON, sweepIndex);
   console.log(
     `[EA Indexer] Background indexer scheduled (${INDEXER_CRON}, ${INDEXER_LOOKBACK_HOURS}h lookback)`,
   );
@@ -331,7 +370,7 @@ export function startBackgroundIndexer(): void {
     gmailWatchRenewalJob.stop();
     gmailWatchRenewalJob = null;
   }
-  gmailWatchRenewalJob = cron.schedule(GMAIL_WATCH_RENEWAL_CRON, runGmailWatchRenewal);
+  gmailWatchRenewalJob = runtime.cronSchedule(GMAIL_WATCH_RENEWAL_CRON, runGmailWatchRenewal);
   console.log(`[Gmail Watch] Renewal scheduled (${GMAIL_WATCH_RENEWAL_CRON})`);
   scheduleSchedulerTimeout(() => {
     runGmailWatchRenewal().catch((err) =>
@@ -343,7 +382,7 @@ export function startBackgroundIndexer(): void {
     gmailHistorySyncJob.stop();
     gmailHistorySyncJob = null;
   }
-  gmailHistorySyncJob = cron.schedule(GMAIL_HISTORY_SYNC_CRON, runGmailHistorySyncWorker);
+  gmailHistorySyncJob = runtime.cronSchedule(GMAIL_HISTORY_SYNC_CRON, runGmailHistorySyncWorker);
   console.log(`[Gmail Sync] History worker scheduled (${GMAIL_HISTORY_SYNC_CRON})`);
   scheduleSchedulerTimeout(() => {
     runGmailHistorySyncWorker().catch((err) =>
@@ -355,7 +394,7 @@ export function startBackgroundIndexer(): void {
     emailTriageJob.stop();
     emailTriageJob = null;
   }
-  emailTriageJob = cron.schedule(EMAIL_TRIAGE_CRON, () => runEmailTriageWorker());
+  emailTriageJob = runtime.cronSchedule(EMAIL_TRIAGE_CRON, () => runEmailTriageWorker());
   console.log(`[Email Triage] Worker scheduled (${EMAIL_TRIAGE_CRON})`);
   scheduleSchedulerTimeout(() => {
     runEmailTriageWorker().catch((err) =>
@@ -367,7 +406,7 @@ export function startBackgroundIndexer(): void {
     triageJobPruneJob.stop();
     triageJobPruneJob = null;
   }
-  triageJobPruneJob = cron.schedule(TRIAGE_JOB_PRUNE_CRON, runTriageJobPruneWorker);
+  triageJobPruneJob = runtime.cronSchedule(TRIAGE_JOB_PRUNE_CRON, runTriageJobPruneWorker);
   console.log(`[Email Triage] Completed-job prune scheduled (${TRIAGE_JOB_PRUNE_CRON})`);
 
   if (emailSearchEmbeddingJob) {
@@ -378,7 +417,7 @@ export function startBackgroundIndexer(): void {
     console.log("[Email Search Embeddings] Worker disabled by EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED=1");
     return;
   }
-  emailSearchEmbeddingJob = cron.schedule(EMAIL_SEARCH_EMBEDDING_CRON, runEmailSearchEmbeddingWorker);
+  emailSearchEmbeddingJob = runtime.cronSchedule(EMAIL_SEARCH_EMBEDDING_CRON, runEmailSearchEmbeddingWorker);
   console.log(`[Email Search Embeddings] Worker scheduled (${EMAIL_SEARCH_EMBEDDING_CRON})`);
   scheduleSchedulerTimeout(() => {
     runEmailSearchEmbeddingWorker().catch((err) =>
@@ -389,7 +428,7 @@ export function startBackgroundIndexer(): void {
 
 async function runReminderSchedulerBatch(): Promise<void> {
   try {
-    const result = await processDueReminderBatch();
+    const result = await runtime.processReminders();
     if (result.processed) {
       console.log(
         `[Reminder Scheduler] Processed ${result.processed} reminder(s): ${result.sent} sent, ${result.missed} missed, ${result.failed} failed`,
@@ -400,7 +439,7 @@ async function runReminderSchedulerBatch(): Promise<void> {
   }
 }
 
-export function runReminderSchedulerWorker(): Promise<void> {
+function runReminderSchedulerWorker(): Promise<void> {
   if (schedulerStopping) return Promise.resolve();
   return schedulerWork.run(
     "reminder-batch",
@@ -409,7 +448,7 @@ export function runReminderSchedulerWorker(): Promise<void> {
   );
 }
 
-export function startReminderSchedulerWorker(): void {
+function startReminderSchedulerWorker(): void {
   if (schedulerStopping) return;
   if (reminderSchedulerTimer) {
     clearInterval(reminderSchedulerTimer);
@@ -428,7 +467,7 @@ export function startReminderSchedulerWorker(): void {
 // Graceful scheduler drain: close every admission source first, then await the
 // scheduler-owned registry. The process-level 15-second force-exit in
 // shutdown.ts remains the outer bound. Idempotent — safe to call twice.
-export function stopScheduler(): Promise<void> {
+function stopScheduler(): Promise<void> {
   if (stopSchedulerInFlight) return stopSchedulerInFlight;
   schedulerStopping = true;
   gmailHistorySyncRerun = false;
@@ -470,3 +509,23 @@ export function stopScheduler(): Promise<void> {
   stopSchedulerInFlight = schedulerWork.drain();
   return stopSchedulerInFlight;
 }
+
+return {
+  initScheduler,
+  requestEmailTriageDrainAt: emailTriageDeadlineController.request,
+  requestGmailHistorySyncDrain,
+  runEmailSearchEmbeddingWorker,
+  runEmailTriageWorker,
+  runReminderSchedulerWorker,
+  startBackgroundIndexer,
+  startReminderSchedulerWorker,
+  stopScheduler,
+};
+}
+
+const defaultSchedulerRuntime = createSchedulerRuntime();
+export const initScheduler = defaultSchedulerRuntime.initScheduler;
+export const requestGmailHistorySyncDrain = defaultSchedulerRuntime.requestGmailHistorySyncDrain;
+export const startBackgroundIndexer = defaultSchedulerRuntime.startBackgroundIndexer;
+export const startReminderSchedulerWorker = defaultSchedulerRuntime.startReminderSchedulerWorker;
+export const stopScheduler = defaultSchedulerRuntime.stopScheduler;

@@ -5,6 +5,7 @@
 // disable (matching the convention in src/components/calendar/views/*).
 import { lazy, Suspense, useMemo } from "react";
 import { makeCalendarBillsData } from "./calendarBillsData";
+import { dashboardCalendarDeadlineData } from "./dashboardCalendarModalModel";
 import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
 import type { ComponentProps } from "react";
 import type { DashboardBriefingProjection, CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
@@ -43,19 +44,6 @@ export interface DashboardCalendarModalMountProps {
   calendarDeadlinesLoading: boolean;
   calendarDeadlineRange: CalendarModalProps["deadlinesRangeData"];
   calendarDeadlineActions: CalendarModalProps["deadlineActions"];
-}
-
-function deadlineDataForCalendarModal(deadlines: {
-  upcoming?: readonly unknown[];
-  stats?: unknown;
-  syncHealth?: unknown;
-} | null | undefined, isLoading: boolean) {
-  return {
-    upcoming: Array.isArray(deadlines?.upcoming) ? deadlines.upcoming : [],
-    stats: deadlines?.stats || null,
-    syncHealth: deadlines?.syncHealth || null,
-    isLoading,
-  };
 }
 
 export default function DashboardCalendarModalMount({
@@ -104,7 +92,7 @@ export default function DashboardCalendarModalMount({
         weatherData={liveData.liveWeather || briefing?.weather || null}
         billsData={billsDataWithLinks}
         billsRangeData={calendarBillRange}
-        deadlinesData={deadlineDataForCalendarModal(
+        deadlinesData={dashboardCalendarDeadlineData(
           seededDeadlines,
           calendarDeadlinesLoading && !calendarDeadlines,
         )}

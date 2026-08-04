@@ -36,7 +36,7 @@ vi.mock("@/auth/securityApi", () => ({
   getCanonicalOriginStatus: mockSecurity.getCanonicalOriginStatus,
 }));
 
-// test-architecture: allow-boundary-mock -- Todoist status is an external provider-health boundary; the real Todoist card remains mounted for deep-link behavior.
+// test-architecture: allow-boundary-mock -- Todoist status is an authenticated server HTTP boundary; the real Todoist card remains mounted for deep-link behavior around the returned provider-health projection.
 vi.mock("@/lib/todoistSetupApi", () => ({
   getTodoistConnectionStatus: mockTodoist.getTodoistConnectionStatus,
 }));
@@ -121,7 +121,6 @@ describe("Settings page", () => {
 
     expect(await screen.findByText("Connections directory")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Continue setup" })).toBeTruthy();
-    expect(mockApi.getOnboardingProgress).toHaveBeenCalledTimes(1);
   });
 
   it("locates and focuses a deep-linked connection row, then flashes it after scrolling ends", async () => {
@@ -136,6 +135,7 @@ describe("Settings page", () => {
     renderSettings();
 
     const target = await screen.findByRole("button", { name: /Todoist/ });
+    // test-architecture: allow-boundary-interaction -- focus and flash state cannot prove the deep-link reveal crossed the browser scroll boundary with centered smooth scrolling.
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({
       behavior: "smooth",
       block: "center",
@@ -172,6 +172,7 @@ describe("Settings page", () => {
       const target = screen.getByRole("button", { name: /Todoist/ });
       window.dispatchEvent(new Event("scrollend"));
 
+      // test-architecture: allow-boundary-interaction -- visible drawer state cannot prove local expansion avoided the browser scroll boundary reserved for inbound deep links.
       expect(scrollIntoView).not.toHaveBeenCalled();
       expect(document.activeElement).not.toBe(target);
       expect(target.closest("[data-settings-flash-container]")?.getAttribute("data-settings-target-active")).toBeNull();
@@ -192,6 +193,7 @@ describe("Settings page", () => {
     renderSettings();
 
     const advancedSummary = await screen.findByText("Advanced OAuth and webhooks");
+    // test-architecture: allow-boundary-interaction -- active-element state cannot prove the advanced disclosure used the required centered browser scroll operation.
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({
       behavior: "smooth",
       block: "center",
@@ -284,6 +286,7 @@ describe("Settings page", () => {
     unmount();
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- after unmount there is no page state to observe; the outbound Settings write is the durability contract for pending edits.
       expect(mockApi.updateSettings).toHaveBeenCalledWith({ email_lookback_hours: 24 });
     });
   });

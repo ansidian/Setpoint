@@ -37,6 +37,7 @@ describe("CalendarEventEditor save re-entrancy guard", () => {
       await Promise.resolve();
     });
 
+    // test-architecture: allow-boundary-interaction -- The regression is duplicate outbound Calendar writes under rapid hotkeys; rendered state cannot prove the provider create happened exactly once.
     expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
 
     // Release the in-flight save so no pending promise dangles past the test.

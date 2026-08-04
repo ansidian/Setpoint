@@ -3,7 +3,9 @@ import type { ProviderModelAvailability } from "../../../shared/types/settings";
 import type { ConnectionId, ConnectionRowView, ConnectionState } from "./connectionModel";
 import {
   projectAiProviderSelection,
+  projectAiSettingsSelectionPatch,
   projectFeatureDependencies,
+  projectProviderModelControl,
 } from "./featureDependencyModel";
 
 function connection(id: ConnectionId, state: ConnectionState): ConnectionRowView {
@@ -206,5 +208,51 @@ describe("AI provider selection projection", () => {
     ]);
     expect(saved).toEqual({ provider: "openai", model: "gpt-saved" });
     expect(providers).toEqual(PROVIDERS);
+  });
+});
+
+describe("provider/model control projection", () => {
+  it("resets a mismatched model to the selected provider default", () => {
+    const result = projectProviderModelControl({
+      providers: PROVIDERS,
+      provider: "anthropic",
+      model: "gpt-saved",
+    });
+
+    expect(result.selectedProvider?.provider).toBe("anthropic");
+    expect(result.selectedModel).toBe("claude-sonnet");
+  });
+
+  it("falls back to the first provider when the saved provider is unknown", () => {
+    const result = projectProviderModelControl({
+      providers: PROVIDERS,
+      provider: "mystery",
+      model: "whatever",
+    });
+
+    expect(result.selectedProvider?.provider).toBe("anthropic");
+    expect(result.selectedModel).toBe("claude-sonnet");
+  });
+
+  it("preserves a compatible saved model missing from the current catalog", () => {
+    const result = projectProviderModelControl({
+      providers: PROVIDERS,
+      provider: "openai",
+      model: "gpt-previous",
+    });
+
+    expect(result.selectedModel).toBe("gpt-previous");
+    expect(result.modelOptions[0]).toEqual({
+      id: "gpt-previous",
+      label: "gpt-previous (saved; not currently listed)",
+    });
+  });
+
+  it.each([
+    ["alfred", { alfred_provider: "openai", alfred_model: "gpt-default" }],
+    ["bill_extract", { bill_extract_provider: "openai", bill_extract_model: "gpt-default" }],
+    ["email_ai", { email_ai_provider: "openai", email_ai_model: "gpt-default" }],
+  ] as const)("persists the %s provider/model pair atomically", (surface, expected) => {
+    expect(projectAiSettingsSelectionPatch(surface, "openai", "gpt-default")).toEqual(expected);
   });
 });

@@ -31,6 +31,42 @@ function modelMatchesProvider(provider: string | undefined, model: string): bool
   return true;
 }
 
+export function projectProviderModelControl({
+  providers,
+  provider,
+  model,
+}: {
+  providers: readonly ProviderModelAvailability[];
+  provider: string;
+  model: string;
+}) {
+  const selectedProvider = providers.find((entry) => entry.provider === provider) ?? providers[0];
+  const listedModel = selectedProvider?.models.find((entry) => entry.id === model);
+  const preserveUnlistedModel = Boolean(
+    model && selectedProvider && modelMatchesProvider(selectedProvider.provider, model),
+  );
+  const selectedModel = listedModel || preserveUnlistedModel
+    ? model
+    : selectedProvider?.defaultModel ?? "";
+  const modelOptions = selectedProvider && selectedModel && !listedModel && preserveUnlistedModel
+    ? [{ id: selectedModel, label: `${selectedModel} (saved; not currently listed)` }, ...selectedProvider.models]
+    : selectedProvider?.models ?? [];
+
+  return { selectedProvider, selectedModel, modelOptions };
+}
+
+export function projectAiSettingsSelectionPatch(
+  surface: "alfred" | "bill_extract" | "email_ai",
+  provider: string,
+  model: string,
+) {
+  if (surface === "alfred") return { alfred_provider: provider, alfred_model: model };
+  if (surface === "bill_extract") {
+    return { bill_extract_provider: provider, bill_extract_model: model };
+  }
+  return { email_ai_provider: provider, email_ai_model: model };
+}
+
 function dependencyState(
   connections: readonly ConnectionRowView[],
   ids: readonly ConnectionId[],

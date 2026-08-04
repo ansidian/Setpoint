@@ -5,10 +5,8 @@ import request, { type Test } from "../../test-utils/supertest.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDb = { execute: vi.fn() };
+// test-architecture: allow-boundary-mock -- Redirects cookie authentication to ephemeral database results while the route executes normally; the database singleton cannot otherwise be bound per test.
 vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../../transaction-imports/transaction-import-service.ts", () => ({ transactionImportService: {} }));
-vi.mock("../../transaction-imports/transaction-import-runtime.ts", () => ({ requestTransactionImportDrain: vi.fn() }));
-vi.mock("../../bills/bills-service.ts", () => ({ listAccounts: vi.fn(), listCategories: vi.fn() }));
 
 process.env.EA_USER_ID = "owner-1";
 
@@ -18,29 +16,37 @@ const sessionHash = `sha256:${crypto.createHash("sha256").update("session-token"
 
 function serviceMock() {
   return {
-    listMappings: vi.fn().mockResolvedValue([]),
-    upsertMapping: vi.fn(async (_userId, input) => input),
-    startHistoricalScan: vi.fn().mockResolvedValue({ runId: "run-1", created: true }),
-    listRuns: vi.fn().mockResolvedValue([{ id: "run-1" }]),
-    listItemsForEmail: vi.fn().mockResolvedValue([{ id: "item-1" }]),
-    getRun: vi.fn().mockResolvedValue({ id: "run-1", items: [] }),
-    commitItems: vi.fn().mockResolvedValue({ accepted: 1 }),
-    retryItem: vi.fn().mockResolvedValue({ accepted: true }),
-    dismissItem: vi.fn().mockResolvedValue({ dismissed: true }),
+    listMappings: async (userId: string) => [{ source: "amazon", owner: userId }],
+    upsertMapping: async (userId: string, input: Record<string, unknown>) => ({ ...input, owner: userId }),
+    startHistoricalScan: async (userId: string, input: { gmailAccountIds: string[] }) => ({
+      runId: `${userId}:${input.gmailAccountIds.join(",")}`,
+      created: true,
+    }),
+    listRuns: async (userId: string, limit: number) => [{ id: `${userId}:${limit}` }],
+    listItemsForEmail: async (userId: string, emailUid: string) => [{ id: `${userId}:${emailUid}` }],
+    getRun: async (_userId: string, runId: string) => ({ id: runId, items: [] }),
+    commitItems: async (userId: string, runId: string, items: unknown[]) => ({
+      accepted: items.length,
+      owner: userId,
+      runId,
+    }),
+    retryItem: async (userId: string, itemId: string) => ({ accepted: true, owner: userId, itemId }),
+    dismissItem: async (userId: string, itemId: string) => ({ dismissed: true, owner: userId, itemId }),
   };
 }
 
-function makeApp(service = serviceMock(), wake = vi.fn()) {
+function makeApp(service = serviceMock()) {
+  let wakeCount = 0;
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/briefing", requireCookieSession, createTransactionImportRouter({
     service: service as never,
-    wake,
-    loadAccounts: vi.fn().mockResolvedValue([{ id: "actual-1" }]) as never,
-    loadCategories: vi.fn().mockResolvedValue([{ categories: [{ id: "category-1" }] }]) as never,
+    wake: () => { wakeCount += 1; },
+    loadAccounts: async () => [{ id: "actual-1" }] as never,
+    loadCategories: async () => [{ categories: [{ id: "category-1" }] }] as never,
   }));
-  return { app, service, wake };
+  return { app, service, wakeCount: () => wakeCount };
 }
 
 function authenticated(requestBuilder: Test): Test {
@@ -59,16 +65,16 @@ beforeEach(() => {
 
 describe("transaction import routes", () => {
   it("requires briefing authentication and derives the owner server-side", async () => {
-    const { app, service } = makeApp();
+    const { app } = makeApp();
     expect((await request(app).get("/api/briefing/transaction-imports/mappings")).status).toBe(401);
 
     const response = await authenticated(request(app).get("/api/briefing/transaction-imports/mappings"));
     expect(response.status).toBe(200);
-    expect(service.listMappings).toHaveBeenCalledWith("owner-1");
+    expect(response.body).toEqual([{ source: "amazon", owner: "owner-1" }]);
   });
 
   it("validates mapping allowlists and live Actual IDs", async () => {
-    const { app, service } = makeApp();
+    const { app } = makeApp();
     expect((await authenticated(request(app)
       .put("/api/briefing/transaction-imports/mappings/venmo")
       .send({ mode: "automatic", actualAccountId: "actual-1" }))).status).toBe(400);
@@ -80,11 +86,11 @@ describe("transaction import routes", () => {
       .put("/api/briefing/transaction-imports/mappings/amazon")
       .send({ mode: "automatic", actualAccountId: "actual-1", actualCategoryId: "category-1" }));
     expect(response.status).toBe(200);
-    expect(service.upsertMapping).toHaveBeenCalledWith("owner-1", expect.objectContaining({ source: "amazon", mode: "automatic" }));
+    expect(response.body).toMatchObject({ owner: "owner-1", source: "amazon", mode: "automatic" });
   });
 
   it("returns 202 for scan, commit, and retry admission and wakes the worker", async () => {
-    const { app, service, wake } = makeApp();
+    const { app, wakeCount } = makeApp();
     const scan = await authenticated(request(app)
       .post("/api/briefing/transaction-imports/runs")
       .send({ gmailAccountIds: ["gmail-1"], sources: ["amazon"], startDate: "2026-01-01", endDate: "2026-02-01" }));
@@ -95,35 +101,35 @@ describe("transaction import routes", () => {
       .post("/api/briefing/transaction-imports/items/item-1/retry"));
 
     expect([scan.status, commit.status, retry.status]).toEqual([202, 202, 202]);
-    expect(service.startHistoricalScan).toHaveBeenCalledWith("owner-1", expect.any(Object));
-    expect(service.commitItems).toHaveBeenCalledWith("owner-1", "run-1", [{ itemId: "item-1" }]);
-    expect(service.retryItem).toHaveBeenCalledWith("owner-1", "item-1");
-    expect(wake).toHaveBeenCalledTimes(3);
+    expect(scan.body).toMatchObject({ runId: "owner-1:gmail-1", created: true });
+    expect(commit.body).toMatchObject({ accepted: 1, owner: "owner-1", runId: "run-1" });
+    expect(retry.body).toMatchObject({ accepted: true, owner: "owner-1", itemId: "item-1" });
+    expect(wakeCount()).toBe(3);
   });
 
   it("shapes owner-scoped status and dismiss responses", async () => {
     const service = serviceMock();
-    service.getRun.mockResolvedValueOnce(null as never);
+    service.getRun = async () => null as never;
     const { app } = makeApp(service);
     expect((await authenticated(request(app).get("/api/briefing/transaction-imports/runs/not-owned"))).status).toBe(404);
 
     const dismissed = await authenticated(request(app).post("/api/briefing/transaction-imports/items/item-1/dismiss"));
     expect(dismissed.status).toBe(200);
-    expect(dismissed.body).toEqual({ dismissed: true });
-    expect(service.dismissItem).toHaveBeenCalledWith("owner-1", "item-1");
+    expect(dismissed.body).toEqual({ dismissed: true, owner: "owner-1", itemId: "item-1" });
   });
 
   it("lists recent runs and email status through owner-scoped read paths", async () => {
-    const { app, service } = makeApp();
+    const { app } = makeApp();
     const runs = await authenticated(request(app).get("/api/briefing/transaction-imports/runs?limit=8"));
     const status = await authenticated(request(app)
       .get("/api/briefing/transaction-imports/email-status?emailUid=gmail-demo-message"));
 
     expect(runs.status).toBe(200);
-    expect(runs.body).toEqual({ runs: [{ id: "run-1" }] });
-    expect(service.listRuns).toHaveBeenCalledWith("owner-1", 8);
+    expect(runs.body).toEqual({ runs: [{ id: "owner-1:8" }] });
     expect(status.status).toBe(200);
-    expect(status.body).toEqual({ emailUid: "gmail-demo-message", items: [{ id: "item-1" }] });
-    expect(service.listItemsForEmail).toHaveBeenCalledWith("owner-1", "gmail-demo-message");
+    expect(status.body).toEqual({
+      emailUid: "gmail-demo-message",
+      items: [{ id: "owner-1:gmail-demo-message" }],
+    });
   });
 });

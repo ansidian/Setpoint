@@ -1,5 +1,5 @@
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import useCalendarModalViewModel from "./useCalendarModalViewModel";
 
 // Regression for fe-calendar::compute-rebuilds-on-planning-status-churn:
@@ -9,11 +9,14 @@ import useCalendarModalViewModel from "./useCalendarModalViewModel";
 
 function makeEventsView() {
   return {
-    compute: vi.fn(({ data }) => ({
-      itemsByDay: {},
-      itemsByDate: {},
-      totalEvents: (data?.events || []).length,
-    })),
+    compute: ({ data }: { data: unknown }) => {
+      const events = (data as { events?: unknown[] } | null)?.events ?? [];
+      return {
+        itemsByDay: {},
+        itemsByDate: {},
+        totalEvents: events.length,
+      };
+    },
     canNavigateBack: () => true,
     label: "Events",
   };
@@ -64,8 +67,8 @@ describe("useCalendarModalViewModel compute keying", () => {
       viewData: { events, deadlineOverlay, planningReadiness: { state: "idle" }, isLoading: true },
     });
 
-    const { rerender } = renderHook((p) => useCalendarModalViewModel(p), { initialProps: props });
-    expect(activeView.compute).toHaveBeenCalledTimes(1);
+    const { result, rerender } = renderHook((p) => useCalendarModalViewModel(p), { initialProps: props });
+    const computedBeforeStatusChange = result.current.computed;
 
     // Planning-status transition: fresh viewData identity (new planningReadiness,
     // isLoading flip) but the narrow compute inputs are referentially stable.
@@ -76,7 +79,7 @@ describe("useCalendarModalViewModel compute keying", () => {
       viewData: { events, deadlineOverlay, planningReadiness: { state: "ready" }, isLoading: false },
     });
     rerender(props);
-    expect(activeView.compute).toHaveBeenCalledTimes(1);
+    expect(result.current.computed).toBe(computedBeforeStatusChange);
   });
 
   it("re-runs events compute when visibleCalendarEvents identity changes", () => {
@@ -90,8 +93,8 @@ describe("useCalendarModalViewModel compute keying", () => {
       viewData: { events: eventsA, deadlineOverlay },
     });
 
-    const { rerender } = renderHook((p) => useCalendarModalViewModel(p), { initialProps: props });
-    expect(activeView.compute).toHaveBeenCalledTimes(1);
+    const { result, rerender } = renderHook((p) => useCalendarModalViewModel(p), { initialProps: props });
+    expect(result.current.computed.totalEvents).toBe(1);
 
     const eventsB = [{ id: "e1", startMs: 1 }, { id: "e2", startMs: 2 }];
     props = baseProps({
@@ -101,8 +104,7 @@ describe("useCalendarModalViewModel compute keying", () => {
       viewData: { events: eventsB, deadlineOverlay },
     });
     rerender(props);
-    expect(activeView.compute).toHaveBeenCalledTimes(2);
-    expect(activeView.compute.mock.results[1]!.value.totalEvents).toBe(2);
+    expect(result.current.computed.totalEvents).toBe(2);
   });
 
 });

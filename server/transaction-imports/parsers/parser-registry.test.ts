@@ -156,6 +156,7 @@ describe("transaction parser registry", () => {
   it("performs no network calls", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     parseTransactionEmail(emailFixture({ html: amazonSingleHtml, text: null }));
+    // test-architecture: allow-boundary-interaction -- Global fetch is the outbound network boundary; this parser safety contract is specifically that parsing untrusted email never initiates a request.
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });

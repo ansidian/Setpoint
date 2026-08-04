@@ -5,8 +5,9 @@ async function importDemoApi(now = "2026-05-12T15:30:00.000Z") {
   vi.setSystemTime(new Date(now));
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", "1");
-  vi.stubGlobal("fetch", vi.fn());
-  return import("../api");
+  let networkAttempted = false;
+  vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
+  return { api: await import("../api"), networkAttempted: () => networkAttempted };
 }
 
 describe("demo calendar API handlers", () => {
@@ -18,7 +19,7 @@ describe("demo calendar API handlers", () => {
   });
 
   it("returns an empty reminders list instead of an unhandled error (P3-16)", async () => {
-    const api = await importDemoApi();
+    const { api, networkAttempted } = await importDemoApi();
 
     expect(await api.listReminders({ sourceType: "calendar_event", sourceItemId: "demo-event-review" }))
       .toEqual({ reminders: [] });
@@ -30,11 +31,11 @@ describe("demo calendar API handlers", () => {
       offsetMinutes: 10,
     })).toMatchObject({ demo: true });
     expect(await api.deleteReminder("demo-reminder-1")).toEqual({ ok: true });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted()).toBe(false);
   });
 
   it("creates every clipboard-batch event and returns indexed created entries (P3-17)", async () => {
-    const api = await importDemoApi();
+    const { api, networkAttempted } = await importDemoApi();
 
     const before = (await api.getCalendarSearch({ scope: "events", q: "Batched demo" })).results.length;
     const result = await api.createCalendarEventsBatch([
@@ -50,11 +51,11 @@ describe("demo calendar API handlers", () => {
 
     const after = (await api.getCalendarSearch({ scope: "events", q: "Batched demo" })).results.length;
     expect(after).toBe(before + 2);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted()).toBe(false);
   });
 
   it("places batch events on their Pacific calendar day so range fetches include them (P3-19)", async () => {
-    const api = await importDemoApi();
+    const { api } = await importDemoApi();
 
     // 23:30 Pacific on 2026-05-14 is 06:30 UTC on 2026-05-15; the UTC-day filter
     // would drop it from a range ending 2026-05-14.
@@ -67,15 +68,15 @@ describe("demo calendar API handlers", () => {
   });
 
   it("reports place suggestions as an empty list rather than an unhandled error (P3-18)", async () => {
-    const api = await importDemoApi();
+    const { api, networkAttempted } = await importDemoApi();
 
     expect(await api.getCalendarPlaceSuggestions("coffee", "session-token")).toEqual({ places: [] });
     expect(await api.getCalendarPlaceDetails("demo-place-1", "session-token")).toEqual({ place: null });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted()).toBe(false);
   });
 
   it("does not flag truncation when results land exactly on the limit (P3-20)", async () => {
-    const api = await importDemoApi();
+    const { api } = await importDemoApi();
 
     // Empty query matches every seed event + deadline, giving a deterministic
     // total to pin the off-by-one boundary against.

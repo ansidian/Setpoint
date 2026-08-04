@@ -311,7 +311,6 @@ describe("InboxView search workflows", () => {
       30,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     ));
-    // test-architecture: allow-boundary-interaction -- a superseded HTTP request must be aborted so obsolete indexed work cannot continue consuming the provider boundary.
     const supersededSignal = vi.mocked(api.searchEmails).mock.calls[0]?.[2]?.signal;
     expect(supersededSignal).toBeInstanceOf(AbortSignal);
     expect(supersededSignal!.aborted).toBe(true);

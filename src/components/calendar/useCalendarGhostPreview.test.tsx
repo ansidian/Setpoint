@@ -1,4 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import useCalendarGhostPreview from "./useCalendarGhostPreview.ts";
 
@@ -31,6 +32,12 @@ function buildProps(overrides = {}) {
   };
 }
 
+function useGhostHarness(props: ReturnType<typeof buildProps>) {
+  const [navigatedViewDate, setNavigatedViewDate] = useState<{ year: number; month: number } | null>(null);
+  const preview = useCalendarGhostPreview({ ...props, setViewDate: setNavigatedViewDate });
+  return { navigatedViewDate, preview };
+}
+
 describe("useCalendarGhostPreview manual month browse", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -42,14 +49,12 @@ describe("useCalendarGhostPreview manual month browse", () => {
   });
 
   it("suppresses ghost snapback after manual month-grid browsing until placement changes", () => {
-    const setViewDate = vi.fn();
-    const initialProps = buildProps({ setViewDate });
-    const { rerender } = renderHook((props) => useCalendarGhostPreview(props), {
+    const initialProps = buildProps();
+    const { result, rerender } = renderHook((props) => useGhostHarness(props), {
       initialProps,
     });
 
     rerender(buildProps({
-      setViewDate,
       viewYear: 2026,
       viewMonth: 5,
       manualMonthBrowseKey: 1,
@@ -59,10 +64,9 @@ describe("useCalendarGhostPreview manual month browse", () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(setViewDate).not.toHaveBeenCalled();
+    expect(result.current.navigatedViewDate).toBeNull();
 
     rerender(buildProps({
-      setViewDate,
       viewYear: 2026,
       viewMonth: 5,
       manualMonthBrowseKey: 1,
@@ -79,14 +83,12 @@ describe("useCalendarGhostPreview manual month browse", () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(setViewDate).toHaveBeenCalledWith({ year: 2026, month: 4 });
+    expect(result.current.navigatedViewDate).toEqual({ year: 2026, month: 4 });
   });
 
   it("does not auto-navigate when a ghost target is already visible in the current grid", () => {
-    const setViewDate = vi.fn();
-    renderHook((props) => useCalendarGhostPreview(props), {
+    const { result } = renderHook((props) => useGhostHarness(props), {
       initialProps: buildProps({
-        setViewDate,
         viewYear: 2026,
         viewMonth: 4,
         deadlineDraftPreview: {
@@ -103,14 +105,12 @@ describe("useCalendarGhostPreview manual month browse", () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(setViewDate).not.toHaveBeenCalled();
+    expect(result.current.navigatedViewDate).toBeNull();
   });
 
   it("auto-navigates when a ghost target is outside the visible grid", () => {
-    const setViewDate = vi.fn();
-    renderHook((props) => useCalendarGhostPreview(props), {
+    const { result } = renderHook((props) => useGhostHarness(props), {
       initialProps: buildProps({
-        setViewDate,
         viewYear: 2026,
         viewMonth: 4,
         deadlineDraftPreview: {
@@ -127,14 +127,12 @@ describe("useCalendarGhostPreview manual month browse", () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(setViewDate).toHaveBeenCalledWith({ year: 2026, month: 3 });
+    expect(result.current.navigatedViewDate).toEqual({ year: 2026, month: 3 });
   });
 
   it("debounces event-ghost navigation without waiting for wall-clock time", () => {
-    const setViewDate = vi.fn();
-    renderHook((props) => useCalendarGhostPreview(props), {
+    const { result } = renderHook((props) => useGhostHarness(props), {
       initialProps: buildProps({
-        setViewDate,
         deadlineEditor: null,
         deadlineDraftPreview: null,
         eventEditor: {
@@ -159,12 +157,12 @@ describe("useCalendarGhostPreview manual month browse", () => {
     act(() => {
       vi.advanceTimersByTime(349);
     });
-    expect(setViewDate).not.toHaveBeenCalled();
+    expect(result.current.navigatedViewDate).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(setViewDate).toHaveBeenCalledWith({ year: 2026, month: 4 });
+    expect(result.current.navigatedViewDate).toEqual({ year: 2026, month: 4 });
   });
 
   it("produces deadline ghosts while composing Todoist items in Events view", () => {

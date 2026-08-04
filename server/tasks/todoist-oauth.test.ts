@@ -89,8 +89,11 @@ describe("Todoist OAuth service", () => {
       state: "state-1",
       browserBindHash: "other-browser-hash",
     })).rejects.toMatchObject({ code: "TODOIST_OAUTH_BROWSER_MISMATCH", status: 400 });
+    // test-architecture: allow-boundary-interaction -- Browser binding must fail before the outbound Todoist token exchange request.
     expect(fetchFn).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- A browser-binding failure must not persist any OAuth token secrets.
     expect(storeTokenResponse).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- A browser-binding failure must not promote staged write-only application credentials.
     expect(credentialManager.promoteCandidate).not.toHaveBeenCalled();
   });
 
@@ -119,7 +122,9 @@ describe("Todoist OAuth service", () => {
     const body = init.body as URLSearchParams;
     expect(body.get("client_secret")).toBe("candidate-client-secret");
     expect(body.get("redirect_uri")).toBe("https://setpoint.example.com/api/ea/accounts/todoist/callback");
+    // test-architecture: allow-boundary-interaction -- Credential promotion is a write-only secret-store boundary and must bind the exact candidate versions consumed by the callback.
     expect(credentialManager.promoteCandidate).toHaveBeenCalledWith(candidateVersions);
+    // test-architecture: allow-boundary-interaction -- OAuth token persistence is a secret database boundary; the successful provider response must be stored for the exact owner.
     expect(storeTokenResponse).toHaveBeenCalledWith(
       "owner-1",
       expect.objectContaining({ access_token: "oauth-access-token", refresh_token: "oauth-refresh-token" }),
@@ -143,7 +148,9 @@ describe("Todoist OAuth service", () => {
       state: "state-1",
       browserBindHash: "browser-hash",
     })).rejects.toMatchObject({ code: "TODOIST_OAUTH_EXCHANGE_FAILED", status: 422 });
+    // test-architecture: allow-boundary-interaction -- A rejected provider exchange must leave the active write-only credential pair untouched.
     expect(credentialManager.promoteCandidate).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- A rejected provider exchange must not corrupt durable OAuth token storage.
     expect(storeTokenResponse).not.toHaveBeenCalled();
   });
 

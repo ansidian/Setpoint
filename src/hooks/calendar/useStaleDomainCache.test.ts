@@ -22,12 +22,12 @@ describe("useStaleDomainCache", () => {
     await act(async () => {
       result.current.load();
     });
-    expect(fetchDomain).toHaveBeenCalledTimes(1);
     expect(result.current.data).toEqual({ upcoming: [{ id: "todo-1" }] });
 
     await act(async () => {
       result.current.load();
     });
+    // test-architecture: allow-boundary-interaction -- Domain fetch is the outbound API; a fresh TTL hit must suppress a duplicate request, which cached data alone cannot establish.
     expect(fetchDomain).toHaveBeenCalledTimes(1);
   });
 
@@ -45,14 +45,12 @@ describe("useStaleDomainCache", () => {
     await act(async () => {
       result.current.load({ force: true });
     });
-    expect(fetchDomain).toHaveBeenCalledTimes(2);
     expect(result.current.data).toEqual({ value: "second" });
 
     vi.setSystemTime(new Date("2026-05-02T16:31:00.000Z"));
     await act(async () => {
       result.current.load();
     });
-    expect(fetchDomain).toHaveBeenCalledTimes(3);
     expect(result.current.data).toEqual({ value: "third" });
   });
 
@@ -65,6 +63,7 @@ describe("useStaleDomainCache", () => {
       result.current.load();
       result.current.load();
     });
+    // test-architecture: allow-boundary-interaction -- Domain fetch is the outbound API; duplicate loads while pending must share one provider request.
     expect(fetchDomain).toHaveBeenCalledTimes(1);
     expect(result.current.loading).toBe(true);
 
@@ -110,7 +109,6 @@ describe("useStaleDomainCache", () => {
     act(() => {
       result.current.load({ refreshLive: true });
     });
-    expect(fetchDomain).toHaveBeenCalledWith({ refreshLive: true });
     expect(result.current.data).toEqual({ schedules: [], refreshLive: true });
     expect(result.current.loading).toBe(false);
 
@@ -118,10 +116,12 @@ describe("useStaleDomainCache", () => {
     act(() => {
       result.current.load();
     });
+    // test-architecture: allow-boundary-interaction -- Domain fetch is the outbound API; a plain load inside the TTL must not repeat the synchronous provider read.
     expect(fetchDomain).toHaveBeenCalledTimes(1);
     act(() => {
       result.current.load({ force: true });
     });
+    // test-architecture: allow-boundary-interaction -- Domain fetch is the outbound API; force must bypass the fresh-cache suppression and perform exactly one replacement read.
     expect(fetchDomain).toHaveBeenCalledTimes(2);
   });
 

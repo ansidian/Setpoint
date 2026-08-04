@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
@@ -72,8 +72,6 @@ describe("CalendarModal dashboard focus behavior", () => {
 
   it("activates a dashboard-focused deadline without issuing an item scroll", async () => {
     window.innerWidth = 1900;
-    const scrollTo = vi.fn();
-
     render(wrapWithDashboard(
       <CalendarModal
         open
@@ -97,21 +95,18 @@ describe("CalendarModal dashboard focus behavior", () => {
     const agendaRail = screen.getByTestId("events-agenda-rail");
     const agendaHeader = agendaRail.querySelector("[data-agenda-date-header='true']")!;
     const agendaRow = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
-    agendaRail.scrollTo = scrollTo;
+    agendaRail.scrollTo = (options) => {
+      agendaRail.scrollTop = typeof options === "number" ? options : options?.top ?? 0;
+    };
     agendaRail.scrollTop = 0;
     agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 } as DOMRect);
     agendaHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
     agendaRow.getBoundingClientRect = () => ({ top: 400, bottom: 444, left: 0, right: 280, width: 280, height: 44 } as DOMRect);
-    const clickRow = agendaRow.click.bind(agendaRow);
-    const clickSpy = vi.spyOn(agendaRow, "click").mockImplementation(() => clickRow());
-    scrollTo.mockClear();
-
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
 
     expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-deadline-row");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
-    expect(clickSpy).toHaveBeenCalled();
-    expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(false);
+    expect(agendaRail.scrollTop).toBe(0);
   });
 
   it("treats dashboard item focus as a one-shot request after the floating detail closes", async () => {

@@ -15,9 +15,6 @@ const mockApi = vi.hoisted(() => ({
 // test-architecture: allow-boundary-mock -- model catalogs, triage stats, and sender persistence are external Settings API boundaries; real cards render together below them.
 vi.mock("@/api", () => mockApi);
 
-// test-architecture: allow-boundary-mock -- the existing Radix Select double preserves labeled value/disabled/change behavior while avoiding portal mechanics in this section workflow test.
-vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils"));
-
 const { default: EmailAutomationSettingsSection } = await import("./EmailAutomationSettingsSection");
 
 // Stateful harness so setSettings(updater) feeds back into the section and the
@@ -204,71 +201,69 @@ describe("EmailAutomationSettingsSection", () => {
 
   describe("email lookback clamp", () => {
     function renderLookback() {
-      const patch = vi.fn();
-      render(<Harness patch={patch} />);
+      render(<Harness patch={() => {}} />);
       const input = screen.getByDisplayValue("16");
-      return { patch, input };
+      return { input };
     }
 
     it("clamps a below-minimum lookback up to 1 hour", () => {
-      const { patch, input } = renderLookback();
+      const { input } = renderLookback();
 
       // -5 parses truthy so it reaches Math.max's floor (a 0 would fall back to
       // the 16 default via `|| 16`, never exercising the clamp).
       fireEvent.change(input, { target: { value: "-5" } });
 
-      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 1 });
+      expect((input as HTMLInputElement).value).toBe("1");
     });
 
     it("clamps an above-maximum lookback down to 168 hours", () => {
-      const { patch, input } = renderLookback();
+      const { input } = renderLookback();
 
       fireEvent.change(input, { target: { value: "999" } });
 
-      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 168 });
+      expect((input as HTMLInputElement).value).toBe("168");
     });
 
     it("passes an in-range lookback through unchanged", () => {
-      const { patch, input } = renderLookback();
+      const { input } = renderLookback();
 
       fireEvent.change(input, { target: { value: "24" } });
 
-      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 24 });
+      expect((input as HTMLInputElement).value).toBe("24");
     });
   });
 
   describe("email interests add/remove", () => {
     it("patches email_interests_json with the appended interest on submit", () => {
-      const patch = vi.fn();
-      render(<Harness initialSettings={{ email_interests: ["Anthropic"] }} patch={patch} />);
+      render(<Harness initialSettings={{ email_interests: ["Anthropic"] }} patch={() => {}} />);
 
       const input = screen.getByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
       fireEvent.change(input, { target: { value: "GitHub" } });
       fireEvent.click(within(input.closest("form")!).getByRole("button", { name: "Add" }));
 
-      expect(patch).toHaveBeenCalledWith({ email_interests_json: ["Anthropic", "GitHub"] });
+      expect(screen.getByRole("button", { name: "Remove Anthropic" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Remove GitHub" })).toBeTruthy();
     });
 
     it("does not patch when submitting a blank interest", () => {
-      const patch = vi.fn();
-      render(<Harness initialSettings={{ email_interests: [] }} patch={patch} />);
+      render(<Harness initialSettings={{ email_interests: [] }} patch={() => {}} />);
 
       const input = screen.getByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
       fireEvent.change(input, { target: { value: "   " } });
       fireEvent.click(within(input.closest("form")!).getByRole("button", { name: "Add" }));
 
-      expect(patch).not.toHaveBeenCalled();
+      expect(screen.queryByRole("button", { name: /^Remove / })).toBeNull();
     });
 
     it("patches email_interests_json with the remaining interests when one is removed", () => {
-      const patch = vi.fn();
       render(
-        <Harness initialSettings={{ email_interests: ["Anthropic", "GitHub"] }} patch={patch} />,
+        <Harness initialSettings={{ email_interests: ["Anthropic", "GitHub"] }} patch={() => {}} />,
       );
 
       fireEvent.click(screen.getByRole("button", { name: "Remove Anthropic" }));
 
-      expect(patch).toHaveBeenCalledWith({ email_interests_json: ["GitHub"] });
+      expect(screen.queryByRole("button", { name: "Remove Anthropic" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Remove GitHub" })).toBeTruthy();
     });
   });
 });

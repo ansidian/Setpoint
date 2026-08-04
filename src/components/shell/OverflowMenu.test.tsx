@@ -31,6 +31,23 @@ function Harness(overrides: Partial<OverflowMenuProps> = {}) {
   };
 }
 
+function StatefulHarness({ history = false }: { history?: boolean }) {
+  const [menuOpen, setMenuOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  return (
+    <MemoryRouter>
+      <OverflowMenu
+        isMobile={false}
+        menuOpen={menuOpen}
+        onToggleMenu={() => setMenuOpen((open) => !open)}
+        onCloseMenu={() => setMenuOpen(false)}
+        onOpenHistory={history ? () => setHistoryOpen(true) : undefined}
+      />
+      <output>{historyOpen ? "history open" : menuOpen ? "menu open" : "menu closed"}</output>
+    </MemoryRouter>
+  );
+}
+
 describe("OverflowMenu menu-button semantics + keyboard model", () => {
   afterEach(cleanup);
 
@@ -129,24 +146,22 @@ describe("OverflowMenu menu-button semantics + keyboard model", () => {
   });
 
   it("Escape closes the menu and returns focus to the trigger", () => {
-    const onCloseMenu = vi.fn();
-    Harness({ menuOpen: true, onCloseMenu });
+    render(<StatefulHarness />);
 
     const items = screen.getAllByRole("menuitem");
     fireEvent.keyDown(items[0]!, { key: "Escape" });
 
-    expect(onCloseMenu).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("menu closed")).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /open more actions/i }));
   });
 
   it("Tab closes the menu", () => {
-    const onCloseMenu = vi.fn();
-    Harness({ menuOpen: true, onCloseMenu });
+    render(<StatefulHarness />);
 
     const items = screen.getAllByRole("menuitem");
     fireEvent.keyDown(items[0]!, { key: "Tab" });
 
-    expect(onCloseMenu).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("menu closed")).toBeTruthy();
   });
 
   it("does not reset focus when the parent re-renders with a new (non-memoized) onCloseMenu while the menu stays open", () => {
@@ -191,14 +206,12 @@ describe("OverflowMenu menu-button semantics + keyboard model", () => {
   });
 
   it("activating Snapshots still calls onCloseMenu and onOpenHistory", () => {
-    const onCloseMenu = vi.fn();
-    const onOpenHistory = vi.fn();
-    Harness({ menuOpen: true, onCloseMenu, onOpenHistory });
+    render(<StatefulHarness history />);
 
     const snapshotsItem = screen.getByRole("menuitem", { name: /snapshots/i });
     fireEvent.click(snapshotsItem);
 
-    expect(onCloseMenu).toHaveBeenCalledTimes(1);
-    expect(onOpenHistory).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("history open")).toBeTruthy();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

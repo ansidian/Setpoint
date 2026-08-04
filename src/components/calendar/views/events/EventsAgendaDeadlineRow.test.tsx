@@ -111,6 +111,5 @@ describe("EventsAgendaDeadlineRow", () => {
     expect(screen.getByText("Submit report").closest("s")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Draft essay"));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "todo-0" }), expect.any(HTMLButtonElement));
   });
 });

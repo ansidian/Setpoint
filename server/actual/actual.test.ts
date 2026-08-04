@@ -9,18 +9,7 @@ import type {
 
 interface MockSchedule extends ActualSchedule { rule?: string }
 interface MockRule { id: string; conditions: ActualScheduleCondition[] }
-interface MockTransaction {
-  accountId?: string;
-  id?: string;
-  date?: string;
-  amount?: number;
-  payee?: string | null;
-  payee_name?: string;
-  schedule?: string | null;
-  notes?: string;
-  cleared?: boolean;
-  category?: string;
-}
+interface MockTransaction { accountId?: string; id?: string; date?: string; amount?: number; payee?: string | null; payee_name?: string; schedule?: string | null; notes?: string; cleared?: boolean; category?: string }
 interface ActualApiState {
   accounts: ActualAccount[];
   payees: ActualPayee[];
@@ -112,9 +101,6 @@ const actualLocalMock = vi.hoisted(() => ({
   readLocalActualMetadata: vi.fn(),
 }));
 
-// vi.mock is hoisted — these factories run fresh after each vi.resetModules().
-// The fake stores enough Actual state for tests to assert adapter outcomes
-// without depending on Actual's query-builder call shape.
 vi.mock("@actual-app/api", () => {
   function createQuery(table: string): MockQuery {
     return {
@@ -169,8 +155,10 @@ vi.mock("@actual-app/api", () => {
   return { default: actualApi };
 });
 
+// test-architecture: allow-boundary-mock -- The local Actual cache is the filesystem/download boundary; SDK adapter cases inject cache discovery and bounded hydration outcomes.
 vi.mock("./actual-local-metadata.ts", () => actualLocalMock);
 
+// test-architecture: allow-boundary-mock -- The shared database is the production configuration boundary; these SDK adapter cases supply one fixed owner connection while persistence is owned by migrated DB suites.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: vi.fn().mockResolvedValue({
@@ -179,12 +167,8 @@ vi.mock("../db/connection.ts", () => ({
   },
 }));
 
-vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn((v: unknown) => v) }));
-
 describe("actual-core mutex (withLock)", () => {
   beforeEach(() => {
-    // Reset module registry so each test gets fresh lock + metadataCache state
-    // Reset all mocks so call counts start from 0
     vi.resetModules();
     vi.clearAllMocks();
     actualApiState.reset();
@@ -194,21 +178,21 @@ describe("actual-core mutex (withLock)", () => {
   });
 
   it("two concurrent calls execute sequentially (second starts after first finishes)", async () => {
-    // Use testConnection (no cache) so both calls always reach init
     const { testConnection } = await import("./actual-core.ts");
     const actualApi = await importActualApiMock();
 
     const firstInit = holdFirstCall(actualApi.init);
 
-    // Launch two calls without awaiting the first — simulates concurrent access
     const p1 = testConnection("user1");
     const p2 = testConnection("user1");
 
     await firstInit.started;
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound Actual session boundary; only one concurrent operation may enter it before release.
     expect(actualApi.init).toHaveBeenCalledTimes(1);
     firstInit.release();
     await Promise.all([p1, p2]);
 
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound Actual session boundary; releasing the mutex must admit the queued operation exactly once.
     expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 
@@ -228,7 +212,6 @@ describe("actual-core mutex (withLock)", () => {
     const p2 = getMetadata("user1");
 
     await expect(p1).rejects.toThrow("connection failed");
-    // Second call gets a fresh init attempt (callCount===2, succeeds)
     await expect(p2).resolves.toBeDefined();
   });
 });
@@ -275,15 +258,15 @@ describe("actual.ts metadata cache", () => {
     ]);
   });
 
-  it("getMetadata returns cached data on second call within TTL (init called once)", async () => {
+  it("getMetadata returns cached data on second call within TTL", async () => {
     const { getMetadata } = await import("./actual.ts");
     const actualApi = await importActualApiMock();
 
-    await getMetadata("user1");
-    await getMetadata("user1");
+    const first = await getMetadata("user1");
+    actualApi.__state.accounts = [{ id: "changed", name: "Changed", type: "checking", closed: false }];
+    const second = await getMetadata("user1");
 
-    // init should only be called once — second call hit cache
-    expect(actualApi.init).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
   });
 
   it("getMetadata re-fetches after TTL expires while reusing the loaded budget session", async () => {
@@ -293,16 +276,16 @@ describe("actual.ts metadata cache", () => {
     const baseTime = Date.now();
     const dateSpy = vi.spyOn(Date, "now");
 
-    // First call at t=0
     dateSpy.mockReturnValue(baseTime);
     await getMetadata("user1");
+    actualApi.__state.accounts = [{ id: "changed", name: "Changed", type: "checking", closed: false }];
 
-    // Second call at t=6 minutes (past 5-min TTL)
     dateSpy.mockReturnValue(baseTime + 6 * 60 * 1000);
-    await getMetadata("user1");
+    const refreshed = await getMetadata("user1");
 
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound session boundary; a TTL data refresh must reuse the already loaded budget session.
     expect(actualApi.init).toHaveBeenCalledTimes(1);
-    expect(actualApi.getAccounts).toHaveBeenCalledTimes(2);
+    expect(refreshed.accounts).toEqual([{ id: "changed", name: "Changed", type: "checking" }]);
 
     dateSpy.mockRestore();
   });
@@ -312,11 +295,14 @@ describe("actual.ts metadata cache", () => {
     const actualApi = await importActualApiMock();
 
     await getMetadata("user1");
-    await getMetadata("user1", { forceRefresh: true });
+    actualApi.__state.accounts = [{ id: "changed", name: "Changed", type: "checking", closed: false }];
+    const refreshed = await getMetadata("user1", { forceRefresh: true });
 
+    // test-architecture: allow-boundary-interaction -- SDK shutdown is the outbound session boundary; force refresh must close the prior singleton session.
     expect(actualApi.shutdown).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound session boundary; force refresh must establish one replacement session.
     expect(actualApi.init).toHaveBeenCalledTimes(2);
-    expect(actualApi.getAccounts).toHaveBeenCalledTimes(2);
+    expect(refreshed.accounts).toEqual([{ id: "changed", name: "Changed", type: "checking" }]);
   });
 
   it("prunes local backups only once across successive successful operations", async () => {
@@ -330,6 +316,7 @@ describe("actual.ts metadata cache", () => {
     await getMetadata("user1");
     await getMetadata("user1", { forceRefresh: true });
 
+    // test-architecture: allow-boundary-interaction -- Backup pruning is a filesystem boundary effect; the interval contract is that successive operations perform one sweep.
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledTimes(1);
   });
 });
@@ -361,13 +348,17 @@ describe("actual.ts sendBill mutex", () => {
       account_id: "a1",
     }, "user1");
 
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound Actual boundary; server URL and local data directory are its compatibility contract.
     expect(actualApi.init).toHaveBeenCalledWith(expect.objectContaining({
       serverURL: "http://localhost",
       dataDir: "/var/ea-actual",
     }));
+    // test-architecture: allow-boundary-interaction -- SDK loadBudget is the outbound Actual boundary; the discovered local budget ID must be selected.
     expect(actualApi.loadBudget).toHaveBeenCalledWith("Budget-Local");
+    // test-architecture: allow-boundary-interaction -- SDK download is an outbound archive effect; a discovered local cache must never trigger it.
     expect(actualApi.downloadBudget).not.toHaveBeenCalled();
-    expect(actualApi.addTransactions).toHaveBeenCalled();
+    expect(actualApi.__getTransactions()).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Backup pruning is a filesystem boundary effect tied to the budget directory used by the successful operation.
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Local");
   });
 
@@ -378,12 +369,16 @@ describe("actual.ts sendBill mutex", () => {
 
     await sendBill({ type: "expense", payee: "U.S. Bank", amount: 42.25, due_date: "2026-05-10", account_id: "a1" }, "user1");
 
+    // test-architecture: allow-boundary-interaction -- Bounded cache hydration is the filesystem/remote-download boundary; missing development caches must use the guarded downloader.
     expect(actualLocalMock.hydrateLocalActualCache).toHaveBeenCalledWith("user1", {
       dataDir: "/var/ea-actual",
       forceDownload: true,
     });
+    // test-architecture: allow-boundary-interaction -- SDK loadBudget is the outbound Actual boundary; the bounded downloader's hydrated budget ID must be loaded.
     expect(actualApi.loadBudget).toHaveBeenCalledWith("Budget-Hydrated");
+    // test-architecture: allow-boundary-interaction -- SDK download is an outbound archive effect; hydration must not fall through to the SDK downloader.
     expect(actualApi.downloadBudget).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- Backup pruning is a filesystem boundary effect tied to the hydrated budget directory.
     expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Hydrated");
   });
 
@@ -406,6 +401,7 @@ describe("actual.ts sendBill mutex", () => {
         code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
       });
 
+      // test-architecture: allow-boundary-interaction -- SDK download is an outbound archive effect; production must fail closed instead of cold-downloading a missing cache.
       expect(actualApi.downloadBudget).not.toHaveBeenCalled();
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
@@ -433,8 +429,9 @@ describe("actual.ts sendBill mutex", () => {
     firstInit.release();
     await Promise.all([p1, p2]);
 
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound singleton-session boundary; metadata and the queued write must share one loaded session.
     expect(actualApi.init).toHaveBeenCalledTimes(1);
-    expect(actualApi.addTransactions).toHaveBeenCalled();
+    expect(actualApi.__getTransactions()).toHaveLength(1);
   });
 
   it("does not reuse a same-named bill schedule for a transfer", async () => {
@@ -460,11 +457,13 @@ describe("actual.ts sendBill mutex", () => {
       to_account_id: "a1",
     }, "user1");
 
+    // test-architecture: allow-boundary-interaction -- createSchedule is an outbound financial-write boundary; a cross-type name collision must create the transfer schedule with the signed amount.
     expect(actualApi.createSchedule).toHaveBeenCalledWith({
       name: "Visa",
       date: tomorrow,
       amount: 50000,
     });
+    // test-architecture: allow-boundary-interaction -- internal.send is the outbound Actual mutation boundary; a transfer must never clobber the same-named bill schedule.
     expect(actualApi.internal.send).not.toHaveBeenCalledWith(
       "schedule/update",
       expect.objectContaining({ schedule: expect.objectContaining({ id: "sched-bill" }) }),
@@ -489,10 +488,12 @@ describe("actual-core testConnection mutex", () => {
     const p2 = testConnection("user1");
 
     await firstInit.started;
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound Actual session boundary; the connection check cannot enter while metadata holds the mutex.
     expect(actualApi.init).toHaveBeenCalledTimes(1);
     firstInit.release();
     await Promise.all([p1, p2]);
 
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound Actual session boundary; releasing metadata admits exactly the queued connection check.
     expect(actualApi.init).toHaveBeenCalledTimes(2);
   });
 });
@@ -592,7 +593,8 @@ describe("actual.ts createQuickTxn", () => {
     firstInit.release();
     await Promise.all([p1, p2]);
 
+    // test-architecture: allow-boundary-interaction -- SDK init is the outbound singleton-session boundary; metadata and quick transaction must share one loaded session.
     expect(actualApi.init).toHaveBeenCalledTimes(1);
-    expect(actualApi.addTransactions).toHaveBeenCalled();
+    expect(actualApi.__getTransactions()).toHaveLength(1);
   });
 });

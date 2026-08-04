@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe("CalendarDateTimeView", () => {
   it("supports keyboard AM/PM selection from a single tab stop", () => {
-    const onSelect = vi.fn();
+    let selectedEpoch: number | null = null;
     const initialEpoch = epochFromLa(2026, 3, 19, 9, 15);
     const nowTick = epochFromLa(2026, 3, 19, 9, 14);
 
@@ -17,7 +17,7 @@ describe("CalendarDateTimeView", () => {
       <CalendarDateTimeView
         nowTick={nowTick}
         initialEpoch={initialEpoch}
-        onSelect={onSelect}
+        onSelect={(epoch) => { selectedEpoch = epoch; }}
         onBack={() => {}}
         confirmLabel="Snooze"
       />,
@@ -38,11 +38,11 @@ describe("CalendarDateTimeView", () => {
     expect(pmButton.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(confirmButton);
 
-    expect(onSelect).toHaveBeenCalledWith(epochFromLa(2026, 3, 19, 21, 15));
+    expect(selectedEpoch).toBe(epochFromLa(2026, 3, 19, 21, 15));
   });
 
   it("supports repeated a/p toggles before enter commits", () => {
-    const onSelect = vi.fn();
+    let selectedEpoch: number | null = null;
     const initialEpoch = epochFromLa(2026, 3, 19, 9, 15);
     const nowTick = epochFromLa(2026, 3, 19, 9, 14);
 
@@ -50,7 +50,7 @@ describe("CalendarDateTimeView", () => {
       <CalendarDateTimeView
         nowTick={nowTick}
         initialEpoch={initialEpoch}
-        onSelect={onSelect}
+        onSelect={(epoch) => { selectedEpoch = epoch; }}
         onBack={() => {}}
         confirmLabel="Snooze"
       />,
@@ -62,7 +62,7 @@ describe("CalendarDateTimeView", () => {
     fireEvent.keyDown(hourInput, { key: "p" });
     fireEvent.keyDown(hourInput, { key: "Enter" });
 
-    expect(onSelect).toHaveBeenCalledWith(epochFromLa(2026, 3, 19, 21, 15));
+    expect(selectedEpoch).toBe(epochFromLa(2026, 3, 19, 21, 15));
   });
 
   it("scrolls the calendar area through months with the wheel", () => {

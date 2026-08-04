@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe("SearchableDropdown", () => {
   it("does not auto-select while typing into the search field", async () => {
-    const onChange = vi.fn();
+    let selectedId = "";
 
     render(
       <SearchableDropdown
@@ -28,7 +28,7 @@ describe("SearchableDropdown", () => {
           { id: "refund", name: "Refund Review" },
         ]}
         value=""
-        onChange={onChange}
+        onChange={(id) => { selectedId = id; }}
         placeholder="Select category..."
       />,
     );
@@ -38,13 +38,13 @@ describe("SearchableDropdown", () => {
       target: { value: "re" },
     });
 
-    expect(onChange).not.toHaveBeenCalled();
+    expect(selectedId).toBe("");
     expect(screen.getByText("Returns")).toBeTruthy();
     expect(screen.getByText("Refund Review")).toBeTruthy();
   });
 
   it("still allows creating a new option when enabled", async () => {
-    const onCreateNew = vi.fn();
+    let createdName = "";
 
     render(
       <SearchableDropdown
@@ -54,7 +54,7 @@ describe("SearchableDropdown", () => {
         value=""
         onChange={vi.fn()}
         allowCreate
-        onCreateNew={onCreateNew}
+        onCreateNew={(name) => { createdName = name; }}
         placeholder="Select payee..."
       />,
     );
@@ -65,17 +65,17 @@ describe("SearchableDropdown", () => {
     });
     fireEvent.click(screen.getByText((content) => content.includes("Create") && content.includes("Rent")));
 
-    expect(onCreateNew).toHaveBeenCalledWith("Rent");
+    expect(createdName).toBe("Rent");
   });
 
   it("does not open or change when disabled", () => {
-    const onChange = vi.fn();
+    let selectedId = "checking";
 
     render(
       <SearchableDropdown
         options={[{ id: "checking", name: "Checking" }]}
         value="checking"
-        onChange={onChange}
+        onChange={(id) => { selectedId = id; }}
         ariaLabel="Actual account"
         disabled
       />,
@@ -85,6 +85,6 @@ describe("SearchableDropdown", () => {
     expect(trigger.disabled).toBe(true);
     fireEvent.click(trigger);
     expect(screen.queryByPlaceholderText("Search...")).toBeNull();
-    expect(onChange).not.toHaveBeenCalled();
+    expect(selectedId).toBe("checking");
   });
 });

@@ -22,6 +22,7 @@ import type {
   TodoistProject,
   TodoistTask,
 } from "../../shared/types/tasks.ts";
+import type { Client } from "@libsql/client";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const LEGACY_DEADLINE_FIELDS = ["content", "project_id", "label_ids"];
@@ -42,6 +43,12 @@ interface TodoistProviderMutationPayload {
   labels?: string[];
   priority?: TodoistPriority;
   due_string?: string;
+}
+
+interface TaskMutationOptions {
+  dbClient?: Client;
+  deleteReminders?: typeof deleteSourceReminders;
+  recomputeReminders?: typeof recomputeUnsentRemindersForSource;
 }
 
 function errorMessage(error: unknown): string {
@@ -66,8 +73,8 @@ async function loadCompletionSources(userId: string): Promise<{ todoistTasks: To
   return { todoistTasks };
 }
 
-async function completedDeadlineOccurrenceExists(userId: string, todoistId: string, occurrenceDate: string): Promise<boolean> {
-  const result = await db.execute({
+async function completedDeadlineOccurrenceExists(userId: string, todoistId: string, occurrenceDate: string, dbClient: Client): Promise<boolean> {
+  const result = await dbClient.execute({
     sql: `SELECT 1
           FROM ea_completed_tasks
           WHERE user_id = ? AND todoist_id = ? AND due_date = ?
@@ -77,9 +84,9 @@ async function completedDeadlineOccurrenceExists(userId: string, todoistId: stri
   return result.rows.length > 0;
 }
 
-async function persistCompletedDeadlineOccurrence(userId: string, todoistId: string, task: TodoistTask, occurrenceDate: string): Promise<boolean> {
+async function persistCompletedDeadlineOccurrence(userId: string, todoistId: string, task: TodoistTask, occurrenceDate: string, dbClient: Client): Promise<boolean> {
   if (!occurrenceDate) return false;
-  const result = await db.execute({
+  const result = await dbClient.execute({
     // INSERT OR IGNORE makes this an atomic claim on (user, todoist, due_date):
     // only the first writer gets rowsAffected > 0, so it can gate the Todoist close.
     sql: `INSERT OR IGNORE INTO ea_completed_tasks
@@ -95,26 +102,30 @@ async function persistCompletedDeadlineOccurrence(userId: string, todoistId: str
   return result.rowsAffected > 0;
 }
 
-async function syncTodoistReminderAnchor(userId: string, task: TodoistTask): Promise<void> {
+async function syncTodoistReminderAnchor(userId: string, task: TodoistTask, {
+  dbClient = db,
+  deleteReminders = deleteSourceReminders,
+  recomputeReminders = recomputeUnsentRemindersForSource,
+}: TaskMutationOptions = {}): Promise<void> {
   const sourceItemId = String(task?.id || "");
   if (!sourceItemId) return;
   const anchor = todoistReminderAnchorFromTask(task);
   if (!anchor?.anchorAt) {
-    await deleteSourceReminders({
+    await deleteReminders({
       userId,
       sourceType: "todoist_task",
       sourceItemId,
       unsentOnly: true,
-    });
+    }, { dbClient });
     return;
   }
-  await recomputeUnsentRemindersForSource({
+  await recomputeReminders({
     userId,
     sourceType: "todoist_task",
     sourceItemId,
     anchorKind: anchor.anchorKind,
     anchorAt: anchor.anchorAt,
-  });
+  }, { dbClient });
 }
 
 function assertIsoDate(value: unknown, message = "Deadline occurrence date must be YYYY-MM-DD"): asserts value is string {
@@ -161,22 +172,25 @@ export async function createDeadline(userId: string, body: DeadlineMutationReque
   return createTodoistTask(userId, todoistPayloadFromDeadlineBody(body));
 }
 
-export async function updateDeadline(userId: string, deadlineId: string, body: DeadlineMutationRequest): Promise<TodoistTask> {
+export async function updateDeadline(userId: string, deadlineId: string, body: DeadlineMutationRequest, options: TaskMutationOptions = {}): Promise<TodoistTask> {
   if (!deadlineId) throw serviceError("Deadline id is required", 400);
   const task = await updateTodoistTask(userId, deadlineId, todoistPayloadFromDeadlineBody(body, { partial: true }));
-  await syncTodoistReminderAnchor(userId, task);
+  await syncTodoistReminderAnchor(userId, task, options);
   return task;
 }
 
-export async function deleteDeadline(userId: string, deadlineId: string): Promise<void> {
+export async function deleteDeadline(userId: string, deadlineId: string, options: TaskMutationOptions = {}): Promise<void> {
   if (!deadlineId) throw serviceError("Deadline id is required", 400);
-  await deleteTask(userId, deadlineId);
+  await deleteTask(userId, deadlineId, options);
 }
 
-export async function completeDeadlineOccurrence(userId: string, deadlineId: string, occurrenceDate: string): Promise<CompleteDeadlineOccurrenceResult> {
+export async function completeDeadlineOccurrence(userId: string, deadlineId: string, occurrenceDate: string, {
+  dbClient = db,
+  deleteReminders = deleteSourceReminders,
+}: TaskMutationOptions = {}): Promise<CompleteDeadlineOccurrenceResult> {
   if (!deadlineId) throw serviceError("Deadline id is required", 400);
   assertIsoDate(occurrenceDate);
-  if (await completedDeadlineOccurrenceExists(userId, deadlineId, occurrenceDate)) {
+  if (await completedDeadlineOccurrenceExists(userId, deadlineId, occurrenceDate, dbClient)) {
     return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
   }
 
@@ -188,14 +202,14 @@ export async function completeDeadlineOccurrence(userId: string, deadlineId: str
     throw serviceError("Deadline occurrence is not active for that date", 409);
   }
   if (todoistTask.status === "complete") {
-    await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate);
+    await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate, dbClient);
     return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
   }
 
   // Atomically claim the occurrence BEFORE closing the Todoist task: only the
   // request that wins the (user, todoist, due_date) INSERT OR IGNORE proceeds, so
   // concurrent completions can't double-close (and double-advance) a recurring task.
-  const claimed = await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate);
+  const claimed = await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate, dbClient);
   if (!claimed) {
     return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
   }
@@ -204,7 +218,7 @@ export async function completeDeadlineOccurrence(userId: string, deadlineId: str
     await completeTodoistTask(userId, deadlineId);
   } catch (err) {
     // Roll back the claim so a retry can re-attempt the close.
-    await db.execute({
+    await dbClient.execute({
       sql: "DELETE FROM ea_completed_tasks WHERE user_id = ? AND todoist_id = ? AND due_date = ?",
       args: [userId, deadlineId, occurrenceDate],
     }).catch(() => {});
@@ -217,12 +231,12 @@ export async function completeDeadlineOccurrence(userId: string, deadlineId: str
   // recorded. The only remaining post-close work is best-effort reminder cleanup;
   // a failure here must be logged but must NOT surface as a failed completion.
   try {
-    await deleteSourceReminders({
+    await deleteReminders({
       userId,
       sourceType: "todoist_task",
       sourceItemId: String(deadlineId),
       unsentOnly: true,
-    });
+    }, { dbClient });
   } catch (err) {
     console.error("[Briefing] Reminder cleanup after Todoist close failed:", errorMessage(err));
   }
@@ -237,11 +251,14 @@ export async function listLabels(userId: string): Promise<TodoistLabel[]> {
   return fetchTodoistLabels(userId);
 }
 
-async function deleteTask(userId: string, id: string): Promise<void> {
+async function deleteTask(userId: string, id: string, {
+  dbClient = db,
+  deleteReminders = deleteSourceReminders,
+}: TaskMutationOptions = {}): Promise<void> {
   await deleteTodoistTask(userId, id);
-  await deleteSourceReminders({
+  await deleteReminders({
     userId,
     sourceType: "todoist_task",
     sourceItemId: String(id),
-  });
+  }, { dbClient });
 }

@@ -16,17 +16,12 @@ vi.mock("../db/connection.ts", () => ({
 }));
 // test-architecture: allow-boundary-mock -- Test credentials are already plaintext at the encryption boundary.
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value: unknown) => value }));
-// test-architecture: allow-boundary-mock -- Reminder reconciliation is outside this persistence-normalization contract.
-vi.mock("../reminders/reminder-service.ts", () => ({
-  deleteSourceReminders: vi.fn(),
-  recomputeUnsentRemindersForSource: vi.fn(),
-}));
-
 const { listTodoistMirrorActiveTasks, syncTodoistMirror } = await import("./todoist-mirror.ts");
 
 beforeEach(async () => {
   testState.db.current = createClient({ url: "file::memory:" });
   await testState.db.current.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
+  await testState.db.current.executeMultiple(readFileSync(join(migrationsDir, "010_discord_reminders.sql"), "utf8"));
   await testState.db.current.execute({
     sql: "INSERT INTO ea_settings (user_id, todoist_api_token_encrypted) VALUES (?, ?)",
     args: ["u1", "todoist-token"],

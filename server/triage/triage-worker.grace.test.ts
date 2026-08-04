@@ -31,8 +31,6 @@ describe("email triage worker grace flows", () => {
       source: "weak_security_grace",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const jobs = await dbClient.execute({
       sql: `SELECT status, attempts, locked_at, scheduled_for, completed_at
             FROM ea_triage_jobs
@@ -151,8 +149,6 @@ describe("email triage worker grace flows", () => {
       source: "arrival_grace_read_deferred",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: `SELECT t.triage_status,
                    t.triage_source,
@@ -229,8 +225,6 @@ describe("email triage worker grace flows", () => {
       modelClient,
       now: new Date("2026-05-03T12:02:59.000Z"),
     })).resolves.toEqual({ processed: false });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const result = await processNextEmailTriageJob({
       dbClient,
       modelClient,
@@ -243,8 +237,6 @@ describe("email triage worker grace flows", () => {
       lane: "needs_attention",
       model_calls: ["strong"],
     });
-    expect(modelClient.classify).toHaveBeenCalledTimes(1);
-
     const rows = await dbClient.execute({
       sql: `SELECT t.triage_status,
                    t.triage_source,
@@ -298,8 +290,6 @@ describe("email triage worker grace flows", () => {
       source: "weak_security_grace_read",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: `SELECT t.lane,
                    t.triage_status,
@@ -397,8 +387,6 @@ describe("email triage worker grace flows", () => {
       source: "weak_security_grace_skip",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const rows = await dbClient.execute({
       sql: `SELECT t.triage_status,
                    t.triage_source,
@@ -486,8 +474,6 @@ describe("email triage worker grace flows", () => {
       source: "cheap_model",
       model_calls: ["cheap"],
     });
-    expect(modelClient.classify).toHaveBeenCalledTimes(1);
-
     const jobs = await dbClient.execute({
       sql: "SELECT status, attempts, scheduled_for FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-1"],
@@ -537,7 +523,6 @@ describe("email triage worker grace flows", () => {
       processed: false,
       paused: true,
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
     const rows = await dbClient.execute({
       sql: `SELECT t.triage_status, t.triage_source, j.status, j.completed_at
             FROM ea_email_triage t

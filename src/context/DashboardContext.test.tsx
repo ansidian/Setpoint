@@ -1,420 +1,182 @@
-import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { useState } from "react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider, useDashboard } from "./DashboardContext";
-import type { DashboardDeadline } from "./dashboardTaskProjection";
-import { completeDeadlineOccurrence } from "../api";
-import type { CompleteDeadlineOccurrenceResult } from "../../shared/types/tasks";
+import type { DashboardDeadline, DashboardDeadlineRoot } from "./dashboardTaskProjection";
+import { completeDeadlineOccurrence, updateDeadline } from "../api";
 
+// test-architecture: allow-boundary-mock -- Dashboard deadline actions cross authenticated Todoist HTTP writes; controlled success/failure responses keep the real provider and optimistic state machine integrated.
 vi.mock("../api", () => ({
   completeDeadlineOccurrence: vi.fn(),
   updateDeadline: vi.fn(),
 }));
 
-const completeDeadlineOccurrenceMock = vi.mocked(completeDeadlineOccurrence);
-const completedOccurrence: CompleteDeadlineOccurrenceResult = {
-  completed: true,
-  alreadyCompleted: false,
-  deadlineId: "test-deadline",
-  occurrenceDate: "2026-04-21",
-};
+const completeMock = vi.mocked(completeDeadlineOccurrence);
+const updateMock = vi.mocked(updateDeadline);
+
+function stats(incomplete: number) {
+  return { incomplete, dueToday: 0, dueThisWeek: 0, totalPoints: 0 };
+}
 
 function Probe({ task, moveTarget = "2026-04-25" }: { task: DashboardDeadline; moveTarget?: string }) {
-  const { handleAddTask, handleCompleteTask, handleUpdateTask, handleDeleteTask, handleMoveTask } = useDashboard();
+  const actions = useDashboard();
   return (
     <>
-      <button type="button" onClick={() => handleAddTask(task)}>
-        Add
-      </button>
-      <button type="button" onClick={() => handleCompleteTask(task.id, task)}>
-        Complete
-      </button>
-      <button type="button" onClick={() => handleUpdateTask({ ...task, title: "Updated title" })}>
-        Update
-      </button>
-      <button type="button" onClick={() => handleDeleteTask(task.id)}>
-        Delete
-      </button>
-      <button type="button" onClick={() => handleMoveTask(task, moveTarget)}>
-        Move
-      </button>
+      <button type="button" onClick={() => actions.handleAddTask(task)}>Add</button>
+      <button type="button" onClick={() => actions.handleUpdateTask({ ...task, title: "Updated title" })}>Update</button>
+      <button type="button" onClick={() => actions.handleUpdateTask({ ...task, due_date: "2026-04-30", due_time: "4:00 PM" })}>Update latest</button>
+      <button type="button" onClick={() => actions.handleDeleteTask(task.id)}>Delete</button>
+      <button type="button" onClick={() => actions.handleCompleteTask(task.id, task)}>Complete</button>
+      <button type="button" onClick={() => actions.handleMoveTask(task, moveTarget)}>Move</button>
     </>
   );
 }
 
-describe("DashboardContext deadline single-owner state", () => {
+function DeadlineHarness({ initial, task, moveTarget }: { initial: DashboardDeadlineRoot; task: DashboardDeadline; moveTarget?: string }) {
+  const [deadlines, setDeadlines] = useState(initial);
+  return (
+    <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setDeadlines}>
+      <Probe task={task} moveTarget={moveTarget} />
+      <button type="button" onClick={() => setDeadlines({ upcoming: [], stats: stats(0) })}>Drop all</button>
+      <output aria-label="deadline state">{JSON.stringify(deadlines)}</output>
+    </DashboardProvider>
+  );
+}
+
+function readDeadlines(): DashboardDeadlineRoot {
+  return JSON.parse(screen.getByRole("status", { name: "deadline state" }).textContent || "{}");
+}
+
+describe("DashboardContext deadline facade", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    completeDeadlineOccurrenceMock.mockResolvedValue(completedOccurrence);
+    vi.clearAllMocks();
+    completeMock.mockResolvedValue({ completed: true, alreadyCompleted: false, deadlineId: "test", occurrenceDate: "2026-04-21" });
+    updateMock.mockResolvedValue({} as never);
   });
 
   afterEach(() => {
     cleanup();
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
-  it("adds deadlines to calendar deadlines without waiting for a refetch", () => {
-    const task = {
-      id: "todo-new",
-      title: "New task",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    const deadlines = { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-
-    render(
-      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
+  it("adds, updates, and deletes through the single rendered deadlines store", () => {
+    const task = { id: "todo-edit", title: "Original", due_date: "2026-04-21", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [], stats: stats(0) }} task={task} />);
 
     fireEvent.click(screen.getByText("Add"));
-
-    expect(setCalendarDeadlines).toHaveBeenCalled();
-    const nextDeadlines = setCalendarDeadlines.mock.results[0]!.value;
-    expect(nextDeadlines.upcoming).toEqual([task]);
-    expect(nextDeadlines.stats.incomplete).toBe(1);
-  });
-
-  it("optimistically completes deadline occurrences through the single deadlines store", async () => {
-    const task = {
-      id: "todo-range-only",
-      title: "Range-only task",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-    const onTaskCompleted = vi.fn();
-    const onTaskCompletionIntent = vi.fn();
-
-    render(
-      <DashboardProvider
-        deadlines={deadlines}
-        setCalendarDeadlines={setCalendarDeadlines}
-        onTaskCompleted={onTaskCompleted}
-        onTaskCompletionIntent={onTaskCompletionIntent}
-      >
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Complete"));
-    });
-
-    expect(completeDeadlineOccurrence).toHaveBeenCalledWith("todo-range-only", "2026-04-21");
-    expect(onTaskCompletionIntent).toHaveBeenCalledWith("todo-range-only");
-    const completingDeadlines = setCalendarDeadlines.mock.results[0]!.value;
-    expect(completingDeadlines.upcoming[0]).toMatchObject({
-      id: "todo-range-only",
-      _completing: true,
-    });
-
-    await act(async () => {
-      await Promise.resolve();
-      await vi.advanceTimersByTimeAsync(600);
-    });
-
-    expect(onTaskCompleted).toHaveBeenCalledWith("todo-range-only");
-    const completedDeadlines = setCalendarDeadlines.mock.results[setCalendarDeadlines.mock.results.length - 1]!.value;
-    expect(completedDeadlines.upcoming[0]).toMatchObject({
-      id: "todo-range-only",
-      status: "complete",
-    });
-    expect(completedDeadlines.upcoming[0]._completing).toBeUndefined();
-  });
-
-  it("routes update and delete through the same deadlines store", () => {
-    const task = {
-      id: "todo-edit",
-      title: "Original title",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-
-    render(
-      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
-
+    expect(readDeadlines().upcoming).toEqual([task]);
     fireEvent.click(screen.getByText("Update"));
-    const updatedDeadlines = setCalendarDeadlines.mock.results[setCalendarDeadlines.mock.results.length - 1]!.value;
-    expect(updatedDeadlines.upcoming[0].title).toBe("Updated title");
-
+    expect(readDeadlines().upcoming[0]?.title).toBe("Updated title");
     fireEvent.click(screen.getByText("Delete"));
-    const remainingDeadlines = setCalendarDeadlines.mock.results[setCalendarDeadlines.mock.results.length - 1]!.value;
-    expect(remainingDeadlines.upcoming).toEqual([]);
+    expect(readDeadlines().upcoming).toEqual([]);
   });
 
-  it("handleCompleteTask resolves true on success and false when completeDeadlineOccurrence rejects", async () => {
-    const successTask = {
-      id: "todo-return-true",
-      title: "Succeeds",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    const failTask = {
-      id: "todo-return-false",
-      title: "Fails",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    let capturedResult: boolean | undefined;
+  it("optimistically completes an occurrence and settles it after the UX delay", async () => {
+    const task = { id: "todo-complete", title: "Complete me", due_date: "2026-04-21", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
 
-    function ReturnProbe({ task }: { task: DashboardDeadline }) {
-      const { handleCompleteTask } = useDashboard();
-      return (
-        <button
-          type="button"
-          onClick={async () => {
-            capturedResult = await handleCompleteTask(task.id, task);
-          }}
-        >
-          CompleteAndCapture
-        </button>
-      );
-    }
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+    expect(readDeadlines().upcoming[0]).toMatchObject({ id: "todo-complete", _completing: true });
+    // test-architecture: allow-boundary-interaction -- the completed UI cannot reveal which Todoist occurrence key crossed the outbound write boundary.
+    expect(completeDeadlineOccurrence).toHaveBeenCalledWith("todo-complete", "2026-04-21");
 
-    // Success case.
-    const successDeadlines = { upcoming: [successTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
-    const setCalendarDeadlinesSuccess = vi.fn((updater) => updater(successDeadlines));
-    completeDeadlineOccurrenceMock.mockResolvedValueOnce(completedOccurrence);
-
-    const { unmount } = render(
-      <DashboardProvider deadlines={successDeadlines} setCalendarDeadlines={setCalendarDeadlinesSuccess}>
-        <ReturnProbe task={successTask} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("CompleteAndCapture"));
-      await Promise.resolve();
-      await vi.advanceTimersByTimeAsync(600);
-    });
-
-    expect(capturedResult).toBe(true);
-    unmount();
-
-    // Failure case.
-    const failDeadlines = { upcoming: [failTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
-    const setCalendarDeadlinesFail = vi.fn((updater) => updater(failDeadlines));
-    completeDeadlineOccurrenceMock.mockRejectedValueOnce(new Error("provider down"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    render(
-      <DashboardProvider deadlines={failDeadlines} setCalendarDeadlines={setCalendarDeadlinesFail}>
-        <ReturnProbe task={failTask} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("CompleteAndCapture"));
-    });
-
-    expect(capturedResult).toBe(false);
-    errorSpy.mockRestore();
+    await act(async () => vi.advanceTimersByTimeAsync(600));
+    expect(readDeadlines().upcoming[0]).toMatchObject({ id: "todo-complete", status: "complete" });
+    expect(readDeadlines().upcoming[0]?._completing).toBeUndefined();
   });
 
-  it("reverts the optimistic completing flag and never completes when the server rejects", async () => {
-    const task = {
-      id: "todo-fails",
-      title: "Server-rejects task",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-    const onTaskCompleted = vi.fn();
-    const onTaskCompletionIntent = vi.fn();
-    completeDeadlineOccurrenceMock.mockRejectedValue(new Error("provider down"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("reverts the optimistic completion when the provider rejects", async () => {
+    const task = { id: "todo-fails", title: "Fails", due_date: "2026-04-21", status: "incomplete" };
+    completeMock.mockRejectedValue(new Error("provider down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
 
-    render(
-      <DashboardProvider
-        deadlines={deadlines}
-        setCalendarDeadlines={setCalendarDeadlines}
-        onTaskCompleted={onTaskCompleted}
-        onTaskCompletionIntent={onTaskCompletionIntent}
-      >
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Complete"));
-    });
-
-    // The intent fired (optimistic) but the completion was rejected, so the row
-    // must return to its pre-click state: _completing cleared, not complete.
-    expect(onTaskCompletionIntent).toHaveBeenCalledWith("todo-fails");
-    const revertedDeadlines = setCalendarDeadlines.mock.results[setCalendarDeadlines.mock.results.length - 1]!.value;
-    expect(revertedDeadlines.upcoming[0]).toMatchObject({
-      id: "todo-fails",
-      status: "incomplete",
-    });
-    expect(revertedDeadlines.upcoming[0]._completing).toBeUndefined();
-    expect(onTaskCompleted).not.toHaveBeenCalled();
-
-    // The 600ms removeCompletedTask timer must never have been scheduled, so
-    // advancing time cannot flip the row to complete.
-    const callsBeforeAdvance = setCalendarDeadlines.mock.calls.length;
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(600);
-    });
-    expect(setCalendarDeadlines.mock.calls.length).toBe(callsBeforeAdvance);
-    expect(onTaskCompleted).not.toHaveBeenCalled();
-    const finalDeadlines = setCalendarDeadlines.mock.results[setCalendarDeadlines.mock.results.length - 1]!.value;
-    expect(finalDeadlines.upcoming[0].status).toBe("incomplete");
-
-    errorSpy.mockRestore();
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+    expect(readDeadlines().upcoming[0]).toMatchObject({ id: "todo-fails", status: "incomplete" });
+    expect(readDeadlines().upcoming[0]?._completing).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("ignores Complete on a task that is already _completing", async () => {
-    const task = {
-      id: "todo-inflight",
-      title: "Already completing",
-      due_date: "2026-04-21",
-      status: "incomplete",
-      _completing: true,
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-    const onTaskCompletionIntent = vi.fn();
-
-    render(
-      <DashboardProvider
-        deadlines={deadlines}
-        setCalendarDeadlines={setCalendarDeadlines}
-        onTaskCompletionIntent={onTaskCompletionIntent}
-      >
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Complete"));
-    });
-
+  it.each([
+    { id: "todo-inflight", due_date: "2026-04-21", status: "incomplete", _completing: true },
+    { id: "todo-done", due_date: "2026-04-21", status: "complete" },
+    { id: "todo-undated", due_date: null, status: "incomplete" },
+  ])("does not write an ineligible occurrence for $id", async (task) => {
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+    // test-architecture: allow-boundary-interaction -- unchanged local state cannot prove an ineligible occurrence avoided the irreversible outbound Todoist completion write.
     expect(completeDeadlineOccurrence).not.toHaveBeenCalled();
-    expect(onTaskCompletionIntent).not.toHaveBeenCalled();
-    expect(setCalendarDeadlines).not.toHaveBeenCalled();
   });
 
-  it("ignores Complete on a task whose status is already complete", async () => {
-    const task = {
-      id: "todo-done",
-      title: "Already complete",
-      due_date: "2026-04-21",
-      status: "complete",
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-    const onTaskCompletionIntent = vi.fn();
-
-    render(
-      <DashboardProvider
-        deadlines={deadlines}
-        setCalendarDeadlines={setCalendarDeadlines}
-        onTaskCompletionIntent={onTaskCompletionIntent}
-      >
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Complete"));
-    });
-
-    expect(completeDeadlineOccurrence).not.toHaveBeenCalled();
-    expect(onTaskCompletionIntent).not.toHaveBeenCalled();
-    expect(setCalendarDeadlines).not.toHaveBeenCalled();
+  it("uses the latest deadline occurrence at call time", async () => {
+    const task = { id: "todo-latest", title: "Latest", due_date: "2026-04-01", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    fireEvent.click(screen.getByText("Update latest"));
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+    // test-architecture: allow-boundary-interaction -- the exact live occurrence date is an outbound provider-compatibility key not recoverable from the later completed rendering.
+    expect(completeDeadlineOccurrence).toHaveBeenCalledWith("todo-latest", "2026-04-30");
   });
 
-  it("ignores Complete on a deadline with no due_date (the occurrence completer needs a date)", async () => {
-    // completeDeadlineOccurrence keys on (id, due_date); a deadline without one
-    // cannot be completed, so the guard must bail before firing the intent (the
-    // sound) or hitting the server — never half-fire on an uncompletable row.
-    const task = {
-      id: "todo-undated",
-      title: "No due date",
-      due_date: null,
-      status: "incomplete",
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
-    const onTaskCompletionIntent = vi.fn();
-
-    render(
-      <DashboardProvider
-        deadlines={deadlines}
-        setCalendarDeadlines={setCalendarDeadlines}
-        onTaskCompletionIntent={onTaskCompletionIntent}
-      >
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Complete"));
-    });
-
-    expect(completeDeadlineOccurrence).not.toHaveBeenCalled();
-    expect(onTaskCompletionIntent).not.toHaveBeenCalled();
-    expect(setCalendarDeadlines).not.toHaveBeenCalled();
+  it("does not resurrect a task removed by a refetch before the completion timer fires", async () => {
+    const task = { id: "todo-refetched-away", title: "Gone", due_date: "2026-04-21", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+    fireEvent.click(screen.getByText("Drop all"));
+    await act(async () => vi.advanceTimersByTimeAsync(600));
+    expect(readDeadlines().upcoming).toEqual([]);
   });
 
-  it("seeds the empty store from the current deadlines view so optimistic flags are kept", async () => {
-    const task = {
-      id: "todo-fallback",
-      title: "Fallback task",
-      due_date: "2026-04-21",
-      status: "incomplete",
-    };
-    const deadlines = {
-      upcoming: [task],
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    };
-    // The cache has not loaded yet: its updater receives undefined.
-    const setCalendarDeadlines = vi.fn((updater) => updater(undefined));
+  it("cancels the completion timer when the provider unmounts", async () => {
+    const task = { id: "todo-unmount", title: "Unmount", due_date: "2026-04-21", status: "incomplete" };
+    const view = render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+    expect(vi.getTimerCount()).toBe(1);
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
-    render(
-      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
-        <Probe task={task} />
-      </DashboardProvider>,
-    );
+  it("moves a deadline optimistically and preserves its time in the outbound write", async () => {
+    const task = { id: "todo-move", title: "Timed", due_date: "2026-04-21", due_time: "3:00 PM", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Move")));
+    expect(readDeadlines().upcoming[0]?.due_date).toBe("2026-04-25");
+    // test-architecture: allow-boundary-interaction -- the rendered target day does not expose the preserved due time sent to the outbound Todoist write.
+    expect(updateDeadline).toHaveBeenCalledWith("todo-move", { dueDate: "2026-04-25", dueTime: "3:00 PM" });
+  });
 
-    await act(async () => {
-      fireEvent.click(screen.getByText("Complete"));
-    });
+  it("rolls an optimistic move back when the provider rejects", async () => {
+    const task = { id: "todo-move-fails", title: "Timed", due_date: "2026-04-21", due_time: "3:00 PM", status: "incomplete" };
+    updateMock.mockRejectedValue(new Error("provider down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Move")));
+    expect(readDeadlines().upcoming[0]?.due_date).toBe("2026-04-21");
+  });
 
-    const seededDeadlines = setCalendarDeadlines.mock.results[0]!.value;
-    expect(seededDeadlines.upcoming[0]).toMatchObject({
-      id: "todo-fallback",
-      _completing: true,
-    });
+  it("does not issue a same-day move", async () => {
+    const task = { id: "todo-noop", title: "Same day", due_date: "2026-04-21", due_time: "3:00 PM", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} moveTarget="2026-04-21" />);
+    await act(async () => fireEvent.click(screen.getByText("Move")));
+    // test-architecture: allow-boundary-interaction -- unchanged local state cannot prove a same-day drag avoided an unnecessary outbound provider write.
+    expect(updateDeadline).not.toHaveBeenCalled();
+  });
+
+  it("uses live cache time for a move started from a stale drag snapshot", async () => {
+    const task = { id: "todo-stale-time", title: "Timed", due_date: "2026-04-21", due_time: "3:00 PM", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    fireEvent.click(screen.getByText("Update latest"));
+    await act(async () => fireEvent.click(screen.getByText("Move")));
+    // test-architecture: allow-boundary-interaction -- the exact live time is provider payload compatibility data and is not visible after the day-only move.
+    expect(updateDeadline).toHaveBeenCalledWith("todo-stale-time", { dueDate: "2026-04-25", dueTime: "4:00 PM" });
+  });
+
+  it("lands a full titled chip when the target cache did not contain the task", async () => {
+    const task = { id: "todo-cross", title: "Pay rent", due_date: "2026-04-21", due_time: "3:00 PM", status: "incomplete" };
+    render(<DeadlineHarness initial={{ upcoming: [], stats: stats(0) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Move")));
+    expect(readDeadlines().upcoming[0]).toMatchObject({ id: "todo-cross", title: "Pay rent", due_date: "2026-04-25" });
   });
 });

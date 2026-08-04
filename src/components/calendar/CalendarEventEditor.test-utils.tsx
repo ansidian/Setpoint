@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { expect, vi } from "vitest";
 import "./CalendarEventEditor.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 
 const CalendarModalCompat = CalendarModal as unknown as ComponentType<Record<string, unknown>>;
 interface RenderModalOptions { events?: Array<Record<string, unknown>>; focusDate?: string; refreshRange?: ReturnType<typeof vi.fn>; upsertEvents?: ReturnType<typeof vi.fn>; removeEvent?: ReturnType<typeof vi.fn> }
@@ -14,24 +14,45 @@ export function renderModal({
   upsertEvents = vi.fn(),
   removeEvent = vi.fn(),
 }: RenderModalOptions = {}) {
-  const utils = render(
-    <CalendarModalCompat
-      open
-      onClose={() => {}}
-      view="events"
-      onViewChange={() => {}}
-      focusDate={focusDate}
-      eventsData={{
-        editable: true,
-        getEvents: () => events,
-        refreshRange,
-        upsertEvents,
-        removeEvent,
-      }}
-      billsData={{}}
-      deadlinesData={{}}
-    />,
-  );
+  function CalendarHarness() {
+    const [currentEvents, setCurrentEvents] = useState(events);
+    const applyUpsert = (input: Record<string, unknown> | Array<Record<string, unknown>>) => {
+      (upsertEvents as unknown as (value: typeof input) => void)(input);
+      const incoming = Array.isArray(input) ? input : [input];
+      setCurrentEvents((current) => {
+        const next = [...current];
+        for (const event of incoming) {
+          const index = next.findIndex((candidate) => candidate.id === event.id);
+          if (index >= 0) next[index] = event;
+          else next.push(event);
+        }
+        return next;
+      });
+    };
+    const applyRemove = (id: string) => {
+      (removeEvent as unknown as (value: string) => void)(id);
+      setCurrentEvents((current) => current.filter((event) => event.id !== id));
+    };
+    return (
+      <CalendarModalCompat
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate={focusDate}
+        eventsData={{
+          editable: true,
+          getEvents: () => currentEvents,
+          refreshRange,
+          upsertEvents: applyUpsert,
+          removeEvent: applyRemove,
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />
+    );
+  }
+  const utils = render(<CalendarHarness />);
   return { ...utils, refreshRange, upsertEvents, removeEvent };
 }
 

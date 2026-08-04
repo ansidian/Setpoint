@@ -1,53 +1,48 @@
-// server/routes/news.test.js
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import express from "express";
-import type { Express, NextFunction, Request, Response } from "express";
+import type { Express } from "express";
+import cookieParser from "cookie-parser";
 import request from "../test-utils/supertest.ts";
 import type { Client } from "@libsql/client";
 import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
+import { seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { createRequireCookieSession } from "../middleware/auth.ts";
+import { createNewsRouter } from "./news.ts";
 
-const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({ db: { current: null } }));
-const currentDb = (): Client => testState.db.current!;
-
-vi.mock("../middleware/auth.ts", () => ({
-  requireCookieSession: (_req: Request, _res: Response, next: NextFunction) => next(),
-}));
-
-vi.mock("../db/connection.ts", () => ({
-  default: {
-    execute: (...args: Parameters<Client["execute"]>) => currentDb().execute(...args),
-    executeMultiple: (...args: Parameters<Client["executeMultiple"]>) => currentDb().executeMultiple(...args),
-    batch: (...args: Parameters<Client["batch"]>) => currentDb().batch(...args),
-  },
-}));
-
-vi.mock("../news/news-preview.ts", () => ({
-  previewNewsFeed: vi.fn(async (url: string) => (url.includes("nofeed")
-    ? null
-    : { feedUrl: `${url.replace(/\/$/, "")}/feed`, title: "Resolved Feed", sampleTitles: ["A", "B"] })),
-}));
-
-vi.mock("../news/news-poller.ts", async (importOriginal) => ({
-  ...(await importOriginal()),
-  requestImmediateNewsSweep: vi.fn(async () => ({ swept: 3, throttled: false })),
-}));
+let db: Client;
+const currentDb = (): Client => db;
 
 process.env.EA_USER_ID = "u1";
-const { default: router } = await import("./news.ts");
 
 function makeApp() {
   const app = express();
   app.use(express.json());
-  app.use("/api/news", router);
+  app.use((req, _res, next) => {
+    req.headers.cookie = "ea_session=valid";
+    next();
+  });
+  app.use(cookieParser());
+  app.use("/api/news", createNewsRouter({
+    dbClient: currentDb(),
+    authenticate: createRequireCookieSession(currentDb()),
+    previewFeed: async (url) => (url.includes("nofeed")
+      ? null
+      : { feedUrl: `${url.replace(/\/$/, "")}/feed`, title: "Resolved Feed", sampleTitles: ["A", "B"] }),
+    requestSweep: async () => ({ swept: 3, throttled: false }),
+  }));
   return app;
 }
 
 describe("news routes", () => {
   let app: Express;
   beforeEach(async () => {
-    testState.db.current = await createMigratedDb();
+    db = await createMigratedDb();
+    await seedOwner(db, { userId: "u1", passwordHash: "hash" });
+    await seedSession(db, "valid");
     app = makeApp();
   });
+
+  afterEach(() => db.close());
 
   it("GET / returns an empty shaped payload for a fresh user", async () => {
     const res = await request(app).get("/api/news");

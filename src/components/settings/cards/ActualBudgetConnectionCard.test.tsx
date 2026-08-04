@@ -14,6 +14,7 @@ const mockSecurity = vi.hoisted(() => ({
   stepUpWithPassword: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Actual connection, provider check, cache hydration, and removal cross authenticated HTTP/provider-storage boundaries.
 vi.mock("@/api", () => ({
   getActualCacheStatus: mockApi.getActualCacheStatus,
   hydrateActualBudgetCache: mockApi.hydrateActualBudgetCache,
@@ -21,6 +22,7 @@ vi.mock("@/api", () => ({
   saveActualBudgetConnection: mockApi.saveActualBudgetConnection,
   testActualBudget: mockApi.testActualBudget,
 }));
+// test-architecture: allow-boundary-mock -- retrying credential mutations may cross the authenticated password-step-up boundary.
 vi.mock("@/auth/securityApi", () => mockSecurity);
 
 const { default: ActualBudgetConnectionCard } = await import("./ActualBudgetConnectionCard");
@@ -73,13 +75,14 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
 
     fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
+    // test-architecture: allow-boundary-interaction -- server URL and sync identity are provider-connection wire inputs not repeated in the generic success state.
     await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledWith({
       serverURL: "https://actual.example.com",
       syncId: "sync-2",
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Check connection" }));
-    await waitFor(() => expect(mockApi.testActualBudget).toHaveBeenCalled());
+    expect(await screen.findByText("Connected")).toBeTruthy();
   });
 
   it("leaves a blank write-only password unchanged when saving other fields", async () => {
@@ -93,6 +96,7 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
 
+    // test-architecture: allow-boundary-interaction -- omission of a blank write-only password is an outbound secret-preservation contract not visible after success.
     await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledWith({
       serverURL: "https://actual.example.com",
       syncId: "sync-2",
@@ -142,13 +146,12 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
 
-    await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledTimes(2));
+    // test-architecture: allow-boundary-interaction -- the retried provider mutation must preserve the full write-only candidate, which is cleared after success.
     expect(mockApi.saveActualBudgetConnection).toHaveBeenLastCalledWith({
       serverURL: "https://actual.example.com",
       syncId: "sync-2",
       password: "actual-private-password",
     });
-    expect(mockSecurity.stepUpWithPassword).toHaveBeenCalledWith("owner-password");
     await waitFor(() => expect(password.value).toBe(""));
   });
 
@@ -163,7 +166,6 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
 
     expect((await screen.findAllByText("Cache missing")).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Hydrate Cache" }));
-    await waitFor(() => expect(mockApi.hydrateActualBudgetCache).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Cache ready")).toBeTruthy();
   });
 
@@ -180,8 +182,7 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
     expect(screen.getByText(/finance sync and transaction actions will stop/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Confirm remove Actual credentials" }));
 
-    await waitFor(() => expect(mockApi.removeActualBudgetConnection).toHaveBeenCalledTimes(1));
-    expect(onRefreshConnections).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Remove Actual credentials" })).toBeNull());
   });
 
   it("does not let a late hydrate resolution clobber a newer cache-status check", async () => {
@@ -216,6 +217,7 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
       setSettings({ ...configured, actual_budget_url: "https://actual.example.com/v2" });
     });
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- the race contract requires a newer outbound cache-status request before the stale hydrate settles; final state alone cannot prove request ordering.
       expect(mockApi.getActualCacheStatus).toHaveBeenCalledTimes(2);
     });
 

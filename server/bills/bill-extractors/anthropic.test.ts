@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ANTHROPIC_PROVIDER } from "./anthropic.ts";
+import { createAnthropicProvider } from "./anthropic.ts";
 
-vi.mock("../../ai-credentials.ts", () => ({
-  resolveAiApiKey: async () => process.env.ANTHROPIC_API_KEY || null,
-}));
+const ANTHROPIC_PROVIDER = createAnthropicProvider({
+  resolveApiKey: async () => process.env.ANTHROPIC_API_KEY || null,
+});
 
 describe("ANTHROPIC_PROVIDER.extract", () => {
   let savedApiKey: string | undefined;

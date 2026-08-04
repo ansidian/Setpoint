@@ -96,6 +96,7 @@ describe("transaction import worker", () => {
     expect(detail).toMatchObject({ status: "completed", cursor: { complete: true } });
     expect(detail!.items).toHaveLength(2);
     expect(detail!.items.every((item) => item.automationMode === "observe")).toBe(true);
+    // test-architecture: allow-boundary-interaction -- Gmail search is the outbound provider boundary; durable resume must send the exact stored page token on the second request.
     expect(searchPage).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ pageToken: "page-2" }));
   });
 
@@ -127,8 +128,11 @@ describe("transaction import worker", () => {
 
     await expect(worker.processNextItemBatch()).resolves.toBe(true);
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; observe mode may issue exactly one preview and must never duplicate it.
     expect(importGroups).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; observe mode must frame the only request as a dry run for the exact owner.
     expect(importGroups).toHaveBeenCalledWith("owner-1", expect.any(Array), true);
+    // test-architecture: allow-boundary-interaction -- Cache invalidation is a downstream process boundary; an observe-only preview must not fan out changed-finance refresh work.
     expect(invalidateAfterCommit).not.toHaveBeenCalled();
     expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "needs_review",
@@ -160,11 +164,14 @@ describe("transaction import worker", () => {
     await worker.processNextItemBatch();
     detail = await store.getRunDetail("owner-1", arrival.runId!);
 
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; the first request must preview both mapped accounts together.
     expect(importGroups).toHaveBeenNthCalledWith(1, "owner-1", expect.arrayContaining([
       expect.objectContaining({ accountId: "actual-checking" }),
       expect.objectContaining({ accountId: "actual-card" }),
     ]), true);
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; only the second request may cross the commit point.
     expect(importGroups).toHaveBeenNthCalledWith(2, "owner-1", expect.any(Array), false);
+    // test-architecture: allow-boundary-interaction -- Finance cache invalidation is a downstream process boundary; one changed commit batch must create exactly one refresh fan-out.
     expect(invalidateAfterCommit).toHaveBeenCalledTimes(1);
     expect(detail!.items.map((item) => item.status)).toEqual(["added", "added"]);
   });
@@ -317,6 +324,7 @@ describe("transaction import worker", () => {
     await worker.processNextItemBatch();
     const item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
     expect(item).toMatchObject({ automaticSafe: false, status: "needs_review" });
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; an automatically unsafe candidate must issue neither preview nor commit.
     expect(importGroups).toHaveBeenCalledTimes(0);
   });
 
@@ -362,7 +370,9 @@ describe("transaction import worker", () => {
     await worker.processNextItemBatch();
     item = (await store.getRunDetail("owner-1", arrival.runId!))!.items[0]!;
     expect(item.status).toBe("added");
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; an owner-confirmed correction must still pass through preview first.
     expect(importGroups).toHaveBeenNthCalledWith(1, "owner-1", expect.any(Array), true);
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; the corrected legacy ID may cross the commit point only after the successful preview.
     expect(importGroups).toHaveBeenNthCalledWith(2, "owner-1", expect.any(Array), false);
   });
 });

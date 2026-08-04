@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createOwnerRuntimeGate } from "./owner-runtime.ts";
 
 const owner = {
@@ -9,20 +9,21 @@ const owner = {
 
 describe("owner runtime gate", () => {
   it("does not start background work for an unclaimed instance", () => {
-    const start = vi.fn();
+    const startedOwners: typeof owner[] = [];
+    const start = (startedOwner: typeof owner) => { startedOwners.push(startedOwner); };
     const gate = createOwnerRuntimeGate(start);
 
     expect(gate.startForOwner(null)).toBe(false);
-    expect(start).not.toHaveBeenCalled();
+    expect(startedOwners).toEqual([]);
   });
 
   it("starts background work once when the owner becomes available", () => {
-    const start = vi.fn();
+    const startedOwners: typeof owner[] = [];
+    const start = (startedOwner: typeof owner) => { startedOwners.push(startedOwner); };
     const gate = createOwnerRuntimeGate(start);
 
     expect(gate.startForOwner(owner)).toBe(true);
     expect(gate.startForOwner(owner)).toBe(false);
-    expect(start).toHaveBeenCalledTimes(1);
-    expect(start).toHaveBeenCalledWith(owner);
+    expect(startedOwners).toEqual([owner]);
   });
 });

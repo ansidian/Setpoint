@@ -12,6 +12,7 @@ function currentDb(): Client {
   return testState.db.current;
 }
 
+// test-architecture: allow-boundary-mock -- Redirects the production database singleton to a migrated ephemeral libSQL client; every assertion executes real SQL and observes durable rows.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement) => currentDb().execute(statement),

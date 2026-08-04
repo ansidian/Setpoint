@@ -186,11 +186,14 @@ describe("iCloud fetchEmailsInRange", () => {
       limit: 25,
     });
 
+    // test-architecture: allow-boundary-interaction -- IMAP mailbox locking is outbound protocol state; inbox scope must be acquired before provider search/fetch.
     expect(activeClient!.getMailboxLock).toHaveBeenCalledWith("INBOX");
+    // test-architecture: allow-boundary-interaction -- IMAP search is outbound; exact date bounds are provider wire inputs not represented in normalized messages.
     expect(activeClient!.search).toHaveBeenCalledWith({
       since: new Date("2026-04-25T00:00:00Z"),
       before: new Date("2026-05-02T00:00:00Z"),
     });
+    // test-architecture: allow-boundary-interaction -- IMAP fetch is outbound; UID selection and source/header fields are the provider compatibility contract for MIME normalization.
     expect(activeClient!.fetch).toHaveBeenCalledWith([11, 12], {
       envelope: true,
       flags: true,

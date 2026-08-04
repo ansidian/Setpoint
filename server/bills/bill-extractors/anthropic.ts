@@ -30,12 +30,17 @@ const TOOL = {
   },
 };
 
-export const ANTHROPIC_PROVIDER: BillExtractionProvider & { id: string; envVar: string } = {
+export function createAnthropicProvider({
+  resolveApiKey = resolveAiApiKey,
+}: {
+  resolveApiKey?: typeof resolveAiApiKey;
+} = {}): BillExtractionProvider & { id: string; envVar: string } {
+  return {
   id: "anthropic",
   envVar: "ANTHROPIC_API_KEY",
 
   async extract({ model, systemPrompt, content }: BillExtractionRequest) {
-    const apiKey = await resolveAiApiKey("anthropic");
+    const apiKey = await resolveApiKey("anthropic");
     if (!apiKey) {
       const err: HttpError = new Error("ANTHROPIC_API_KEY not set");
       err.status = 503;
@@ -80,4 +85,7 @@ export const ANTHROPIC_PROVIDER: BillExtractionProvider & { id: string; envVar: 
 
     return { fields: toolBlock.input, usage: data.usage || {} };
   },
-};
+  };
+}
+
+export const ANTHROPIC_PROVIDER = createAnthropicProvider();

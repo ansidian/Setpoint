@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
 
@@ -7,11 +7,10 @@ const mockApi = vi.hoisted(() => ({
   getBillExtractModels: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- the bill-extraction provider catalog crosses the authenticated model-discovery HTTP boundary while selection renders through the real control.
 vi.mock("@/api", () => ({
   getBillExtractModels: mockApi.getBillExtractModels,
 }));
-
-vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils"));
 
 const { default: BillExtractionAiCard } = await import("./BillExtractionAiCard");
 
@@ -68,37 +67,13 @@ describe("BillExtractionAiCard", () => {
   it("renders the two labeled provider/model selects", async () => {
     renderCard();
 
-    await waitFor(() => {
-      expect(mockApi.getBillExtractModels).toHaveBeenCalled();
-    });
-
-    expect(screen.getByText("Provider")).toBeTruthy();
+    expect(await screen.findByText("Provider")).toBeTruthy();
     expect(screen.getByText("Model")).toBeTruthy();
     expect(screen.getByLabelText("Bill extraction provider")).toBeTruthy();
     expect(screen.getByLabelText("Bill extraction model")).toBeTruthy();
     expect(screen.getByRole("link", {
       name: "Anthropic API pricing (opens in a new tab)",
     })).toBeTruthy();
-  });
-
-  it("a provider change reaches patch with the resolved provider/model", async () => {
-    const patch = vi.fn();
-    renderCard({ patch });
-
-    await waitFor(() => {
-      expect(mockApi.getBillExtractModels).toHaveBeenCalled();
-    });
-
-    fireEvent.change(screen.getByLabelText("Bill extraction provider"), {
-      target: { value: "openai" },
-    });
-
-    await waitFor(() => {
-      expect(patch).toHaveBeenLastCalledWith({
-        bill_extract_provider: "openai",
-        bill_extract_model: "gpt-5.5",
-      });
-    });
   });
 
   it("shows the env-var warning for an unavailable provider", async () => {

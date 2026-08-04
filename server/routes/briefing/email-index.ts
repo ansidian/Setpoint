@@ -5,16 +5,26 @@ import {
 } from "../../email/email-index.ts";
 import { wakeEmailBackfillWorker } from "../../email/email-backfill-worker.ts";
 
-const router = Router();
 const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error || "");
 }
 
+export function createEmailIndexRouter({
+  getHealth = getEmailIndexHealth,
+  queueBackfill = queueEmailIndexBackfill,
+  wake = wakeEmailBackfillWorker,
+}: {
+  getHealth?: typeof getEmailIndexHealth;
+  queueBackfill?: typeof queueEmailIndexBackfill;
+  wake?: typeof wakeEmailBackfillWorker;
+} = {}) {
+  const router = Router();
+
 router.get("/email-index/health", async (_req, res) => {
   try {
-    res.json(await getEmailIndexHealth(ownerUserId()));
+    res.json(await getHealth(ownerUserId()));
   } catch (err) {
     console.error("[EA] Email index health failed:", errorMessage(err));
     res.status(500).json({ message: "Email index health failed" });
@@ -23,10 +33,10 @@ router.get("/email-index/health", async (_req, res) => {
 
 router.post("/email-index/backfill", async (req, res) => {
   try {
-    const result = await queueEmailIndexBackfill(ownerUserId(), {
+    const result = await queueBackfill(ownerUserId(), {
       targetDays: req.body?.targetDays,
     });
-    wakeEmailBackfillWorker();
+    wake();
     res.status(202).json(result);
   } catch (err) {
     console.error("[EA] Email index backfill trigger failed:", errorMessage(err));
@@ -34,4 +44,7 @@ router.post("/email-index/backfill", async (req, res) => {
   }
 });
 
-export default router;
+  return router;
+}
+
+export default createEmailIndexRouter();

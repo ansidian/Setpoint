@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   getCalendarSearch: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Calendar search HTTP is the outbound provider-backed API; the hook suite controls latency/errors while observing returned search state and race handling.
 vi.mock("../../api", () => ({
   getCalendarSearch: apiMocks.getCalendarSearch,
 }));
@@ -52,11 +53,10 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("final");
     });
 
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; pending-state rerenders must settle after admitting exactly one debounced request.
     await waitFor(() => expect(apiMocks.getCalendarSearch).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(result.current.pending).toBe(false));
     await flushPromises();
-
-    expect(apiMocks.getCalendarSearch).toHaveBeenCalledTimes(1);
   });
 
 
@@ -81,8 +81,8 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("fi");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
-    expect(searchApi).toHaveBeenCalledWith(searchArgs("events", "fi"));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the first debounced request must carry the active scope, query, limit, and cancellation signal.
+    await waitFor(() => expect(searchApi).toHaveBeenCalledWith(searchArgs("events", "fi")));
     await act(async () => {
       first.resolve({
         results: [{ id: "event:first", itemId: "first", title: "First" }],
@@ -98,17 +98,17 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("fin");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; changing the query must issue the replacement payload for the same scope.
+    await waitFor(() => expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "fin")));
     expect(result.current.pending).toBe(true);
     expect(result.current.results).toEqual([]);
-    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "fin"));
 
     act(() => {
       result.current.setQuery("final");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
-    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "final"));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the final query must replace the superseded request with its exact payload.
+    await waitFor(() => expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "final")));
 
     await act(async () => {
       third.resolve({
@@ -150,16 +150,19 @@ describe("useCalendarModalSearch", () => {
       result.current.openSearch();
       result.current.setQuery("first event");
     });
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the first active-scope request must exist before its abort signal can be inspected.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
     const firstEventSignal = searchApi.mock.calls[0]![0].signal!;
 
     rerender({ view: "bills" });
     act(() => result.current.setQuery("rent"));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; switching scopes must start the bills request before inspecting cross-scope cancellation.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
     const billSignal = searchApi.mock.calls[1]![0].signal!;
 
     rerender({ view: "events" });
     act(() => result.current.setQuery("final event"));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; restoring events must start one replacement request before inspecting all three signals.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
     const secondEventSignal = searchApi.mock.calls[2]![0].signal!;
 
@@ -181,6 +184,7 @@ describe("useCalendarModalSearch", () => {
       result.current.openSearch();
       result.current.setQuery("final");
     });
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; close-search cancellation is observable only after the active request exposes its signal.
     await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
     const signal = searchApi.mock.calls[0]![0].signal!;
 
@@ -205,18 +209,17 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("final");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(result.current.pending).toBe(false));
     expect(result.current.error).toBeNull();
   });
 
   it("handles keyboard highlight, enter activation advance, and escape clear-close", () => {
-    const onActivateResult = vi.fn();
+    let activatedResult: { id: string; itemId: string } | null = null;
     const { result } = renderHook(() => useCalendarModalSearch({
       modalOpen: true,
       view: "events",
       searchApi: vi.fn(),
-      onActivateResult,
+      onActivateResult: (item) => { activatedResult = item as typeof activatedResult; },
     }));
 
     act(() => {
@@ -235,12 +238,12 @@ describe("useCalendarModalSearch", () => {
     expect(result.current.highlightedIndex).toBe(1);
 
     act(() => result.current.handleInputKeyDown({ key: "Enter", preventDefault: vi.fn(), stopPropagation: vi.fn() }));
-    expect(onActivateResult).toHaveBeenCalledWith({ id: "result-2", itemId: "two" });
+    expect(activatedResult).toEqual({ id: "result-2", itemId: "two" });
     expect(result.current.open).toBe(true);
     expect(result.current.highlightedIndex).toBe(0);
 
     act(() => result.current.handleInputKeyDown({ key: "Enter", shiftKey: true, preventDefault: vi.fn(), stopPropagation: vi.fn() }));
-    expect(onActivateResult).toHaveBeenLastCalledWith({ id: "result-1", itemId: "one" });
+    expect(activatedResult).toEqual({ id: "result-1", itemId: "one" });
     expect(result.current.highlightedIndex).toBe(1);
 
     act(() => result.current.handleInputKeyDown({ key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() }));
@@ -266,7 +269,7 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("work");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.pending).toBe(true));
 
     await act(async () => {
       response.resolve({
@@ -328,7 +331,7 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("final");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.pending).toBe(true));
     await act(async () => {
       eventsFirst.resolve({
         results: [{ id: "event:final", itemId: "event-final", title: "Final" }],
@@ -351,8 +354,8 @@ describe("useCalendarModalSearch", () => {
     act(() => {
       result.current.setQuery("rent");
     });
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
-    expect(searchApi).toHaveBeenLastCalledWith(searchArgs("bills", "rent"));
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; the bills scope must send its own restored query snapshot and cancellation signal.
+    await waitFor(() => expect(searchApi).toHaveBeenLastCalledWith(searchArgs("bills", "rent")));
     await act(async () => {
       billsFirst.resolve({
         results: [{ id: "bill:rent", itemId: "bill-rent", title: "Rent" }],
@@ -370,7 +373,7 @@ describe("useCalendarModalSearch", () => {
       expect(result.current.results.map((item) => item.itemId)).toEqual(["event-final"]);
       expect(result.current.pending).toBe(true);
     });
-    expect(searchApi).toHaveBeenCalledTimes(3);
+    // test-architecture: allow-boundary-interaction -- Calendar search HTTP is outbound; restoring events must refetch the cached query without blanking its prior results.
     expect(searchApi).toHaveBeenLastCalledWith(searchArgs("events", "final"));
 
     await act(async () => {
@@ -459,7 +462,7 @@ describe("useCalendarModalSearch", () => {
       result.current.setQuery("final");
     });
 
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.pending).toBe(true));
     await act(async () => {
       first.resolve({
         results: [
@@ -474,7 +477,7 @@ describe("useCalendarModalSearch", () => {
     act(() => result.current.setHighlightedIndex(1));
     rerender({ view: "bills" });
     rerender({ view: "events" });
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.pending).toBe(true));
 
     await act(async () => {
       refresh.resolve({
@@ -491,7 +494,7 @@ describe("useCalendarModalSearch", () => {
 
     rerender({ view: "bills" });
     rerender({ view: "events" });
-    await waitFor(() => expect(searchApi).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(result.current.pending).toBe(true));
 
     await act(async () => {
       failed.reject(new Error("offline"));

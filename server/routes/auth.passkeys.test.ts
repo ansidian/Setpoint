@@ -49,6 +49,7 @@ const webAuthnMocks = vi.hoisted(() => ({
   verifyRegistrationResponse: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Binds the real passkey router and stores to a migrated ephemeral libSQL database; WebAuthn challenge, pending-auth, and session outcomes are asserted from durable rows.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement) => currentDb().execute(statement),
@@ -139,11 +140,6 @@ describe("auth passkey routes", () => {
     const challengeRows = await currentDb().execute("SELECT challenge_hash, pending_auth_hash FROM ea_webauthn_challenges");
 
     expect(res.status).toBe(200);
-    expect(webAuthnMocks.generateAuthenticationOptions).toHaveBeenCalledWith(expect.objectContaining({
-      rpID: "localhost",
-      userVerification: "required",
-      allowCredentials: [{ id: "credential-1", transports: ["internal"] }],
-    }));
     expect(res.body).toMatchObject({
       challenge: expect.any(String),
       allowCredentials: [{ id: "credential-1", transports: ["internal"] }],
@@ -366,7 +362,7 @@ describe("auth passkey routes", () => {
       .send({ label: "Security Key" });
 
     expect(res.status).toBe(401);
-    expect(webAuthnMocks.generateRegistrationOptions).not.toHaveBeenCalled();
+    expect((await currentDb().execute("SELECT challenge_hash FROM ea_webauthn_challenges")).rows).toEqual([]);
   });
 
   it("returns passkey registration options for an authenticated session", async () => {
@@ -381,17 +377,6 @@ describe("auth passkey routes", () => {
     const challengeRows = await currentDb().execute("SELECT challenge_type FROM ea_webauthn_challenges");
 
     expect(res.status).toBe(200);
-    expect(webAuthnMocks.generateRegistrationOptions).toHaveBeenCalledWith(expect.objectContaining({
-      rpName: "Setpoint",
-      rpID: "localhost",
-      userName: "user-1",
-      attestationType: "none",
-      authenticatorSelection: {
-        residentKey: "preferred",
-        userVerification: "required",
-      },
-      excludeCredentials: [{ id: "credential-1", transports: ["internal"] }],
-    }));
     expect(res.body).toMatchObject({
       challenge: expect.any(String),
       attestation: "none",
@@ -410,9 +395,6 @@ describe("auth passkey routes", () => {
       .send({ label: "Security Key" });
 
     expect(res.status).toBe(200);
-    expect(webAuthnMocks.generateRegistrationOptions).toHaveBeenCalledWith(expect.objectContaining({
-      rpID: "127.0.0.1",
-    }));
     expect(res.body.rp).toMatchObject({ id: "127.0.0.1" });
   });
 

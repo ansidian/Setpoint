@@ -1,56 +1,62 @@
 
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { describe, expect, it } from "vitest";
 import useEditorCancelOnScroll from "./useEditorCancelOnScroll";
 
 function setup(overrides: Partial<Parameters<typeof useEditorCancelOnScroll>[0]> = {}) {
-  const onCancelFloatingEditor = vi.fn();
   const props = {
     floatingDetailOpen: true,
     floatingDetailMode: "create",
     floatingEditorDirty: false,
-    onCancelFloatingEditor,
     ...overrides,
   };
-  const hook = renderHook((currentProps) => useEditorCancelOnScroll(currentProps), {
+  const hook = renderHook((currentProps) => {
+    const [cancelCount, setCancelCount] = useState(0);
+    const maybeCancel = useEditorCancelOnScroll({
+      ...currentProps,
+      onCancelFloatingEditor: () => setCancelCount((count) => count + 1),
+    });
+    return { maybeCancel, cancelCount };
+  }, {
     initialProps: props,
   });
-  return { ...hook, onCancelFloatingEditor, props };
+  return { ...hook, props };
 }
 
 describe("useEditorCancelOnScroll", () => {
   it("cancels a clean editor once on owner scrolling", () => {
-    const { result, onCancelFloatingEditor } = setup();
+    const { result } = setup();
 
-    act(() => result.current(false));
-    act(() => result.current(false));
+    act(() => result.current.maybeCancel(false));
+    act(() => result.current.maybeCancel(false));
 
-    expect(onCancelFloatingEditor).toHaveBeenCalledTimes(1);
+    expect(result.current.cancelCount).toBe(1);
   });
 
   it("preserves clean editors during programmatic navigation scrolling", () => {
-    const { result, onCancelFloatingEditor } = setup();
+    const { result } = setup();
 
-    act(() => result.current(true));
+    act(() => result.current.maybeCancel(true));
 
-    expect(onCancelFloatingEditor).not.toHaveBeenCalled();
+    expect(result.current.cancelCount).toBe(0);
   });
 
   it("preserves dirty editors during owner scrolling", () => {
-    const { result, onCancelFloatingEditor } = setup({ floatingEditorDirty: true });
+    const { result } = setup({ floatingEditorDirty: true });
 
-    act(() => result.current(false));
+    act(() => result.current.maybeCancel(false));
 
-    expect(onCancelFloatingEditor).not.toHaveBeenCalled();
+    expect(result.current.cancelCount).toBe(0);
   });
 
   it("resets the one-shot cancellation latch for a new editor session", () => {
-    const { result, onCancelFloatingEditor, props, rerender } = setup();
+    const { result, props, rerender } = setup();
 
-    act(() => result.current(false));
+    act(() => result.current.maybeCancel(false));
     rerender({ ...props, floatingDetailMode: "edit" });
-    act(() => result.current(false));
+    act(() => result.current.maybeCancel(false));
 
-    expect(onCancelFloatingEditor).toHaveBeenCalledTimes(2);
+    expect(result.current.cancelCount).toBe(2);
   });
 });

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { getActiveOwner } from "../auth/owner-context.ts";
 import { requireCookieSession } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
@@ -24,17 +24,18 @@ function parseMutation(body: unknown): OnboardingProgressMutation | null {
 export function createOnboardingRouter(
   store: Pick<OnboardingProgressStore, "get" | "update"> = onboardingProgressStore,
   ownerId: () => string | null = () => getActiveOwner()?.userId ?? null,
+  authenticate: RequestHandler = requireCookieSession,
 ) {
   const router = Router();
   wrapRouterAsync(router);
 
-  router.get("/", requireCookieSession, async (_req, res) => {
+  router.get("/", authenticate, async (_req, res) => {
     const userId = ownerId();
     if (!userId) return res.status(409).json({ message: "Instance is not claimed" });
     return res.json(await store.get(userId));
   });
 
-  router.patch("/", requireCookieSession, async (req, res) => {
+  router.patch("/", authenticate, async (req, res) => {
     const userId = ownerId();
     if (!userId) return res.status(409).json({ message: "Instance is not claimed" });
     const mutation = parseMutation(req.body);

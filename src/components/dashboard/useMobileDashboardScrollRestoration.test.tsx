@@ -10,7 +10,7 @@ describe("useMobileDashboardScrollRestoration", () => {
 
   it("captures dashboard scroll and restores it immediately and after the revealed content expands", () => {
     let nextFrame: FrameRequestCallback | null = null;
-    const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame")
+    vi.spyOn(window, "requestAnimationFrame")
       .mockImplementation((callback) => {
         nextFrame = callback;
         return 17;
@@ -31,13 +31,12 @@ describe("useMobileDashboardScrollRestoration", () => {
     rerender({ tab: "dashboard" });
 
     expect(scrollRegion.scrollTop).toBe(184);
-    expect(requestAnimationFrame).toHaveBeenCalledOnce();
-
     scrollRegion.scrollTop = 0;
     act(() => nextFrame?.(0));
     expect(scrollRegion.scrollTop).toBe(184);
 
     unmount();
+    // test-architecture: allow-boundary-interaction -- after unmount there is no rendered state; cancelling the exact browser frame is the cleanup contract that prevents a stale scroll write.
     expect(cancelAnimationFrame).toHaveBeenCalledWith(17);
   });
 });

@@ -18,6 +18,8 @@ import {
   resolveTriageSoundRegistry,
   TRIAGE_SOUND_LANE_SCOPES,
   TRIAGE_SOUND_TRIGGER_ROWS,
+  updateTriageSoundTrigger,
+  updateTriageSoundVolume,
 } from "@/lib/triageSoundSettings";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import { playTriageNotificationSound } from "@/lib/triageSoundPlayback";
@@ -52,24 +54,11 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
   }
 
   function updateVolume(value: string | number) {
-    const volume = Math.min(1, Math.max(0, Number(value)));
-    applySoundSettings({
-      ...soundSettings,
-      volume: Number.isFinite(volume) ? volume : 1,
-    });
+    applySoundSettings(updateTriageSoundVolume(soundSettings, value));
   }
 
   function updateTrigger(triggerKey: TriageSoundTriggerKey, updates: Partial<TriageSoundTriggerSetting>) {
-    applySoundSettings({
-      ...soundSettings,
-      triggers: {
-        ...soundSettings.triggers,
-        [triggerKey]: {
-          ...soundSettings.triggers[triggerKey],
-          ...updates,
-        },
-      },
-    });
+    applySoundSettings(updateTriageSoundTrigger(soundSettings, triggerKey, updates));
   }
 
   return (

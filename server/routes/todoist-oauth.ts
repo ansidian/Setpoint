@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { Router } from "express";
-import type { CookieOptions, Response } from "express";
+import type { CookieOptions, RequestHandler, Response } from "express";
 import { hashToken, requireCookieSession, requireRecentPasswordAuth } from "../middleware/auth.ts";
 import { wrapRouterAsync } from "../middleware/async-handler.ts";
 import {
@@ -50,6 +50,10 @@ export function createTodoistOAuthRouter(
   service: TodoistOAuthService = todoistOAuthService,
   randomBind = () => crypto.randomBytes(32).toString("base64url"),
   personalTokens: TodoistPersonalTokenService = todoistPersonalTokenService,
+  auth: { cookie: RequestHandler; recent: RequestHandler } = {
+    cookie: requireCookieSession,
+    recent: requireRecentPasswordAuth,
+  },
 ) {
   const router = Router();
   wrapRouterAsync(router);
@@ -77,18 +81,18 @@ export function createTodoistOAuthRouter(
     }
   });
 
-  router.get("/accounts/todoist/auth", requireRecentPasswordAuth, async (_req, res) => {
+  router.get("/accounts/todoist/auth", auth.recent, async (_req, res) => {
     const browserBind = randomBind();
     const result = await service.beginAuthorization(process.env.EA_USER_ID!, hashToken(browserBind));
     res.cookie(BIND_COOKIE, browserBind, bindCookieOptions());
     return res.json(result);
   });
 
-  router.get("/accounts/todoist/status", requireCookieSession, async (_req, res) => {
+  router.get("/accounts/todoist/status", auth.cookie, async (_req, res) => {
     return res.json(await service.getStatus(process.env.EA_USER_ID!));
   });
 
-  router.post("/accounts/todoist/personal-token", requireRecentPasswordAuth, async (req, res) => {
+  router.post("/accounts/todoist/personal-token", auth.recent, async (req, res) => {
     const token = typeof req.body?.token === "string" ? req.body.token : "";
     if (!token.trim()) {
       return res.status(400).json({ message: "Todoist personal token is required" });
@@ -103,7 +107,7 @@ export function createTodoistOAuthRouter(
     }
   });
 
-  router.delete("/accounts/todoist/connection", requireRecentPasswordAuth, async (_req, res) => {
+  router.delete("/accounts/todoist/connection", auth.recent, async (_req, res) => {
     try {
       return res.json(await personalTokens.disconnect(process.env.EA_USER_ID!));
     } catch {

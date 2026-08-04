@@ -5,11 +5,13 @@ const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
 }));
 
+// test-architecture: allow-boundary-mock -- OAuth token persistence runs against a migrated in-memory database redirected through the shared connection seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement | string) => testState.db.current.execute(statement),
   },
 }));
+// test-architecture: allow-boundary-mock -- Token encryption is the cryptographic storage boundary; persistence cases use deterministic ciphertext so durable rows can be inspected without deployment keys.
 vi.mock("../platform/encryption.ts", () => ({
   encrypt: (value: unknown) => `enc:${value}`,
   decrypt: (value: unknown) => String(value).replace(/^enc:/, ""),
@@ -102,6 +104,7 @@ describe("getTodoistApiToken", () => {
     });
 
     expect(token).toBe("fresh-access");
+    // test-architecture: allow-boundary-interaction -- A fresh stored access token must not issue an outbound Todoist OAuth refresh request.
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
@@ -135,6 +138,7 @@ describe("getTodoistApiToken", () => {
     });
 
     expect(token).toBe("fresh-access");
+    // test-architecture: allow-boundary-interaction -- Todoist OAuth refresh is the outbound provider boundary; exact form framing and credentials are its compatibility contract.
     expect(fetchFn).toHaveBeenCalledWith(
       "https://api.todoist.com/oauth/access_token",
       expect.objectContaining({
@@ -149,6 +153,7 @@ describe("getTodoistApiToken", () => {
     expect(body.get("grant_type")).toBe("refresh_token");
     expect(body.get("refresh_token")).toBe("refresh-1");
     expect(init.signal).toBeInstanceOf(AbortSignal);
+    // test-architecture: allow-boundary-interaction -- Application credentials are a write-only secret boundary and must be resolved once for the refresh attempt.
     expect(resolveApplicationCredentials).toHaveBeenCalledTimes(1);
 
     const row = (await testState.db.current.execute("SELECT * FROM ea_settings WHERE user_id = 'u1'")).rows[0]!;

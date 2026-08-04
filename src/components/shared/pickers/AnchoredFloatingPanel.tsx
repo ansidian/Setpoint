@@ -7,6 +7,7 @@ import { computePlacement } from "@/components/inbox/helpers";
 import useDismissablePortal from "@/hooks/useDismissablePortal";
 import useIsMobile from "@/hooks/useIsMobile";
 import BottomSheet from "@/components/ui/BottomSheet";
+import { resolveMobileSheetHeight } from "./anchoredFloatingPanelModel";
 
 export type AnchoredFloatingPanelProps = {
   anchorRef: RefObject<HTMLElement | null>;
@@ -77,9 +78,7 @@ export default function AnchoredFloatingPanel({ open = true, disableMobileSheet 
         onClose={props.onClose as () => void}
         title={props.ariaLabel}
         hideTitle={hideTitle}
-        height={mobileHeight === null
-          ? undefined
-          : mobileHeight ?? (typeof props.height === "number" ? `min(${props.height}px, 70vh)` : props.height)}
+        height={resolveMobileSheetHeight(props.height, mobileHeight)}
       >
         {props.children}
       </BottomSheet>

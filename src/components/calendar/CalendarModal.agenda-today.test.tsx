@@ -198,9 +198,10 @@ describe("CalendarModal today agenda behavior", () => {
       const agendaRail = screen.getByTestId("events-agenda-rail");
       const firstHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-01']")!;
       const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']")!;
-      const scrollTo = vi.fn();
       agendaRail.scrollTop = 0;
-      agendaRail.scrollTo = scrollTo;
+      agendaRail.scrollTo = (options) => {
+        agendaRail.scrollTop = typeof options === "number" ? options : options?.top ?? 0;
+      };
       agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 } as DOMRect);
       firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
       todayHeader.getBoundingClientRect = () => ({ top: 620, bottom: 654, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
@@ -210,9 +211,7 @@ describe("CalendarModal today agenda behavior", () => {
       });
 
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
-      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
-        top: 620,
-      }));
+      expect(agendaRail.scrollTop).toBe(620);
     } finally {
       vi.useRealTimers();
     }
@@ -256,9 +255,10 @@ describe("CalendarModal today agenda behavior", () => {
       const todayRow = within(agendaRail).getByTestId("calendar-agenda-event-row");
       const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']")!;
       const todayContent = todayRow.parentElement!;
-      const scrollTo = vi.fn();
       agendaRail.scrollTop = 0;
-      agendaRail.scrollTo = scrollTo;
+      agendaRail.scrollTo = (options) => {
+        agendaRail.scrollTop = typeof options === "number" ? options : options?.top ?? 0;
+      };
       agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 } as DOMRect);
       todayRow.getBoundingClientRect = () => ({ top: 464, bottom: 508, left: 0, right: 280, width: 280, height: 44 } as DOMRect);
       todayContent.getBoundingClientRect = () => ({ top: 464, bottom: 508, left: 0, right: 280, width: 280, height: 44 } as DOMRect);
@@ -273,7 +273,6 @@ describe("CalendarModal today agenda behavior", () => {
       });
 
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
-      expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(true);
       expect(agendaRail.scrollTop).toBeGreaterThan(0);
     } finally {
       vi.useRealTimers();

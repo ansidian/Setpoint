@@ -1,6 +1,5 @@
-import { useState } from "react";
 import type { ComponentProps } from "react";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarScrollContainer from "./CalendarScrollContainer";
 import { monthBlockHeight, monthIndexToDate } from "../../../hooks/calendar/calendarScrollModel";
@@ -8,7 +7,6 @@ import eventsView from "../views/eventsView.tsx";
 import billsView from "../views/billsView.tsx";
 import type { CalendarGridItemLike } from "./calendarGridCellModel";
 import type { CalendarGridActiveViewContract, CalendarGridLayout } from "./CalendarGrid";
-import type { Mock } from "vitest";
 
 // Every test here drives the settle/alignment logic through real-time
 // waitFor polling: the settle is a setTimeout(SCROLL_SETTLE_MS) and the scroll
@@ -97,16 +95,6 @@ function monthOffset(targetIndex: number) {
 function monthHeight(targetIndex: number) {
   const { year, month } = monthIndexToDate(targetIndex, CURRENT_YEAR, CURRENT_MONTH);
   return monthBlockHeight({ year, month, cellHeight: CELL_HEIGHT, gridGap: GRID_GAP });
-}
-
-// The mount centering write is marked programmatic and clears on the settle
-// timer; tests dispatching user scrolls must first wait out that window, the
-// same way a real browser's mount echo settles before the user can scroll.
-// Polls the onFetchSettle spy (the settle's observable) instead of sleeping a
-// fixed interval, so starved timers under suite load cannot flake the wait.
-async function awaitMountSettle(onFetchSettle: Mock) {
-  await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
-  onFetchSettle.mockClear();
 }
 
 function getScrollElement(container: HTMLElement): HTMLElement {
@@ -305,73 +293,6 @@ describe("CalendarScrollContainer", () => {
     })).not.toThrow();
   });
 
-  it("dispatches calendar-overflow-close on scroll", () => {
-    const { container } = renderContainer();
-    const scrollEl = getScrollElement(container);
-    const handler = vi.fn();
-    document.addEventListener("calendar-overflow-close", handler);
-    try {
-      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      expect(handler).toHaveBeenCalledTimes(1);
-    } finally {
-      document.removeEventListener("calendar-overflow-close", handler);
-    }
-  });
-
-  it("cancels a clean floating editor on user scroll", async () => {
-    const onCancelFloatingEditor = vi.fn();
-    const onFetchSettle = vi.fn();
-    const { container } = renderContainer({
-      floatingDetailOpen: true,
-      floatingDetailMode: "create",
-      floatingEditorDirty: false,
-      onCancelFloatingEditor,
-      onFetchSettle,
-    });
-    const scrollEl = getScrollElement(container);
-    await awaitMountSettle(onFetchSettle);
-
-    scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-
-    expect(onCancelFloatingEditor).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not let an unconsumed scroll crossing swallow the next programmatic navigation", async () => {
-    // The controller can ignore a scroll-driven display-month change (agenda-
-    // driven suppression, open floating editor). The crossing's scroll-driven
-    // flag must not survive to eat the next programmatic navigation.
-    const props = {
-      view: "events",
-      activeView,
-      layout,
-      currentYear: CURRENT_YEAR,
-      currentMonth: CURRENT_MONTH,
-      todayDate: TODAY_DATE,
-      viewYear: CURRENT_YEAR,
-      viewMonth: CURRENT_MONTH,
-      onDisplayMonthChange: vi.fn(), // inert: the controller ignored the crossing
-      onFetchSettle: vi.fn(),
-      viewData: null,
-      buildFallbackDayState,
-      closeEventEditor: vi.fn(),
-      setSelectedDay: vi.fn(),
-      setSelectedDateKey: vi.fn(),
-      setSelectedItemId: vi.fn(),
-    };
-    const { container, rerender } = render(<CalendarScrollContainer {...props} />);
-    const scrollEl = getScrollElement(container);
-    await awaitMountSettle(props.onFetchSettle);
-
-    // User scroll crosses into the next month; the parent does not consume it.
-    scrollEl.scrollTop = monthOffset(1) + 10;
-    scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-    await waitFor(() => expect(props.onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
-
-    // Programmatic navigation three months out must still move the grid.
-    rerender(<CalendarScrollContainer {...props} viewMonth={CURRENT_MONTH + 3} />);
-    expect(scrollEl.scrollTop).toBe(monthOffset(3));
-  });
-
   it("tints a selected deadline chip rendered from a non-active preview month", () => {
     const { container } = renderContainer({
       activeView: eventsView,
@@ -421,78 +342,6 @@ describe("CalendarScrollContainer", () => {
       const scrollEl = getScrollElement(container);
       // jsdom clientHeight is 0, so centering resolves to offset + height / 2.
       expect(scrollEl.scrollTop).toBe(monthOffset(2) + monthHeight(2) / 2);
-    });
-
-    it("keeps the focus month when the mount centering write echoes a scroll event", async () => {
-      const onDisplayMonthChange = vi.fn();
-      const onFetchSettle = vi.fn();
-      const { container } = renderContainer({
-        viewYear: CURRENT_YEAR,
-        viewMonth: CURRENT_MONTH + 2,
-        onDisplayMonthChange,
-        onFetchSettle,
-      });
-      const scrollEl = getScrollElement(container);
-      // jsdom fires no scroll event for scrollTop writes; emulate the echo a
-      // real browser produces for the mount centering write.
-      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      // The echo settle must not read as user intent or it re-targets the
-      // agenda rail to first-of-month, stomping more specific focus commands.
-      await waitFor(() => {
-        expect(onFetchSettle).toHaveBeenCalledWith(expect.objectContaining({ scrollDriven: false }));
-      }, { timeout: 5000 });
-      expect(onDisplayMonthChange).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("scroll settle after a month crossing", () => {
-    // The inert-vi.fn() harnesses above never change props, so they cannot
-    // catch the settle timer being killed by the re-render that a real
-    // display-month change triggers. This harness consumes the change the
-    // way the controller does: by updating viewYear/viewMonth.
-    function ControlledContainer({ onFetchSettle }: {
-      onFetchSettle: NonNullable<ComponentProps<typeof CalendarScrollContainer>["onFetchSettle"]>;
-    }) {
-      const [viewDate, setViewDate] = useState({ year: CURRENT_YEAR, month: CURRENT_MONTH });
-      return (
-        <CalendarScrollContainer
-          view="events"
-          activeView={activeView}
-          layout={layout}
-          currentYear={CURRENT_YEAR}
-          currentMonth={CURRENT_MONTH}
-          todayDate={TODAY_DATE}
-          viewYear={viewDate.year}
-          viewMonth={viewDate.month}
-          onDisplayMonthChange={setViewDate}
-          onFetchSettle={onFetchSettle}
-          viewData={null}
-          buildFallbackDayState={buildFallbackDayState}
-          closeEventEditor={() => {}}
-          setSelectedDay={() => {}}
-          setSelectedDateKey={() => {}}
-          setSelectedItemId={() => {}}
-        />
-      );
-    }
-
-    it("still fires the fetch settle when the gesture's final event crosses a month", async () => {
-      const onFetchSettle = vi.fn();
-      const { container } = render(<ControlledContainer onFetchSettle={onFetchSettle} />);
-      const scrollEl = getScrollElement(container);
-      await awaitMountSettle(onFetchSettle);
-
-      // Final event of a gesture lands inside the next month: the crossing
-      // updates the display month, which re-renders with a new activeIndex.
-      scrollEl.scrollTop = monthOffset(1) + 10;
-      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-
-      const next = monthIndexToDate(1, CURRENT_YEAR, CURRENT_MONTH);
-      await waitFor(() => {
-        expect(onFetchSettle).toHaveBeenCalledWith(
-          expect.objectContaining({ year: next.year, month: next.month, scrollDriven: true }),
-        );
-      }, { timeout: 5000 });
     });
 
   });

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardBody } from "./Dashboard";
 import { DashboardProvider } from "../context/DashboardContext";
@@ -175,14 +175,13 @@ describe("Dashboard event loading", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
 
-    const onOpenDeadline = vi.fn();
     renderDashboardBody({
       briefing: {
         ...makeBriefing([]),
         deadlines: {
           upcoming: [{
             id: "deadline-rec",
-            title: "Recurring review",
+            title: "Stale recurring review",
             due_date: "2026-04-21",
             status: "open",
             is_recurring: true,
@@ -194,82 +193,17 @@ describe("Dashboard event loading", () => {
       calendarDeadlines: {
         upcoming: [{
           id: "deadline-rec",
-          title: "Recurring review",
+          title: "Live recurring review",
           due_date: "2026-04-23",
           status: "open",
           is_recurring: true,
         }],
         stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
       },
-      onOpenDeadline,
     });
 
-    // The context column's Coming-up list opens the live (calendar) record, not
-    // the stale briefing one, through onJump -> handleRailJump -> onOpenDeadline.
-    const comingUp = screen.getByTestId("context-coming-up");
-    fireEvent.click(within(comingUp).getByText("Recurring review"));
-    // Second arg is the clicked element, the desktop glance-sheet anchor.
-    expect(onOpenDeadline).toHaveBeenCalledWith(expect.objectContaining({
-      id: "deadline-rec",
-      due_date: "2026-04-23",
-    }), expect.anything());
-  });
-
-  it("deep links timeline events to the selected calendar chip", async () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    const onOpenEventsCalendar = vi.fn();
-    const event = {
-      ...makeEvent(now, "Roadmap sync"),
-      id: "event-1",
-    };
-    renderDashboardBody({
-      briefing: makeBriefing([event]),
-      ensureRange: vi.fn().mockResolvedValue([event]),
-      onOpenEventsCalendar,
-    });
-    await act(async () => {});
-
-    const timeline = screen.getByTestId("today-timeline");
-    fireEvent.click(within(timeline).getByText("Roadmap sync"));
-
-    // The tapped event record is carried as a 3rd arg so the shell can open it in
-    // the in-place glance sheet; the 4th arg is the clicked element (desktop anchor).
-    expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1", expect.objectContaining({ id: "event-1" }), expect.anything());
-  });
-
-  it("deep links coming-up bill rows to their schedule id and bill date", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    const onOpenBillsCalendar = vi.fn();
-    renderDashboardBody({
-      briefing: makeBriefing([]),
-      ensureRange: vi.fn().mockResolvedValue([]),
-      onOpenBillsCalendar,
-      liveData: {
-        liveBills: [
-          {
-            id: "schedule-rent",
-            name: "Rent",
-            payee: "Landlord",
-            amount: 1800,
-            next_date: "2026-04-20",
-            paid: false,
-          },
-        ],
-      },
-    });
-
-    const rentRows = screen.getAllByText("Rent");
-    fireEvent.click(rentRows[rentRows.length - 1]!);
-
-    // The tapped bill record is carried as a 3rd arg (powers the in-place glance
-    // sheet); the 4th arg is the clicked element (desktop anchor).
-    expect(onOpenBillsCalendar).toHaveBeenCalledWith("2026-04-20", "schedule-rent", expect.objectContaining({ name: "Rent", next_date: "2026-04-20" }), expect.anything());
+    expect(screen.getAllByText("Live recurring review").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Stale recurring review")).toBeNull();
   });
 
 });

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarModalHeader from "./CalendarModalHeader.tsx";
 
@@ -6,33 +7,42 @@ afterEach(cleanup);
 
 function renderHeader({
   view = "events",
-  onViewChange = vi.fn<(view: string) => void>(),
   availableCalendarViews = ["events", "bills"],
 }: {
   view?: string;
-  onViewChange?: (view: string) => void;
   availableCalendarViews?: string[];
 } = {}) {
+  function HeaderHarness() {
+    const [activeView, setActiveView] = useState(view);
+    return (
+      <CalendarModalHeader
+        view={activeView}
+        monthName="April"
+        monthYear={2026}
+        layout={{ tier: "xl", shellPadding: 24, contentGap: 12 }}
+        canGoPrev
+        navigateMonth={vi.fn()}
+        jumpToMonth={vi.fn()}
+        currentYear={2026}
+        currentMonth={3}
+        onViewChange={setActiveView}
+        availableCalendarViews={availableCalendarViews}
+        eventEditor={{} as never}
+        viewYear={2026}
+        viewMonth={3}
+        setDeadlineEditor={vi.fn()}
+        viewLabel="Events"
+      />
+    );
+  }
+
   render(
-    <CalendarModalHeader
-      view={view}
-      monthName="April"
-      monthYear={2026}
-      layout={{ tier: "xl", shellPadding: 24, contentGap: 12 }}
-      canGoPrev
-      navigateMonth={vi.fn()}
-      jumpToMonth={vi.fn()}
-      currentYear={2026}
-      currentMonth={3}
-      onViewChange={onViewChange}
-      availableCalendarViews={availableCalendarViews}
-      eventEditor={{} as never}
-      viewYear={2026}
-      viewMonth={3}
-      setDeadlineEditor={vi.fn()}
-      viewLabel="Events"
-    />,
+    <HeaderHarness />,
   );
+}
+
+function selectedTab(name: string) {
+  return screen.getByRole("tab", { name }).getAttribute("aria-selected");
 }
 
 describe("CalendarModalHeader tablist", () => {
@@ -63,53 +73,48 @@ describe("CalendarModalHeader tablist", () => {
     expect(billsTab!.getAttribute("aria-selected")).toBe("false");
   });
 
-  it("calls onViewChange when clicking the inactive tab", () => {
-    const onViewChange = vi.fn();
-    renderHeader({ onViewChange });
+  it("selects the inactive tab when clicked", () => {
+    renderHeader();
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     const billsTab = within(list).getAllByRole("tab").find((t) => /bills/i.test(t.textContent));
     fireEvent.click(billsTab!);
 
-    expect(onViewChange).toHaveBeenCalledWith("bills");
+    expect(selectedTab("Bills")).toBe("true");
   });
 
-  it("ArrowRight on a focused tab moves selection via onViewChange", () => {
-    const onViewChange = vi.fn();
-    renderHeader({ onViewChange });
+  it("ArrowRight on a focused tab moves selection", () => {
+    renderHeader();
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "ArrowRight" });
 
-    expect(onViewChange).toHaveBeenCalledWith("bills");
+    expect(selectedTab("Bills")).toBe("true");
   });
 
-  it("ArrowLeft on a focused tab moves selection via onViewChange", () => {
-    const onViewChange = vi.fn();
-    renderHeader({ view: "bills", onViewChange });
+  it("ArrowLeft on a focused tab moves selection", () => {
+    renderHeader({ view: "bills" });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "ArrowLeft" });
 
-    expect(onViewChange).toHaveBeenCalledWith("events");
+    expect(selectedTab("Events")).toBe("true");
   });
 
   it("Home key moves to first view when not already first", () => {
-    const onViewChange = vi.fn();
-    renderHeader({ view: "bills", onViewChange });
+    renderHeader({ view: "bills" });
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "Home" });
-    expect(onViewChange).toHaveBeenCalledWith("events");
+    expect(selectedTab("Events")).toBe("true");
   });
 
   it("End key moves to last view when not already last", () => {
-    const onViewChange = vi.fn();
-    renderHeader({ onViewChange });
+    renderHeader();
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
     fireEvent.keyDown(list, { key: "End" });
-    expect(onViewChange).toHaveBeenCalledWith("bills");
+    expect(selectedTab("Bills")).toBe("true");
   });
 
   it("does NOT render a tablist when only events view is available", () => {

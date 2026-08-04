@@ -89,7 +89,6 @@ describe("useBrowserBackDismiss", () => {
   });
 
   it("unwinds its history entry on unmount while still enabled (mount-style consumers)", async () => {
-    const backSpy = vi.spyOn(window.history, "back");
     const { unmount } = renderHook(() => useBrowserBackDismiss({
       enabled: true,
       historyKey: "eaTestUnmountDismiss",
@@ -100,39 +99,36 @@ describe("useBrowserBackDismiss", () => {
 
     unmount();
 
-    await waitFor(() => expect(backSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.history.state.eaTestUnmountDismiss).toBeUndefined());
   });
 
   it("does not unwind a newly pushed entry during Strict Mode's simulated unmount", () => {
-    const backSpy = vi.spyOn(window.history, "back");
     renderHook(() => useBrowserBackDismiss({
       enabled: true,
       historyKey: "eaTestStrictDismiss",
       onDismiss: () => {},
     }), { wrapper: StrictMode });
 
-    expect(backSpy).not.toHaveBeenCalled();
     expect(window.history.state.eaTestStrictDismiss).toBeTruthy();
   });
 
   it("does not unwind again on unmount after the entry was already popped", async () => {
-    const onDismiss = vi.fn();
+    let dismissCount = 0;
     const { unmount } = renderHook(() => useBrowserBackDismiss({
       enabled: true,
       historyKey: "eaTestPopThenUnmount",
-      onDismiss,
+      onDismiss: () => { dismissCount += 1; },
     }));
 
     act(() => {
       window.history.back();
     });
     await waitFor(() => {
-      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(dismissCount).toBe(1);
     });
 
-    const backSpy = vi.spyOn(window.history, "back");
     unmount();
 
-    expect(backSpy).not.toHaveBeenCalled();
+    expect(window.history.state.eaTestPopThenUnmount).toBeUndefined();
   });
 });

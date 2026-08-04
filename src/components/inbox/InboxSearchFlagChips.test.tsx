@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { afterEach, describe, expect, it } from "vitest";
 import { toggleReadStateFlag } from "./InboxSearchFlagChipsModel";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
 
@@ -27,18 +28,15 @@ describe("toggleReadStateFlag", () => {
 
 describe("InboxSearchFlagChips", () => {
   it("turns read/unread flags into toggles for the search query", () => {
-    const onChange = vi.fn();
-    render(
-      <InboxSearchFlagChips
-        query="amazon"
-        onChange={onChange}
-        accent="#cba6da"
-      />,
-    );
+    function Harness() {
+      const [query, setQuery] = useState("amazon");
+      return <><output aria-label="Search query">{query}</output><InboxSearchFlagChips query={query} onChange={setQuery} accent="#cba6da" /></>;
+    }
+    render(<Harness />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle unread search flag" }));
 
-    expect(onChange).toHaveBeenCalledWith("is:unread amazon");
+    expect(screen.getByLabelText("Search query").textContent).toBe("is:unread amazon");
   });
 
   it("renders as a single unread chip that is off for read/default queries", () => {

@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useState } from "react";
 import {
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
+  dashboardEventCalendarRequest,
   nextItemSheet,
 } from "./dashboardShellModel";
 import type { DashboardGlanceSheet, DashboardTab, CalendarOpenOptions } from "./dashboardShellModel";
@@ -37,11 +38,8 @@ export default function useDashboardItemSheet({ tab, openCalendar }: { tab: Dash
   }, [openCalendar]);
 
   const openEventInCalendar = useCallback((date?: string | null, itemId?: string | number | null) => {
-    openCalendar("events", date || null, itemId ? String(itemId) : null, {
-      source: "dashboard",
-      openDetail: !!itemId && itemId !== "new",
-      forceEventOverlay: !!itemId && itemId !== "new",
-    });
+    const request = dashboardEventCalendarRequest(date, itemId);
+    openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
   }, [openCalendar]);
 
   const openBill = useCallback((date: string | null, itemId: string | number | null, item?: DashboardSheetRecord | null, anchor?: unknown) => {

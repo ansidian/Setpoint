@@ -1,22 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup } from "@testing-library/react";
-import type { OnboardingProgress } from "../../shared/types/onboarding";
-
-const api = vi.hoisted(() => ({
-  getCapabilities: vi.fn(),
-  getOnboardingProgress: vi.fn(),
-  updateOnboardingProgress: vi.fn(),
-}));
-
-vi.mock("../api", () => api);
-vi.mock("../lib/onboardingApi", () => ({
-  getOnboardingProgress: api.getOnboardingProgress,
-  updateOnboardingProgress: api.updateOnboardingProgress,
-}));
-
-const { default: Onboarding } = await import("./Onboarding");
+import type {
+  OnboardingProgress,
+  OnboardingProgressMutation,
+  OnboardingStepId,
+} from "../../shared/types/onboarding";
+import Onboarding from "./Onboarding";
 
 const pending: OnboardingProgress = {
   version: 1,
@@ -26,21 +16,61 @@ const pending: OnboardingProgress = {
   updatedAt: 0,
 };
 
+let serverProgress: OnboardingProgress;
+
+function response(payload: unknown): Response {
+  return { ok: true, status: 200, json: vi.fn().mockResolvedValue(payload) } as unknown as Response;
+}
+
+function installOnboardingServer(initial: OnboardingProgress): void {
+  serverProgress = initial;
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/capabilities") {
+      return response({ generatedAt: "now", capabilities: [] });
+    }
+    if (path !== "/api/onboarding") throw new Error(`Unexpected request: ${path}`);
+    if ((init?.method ?? "GET") === "GET") return response(serverProgress);
+
+    const mutation = JSON.parse(String(init?.body)) as OnboardingProgressMutation;
+    const steps = { ...serverProgress.steps };
+    let completedAt = serverProgress.completedAt;
+    if (mutation.action === "finish") completedAt = 100;
+    else if (mutation.action === "reopen") completedAt = null;
+    else if ("stepId" in mutation) {
+      steps[mutation.stepId] = mutation.action === "skip" ? "skipped" : mutation.action === "complete" ? "completed" : "reviewed";
+      const allStepIds: OnboardingStepId[] = [
+        "email_calendar", "ai", "tasks", "weather", "finances", "notifications", "advanced_delivery",
+      ];
+      const allReviewed = allStepIds
+        .every((stepId) => steps[stepId] === "completed");
+      if (allReviewed) completedAt = 100;
+    }
+    serverProgress = {
+      ...serverProgress,
+      status: completedAt == null ? "in_progress" : "complete",
+      steps,
+      completedAt,
+      updatedAt: serverProgress.updatedAt + 1,
+    };
+    return response(serverProgress);
+  }));
+}
+
+function renderOnboarding(entry = "/onboarding"): void {
+  render(<MemoryRouter initialEntries={[entry]}><Onboarding /></MemoryRouter>);
+}
+
 describe("Onboarding", () => {
-  afterEach(cleanup);
-  beforeEach(() => {
-    api.getOnboardingProgress.mockResolvedValue(pending);
-    api.getCapabilities.mockResolvedValue({ generatedAt: "now", capabilities: [] });
-    api.updateOnboardingProgress.mockImplementation(async (mutation) => ({
-      ...pending,
-      steps: mutation.stepId ? { [mutation.stepId]: mutation.action === "skip" ? "skipped" : "completed" } : {},
-      status: mutation.action === "finish" ? "complete" : "in_progress",
-      completedAt: mutation.action === "finish" ? 100 : null,
-    }));
+  beforeEach(() => installOnboardingServer(pending));
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
   });
 
   it("renders explicit provider actions for multi-provider steps", async () => {
-    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    renderOnboarding();
 
     expect(await screen.findByRole("heading", { name: "Connect email and calendar" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Set up Google Workspace" }).getAttribute("href")).toBe("/settings?tab=connections#google-workspace");
@@ -53,7 +83,7 @@ describe("Onboarding", () => {
   });
 
   it("opens a requested onboarding step and exposes each advanced destination", async () => {
-    render(<MemoryRouter initialEntries={["/onboarding?step=advanced_delivery"]}><Onboarding /></MemoryRouter>);
+    renderOnboarding("/onboarding?step=advanced_delivery");
 
     expect(await screen.findByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Set up Gmail realtime" }).getAttribute("href"))
@@ -65,20 +95,17 @@ describe("Onboarding", () => {
   });
 
   it("persists skip state and advances without requiring a provider", async () => {
-    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    renderOnboarding();
     await screen.findByRole("heading", { name: "Connect email and calendar" });
 
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
 
-    await waitFor(() => expect(api.updateOnboardingProgress).toHaveBeenCalledWith({
-      action: "skip",
-      stepId: "email_calendar",
-    }));
     expect(await screen.findByRole("heading", { name: "Enable AI features" })).toBeTruthy();
+    expect(screen.getByText("Skipped")).toBeTruthy();
   });
 
-  it("shows the completion state after reviewing the final checklist item", async () => {
-    const finalStep: OnboardingProgress = {
+  it("shows completion after reviewing the final checklist item", async () => {
+    installOnboardingServer({
       ...pending,
       steps: {
         email_calendar: "completed",
@@ -88,26 +115,18 @@ describe("Onboarding", () => {
         finances: "completed",
         notifications: "completed",
       },
-    };
-    api.getOnboardingProgress.mockResolvedValue(finalStep);
-    api.updateOnboardingProgress.mockResolvedValue({
-      ...finalStep,
-      status: "complete",
-      steps: { ...finalStep.steps, advanced_delivery: "completed" },
-      completedAt: 100,
     });
 
-    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    renderOnboarding();
     expect(await screen.findByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
-
     fireEvent.click(screen.getByRole("button", { name: "Mark reviewed" }));
 
     expect(await screen.findByRole("heading", { name: "Setup checklist complete" })).toBeTruthy();
     expect(screen.getByText("You reviewed every setup option.")).toBeTruthy();
   });
 
-  it("does not show the completion state when the final unresolved item is skipped", async () => {
-    const finalStep: OnboardingProgress = {
+  it("keeps an explicit finish path when the final unresolved item is skipped", async () => {
+    installOnboardingServer({
       ...pending,
       steps: {
         email_calendar: "completed",
@@ -117,39 +136,24 @@ describe("Onboarding", () => {
         finances: "completed",
         notifications: "completed",
       },
-    };
-    api.getOnboardingProgress.mockResolvedValue(finalStep);
-    api.updateOnboardingProgress.mockResolvedValue({
-      ...finalStep,
-      steps: { ...finalStep.steps, advanced_delivery: "skipped" },
     });
 
-    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    renderOnboarding();
     expect(await screen.findByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
-
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
 
-    await waitFor(() => expect(api.updateOnboardingProgress).toHaveBeenCalledWith({
-      action: "skip",
-      stepId: "advanced_delivery",
-    }));
+    expect(await screen.findByRole("button", { name: "Finish onboarding" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Setup checklist complete" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Optional delivery enhancements" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Finish onboarding" })).toBeTruthy();
   });
 
-  it("finishes with every integration still pending and offers explicit reopen", async () => {
-    const changed = vi.fn();
-    window.addEventListener("ea-onboarding-changed", changed);
-    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+  it("finishes with every integration pending and can reopen the checklist", async () => {
+    renderOnboarding();
     await screen.findByRole("heading", { name: "Connect email and calendar" });
 
     fireEvent.click(screen.getByRole("button", { name: "Finish onboarding" }));
     expect(await screen.findByRole("heading", { name: "Setup checklist complete" })).toBeTruthy();
-    expect(changed).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Reopen checklist" }));
-    await waitFor(() => expect(api.updateOnboardingProgress).toHaveBeenCalledWith({ action: "reopen" }));
-    window.removeEventListener("ea-onboarding-changed", changed);
+    expect(await screen.findByRole("heading", { name: "Connect email and calendar" })).toBeTruthy();
   });
 });

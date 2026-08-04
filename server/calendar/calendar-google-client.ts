@@ -9,6 +9,7 @@ import type {
   GoogleEventResource,
 } from "../../shared/types/calendar.ts";
 import { googleOAuthCredentialManager } from "../google-oauth-credentials.ts";
+import type { Client } from "@libsql/client";
 
 export interface StoredCalendarAccount extends CalendarAccount {
   credentials_encrypted?: string | null;
@@ -62,6 +63,10 @@ interface RawCalendarListEntry {
 interface CalendarListResponse {
   items?: RawCalendarListEntry[];
   nextPageToken?: string;
+}
+
+interface CalendarDbOptions {
+  dbClient?: Client;
 }
 
 function errorMessage(error: unknown) {
@@ -134,8 +139,10 @@ async function getAccountCredentials(account: StoredCalendarAccount): Promise<Ca
   }
 }
 
-async function persistCredentials(accountId: string, credentials: CalendarCredentials) {
-  await db.execute({
+async function persistCredentials(accountId: string, credentials: CalendarCredentials, {
+  dbClient = db,
+}: CalendarDbOptions = {}) {
+  await dbClient.execute({
     sql: `UPDATE ea_accounts
           SET credentials_encrypted = ?, updated_at = datetime('now')
           WHERE id = ?`,
@@ -143,7 +150,9 @@ async function persistCredentials(accountId: string, credentials: CalendarCreden
   });
 }
 
-export async function getAuthorizedAccount(account: StoredCalendarAccount): Promise<AuthorizedCalendarAccount> {
+export async function getAuthorizedAccount(account: StoredCalendarAccount, {
+  dbClient = db,
+}: CalendarDbOptions = {}): Promise<AuthorizedCalendarAccount> {
   const credentials = await getAccountCredentials(account);
 
   if (typeof credentials.expires_at !== "number"
@@ -165,7 +174,7 @@ export async function getAuthorizedAccount(account: StoredCalendarAccount): Prom
       const text = await res.text().catch(() => "");
       if (isInvalidGrantError(text)) {
         try {
-          await markAccountNeedsReauth(account.id);
+          await markAccountNeedsReauth(account.id, { dbClient });
         } catch (markErr) {
           console.error("[Calendar] Failed to mark needs_reauth:", errorMessage(markErr));
         }
@@ -179,11 +188,11 @@ export async function getAuthorizedAccount(account: StoredCalendarAccount): Prom
     if (data.refresh_token) credentials.refresh_token = data.refresh_token;
     if (data.scope) credentials.scopes = data.scope.split(" ").filter(Boolean);
 
-    await persistCredentials(account.id, credentials);
+    await persistCredentials(account.id, credentials, { dbClient });
 
     if (account.needs_reauth) {
       try {
-        await clearAccountNeedsReauth(account.id);
+        await clearAccountNeedsReauth(account.id, { dbClient });
       } catch (clearErr) {
         console.error("[Calendar] Failed to clear needs_reauth:", errorMessage(clearErr));
       }
@@ -385,7 +394,7 @@ export function invalidateCalendarListCache(accountId?: string | null) {
   calendarListCache.delete(accountId);
 }
 
-export async function listCalendarsForAccount(account: StoredCalendarAccount): Promise<GoogleCalendarSource[]> {
+export async function listCalendarsForAccount(account: StoredCalendarAccount, options: CalendarDbOptions = {}): Promise<GoogleCalendarSource[]> {
   const cacheKey = account?.id ?? null;
   const credentialsKey = account?.credentials_encrypted ?? "";
   if (cacheKey != null) {
@@ -395,7 +404,7 @@ export async function listCalendarsForAccount(account: StoredCalendarAccount): P
     }
   }
 
-  const auth = await getAuthorizedAccount(account);
+  const auth = await getAuthorizedAccount(account, options);
   const rawCalendars: RawCalendarListEntry[] = [];
   let pageToken: string | null = null;
 

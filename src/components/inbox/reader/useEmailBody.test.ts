@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import useEmailBody from "./useEmailBody";
 import { getEmailBody } from "../../../api";
 
+// test-architecture: allow-boundary-mock -- src/api.ts is the authenticated email-body HTTP boundary; provider failures are controlled while the real fallback hook runs.
 vi.mock("../../../api", () => ({
   getEmailBody: vi.fn(),
   peekEmailBody: vi.fn(() => null),

@@ -155,6 +155,28 @@ export function normalizeTriageSoundSettings(value: unknown): TriageSoundSetting
   return next;
 }
 
+export function updateTriageSoundTrigger(
+  settings: TriageSoundSettings,
+  triggerKey: TriageSoundTriggerKey,
+  updates: Partial<TriageSoundTriggerSetting>,
+): TriageSoundSettings {
+  return {
+    ...settings,
+    triggers: {
+      ...settings.triggers,
+      [triggerKey]: { ...settings.triggers[triggerKey], ...updates },
+    },
+  };
+}
+
+export function updateTriageSoundVolume(
+  settings: TriageSoundSettings,
+  value: string | number,
+): TriageSoundSettings {
+  const volume = Math.min(1, Math.max(0, Number(value)));
+  return { ...settings, volume: Number.isFinite(volume) ? volume : 1 };
+}
+
 export function resolveTriageSoundRegistry(value: unknown): TriageSoundDefinition[] {
   return Array.isArray(value) && value.length > 0
     ? value as TriageSoundDefinition[]

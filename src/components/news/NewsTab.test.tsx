@@ -1,49 +1,31 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { useEffect, useState } from "react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewsPageEnvelope } from "../../../shared/types/news.ts";
+import NewsTab from "./NewsTab";
 
-const hookState = vi.hoisted<{ news: NewsPageEnvelope | null }>(() => ({ news: null }));
-// useNews resolves the initial fetch asynchronously in the real app, which
-// gives NewsTab a genuine news-identity change to adopt the divider marker
-// from. Mirror that here with an effect-driven state flip rather than
-// returning the same object reference on every render.
-function useFakeNews() {
-  const [news, setNews] = useState<NewsPageEnvelope | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    window.queueMicrotask(() => {
-      if (!cancelled) setNews(hookState.news);
-    });
-    return () => { cancelled = true; };
-  }, []);
-  return { news, loading: false, error: null, refreshing: false, reload: vi.fn(), refresh: vi.fn() };
-}
-vi.mock("../../hooks/useNews", () => ({
-  default: useFakeNews,
-}));
+interface RequestRecord { path: string; method: string; body: unknown }
+let newsPayload: NewsPageEnvelope;
+let requests: RequestRecord[] = [];
 
-// NewsTab's import graph (manage panel, add-source form, catalog picker) pulls
-// in the whole news API surface at module load — mock all of it.
-const api = vi.hoisted(() => ({
-  markNewsSeen: vi.fn(async () => ({ ok: true })),
-  createNewsTopic: vi.fn(), renameNewsTopic: vi.fn(), reorderNewsTopics: vi.fn(),
-  deleteNewsTopic: vi.fn(), updateNewsSource: vi.fn(), deleteNewsSource: vi.fn(),
-  previewNewsSource: vi.fn(), createNewsSource: vi.fn(),
-  getNewsCatalog: vi.fn(async () => ({ topics: [] })), importNewsStarterTopics: vi.fn(),
-}));
-vi.mock("../../api", () => api);
-
-const { default: NewsTab } = await import("./NewsTab");
+beforeEach(() => {
+  requests = [];
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const path = new URL(String(input), "https://setpoint.test").pathname;
+    requests.push({ path, method: init.method ?? "GET", body: init.body ? JSON.parse(String(init.body)) : null });
+    const body = path === "/api/news" ? newsPayload : path === "/api/news/catalog" ? { topics: [] } : { ok: true };
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  });
+});
 
 afterEach(() => {
   cleanup();
   window.localStorage?.clear();
+  vi.unstubAllGlobals();
 });
 
 describe("NewsTab mark-all-seen", () => {
   it("bumps the marker via the API and re-splits the page immediately", async () => {
-    hookState.news = {
+    newsPayload = {
       lastSeenAt: "2026-07-04T10:00:00.000Z",
       lastUpdatedAt: "2026-07-04T11:55:00.000Z",
       topics: [{
@@ -57,12 +39,12 @@ describe("NewsTab mark-all-seen", () => {
     const topic = await screen.findByRole("region", { name: "AI" });
     expect(within(topic).getByText(/1 new/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /mark caught up/i }));
-    expect(api.markNewsSeen).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(requests.some((request) => request.path === "/api/news/seen" && request.method === "POST")).toBe(true));
     expect(within(topic).queryByText(/1 new/)).toBeNull(); // item re-split to older, pill gone
   });
 
   it("opens source management on the affected topic from its health cue", async () => {
-    hookState.news = {
+    newsPayload = {
       lastSeenAt: null,
       lastUpdatedAt: "2026-07-04T11:55:00.000Z",
       topics: [{
@@ -83,7 +65,7 @@ describe("NewsTab mark-all-seen", () => {
   });
 
   it("closes source management when the News tab becomes inactive", async () => {
-    hookState.news = {
+    newsPayload = {
       lastSeenAt: null,
       lastUpdatedAt: null,
       topics: [{ id: 1, name: "AI", position: 0, sources: [], items: [], mutedTerms: [] }],

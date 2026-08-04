@@ -3,25 +3,32 @@ import { renderHook, act } from "@testing-library/react";
 import type { CurrentDashboardResponse } from "../../shared/types/dashboard";
 import type { ActiveSnapshotView } from "../../shared/types/snapshots";
 
-vi.mock("../api", () => ({
-  getActiveSnapshot: vi.fn(),
-  getCurrentDashboard: vi.fn(),
-  requestCurrentDashboardRefresh: vi.fn(),
-  syncCurrentDashboard: vi.fn(),
-}));
+import useCurrentDashboard from "./useCurrentDashboard";
 
-const {
-  getActiveSnapshot,
-  getCurrentDashboard,
-  requestCurrentDashboardRefresh,
-  syncCurrentDashboard,
-} = await import("../api");
-const { default: useCurrentDashboard } = await import("./useCurrentDashboard");
+const getActiveSnapshotMock = vi.fn();
+const getCurrentDashboardMock = vi.fn();
+const requestCurrentDashboardRefreshMock = vi.fn();
+const syncCurrentDashboardMock = vi.fn();
+const getActiveSnapshot = getActiveSnapshotMock;
+const getCurrentDashboard = getCurrentDashboardMock;
 
-const getActiveSnapshotMock = vi.mocked(getActiveSnapshot) as unknown as ReturnType<typeof vi.fn>;
-const getCurrentDashboardMock = vi.mocked(getCurrentDashboard) as unknown as ReturnType<typeof vi.fn>;
-const requestCurrentDashboardRefreshMock = vi.mocked(requestCurrentDashboardRefresh) as unknown as ReturnType<typeof vi.fn>;
-const syncCurrentDashboardMock = vi.mocked(syncCurrentDashboard) as unknown as ReturnType<typeof vi.fn>;
+function installDashboardApiBoundary(): void {
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const path = String(input);
+    const handler = path === "/api/briefing/snapshot/active"
+      ? getActiveSnapshotMock
+      : path === "/api/dashboard/current"
+        ? getCurrentDashboardMock
+        : path === "/api/dashboard/current/refresh"
+          ? requestCurrentDashboardRefreshMock
+          : path === "/api/dashboard/current/sync"
+            ? syncCurrentDashboardMock
+            : null;
+    if (!handler) throw new Error(`Unexpected dashboard test request: ${path}`);
+    const body = await handler();
+    return { ok: true, status: 200, json: () => Promise.resolve(body) } as Response;
+  });
+}
 
 type FakeEventSourceListener = (event: MessageEvent<string>) => void;
 
@@ -125,6 +132,7 @@ const currentPayload = {
 
 describe("useCurrentDashboard", () => {
   beforeEach(() => {
+    installDashboardApiBoundary();
     setDocumentHidden(false);
     FakeEventSource.instances = [];
     getActiveSnapshotMock.mockReset().mockResolvedValue(currentPayload.activeSnapshot);
@@ -173,7 +181,7 @@ describe("useCurrentDashboard", () => {
       });
       await Promise.resolve();
     });
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current!.fetchedAt).toBe("2026-05-04T12:00:00.000Z");
 
     setDocumentHidden(false);
@@ -182,7 +190,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(3);
     expect(result.current.current!.fetchedAt).toBe("2026-05-05T00:25:00.000Z");
     unmount();
   });
@@ -208,8 +216,8 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
-    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(1);
+    expect(getActiveSnapshot.mock.calls).toHaveLength(1);
     expect(result.current.current!.activeSnapshot.snapshot!.id).toBe(88);
 
     setDocumentHidden(false);
@@ -218,7 +226,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(1);
     unmount();
   });
 
@@ -243,13 +251,13 @@ describe("useCurrentDashboard", () => {
       FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "todoist" });
       await Promise.resolve();
     });
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
 
     await act(async () => {
       FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "todoist" });
       await Promise.resolve();
     });
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
 
     await act(async () => {
       resolveFirstEventFetch({
@@ -260,7 +268,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(3);
     expect(result.current.current!.fetchedAt).toBe("2026-05-05T00:30:00.000Z");
     unmount();
   });
@@ -298,8 +306,8 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getActiveSnapshot.mock.calls).toHaveLength(1);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current!.weather!.temp).toBe(81);
     unmount();
   });
@@ -327,8 +335,8 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getActiveSnapshot.mock.calls).toHaveLength(1);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.current!.activeSnapshot.snapshot!.id).toBe(101);
     unmount();
   });
@@ -347,7 +355,7 @@ describe("useCurrentDashboard", () => {
 
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(1);
 
     // Older request starts via SSE, then a newer request starts concurrently
     // via an explicit refresh (loadCurrent has no in-flight guard).
@@ -358,7 +366,7 @@ describe("useCurrentDashboard", () => {
     await act(async () => {
       refreshPromise = result.current.liveData.refreshNow();
     });
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(3);
 
     const fresh = { ...currentPayload, weather: { temp: 80, icon: "Sun" }, fetchedAt: "2026-05-05T01:00:00.000Z" };
     const stale = { ...currentPayload, weather: { temp: 60, icon: "Cloud" }, fetchedAt: "2026-05-05T00:00:00.000Z" };
@@ -431,7 +439,7 @@ describe("useCurrentDashboard", () => {
       });
       await Promise.resolve();
     });
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.briefingData.briefing!.deadlines.upcoming).toEqual([{ id: "deadline-1" }]);
     expect(result.current.refreshing).toBe(false);
 
@@ -439,7 +447,7 @@ describe("useCurrentDashboard", () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(3);
     expect(result.current.briefingData.briefing!.deadlines.upcoming).toEqual([{ id: "deadline-live" }]);
     expect(result.current.refreshing).toBe(false);
     unmount();

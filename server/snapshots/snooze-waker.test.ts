@@ -49,6 +49,7 @@ describe("snooze waker", () => {
     });
 
     expect(result).toEqual({ woke: 1 });
+    // test-architecture: allow-boundary-interaction -- Gmail wake-up is the outbound provider boundary; the resurfaced snooze must target its exact account/message identity.
     expect(wakeAtGmailFn).toHaveBeenCalledWith(
       { id: "gmail-work", email: "work@example.test", type: "gmail" },
       "gmail-work-msg-1",
@@ -464,6 +465,7 @@ describe("stopSnoozeWaker", () => {
     startSnoozeWaker();
     stopSnoozeWaker();
 
+    // test-architecture: allow-boundary-interaction -- Cron stop is the process-timer boundary; shutdown must release the one registered waker job.
     expect(job.stop).toHaveBeenCalledTimes(1);
   });
 
@@ -475,6 +477,7 @@ describe("stopSnoozeWaker", () => {
     stopSnoozeWaker();
     expect(() => stopSnoozeWaker()).not.toThrow();
     // Second call must not re-stop an already-cleared handle.
+    // test-architecture: allow-boundary-interaction -- Cron stop is the process-timer boundary; repeated shutdown must not stop the cleared handle twice.
     expect(job.stop).toHaveBeenCalledTimes(1);
   });
 

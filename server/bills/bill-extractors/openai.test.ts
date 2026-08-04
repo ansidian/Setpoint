@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OPENAI_PROVIDER } from "./openai.ts";
+import { createOpenAiProvider } from "./openai.ts";
 
-vi.mock("../../ai-credentials.ts", () => ({
-  resolveAiApiKey: async () => process.env.OPENAI_API_KEY || null,
-}));
+const OPENAI_PROVIDER = createOpenAiProvider({
+  resolveApiKey: async () => process.env.OPENAI_API_KEY || null,
+});
 
 describe("OPENAI_PROVIDER.extract", () => {
   let savedApiKey: string | undefined;

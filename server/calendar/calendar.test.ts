@@ -6,6 +6,7 @@ const clientMocks = vi.hoisted(() => ({
   googleCalendarFetch: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Google Calendar authorization/list/fetch is the outbound provider boundary; the calendar facade runs its real fan-out and normalization over controlled provider responses.
 vi.mock("./calendar-google-client", async (importOriginal) => ({
   ...(await importOriginal()),
   getAuthorizedAccount: clientMocks.getAuthorizedAccount,
@@ -131,6 +132,7 @@ describe("fetchCalendar fan-out", () => {
     );
 
     // 2 accounts × 2 calendars = 4 independent event fetches.
+    // test-architecture: allow-boundary-interaction -- Google Calendar fetch is the outbound provider boundary; two accounts by two calendars must issue exactly four range requests.
     expect(clientMocks.googleCalendarFetch).toHaveBeenCalledTimes(4);
     expect(events).toHaveLength(4);
   });

@@ -1,28 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AnchoredFloatingPanel from "./AnchoredFloatingPanel";
-import type BottomSheet from "@/components/ui/BottomSheet";
-import type { BottomSheetProps } from "@/components/ui/BottomSheet";
-import useIsMobile from "@/hooks/useIsMobile";
-
-vi.mock("@/hooks/useIsMobile", () => ({ default: vi.fn(() => false) }));
-
-// jsdom/happy-dom's CSS grammar doesn't recognize the `min()` math function, so
-// setting element.style.height to it silently no-ops (verified against both
-// engines) — a test-environment gap, not a real-browser one. Wrap (not
-// replace) BottomSheet so every other test here still exercises the real
-// primitive, while the height-forwarding test below can inspect the actual
-// prop value instead of reading it back off a DOM CSSOM that can't represent it.
-const { recordedBottomSheetProps } = vi.hoisted((): { recordedBottomSheetProps: BottomSheetProps[] } => ({ recordedBottomSheetProps: [] }));
-vi.mock("@/components/ui/BottomSheet", async (importOriginal) => {
-  const actual = await importOriginal<{ default: typeof BottomSheet }>();
-  return {
-    default: (props: BottomSheetProps) => {
-      recordedBottomSheetProps.push(props);
-      return actual.default(props);
-    },
-  };
-});
+import { resolveMobileSheetHeight } from "./anchoredFloatingPanelModel";
 
 function rect({ top, left, width, height }: Pick<DOMRect, "top" | "left" | "width" | "height">): DOMRect {
   return {
@@ -46,7 +25,6 @@ describe("AnchoredFloatingPanel", () => {
   let getBoundingClientRectMock: { mockRestore(): void } | null;
 
   beforeEach(() => {
-    vi.mocked(useIsMobile).mockReturnValue(false);
     window.innerWidth = 1280;
     window.innerHeight = 800;
 
@@ -227,7 +205,7 @@ describe("AnchoredFloatingPanel", () => {
   });
 
   it("closes on Escape", async () => {
-    const onClose = vi.fn();
+    let closeCount = 0;
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
@@ -235,7 +213,7 @@ describe("AnchoredFloatingPanel", () => {
         height={386}
         role="dialog"
         ariaLabel="Test anchored panel"
-        onClose={onClose}
+        onClose={() => { closeCount += 1; }}
       >
         <div style={{ height: 200 }}>Content</div>
       </AnchoredFloatingPanel>,
@@ -244,11 +222,11 @@ describe("AnchoredFloatingPanel", () => {
     await screen.findByRole("dialog", { name: "Test anchored panel" });
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(closeCount).toBe(1);
   });
 
   it("dismisses on an outside pointerdown but spares the panel, anchor, and sibling calendar popovers", async () => {
-    const onClose = vi.fn();
+    let closeCount = 0;
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
@@ -256,7 +234,7 @@ describe("AnchoredFloatingPanel", () => {
         height={386}
         role="dialog"
         ariaLabel="Test anchored panel"
-        onClose={onClose}
+        onClose={() => { closeCount += 1; }}
       >
         <button type="button">Inside</button>
       </AnchoredFloatingPanel>,
@@ -267,7 +245,7 @@ describe("AnchoredFloatingPanel", () => {
     fireEvent.pointerDown(panel);
     if (!anchor) throw new Error("Expected anchor fixture");
     fireEvent.pointerDown(anchor);
-    expect(onClose).not.toHaveBeenCalled();
+    expect(closeCount).toBe(0);
 
     const sibling = document.createElement("div");
     sibling.setAttribute("data-calendar-popover-panel", "true");
@@ -275,16 +253,15 @@ describe("AnchoredFloatingPanel", () => {
     sibling.appendChild(inner);
     document.body.appendChild(sibling);
     fireEvent.pointerDown(inner);
-    expect(onClose).not.toHaveBeenCalled();
+    expect(closeCount).toBe(0);
 
     fireEvent.pointerDown(document.body);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(closeCount).toBe(1);
 
     sibling.remove();
   });
 
   it("renders content through BottomSheet on mobile (sheet, not anchored)", () => {
-    vi.mocked(useIsMobile).mockReturnValue(true);
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
@@ -292,6 +269,7 @@ describe("AnchoredFloatingPanel", () => {
         height={386}
         role="dialog"
         ariaLabel="Snooze options"
+        forceMobileSheet
         onClose={() => {}}
       >
         <button type="button">Tomorrow</button>
@@ -307,15 +285,15 @@ describe("AnchoredFloatingPanel", () => {
   });
 
   it("hideTitle drops the sheet header entirely (no visible title, no redundant Close) but keeps the accessible name and dismissal", () => {
-    vi.mocked(useIsMobile).mockReturnValue(true);
-    const onClose = vi.fn();
+    let closeCount = 0;
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
         role="dialog"
         ariaLabel="Deadline"
+        forceMobileSheet
         hideTitle
-        onClose={onClose}
+        onClose={() => { closeCount += 1; }}
       >
         <div>Glance content</div>
       </AnchoredFloatingPanel>,
@@ -331,35 +309,16 @@ describe("AnchoredFloatingPanel", () => {
     expect(screen.getByText("Glance content")).toBeTruthy();
     // Removing the X did not strand the sheet: Escape still dismisses it.
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("forwards a numeric height to the mobile sheet, clamped so a tall desktop hint can't force a full-screen sheet (UX-L10)", () => {
-    recordedBottomSheetProps.length = 0;
-    vi.mocked(useIsMobile).mockReturnValue(true);
-    render(
-      <AnchoredFloatingPanel
-        anchorRef={{ current: anchor }}
-        role="dialog"
-        ariaLabel="Snooze options"
-        height={400}
-        onClose={() => {}}
-      >
-        <div>Content</div>
-      </AnchoredFloatingPanel>,
-    );
-
-    expect(recordedBottomSheetProps[recordedBottomSheetProps.length - 1]?.height).toBe("min(400px, 70vh)");
+    expect(closeCount).toBe(1);
   });
 
   it("lets a mobile caller size the sheet to its content instead of reusing a desktop panel height", () => {
-    recordedBottomSheetProps.length = 0;
-    vi.mocked(useIsMobile).mockReturnValue(true);
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
         role="menu"
         ariaLabel="Snooze"
+        forceMobileSheet
         height={180}
         mobileHeight={null}
         onClose={() => {}}
@@ -368,16 +327,22 @@ describe("AnchoredFloatingPanel", () => {
       </AnchoredFloatingPanel>,
     );
 
-    expect(recordedBottomSheetProps[recordedBottomSheetProps.length - 1]?.height).toBeUndefined();
+    expect(screen.getByRole("dialog", { name: "Snooze" }).style.height).toBe("");
+  });
+
+  it("clamps numeric desktop height hints for the mobile sheet (UX-L10)", () => {
+    expect(resolveMobileSheetHeight(400, undefined)).toBe("min(400px, 70vh)");
+    expect(resolveMobileSheetHeight(400, null)).toBeUndefined();
+    expect(resolveMobileSheetHeight(400, "50vh")).toBe("50vh");
   });
 
   it("does not crash and leaks no style when a desktop-only style/width prop reaches the mobile sheet (UX-L10)", () => {
-    vi.mocked(useIsMobile).mockReturnValue(true);
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
         role="dialog"
         ariaLabel="Snooze options"
+        forceMobileSheet
         width={300}
         style={{ padding: 999 }}
         onClose={() => {}}
@@ -393,7 +358,6 @@ describe("AnchoredFloatingPanel", () => {
   });
 
   it("stays anchored on mobile when disableMobileSheet is set", async () => {
-    vi.mocked(useIsMobile).mockReturnValue(true);
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
@@ -401,6 +365,7 @@ describe("AnchoredFloatingPanel", () => {
         height={386}
         role="dialog"
         ariaLabel="Snooze options"
+        forceMobileSheet
         disableMobileSheet
         onClose={() => {}}
       >

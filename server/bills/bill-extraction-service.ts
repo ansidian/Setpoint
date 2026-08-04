@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+import type { Client } from "@libsql/client";
 import { trimBillBody } from "./bill-extract.ts";
 import { ANTHROPIC_PROVIDER } from "./bill-extractors/anthropic.ts";
 import { OPENAI_PROVIDER } from "./bill-extractors/openai.ts";
@@ -23,9 +24,18 @@ const PROVIDERS: Record<string, BillExtractionProvider & { id: string; envVar: s
   [OPENAI_PROVIDER.id]: OPENAI_PROVIDER,
 };
 
-export async function loadBillExtractChoice(userId: string): Promise<{ provider: string; model: string }> {
+interface BillExtractionDependencies {
+  dbClient?: Pick<Client, "execute">;
+  metadataReader?: typeof getMetadata;
+  providers?: typeof PROVIDERS;
+}
+
+export async function loadBillExtractChoice(
+  userId: string,
+  { dbClient = db }: Pick<BillExtractionDependencies, "dbClient"> = {},
+): Promise<{ provider: string; model: string }> {
   try {
-    const result = await db.execute({
+    const result = await dbClient.execute({
       sql: "SELECT bill_extract_provider, bill_extract_model FROM ea_settings WHERE user_id = ?",
       args: [userId],
     });
@@ -39,8 +49,16 @@ export async function loadBillExtractChoice(userId: string): Promise<{ provider:
   }
 }
 
-export async function extractBill(userId: string, { subject, from, body }: BillExtractionInput): Promise<BillCandidate & { provider: string; model: string; mapping: BillPayMappingOutcome }> {
-  const metadata = await getMetadata(userId).catch(() => EMPTY_ACTUAL_METADATA);
+export async function extractBill(
+  userId: string,
+  { subject, from, body }: BillExtractionInput,
+  {
+    dbClient = db,
+    metadataReader = getMetadata,
+    providers = PROVIDERS,
+  }: BillExtractionDependencies = {},
+): Promise<BillCandidate & { provider: string; model: string; mapping: BillPayMappingOutcome }> {
+  const metadata = await metadataReader(userId).catch(() => EMPTY_ACTUAL_METADATA);
   const categories = metadata.categories || [];
   const accounts = metadata.accounts || [];
   const payees = metadata.payees || [];
@@ -76,8 +94,8 @@ export async function extractBill(userId: string, { subject, from, body }: BillE
 - category_name: the category's display name (copied from the list)
 - to_account_code: ONLY for type=transfer, code (a1, a2, ...) of the credit card being paid. Match on Visa/MC/Amex or last-4 digits. Null if unsure.${catList.length ? `\n\nCategories: ${catList.join(", ")}` : ""}${acctList.length ? `\n\nAccounts: ${acctList.join(", ")}` : ""}`;
 
-  const { provider: providerId, model } = await loadBillExtractChoice(userId);
-  const provider = PROVIDERS[providerId];
+  const { provider: providerId, model } = await loadBillExtractChoice(userId, { dbClient });
+  const provider = providers[providerId];
   if (!provider) {
     const err: HttpError = new Error(`Unknown bill-extract provider: ${providerId}`);
     err.status = 400;
@@ -108,6 +126,7 @@ export async function extractBill(userId: string, { subject, from, body }: BillE
     extracted,
     metadata: { accounts, categories, payees },
     email: { subject, from, body },
+    dbClient,
   });
 
   return {

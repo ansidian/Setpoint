@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import MobileFilterSheet from "./MobileFilterSheet";
 
 afterEach(() => cleanup());
@@ -40,12 +40,15 @@ describe("MobileFilterSheet", () => {
     expect(screen.getByText("Personal")).toBeTruthy();
   });
 
-  it("selects an account and closes", () => {
-    const setAccountId = vi.fn();
-    const onClose = vi.fn();
-    renderSheet({ setAccountId, onClose });
+  it("selects an account and closes", async () => {
+    function Harness() {
+      const [accountId, setAccountId] = useState("__all");
+      const [open, setOpen] = useState(true);
+      return <><output aria-label="Selected account">{accountId}</output><MobileFilterSheet open={open} accent="#cba6da" accountId={accountId} setAccountId={setAccountId} accounts={accounts} totalUnread={4} onClose={() => setOpen(false)} /></>;
+    }
+    render(<Harness />);
     fireEvent.click(screen.getByText("Work"));
-    expect(setAccountId).toHaveBeenCalledWith("work");
-    expect(onClose).toHaveBeenCalled();
+    expect(screen.getByLabelText("Selected account").textContent).toBe("work");
+    await waitFor(() => expect(screen.queryByTestId("inbox-mobile-filter-sheet")).toBeNull());
   });
 });

@@ -87,6 +87,7 @@ describe("reminder scheduler", () => {
     });
 
     expect(result).toEqual({ processed: 2, sent: 1, missed: 1, failed: 0 });
+    // test-architecture: allow-boundary-interaction -- Discord delivery is the outbound notification boundary; exactly one request distinguishes the due reminder from the durably missed one.
     expect(send).toHaveBeenCalledOnce();
     const rows = await db.execute("SELECT id, status, sent_at, missed_at FROM ea_reminders ORDER BY id");
     expect(rows.rows).toMatchObject([

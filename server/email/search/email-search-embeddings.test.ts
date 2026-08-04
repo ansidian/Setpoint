@@ -101,6 +101,7 @@ describe("email search embedding client", () => {
       [0.1, 0.2, 0.3],
       [0.4, 0.5, 0.6],
     ]);
+    // test-architecture: allow-boundary-interaction -- Fetch is the outbound OpenAI embeddings boundary; URL, authorization, model, and input framing are compatibility details not exposed by normalized vectors.
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://api.openai.com/v1/embeddings",
       expect.objectContaining({

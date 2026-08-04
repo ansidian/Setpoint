@@ -40,7 +40,6 @@ const mockDb = {
 vi.mock("../actual/actual.ts", () => mockActual);
 // test-architecture: allow-boundary-mock -- The local Actual cache is a filesystem/provider boundary; the facade tests supply fresh metadata for invalidation.
 vi.mock("../actual/actual-local-metadata.ts", () => mockActualLocal);
-vi.mock("./bill-extract.ts", () => ({ trimBillBody: ({ body }: { body: string }) => body.slice(0, 100) }));
 // test-architecture: allow-boundary-mock -- The service's default database is replaced by an ephemeral client or controlled provider fixture per behavior case.
 vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 

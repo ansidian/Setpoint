@@ -19,17 +19,8 @@ const account = {
   calendar_enabled: 1,
 };
 
-const primaryCalendar = {
-  id: "primary",
-  summary: "Personal",
-  backgroundColor: "#4285f4",
-};
-
-const workCalendar = {
-  id: "work",
-  summary: "Work",
-  backgroundColor: "#16a34a",
-};
+const primaryCalendar = { id: "primary", summary: "Personal", backgroundColor: "#4285f4" };
+const workCalendar = { id: "work", summary: "Work", backgroundColor: "#16a34a" };
 
 const occurrence = {
   id: "event-1",
@@ -136,6 +127,7 @@ describe("Calendar Search Mirror service", () => {
       calendars: 2,
       occurrences: 1,
     });
+    // test-architecture: allow-boundary-interaction -- Google incremental-sync framing is the outbound provider compatibility contract; a full sync must omit a stale token and request deleted rows.
     expect(syncClient).toHaveBeenCalledWith(expect.objectContaining({
       account,
       calendar: primaryCalendar,
@@ -242,6 +234,7 @@ describe("Calendar Search Mirror service", () => {
       now: new Date("2026-05-12T20:00:00.000Z"),
     });
 
+    // test-architecture: allow-boundary-interaction -- Google's sync token is an outbound protocol cursor; the next incremental request must use the exact durably stored token.
     expect(syncClient).toHaveBeenLastCalledWith(expect.objectContaining({
       mode: "incremental",
       syncToken: "sync-1",
@@ -549,14 +542,18 @@ describe("Calendar Search Mirror service", () => {
     });
 
     expect(queued).toEqual({ queued: true, coalesced: false });
+    // test-architecture: allow-boundary-interaction -- Mirror sync admission is a background-process boundary; first-search repair must return without synchronously entering provider work.
     expect(syncFn).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(25);
 
+    // test-architecture: allow-boundary-interaction -- Durable mirror wake-up recording is the scheduler boundary; the queued request must retain its first-search reason.
     expect(recordSyncRequestFn).toHaveBeenCalledWith("test-user", {
       reason: "calendar-search-initializing",
     });
+    // test-architecture: allow-boundary-interaction -- Owner configuration is a database-backed admission boundary for the queued mirror worker.
     expect(loadConfigFn).toHaveBeenCalledWith("test-user");
+    // test-architecture: allow-boundary-interaction -- Google mirror sync is outbound background work; the queued repair must carry the admitted account and request reason.
     expect(syncFn).toHaveBeenCalledWith("test-user", [account], {
       forceFull: true,
     });
@@ -584,6 +581,7 @@ describe("Calendar Search Mirror service", () => {
     })).toEqual({ started: true });
 
     await vi.waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Startup mirror repair is a process-worker boundary and must be admitted with its explicit startup reason.
       expect(requestSyncFn).toHaveBeenCalledWith("test-user", {
         reason: "calendar-search-startup",
         debounceMs: 0,
@@ -592,6 +590,7 @@ describe("Calendar Search Mirror service", () => {
     });
 
     await vi.advanceTimersByTimeAsync(CALENDAR_SEARCH_MIRROR_SYNC_BACKSTOP_MS);
+    // test-architecture: allow-boundary-interaction -- Interval mirror repair is a process-worker boundary; timer advancement must enqueue its backstop reason.
     expect(requestSyncFn).toHaveBeenCalledWith("test-user", {
       reason: "calendar-search-backstop",
     });

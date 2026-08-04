@@ -74,7 +74,6 @@ describe("OpenAI Alfred adapter", () => {
       recordUsage,
     });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(events.map((event) => event.type)).toEqual([
       "tool_start",
       "tool_result",

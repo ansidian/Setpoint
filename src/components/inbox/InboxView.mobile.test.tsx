@@ -50,10 +50,6 @@ function makeSearchResponse(overrides: Partial<EmailSearchClientResponse>): Emai
   };
 }
 
-function signalOptions() {
-  return expect.objectContaining({ signal: expect.any(AbortSignal) });
-}
-
 const activeSnapshotMock = vi.hoisted(() => ({
   state: {
     snapshot: null,
@@ -63,6 +59,7 @@ const activeSnapshotMock = vi.hoisted(() => ({
   } as InboxActiveSnapshotController,
 }));
 
+// test-architecture: allow-boundary-mock -- rendered mobile Inbox workflows keep the real controller, snapshot hook input, rows, reader, and accessibility state while replacing only authenticated HTTP calls.
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
   return {
@@ -79,22 +76,6 @@ vi.mock("../../api", async () => {
     searchEmails: vi.fn().mockResolvedValue({ accounts: [] }),
   };
 });
-
-vi.mock("../../hooks/useActiveSnapshot", () => ({
-  default: () => activeSnapshotMock.state,
-}));
-
-vi.mock("../bills/BillBadge", () => ({
-  default: function BillBadgeMock() {
-    return <div data-testid="bill-badge">Bill badge</div>;
-  },
-}));
-
-vi.mock("./reader/DraftReply", () => ({
-  default: function DraftReplyMock() {
-    return <div data-testid="draft-reply">Draft reply</div>;
-  },
-}));
 
 afterEach(() => {
   cleanup();
@@ -126,7 +107,9 @@ function renderInbox({
     },
   };
 
-  return render(
+  function Harness() {
+    const [alfredQuestion, setAlfredQuestion] = useState("");
+    return <><output aria-label="Alfred question">{alfredQuestion}</output>
     <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <InboxView
         accent="#cba6da"
@@ -142,6 +125,7 @@ function renderInbox({
         emailAccounts={briefing.emails.accounts}
         briefingSummary={briefing.emails.summary}
         briefingGeneratedAt="2026-04-19 15:00:00"
+        activeSnapshot={activeSnapshotMock.state.snapshot || activeSnapshotMock.state.loading ? activeSnapshotMock.state : undefined}
         liveEmails={liveEmails}
         snoozedEntries={snoozedEntries}
         resurfacedEntries={resurfacedEntries}
@@ -149,10 +133,11 @@ function renderInbox({
         onRefresh={() => {}}
         seedSelectedId={seedSelectedId}
         isMobile={isMobile}
-        onAskAlfred={onAskAlfred}
+        onAskAlfred={onAskAlfred || setAlfredQuestion}
       />
-    </DashboardProvider>,
-  );
+    </DashboardProvider></>;
+  }
+  return render(<Harness />);
 }
 
 function activateBudgetSnapshot() {
@@ -239,9 +224,6 @@ describe("InboxView mobile", () => {
       target: { value: "amazon" },
     });
 
-    await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 30, signalOptions());
-    });
     expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
     expect(screen.queryByText("Budget dinner plans")).toBeNull();
   });
@@ -280,15 +262,12 @@ describe("InboxView mobile", () => {
       target: { value: "amazon" },
     });
 
-    await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 30, signalOptions());
-    });
     expect(await screen.findByText("1 of 42 indexed")).toBeTruthy();
   });
 
   it("renders a Show more results button on mobile when more indexed results are available and wires the click through", async () => {
     vi.mocked(searchEmails).mockReset();
-    vi.mocked(searchEmails).mockResolvedValue(makeSearchResponse({
+    vi.mocked(searchEmails).mockResolvedValueOnce(makeSearchResponse({
       accounts: [
         {
           account_id: "gmail-personal",
@@ -312,6 +291,15 @@ describe("InboxView mobile", () => {
       total: 42,
       has_more: true,
       query: "amazon",
+    })).mockResolvedValueOnce(makeSearchResponse({
+      accounts: [{
+        account_id: "gmail-personal", account_label: "Personal", account_email: "personal@example.com",
+        account_color: "#cba6da", account_icon: "Mail", results: [
+          makeSearchResult({ uid: "gmail-personal-amazon-1", subject: "Amazon order from last month", email_date: "2026-04-02T12:00:00.000Z" }),
+          makeSearchResult({ uid: "gmail-personal-amazon-2", subject: "Amazon return label", email_date: "2026-04-01T12:00:00.000Z" }),
+        ],
+      }],
+      total: 42, has_more: true, query: "amazon",
     }));
 
     renderInbox({ isMobile: true });
@@ -320,17 +308,12 @@ describe("InboxView mobile", () => {
       target: { value: "amazon" },
     });
 
-    await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 30, signalOptions());
-    });
     expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
 
     const button = screen.getByRole("button", { name: "Show more results" });
     fireEvent.click(button);
 
-    await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon", 60, signalOptions());
-    });
+    expect(await screen.findByText("Amazon return label")).toBeTruthy();
   });
 
   it("shows skeleton rows instead of search chrome or empty copy while mobile indexed search is loading", async () => {
@@ -359,24 +342,20 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("tuition", 30, signalOptions());
-    });
-    await waitFor(() => {
       expect(screen.getByText("No indexed mail matches")).toBeTruthy();
     });
     expect(screen.queryByTestId("inbox-mobile-search-skeleton")).toBeNull();
   });
 
   it("hands the Sparkles button query off to alfred", () => {
-    const onAskAlfred = vi.fn();
-    renderInbox({ isMobile: true, liveEmails: [], onAskAlfred });
+    renderInbox({ isMobile: true, liveEmails: [] });
 
     fireEvent.change(screen.getByLabelText("Search indexed mail"), {
       target: { value: "amazon return" },
     });
     fireEvent.click(screen.getByTestId("inbox-mobile-ask-alfred-trigger"));
 
-    expect(onAskAlfred).toHaveBeenCalledWith("amazon return");
+    expect(screen.getByLabelText("Alfred question").textContent).toBe("amazon return");
     expect(screen.queryByTestId("inbox-ai-confirmation")).toBeNull();
   });
 
@@ -422,6 +401,7 @@ describe("InboxView mobile", () => {
           emailAccounts={[]}
           briefingSummary=""
           briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshotMock.state}
           liveEmails={[]}
           liveReadOverrides={readOverrides}
           onLiveReadOverrideChange={(uid, read) => {

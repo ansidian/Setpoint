@@ -131,7 +131,7 @@ describe("apiFetch calendar mutation timeouts", () => {
     await api.updateCalendarEvent("id", {});
     await api.deleteCalendarEvent("id", {});
 
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch.mock.calls).toHaveLength(4);
     for (const [, options] of fetch.mock.calls) {
       expect(options?.signal).toBeInstanceOf(AbortSignal);
     }
@@ -171,10 +171,10 @@ describe("path-interpolated ids", () => {
 
     await api.dismissTombstone("abc/def?x=1");
 
-    expect(fetch).toHaveBeenCalledWith(
+    expect(fetch.mock.calls[0]).toEqual([
       "/api/briefing/tombstone/abc%2Fdef%3Fx%3D1",
       expect.objectContaining({ method: "DELETE" }),
-    );
+    ]);
   });
 
   it("encodes reserved characters in a note id", async () => {

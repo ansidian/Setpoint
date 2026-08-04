@@ -16,11 +16,13 @@ function currentDb(): Client {
   return testState.db.current;
 }
 
+// test-architecture: allow-boundary-mock -- OAuth callback persistence executes real migrations and SQL against an ephemeral libSQL client redirected through the production singleton seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => currentDb().execute(statement),
   },
 }));
+// test-architecture: allow-boundary-mock -- Credential encryption is the cryptographic storage boundary; callback tests use passthrough ciphertext so canonical durable rows can be inspected.
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: (value: string) => value,
   encrypt: (value: string) => value,

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import * as tasksService from "../../tasks/tasks-service.ts";
 
-const router = Router();
 const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function errorDetails(error: unknown): { message: string; status: number } {
@@ -12,9 +11,12 @@ function errorDetails(error: unknown): { message: string; status: number } {
   return { message: String(error), status: 400 };
 }
 
+export function createBriefingTasksRouter(service: Pick<typeof tasksService, "listProjects" | "listLabels"> = tasksService) {
+  const router = Router();
+
 router.get("/todoist/projects", async (_req, res) => {
   try {
-    res.json(await tasksService.listProjects(ownerUserId()));
+    res.json(await service.listProjects(ownerUserId()));
   } catch (err) {
     const { message, status } = errorDetails(err);
     console.error("Error fetching Todoist projects:", message);
@@ -24,7 +26,7 @@ router.get("/todoist/projects", async (_req, res) => {
 
 router.get("/todoist/labels", async (_req, res) => {
   try {
-    res.json(await tasksService.listLabels(ownerUserId()));
+    res.json(await service.listLabels(ownerUserId()));
   } catch (err) {
     const { message, status } = errorDetails(err);
     console.error("Error fetching Todoist labels:", message);
@@ -32,4 +34,7 @@ router.get("/todoist/labels", async (_req, res) => {
   }
 });
 
-export default router;
+  return router;
+}
+
+export default createBriefingTasksRouter();

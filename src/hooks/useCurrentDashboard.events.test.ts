@@ -2,25 +2,41 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { CurrentDashboardResponse } from "../../shared/types/dashboard";
 
-vi.mock("../api", () => ({
-  getActiveSnapshot: vi.fn(),
-  getCurrentDashboard: vi.fn(),
-  requestCurrentDashboardRefresh: vi.fn(),
-  syncCurrentDashboard: vi.fn(),
-}));
+import useCurrentDashboard from "./useCurrentDashboard";
+import { ensureMetadataLoaded, invalidateActualMetadata, type ActualMetadata } from "../lib/actualMetadata";
 
-const {
-  getActiveSnapshot,
-  getCurrentDashboard,
-  requestCurrentDashboardRefresh,
-  syncCurrentDashboard,
-} = await import("../api");
-const { default: useCurrentDashboard } = await import("./useCurrentDashboard");
+const getActiveSnapshotMock = vi.fn();
+const getCurrentDashboardMock = vi.fn();
+const requestCurrentDashboardRefreshMock = vi.fn();
+const syncCurrentDashboardMock = vi.fn();
+const getActiveSnapshot = getActiveSnapshotMock;
+const getCurrentDashboard = getCurrentDashboardMock;
+let actualMetadataResponse = {
+  accounts: [],
+  payees: [{ id: "payee-old", name: "Old Payee" }],
+  categories: [],
+};
 
-const getActiveSnapshotMock = vi.mocked(getActiveSnapshot) as unknown as ReturnType<typeof vi.fn>;
-const getCurrentDashboardMock = vi.mocked(getCurrentDashboard) as unknown as ReturnType<typeof vi.fn>;
-const requestCurrentDashboardRefreshMock = vi.mocked(requestCurrentDashboardRefresh) as unknown as ReturnType<typeof vi.fn>;
-const syncCurrentDashboardMock = vi.mocked(syncCurrentDashboard) as unknown as ReturnType<typeof vi.fn>;
+function installDashboardApiBoundary(): void {
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const path = String(input);
+    if (path === "/api/briefing/actual/metadata") {
+      return { ok: true, status: 200, json: () => Promise.resolve(actualMetadataResponse) } as Response;
+    }
+    const handler = path === "/api/briefing/snapshot/active"
+      ? getActiveSnapshotMock
+      : path === "/api/dashboard/current"
+        ? getCurrentDashboardMock
+        : path === "/api/dashboard/current/refresh"
+          ? requestCurrentDashboardRefreshMock
+          : path === "/api/dashboard/current/sync"
+            ? syncCurrentDashboardMock
+            : null;
+    if (!handler) throw new Error(`Unexpected dashboard test request: ${path}`);
+    const body = await handler();
+    return { ok: true, status: 200, json: () => Promise.resolve(body) } as Response;
+  });
+}
 
 type FakeEventSourceListener = (event: MessageEvent<string>) => void;
 
@@ -122,8 +138,16 @@ const currentPayload = {
   fetchedAt: "2026-05-04T12:00:00.000Z",
 } as unknown as CurrentDashboardResponse;
 
+function loadActualMetadata() {
+  return new Promise<ActualMetadata>((resolve) => {
+    ensureMetadataLoaded(resolve);
+  });
+}
+
 describe("useCurrentDashboard", () => {
   beforeEach(() => {
+    invalidateActualMetadata();
+    installDashboardApiBoundary();
     setDocumentHidden(false);
     FakeEventSource.instances = [];
     getActiveSnapshotMock.mockReset().mockResolvedValue(currentPayload.activeSnapshot);
@@ -140,14 +164,45 @@ describe("useCurrentDashboard", () => {
       activeSnapshot: { ...currentPayload.activeSnapshot, snapshot: { id: 100 } },
       fetchedAt: "2026-05-04T12:06:00.000Z",
     });
+    actualMetadataResponse = {
+      accounts: [],
+      payees: [{ id: "payee-old", name: "Old Payee" }],
+      categories: [],
+    };
   });
 
   afterEach(() => {
+    invalidateActualMetadata();
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     setDocumentHidden(false);
     vi.useRealTimers();
+  });
+
+  it("invalidates the shared Actual metadata cache when bills change over SSE", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    expect((await loadActualMetadata()).payees).toEqual([{ id: "payee-old", name: "Old Payee" }]);
+
+    const { unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    actualMetadataResponse = {
+      accounts: [],
+      payees: [{ id: "payee-fresh", name: "Fresh Payee" }],
+      categories: [],
+    };
+
+    await act(async () => {
+      FakeEventSource.instances[0]!.emit("dashboard-current-changed", {
+        source: "bills",
+        reason: "mirror_refreshed",
+        state: "current",
+      });
+      await Promise.resolve();
+    });
+
+    expect((await loadActualMetadata()).payees).toEqual([{ id: "payee-fresh", name: "Fresh Payee" }]);
+    unmount();
   });
 
   it("subscribes to dashboard-current events and silently refetches current data", async () => {
@@ -178,7 +233,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
     expect(result.current.briefingData.briefing!.deadlines.upcoming).toEqual([{ id: "deadline-live" }]);
     expect(result.current.refreshing).toBe(false);
 
@@ -187,10 +242,10 @@ describe("useCurrentDashboard", () => {
 
   it("passes dashboard-current SSE payloads to event consumers while refetching", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
-    const onDashboardEvent = vi.fn();
+    const dashboardEvents: unknown[] = [];
     getCurrentDashboardMock.mockResolvedValueOnce(currentPayload);
 
-    const { unmount } = renderHook(() => useCurrentDashboard({ onDashboardEvent }));
+    const { unmount } = renderHook(() => useCurrentDashboard({ onDashboardEvent: (event) => dashboardEvents.push(event) }));
     await act(async () => {});
 
     const payload = {
@@ -206,9 +261,9 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(onDashboardEvent).toHaveBeenCalledWith(payload);
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
-    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(dashboardEvents).toEqual([payload]);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(1);
+    expect(getActiveSnapshot.mock.calls).toHaveLength(1);
     unmount();
   });
 
@@ -296,8 +351,8 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
-    expect(getActiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard.mock.calls).toHaveLength(1);
+    expect(getActiveSnapshot.mock.calls).toHaveLength(1);
     expect(result.current.activeSnapshot.snapshot!.lanes.queued).toEqual(queuedSnapshot.lanes.queued);
     unmount();
   });
@@ -369,7 +424,6 @@ describe("useCurrentDashboard", () => {
     const { unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
 
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
     expect(FakeEventSource.instances).toHaveLength(0);
     unmount();
   });

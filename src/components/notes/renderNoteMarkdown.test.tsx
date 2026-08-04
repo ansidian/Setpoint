@@ -1,10 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { afterEach, describe, expect, it } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { renderNoteMarkdown } from "./renderNoteMarkdown";
 import { toggleCheckboxLine } from "./noteEditorExtensions";
 
 describe("renderNoteMarkdown", () => {
   afterEach(cleanup);
+
+  function CheckboxHarness({ initial }: { initial: string }) {
+    const [content, setContent] = useState(initial);
+    return <div>{renderNoteMarkdown(content, { onToggleCheckbox: (index) => setContent((value) => toggleCheckboxLine(value, index)) })}</div>;
+  }
 
   it("renders bold and italic", () => {
     render(<div>{renderNoteMarkdown("a **bold** and *em* word")}</div>);
@@ -36,12 +42,11 @@ describe("renderNoteMarkdown", () => {
   });
 
   it("renders a leading checkbox and toggles via onToggleCheckbox", () => {
-    const onToggle = vi.fn();
-    render(<div>{renderNoteMarkdown("- [ ] buy milk", { onToggleCheckbox: onToggle })}</div>);
+    render(<CheckboxHarness initial="- [ ] buy milk" />);
     const box = screen.getByRole<HTMLInputElement>("checkbox", { name: /buy milk/i });
     expect(box.checked).toBe(false);
     fireEvent.click(box);
-    expect(onToggle).toHaveBeenCalledWith(0);
+    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: /buy milk/i }).checked).toBe(true);
   });
 
   it("does not chip a # mid-word (matches parseTags anchoring)", () => {
@@ -70,13 +75,10 @@ describe("renderNoteMarkdown", () => {
   it("renderer and toggleCheckboxLine agree on checkbox index, ignoring malformed boxes", () => {
     // A bare `- [x]` (no space after ]) is NOT a togglable checkbox in either module.
     const content = "- [x]\n- [ ] buy milk";
-    const onToggle = vi.fn();
-    render(<div>{renderNoteMarkdown(content, { onToggleCheckbox: onToggle })}</div>);
+    render(<CheckboxHarness initial={content} />);
     const boxes = screen.getAllByRole("checkbox");
     expect(boxes.length).toBe(1); // only the well-formed checkbox renders
     fireEvent.click(boxes[0]!);
-    expect(onToggle).toHaveBeenCalledWith(0);
-    // index 0 from the renderer flips the SAME line in the toggle util
-    expect(toggleCheckboxLine(content, 0)).toBe("- [x]\n- [x] buy milk");
+    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: /buy milk/i }).checked).toBe(true);
   });
 });

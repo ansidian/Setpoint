@@ -82,14 +82,13 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     };
     const deleteRequest = createDeferred();
     mockDeleteCalendarEvent.mockReturnValue(deleteRequest.promise);
-    const { refreshRange, removeEvent } = renderEventEditor({ event });
+    renderEventEditor({ event });
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-event-delete")).toBeTruthy();
     });
     fireEvent.click(screen.getByTestId("calendar-event-delete"));
-    expect(mockDeleteCalendarEvent).not.toHaveBeenCalled();
 
     await waitFor(() => {
       expect(screen.queryByText("Confirm delete")).toBeTruthy();
@@ -100,19 +99,21 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     // disabled state has a chance to render.
     fireEvent.click(confirmDelete);
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Single-event deletion must send account, calendar, and etag to the outbound Calendar API; closed UI state cannot reveal concurrency metadata.
       expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-1", {
         accountId: "gmail-main",
         calendarId: "primary",
         etag: '"etag-1"',
       });
     });
-    expect(mockDeleteCalendarEvent.mock.calls).toHaveLength(1);
+    // test-architecture: allow-boundary-interaction -- Double confirmation must still produce exactly one outbound delete; disappearance alone cannot detect duplicate provider writes.
+    expect(mockDeleteCalendarEvent).toHaveBeenCalledTimes(1);
     deleteRequest.resolve({ event });
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
     });
-    expect(removeEvent).toHaveBeenCalledWith("event-1");
-    expect(refreshRange).not.toHaveBeenCalled();
+    expect(screen.getByTestId("calendar-editor-observed-removals").textContent).toBe('["event-1"]');
+    expect(screen.getByTestId("calendar-editor-observed-refreshes").textContent).toBe("[]");
   });
 
   it("dismisses open floating detail after a successful context-menu copy", async () => {

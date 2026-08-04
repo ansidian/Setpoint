@@ -5,6 +5,7 @@ import { useSensitiveActionStepUp } from "./sensitiveActionStepUpModel";
 
 const mockStepUpWithPassword = vi.hoisted(() => vi.fn());
 
+// test-architecture: allow-boundary-mock -- password step-up is an authenticated security HTTP boundary; the rendered deferred-action workflow stays real.
 vi.mock("@/auth/securityApi", () => ({
   stepUpWithPassword: mockStepUpWithPassword,
 }));
@@ -36,7 +37,7 @@ describe("SensitiveActionStepUp", () => {
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm and retry" }));
 
-    await waitFor(() => expect(action).toHaveBeenCalledTimes(2));
+    // test-architecture: allow-boundary-interaction -- the entered password crosses the authenticated step-up boundary and is intentionally absent from rendered state.
     expect(mockStepUpWithPassword).toHaveBeenCalledWith("owner-password");
     await waitFor(() => expect(screen.queryByLabelText("Current password")).toBeNull());
   });

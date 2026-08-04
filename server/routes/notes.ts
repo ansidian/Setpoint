@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
 import { requireCookieSession } from "../middleware/auth.ts";
 import type {
@@ -13,14 +14,21 @@ import type {
 
 type ErrorResponse = { message: string };
 
-const router = Router();
-router.use(requireCookieSession);
-
 const userId = (): string => process.env.EA_USER_ID!;
+
+export function createNotesRouter({
+  dbClient = db,
+  authenticate = requireCookieSession,
+}: {
+  dbClient?: Pick<Client, "execute" | "batch">;
+  authenticate?: RequestHandler;
+} = {}) {
+const router = Router();
+router.use(authenticate);
 
 router.get<Record<string, never>, Note[] | ErrorResponse>("/", async (_req, res) => {
   try {
-    const result = await db.execute({
+    const result = await dbClient.execute({
       sql: "SELECT * FROM ea_notes WHERE user_id = ? ORDER BY sort_order",
       args: [userId()],
     });
@@ -40,7 +48,7 @@ router.post<Record<string, never>, Note | ErrorResponse, CreateNoteRequest>("/",
     // Shift-then-insert must be atomic: a crash between the two statements would
     // permanently bump every note's sort_order with no row left at slot 0.
     // libsql batch is transactional, so the freed slot is always filled.
-    const [, insert] = await db.batch([
+    const [, insert] = await dbClient.batch([
       {
         sql: "UPDATE ea_notes SET sort_order = sort_order + 1 WHERE user_id = ?",
         args: [userId()],
@@ -73,7 +81,7 @@ router.patch<Record<string, never>, NoteMutationResponse | ErrorResponse, Reorde
       sql: "UPDATE ea_notes SET sort_order = ? WHERE id = ? AND user_id = ?",
       args: [i, id, userId()],
     }));
-    await db.batch(stmts);
+    await dbClient.batch(stmts);
     res.json({ success: true });
   } catch (err) {
     console.error("Error reordering notes:", err);
@@ -85,7 +93,7 @@ router.patch<{ id: string }, NoteMutationResponse | ErrorResponse, ArchiveNoteRe
   const { id } = req.params;
   const archived = !!req.body?.archived;
   try {
-    await db.execute({
+    await dbClient.execute({
       sql: archived
         ? "UPDATE ea_notes SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND user_id = ?"
         : "UPDATE ea_notes SET archived_at = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
@@ -105,7 +113,7 @@ router.patch<{ id: string }, NoteMutationResponse | ErrorResponse, UpdateNoteReq
     return res.status(400).json({ message: "Content is required" });
   }
   try {
-    await db.execute({
+    await dbClient.execute({
       sql: "UPDATE ea_notes SET content = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
       args: [content.trim(), id, userId()],
     });
@@ -119,7 +127,7 @@ router.patch<{ id: string }, NoteMutationResponse | ErrorResponse, UpdateNoteReq
 router.delete<{ id: string }, NoteMutationResponse | ErrorResponse>("/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    await db.execute({
+    await dbClient.execute({
       sql: "DELETE FROM ea_notes WHERE id = ? AND user_id = ?",
       args: [id, userId()],
     });
@@ -130,4 +138,7 @@ router.delete<{ id: string }, NoteMutationResponse | ErrorResponse>("/:id", asyn
   }
 });
 
-export default router;
+return router;
+}
+
+export default createNotesRouter();

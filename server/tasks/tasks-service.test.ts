@@ -11,12 +11,14 @@ const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
 }));
 
+// test-architecture: allow-boundary-mock -- Completion claims run against a migrated ephemeral database redirected through the shared production connection seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement | string) => testState.db.current.execute(statement),
     batch: (statements: InStatement[]) => testState.db.current.batch(statements),
   },
 }));
+// test-architecture: allow-boundary-mock -- Todoist task mutation is the outbound provider boundary; the deadline use case controls provider successes/failures while asserting results and durable claims.
 vi.mock("./todoist.ts", () => ({
   completeTodoistTask: vi.fn(),
   deleteTodoistTask: vi.fn(),
@@ -26,11 +28,6 @@ vi.mock("./todoist.ts", () => ({
   createTodoistTask: vi.fn(),
   updateTodoistTask: vi.fn(),
 }));
-vi.mock("../reminders/reminder-service.ts", () => ({
-  deleteSourceReminders: vi.fn(),
-  recomputeUnsentRemindersForSource: vi.fn(),
-}));
-
 type TestMock = ReturnType<typeof vi.fn>;
 const todoist = await import("./todoist.ts") as unknown as {
   completeTodoistTask: TestMock;
@@ -40,10 +37,6 @@ const todoist = await import("./todoist.ts") as unknown as {
   fetchTodoistTasksAll: TestMock;
   createTodoistTask: TestMock;
   updateTodoistTask: TestMock;
-};
-const reminderService = await import("../reminders/reminder-service.ts") as unknown as {
-  deleteSourceReminders: TestMock;
-  recomputeUnsentRemindersForSource: TestMock;
 };
 const {
   completeDeadlineOccurrence,
@@ -55,9 +48,46 @@ const {
 beforeEach(async () => {
   testState.db.current = await createCompletedTasksTestDb();
   Object.values(todoist).forEach((fn) => fn.mockReset?.());
-  Object.values(reminderService).forEach((fn) => fn.mockReset?.());
   todoist.fetchTodoistTasksAll.mockResolvedValue([]);
 });
+
+async function seedReminder({
+  id = "rem-1",
+  sourceItemId = "td-1",
+  status = "pending",
+  offsetMinutes = 60,
+}: {
+  id?: string;
+  sourceItemId?: string;
+  status?: "pending" | "sent";
+  offsetMinutes?: number;
+} = {}) {
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_reminders
+            (id, user_id, source_type, source_item_id, anchor_kind, anchor_at,
+             offset_minutes, remind_at, status)
+          VALUES (?, 'u1', 'todoist_task', ?, 'todoist_due_datetime', ?, ?, ?, ?)`,
+    args: [
+      id,
+      sourceItemId,
+      "2026-05-11T17:00:00.000Z",
+      offsetMinutes,
+      "2026-05-11T16:00:00.000Z",
+      status,
+    ],
+  });
+}
+
+async function listReminders(sourceItemId = "td-1") {
+  const result = await testState.db.current.execute({
+    sql: `SELECT id, anchor_kind, anchor_at, remind_at, status
+          FROM ea_reminders
+          WHERE user_id = 'u1' AND source_item_id = ?
+          ORDER BY id`,
+    args: [sourceItemId],
+  });
+  return result.rows;
+}
 
 afterEach(async () => {
   await testState.db.current?.close?.();
@@ -79,6 +109,7 @@ describe("deadline-domain mutations", () => {
     });
 
     expect(result).toMatchObject({ id: "td-new" });
+    // test-architecture: allow-boundary-interaction -- Todoist create is an outbound provider write; its exact domain-to-provider payload is the compatibility contract.
     expect(todoist.createTodoistTask).toHaveBeenCalledWith("u1", {
       content: "Pay invoice",
       description: "Attach receipt",
@@ -96,6 +127,7 @@ describe("deadline-domain mutations", () => {
       status: 400,
     });
 
+    // test-architecture: allow-boundary-interaction -- Invalid legacy input must never issue an outbound Todoist create request.
     expect(todoist.createTodoistTask).not.toHaveBeenCalled();
   });
 
@@ -108,6 +140,7 @@ describe("deadline-domain mutations", () => {
       labelIds: [],
     });
 
+    // test-architecture: allow-boundary-interaction -- Todoist update is an outbound provider write; the translated partial payload is its compatibility contract.
     expect(todoist.updateTodoistTask).toHaveBeenCalledWith("u1", "td-1", {
       content: "Renamed",
       due_string: "tomorrow at 9am",
@@ -121,18 +154,17 @@ describe("deadline-domain mutations", () => {
       status: 400,
     });
 
+    // test-architecture: allow-boundary-interaction -- A blank title must fail before any outbound Todoist update can erase provider data.
     expect(todoist.updateTodoistTask).not.toHaveBeenCalled();
   });
 
   it("deletes Todoist-backed deadlines and local reminders", async () => {
+    await seedReminder();
     await deleteDeadline("u1", "td-1");
 
+    // test-architecture: allow-boundary-interaction -- Todoist delete is an outbound provider write and must target the exact owner/task identity.
     expect(todoist.deleteTodoistTask).toHaveBeenCalledWith("u1", "td-1");
-    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-1",
-    });
+    expect(await listReminders()).toEqual([]);
   });
 
   it("requires an explicit ISO occurrence date before reading Todoist state", async () => {
@@ -141,7 +173,9 @@ describe("deadline-domain mutations", () => {
       status: 400,
     });
 
+    // test-architecture: allow-boundary-interaction -- Invalid occurrence dates must fail before the provider-backed Todoist read boundary.
     expect(todoist.fetchTodoistTasksAll).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- Invalid occurrence dates must never issue an outbound Todoist close.
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
   });
 
@@ -160,7 +194,9 @@ describe("deadline-domain mutations", () => {
       deadlineId: "td-rec",
       occurrenceDate: "2026-05-12",
     });
+    // test-architecture: allow-boundary-interaction -- A durable completion claim must short-circuit before a provider-backed Todoist read.
     expect(todoist.fetchTodoistTasksAll).not.toHaveBeenCalled();
+    // test-architecture: allow-boundary-interaction -- Idempotent durable completion must never duplicate the outbound Todoist close.
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
   });
 
@@ -177,6 +213,7 @@ describe("deadline-domain mutations", () => {
       status: 409,
     });
 
+    // test-architecture: allow-boundary-interaction -- A mismatched active occurrence must never issue an outbound Todoist close.
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
   });
@@ -193,10 +230,12 @@ describe("deadline-domain mutations", () => {
     // The completion is recorded by the pre-close atomic claim (P2-30). The remote
     // /close then succeeds, but the post-close reminder cleanup throws (P3-64's
     // "/close is the commit point" failure window). The completion must survive.
-    reminderService.deleteSourceReminders.mockRejectedValueOnce(new Error("disk I/O error"));
+    const failingReminderCleanup = vi.fn(async () => { throw new Error("disk I/O error"); });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12");
+    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12", {
+      deleteReminders: failingReminderCleanup as never,
+    });
 
     // The remote close already happened, so the completion must not be lost.
     expect(result).toEqual({
@@ -205,17 +244,11 @@ describe("deadline-domain mutations", () => {
       deadlineId: "td-rec",
       occurrenceDate: "2026-05-12",
     });
+    // test-architecture: allow-boundary-interaction -- Todoist close is the outbound provider commit point; it must target the claimed recurring task exactly once.
     expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec");
     // The pre-close claim persisted the completion row, so the occurrence is
     // recorded even though the post-close reminder cleanup threw.
     expect(await listCompletedTasks(testState.db.current, "u1")).toHaveLength(1);
-    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-rec",
-      unsentOnly: true,
-    });
-    expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 
@@ -227,10 +260,12 @@ describe("deadline-domain mutations", () => {
       status: "incomplete",
       is_recurring: true,
     }]);
-    reminderService.deleteSourceReminders.mockRejectedValueOnce(new Error("reminders down"));
+    const failingReminderCleanup = vi.fn(async () => { throw new Error("reminders down"); });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12");
+    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12", {
+      deleteReminders: failingReminderCleanup as never,
+    });
 
     expect(result).toEqual({
       completed: true,
@@ -242,11 +277,12 @@ describe("deadline-domain mutations", () => {
     expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
       { todoist_id: "td-rec", due_date: "2026-05-12" },
     ]);
-    expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 
   it("completes and stores the matching active occurrence", async () => {
+    await seedReminder({ id: "pending", sourceItemId: "td-rec", status: "pending" });
+    await seedReminder({ id: "sent", sourceItemId: "td-rec", status: "sent" });
     todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
       id: "td-rec",
       title: "Daily review",
@@ -264,16 +300,14 @@ describe("deadline-domain mutations", () => {
       deadlineId: "td-rec",
       occurrenceDate: "2026-05-12",
     });
+    // test-architecture: allow-boundary-interaction -- Todoist close is the outbound provider commit point and must target the active claimed occurrence.
     expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec");
     expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
       { todoist_id: "td-rec", due_date: "2026-05-12" },
     ]);
-    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-rec",
-      unsentOnly: true,
-    });
+    expect(await listReminders("td-rec")).toEqual([
+      expect.objectContaining({ id: "sent", status: "sent" }),
+    ]);
   });
 
   it("does not double-close a recurring occurrence under concurrent completion (P2-30)", async () => {
@@ -293,6 +327,7 @@ describe("deadline-domain mutations", () => {
 
     // Exactly one request closes the Todoist task (which advances the recurrence);
     // the other loses the atomic claim and short-circuits as alreadyCompleted.
+    // test-architecture: allow-boundary-interaction -- Todoist close is an outbound write; the durable atomic claim must admit exactly one close under concurrency.
     expect(todoist.completeTodoistTask).toHaveBeenCalledTimes(1);
     expect([a.alreadyCompleted, b.alreadyCompleted].sort()).toEqual([false, true]);
     expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
@@ -303,27 +338,29 @@ describe("deadline-domain mutations", () => {
 
 describe("updateDeadline", () => {
   it("recomputes unsent Todoist reminders when the due date changes through EA", async () => {
+    await seedReminder();
     todoist.updateTodoistTask.mockResolvedValueOnce({
       id: "td-1",
       title: "Follow up",
-      due_date: "2026-05-12",
+      due_date: "2026-09-12",
       due_time: "10:00 AM",
       class_name: "Inbox",
     });
 
-    const task = await updateDeadline("u1", "td-1", { dueString: "2026-05-12 at 10:00 AM" });
+    const task = await updateDeadline("u1", "td-1", { dueString: "2026-09-12 at 10:00 AM" });
 
     expect(task.id).toBe("td-1");
-    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-1",
-      anchorKind: "todoist_due_datetime",
-      anchorAt: "2026-05-12T17:00:00.000Z",
-    });
+    expect(await listReminders()).toEqual([
+      expect.objectContaining({
+        anchor_kind: "todoist_due_datetime",
+        anchor_at: "2026-09-12T17:00:00.000Z",
+      }),
+    ]);
   });
 
   it("deletes unsent reminders when the task no longer has a due anchor", async () => {
+    await seedReminder({ id: "pending", status: "pending" });
+    await seedReminder({ id: "sent", status: "sent" });
     todoist.updateTodoistTask.mockResolvedValueOnce({
       id: "td-1",
       title: "Follow up",
@@ -333,43 +370,38 @@ describe("updateDeadline", () => {
 
     await updateDeadline("u1", "td-1", { dueString: "" });
 
-    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-1",
-      unsentOnly: true,
-    });
+    expect(await listReminders()).toEqual([
+      expect.objectContaining({ id: "sent", status: "sent" }),
+    ]);
   });
 
   it("anchors date-only Todoist reminders at 9 AM Pacific", async () => {
+    await seedReminder();
     todoist.updateTodoistTask.mockResolvedValueOnce({
       id: "td-1",
       title: "Follow up",
-      due_date: "2026-05-12",
+      due_date: "2026-09-12",
       due_time: null,
     });
 
-    await updateDeadline("u1", "td-1", { dueString: "2026-05-12" });
+    await updateDeadline("u1", "td-1", { dueString: "2026-09-12" });
 
-    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-1",
-      anchorKind: "todoist_date_9am_pacific",
-      anchorAt: "2026-05-12T16:00:00.000Z",
-    });
+    expect(await listReminders()).toEqual([
+      expect.objectContaining({
+        anchor_kind: "todoist_date_9am_pacific",
+        anchor_at: "2026-09-12T16:00:00.000Z",
+      }),
+    ]);
   });
 });
 
 describe("deleteDeadline", () => {
   it("deletes local reminders when deleting a Todoist task through EA", async () => {
+    await seedReminder();
     await deleteDeadline("u1", "td-1");
 
+    // test-architecture: allow-boundary-interaction -- Todoist delete is the outbound provider write for this deadline identity.
     expect(todoist.deleteTodoistTask).toHaveBeenCalledWith("u1", "td-1");
-    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
-      userId: "u1",
-      sourceType: "todoist_task",
-      sourceItemId: "td-1",
-    });
+    expect(await listReminders()).toEqual([]);
   });
 });

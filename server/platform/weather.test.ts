@@ -101,13 +101,14 @@ describe("fetchWeather caching", () => {
 
     expect(first.temp).toBe(60);
     expect(second).toBe(first);
+    // test-architecture: allow-boundary-interaction -- Global fetch is the outbound weather-provider boundary; one request proves a cache hit does not duplicate provider traffic.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("serves stale data immediately on TTL lapse and refreshes in the background", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-01T00:00:00.000Z"));
-    const fetchMock = vi.spyOn(globalThis, "fetch")
+    vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(okResponse(payload(60)))
       .mockResolvedValueOnce(okResponse(payload(75)));
 
@@ -118,10 +119,12 @@ describe("fetchWeather caching", () => {
     vi.setSystemTime(new Date("2026-05-01T00:31:00.000Z")); // past the 30-min TTL
     const stale = await fetchWeather(2.02, 2.02, service as never);
 
-    // Stale payload returned immediately, and a background refresh was issued
-    // (the second fetch) rather than blocking the caller on it.
+    // Stale payload returns immediately; once the background refresh settles,
+    // the next read observes the refreshed cache value.
     expect(stale.temp).toBe(60);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.waitFor(async () => {
+      expect((await fetchWeather(2.02, 2.02, service as never)).temp).toBe(75);
+    });
   });
 
   it("throws on fetch failure when there is no cached data", async () => {

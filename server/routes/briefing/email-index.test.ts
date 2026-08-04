@@ -6,20 +6,13 @@ import request from "../../test-utils/supertest.ts";
 
 const mockDb = { execute: vi.fn() };
 
+// test-architecture: allow-boundary-mock -- Redirects the production cookie-session database singleton for this HTTP test; the route dependencies themselves are injected and observed through responses.
 vi.mock("../../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../../email/email-index.ts", () => ({
-  getEmailIndexHealth: vi.fn(async () => ({ accounts: [{ account_id: "gmail-work" }] })),
-  queueEmailIndexBackfill: vi.fn(async () => ({ queued: true, accounts: [{ account_id: "gmail-work" }] })),
-}));
-vi.mock("../../email/email-backfill-worker.ts", () => ({
-  wakeEmailBackfillWorker: vi.fn(),
-}));
 
 process.env.EA_USER_ID = "user-1";
 
-const emailIndexService = await import("../../email/email-index.ts");
-const emailBackfillWorker = await import("../../email/email-backfill-worker.ts");
-const briefingRoutes = (await import("./index.ts")).default;
+const { requireCookieSession } = await import("../../middleware/auth.ts");
+const { createEmailIndexRouter } = await import("./email-index.ts");
 const originalNodeEnv = process.env.NODE_ENV;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
@@ -32,11 +25,19 @@ function restoreNodeEnv() {
 }
 
 function makeApp() {
+  let wakeCount = 0;
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
-  app.use("/api/briefing", briefingRoutes);
-  return app;
+  app.use("/api/briefing", requireCookieSession, createEmailIndexRouter({
+    getHealth: async (userId) => ({ accounts: [{ account_id: `gmail-${userId}` }] }) as never,
+    queueBackfill: async (userId, options) => ({
+      queued: true,
+      accounts: [{ account_id: `gmail-${userId}-${options?.targetDays}` }],
+    }) as never,
+    wake: () => { wakeCount += 1; },
+  }));
+  return { app, wakeCount: () => wakeCount };
 }
 
 function setSessionRow() {
@@ -67,29 +68,26 @@ describe("email index routes", () => {
     process.env.NODE_ENV = "production";
 
     try {
-      const res = await request(makeApp())
+      const res = await request(makeApp().app)
         .get("/api/briefing/email-index/health")
         .set("Cookie", ["ea_session=cookie-session"]);
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ accounts: [{ account_id: "gmail-work" }] });
-      expect(emailIndexService.getEmailIndexHealth).toHaveBeenCalledWith("user-1");
+      expect(res.body).toEqual({ accounts: [{ account_id: "gmail-user-1" }] });
     } finally {
       restoreNodeEnv();
     }
   });
 
   it("queues a manual backfill trigger without running the backfill synchronously", async () => {
-    const res = await request(makeApp())
+    const harness = makeApp();
+    const res = await request(harness.app)
       .post("/api/briefing/email-index/backfill")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ targetDays: 90 });
 
     expect(res.status).toBe(202);
-    expect(res.body).toEqual({ queued: true, accounts: [{ account_id: "gmail-work" }] });
-    expect(emailIndexService.queueEmailIndexBackfill).toHaveBeenCalledWith("user-1", {
-      targetDays: 90,
-    });
-    expect(emailBackfillWorker.wakeEmailBackfillWorker).toHaveBeenCalledWith();
+    expect(res.body).toEqual({ queued: true, accounts: [{ account_id: "gmail-user-1-90" }] });
+    expect(harness.wakeCount()).toBe(1);
   });
 });

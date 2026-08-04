@@ -3,6 +3,7 @@ import type { Mock } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { CalendarRangeEvent } from "./useCalendarRange";
 
+// test-architecture: allow-boundary-mock -- Calendar range HTTP is the outbound provider-backed API; the cache/race suite supplies controlled responses while observing the hook's returned cache state.
 vi.mock("../../api", () => ({
   getCalendarRange: vi.fn(),
 }));
@@ -33,6 +34,7 @@ describe("useCalendarRange", () => {
       const events = await result.current.ensureRange("2026-04-18", "2026-04-25");
       expect(events).toEqual([]);
     });
+    // test-architecture: allow-boundary-interaction -- Calendar range HTTP is outbound; disabled mode must issue no provider-backed request, which an empty return alone cannot prove.
     expect(getCalendarRange).not.toHaveBeenCalled();
   });
 
@@ -109,6 +111,7 @@ describe("useCalendarRange", () => {
       first = result.current.ensureRange("2026-04-18", "2026-04-25");
       second = result.current.ensureRange("2026-04-18", "2026-04-25");
     });
+    // test-architecture: allow-boundary-interaction -- Calendar range HTTP is outbound; concurrent identical visible ensures must share one in-flight request.
     expect(getCalendarRange).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -311,7 +314,6 @@ describe("useCalendarRange", () => {
     act(() => {
       passA = result.current.ensureRange("2026-04-18", "2026-04-25", { signal: controllerA.signal });
     });
-    expect(getCalendarRange).toHaveBeenCalledTimes(1);
 
     // The controller's scroll-driven pattern: the next pass aborts the
     // previous one, then synchronously re-ensures the same range while the
@@ -350,6 +352,7 @@ describe("useCalendarRange", () => {
     });
 
     // A genuinely aborted pass must not refetch on its own behalf.
+    // test-architecture: allow-boundary-interaction -- Calendar range HTTP is outbound; an aborted owning pass must not recursively refetch after its own cancellation.
     expect(getCalendarRange).toHaveBeenCalledTimes(1);
     expect(result.current.hasMonth(2026, 3)).toBe(false);
     await expect(pass).resolves.toEqual([]);

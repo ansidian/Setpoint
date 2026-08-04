@@ -20,30 +20,30 @@ describe("BottomSheet", () => {
   });
 
   it("closes on Escape", () => {
-    const onClose = vi.fn();
+    let closeCount = 0;
     render(
-      <BottomSheet open onClose={onClose} title="Snapshots">
+      <BottomSheet open onClose={() => { closeCount += 1; }} title="Snapshots">
         <div>Content</div>
       </BottomSheet>,
     );
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(closeCount).toBe(1);
   });
 
   it("closes on backdrop click but not on a click inside the sheet", () => {
-    const onClose = vi.fn();
+    let closeCount = 0;
     render(
-      <BottomSheet open onClose={onClose} title="Snapshots">
+      <BottomSheet open onClose={() => { closeCount += 1; }} title="Snapshots">
         <button type="button">Inside</button>
       </BottomSheet>,
     );
 
     fireEvent.click(screen.getByText("Inside"));
-    expect(onClose).not.toHaveBeenCalled();
+    expect(closeCount).toBe(0);
 
     fireEvent.click(screen.getByTestId("bottom-sheet-backdrop"));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(closeCount).toBe(1);
   });
 
   it("locks body scroll while open and restores the prior value on unmount", () => {
@@ -143,9 +143,9 @@ describe("BottomSheet", () => {
   });
 
   it("dismisses via browser back (popstate losing the sheet's token)", async () => {
-    const onClose = vi.fn();
+    let closeCount = 0;
     render(
-      <BottomSheet open onClose={onClose} title="Snapshots">
+      <BottomSheet open onClose={() => { closeCount += 1; }} title="Snapshots">
         <div>Content</div>
       </BottomSheet>,
     );
@@ -155,40 +155,39 @@ describe("BottomSheet", () => {
     });
 
     await waitFor(() => {
-      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(closeCount).toBe(1);
     });
   });
 
-  it("unwinds its history entry when closed via Escape", () => {
-    const backSpy = vi.spyOn(window.history, "back");
-    const onClose = vi.fn();
+  it("unwinds its history entry when closed via Escape", async () => {
+    let closeCount = 0;
     const { rerender } = render(
-      <BottomSheet open onClose={onClose} title="Snapshots">
+      <BottomSheet open onClose={() => { closeCount += 1; }} title="Snapshots">
         <div>Content</div>
       </BottomSheet>,
     );
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(closeCount).toBe(1);
 
     rerender(
-      <BottomSheet open={false} onClose={onClose} title="Snapshots">
+      <BottomSheet open={false} onClose={() => { closeCount += 1; }} title="Snapshots">
         <div>Content</div>
       </BottomSheet>,
     );
 
-    expect(backSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(window.history.state?.eaBottomSheet).toBeUndefined());
   });
 
   it("dismisses only the top sheet when two are stacked", async () => {
-    const onCloseOuter = vi.fn();
-    const onCloseInner = vi.fn();
+    let outerCloseCount = 0;
+    let innerCloseCount = 0;
     render(
       <>
-        <BottomSheet open onClose={onCloseOuter} title="Outer">
+        <BottomSheet open onClose={() => { outerCloseCount += 1; }} title="Outer">
           <div>Outer content</div>
         </BottomSheet>
-        <BottomSheet open onClose={onCloseInner} title="Inner">
+        <BottomSheet open onClose={() => { innerCloseCount += 1; }} title="Inner">
           <div>Inner content</div>
         </BottomSheet>
       </>,
@@ -199,8 +198,8 @@ describe("BottomSheet", () => {
     });
 
     await waitFor(() => {
-      expect(onCloseInner).toHaveBeenCalledTimes(1);
+      expect(innerCloseCount).toBe(1);
     });
-    expect(onCloseOuter).not.toHaveBeenCalled();
+    expect(outerCloseCount).toBe(0);
   });
 });

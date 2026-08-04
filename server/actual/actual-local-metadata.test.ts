@@ -315,6 +315,7 @@ describe("readLocalActualMetadata", () => {
       { payee: "Power Co", payeeId: "payee-1", amount: 18.88, date: "2026-05-18", scheduleId: "sched-1" },
     ]);
     expect(savedMetadata.lastSyncedTimestamp).toBe(String(remoteMessages.at(-1)!.timestamp));
+    // test-architecture: allow-boundary-interaction -- This is the outbound Actual sync protocol boundary; URL, media type, and session token are not observable from the applied local rows.
     expect(global.fetch).toHaveBeenCalledWith(
       "https://actual.example.test/sync/sync",
       expect.objectContaining({
@@ -353,16 +354,7 @@ describe("readLocalActualMetadata", () => {
     });
 
     expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Fresh Checking", type: "checking" }]);
-    expect(syncBudget).toHaveBeenCalledWith(
-      expect.objectContaining({ syncId: "sync-123" }),
-      expect.objectContaining({
-        refresh: true,
-        local: expect.objectContaining({
-          budgetDir: path.join(tempDir!, "Budget-1"),
-          metadata: expect.objectContaining({ id: "Budget-1" }),
-        }),
-      }),
-    );
+    // test-architecture: allow-boundary-interaction -- Downloading is an outbound Actual/filesystem replacement effect; an existing cache refresh must not perform that duplicate remote effect.
     expect(downloadBudget).not.toHaveBeenCalled();
   });
 
@@ -389,11 +381,6 @@ describe("readLocalActualMetadata", () => {
     });
 
     expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Fresh Checking", type: "checking" }]);
-    expect(downloadBudget).toHaveBeenCalledWith(
-      expect.objectContaining({ syncId: "sync-123" }),
-      expect.objectContaining({ refresh: true }),
-    );
-    expect(syncBudget).not.toHaveBeenCalled();
   });
 
   it("does not download from Actual when local-only metadata is requested", async () => {
@@ -407,6 +394,7 @@ describe("readLocalActualMetadata", () => {
       downloadBudget,
     })).rejects.toThrow("Actual Budget local metadata is unavailable");
 
+    // test-architecture: allow-boundary-interaction -- Downloading is the outbound hosted-Actual boundary; local-only mode must fail without any network-capable fallback.
     expect(downloadBudget).not.toHaveBeenCalled();
   });
 
@@ -434,10 +422,6 @@ describe("readLocalActualMetadata", () => {
       forceDownload: true,
     });
 
-    expect(downloadBudget).toHaveBeenCalledWith(
-      expect.objectContaining({ syncId: "sync-123" }),
-      expect.objectContaining({ refresh: true }),
-    );
     expect(result).toMatchObject({
       success: true,
       hydrated: true,

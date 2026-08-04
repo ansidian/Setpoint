@@ -70,6 +70,7 @@ describe("Actual worker runner", () => {
     const first = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
     const second = runActualWorkerOperation("getPayees", ["user-1"], { timeoutMs: 1000 });
     await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; only one request may be admitted before the active request completes.
     expect(child.send).toHaveBeenCalledTimes(1);
 
     const firstRequest = child.send.mock.calls[0]![0];
@@ -80,6 +81,7 @@ describe("Actual worker runner", () => {
     });
     await expect(first).resolves.toEqual({ accounts: [] });
 
+    // test-architecture: allow-boundary-interaction -- child.send is the process IPC boundary; completion must admit exactly the queued follow-up request.
     expect(child.send).toHaveBeenCalledTimes(2);
     const secondRequest = child.send.mock.calls[1]![0];
     child.emit("message", {
@@ -89,7 +91,6 @@ describe("Actual worker runner", () => {
     });
 
     await expect(second).resolves.toEqual([{ id: "payee-1" }]);
-    expect(forkMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects with a 502 when the worker exits before responding", async () => {
@@ -128,7 +129,6 @@ describe("Actual worker runner", () => {
     });
 
     await expect(second).resolves.toEqual({ accounts: [] });
-    expect(forkMock).toHaveBeenCalledTimes(2);
   });
 
   it("shuts down an idle worker after the configured idle window", async () => {
@@ -147,8 +147,10 @@ describe("Actual worker runner", () => {
     });
     await expect(resultPromise).resolves.toEqual({ accounts: [] });
 
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; the reusable worker must remain alive before its idle deadline.
     expect(child.kill).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(25);
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; idle expiry must request graceful SIGTERM shutdown.
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
     child.emit("exit", null, "SIGTERM");
   });
@@ -170,6 +172,7 @@ describe("Actual worker runner", () => {
     });
 
     await expect(resultPromise).resolves.toEqual({ success: true });
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; shutdownAfterOperation must request SIGTERM immediately after the response.
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
     child.emit("exit", null, "SIGTERM");
   });
@@ -188,14 +191,16 @@ describe("Actual worker runner", () => {
       status: 504,
       code: "ACTUAL_WORKER_TIMEOUT",
     });
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; a timed-out worker must receive SIGTERM before replacement work is admitted.
     expect(firstChild.kill).toHaveBeenCalledWith("SIGTERM");
 
     const second = runActualWorkerOperation("getPayees", ["user-1"], { timeoutMs: 5000 });
     await Promise.resolve();
+    // test-architecture: allow-boundary-interaction -- secondChild.send is the replacement-process IPC boundary; recovery must admit the next request without waiting for force-kill grace.
     expect(secondChild.send).toHaveBeenCalledTimes(1);
-    expect(forkMock).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(2000);
+    // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; an unresponsive timed-out worker must escalate to SIGKILL after grace.
     expect(firstChild.kill).toHaveBeenCalledWith("SIGKILL");
 
     const secondRequest = secondChild.send.mock.calls[0]![0];

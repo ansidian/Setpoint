@@ -1,6 +1,22 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import CommandPalette from "./CommandPalette";
+import type { CommandPaletteItem } from "./CommandPalette";
+
+const noop = () => {};
+
+function PaletteHarness() {
+  const [open, setOpen] = useState(true);
+  const [action, setAction] = useState<CommandPaletteItem | null>(null);
+  return (
+    <>
+      <CommandPalette open={open} accent="#cba6da" onClose={() => setOpen(false)} onAction={setAction} />
+      <output data-testid="palette-state">{open ? "open" : "closed"}</output>
+      {action ? <output data-testid="palette-action">{[action.id, action.kind, action.payload].filter(Boolean).join("|")}</output> : null}
+    </>
+  );
+}
 
 describe("CommandPalette", () => {
   afterEach(() => {
@@ -12,8 +28,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -28,8 +44,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -38,27 +54,15 @@ describe("CommandPalette", () => {
   });
 
   it("routes Bills and Deadlines to calendar destinations", () => {
-    const onAction = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     fireEvent.click(screen.getByText("Go to Deadlines"));
-    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: "calendar-view",
-      payload: "deadlines",
-    }));
+    expect(screen.getByTestId("palette-action").textContent).toBe("deadlines|calendar-view|deadlines");
 
+    cleanup();
+    render(<PaletteHarness />);
     fireEvent.click(screen.getByText("Go to Bills"));
-    expect(onAction).toHaveBeenLastCalledWith(expect.objectContaining({
-      kind: "calendar-view",
-      payload: "bills",
-    }));
+    expect(screen.getByTestId("palette-action").textContent).toBe("bills|calendar-view|bills");
   });
 
 
@@ -67,8 +71,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -82,8 +86,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -94,23 +98,12 @@ describe("CommandPalette", () => {
   });
 
   it("offers analytics with the A key hint", () => {
-    const onAction = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     fireEvent.click(screen.getByText("Analytics"));
 
     expect(screen.getByText("A").tagName).toBe("KBD");
-    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
-      id: "analytics",
-      kind: "analytics",
-    }));
+    expect(screen.getByTestId("palette-action").textContent).toBe("analytics|analytics");
   });
 
   it("filters the list to matching commands as you type the query", () => {
@@ -118,8 +111,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -142,8 +135,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -156,70 +149,35 @@ describe("CommandPalette", () => {
   });
 
   it("runs the second item when ArrowDown then Enter is pressed in the input", () => {
-    const onAction = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={onClose}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     const input = screen.getByPlaceholderText("Jump to anything…");
     // Cursor starts at the first item; one ArrowDown moves it to the second.
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(onAction).toHaveBeenCalledTimes(1);
-    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
-      id: "go-inbox",
-      kind: "tab",
-      payload: "inbox",
-    }));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("palette-action").textContent).toBe("go-inbox|tab|inbox");
+    expect(screen.getByTestId("palette-state").textContent).toBe("closed");
   });
 
   it("runs the first item when Enter is pressed without moving the cursor", () => {
-    const onAction = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     fireEvent.keyDown(screen.getByPlaceholderText("Jump to anything…"), {
       key: "Enter",
     });
 
-    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
-      id: "go-dashboard",
-    }));
+    expect(screen.getByTestId("palette-action").textContent).toBe("go-dashboard|tab|dashboard");
   });
 
   it("Enter after typing runs the top filtered match, not the original first item", () => {
-    const onAction = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     const input = screen.getByPlaceholderText("Jump to anything…");
     fireEvent.change(input, { target: { value: "analytics" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
-      id: "analytics",
-      kind: "analytics",
-    }));
+    expect(screen.getByTestId("palette-action").textContent).toBe("analytics|analytics");
   });
 
   it("shows No matches. when the query matches nothing", () => {
@@ -227,8 +185,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -241,51 +199,26 @@ describe("CommandPalette", () => {
   });
 
   it("Enter is a no-op when the query matches nothing", () => {
-    const onAction = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={onClose}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     const input = screen.getByPlaceholderText("Jump to anything…");
     fireEvent.change(input, { target: { value: "zzzznotacommand" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(onAction).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("palette-action")).toBeNull();
+    expect(screen.getByTestId("palette-state").textContent).toBe("open");
   });
 
   it("calls onClose when Escape is pressed", () => {
-    const onClose = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={onClose}
-        onAction={vi.fn()}
-      />,
-    );
+    render(<PaletteHarness />);
 
     fireEvent.keyDown(window, { key: "Escape" });
 
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("palette-state").textContent).toBe("closed");
   });
 
   it("syncs the cursor on mouseEnter so Enter runs the hovered item", () => {
-    const onAction = vi.fn();
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={onAction}
-      />,
-    );
+    render(<PaletteHarness />);
 
     // Hover a command far from the default first-item cursor.
     fireEvent.mouseEnter(screen.getByText("Go to Bills"));
@@ -293,11 +226,7 @@ describe("CommandPalette", () => {
       key: "Enter",
     });
 
-    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
-      id: "bills",
-      kind: "calendar-view",
-      payload: "bills",
-    }));
+    expect(screen.getByTestId("palette-action").textContent).toBe("bills|calendar-view|bills");
   });
 
   it("input has role combobox with aria-activedescendant pointing at the first option id on open", () => {
@@ -305,8 +234,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -325,8 +254,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -340,8 +269,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -361,8 +290,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -378,8 +307,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -399,8 +328,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 
@@ -428,8 +357,8 @@ describe("CommandPalette", () => {
       <CommandPalette
         open
         accent="#cba6da"
-        onClose={vi.fn()}
-        onAction={vi.fn()}
+        onClose={noop}
+        onAction={noop}
       />,
     );
 

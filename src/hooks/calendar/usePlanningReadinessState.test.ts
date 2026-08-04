@@ -1,4 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
+import { useCallback, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import usePlanningReadinessState, { type PlanningReadinessStateOptions } from "./usePlanningReadinessState";
 
@@ -119,14 +120,23 @@ describe("usePlanningReadinessState", () => {
   });
 
   it("defers the ensure pass while the event editor is open", async () => {
+    const neverSettles = new Promise<unknown>(() => {});
     const props = planningProps({
-      eventsEnsureRange: vi.fn().mockResolvedValue([]),
       eventEditorIsEditorOpen: true,
+      deadlineOverlayVisible: false,
     });
-    renderHook(() => usePlanningReadinessState(props));
+    const { result } = renderHook(() => {
+      const [ensureStarted, setEnsureStarted] = useState(false);
+      const eventsEnsureRange = useCallback(() => {
+        setEnsureStarted(true);
+        return neverSettles;
+      }, []);
+      usePlanningReadinessState({ ...props, eventsEnsureRange });
+      return ensureStarted;
+    });
 
-    expect(props.eventsEnsureRange).not.toHaveBeenCalled();
+    expect(result.current).toBe(false);
     await advance(260);
-    expect(props.eventsEnsureRange).toHaveBeenCalledTimes(1);
+    expect(result.current).toBe(true);
   });
 });

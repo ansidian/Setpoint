@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { consumeAnthropicStream } from "./anthropic-stream.ts";
 
 type SseEntry = readonly [name: string, data: Record<string, unknown>];
@@ -15,7 +15,7 @@ async function* chunks(strings: string[]): AsyncGenerator<Uint8Array> {
 
 describe("consumeAnthropicStream", () => {
   it("assembles streamed text and reports deltas", async () => {
-    const onTextDelta = vi.fn();
+    const textDeltas: string[] = [];
     const stream = chunks(sse([
       ["message_start", { type: "message_start", message: { model: "claude-sonnet-4-6", usage: { input_tokens: 10 } } }],
       ["content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }],
@@ -26,14 +26,13 @@ describe("consumeAnthropicStream", () => {
       ["message_stop", { type: "message_stop" }],
     ]));
 
-    const turn = await consumeAnthropicStream(stream, { onTextDelta });
+    const turn = await consumeAnthropicStream(stream, { onTextDelta: (delta) => textDeltas.push(delta) });
 
     expect(turn.content).toEqual([{ type: "text", text: "Two things need you." }]);
     expect(turn.stopReason).toBe("end_turn");
     expect(turn.model).toBe("claude-sonnet-4-6");
     expect(turn.usage).toEqual({ input_tokens: 10, output_tokens: 12 });
-    expect(onTextDelta).toHaveBeenCalledWith("Two things ");
-    expect(onTextDelta).toHaveBeenCalledWith("need you.");
+    expect(textDeltas).toEqual(["Two things ", "need you."]);
   });
 
   it("assembles tool_use blocks from partial json deltas", async () => {

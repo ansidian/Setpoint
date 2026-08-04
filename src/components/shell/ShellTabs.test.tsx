@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { ShellTabs } from "./ShellTabs";
+import type { DashboardTab } from "../dashboard/dashboardShellModel";
 
-function renderTabs(overrides = {}) {
-  const onTab = vi.fn();
-  const utils = render(
-    <ShellTabs tab="dashboard" onTab={onTab} inboxUnreadSignalCount={0} {...overrides} />,
-  );
-  return { onTab, ...utils };
+function TabsHarness({ initialTab = "dashboard" }: { initialTab?: DashboardTab }) {
+  const [tab, setTab] = useState<DashboardTab>(initialTab);
+  return <ShellTabs tab={tab} onTab={setTab} inboxUnreadSignalCount={0} />;
+}
+
+function renderTabs({ tab = "dashboard" }: { tab?: DashboardTab } = {}) {
+  return render(<TabsHarness initialTab={tab} />);
 }
 
 describe("ShellTabs WAI-ARIA tabs pattern", () => {
@@ -48,35 +51,35 @@ describe("ShellTabs WAI-ARIA tabs pattern", () => {
   });
 
   it("ArrowRight moves focus and activates the next tab (activation-follows-focus)", () => {
-    const { onTab } = renderTabs({ tab: "dashboard" });
+    renderTabs({ tab: "dashboard" });
 
     const dashboardTab = screen.getByRole("tab", { name: /Dashboard/ });
     dashboardTab.focus();
     fireEvent.keyDown(dashboardTab, { key: "ArrowRight" });
 
-    expect(onTab).toHaveBeenCalledWith("inbox");
+    expect(screen.getByRole("tab", { name: /Inbox/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("ArrowLeft from the first tab wraps to the last tab", () => {
-    const { onTab } = renderTabs({ tab: "dashboard" });
+    renderTabs({ tab: "dashboard" });
 
     const dashboardTab = screen.getByRole("tab", { name: /Dashboard/ });
     dashboardTab.focus();
     fireEvent.keyDown(dashboardTab, { key: "ArrowLeft" });
 
-    expect(onTab).toHaveBeenCalledWith("news");
+    expect(screen.getByRole("tab", { name: /News/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("Home and End jump to the first and last tab", () => {
-    const { onTab } = renderTabs({ tab: "calendar" });
+    renderTabs({ tab: "calendar" });
 
     const calendarTab = screen.getByRole("tab", { name: /Calendar/ });
     calendarTab.focus();
     fireEvent.keyDown(calendarTab, { key: "End" });
-    expect(onTab).toHaveBeenLastCalledWith("news");
+    expect(screen.getByRole("tab", { name: /News/ }).getAttribute("aria-selected")).toBe("true");
 
-    fireEvent.keyDown(calendarTab, { key: "Home" });
-    expect(onTab).toHaveBeenLastCalledWith("dashboard");
+    fireEvent.keyDown(screen.getByRole("tab", { name: /News/ }), { key: "Home" });
+    expect(screen.getByRole("tab", { name: /Dashboard/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("moves DOM focus to the newly-activated tab button", () => {

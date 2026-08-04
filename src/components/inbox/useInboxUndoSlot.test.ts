@@ -19,7 +19,8 @@ afterEach(() => {
 
 describe("useInboxUndoSlot", () => {
   it("dismisses a settled toast when its keep-alive view is hidden", async () => {
-    const commit = vi.fn().mockResolvedValue({});
+    let commitCount = 0;
+    const commit = async () => { commitCount += 1; };
 
     function Harness() {
       const controller = useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() });
@@ -61,12 +62,13 @@ describe("useInboxUndoSlot", () => {
     });
     rerender(visibleTree);
 
-    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commitCount).toBe(1);
     expect(screen.queryByText("Email moved to trash")).toBeNull();
   });
 
   it("surfaces a ready slot then auto-commits once the undo window elapses", async () => {
-    const commit = vi.fn().mockResolvedValue({});
+    let commitCount = 0;
+    const commit = async () => { commitCount += 1; };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));
 
     act(() => {
@@ -74,19 +76,20 @@ describe("useInboxUndoSlot", () => {
     });
 
     expect(result.current.undo).toMatchObject({ status: "ready", message: "Email moved to trash" });
-    expect(commit).not.toHaveBeenCalled();
+    expect(commitCount).toBe(0);
 
     await act(async () => {
       vi.advanceTimersByTime(INBOX_UNDO_WINDOW_MS);
       await Promise.resolve();
     });
 
-    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commitCount).toBe(1);
     expect(result.current.undo).toBeNull();
   });
 
   it("commits the pending slot at most once across timer fire and explicit finalize", async () => {
-    const commit = vi.fn().mockResolvedValue({});
+    let commitCount = 0;
+    const commit = async () => { commitCount += 1; };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));
 
     act(() => {
@@ -102,12 +105,14 @@ describe("useInboxUndoSlot", () => {
       await Promise.resolve();
     });
 
-    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commitCount).toBe(1);
   });
 
   it("finalizes the previous slot before installing a replacement", async () => {
-    const firstCommit = vi.fn().mockResolvedValue({});
-    const secondCommit = vi.fn().mockResolvedValue({});
+    let firstCommitCount = 0;
+    let secondCommitCount = 0;
+    const firstCommit = async () => { firstCommitCount += 1; };
+    const secondCommit = async () => { secondCommitCount += 1; };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));
 
     act(() => {
@@ -118,14 +123,16 @@ describe("useInboxUndoSlot", () => {
       await Promise.resolve();
     });
 
-    expect(firstCommit).toHaveBeenCalledTimes(1);
-    expect(secondCommit).not.toHaveBeenCalled();
+    expect(firstCommitCount).toBe(1);
+    expect(secondCommitCount).toBe(0);
     expect(result.current.undo).toMatchObject({ status: "ready", message: "Second" });
   });
 
   it("runs the undo callback and clears the slot without committing", async () => {
-    const commit = vi.fn().mockResolvedValue({});
-    const undo = vi.fn().mockResolvedValue(undefined);
+    let commitCount = 0;
+    let undoCount = 0;
+    const commit = async () => { commitCount += 1; };
+    const undo = async () => { undoCount += 1; };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));
 
     act(() => {
@@ -136,7 +143,7 @@ describe("useInboxUndoSlot", () => {
       await result.current.onUndo();
     });
 
-    expect(undo).toHaveBeenCalledTimes(1);
+    expect(undoCount).toBe(1);
     expect(result.current.undo).toBeNull();
 
     // The expired timer must not commit a slot the user already undid.
@@ -144,12 +151,13 @@ describe("useInboxUndoSlot", () => {
       vi.advanceTimersByTime(INBOX_UNDO_WINDOW_MS);
       await Promise.resolve();
     });
-    expect(commit).not.toHaveBeenCalled();
+    expect(commitCount).toBe(0);
   });
 
   it("ignores a second undo while the first is in flight", async () => {
     let resolveUndo: ((value?: unknown) => void) | undefined;
-    const undo = vi.fn(() => new Promise((resolve) => { resolveUndo = resolve; }));
+    let undoCount = 0;
+    const undo = () => { undoCount += 1; return new Promise((resolve) => { resolveUndo = resolve; }); };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));
 
     act(() => {
@@ -165,7 +173,7 @@ describe("useInboxUndoSlot", () => {
     await act(async () => {
       await result.current.onUndo();
     });
-    expect(undo).toHaveBeenCalledTimes(1);
+    expect(undoCount).toBe(1);
 
     await act(async () => {
       resolveUndo?.();
@@ -175,8 +183,9 @@ describe("useInboxUndoSlot", () => {
   });
 
   it("shows an error toast and refreshes when undo rejects", async () => {
-    const onActiveSnapshotRefresh = vi.fn();
-    const undo = vi.fn().mockRejectedValue(new Error("Undo exploded"));
+    let refreshCount = 0;
+    const onActiveSnapshotRefresh = () => { refreshCount += 1; };
+    const undo = async () => { throw new Error("Undo exploded"); };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh }));
 
     act(() => {
@@ -187,7 +196,7 @@ describe("useInboxUndoSlot", () => {
     });
 
     expect(result.current.undo).toMatchObject({ status: "error", error: "Undo exploded" });
-    expect(onActiveSnapshotRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
 
     await act(async () => {
       vi.advanceTimersByTime(ERROR_TOAST_MS);
@@ -196,8 +205,10 @@ describe("useInboxUndoSlot", () => {
   });
 
   it("shows an error toast and refreshes when the auto-commit rejects", async () => {
-    const onActiveSnapshotRefresh = vi.fn();
-    const commit = vi.fn().mockRejectedValue(new Error("Commit failed"));
+    let refreshCount = 0;
+    let commitCount = 0;
+    const onActiveSnapshotRefresh = () => { refreshCount += 1; };
+    const commit = async () => { commitCount += 1; throw new Error("Commit failed"); };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh }));
 
     act(() => {
@@ -209,14 +220,16 @@ describe("useInboxUndoSlot", () => {
       await Promise.resolve();
     });
 
-    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commitCount).toBe(1);
     expect(result.current.undo).toMatchObject({ status: "error", error: "Commit failed" });
-    expect(onActiveSnapshotRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
   });
 
   it("uses the keepalive exit commit when the page exits before the window closes", () => {
-    const commit = vi.fn().mockResolvedValue({});
-    const commitOnExit = vi.fn();
+    let commitCount = 0;
+    let exitCommitCount = 0;
+    const commit = async () => { commitCount += 1; };
+    const commitOnExit = () => { exitCommitCount += 1; };
     const { result } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh: vi.fn() }));
 
     act(() => {
@@ -232,13 +245,15 @@ describe("useInboxUndoSlot", () => {
       window.dispatchEvent(new Event("pagehide"));
     });
 
-    expect(commitOnExit).toHaveBeenCalledTimes(1);
-    expect(commit).not.toHaveBeenCalled();
+    expect(exitCommitCount).toBe(1);
+    expect(commitCount).toBe(0);
   });
 
   it("settles a pending commit on unmount without reporting errors", async () => {
-    const onActiveSnapshotRefresh = vi.fn();
-    const commit = vi.fn().mockRejectedValue(new Error("unmount commit failed"));
+    let refreshCount = 0;
+    let commitCount = 0;
+    const onActiveSnapshotRefresh = () => { refreshCount += 1; };
+    const commit = async () => { commitCount += 1; throw new Error("unmount commit failed"); };
     const { result, unmount } = renderHook(() => useInboxUndoSlot({ onActiveSnapshotRefresh }));
 
     act(() => {
@@ -251,8 +266,8 @@ describe("useInboxUndoSlot", () => {
       await Promise.resolve();
     });
 
-    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commitCount).toBe(1);
     // Unmount settle silences error reporting and snapshot refresh.
-    expect(onActiveSnapshotRefresh).not.toHaveBeenCalled();
+    expect(refreshCount).toBe(0);
   });
 });

@@ -3,12 +3,14 @@ import * as snapshotService from "../../snapshots/snapshot-service.ts";
 import { errorMessage, errorStatus } from "../../snapshots/snapshot-types.ts";
 import { timeRoute } from "../../timing.ts";
 
-const router = Router();
 const ownerUserId = (): string => process.env.EA_USER_ID!;
+
+export function createSnapshotRouter(service: typeof snapshotService = snapshotService) {
+const router = Router();
 
 router.get("/snapshot/history", timeRoute("/api/briefing/snapshot/history"), async (_req, res) => {
   try {
-    res.json(await snapshotService.getSnapshotHistory(ownerUserId()));
+    res.json(await service.getSnapshotHistory(ownerUserId()));
   } catch (err) {
     console.error("Error fetching snapshot history:", err);
     const status = errorStatus(err);
@@ -18,7 +20,7 @@ router.get("/snapshot/history", timeRoute("/api/briefing/snapshot/history"), asy
 
 router.get("/snapshot/active", timeRoute("/api/briefing/snapshot/active"), async (_req, res) => {
   try {
-    res.json(await snapshotService.getActiveSnapshotView(ownerUserId()));
+    res.json(await service.getActiveSnapshotView(ownerUserId()));
   } catch (err) {
     console.error("Error fetching active snapshot:", err);
     res.status(errorStatus(err) || 500).json({ message: "Failed to fetch active snapshot" });
@@ -27,7 +29,7 @@ router.get("/snapshot/active", timeRoute("/api/briefing/snapshot/active"), async
 
 router.post("/snapshot/sync", timeRoute("/api/briefing/snapshot/sync"), async (_req, res) => {
   try {
-    res.json(await snapshotService.syncActiveSnapshot(ownerUserId()));
+    res.json(await service.syncActiveSnapshot(ownerUserId()));
   } catch (err) {
     console.error("Error syncing active snapshot:", err);
     res.status(errorStatus(err) || 500).json({ message: "Failed to sync active snapshot" });
@@ -36,7 +38,7 @@ router.post("/snapshot/sync", timeRoute("/api/briefing/snapshot/sync"), async (_
 
 router.get("/snapshot/:id", timeRoute("/api/briefing/snapshot/:id"), async (req, res) => {
   try {
-    res.json(await snapshotService.getSnapshotViewById(ownerUserId(), Number(req.params.id)));
+    res.json(await service.getSnapshotViewById(ownerUserId(), Number(req.params.id)));
   } catch (err) {
     console.error("Error fetching snapshot detail:", err);
     const status = errorStatus(err);
@@ -47,7 +49,7 @@ router.get("/snapshot/:id", timeRoute("/api/briefing/snapshot/:id"), async (req,
 router.patch("/snapshot/items/:itemId/lane", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);
-    res.json(await snapshotService.moveSnapshotItemLane(ownerUserId(), itemId, req.body?.lane));
+    res.json(await service.moveSnapshotItemLane(ownerUserId(), itemId, req.body?.lane));
   } catch (err) {
     console.error("Error moving snapshot item lane:", err);
     const status = errorStatus(err);
@@ -58,7 +60,7 @@ router.patch("/snapshot/items/:itemId/lane", async (req, res) => {
 router.post("/snapshot/items/:itemId/dismiss", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);
-    res.json(await snapshotService.dismissSnapshotItemForToday(ownerUserId(), itemId));
+    res.json(await service.dismissSnapshotItemForToday(ownerUserId(), itemId));
   } catch (err) {
     console.error("Error dismissing snapshot item:", err);
     const status = errorStatus(err);
@@ -69,7 +71,7 @@ router.post("/snapshot/items/:itemId/dismiss", async (req, res) => {
 router.post("/snapshot/items/:itemId/restore", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);
-    res.json(await snapshotService.restoreSnapshotItemForToday(ownerUserId(), itemId));
+    res.json(await service.restoreSnapshotItemForToday(ownerUserId(), itemId));
   } catch (err) {
     console.error("Error restoring snapshot item:", err);
     const status = errorStatus(err);
@@ -80,7 +82,7 @@ router.post("/snapshot/items/:itemId/restore", async (req, res) => {
 router.post("/snapshot/items/:itemId/handled", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);
-    res.json(await snapshotService.markSnapshotItemHandled(ownerUserId(), itemId));
+    res.json(await service.markSnapshotItemHandled(ownerUserId(), itemId));
   } catch (err) {
     console.error("Error marking snapshot item handled:", err);
     const status = errorStatus(err);
@@ -91,7 +93,7 @@ router.post("/snapshot/items/:itemId/handled", async (req, res) => {
 router.post("/snapshot/items/:itemId/reopen", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);
-    res.json(await snapshotService.reopenSnapshotItem(ownerUserId(), itemId));
+    res.json(await service.reopenSnapshotItem(ownerUserId(), itemId));
   } catch (err) {
     console.error("Error reopening snapshot item:", err);
     const status = errorStatus(err);
@@ -99,4 +101,7 @@ router.post("/snapshot/items/:itemId/reopen", async (req, res) => {
   }
 });
 
-export default router;
+return router;
+}
+
+export default createSnapshotRouter();

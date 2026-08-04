@@ -49,6 +49,7 @@ const webAuthnMocks = vi.hoisted(() => ({
   verifyRegistrationResponse: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Binds the real auth router and stores to a migrated ephemeral libSQL database so session, cookie, and security-transition state is observed durably.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement) => currentDb().execute(statement),

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import type { Response } from "express";
-import type { Value } from "@libsql/client";
+import type { RequestHandler, Response } from "express";
+import type { Client, Value } from "@libsql/client";
 import db from "../db/connection.ts";
 import { requireCookieSession } from "../middleware/auth.ts";
 import { buildHnFeedUrl, buildNewsPagePayload, sanitizeMutedTerms } from "../news/news-model.ts";
@@ -10,33 +10,44 @@ import { requestImmediateNewsSweep } from "../news/news-poller.ts";
 import type { NewsCatalogTopic } from "../../shared/types/news.ts";
 import type { NewsItemRow, NewsSourceRow, NewsTopicRow } from "../news/news-model.ts";
 
-const router = Router();
-router.use(requireCookieSession);
-
 type ErrorResponse = { message: string };
 type NewsId = string | number;
 
 const userId = (): string => process.env.EA_USER_ID!;
 
+export function createNewsRouter({
+  dbClient = db,
+  authenticate = requireCookieSession,
+  previewFeed = previewNewsFeed,
+  requestSweep = requestImmediateNewsSweep,
+}: {
+  dbClient?: Pick<Client, "execute" | "batch">;
+  authenticate?: RequestHandler;
+  previewFeed?: typeof previewNewsFeed;
+  requestSweep?: typeof requestImmediateNewsSweep;
+} = {}) {
+const router = Router();
+router.use(authenticate);
+
 async function loadPageRows() {
-  const topics = await db.execute({
+  const topics = await dbClient.execute({
     sql: "SELECT * FROM ea_news_topics WHERE user_id = ? ORDER BY position, id",
     args: [userId()],
   });
-  const sources = await db.execute({
+  const sources = await dbClient.execute({
     sql: `SELECT s.* FROM ea_news_sources s
           JOIN ea_news_topics t ON t.id = s.topic_id
           WHERE t.user_id = ? ORDER BY s.id`,
     args: [userId()],
   });
-  const items = await db.execute({
+  const items = await dbClient.execute({
     sql: `SELECT i.* FROM ea_news_items i
           JOIN ea_news_sources s ON s.id = i.source_id
           JOIN ea_news_topics t ON t.id = s.topic_id
           WHERE t.user_id = ?`,
     args: [userId()],
   });
-  const settings = await db.execute({
+  const settings = await dbClient.execute({
     sql: "SELECT news_last_seen_at FROM ea_settings WHERE user_id = ?",
     args: [userId()],
   });
@@ -51,7 +62,7 @@ async function loadPageRows() {
 }
 
 async function requireOwnedTopic(topicId: NewsId, res: Response<unknown | ErrorResponse>): Promise<boolean> {
-  const topic = await db.execute({
+  const topic = await dbClient.execute({
     sql: "SELECT id FROM ea_news_topics WHERE id = ? AND user_id = ?",
     args: [topicId, userId()],
   });
@@ -79,11 +90,11 @@ router.post("/topics", async (req, res) => {
   const name = String(req.body?.name || "").trim();
   if (!name) return res.status(400).json({ message: "Topic name is required" });
   try {
-    const max = await db.execute({
+    const max = await dbClient.execute({
       sql: "SELECT COALESCE(MAX(position), -1) AS p FROM ea_news_topics WHERE user_id = ?",
       args: [userId()],
     });
-    const insert = await db.execute({
+    const insert = await dbClient.execute({
       sql: "INSERT INTO ea_news_topics (user_id, name, position) VALUES (?, ?, ?)",
       args: [userId(), name, Number(max.rows[0]!.p) + 1],
     });
@@ -95,7 +106,7 @@ router.post("/topics", async (req, res) => {
 });
 
 async function insertCatalogTopic(bundle: NewsCatalogTopic, position: number): Promise<void> {
-  const insert = await db.execute({
+  const insert = await dbClient.execute({
     sql: "INSERT INTO ea_news_topics (user_id, name, position) VALUES (?, ?, ?)",
     args: [userId(), bundle.name, position],
   });
@@ -104,7 +115,7 @@ async function insertCatalogTopic(bundle: NewsCatalogTopic, position: number): P
     const feedUrl = source.kind === "hn"
       ? buildHnFeedUrl({ query: source.hnQuery, minPoints: source.minPoints })
       : source.feedUrl;
-    await db.execute({
+    await dbClient.execute({
       sql: `INSERT INTO ea_news_sources (topic_id, kind, title, feed_url, site_url, hn_query, min_points)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
@@ -129,7 +140,7 @@ router.post("/topics/import-starter", async (req, res) => {
     .filter((bundle): bundle is NonNullable<typeof bundle> => Boolean(bundle));
   if (!bundles.length) return res.status(400).json({ message: "No catalog topics selected" });
   try {
-    const max = await db.execute({
+    const max = await dbClient.execute({
       sql: "SELECT COALESCE(MAX(position), -1) AS p FROM ea_news_topics WHERE user_id = ?",
       args: [userId()],
     });
@@ -138,7 +149,7 @@ router.post("/topics/import-starter", async (req, res) => {
       await insertCatalogTopic(bundle, position);
       position += 1;
     }
-    requestImmediateNewsSweep().catch(() => {});
+    requestSweep().catch(() => {});
     res.json({ imported: bundles.map((bundle) => bundle.name) });
   } catch (err) {
     console.error("Error importing starter topics:", err);
@@ -152,7 +163,7 @@ router.post("/topics/reorder", async (req, res) => {
     : [];
   if (!ids.length) return res.status(400).json({ message: "ids required" });
   try {
-    await db.batch(ids.map((id, index) => ({
+    await dbClient.batch(ids.map((id, index) => ({
       sql: "UPDATE ea_news_topics SET position = ? WHERE id = ? AND user_id = ?",
       args: [index, id, userId()],
     })));
@@ -182,7 +193,7 @@ router.patch("/topics/:id", async (req, res) => {
   if (!updates.length) return res.status(400).json({ message: "Nothing to update" });
   try {
     if (!(await requireOwnedTopic(req.params.id, res))) return;
-    await db.execute({
+    await dbClient.execute({
       sql: `UPDATE ea_news_topics SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
       args: [...args, req.params.id, userId()],
     });
@@ -196,7 +207,7 @@ router.patch("/topics/:id", async (req, res) => {
 router.delete("/topics/:id", async (req, res) => {
   try {
     if (!(await requireOwnedTopic(req.params.id, res))) return;
-    await db.batch([
+    await dbClient.batch([
       {
         sql: `DELETE FROM ea_news_items WHERE source_id IN
               (SELECT id FROM ea_news_sources WHERE topic_id = ?)`,
@@ -216,7 +227,7 @@ router.post("/sources/preview", async (req, res) => {
   const url = String(req.body?.url || "").trim();
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ message: "A full http(s) URL is required" });
   try {
-    const preview = await previewNewsFeed(url);
+    const preview = await previewFeed(url);
     if (!preview) {
       return res.status(422).json({
         message: "Not a feed, and no feed advertised at that URL — try the site's /feed path or openrss.org.",
@@ -242,13 +253,13 @@ router.post("/sources", async (req, res) => {
     const resolvedFeedUrl = kind === "hn"
       ? buildHnFeedUrl({ query: hnQuery ?? "", minPoints: minPoints ?? 50 })
       : feedUrl;
-    const insert = await db.execute({
+    const insert = await dbClient.execute({
       sql: `INSERT INTO ea_news_sources (topic_id, kind, title, feed_url, site_url, hn_query, min_points)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [topicId, kind, String(title).trim(), resolvedFeedUrl, siteUrl ?? null,
         kind === "hn" ? (hnQuery ?? "") : null, kind === "hn" ? (minPoints ?? 50) : null],
     });
-    requestImmediateNewsSweep().catch(() => {});
+    requestSweep().catch(() => {});
     res.json({
       source: {
         id: Number(insert.lastInsertRowid), topicId, kind,
@@ -278,7 +289,7 @@ router.patch("/sources/:id", async (req, res) => {
   }
   if (!updates.length) return res.status(400).json({ message: "Nothing to update" });
   try {
-    const result = await db.execute({
+    const result = await dbClient.execute({
       sql: `UPDATE ea_news_sources SET ${updates.join(", ")}
             WHERE id = ? AND topic_id IN (SELECT id FROM ea_news_topics WHERE user_id = ?)`,
       args: [...args, req.params.id, userId()],
@@ -293,13 +304,13 @@ router.patch("/sources/:id", async (req, res) => {
 
 router.delete("/sources/:id", async (req, res) => {
   try {
-    const owned = await db.execute({
+    const owned = await dbClient.execute({
       sql: `SELECT s.id FROM ea_news_sources s JOIN ea_news_topics t ON t.id = s.topic_id
             WHERE s.id = ? AND t.user_id = ?`,
       args: [req.params.id, userId()],
     });
     if (!owned.rows.length) return res.status(404).json({ message: "Source not found" });
-    await db.batch([
+    await dbClient.batch([
       { sql: "DELETE FROM ea_news_items WHERE source_id = ?", args: [req.params.id] },
       { sql: "DELETE FROM ea_news_sources WHERE id = ?", args: [req.params.id] },
     ]);
@@ -313,14 +324,14 @@ router.delete("/sources/:id", async (req, res) => {
 router.post("/seen", async (req, res) => {
   const at = req.body?.at || new Date().toISOString();
   try {
-    const existing = await db.execute({
+    const existing = await dbClient.execute({
       sql: "SELECT user_id FROM ea_settings WHERE user_id = ?",
       args: [userId()],
     });
     if (!existing.rows.length) {
-      await db.execute({ sql: "INSERT INTO ea_settings (user_id) VALUES (?)", args: [userId()] });
+      await dbClient.execute({ sql: "INSERT INTO ea_settings (user_id) VALUES (?)", args: [userId()] });
     }
-    await db.execute({
+    await dbClient.execute({
       sql: "UPDATE ea_settings SET news_last_seen_at = ? WHERE user_id = ?",
       args: [at, userId()],
     });
@@ -333,11 +344,14 @@ router.post("/seen", async (req, res) => {
 
 router.post("/refresh", async (_req, res) => {
   try {
-    res.json(await requestImmediateNewsSweep());
+    res.json(await requestSweep());
   } catch (err) {
     console.error("Error refreshing news:", err);
     res.status(500).json({ message: "Failed to refresh news" });
   }
 });
 
-export default router;
+return router;
+}
+
+export default createNewsRouter();

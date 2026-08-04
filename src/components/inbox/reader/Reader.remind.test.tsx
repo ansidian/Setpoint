@@ -1,24 +1,25 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Activity, useState } from "react";
 import Reader from "./Reader";
-import type { AddTaskPanelProps } from "../../todoist/add-task-panel/types";
 
-const panelProps = vi.hoisted(() => ({ current: null as AddTaskPanelProps | null }));
-vi.mock("../../todoist/AddTaskPanel", () => ({
-  default: (props: AddTaskPanelProps) => {
-    panelProps.current = props;
-    return <div data-testid="fake-task-panel">
-      <button onClick={() => props.onDirtyChange?.(true)}>Dirty task</button>
-      <button onClick={props.onClose}>Close task</button>
-      <button onClick={() => props.onTaskAdded?.({ id: "new-task", title: "Renew", due_date: "2026-08-01" })}>Save task</button>
-    </div>;
-  },
-}));
-vi.mock("./useEmailBody", () => ({ default: () => ({ loading: true, body: null, error: null, source: "loading" }) }));
-vi.mock("./useBillPayResolver", () => ({ default: () => ({ key: null, status: "idle", resolvedBill: null, mapping: null, actualStatus: null, error: null }) }));
+// test-architecture: allow-boundary-mock -- Reader, AddTaskPanel, body loading, and bill resolution run together while authenticated HTTP/provider responses are deterministic.
+vi.mock("../../../api", async () => {
+  const actual = await vi.importActual("../../../api");
+  return {
+    ...actual,
+    getEmailBody: vi.fn().mockResolvedValue({ body: "Loaded email body" }),
+    peekEmailBody: vi.fn(() => null),
+    resolveBillPaySeed: vi.fn().mockResolvedValue({ bill: null, mapping: null, actualStatus: null }),
+    getTodoistProjects: vi.fn().mockResolvedValue([]),
+    getTodoistLabels: vi.fn().mockResolvedValue([]),
+    listReminders: vi.fn().mockResolvedValue({ reminders: [] }),
+    createDeadline: vi.fn().mockResolvedValue({ id: "new-task", title: "Renew", due_date: "2126-08-03" }),
+    createReminder: vi.fn().mockResolvedValue({}),
+  };
+});
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); panelProps.current = null; });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function Harness({ mobile = false }: { mobile?: boolean }) {
   const [billOpen, setBillOpen] = useState(false);
@@ -34,9 +35,9 @@ describe("Inbox Remind me workspace", () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
     expect(screen.getByTestId("inbox-remind-workspace")).toBeTruthy();
-    expect(panelProps.current).toMatchObject({ host: "inline", initialInput: "Submit renewal", requireDue: true });
-    expect(panelProps.current?.initialDescription).toContain("Coverage expires.\n\nFrom: Agent <agent@example.test>");
-    expect(panelProps.current?.initialDescription).toContain("https://mail.google.com/mail/");
+    expect((screen.getByLabelText("Task title") as HTMLInputElement).value).toBe("Submit renewal");
+    expect((screen.getByLabelText("Task description") as HTMLTextAreaElement).value).toContain("Coverage expires.\n\nFrom: Agent <agent@example.test>");
+    expect((screen.getByLabelText("Task description") as HTMLTextAreaElement).value).toContain("https://mail.google.com/mail/");
   });
 
   it("toggles the desktop reminder rail closed and keeps its exit shell inert", () => {
@@ -53,46 +54,46 @@ describe("Inbox Remind me workspace", () => {
     expect(drawer.style.pointerEvents).toBe("none");
   });
 
-  it("opens AddTaskPanel with the floating host on mobile", () => {
+  it("opens AddTaskPanel with the floating host on mobile", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
     render(<Harness mobile />);
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(within(screen.getByTestId("inbox-mobile-actions-menu")).getByRole("button", { name: "Remind me" }));
-    expect(screen.getByTestId("fake-task-panel")).toBeTruthy();
-    expect(panelProps.current?.host).toBe("floating");
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(screen.getByLabelText("Task title")).toBeTruthy();
   });
 
-  it("delegates dirty Cancel confirmation to the editor while still guarding competing bill actions", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("delegates dirty Cancel confirmation to the editor while still guarding competing bill actions", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
-    expect(panelProps.current?.confirmDirtyCloseInline).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Dirty task" }));
-    fireEvent.click(screen.getByRole("button", { name: "Close task" }));
+    fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Changed renewal" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("true");
-    expect(confirm).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByLabelText("Task title")).toBeNull());
 
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
-    fireEvent.click(screen.getByRole("button", { name: "Dirty task" }));
+    await waitFor(() => expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("false"));
+    fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Changed again" } });
     fireEvent.click(screen.getByRole("button", { name: /pay bill/i }));
-    expect(screen.getByTestId("fake-task-panel")).toBeTruthy();
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Task title")).toBeTruthy();
+    expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("false");
   });
 
-  it("closes after success and announces without mutating email lifecycle", () => {
-    const onAction = vi.fn();
+  it("closes after success and announces without mutating email lifecycle", async () => {
     function SuccessHarness() {
       const [billOpen, setBillOpen] = useState(false);
-      return <Reader email={{ id: "mail-1", subject: "Renew", action: "Renew", deadline_at: "2126-08-03" }} accent="#cba6da" onAction={onAction} onClose={() => {}} showTriage={false} showDraft={false} billOpen={billOpen} setBillOpen={setBillOpen} />;
+      return <Reader email={{ id: "mail-1", subject: "Renew", action: "Renew", deadline_at: "2126-08-03" }} accent="#cba6da" onAction={() => {}} onClose={() => {}} showTriage={false} showDraft={false} billOpen={billOpen} setBillOpen={setBillOpen} />;
     }
     render(<SuccessHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save task" }));
-    expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("true");
-    expect(screen.getByRole("status").textContent).toBe("Reminder added");
-    expect(onAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    await waitFor(() => expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("true"));
+    expect(await screen.findByText("Reminder added")).toBeTruthy();
   });
 
-  it("dismisses the reminder toast when the inbox view is hidden", () => {
+  it("dismisses the reminder toast when the inbox view is hidden", async () => {
     const { rerender } = render(
       <Activity mode="visible">
         <Harness />
@@ -100,8 +101,8 @@ describe("Inbox Remind me workspace", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save task" }));
-    expect(screen.getByRole("status").textContent).toBe("Reminder added");
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    expect(await screen.findByText("Reminder added")).toBeTruthy();
 
     rerender(
       <Activity mode="hidden">

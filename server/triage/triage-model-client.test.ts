@@ -166,6 +166,7 @@ describe("triage model client", () => {
 
     await expect(client.classify({ tier: "cheap", email, reason: "" }))
       .rejects.toMatchObject({ status: 503 });
+    // test-architecture: allow-boundary-interaction -- Model fetch is the outbound AI-provider boundary; missing credentials must fail before any email content leaves the process.
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -218,6 +219,7 @@ describe("triage model client", () => {
 
     await client.classify({ tier: "cheap", email, reason: "no_preflight_match" });
 
+    // test-architecture: allow-boundary-interaction -- OpenAI fetch is outbound; an unsupported cache-field response permits exactly one compatibility retry without those fields.
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const firstBody = JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body));
     const retryBody = JSON.parse(String(fetchImpl.mock.calls[1]![1]!.body));

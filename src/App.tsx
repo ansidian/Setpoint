@@ -6,6 +6,14 @@ import { getOnboardingProgress } from "./lib/onboardingApi";
 import { getSetupStatus } from "./setupApi";
 import { isDemoMode } from "./demo/config.ts";
 import { resolveRouterBasename } from "./routerBase";
+import {
+  applyOnboardingStatusChange,
+  initialAppBootstrap,
+  isSettingsShortcut,
+  resolveAppRedirect,
+  type AppBootstrapState,
+  type AppRoutePath,
+} from "./appRouteModel";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
 import RecoverableErrorBoundary from "./components/layout/RecoverableErrorBoundary";
@@ -28,6 +36,11 @@ function AuthSpinner(): ReactElement {
 
 type SettingsShortcutProps = { enabled: boolean };
 
+function redirectElement(path: AppRoutePath, bootstrap: AppBootstrapState, content: ReactElement): ReactElement {
+  const destination = resolveAppRedirect(path, bootstrap);
+  return destination ? <Navigate to={destination} replace /> : content;
+}
+
 function SettingsShortcut({ enabled }: SettingsShortcutProps): null {
   const navigate = useNavigate();
 
@@ -35,8 +48,7 @@ function SettingsShortcut({ enabled }: SettingsShortcutProps): null {
     if (!enabled) return undefined;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return;
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key !== ",") return;
+      if (!isSettingsShortcut(event)) return;
 
       event.preventDefault();
       navigate("/settings");
@@ -51,9 +63,7 @@ function SettingsShortcut({ enabled }: SettingsShortcutProps): null {
 
 export default function App(): ReactElement {
   const demoMode = isDemoMode();
-  const [bootstrap, setBootstrap] = useState<{ claimed: boolean; authenticated: boolean; onboardingFinished: boolean } | null>(
-    demoMode ? { claimed: true, authenticated: true, onboardingFinished: true } : null,
-  );
+  const [bootstrap, setBootstrap] = useState<AppBootstrapState | null>(() => initialAppBootstrap(demoMode));
 
   useEffect(() => {
     if (demoMode) return undefined;
@@ -78,8 +88,7 @@ export default function App(): ReactElement {
   useEffect(() => {
     function handleOnboardingChanged(event: Event) {
       const finished = (event as CustomEvent<{ finished?: unknown }>).detail?.finished;
-      if (typeof finished !== "boolean") return;
-      setBootstrap((current) => current ? { ...current, onboardingFinished: finished } : current);
+      setBootstrap((current) => applyOnboardingStatusChange(current, finished));
     }
     window.addEventListener("ea-onboarding-changed", handleOnboardingChanged);
     return () => window.removeEventListener("ea-onboarding-changed", handleOnboardingChanged);
@@ -89,7 +98,7 @@ export default function App(): ReactElement {
     return <AuthSpinner />;
   }
 
-  const { claimed, authenticated, onboardingFinished } = bootstrap;
+  const { authenticated } = bootstrap;
 
   return (
     <ChunkLoadBoundary>
@@ -98,16 +107,16 @@ export default function App(): ReactElement {
         <SettingsShortcut enabled={authenticated === true} />
         <Routes>
           <Route path="/setup" element={
-            claimed ? <Navigate to={onboardingFinished ? "/" : "/onboarding"} replace /> : (
+            redirectElement("/setup", bootstrap, (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
                   <OwnerSetup onClaimed={() => setBootstrap({ claimed: true, authenticated: true, onboardingFinished: false })} />
                 </Suspense>
               </RecoverableErrorBoundary>
-            )
+            ))
           } />
           <Route path="/login" element={
-            !claimed ? <Navigate to="/setup" replace /> : authenticated ? <Navigate to={onboardingFinished ? "/" : "/onboarding"} replace /> : (
+            redirectElement("/login", bootstrap, (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
                   <Login onLogin={() => {
@@ -117,34 +126,34 @@ export default function App(): ReactElement {
                   }} />
                 </Suspense>
               </RecoverableErrorBoundary>
-            )
+            ))
           } />
           <Route path="/" element={
-            !claimed ? <Navigate to="/setup" replace /> : authenticated ? (
+            redirectElement("/", bootstrap, (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
                   <Dashboard />
                 </Suspense>
               </RecoverableErrorBoundary>
-            ) : <Navigate to="/login" replace />
+            ))
           } />
           <Route path="/settings" element={
-            !claimed ? <Navigate to="/setup" replace /> : authenticated ? (
+            redirectElement("/settings", bootstrap, (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
                   <SettingsRoute />
                 </Suspense>
               </RecoverableErrorBoundary>
-            ) : <Navigate to="/login" replace />
+            ))
           } />
           <Route path="/onboarding" element={
-            !claimed ? <Navigate to="/setup" replace /> : authenticated ? (
+            redirectElement("/onboarding", bootstrap, (
               <RecoverableErrorBoundary>
                 <Suspense fallback={<AuthSpinner />}>
                   <Onboarding />
                 </Suspense>
               </RecoverableErrorBoundary>
-            ) : <Navigate to="/login" replace />
+            ))
           } />
         </Routes>
       </BrowserRouter>

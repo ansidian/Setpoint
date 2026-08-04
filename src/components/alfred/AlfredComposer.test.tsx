@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import AlfredComposer from "./AlfredComposer";
 
 afterEach(cleanup);
@@ -13,33 +14,39 @@ const baseProps = {
   onSubmit: () => {},
 };
 
+function ComposerHarness() {
+  const [submitted, setSubmitted] = useState("none");
+  return <>
+    <AlfredComposer {...baseProps} onSubmit={setSubmitted} />
+    <output>{submitted}</output>
+  </>;
+}
+
 describe("AlfredComposer", () => {
   it("submits the trimmed draft on Enter and clears the input", () => {
-    const onSubmit = vi.fn();
-    render(<AlfredComposer {...baseProps} onSubmit={onSubmit} />);
+    render(<ComposerHarness />);
     const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…");
     fireEvent.change(input, { target: { value: "  any bills?  " } });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSubmit).toHaveBeenCalledWith("any bills?");
+    expect(screen.getByText("any bills?")).toBeTruthy();
     expect(input.value).toBe("");
   });
 
   it("does not submit an empty / whitespace-only draft on Enter", () => {
-    const onSubmit = vi.fn();
-    render(<AlfredComposer {...baseProps} onSubmit={onSubmit} />);
+    render(<ComposerHarness />);
     const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…");
     fireEvent.change(input, { target: { value: "   " } });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("none")).toBeTruthy();
+    expect(input.value).toBe("   ");
   });
 
   it("submits via the send button and clears the draft", () => {
-    const onSubmit = vi.fn();
-    render(<AlfredComposer {...baseProps} onSubmit={onSubmit} />);
+    render(<ComposerHarness />);
     const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…");
     fireEvent.change(input, { target: { value: "find it" } });
     fireEvent.click(screen.getByTitle("Send"));
-    expect(onSubmit).toHaveBeenCalledWith("find it");
+    expect(screen.getByText("find it")).toBeTruthy();
     expect(input.value).toBe("");
   });
 

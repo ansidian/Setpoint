@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
+  checkTestArchitectureApprovalsEmpty,
   checkTestArchitectureBaseline,
+  checkTestArchitectureBaselineEmpty,
   checkTestArchitectureBaselineGrowth,
   collectTestArchitectureMetrics,
   normalizeTestArchitecturePath,
@@ -24,6 +26,7 @@ describe("collectTestArchitectureMetrics", () => {
         "../multiline.ts": 1,
       },
       interactionAssertions: 2,
+      exemptionViolations: [],
     })
   })
 
@@ -39,6 +42,25 @@ describe("collectTestArchitectureMetrics", () => {
     expect(collectTestArchitectureMetrics(source)).toEqual({
       localModuleMocks: { "../unreasoned.ts": 1 },
       interactionAssertions: 0,
+      exemptionViolations: ["line 5 has an empty test-architecture boundary rationale"],
+    })
+  })
+
+  it("rejects exemptions that are not local to exactly one construct", () => {
+    const source = [
+      '// test-architecture: allow-boundary-mock -- external provider response is controlled here',
+      'const unrelated = true',
+      'vi.mock("../provider.ts", () => ({}))',
+      '// test-architecture: allow-boundary-interaction -- outbound provider writes share a blanket marker',
+      'expect(save).toHaveBeenCalled(); expect(load).toHaveBeenCalled()',
+    ].join("\n")
+    expect(collectTestArchitectureMetrics(source)).toEqual({
+      localModuleMocks: { "../provider.ts": 1 },
+      interactionAssertions: 0,
+      exemptionViolations: [
+        "line 1 has a test-architecture exemption that is not beside its exact construct",
+        "line 4 applies one test-architecture exemption to 2 constructs",
+      ],
     })
   })
 })
@@ -100,30 +122,53 @@ describe("checkTestArchitectureBaselineGrowth", () => {
         localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 2 } },
         interactionAssertions: { "src/legacy.test.ts": 3 },
       },
-      approvals: { localModuleMocks: {}, interactionAssertions: {} },
     })).toEqual([
-      "src/legacy.test.ts raises the interactionAssertions baseline from 2 to 3 without an exact owner approval and reason",
-      "src/legacy.test.ts raises the local mock baseline for ../provider.ts from 1 to 2 without an exact owner approval and reason",
+      "src/legacy.test.ts raises the interactionAssertions baseline from 2 to 3; the debt-elimination campaign is shrink-only",
+      "src/legacy.test.ts raises the local mock baseline for ../provider.ts from 1 to 2; the debt-elimination campaign is shrink-only",
     ])
   })
 
-  it("accepts only an exact, reasoned owner approval", () => {
+  it("does not let a former exact approval authorize growth", () => {
     const approval = {
       from: 1,
       to: 2,
       approvedBy: "repository owner",
       reason: "provider adapter became the reviewed module boundary",
     }
+    expect(checkTestArchitectureApprovalsEmpty({
+      localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": approval } },
+      interactionAssertions: {},
+    })).toEqual([
+      "test-architecture baseline approvals must remain empty; use construct-local boundary rationales",
+    ])
     expect(checkTestArchitectureBaselineGrowth({
       previousBaseline,
       baseline: {
         localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 2 } },
         interactionAssertions: { "src/legacy.test.ts": 2 },
       },
-      approvals: {
-        localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": approval } },
-        interactionAssertions: {},
-      },
+    })).toEqual([
+      "src/legacy.test.ts raises the local mock baseline for ../provider.ts from 1 to 2; the debt-elimination campaign is shrink-only",
+    ])
+  })
+
+  it("accepts an empty frozen approval ledger", () => {
+    expect(checkTestArchitectureApprovalsEmpty({
+      localModuleMocks: {},
+      interactionAssertions: {},
+    })).toEqual([])
+  })
+
+  it("permanently rejects aggregate baseline entries", () => {
+    expect(checkTestArchitectureBaselineEmpty({
+      localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 1 } },
+      interactionAssertions: {},
+    })).toEqual([
+      "test-architecture baseline must remain empty; aggregate grandfathered allowances are forbidden",
+    ])
+    expect(checkTestArchitectureBaselineEmpty({
+      localModuleMocks: {},
+      interactionAssertions: {},
     })).toEqual([])
   })
 })

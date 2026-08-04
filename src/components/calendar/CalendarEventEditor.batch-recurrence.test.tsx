@@ -15,7 +15,7 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     await ensureChrono();
   });
   it("uses repeat as a recurrence popover with real recurrence state", async () => {
-    const { refreshRange, upsertEvents } = renderEventEditor();
+    renderEventEditor();
     mockCreateCalendarEvent.mockResolvedValue({
       event: {
         id: "manual-series-1",
@@ -45,6 +45,7 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
 
     fireEvent.click(getActiveEventSaveButton());
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Structured recurrence is an outbound Calendar request contract that is not recoverable from the normalized saved event.
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
         accountId: "gmail-main",
         calendarId: "primary",
@@ -56,13 +57,13 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
           ends: { type: "never" },
         }),
       }));
-      expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
-      expect(upsertEvents).not.toHaveBeenCalled();
+      expect(screen.getByTestId("calendar-editor-observed-refreshes").textContent).toContain('["2026-04-20","2026-04-20"]');
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toBe("[]");
     });
   });
 
   it("renders batch review UI for batch NLP and saves via the batch API", async () => {
-    const { upsertEvents } = renderEventEditor();
+    renderEventEditor();
     mockCreateCalendarEventsBatch.mockResolvedValue({
       created: [
         {
@@ -115,21 +116,15 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Batch NLP must select the outbound batch endpoint exactly once; rendered saved state cannot reveal duplicate provider writes.
       expect(mockCreateCalendarEventsBatch).toHaveBeenCalledTimes(1);
-      expect(upsertEvents).toHaveBeenCalledWith([
-        expect.objectContaining({
-          id: "batch-1",
-        }),
-        expect.objectContaining({
-          id: "batch-2",
-        }),
-      ]);
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain("batch-1");
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain("batch-2");
     });
-    expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
   it("edits retained batch row schedules from the compact schedule picker", async () => {
-    const { upsertEvents } = renderEventEditor();
+    renderEventEditor();
     mockCreateCalendarEventsBatch.mockResolvedValue({
       created: [
         {
@@ -179,12 +174,16 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
-      expect(mockCreateCalendarEventsBatch).toHaveBeenCalledTimes(1);
-      expect(upsertEvents).toHaveBeenCalledWith([
+      // test-architecture: allow-boundary-interaction -- The edited row schedule must cross the outbound batch API with its date range and time fields; returned events do not preserve request formatting.
+      expect(mockCreateCalendarEventsBatch).toHaveBeenCalledWith(expect.arrayContaining([
         expect.objectContaining({
-          id: "batch-1",
+          startDate: "2026-04-28",
+          endDate: "2026-04-29",
+          startTime: "17:00",
+          endTime: "17:30",
         }),
-      ]);
+      ]));
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain("batch-1");
     });
   });
 
@@ -223,7 +222,7 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
   });
 
   it("renders recurrence UI for recurring NLP and saves structured recurrence", async () => {
-    const { refreshRange, upsertEvents } = renderEventEditor();
+    renderEventEditor();
     mockCreateCalendarEvent.mockResolvedValue({
       event: {
         id: "series-1",
@@ -273,6 +272,7 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- Advanced recurrence fields are an outbound Calendar request contract not represented by the normalized response event.
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
         title: "Work",
         recurrence: {
@@ -282,8 +282,8 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
           ends: { type: "onDate", untilDate: "2026-04-24" },
         },
       }));
-      expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
-      expect(upsertEvents).not.toHaveBeenCalled();
+      expect(screen.getByTestId("calendar-editor-observed-refreshes").textContent).toContain('["2026-04-20","2026-04-20"]');
+      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toBe("[]");
     });
   });
 

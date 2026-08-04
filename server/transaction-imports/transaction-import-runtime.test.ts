@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createTransactionImportRuntime } from "./transaction-import-runtime.ts";
 
 const workerMock = vi.hoisted(() => ({
   recoverAbandonedHistoricalRuns: vi.fn().mockResolvedValue({}),
@@ -7,12 +8,9 @@ const workerMock = vi.hoisted(() => ({
   processNextItemBatch: vi.fn().mockResolvedValue(false),
 }));
 
-vi.mock("./transaction-import-worker.ts", () => ({ transactionImportWorker: workerMock }));
-
 describe("transaction import runtime", () => {
   afterEach(() => {
     vi.useRealTimers();
-    vi.resetModules();
     vi.clearAllMocks();
   });
 
@@ -25,36 +23,40 @@ describe("transaction import runtime", () => {
         resolve();
       }));
     });
-    const runtime = await import("./transaction-import-runtime.ts");
+    const runtime = createTransactionImportRuntime(workerMock);
 
-    await runtime.startTransactionImportWorker();
+    await runtime.start();
     await vi.advanceTimersByTimeAsync(0);
     await pageStarted;
     let stopped = false;
-    const stopping = runtime.stopTransactionImportWorker().then(() => { stopped = true; });
+    const stopping = runtime.stop().then(() => { stopped = true; });
     await Promise.resolve();
     expect(stopped).toBe(false);
     release();
     await stopping;
     expect(stopped).toBe(true);
 
-    runtime.requestTransactionImportDrain();
+    runtime.requestDrain();
     await vi.advanceTimersByTimeAsync(0);
+    // test-architecture: allow-boundary-interaction -- Worker admission is a background-process boundary; after stop, a new drain request must not admit a second durable worker pass.
     expect(workerMock.processNextHistoricalPage).toHaveBeenCalledTimes(1);
   });
 
   it("reclaims abandoned Gmail scans at startup and keeps checking stale claims", async () => {
     vi.useFakeTimers();
     workerMock.processNextHistoricalPage.mockResolvedValue(false);
-    const runtime = await import("./transaction-import-runtime.ts");
+    const runtime = createTransactionImportRuntime(workerMock);
 
-    await runtime.startTransactionImportWorker();
+    await runtime.start();
+    // test-architecture: allow-boundary-interaction -- Startup recovery is a durable worker boundary; abandoned historical scans must be reclaimed exactly once before interval admission.
     expect(workerMock.recoverAbandonedHistoricalRuns).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Stale-claim recovery is a durable worker boundary; startup must perform the initial recovery before scheduling later sweeps.
     expect(workerMock.recoverStaleClaims).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(30_000);
+    // test-architecture: allow-boundary-interaction -- The timer/process boundary must admit the immediate drain and one interval drain in addition to startup recovery.
     expect(workerMock.recoverStaleClaims).toHaveBeenCalledTimes(3);
 
-    await runtime.stopTransactionImportWorker();
+    await runtime.stop();
   });
 });

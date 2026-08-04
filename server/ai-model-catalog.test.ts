@@ -42,7 +42,11 @@ function response(data: unknown, status = 200): Response {
 
 describe("AI model catalog", () => {
   it("returns the agreed curated OpenAI models in canonical order", async () => {
-    const fetchImpl = vi.fn();
+    let fetched = false;
+    const fetchImpl = async () => {
+      fetched = true;
+      throw new Error("OpenAI catalog must not use discovery");
+    };
     const service = createAiModelCatalogService({
       fetchImpl,
       getCredentialMetadata: async (provider) => credential(provider, false),
@@ -65,7 +69,7 @@ describe("AI model catalog", () => {
       "gpt-5.4-pro",
     ]);
     expect(openai?.pricingUrl).toBe("https://developers.openai.com/api/docs/pricing");
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(fetched).toBe(false);
   });
 
   it("omits non-streaming OpenAI models from Alfred availability", async () => {
@@ -84,13 +88,17 @@ describe("AI model catalog", () => {
   });
 
   it("discovers Anthropic display names once within the cache TTL", async () => {
-    const fetchImpl = vi.fn(async () => response({
+    let fetchCount = 0;
+    const fetchImpl = async () => {
+      fetchCount += 1;
+      return response({
       data: [
         { id: "claude-opus-4-6", display_name: "Claude Opus 4.6" },
         { id: "not-a-claude-model", display_name: "Ignore me" },
         { id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6" },
       ],
-    }));
+      });
+    };
     const service = createAiModelCatalogService({
       fetchImpl,
       getCredentialMetadata: async (provider) => credential(provider, true, 7),
@@ -107,16 +115,19 @@ describe("AI model catalog", () => {
     expect(second[0]?.models).toEqual(first[0]?.models);
     expect(first[0]?.pricingUrl)
       .toBe("https://platform.claude.com/docs/en/about-claude/pricing");
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchCount).toBe(1);
   });
 
   it("refreshes after the TTL and uses stale discovered data if refresh fails", async () => {
     let currentTime = 1_000;
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(response({
+    let fetchCount = 0;
+    const responses = [
+      response({
         data: [{ id: "claude-opus-4-6", display_name: "Claude Opus 4.6" }],
-      }))
-      .mockResolvedValueOnce(response({ message: "unavailable" }, 503));
+      }),
+      response({ message: "unavailable" }, 503),
+    ];
+    const fetchImpl = async () => responses[fetchCount++]!;
     const service = createAiModelCatalogService({
       fetchImpl,
       getCredentialMetadata: async (provider) => credential(provider, true, 3),
@@ -129,7 +140,7 @@ describe("AI model catalog", () => {
     const stale = await service.availability("email_triage");
 
     expect(stale[0]?.models).toEqual(first[0]?.models);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchCount).toBe(2);
   });
 
   it("uses the emergency Anthropic fallback when discovery has never succeeded", async () => {
@@ -145,8 +156,16 @@ describe("AI model catalog", () => {
   });
 
   it("does not discover Anthropic models without an active credential", async () => {
-    const fetchImpl = vi.fn();
-    const resolveApiKey = vi.fn();
+    let fetched = false;
+    let resolvedApiKey = false;
+    const fetchImpl = async () => {
+      fetched = true;
+      throw new Error("Missing credentials must prevent discovery");
+    };
+    const resolveApiKey = async () => {
+      resolvedApiKey = true;
+      return null;
+    };
     const service = createAiModelCatalogService({
       fetchImpl,
       getCredentialMetadata: async (provider) => credential(provider, false),
@@ -157,8 +176,8 @@ describe("AI model catalog", () => {
 
     expect(providers[0]?.available).toBe(false);
     expect(providers[0]?.models).toEqual(ANTHROPIC_FALLBACK_MODELS);
-    expect(resolveApiKey).not.toHaveBeenCalled();
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(resolvedApiKey).toBe(false);
+    expect(fetched).toBe(false);
   });
 
   it("accepts discovered Claude IDs but only curated OpenAI IDs for new selections", () => {

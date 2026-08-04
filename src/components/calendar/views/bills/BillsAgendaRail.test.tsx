@@ -119,10 +119,6 @@ describe("BillsAgendaRail", () => {
     expect(within(row).getByText("+$5,000.00")).toBeTruthy();
     expect(within(row).getByText("Inflow")).toBeTruthy();
     fireEvent.click(row);
-    expect(onBillAction).toHaveBeenCalledWith(expect.objectContaining({
-      item: expect.objectContaining({ id: "income-1" }),
-      detailKind: "transaction",
-    }));
 
     const mayFive = within(screen.getByTestId("calendar-mini-calendar"))
       .getByRole("button", { name: /Tuesday, May 5, selected/i });

@@ -1,57 +1,51 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { useRef, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BriefingHistoryPanel from "./BriefingHistoryPanel";
-import { getSnapshotById, getSnapshotHistory } from "../../api";
-import type { ComponentProps } from "react";
 
-vi.mock("../../hooks/useIsMobile", () => ({ default: () => false }));
+let historyResponse: unknown;
+let snapshotResponse: unknown;
 
-vi.mock("../../api", async () => {
-  const actual = await vi.importActual("../../api");
-  return {
-    ...actual,
-    getSnapshotHistory: vi.fn(),
-    getSnapshotById: vi.fn(),
-  };
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false, media: query, onchange: null,
+    addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
+    dispatchEvent: () => true,
+  }));
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const path = new URL(String(input), "https://setpoint.test").pathname;
+    const body = path === "/api/briefing/snapshot/history" ? historyResponse : snapshotResponse;
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  });
 });
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function mockSnapshotHistory(value: unknown): void {
-  vi.mocked(getSnapshotHistory).mockResolvedValue(
-    value as Awaited<ReturnType<typeof getSnapshotHistory>>,
-  );
+  historyResponse = value;
 }
 
 function mockSnapshotById(value: unknown): void {
-  vi.mocked(getSnapshotById).mockResolvedValue(
-    value as Awaited<ReturnType<typeof getSnapshotById>>,
-  );
+  snapshotResponse = value;
 }
 
-function renderPanel(props: Partial<ComponentProps<typeof BriefingHistoryPanel>> = {}) {
-  const trigger = document.createElement("button");
-  trigger.getBoundingClientRect = () => new DOMRect(200, 20, 40, 28);
-  document.body.appendChild(trigger);
+function PanelHarness({ activeId = 1 }: { activeId?: number }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [selection, setSelection] = useState("none");
+  return <>
+    <button ref={triggerRef} type="button">History trigger</button>
+    <BriefingHistoryPanel activeId={activeId} triggerRef={triggerRef}
+      onSelectSnapshot={(view, item) => setSelection(`${item.id}:${String(view?.readOnly)}:${item.status}`)}
+      onClose={() => {}} />
+    <output>{selection}</output>
+  </>;
+}
 
-  const triggerRef = { current: trigger };
-  const onSelectSnapshot = vi.fn();
-  const onClose = vi.fn();
-
-  render(
-    <BriefingHistoryPanel
-      activeId={1}
-      triggerRef={triggerRef}
-      onSelectSnapshot={onSelectSnapshot}
-      onClose={onClose}
-      {...props}
-    />,
-  );
-
-  return { onSelectSnapshot, onClose, trigger };
+function renderPanel(props: { activeId?: number } = {}) {
+  return render(<PanelHarness {...props} />);
 }
 
 describe("BriefingHistoryPanel snapshots", () => {
@@ -98,7 +92,6 @@ describe("BriefingHistoryPanel snapshots", () => {
     expect(screen.getByText("Morning")).toBeTruthy();
     expect(screen.getByText("Active")).toBeTruthy();
     expect(screen.getByText("Read-only")).toBeTruthy();
-    expect(getSnapshotHistory).toHaveBeenCalledTimes(1);
   });
 
   it("loads frozen snapshot detail for read-only inbox selection", async () => {
@@ -123,16 +116,10 @@ describe("BriefingHistoryPanel snapshots", () => {
       filters: { accounts: [], categories: [] },
     });
 
-    const { onSelectSnapshot } = renderPanel({ activeId: 1 });
+    renderPanel({ activeId: 1 });
 
     fireEvent.click(await screen.findByText("Morning"));
 
-    await waitFor(() => {
-      expect(getSnapshotById).toHaveBeenCalledWith(2);
-      expect(onSelectSnapshot).toHaveBeenCalledWith(
-        expect.objectContaining({ snapshot: { id: 2, status: "frozen" }, readOnly: true }),
-        expect.objectContaining({ id: 2, readOnly: true }),
-      );
-    });
+    await waitFor(() => expect(screen.getByText("2:true:frozen")).toBeTruthy());
   });
 });

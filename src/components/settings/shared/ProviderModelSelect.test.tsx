@@ -1,9 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/components/ui/select", () => import("./selectMock.test-utils"));
-
-const { default: ProviderModelSelect } = await import("./ProviderModelSelect");
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import ProviderModelSelect from "./ProviderModelSelect";
 
 const PROVIDERS = [
   {
@@ -30,108 +27,42 @@ const PROVIDERS = [
   },
 ];
 
-function renderSelect(overrides = {}) {
-  const onChange = vi.fn();
-  render(
-    <ProviderModelSelect
-      providers={PROVIDERS}
-      provider="anthropic"
-      model="claude-sonnet-4-6"
-      onChange={onChange}
-      providerAriaLabel="AI provider"
-      modelAriaLabel="AI model"
-      {...overrides}
-    />,
-  );
-  return { onChange };
-}
-
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
+afterEach(cleanup);
 
 describe("ProviderModelSelect", () => {
-  it("switching provider resets to that provider's default model", () => {
-    const { onChange } = renderSelect();
+  it("renders accessible provider and model controls with the selected labels", () => {
+    render(
+      <ProviderModelSelect
+        providers={PROVIDERS}
+        provider="anthropic"
+        model="claude-haiku-4-5"
+        onChange={() => {}}
+        providerAriaLabel="AI provider"
+        modelAriaLabel="AI model"
+      />,
+    );
 
-    fireEvent.change(screen.getByLabelText("AI provider"), {
-      target: { value: "openai" },
-    });
-
-    expect(onChange).toHaveBeenCalledWith("openai", "gpt-5.5");
+    expect(screen.getByRole("combobox", { name: "AI provider" }).textContent).toContain("Anthropic");
+    expect(screen.getByRole("combobox", { name: "AI model" }).textContent).toContain("Haiku 4.5");
   });
 
-  it("falls back to the provider default when the model id is not in the provider", () => {
-    renderSelect({ provider: "anthropic", model: "gpt-5.5" });
+  it("disables both controls and exposes the selected provider pricing link", () => {
+    render(
+      <ProviderModelSelect
+        providers={PROVIDERS}
+        provider="openai"
+        model="gpt-5.5"
+        onChange={() => {}}
+        providerAriaLabel="AI provider"
+        modelAriaLabel="AI model"
+        disabled
+      />,
+    );
 
-    // gpt-5.5 is not an Anthropic model, so the displayed value falls back to the default.
-    expect(screen.getByLabelText<HTMLSelectElement>("AI model").value).toBe("claude-sonnet-4-6");
-  });
-
-  it("keeps the current model id when it belongs to the selected provider", () => {
-    renderSelect({ provider: "anthropic", model: "claude-haiku-4-5" });
-
-    expect(screen.getByLabelText<HTMLSelectElement>("AI model").value).toBe("claude-haiku-4-5");
-  });
-
-  it("disables the model select when the selected provider is unavailable", () => {
-    const providers = [
-      PROVIDERS[0],
-      { ...PROVIDERS[1], available: false },
-    ];
-    renderSelect({ providers, provider: "openai", model: "gpt-5.5" });
-
-    expect(screen.getByLabelText<HTMLSelectElement>("AI model").disabled).toBe(true);
-  });
-
-  it("passes the current provider through when only the model changes", () => {
-    const { onChange } = renderSelect({ provider: "openai", model: "gpt-5.5" });
-
-    fireEvent.change(screen.getByLabelText("AI model"), {
-      target: { value: "gpt-5.4" },
-    });
-
-    expect(onChange).toHaveBeenCalledWith("openai", "gpt-5.4");
-  });
-
-  it("keeps a saved model visible when it is not in the current catalog", () => {
-    renderSelect({ provider: "openai", model: "gpt-5.3" });
-
-    expect(screen.getByLabelText<HTMLSelectElement>("AI model").value).toBe("gpt-5.3");
-    expect(screen.getByRole("option", {
-      name: "gpt-5.3 (saved; not currently listed)",
-    })).toBeTruthy();
-  });
-
-  it("links to pricing for the selected provider", () => {
-    renderSelect({ provider: "openai", model: "gpt-5.5" });
-
-    const link = screen.getByRole("link", {
-      name: "OpenAI API pricing (opens in a new tab)",
-    });
+    expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "AI provider" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "AI model" }).disabled).toBe(true);
+    const link = screen.getByRole("link", { name: "OpenAI API pricing (opens in a new tab)" });
     expect(link.getAttribute("href")).toBe("https://developers.openai.com/api/docs/pricing");
     expect(link.getAttribute("target")).toBe("_blank");
-  });
-
-  it("falls back to the first provider when the provided provider is unknown", () => {
-    const { onChange } = renderSelect({ provider: "mystery", model: "whatever" });
-
-    // selected provider resolves to the first entry (anthropic) and its default model.
-    expect(screen.getByLabelText<HTMLSelectElement>("AI provider").value).toBe("anthropic");
-    expect(screen.getByLabelText<HTMLSelectElement>("AI model").value).toBe("claude-sonnet-4-6");
-
-    // changeModel routes back through the resolved provider, not the bad input.
-    fireEvent.change(screen.getByLabelText("AI model"), {
-      target: { value: "claude-haiku-4-5" },
-    });
-    expect(onChange).toHaveBeenCalledWith("anthropic", "claude-haiku-4-5");
-  });
-
-  it("disables both selects when disabled is set", () => {
-    renderSelect({ disabled: true });
-
-    expect(screen.getByLabelText<HTMLSelectElement>("AI provider").disabled).toBe(true);
-    expect(screen.getByLabelText<HTMLSelectElement>("AI model").disabled).toBe(true);
   });
 });

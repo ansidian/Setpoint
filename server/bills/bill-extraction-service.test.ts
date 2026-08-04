@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { extractBill, loadBillExtractChoice } from "./bill-extraction-service.ts";
+import { createAnthropicProvider } from "./bill-extractors/anthropic.ts";
+import { createOpenAiProvider } from "./bill-extractors/openai.ts";
 interface TestStatement { sql: string; args?: unknown[] }
 
 interface MetadataFixture {
@@ -9,30 +12,17 @@ interface MetadataFixture {
   recentTransactions?: unknown[];
 }
 
-const mockActual = {
-  sendBill: vi.fn(),
-  markBillPaid: vi.fn(),
-  getMetadata: vi.fn(),
-  testConnection: vi.fn(),
-  createQuickTxn: vi.fn(),
-};
-const mockActualLocal = {
-  describeLocalActualCache: vi.fn(),
-  hydrateLocalActualCache: vi.fn(),
-  readLocalActualMetadata: vi.fn(),
-};
 const mockDb = {
   execute: vi.fn<(statement: TestStatement) => Promise<{ rows: Array<Record<string, unknown>> }>>(),
   batch: vi.fn<(statements: TestStatement[]) => Promise<unknown>>(),
 };
-vi.mock("../actual/actual.ts", () => mockActual);
-vi.mock("../actual/actual-local-metadata.ts", () => mockActualLocal);
-vi.mock("./bill-extract.ts", () => ({ trimBillBody: ({ body }: { body: string }) => body.slice(0, 100) }));
-vi.mock("../db/connection.ts", () => ({ default: mockDb }));
-vi.mock("../ai-credentials.ts", () => ({
-  resolveAiApiKey: async (provider: "openai" | "anthropic") =>
-    process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null,
-}));
+let currentMetadata: MetadataFixture | null = null;
+const resolveApiKey = async (provider: "openai" | "anthropic") =>
+  process.env[provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"] || null;
+const providers = {
+  anthropic: createAnthropicProvider({ resolveApiKey }),
+  openai: createOpenAiProvider({ resolveApiKey }),
+};
 
 const originalFetch = global.fetch;
 const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -42,21 +32,8 @@ function rowResult(rows: Array<Record<string, unknown>> = []) {
   return { rows };
 }
 
-function metadataProjectionRow(metadata: MetadataFixture = {}) {
-  return {
-    status: "current",
-    accounts_json: JSON.stringify(metadata.accounts || []),
-    payees_json: JSON.stringify(metadata.payees || []),
-    categories_json: JSON.stringify(metadata.categories || []),
-    schedules_json: JSON.stringify(metadata.schedules || []),
-    recent_transactions_json: JSON.stringify(metadata.recentTransactions || []),
-    last_success_at: "2026-05-06T12:00:00.000Z",
-    last_attempt_at: "2026-05-06T12:00:00.000Z",
-    last_error: null,
-  };
-}
-
 function mockSettings(provider: string, model: string, { metadata = null }: { metadata?: MetadataFixture | null } = {}) {
+  currentMetadata = metadata;
   mockDb.execute.mockImplementation(({ sql }) => {
     if (/bill_extract_provider/i.test(sql)) {
       return Promise.resolve({
@@ -66,19 +43,28 @@ function mockSettings(provider: string, model: string, { metadata = null }: { me
     if (/bill_pay_mappings_json/i.test(sql)) {
       return Promise.resolve({ rows: [{ bill_pay_mappings_json: null }] });
     }
-    if (/ea_actual_metadata_mirror/i.test(sql) && metadata) {
-      return Promise.resolve(rowResult([metadataProjectionRow(metadata)]));
-    }
     return Promise.resolve(rowResult());
   });
 }
 
+const dependencies = () => ({
+  dbClient: mockDb as never,
+  metadataReader: async () => ({
+    accounts: currentMetadata?.accounts || [],
+    payees: currentMetadata?.payees || [],
+    payeeMap: {},
+    categories: currentMetadata?.categories || [],
+    schedules: currentMetadata?.schedules || [],
+    recentTransactions: currentMetadata?.recentTransactions || [],
+    syncHealth: { state: "current", lastSuccessAt: "2026-05-06T12:00:00.000Z" },
+  }) as never,
+  providers,
+});
+
 beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
   process.env.OPENAI_API_KEY = "test-openai-key";
-  Object.values(mockActual).forEach((fn) => fn.mockReset());
-  Object.values(mockActualLocal).forEach((fn) => fn.mockReset());
-  mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
+  currentMetadata = null;
   mockDb.execute.mockReset();
   mockDb.batch.mockReset();
 });
@@ -89,20 +75,18 @@ afterEach(() => {
   process.env.OPENAI_API_KEY = originalOpenAiKey;
 });
 
-const { extractBill, loadBillExtractChoice } = await import("./bill-extraction-service.ts");
-
 describe("loadBillExtractChoice", () => {
   it("returns the stored provider/model when allowed", async () => {
     mockSettings("openai", "gpt-5.4-mini");
-    expect(await loadBillExtractChoice("u1")).toEqual({ provider: "openai", model: "gpt-5.4-mini" });
+    expect(await loadBillExtractChoice("u1", { dbClient: mockDb as never })).toEqual({ provider: "openai", model: "gpt-5.4-mini" });
   });
 
   it("falls back to the defaults for unknown models or settings read failures", async () => {
     mockSettings("openai", "not-a-real-model");
-    expect(await loadBillExtractChoice("u1")).toEqual({ provider: "anthropic", model: "claude-haiku-4-5" });
+    expect(await loadBillExtractChoice("u1", { dbClient: mockDb as never })).toEqual({ provider: "anthropic", model: "claude-haiku-4-5" });
 
     mockDb.execute.mockRejectedValue(new Error("db down"));
-    expect(await loadBillExtractChoice("u1")).toEqual({ provider: "anthropic", model: "claude-haiku-4-5" });
+    expect(await loadBillExtractChoice("u1", { dbClient: mockDb as never })).toEqual({ provider: "anthropic", model: "claude-haiku-4-5" });
   });
 });
 
@@ -140,7 +124,7 @@ describe("extractBill (Anthropic)", () => {
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
-    const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" });
+    const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
 
     expect(out).toEqual({
       payee: "PG&E",
@@ -161,14 +145,13 @@ describe("extractBill (Anthropic)", () => {
   it("returns 502-shaped error when Anthropic response lacks tool_use", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mockSettings("anthropic", "claude-haiku-4-5");
-    mockActual.getMetadata.mockResolvedValueOnce({ accounts: [], payees: [], categories: [] });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ content: [] }),
     });
 
     await expect(
-      extractBill("u1", { subject: "x", from: "y", body: "z" })
+      extractBill("u1", { subject: "x", from: "y", body: "z" }, dependencies())
     ).rejects.toMatchObject({ status: 502 });
   });
 });
@@ -201,7 +184,7 @@ describe("extractBill (OpenAI)", () => {
       });
       global.fetch = fetchMock as unknown as typeof fetch;
 
-      const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" });
+      const out = await extractBill("u1", { subject: "Bill", from: "x@y", body: "body" }, dependencies());
 
       expect(out).toEqual({
         payee: "Xfinity",
@@ -226,10 +209,9 @@ describe("extractBill (OpenAI)", () => {
   it("surfaces a clear unavailable error when OPENAI_API_KEY is missing", async () => {
     mockSettings("openai", "gpt-5.5");
     delete process.env.OPENAI_API_KEY;
-    mockActual.getMetadata.mockResolvedValueOnce({ accounts: [], payees: [], categories: [] });
 
     await expect(
-      extractBill("u1", { subject: "x", from: "y", body: "z" })
+      extractBill("u1", { subject: "x", from: "y", body: "z" }, dependencies())
     ).rejects.toMatchObject({ status: 503, message: /OPENAI_API_KEY not set/ });
   });
 });

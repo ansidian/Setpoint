@@ -1,13 +1,9 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRIAGE_SOUND_AUDIO_UNLOCK_KEY } from "@/lib/triageSoundPlayback";
+import useTriageNotificationSounds from "./useTriageNotificationSounds";
 
-vi.mock("@/api", () => ({
-  getSettings: vi.fn(),
-}));
-
-const { getSettings } = await import("@/api");
-const { default: useTriageNotificationSounds } = await import("./useTriageNotificationSounds");
+let settingsRequestCount = 0;
 
 const settings = {
   triage_sound_settings: {
@@ -57,12 +53,33 @@ function queueEvent(eventKey = "queued-1") {
   };
 }
 
+function installAudioBoundary({ rejectFirst = false }: { rejectFirst?: boolean } = {}) {
+  const paths: string[] = [];
+  const instances: Array<{ volume: number }> = [];
+  let playCount = 0;
+  vi.stubGlobal("Audio", function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
+    this.path = path;
+    this.volume = 0;
+    paths.push(path);
+    instances.push(this);
+    this.play = () => {
+      playCount += 1;
+      return rejectFirst && playCount === 1
+        ? Promise.reject(new Error("NotAllowedError"))
+        : Promise.resolve();
+    };
+  });
+  return { paths, instances, playCount: () => playCount };
+}
+
 describe("useTriageNotificationSounds", () => {
   beforeEach(() => {
     sessionStorage.clear();
-    vi.mocked(getSettings).mockReset().mockResolvedValue(
-      settings as unknown as Awaited<ReturnType<typeof getSettings>>,
-    );
+    settingsRequestCount = 0;
+    vi.stubGlobal("fetch", () => {
+      settingsRequestCount += 1;
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(settings) } as Response);
+    });
   });
 
   afterEach(() => {
@@ -73,18 +90,14 @@ describe("useTriageNotificationSounds", () => {
   });
 
   it("plays configured triage sounds only after audio has been unlocked", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleDashboardEvent(triageEvent());
     });
-    expect(globalThis.Audio).not.toHaveBeenCalled();
+    expect(audio.paths).toEqual([]);
 
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     act(() => {
@@ -92,20 +105,16 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/clear-chime.mp3");
     });
-    expect(play).toHaveBeenCalled();
-    expect(vi.mocked(globalThis.Audio).mock.instances[0]?.volume).toBe(0.9);
+    expect(audio.playCount()).toBe(1);
+    expect(audio.instances[0]?.volume).toBe(0.9);
   });
 
   it("unlocks audio on the first pointerdown so later events sound without a test play", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       document.dispatchEvent(new Event("pointerdown"));
@@ -117,17 +126,14 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/clear-chime.mp3");
     });
   });
 
   it("unlocks audio on the first keydown as well", async () => {
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = vi.fn(() => Promise.resolve());
-    }));
+    installAudioBoundary();
     renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       document.dispatchEvent(new Event("keydown"));
@@ -137,14 +143,10 @@ describe("useTriageNotificationSounds", () => {
   });
 
   it("dedupes repeated SSE event keys", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleDashboardEvent(triageEvent("event-1"));
@@ -152,38 +154,30 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledTimes(1);
+      expect(audio.paths).toHaveLength(1);
     });
   });
 
   it("plays configured sounds when mail enters the triage queue", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleDashboardEvent(queueEvent());
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/quick-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/quick-chime.mp3");
     });
   });
 
   it("plays the queued sound when a queued snapshot row appears after the initial snapshot", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleActiveSnapshot({
@@ -204,19 +198,15 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/quick-chime.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/quick-chime.mp3");
     });
   });
 
   it("plays once when the same queued email arrives via SSE and a snapshot diff", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       // Seed the snapshot baseline, then deliver the same email through both
@@ -238,22 +228,16 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledTimes(1);
+      expect(audio.paths).toHaveLength(1);
     });
   });
 
   it("retries an event whose playback failed when a later snapshot re-offers it", async () => {
     // First play() rejects (autoplay block); subsequent plays succeed.
-    const play = vi.fn()
-      .mockRejectedValueOnce(new Error("NotAllowedError"))
-      .mockResolvedValue(undefined);
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary({ rejectFirst: true });
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     const queuedSnapshot = {
       snapshot: { id: "active" },
@@ -271,7 +255,7 @@ describe("useTriageNotificationSounds", () => {
       });
       result.current.handleActiveSnapshot(queuedSnapshot);
     });
-    await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(audio.playCount()).toBe(1));
     // Let the rejection propagate so the gate releases the burned key.
     await act(async () => {});
 
@@ -280,19 +264,15 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(play).toHaveBeenCalledTimes(2);
+      expect(audio.playCount()).toBe(2);
     }, { timeout: 3000 });
   });
 
   it("coalesces a burst of new queued snapshot rows into one sound", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleActiveSnapshot({
@@ -312,19 +292,15 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledTimes(1);
+      expect(audio.paths).toHaveLength(1);
     });
   });
 
   it("does not play queued sounds for rows already present on initial snapshot load", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleActiveSnapshot({
@@ -338,37 +314,29 @@ describe("useTriageNotificationSounds", () => {
       });
     });
 
-    expect(globalThis.Audio).not.toHaveBeenCalled();
+    expect(audio.paths).toEqual([]);
   });
 
   it("attempts task completion sounds from the completion gesture before the session is unlocked", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleTaskCompleted("todo-1");
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/smooth-modern.mp3");
+      expect(audio.paths).toContain("/sounds/notifications/smooth-modern.mp3");
       expect(sessionStorage.getItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY)).toBe("1");
     });
   });
 
   it("plays repeated task completion actions for the same task id", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleTaskCompleted("todo-1");
@@ -376,21 +344,18 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledTimes(2);
-      expect(globalThis.Audio).toHaveBeenNthCalledWith(1, "/sounds/notifications/smooth-modern.mp3");
-      expect(globalThis.Audio).toHaveBeenNthCalledWith(2, "/sounds/notifications/smooth-modern.mp3");
+      expect(audio.paths).toEqual([
+        "/sounds/notifications/smooth-modern.mp3",
+        "/sounds/notifications/smooth-modern.mp3",
+      ]);
     });
   });
 
   it("plays configured sounds for upcoming calendar events and task completion actions", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
-    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
 
     act(() => {
       result.current.handleCalendarSnapshot({
@@ -405,19 +370,17 @@ describe("useTriageNotificationSounds", () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
-      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/smooth-modern.mp3");
+      expect(audio.paths).toEqual(expect.arrayContaining([
+        "/sounds/notifications/clear-chime.mp3",
+        "/sounds/notifications/smooth-modern.mp3",
+      ]));
     });
   });
 
   it("schedules the upcoming calendar sound when an event enters the 15-minute window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-06T17:00:00.000Z"));
-    const play = vi.fn(() => Promise.resolve());
-    vi.stubGlobal("Audio", vi.fn(function AudioMock(this: HTMLAudioElement & { path: string }, path: string) {
-      this.path = path;
-      this.play = play;
-    }));
+    const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
     const { result } = renderHook(() => useTriageNotificationSounds());
     await act(async () => {});
@@ -433,12 +396,12 @@ describe("useTriageNotificationSounds", () => {
       });
     });
 
-    expect(globalThis.Audio).not.toHaveBeenCalled();
+    expect(audio.paths).toEqual([]);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60 * 1000);
     });
 
-    expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
+    expect(audio.paths).toContain("/sounds/notifications/clear-chime.mp3");
   });
 });

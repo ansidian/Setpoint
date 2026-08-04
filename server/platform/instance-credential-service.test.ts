@@ -1,7 +1,7 @@
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
 import path from "path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import { createEncryption } from "./encryption.ts";
 import { createInstanceCredentialService } from "./instance-credential-service.ts";
@@ -80,16 +80,16 @@ describe("instance credential service", () => {
       EA_ENCRYPTION_KEY: ROOT_KEY,
       PIRATE_WEATHER_API_KEY: "weather-secret",
     });
-    const listener = vi.fn();
-    service.subscribe(listener);
+    const events: unknown[] = [];
+    service.subscribe((event) => events.push(event));
 
     const metadata = await service.importEnvironment("weather.pirate_weather_api_key");
     expect(metadata).toMatchObject({ source: "stored", activeConfigured: true });
     expect(JSON.stringify(metadata)).not.toContain("weather-secret");
-    expect(listener).toHaveBeenCalledWith({
+    expect(events).toEqual([{
       key: "weather.pirate_weather_api_key",
       reason: "environment_imported",
-    });
+    }]);
   });
 
   it("does not delete a stored value when host fallback is unavailable", async () => {

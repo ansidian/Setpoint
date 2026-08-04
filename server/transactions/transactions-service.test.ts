@@ -13,19 +13,25 @@ const stateCurrent = vi.fn(async (_userId: string) => ({ syncHealth: { state: "c
 
 describe("queryTransactions", () => {
   it("forwards notes filter to readRange", async () => {
-    const readRange = reader();
-    await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
+    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
+      transactions: filters.notes === "coffee" ? ROWS : [],
+      truncated: false,
+    }));
+    const result = await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
       readRange, mirrorState: stateCurrent,
     });
-    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ notes: "coffee" }));
+    expect(result.transactions).toEqual(ROWS);
   });
 
   it("forwards direction:'income' to readRange", async () => {
-    const readRange = reader();
-    await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
+    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
+      transactions: filters.direction === "income" ? ROWS : [],
+      truncated: false,
+    }));
+    const result = await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
       readRange, mirrorState: stateCurrent,
     });
-    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ direction: "income" }));
+    expect(result.transactions).toEqual(ROWS);
   });
 
   it("returns the list with total and no sync_state when current", async () => {
@@ -63,19 +69,25 @@ describe("queryTransactions", () => {
 
 describe("summarizeTransactions", () => {
   it("forwards notes filter to readRange", async () => {
-    const readRange = reader();
-    await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
+    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
+      transactions: filters.notes === "coffee" ? ROWS : [],
+      truncated: false,
+    }));
+    const result = await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
       readRange, mirrorState: stateCurrent,
     });
-    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ notes: "coffee" }));
+    expect(result.total).toBe(142);
   });
 
   it("forwards direction:'income' to readRange", async () => {
-    const readRange = reader();
-    await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
+    const readRange = vi.fn(async (_userId: string, filters: TransactionFilters) => ({
+      transactions: filters.direction === "income" ? ROWS : [],
+      truncated: false,
+    }));
+    const result = await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
       readRange, mirrorState: stateCurrent,
     });
-    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ direction: "income" }));
+    expect(result.total).toBe(142);
   });
 
   it("aggregates by category with total", async () => {

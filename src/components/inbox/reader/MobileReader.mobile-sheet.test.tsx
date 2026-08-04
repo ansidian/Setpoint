@@ -1,12 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { StrictMode, useState } from "react";
 import MobileReader from "./MobileReader";
-
-// The reader is explicitly the mobile surface; its menus must remain mobile
-// even if the shared media-query hook has not caught up during hydration.
-vi.mock("../../../hooks/useIsMobile", () => ({ default: () => false }));
-vi.mock("../../bills/BillBadge", () => ({ default: () => null }));
 
 afterEach(() => cleanup());
 

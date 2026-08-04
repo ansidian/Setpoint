@@ -3,6 +3,7 @@ import {
   buildDashboardEventsData,
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
+  dashboardEventCalendarRequest,
   nextItemSheet,
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
@@ -111,6 +112,17 @@ describe("dashboard shell model", () => {
       options: {
         source: "dashboard",
         openDetail: true,
+      },
+    });
+
+    expect(dashboardEventCalendarRequest("2026-04-21", "event-1")).toEqual({
+      viewKey: "events",
+      focusDate: "2026-04-21",
+      focusItemId: "event-1",
+      options: {
+        source: "dashboard",
+        openDetail: true,
+        forceEventOverlay: true,
       },
     });
   });

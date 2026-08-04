@@ -14,35 +14,36 @@ describe("useWarmImport", () => {
   });
 
   it("does not warm the import when disabled", () => {
-    const importFn = vi.fn(() => Promise.resolve());
-    const requestIdleCallback = vi.fn();
-    vi.stubGlobal("requestIdleCallback", requestIdleCallback);
+    let importCount = 0;
+    const importFn = () => { importCount += 1; return Promise.resolve(); };
+    vi.stubGlobal("requestIdleCallback", vi.fn());
 
     renderHook(() => useWarmImport(importFn, { enabled: false }));
 
-    expect(requestIdleCallback).not.toHaveBeenCalled();
     act(() => {
       vi.runAllTimers();
     });
-    expect(importFn).not.toHaveBeenCalled();
+    expect(importCount).toBe(0);
   });
 
   it("warms the import once when idle by default", () => {
-    const importFn = vi.fn(() => Promise.resolve());
+    let importCount = 0;
+    const importFn = () => { importCount += 1; return Promise.resolve(); };
     vi.stubGlobal("requestIdleCallback", vi.fn((callback) => setTimeout(callback, 0)));
     vi.stubGlobal("cancelIdleCallback", vi.fn((handle) => clearTimeout(handle)));
 
     renderHook(() => useWarmImport(importFn));
 
-    expect(importFn).not.toHaveBeenCalled();
+    expect(importCount).toBe(0);
     act(() => {
       vi.runAllTimers();
     });
-    expect(importFn).toHaveBeenCalledTimes(1);
+    expect(importCount).toBe(1);
   });
 
   it("does not warm after unmounting before idle", () => {
-    const importFn = vi.fn(() => Promise.resolve());
+    let importCount = 0;
+    const importFn = () => { importCount += 1; return Promise.resolve(); };
     vi.stubGlobal("requestIdleCallback", vi.fn((callback) => setTimeout(callback, 0)));
     vi.stubGlobal("cancelIdleCallback", vi.fn((handle) => clearTimeout(handle)));
 
@@ -52,6 +53,6 @@ describe("useWarmImport", () => {
       vi.runAllTimers();
     });
 
-    expect(importFn).not.toHaveBeenCalled();
+    expect(importCount).toBe(0);
   });
 });

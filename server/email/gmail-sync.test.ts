@@ -10,6 +10,7 @@ const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
 }));
 
+// test-architecture: allow-boundary-mock -- Gmail sync queue, cursor, index, and triage behavior runs against a migrated ephemeral libSQL client redirected through the production singleton seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => testState.db.current.execute(statement),
@@ -74,6 +75,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     });
 
     expect(result).toMatchObject({ indexed: 1, queued: 1 });
+    // test-architecture: allow-boundary-interaction -- Transaction-import admission is a background durable-worker boundary; sync must enqueue the exact normalized arrival without awaiting its drain.
     expect(ingestTransactionArrivalsFn).toHaveBeenCalledWith("user-1", "gmail-work", [email]);
   });
 
@@ -115,6 +117,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       now: new Date("2026-05-03T15:30:00.000Z"),
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail lookback is the outbound recovery boundary; an expired history cursor must request the exact account and bounded recovery horizon.
     expect(fetchEmailsFn).toHaveBeenCalledWith(expect.objectContaining({ id: "gmail-work" }), 336);
     expect(result).toMatchObject({
       account_id: "gmail-work",
@@ -191,6 +194,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       now: new Date("2026-05-03T15:30:00.000Z"),
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail lookback is the outbound recovery boundary; a 404 cursor failure must enter provider recovery instead of discarding the durable job.
     expect(fetchEmailsFn).toHaveBeenCalled(); // lookback recovery ran instead of throwing the job away
     expect(result).toMatchObject({ history_recovered: true, indexed: 1 });
   });
@@ -239,8 +243,10 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       requestEmailTriageDrainAtFn,
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail message fetch is outbound; an incomplete provider batch must retry the dropped identity rather than advance the durable cursor past it.
     expect(fetchEmailsByIdsFn).toHaveBeenCalledTimes(2); // dropped msg-2 retried, not skipped
     expect(result.indexed).toBe(2);
+    // test-architecture: allow-boundary-interaction -- Triage deadline wake-up is a process-timer boundary; the exact durable arrival-grace deadline must arm the scheduler.
     expect(requestEmailTriageDrainAtFn).toHaveBeenCalledWith("2026-05-03T12:15:30.000Z");
   });
 
@@ -307,11 +313,13 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       now: new Date("2026-05-03T12:15:00.000Z"),
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail history.list is outbound; exact cursor and page-token framing are provider compatibility inputs not exposed by settled rows.
     expect(fetchHistoryPage).toHaveBeenCalledWith({
       account: expect.objectContaining({ id: "gmail-work" }),
       startHistoryId: "100",
       pageToken: null,
     });
+    // test-architecture: allow-boundary-interaction -- Gmail message fetch is outbound; reconciliation must request the exact added IDs projected from the provider history page.
     expect(fetchEmailsByIdsFn).toHaveBeenCalledWith(
       expect.objectContaining({ id: "gmail-work" }),
       ["msg-1", "msg-3"],
@@ -475,6 +483,7 @@ describe("processNextGmailHistorySyncJob bounded retry (CORR-L08)", () => {
     expect(row.attempts).toBe(1);
     expect(row.last_error).toBe("Gmail API 503: temporarily unavailable");
     expect(new Date(String(row.scheduled_for)).getTime()).toBeGreaterThan(now.getTime());
+    // test-architecture: allow-boundary-interaction -- Timing telemetry is the process logging boundary; stage metadata is intentionally not persisted or returned by sync.
     expect(logTimingFn).toHaveBeenCalledWith(expect.objectContaining({
       event: "email-arrival",
       status: "retrying",
@@ -522,6 +531,7 @@ describe("processNextGmailHistorySyncJob bounded retry (CORR-L08)", () => {
       syncFn: successSyncFn,
     });
     expect(claimedResult.processed).toBe(true);
+    // test-architecture: allow-boundary-interaction -- Sync settlement is the durable queue boundary; one claimed job must produce exactly one success transition after reconciliation.
     expect(successSyncFn).toHaveBeenCalledTimes(1);
   });
 

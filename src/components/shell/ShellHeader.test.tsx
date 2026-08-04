@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,6 +39,27 @@ function renderHeader(overrides = {}) {
         {...overrides}
       />
     </MemoryRouter>,
+  );
+}
+
+function AnalyticsHeaderHarness({ isMobile = false }: { isMobile?: boolean }) {
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  return (
+    <MemoryRouter>
+      <ShellHeader
+        tab="dashboard"
+        onTab={() => {}}
+        onOpenPalette={() => {}}
+        onOpenAnalytics={() => setAnalyticsOpen(true)}
+        onOpenHistory={() => {}}
+        onOpenCalendar={() => {}}
+        onQuickRefresh={() => {}}
+        systemStatus={currentStatus}
+        analyticsOpen={analyticsOpen}
+        isMobile={isMobile}
+      />
+      <output>{analyticsOpen ? "analytics open" : "analytics closed"}</output>
+    </MemoryRouter>
   );
 }
 
@@ -171,19 +193,18 @@ describe("ShellHeader system status", () => {
   });
 
   it("opens analytics and exposes active state for the shell analytics tint", () => {
-    const onOpenAnalytics = vi.fn();
-    renderHeader({ onOpenAnalytics, analyticsOpen: true });
+    render(<AnalyticsHeaderHarness />);
 
     const button = screen.getByRole("button", { name: /open analytics/i });
+    expect(button.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(button);
 
-    expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
     expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("analytics open")).toBeTruthy();
   });
 
   it("moves analytics into the mobile overflow menu and keeps Sync now on one row", () => {
-    const onOpenAnalytics = vi.fn();
-    renderHeader({ isMobile: true, onOpenAnalytics });
+    render(<AnalyticsHeaderHarness isMobile />);
 
     expect(screen.queryByRole("button", { name: /open analytics/i })).toBeNull();
     const syncButton = screen.getByRole("button", { name: /sync now/i });
@@ -192,7 +213,7 @@ describe("ShellHeader system status", () => {
     fireEvent.click(screen.getByRole("button", { name: /open more actions/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /analytics/i }));
 
-    expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("analytics open")).toBeTruthy();
   });
 
   it("hides the top tab strip on mobile (MobileBottomNav takes over), keeps it on desktop", () => {

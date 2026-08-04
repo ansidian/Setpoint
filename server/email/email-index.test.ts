@@ -10,6 +10,7 @@ const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
 }));
 
+// test-architecture: allow-boundary-mock -- Email-index behavior executes real migrations and SQL against an ephemeral libSQL client redirected through the production singleton seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => testState.db.current.execute(statement),

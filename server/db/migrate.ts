@@ -50,7 +50,7 @@ export async function migrate() {
   for (const file of migrationFiles) {
     if (!executed.has(file)) {
       const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf-8");
-      await runMigration(file, sql);
+      await runMigration(file, sql, { dbClient: db });
       ranCount++;
     }
   }

@@ -1,12 +1,55 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import CalendarInlineOverflowLayer from "./CalendarInlineOverflowLayer";
+import {
+  createCalendarEventSelectionSet,
+  isCalendarEventSelected,
+  toggleCalendarEventSelection,
+  type SelectableCalendarEvent,
+} from "../events/calendarEventSelectionModel";
 
 afterEach(() => {
   cleanup();
 });
 
 describe("CalendarInlineOverflowLayer", () => {
+  it("modifier-selects an event from the inline overflow surface", () => {
+    const event = {
+      id: "event-inline",
+      title: "Overflow planning",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-12T17:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-12T18:00:00.000Z").getTime(),
+      writable: true,
+    };
+    function Harness() {
+      const [selection, setSelection] = useState(() => createCalendarEventSelectionSet());
+      return (
+        <CalendarInlineOverflowLayer
+          overflow={{
+            inlineAnchor: { top: 0, left: 0, width: 320 },
+            dateKey: "2026-05-12",
+            items: [{ id: event.id, title: event.title, writable: true, sourceEvent: event }],
+          }}
+          quickActions={{
+            isEventSelectionSelected: (candidate) => isCalendarEventSelected(selection, candidate as SelectableCalendarEvent),
+            toggleEventSelection: ({ event: candidate }) => setSelection((current) => (
+              toggleCalendarEventSelection(current, candidate as SelectableCalendarEvent)
+            )),
+          }}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    fireEvent.click(chip, { ctrlKey: true });
+
+    expect(chip.getAttribute("data-calendar-event-selection")).toBe("true");
+  });
+
   it("keeps compact time labels visible and renders deadline status icons", () => {
     render(
       <CalendarInlineOverflowLayer

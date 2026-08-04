@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ActiveSnapshotView, SnapshotItem } from "../../shared/types/snapshots";
 
+let networkAttempted = false;
+
 async function importDemoApi(now = "2026-05-12T15:30:00.000Z") {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(now));
   vi.resetModules();
   vi.stubEnv("VITE_EA_DEMO", "1");
-  vi.stubGlobal("fetch", vi.fn());
+  networkAttempted = false;
+  vi.stubGlobal("fetch", () => { networkAttempted = true; throw new Error("Demo mode reached fetch"); });
   return import("../api");
 }
 
@@ -52,7 +55,7 @@ describe("demo mode in-memory mutations", () => {
     await api.markBillPaid(electricBill.id);
     expect((await api.getCalendarBillsRange("2026-05-01", "2026-05-31")).schedules.find((bill) => bill.scheduleId === "demo-electric")?.paid).toBe(true);
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 
   it("keeps bulk read state and demo task references available across reads", async () => {
@@ -108,7 +111,7 @@ describe("demo mode in-memory mutations", () => {
       { address: "morgan@northstar.example", name: "Morgan Lee", source: "auto" },
       { address: "avery@studio.example", name: "Avery Chen", source: "manual" },
     ]);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 
   it("supports simple one-off calendar edits and rejects provider-like actions explicitly", async () => {
@@ -181,6 +184,6 @@ describe("demo mode in-memory mutations", () => {
     await api.unsnoozeEmail("demo-email-budget");
     expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-budget")).toBe(true);
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(networkAttempted).toBe(false);
   });
 });

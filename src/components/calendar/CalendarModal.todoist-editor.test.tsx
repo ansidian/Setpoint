@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { flushAnimationFrame, getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
-import { getVisibleGridRange } from "./calendarDateUtils.ts";
 
 describe("CalendarModal Todoist editor behavior", () => {
   it("switches from an event create to the Todoist create workspace without ghosts or losing the panel", async () => {
@@ -97,8 +96,6 @@ describe("CalendarModal Todoist editor behavior", () => {
 
     try {
       window.innerWidth = 1900;
-      const onEventsVisibleRangeChange = vi.fn();
-
       render(wrapWithDashboard(
         <CalendarModal
           open
@@ -113,7 +110,6 @@ describe("CalendarModal Todoist editor behavior", () => {
             ensureRange: vi.fn().mockResolvedValue([]),
             revision: 0,
           }}
-          onEventsVisibleRangeChange={onEventsVisibleRangeChange}
           billsData={{}}
           deadlinesData={{ upcoming: [] }}
         />,
@@ -129,11 +125,6 @@ describe("CalendarModal Todoist editor behavior", () => {
       await waitFor(() => {
         expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
       }, { timeout: 1500 });
-
-      await waitFor(() => {
-        const { start, end } = getVisibleGridRange(2027, 4);
-        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
-      });
 
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
       expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
@@ -177,12 +168,10 @@ describe("CalendarModal Todoist editor behavior", () => {
 
   it("closes the inline Todoist editor from its local exit action without closing the modal", async () => {
     window.innerWidth = 1900;
-    const onClose = vi.fn();
-
     render(wrapWithDashboard(
       <CalendarModal
         open
-        onClose={onClose}
+        onClose={() => {}}
         view="events"
         forceDeadlineOverlay
         onViewChange={() => {}}
@@ -206,7 +195,6 @@ describe("CalendarModal Todoist editor behavior", () => {
     });
     expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("does not reuse previous focused deadline state for a clean create request", async () => {

@@ -11,14 +11,18 @@ const testState = vi.hoisted(() => ({
 const gmailApi = vi.hoisted(() => ({ fetchEmailsInRange: vi.fn() }));
 const icloudApi = vi.hoisted(() => ({ fetchEmailsInRange: vi.fn() }));
 
+// test-architecture: allow-boundary-mock -- Backfill durability runs against a migrated ephemeral libSQL client redirected through the shared production connection seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => testState.db.current.execute(statement),
     batch: (statements: InStatement[], mode?: TransactionMode) => testState.db.current.batch(statements, mode),
   },
 }));
+// test-architecture: allow-boundary-mock -- Gmail range fetch is the outbound provider boundary; worker cases control provider pages while asserting migrated durable progress.
 vi.mock("./gmail.ts", () => ({ fetchEmailsInRange: gmailApi.fetchEmailsInRange }));
+// test-architecture: allow-boundary-mock -- iCloud IMAP range fetch is the outbound provider boundary; worker cases control provider pages while asserting migrated durable progress.
 vi.mock("./icloud.ts", () => ({ fetchEmailsInRange: icloudApi.fetchEmailsInRange }));
+// test-architecture: allow-boundary-mock -- Credential decryption is the cryptographic secret boundary; provider-worker cases use one deterministic iCloud password without deployment keys.
 vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn(() => "icloud-password") }));
 
 const worker = await import("./email-backfill-worker.ts");
@@ -138,6 +142,7 @@ describe("processNextBackfillWindow", () => {
       windowDays: 7,
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail range fetch is outbound; the newest-to-oldest window and mailbox scope are provider compatibility inputs not recoverable from indexed rows.
     expect(gmailApi.fetchEmailsInRange).toHaveBeenCalledWith(
       expect.objectContaining({ id: "gmail-work" }),
       {
@@ -278,6 +283,7 @@ describe("processNextBackfillWindow", () => {
       last_error: "Email account not found: gmail-work",
       attempts: 1,
     });
+    // test-architecture: allow-boundary-interaction -- Gmail range fetch is outbound; a provider reauth state must suppress further requests until credentials are repaired.
     expect(gmailApi.fetchEmailsInRange).not.toHaveBeenCalled();
 
     // A 'failed' row is terminal: a second drain pass must not pick it back up.
@@ -502,6 +508,7 @@ describe("stopEmailBackfillWorker", () => {
 
     await vi.advanceTimersByTimeAsync(2000);
 
+    // test-architecture: allow-boundary-interaction -- Gmail range fetch is outbound; a completed durable backfill must not restart provider pagination.
     expect(gmailApi.fetchEmailsInRange).not.toHaveBeenCalled();
     const rows = await testState.db.current.execute({
       sql: `SELECT status FROM ea_email_backfill_state WHERE account_id = ?`,
@@ -523,6 +530,7 @@ describe("stopEmailBackfillWorker", () => {
     // wakeEmailBackfillWorker alone must stay a no-op post-stop...
     worker.wakeEmailBackfillWorker({ delayMs: 1000 });
     await vi.advanceTimersByTimeAsync(2000);
+    // test-architecture: allow-boundary-interaction -- Gmail range fetch is outbound; another worker's active claim must prevent duplicate provider work.
     expect(gmailApi.fetchEmailsInRange).not.toHaveBeenCalled();
 
     // ...but startEmailBackfillWorker clears the stop latch so the worker can

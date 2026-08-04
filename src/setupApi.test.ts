@@ -28,6 +28,7 @@ describe("owner setup API", () => {
 
     await api.claimOwner("deployment-setup-token", "new-owner-password", "https://setpoint.example.com");
 
+    // test-architecture: allow-boundary-interaction -- only the outbound fetch contract proves the write-only setup token, password, and confirmed origin reach the exact owner-claim endpoint and body.
     expect(fetch).toHaveBeenCalledWith(
       "/api/auth/setup/claim",
       expect.objectContaining({
@@ -48,6 +49,7 @@ describe("owner setup API", () => {
 
     await expect(api.getSetupStatus()).resolves.toEqual({ claimed: true });
     await expect(api.claimOwner("deployment-setup-token", "must-not-leave-browser", "https://demo.example.com")).rejects.toThrow("DEMO_API_UNHANDLED");
+    // test-architecture: allow-boundary-interaction -- successful inert demo results cannot prove setup secrets were never sent across the browser network boundary.
     expect(fetch).not.toHaveBeenCalled();
   });
 });

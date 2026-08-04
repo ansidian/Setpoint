@@ -6,6 +6,7 @@ const mockApi = vi.hoisted(() => ({
   updateImportantSenders: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- important-sender reads and full-list persistence cross the authenticated settings HTTP boundary while optimistic/rollback state renders normally.
 vi.mock("@/api", () => ({
   getImportantSenders: mockApi.getImportantSenders,
   updateImportantSenders: mockApi.updateImportantSenders,
@@ -44,6 +45,7 @@ describe("ImportantSendersCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- sender persistence replaces the complete manual list; the optimistic row cannot prove the existing entry was preserved outbound.
       expect(mockApi.updateImportantSenders).toHaveBeenCalledWith([
         { address: "boss@company.com", name: "Boss", source: "manual" },
         { address: "new@company.com", name: "new", source: "manual" },
@@ -60,6 +62,7 @@ describe("ImportantSendersCard", () => {
     fireEvent.click(screen.getByTitle("Remove"));
 
     await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- removing the final sender must persist an explicit empty list, which is indistinguishable from a local optimistic clear.
       expect(mockApi.updateImportantSenders).toHaveBeenCalledWith([]);
     });
     expect(screen.queryByText("boss@company.com")).toBeNull();
@@ -75,7 +78,7 @@ describe("ImportantSendersCard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    expect(mockApi.updateImportantSenders).not.toHaveBeenCalled();
+    expect(screen.getAllByText("boss@company.com")).toHaveLength(1);
   });
 
   it("rolls back the optimistic add and surfaces an error when the save fails", async () => {

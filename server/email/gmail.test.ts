@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // mock encryption before module load so getValidToken doesn't need real credentials
+// test-architecture: allow-boundary-mock -- Gmail token decryption is the cryptographic boundary; HTTP adapter cases use one controlled valid token.
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => JSON.stringify({
     access_token: "tok",
@@ -9,6 +10,7 @@ vi.mock("../platform/encryption.ts", () => ({
   }),
   encrypt: (s: string) => s,
 }));
+// test-architecture: allow-boundary-mock -- Google application credentials are a write-only secret boundary used only by provider-token refresh paths.
 vi.mock("../google-oauth-credentials.ts", () => ({
   googleOAuthCredentialManager: {
     resolveActive: vi.fn(async () => ({ clientId: "client-id", clientSecret: "client-secret" })),
@@ -50,6 +52,7 @@ describe("gmail", () => {
       const ids = Array.from({ length: 25 }, (_, i) => `id${i}`);
       const results = await fetchMessages("token", ids);
 
+      // test-architecture: allow-boundary-interaction -- Gmail message HTTP is outbound; each requested identity must be fetched exactly once with no omissions or duplicates.
       expect(fetchMock).toHaveBeenCalledTimes(25);
       expect(results.length).toBe(25);
     });
@@ -63,6 +66,7 @@ describe("gmail", () => {
       const ids = Array.from({ length: 120 }, (_, i) => `id${i}`);
       const results = await fetchMessages("token", ids);
 
+      // test-architecture: allow-boundary-interaction -- Gmail message HTTP is outbound; bounded concurrency must still fetch each of 120 requested identities exactly once.
       expect(fetchMock).toHaveBeenCalledTimes(120);
       expect(results.length).toBe(120);
     });
@@ -87,6 +91,7 @@ describe("gmail", () => {
       // First and third calls fail; 3 of 5 succeed
       expect(results.length).toBe(3);
       // 2 per-message warnings + 1 summary warning
+      // test-architecture: allow-boundary-interaction -- Retry warnings are the process logging boundary; every exhausted Gmail message request must emit one operational warning.
       expect(warnSpy).toHaveBeenCalledTimes(3);
       warnSpy.mockRestore();
     });

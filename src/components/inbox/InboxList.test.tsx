@@ -1,30 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComponentProps, MouseEventHandler, ReactNode } from "react";
+import { afterEach, describe, expect, it } from "vitest";
+import { useState, type ComponentProps } from "react";
 import InboxList from "./InboxList";
 import { makeInboxEmail } from "./test-utils/inboxFixtures";
-
-vi.mock("./primitives", () => ({
-  Avatar: function AvatarMock({ name }: { name?: string | null }) {
-    return <span aria-hidden="true">{name?.slice(0, 1)}</span>;
-  },
-  Kbd: function KbdMock({ children }: { children: ReactNode }) {
-    return <kbd>{children}</kbd>;
-  },
-  StickyHeader: function StickyHeaderMock({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
-  },
-  IconBtn: function IconBtnMock({ children, onClick, title }: { children: ReactNode; onClick: MouseEventHandler<HTMLButtonElement>; title?: string }) {
-    return (
-      <button type="button" onClick={onClick} title={title}>
-        {children}
-      </button>
-    );
-  },
-  LaneIcon: function LaneIconMock() {
-    return <span aria-hidden="true" />;
-  },
-}));
 
 afterEach(() => {
   cleanup();
@@ -160,20 +138,22 @@ describe("InboxList", () => {
   });
 
   it("collapses low-priority active snapshot categories into a More menu", () => {
-    const onCategoryFilterChange = vi.fn();
-
-    renderInboxList({
-      activeSnapshotMode: true,
-      snapshotCategories: [
-        { category: "marketing", count: 20 },
-        { category: "finance", count: 1 },
-        { category: "security", count: 2 },
-        { category: "legal", count: 3 },
-        { category: "school", count: 8 },
-        { category: "work", count: 9 },
-      ],
-      onCategoryFilterChange,
-    });
+    function CategoryHarness() {
+      const [categoryFilter, setCategoryFilter] = useState("__all");
+      return <><output aria-label="Selected category">{categoryFilter}</output><InboxList
+        accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
+        density="default" layout="swimlanes" showPreview searchQuery="" onSearchChange={() => {}}
+        onMarkAllRead={() => {}} onRefresh={() => {}} totalCount={0} unreadCount={0}
+        briefingGeneratedAt={null} searchRef={null}
+        activeSnapshotMode categoryFilter={categoryFilter} onCategoryFilterChange={setCategoryFilter}
+        snapshotCategories={[
+          { category: "marketing", count: 20 }, { category: "finance", count: 1 },
+          { category: "security", count: 2 }, { category: "legal", count: 3 },
+          { category: "school", count: 8 }, { category: "work", count: 9 },
+        ]}
+      /></>;
+    }
+    render(<CategoryHarness />);
 
     const strip = screen.getByTestId("inbox-category-filter-strip");
     expect(within(strip).getByRole("button", { name: /^All$/i })).toBeTruthy();
@@ -191,25 +171,27 @@ describe("InboxList", () => {
     expect(within(menu).queryByRole("menuitemradio", { name: /Security 2/i })).toBeNull();
 
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Marketing 20/i }));
-    expect(onCategoryFilterChange).toHaveBeenCalledWith("marketing");
+    expect(screen.getByLabelText("Selected category").textContent).toBe("marketing");
     expect(screen.queryByRole("menu", { name: /more inbox categories/i })).toBeNull();
   });
 
   it("marks a hidden active category through the More trigger and only All clears it", () => {
-    const onCategoryFilterChange = vi.fn();
-
-    renderInboxList({
-      activeSnapshotMode: true,
-      categoryFilter: "marketing",
-      snapshotCategories: [
-        { category: "finance", count: 1 },
-        { category: "security", count: 2 },
-        { category: "legal", count: 3 },
-        { category: "school", count: 8 },
-        { category: "marketing", count: 20 },
-      ],
-      onCategoryFilterChange,
-    });
+    function CategoryHarness() {
+      const [categoryFilter, setCategoryFilter] = useState("marketing");
+      return <><output aria-label="Selected category">{categoryFilter}</output><InboxList
+        accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
+        density="default" layout="swimlanes" showPreview searchQuery="" onSearchChange={() => {}}
+        onMarkAllRead={() => {}} onRefresh={() => {}} totalCount={0} unreadCount={0}
+        briefingGeneratedAt={null} searchRef={null}
+        activeSnapshotMode categoryFilter={categoryFilter} onCategoryFilterChange={setCategoryFilter}
+        snapshotCategories={[
+          { category: "finance", count: 1 }, { category: "security", count: 2 },
+          { category: "legal", count: 3 }, { category: "school", count: 8 },
+          { category: "marketing", count: 20 },
+        ]}
+      /></>;
+    }
+    render(<CategoryHarness />);
 
     const strip = screen.getByTestId("inbox-category-filter-strip");
     expect(within(strip).getByRole("button", { name: /Marketing · More/i }).getAttribute("aria-pressed")).toBe("true");
@@ -220,10 +202,10 @@ describe("InboxList", () => {
     expect(activeMenuItem.getAttribute("aria-checked")).toBe("true");
 
     fireEvent.click(activeMenuItem);
-    expect(onCategoryFilterChange).not.toHaveBeenCalledWith("marketing");
+    expect(screen.getByLabelText("Selected category").textContent).toBe("marketing");
 
     fireEvent.click(within(strip).getByRole("button", { name: /^All$/i }));
-    expect(onCategoryFilterChange).toHaveBeenCalledWith("__all");
+    expect(screen.getByLabelText("Selected category").textContent).toBe("__all");
   });
 
   it("shows indexed-search skeleton rows while a desktop search is unresolved", () => {
@@ -274,19 +256,24 @@ describe("InboxList", () => {
   });
 
   it("hands the search query off to alfred on Cmd+Enter", () => {
-    const onAskAlfred = vi.fn();
-
-    renderInboxList({
-      searchQuery: "amazon return",
-      onAskAlfred,
-    });
+    function AlfredHarness() {
+      const [question, setQuestion] = useState("");
+      return <><output aria-label="Alfred question">{question}</output><InboxList
+        accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
+        density="default" layout="swimlanes" showPreview searchQuery="amazon return"
+        onSearchChange={() => {}} onMarkAllRead={() => {}} onRefresh={() => {}}
+        totalCount={0} unreadCount={0} briefingGeneratedAt={null}
+        searchRef={null} onAskAlfred={setQuestion}
+      /></>;
+    }
+    render(<AlfredHarness />);
 
     fireEvent.keyDown(screen.getByLabelText("Search indexed mail"), {
       key: "Enter",
       metaKey: true,
     });
 
-    expect(onAskAlfred).toHaveBeenCalledWith("amazon return");
+    expect(screen.getByLabelText("Alfred question").textContent).toBe("amazon return");
     expect(screen.queryByTestId("inbox-ai-confirmation")).toBeNull();
   });
 
@@ -337,21 +324,22 @@ describe("InboxList", () => {
   });
 
   it("renders a Show more results button when more indexed results are available and wires the click through", () => {
-    const onLoadMoreSearch = vi.fn();
-
-    renderInboxList({
-      emails: [makeInboxEmail({ id: "email-1", _lane: "action" })],
-      layout: "flat",
-      indexedSearchActive: true,
-      totalCount: 30,
-      indexedSearchTotal: 42,
-      indexedSearchHasMore: true,
-      onLoadMoreSearch,
-    });
+    function SearchPagingHarness() {
+      const [hasMore, setHasMore] = useState(true);
+      return <InboxList
+        accent="#cba6da" emails={[makeInboxEmail({ id: "email-1", _lane: "action" })]}
+        accountsById={{}} selectedId={null} onOpen={() => {}} density="default" layout="flat"
+        showPreview searchQuery="" onSearchChange={() => {}} onMarkAllRead={() => {}}
+        onRefresh={() => {}} totalCount={30} unreadCount={0}
+        briefingGeneratedAt={null} searchRef={null} indexedSearchActive indexedSearchTotal={42}
+        indexedSearchHasMore={hasMore} onLoadMoreSearch={() => setHasMore(false)}
+      />;
+    }
+    render(<SearchPagingHarness />);
 
     const button = screen.getByRole("button", { name: "Show more results" });
     fireEvent.click(button);
-    expect(onLoadMoreSearch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Show more results" })).toBeNull();
   });
 
   it("hides the Show more results button when there is nothing more to load, even at the results ceiling", () => {

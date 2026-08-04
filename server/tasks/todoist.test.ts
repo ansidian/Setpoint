@@ -19,13 +19,17 @@ const testState = vi.hoisted(() => ({
   requestTodoistMirrorSync: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Todoist credential lookup is a database boundary; facade cases supply one controlled stored token while write-through durability is tested separately.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: testState.dbExecute,
   },
 }));
+// test-architecture: allow-boundary-mock -- Token decryption is the cryptographic storage boundary used before outbound Todoist requests.
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value: unknown) => value }));
+// test-architecture: allow-boundary-mock -- The local Todoist mirror is the facade's durable cache boundary; cases verify provider writes project into controlled mirror state and reads never fall through live.
 vi.mock("./todoist-mirror.ts", () => testState.mirror);
+// test-architecture: allow-boundary-mock -- Mirror wake-up is the process/timer boundary following provider mutations; exact coalescing is owned by webhook worker tests.
 vi.mock("./todoist-webhook.ts", () => ({
   requestTodoistMirrorSync: testState.requestTodoistMirrorSync,
 }));
@@ -190,7 +194,9 @@ describe("Todoist write mirror coherence", () => {
     });
 
     expect(result).toMatchObject({ id: "new-task", title: "Draft essay" });
+    // test-architecture: allow-boundary-interaction -- Provider create success must write through to the durable local mirror for the exact owner/item.
     expect(testState.mirror.upsertTodoistMirrorItem).toHaveBeenCalledWith("u1", createdTask);
+    // test-architecture: allow-boundary-interaction -- Post-create reconciliation crosses the background-worker boundary and must retain its exact reason.
     expect(testState.requestTodoistMirrorSync).toHaveBeenCalledWith("u1", {
       reason: "todoist-write",
     });
@@ -229,7 +235,9 @@ describe("Todoist write mirror coherence", () => {
       content: "Revised essay",
     });
 
+    // test-architecture: allow-boundary-interaction -- Provider update success must write through to the durable local mirror for the exact owner/item.
     expect(testState.mirror.upsertTodoistMirrorItem).toHaveBeenCalledWith("u1", updatedTask);
+    // test-architecture: allow-boundary-interaction -- Post-update reconciliation crosses the background-worker boundary and must retain its exact reason.
     expect(testState.requestTodoistMirrorSync).toHaveBeenCalledWith("u1", {
       reason: "todoist-write",
     });
@@ -245,7 +253,9 @@ describe("Todoist write mirror coherence", () => {
 
     await completeTodoistTask("u1", "task-1");
 
+    // test-architecture: allow-boundary-interaction -- Provider close success must durably remove the exact task from the active mirror before later reads.
     expect(testState.mirror.markTodoistMirrorItemCompleted).toHaveBeenCalledWith("u1", "task-1");
+    // test-architecture: allow-boundary-interaction -- Post-close reconciliation crosses the background-worker boundary and must retain its exact reason.
     expect(testState.requestTodoistMirrorSync).toHaveBeenCalledWith("u1", {
       reason: "todoist-write",
     });
@@ -261,7 +271,9 @@ describe("Todoist write mirror coherence", () => {
 
     await deleteTodoistTask("u1", "task-1");
 
+    // test-architecture: allow-boundary-interaction -- Provider delete success must durably tombstone the exact task in the local mirror.
     expect(testState.mirror.markTodoistMirrorItemDeleted).toHaveBeenCalledWith("u1", "task-1");
+    // test-architecture: allow-boundary-interaction -- Post-delete reconciliation crosses the background-worker boundary and must retain its exact reason.
     expect(testState.requestTodoistMirrorSync).toHaveBeenCalledWith("u1", {
       reason: "todoist-write",
     });
@@ -270,7 +282,8 @@ describe("Todoist write mirror coherence", () => {
 
 describe("Todoist mirror-backed facade", () => {
   it("maps active tasks from the mirror without calling the live filter endpoint", async () => {
-    testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
+    testState.mirror.listTodoistMirrorActiveTasks.mockImplementationOnce(async (userId, range) => (
+      userId === "u1" && range.start === null && range.end === null ? [
       {
         id: "t1",
         content: "Submit lab",
@@ -283,15 +296,12 @@ describe("Todoist mirror-backed facade", () => {
         priority: 4,
         labels: ["school"],
       },
-    ]);
+    ] : []));
     const { fetchTodoistTasks } = await import("./todoist.ts");
 
     const tasks = await fetchTodoistTasks("u1");
 
-    expect(testState.mirror.listTodoistMirrorActiveTasks).toHaveBeenCalledWith("u1", {
-      start: null,
-      end: null,
-    });
+    // test-architecture: allow-boundary-interaction -- Mirror-backed reads must never fall through to Todoist's live filter endpoint.
     expect(testState.fetchFn).not.toHaveBeenCalledWith(
       expect.stringContaining("/tasks/filter"),
       expect.anything(),
@@ -327,7 +337,8 @@ describe("Todoist mirror-backed facade", () => {
         labels: [],
       },
     ]);
-    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+    testState.mirror.listTodoistMirrorCompletedTasks.mockImplementationOnce(async (userId, range) => (
+      userId === "u1" && range.start === "2026-05-05" && range.end === null ? [
       {
         id: "single-done",
         content: "Check-in IHSS",
@@ -337,15 +348,11 @@ describe("Todoist mirror-backed facade", () => {
         priority: 1,
         labels: [],
       },
-    ]);
+    ] : []));
     const { fetchTodoistTasks } = await import("./todoist.ts");
 
     const tasks = await fetchTodoistTasks("u1");
 
-    expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
-      start: "2026-05-05",
-      end: null,
-    });
     expect(tasks.map((task) => [task.id, task.status, task.due_date, task.is_recurring])).toEqual([
       ["recurring-next", "incomplete", "2026-05-07", true],
       ["single-done", "complete", "2026-05-05", false],
@@ -366,7 +373,8 @@ describe("Todoist mirror-backed facade", () => {
         labels: [],
       },
     ]);
-    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+    testState.mirror.listTodoistMirrorCompletedTasks.mockImplementationOnce(async (userId, range) => (
+      userId === "u1" && range.start === "2026-05-05" && range.end === null ? [
       {
         id: "single-done",
         content: "Check-in IHSS",
@@ -376,15 +384,11 @@ describe("Todoist mirror-backed facade", () => {
         priority: 1,
         labels: [],
       },
-    ]);
+    ] : []));
     const { fetchTodoistTasksAll } = await import("./todoist.ts");
 
     const tasks = await fetchTodoistTasksAll("u1");
 
-    expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
-      start: "2026-05-05",
-      end: null,
-    });
     expect(tasks.map((task) => [task.id, task.status, task.due_date, task.is_recurring])).toEqual([
       ["recurring-next", "incomplete", "2026-05-07", true],
       ["single-done", "complete", "2026-05-05", false],
@@ -393,19 +397,21 @@ describe("Todoist mirror-backed facade", () => {
   });
 
   it("reads non-deleted due Todoist ids for tombstone orphan pruning", async () => {
-    testState.mirror.listTodoistMirrorDueTaskIds.mockResolvedValueOnce(new Set(["active-1", "completed-1"]));
+    testState.mirror.listTodoistMirrorDueTaskIds.mockImplementationOnce(async (userId) => (
+      userId === "u1" ? new Set(["active-1", "completed-1"]) : new Set()
+    ));
     const { fetchTodoistDueTaskIdSet } = await import("./todoist.ts");
 
     const ids = await fetchTodoistDueTaskIdSet("u1");
 
-    expect(testState.mirror.listTodoistMirrorDueTaskIds).toHaveBeenCalledWith("u1");
     expect(ids).toEqual(new Set(["active-1", "completed-1"]));
   });
 
   it("reads historical range rows from active and completed mirror tables without live Todoist lookup", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-05T18:00:00.000Z"));
-    testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
+    testState.mirror.listTodoistMirrorActiveTasks.mockImplementationOnce(async (userId, range) => (
+      userId === "u1" && range.start === "2026-05-01" && range.end === "2026-05-10" ? [
       {
         id: "active-1",
         content: "Active deadline",
@@ -414,8 +420,9 @@ describe("Todoist mirror-backed facade", () => {
         priority: 1,
         labels: [],
       },
-    ]);
-    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+    ] : []));
+    testState.mirror.listTodoistMirrorCompletedTasks.mockImplementationOnce(async (userId, range) => (
+      userId === "u1" && range.start === "2026-05-01" && range.end === "2026-05-10" ? [
       {
         task_id: "completed-1",
         content: "Completed deadline",
@@ -424,24 +431,18 @@ describe("Todoist mirror-backed facade", () => {
         priority: 1,
         labels: [],
       },
-    ]);
+    ] : []));
     testState.fetchFn.mockRejectedValue(new Error("network should not be used"));
     const { fetchTodoistTasksRange } = await import("./todoist.ts");
 
     const tasks = await fetchTodoistTasksRange("u1", { start: "2026-05-01", end: "2026-05-10" });
 
-    expect(testState.mirror.listTodoistMirrorActiveTasks).toHaveBeenCalledWith("u1", {
-      start: "2026-05-01",
-      end: "2026-05-10",
-    });
-    expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
-      start: "2026-05-01",
-      end: "2026-05-10",
-    });
+    // test-architecture: allow-boundary-interaction -- Historical range reads must not use Todoist's live active-task endpoint.
     expect(testState.fetchFn).not.toHaveBeenCalledWith(
       expect.stringContaining("/tasks/filter"),
       expect.anything(),
     );
+    // test-architecture: allow-boundary-interaction -- Historical range reads must not use Todoist's live completed-task endpoint.
     expect(testState.fetchFn).not.toHaveBeenCalledWith(
       expect.stringContaining("/tasks/completed/by_due_date"),
       expect.anything(),
@@ -462,6 +463,7 @@ describe("Todoist mirror-backed facade", () => {
     await expect(fetchTodoistLabels("u1")).resolves.toEqual([
       { id: "l1", name: "writing", color: "#884dff" },
     ]);
+    // test-architecture: allow-boundary-interaction -- Project/label picker reads must remain local and issue no outbound Todoist HTTP request.
     expect(testState.fetchFn).not.toHaveBeenCalled();
   });
 
@@ -485,6 +487,7 @@ describe("Todoist mirror-backed facade", () => {
     const { fetchTodoistTasks } = await import("./todoist.ts");
 
     await expect(fetchTodoistTasks("u1")).resolves.toEqual([]);
+    // test-architecture: allow-boundary-interaction -- Missing mirror bootstrap crosses the outbound background-sync boundary with an explicit full-sync request.
     expect(testState.mirror.syncTodoistMirror).toHaveBeenCalledWith("u1", { forceFull: true });
   });
 
@@ -514,6 +517,7 @@ describe("Todoist mirror-backed facade", () => {
 
     const tasks = await fetchTodoistTasksRange("u1", { start: "2026-05-01", end: "2026-05-10" });
 
+    // test-architecture: allow-boundary-interaction -- Mirror-backed range reads must issue no outbound Todoist HTTP request, including the deprecated completed endpoint.
     expect(testState.fetchFn).not.toHaveBeenCalled();
     expect(tasks.map((task) => [task.id, task.status])).toEqual([
       ["active-1", "incomplete"],

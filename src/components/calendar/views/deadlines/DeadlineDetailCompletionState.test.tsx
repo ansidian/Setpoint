@@ -5,6 +5,7 @@ import type { ComponentType, ReactNode } from "react";
 
 const completeDeadlineOccurrence = vi.fn();
 
+// test-architecture: allow-boundary-mock -- Deadline completion tests replace only the outbound HTTP adapter; the real rendered detail state owns pending, success, failure, and reopen reconciliation without contacting Todoist.
 vi.mock("../../../../api", async () => {
   const actual = await vi.importActual("../../../../api");
   return {

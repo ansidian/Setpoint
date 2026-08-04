@@ -1,56 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createClient } from "@libsql/client";
 import type { Client, Row } from "@libsql/client";
+import { readFileSync } from "node:fs";
 import express from "express";
-import type { Express, NextFunction, Request, Response } from "express";
+import type { Express } from "express";
+import cookieParser from "cookie-parser";
 import request from "../test-utils/supertest.ts";
+import type { Test } from "../test-utils/supertest.ts";
+import { createAuthTestDb, seedOwner, seedSession } from "../test-utils/auth-db.ts";
+import { createRequireCookieSession } from "../middleware/auth.ts";
+import { createNotesRouter } from "./notes.ts";
 
-const testState = vi.hoisted<{ db: { current: Client | null }; batchCalls: unknown[][] }>(() => ({
+const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
-  batchCalls: [],
 }));
 const currentDb = (): Client => testState.db.current!;
 
-vi.mock("../middleware/auth.ts", () => ({
-  requireCookieSession: (_req: Request, _res: Response, next: NextFunction) => next(),
-}));
-
-vi.mock("../db/connection.ts", () => ({
-  default: {
-    execute: (...args: Parameters<Client["execute"]>) => currentDb().execute(...args),
-    executeMultiple: (...args: Parameters<Client["executeMultiple"]>) => currentDb().executeMultiple(...args),
-    batch: (...args: Parameters<Client["batch"]>) => {
-      testState.batchCalls.push(args);
-      return currentDb().batch(...args);
-    },
-  },
-}));
-
 process.env.EA_USER_ID = "u1";
-
-const { default: router } = await import("./notes.ts");
 
 function makeApp(): Express {
   const app = express();
   app.use(express.json());
-  app.use("/api/notes", router);
+  app.use(cookieParser());
+  app.use("/api/notes", createNotesRouter({
+    dbClient: currentDb(),
+    authenticate: createRequireCookieSession(currentDb()),
+  }));
   return app;
 }
 
-async function createNotesDb(): Promise<Client> {
-  const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(`
-    CREATE TABLE ea_notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      archived_at TEXT,
-      updated_at TEXT
-    );
-  `);
-  return db;
+function authenticated(test: Test): Test {
+  return test.set("Cookie", "ea_session=valid");
 }
 
 async function seedNote(db: Client, content: string, sortOrder: number): Promise<void> {
@@ -70,8 +49,13 @@ async function readNotes(db: Client): Promise<Row[]> {
 
 describe("notes routes", () => {
   beforeEach(async () => {
-    testState.db.current = await createNotesDb();
-    testState.batchCalls.length = 0;
+    testState.db.current = await createAuthTestDb();
+    await currentDb().executeMultiple(readFileSync(
+      new URL("../db/migrations/021_notes_archive.sql", import.meta.url),
+      "utf8",
+    ));
+    await seedOwner(currentDb(), { userId: "u1", passwordHash: "hash" });
+    await seedSession(currentDb(), "valid");
   });
 
   afterEach(async () => {
@@ -84,7 +68,7 @@ describe("notes routes", () => {
     await seedNote(currentDb(), "top-existing", 0);
     await seedNote(currentDb(), "below-existing", 1);
 
-    const res = await request(makeApp()).post("/api/notes").send({ content: "freshest" });
+    const res = await authenticated(request(makeApp()).post("/api/notes")).send({ content: "freshest" });
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ content: "freshest", sort_order: 0 });
@@ -105,12 +89,10 @@ describe("notes routes", () => {
   it("rejects blank content without touching the database", async () => {
     await seedNote(currentDb(), "older", 0);
 
-    const res = await request(makeApp()).post("/api/notes").send({ content: "   " });
+    const res = await authenticated(request(makeApp()).post("/api/notes")).send({ content: "   " });
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "Content is required" });
-    expect(testState.batchCalls).toHaveLength(0);
-
     const rows = await readNotes(currentDb());
     expect(rows).toHaveLength(1);
     expect(rows[0]!.sort_order).toBe(0);
@@ -120,11 +102,11 @@ describe("notes routes", () => {
     await seedNote(currentDb(), "promote me", 0);
     const id = (await readNotes(currentDb()))[0]!.id;
 
-    const res = await request(makeApp()).patch(`/api/notes/${id}/archive`).send({ archived: true });
+    const res = await authenticated(request(makeApp()).patch(`/api/notes/${id}/archive`)).send({ archived: true });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true });
-    const list = await request(makeApp()).get("/api/notes");
+    const list = await authenticated(request(makeApp()).get("/api/notes"));
     const row = list.body.find((n: { id: number }) => n.id === id);
     // Guard the contract, not just presence: both must hold a real datetime string.
     expect(row.archived_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
@@ -134,11 +116,11 @@ describe("notes routes", () => {
   it("unarchives a note (clears archived_at and re-bumps updated_at)", async () => {
     await seedNote(currentDb(), "back to active", 0);
     const id = (await readNotes(currentDb()))[0]!.id;
-    await request(makeApp()).patch(`/api/notes/${id}/archive`).send({ archived: true });
+    await authenticated(request(makeApp()).patch(`/api/notes/${id}/archive`)).send({ archived: true });
 
-    await request(makeApp()).patch(`/api/notes/${id}/archive`).send({ archived: false });
+    await authenticated(request(makeApp()).patch(`/api/notes/${id}/archive`)).send({ archived: false });
 
-    const list = await request(makeApp()).get("/api/notes");
+    const list = await authenticated(request(makeApp()).get("/api/notes"));
     const row = list.body.find((n: { id: number }) => n.id === id);
     expect(row.archived_at).toBeNull();
     // The clear path also bumps updated_at ("always bumps updated_at").
@@ -149,10 +131,10 @@ describe("notes routes", () => {
     await seedNote(currentDb(), "old text", 0);
     const id = (await readNotes(currentDb()))[0]!.id;
 
-    const res = await request(makeApp()).patch(`/api/notes/${id}`).send({ content: "new text" });
+    const res = await authenticated(request(makeApp()).patch(`/api/notes/${id}`)).send({ content: "new text" });
 
     expect(res.status).toBe(200);
-    const list = await request(makeApp()).get("/api/notes");
+    const list = await authenticated(request(makeApp()).get("/api/notes"));
     expect(list.body.find((n: { id: number }) => n.id === id).updated_at).not.toBeNull();
   });
 });

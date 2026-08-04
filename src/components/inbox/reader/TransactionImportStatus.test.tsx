@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 
 const getTransactionImportEmailStatus = vi.hoisted(() => vi.fn());
+// test-architecture: allow-boundary-mock -- src/api.ts is the authenticated transaction-import status boundary; reader projection and routing stay real.
 vi.mock("@/api", () => ({ getTransactionImportEmailStatus }));
 
 const { default: TransactionImportStatus } = await import("./TransactionImportStatus");

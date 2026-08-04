@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalendarQuickActionEvent } from "./calendarQuickActionModel";
 
+// test-architecture: allow-boundary-mock -- The quick-action state machine runs against a fake Calendar HTTP adapter so race/error tests cannot mutate the real provider.
 vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
   createCalendarEventsBatch: vi.fn(),
@@ -24,6 +25,32 @@ const {
 afterEach(() => {
   vi.clearAllMocks();
 });
+
+function createObservedHandlers() {
+  const state = {
+    upserts: [] as CalendarQuickActionEvent[],
+    removals: [] as Array<string | number>,
+    batchDeleted: [] as CalendarQuickActionEvent[][],
+    staleBounds: [] as Array<[string, string]>,
+  };
+  return {
+    state,
+    handlers: {
+      upsertEvents: (input: CalendarQuickActionEvent | CalendarQuickActionEvent[]) => {
+        state.upserts.push(...(Array.isArray(input) ? input : [input]));
+      },
+      removeEvent: (id: string | number | null | undefined) => {
+        if (id !== null && id !== undefined) state.removals.push(id);
+      },
+      onBatchDeleted: (events: CalendarQuickActionEvent[]) => {
+        state.batchDeleted.push(events);
+      },
+      markStale: (start: string, end: string) => {
+        state.staleBounds.push([start, end]);
+      },
+    },
+  };
+}
 
 describe("useCalendarQuickActions batch delete partial failure", () => {
   function makeEvent(
@@ -49,14 +76,10 @@ describe("useCalendarQuickActions batch delete partial failure", () => {
         ? Promise.resolve({})
         : Promise.reject(new Error("Provider rejected delete."))
     ));
-    const onBatchDeleted = vi.fn();
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      onBatchDeleted,
+      ...observed.handlers,
     }));
 
     act(() => {
@@ -67,14 +90,15 @@ describe("useCalendarQuickActions batch delete partial failure", () => {
     });
 
     // Both deletes were attempted — the loop did not abort after "event-keep" failed.
+    // test-architecture: allow-boundary-interaction -- Partial failure must still attempt the first outbound Calendar delete; result state does not identify every provider request attempted.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("event-keep", expect.anything());
+    // test-architecture: allow-boundary-interaction -- Partial failure must continue to the second outbound Calendar delete after the first rejects.
     expect(deleteCalendarEvent).toHaveBeenCalledWith("event-drop", expect.anything());
     // Selection is pruned for the succeeded event only, never the failed one.
-    expect(onBatchDeleted).toHaveBeenCalledTimes(1);
-    const prunedIds = onBatchDeleted.mock.calls[0]![0].map((event: { id: unknown }) => event.id);
+    const prunedIds = observed.state.batchDeleted.flat().map((event) => event.id);
     expect(prunedIds).toEqual(["event-drop"]);
     // Failed event was rolled back into the grid and the menu stays open with an error.
-    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({ id: "event-keep" }));
+    expect(observed.state.upserts.map((event) => event.id)).toContain("event-keep");
     expect(result.current.contextMenu).toMatchObject({
       busy: false,
       error: "Deleted 1, failed 1.",
@@ -85,12 +109,10 @@ describe("useCalendarQuickActions batch delete partial failure", () => {
     const a = makeEvent({ id: "event-a", etag: '"etag-a"' });
     const b = makeEvent({ id: "event-b", etag: '"etag-b"' });
     deleteCalendarEvent.mockRejectedValue(new Error("All deletes failed."));
-    const onBatchDeleted = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents: vi.fn(),
-      removeEvent: vi.fn(),
-      onBatchDeleted,
+      ...observed.handlers,
     }));
 
     act(() => {
@@ -100,8 +122,9 @@ describe("useCalendarQuickActions batch delete partial failure", () => {
       await result.current.confirmContextDelete();
     });
 
+    // test-architecture: allow-boundary-interaction -- The all-failure case must attempt both outbound provider deletes rather than aborting after the first rejection.
     expect(deleteCalendarEvent).toHaveBeenCalledTimes(2);
-    expect(onBatchDeleted).not.toHaveBeenCalled();
+    expect(observed.state.batchDeleted).toEqual([]);
     expect(result.current.contextMenu).toMatchObject({
       busy: false,
       error: "All deletes failed.",
@@ -127,12 +150,10 @@ describe("useCalendarQuickActions delete timeout settles by reverting", () => {
       writable: true,
       etag: '"etag-timeout"',
     };
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
+      ...observed.handlers,
       onEventDeleted: vi.fn(),
     }));
 
@@ -148,8 +169,8 @@ describe("useCalendarQuickActions delete timeout settles by reverting", () => {
 
     // The optimistic removal is reverted (event re-upserted) and the timeout is
     // surfaced — the mutation SETTLED rather than leaving the grid diverged.
-    expect(removeEvent).toHaveBeenCalledWith("event-timeout");
-    expect(upsertEvents).toHaveBeenCalledWith(event);
+    expect(observed.state.removals).toContain("event-timeout");
+    expect(observed.state.upserts).toContainEqual(event);
     expect(result.current.status).toMatchObject({ tone: "error" });
     expect(result.current.status?.message).toContain("timed out");
   });
@@ -169,14 +190,10 @@ describe("useCalendarQuickActions marks months stale after failed mutations", ()
       writable: true,
       etag: '"etag-stale"',
     };
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
-    const markStale = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
-      markStale,
+      ...observed.handlers,
       onEventDeleted: vi.fn(),
     }));
 
@@ -193,8 +210,8 @@ describe("useCalendarQuickActions marks months stale after failed mutations", ()
     // The optimistic removal is reverted AND the touched months are marked stale
     // so the next range pass re-fetches truth from Google (self-heals a mutation
     // that may have applied server-side before the client gave up).
-    expect(upsertEvents).toHaveBeenCalledWith(event);
-    expect(markStale).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
+    expect(observed.state.upserts).toContainEqual(event);
+    expect(observed.state.staleBounds).toContainEqual(["2026-04-20", "2026-04-20"]);
   });
 });
 
@@ -212,12 +229,10 @@ describe("useCalendarQuickActions clipboard paste failure", () => {
       writable: true,
     };
     const clipboard = createCalendarEventClipboard(createCalendarEventSelectionSet([source]));
-    const upsertEvents = vi.fn();
-    const removeEvent = vi.fn();
+    const observed = createObservedHandlers();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
-      upsertEvents,
-      removeEvent,
+      ...observed.handlers,
       onSelectEvent: vi.fn(),
     }));
 
@@ -225,8 +240,8 @@ describe("useCalendarQuickActions clipboard paste failure", () => {
       await result.current.pasteEvent(clipboard, "2026-04-22");
     });
 
-    const optimisticEvent = upsertEvents.mock.calls[0]![0];
-    expect(removeEvent).toHaveBeenCalledWith(optimisticEvent.id);
+    const optimisticEvent = observed.state.upserts[0]!;
+    expect(observed.state.removals).toContain(optimisticEvent.id);
     expect(result.current.status).toEqual({ tone: "error", message: "Failed to paste event." });
   });
 });

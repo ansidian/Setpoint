@@ -10,6 +10,7 @@ const gmailApi = vi.hoisted(() => ({
   getAccessToken: vi.fn(async (account: { id: string }) => `token-${account.id}`),
 }));
 
+// test-architecture: allow-boundary-mock -- Gmail access-token resolution is the credential/provider boundary; watch lifecycle executes real durable logic with controlled per-account tokens.
 vi.mock("./gmail.ts", async (importOriginal) => ({
   ...await importOriginal<typeof GmailModule>(),
   getAccessToken: gmailApi.getAccessToken,
@@ -63,6 +64,7 @@ describe("Gmail watch lifecycle", () => {
       watch_expiration_at: "2026-08-02T00:00:00.000Z",
       status: "active",
     });
+    // test-architecture: allow-boundary-interaction -- Gmail watch registration is outbound; URL, label filter, and Pub/Sub topic framing are provider compatibility contracts.
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://gmail.googleapis.com/gmail/v1/users/me/watch",
       expect.objectContaining({
@@ -154,6 +156,7 @@ describe("Gmail watch lifecycle", () => {
       dbClient: { execute } as never,
       topicResolver: async () => null,
     })).resolves.toEqual({ checked: 0, renewed: 0, skipped: true });
+    // test-architecture: allow-boundary-interaction -- Watch-state persistence is a database boundary; invalid topic configuration must fail before corrupting durable provider cursor state.
     expect(execute).not.toHaveBeenCalled();
   });
 });

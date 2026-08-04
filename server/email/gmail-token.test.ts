@@ -23,11 +23,13 @@ function currentDb(): Client {
   return testState.db.current;
 }
 
+// test-architecture: allow-boundary-mock -- Gmail token persistence executes real migrations and SQL against an ephemeral libSQL client redirected through the production singleton seam.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => currentDb().execute(statement),
   },
 }));
+// test-architecture: allow-boundary-mock -- Token encryption is the cryptographic storage boundary; deterministic ciphertext makes durable refresh/reauth state inspectable.
 vi.mock("../platform/encryption.ts", () => ({
   decrypt: () => testState.storedCredentials.current,
   encrypt: (value: string) => value,
@@ -35,6 +37,7 @@ vi.mock("../platform/encryption.ts", () => ({
 const googleCredentials = vi.hoisted(() => ({
   resolveActive: vi.fn(async () => ({ clientId: "runtime-client-id", clientSecret: "runtime-client-secret" })),
 }));
+// test-architecture: allow-boundary-mock -- Google application credentials are a write-only secret boundary; refresh cases supply one active client pair without production secrets.
 vi.mock("../google-oauth-credentials.ts", () => ({
   googleOAuthCredentialManager: googleCredentials,
 }));
@@ -123,6 +126,7 @@ describe("getValidToken expires_at handling (P3-48)", () => {
     // A refresh actually happened: token swapped and exactly one fetch (the
     // refresh) was made.
     expect(token).toBe("refreshed");
+    // test-architecture: allow-boundary-interaction -- Google OAuth refresh is the outbound provider boundary; one expired token may trigger exactly one refresh exchange.
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://oauth2.googleapis.com/token");
     const refreshBody = fetchMock.mock.calls[0]?.[1]?.body;
@@ -143,6 +147,7 @@ describe("getValidToken expires_at handling (P3-48)", () => {
     const token = await getAccessToken(account);
 
     expect(token).toBe("valid");
+    // test-architecture: allow-boundary-interaction -- Google OAuth refresh is outbound; malformed legacy expiry metadata must fail closed before sending credentials to the provider.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComponentProps } from "react";
+import { afterEach, describe, expect, it } from "vitest";
+import { useState, type ComponentProps } from "react";
 import CalendarEventReminderChips from "./CalendarEventReminderChips";
 
 afterEach(() => {
@@ -26,13 +26,11 @@ describe("CalendarEventReminderChips", () => {
   }
 
   it("disables duplicate and past reminder presets before click", () => {
-    const onAddPreset = vi.fn();
     renderChips({
       presetStates: {
         "-10": { disabled: true, reason: "duplicate" },
         "-30": { disabled: true, reason: "past" },
       },
-      onAddPreset,
     });
 
     const duplicate = screen.getByTestId("calendar-event-reminder-preset-10") as HTMLButtonElement;
@@ -43,18 +41,37 @@ describe("CalendarEventReminderChips", () => {
 
     fireEvent.click(duplicate);
     fireEvent.click(past);
-    expect(onAddPreset).not.toHaveBeenCalled();
+    expect(screen.queryAllByTestId("calendar-event-reminder-chip")).toHaveLength(0);
   });
 
   it("offers an at-start preset for event reminders", () => {
-    const onAddPreset = vi.fn();
-    renderChips({ onAddPreset });
+    function ReminderHarness() {
+      const [reminders, setReminders] = useState<ComponentProps<typeof CalendarEventReminderChips>["reminders"]>([]);
+      return (
+        <CalendarEventReminderChips
+          reminders={reminders}
+          reminderError={null}
+          customReminder={{ date: "", time: "" }}
+          disabled={false}
+          presetStates={{}}
+          onAddPreset={(offsetMinutes) => setReminders([{
+            clientId: `preset-${offsetMinutes}`,
+            offsetMinutes,
+            status: "pending",
+          }])}
+          onUpdateCustomReminder={() => {}}
+          onAddCustom={() => {}}
+          onRemoveReminder={() => {}}
+        />
+      );
+    }
+    render(<ReminderHarness />);
 
     const atStart = screen.getByTestId("calendar-event-reminder-preset-0");
     expect(atStart.textContent).toBe("At start");
 
     fireEvent.click(atStart);
-    expect(onAddPreset).toHaveBeenCalledWith(0);
+    expect(screen.getByTestId("calendar-event-reminder-chip").textContent).toContain("At start");
   });
 
   it("keeps custom reminder creation available when presets are disabled", () => {

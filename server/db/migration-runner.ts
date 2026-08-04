@@ -1,12 +1,11 @@
 import type { Client } from "@libsql/client";
-import db from "./connection.ts";
 
-type MigrationOptions = { dbClient?: Client };
+type MigrationOptions = { dbClient: Client };
 
 export async function runMigration(
   name: string,
   sql: string,
-  { dbClient = db }: MigrationOptions = {},
+  { dbClient }: MigrationOptions,
 ): Promise<void> {
   console.log(`Running migration: ${name}`);
   // Apply the migration body and its ledger row as one atomic write transaction.

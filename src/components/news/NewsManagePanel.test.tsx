@@ -1,25 +1,31 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewsPageEnvelope } from "../../../shared/types/news.ts";
+import NewsManagePanel from "./NewsManagePanel";
 
-const api = vi.hoisted(() => ({
-  updateNewsSource: vi.fn(async () => ({ ok: true })),
-  deleteNewsSource: vi.fn(async () => ({ ok: true })),
-  deleteNewsTopic: vi.fn(async () => ({ ok: true })),
-  createNewsTopic: vi.fn(async () => ({ id: 9, name: "New" })),
-  renameNewsTopic: vi.fn(async () => ({ ok: true })),
-  updateNewsTopicMutedTerms: vi.fn(async () => ({ ok: true })),
-  reorderNewsTopics: vi.fn(async () => ({ ok: true })),
-  previewNewsSource: vi.fn(async () => ({ feedUrl: "https://x/feed", title: "X Feed", sampleTitles: ["Hello"] })),
-  createNewsSource: vi.fn(async () => ({ source: { id: 30 } })),
-  getNewsCatalog: vi.fn(async () => ({ topics: [] })),
-  importNewsStarterTopics: vi.fn(async () => ({ imported: [] })),
-}));
-vi.mock("../../api", () => api);
+interface RequestRecord { path: string; method: string; body: unknown }
+let requests: RequestRecord[] = [];
 
-const { default: NewsManagePanel } = await import("./NewsManagePanel");
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+}
 
-afterEach(cleanup);
+beforeEach(() => {
+  requests = [];
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const path = new URL(String(input), "https://setpoint.test").pathname;
+    requests.push({ path, method: init.method ?? "GET", body: init.body ? JSON.parse(String(init.body)) : null });
+    if (path === "/api/news/sources/preview") return json({ feedUrl: "https://x/feed", title: "X Feed", sampleTitles: ["Hello"] });
+    if (path === "/api/news/sources") return json({ source: { id: 30 } });
+    if (path === "/api/news/catalog") return json({ topics: [] });
+    return json({ ok: true });
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const news: NewsPageEnvelope = {
   lastSeenAt: null, lastUpdatedAt: null,
@@ -90,11 +96,9 @@ describe("NewsManagePanel", () => {
   });
 
   it("toggling a source calls updateNewsSource and onChanged", async () => {
-    const onChanged = vi.fn();
-    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={onChanged} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /feed a/i }));
-    await waitFor(() => expect(api.updateNewsSource).toHaveBeenCalledWith(10, { enabled: false }));
-    expect(onChanged).toHaveBeenCalled();
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/news/sources/10", method: "PATCH", body: { enabled: false } }));
   });
 
   it("shows a failing badge for a backed-off source", () => {
@@ -115,8 +119,7 @@ describe("NewsManagePanel", () => {
   });
 
   it("add-source flow: check → confirm calls previewNewsSource then createNewsSource", async () => {
-    const onChanged = vi.fn();
-    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={onChanged} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /add source/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste a site or feed url/i), {
       target: { value: "https://x.com" },
@@ -124,20 +127,22 @@ describe("NewsManagePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /check/i }));
     await screen.findByText(/X Feed/);
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
-    await waitFor(() => expect(api.createNewsSource).toHaveBeenCalledWith(
-      expect.objectContaining({ topicId: 1, kind: "rss", feedUrl: "https://x/feed", title: "X Feed" }),
-    ));
+    await waitFor(() => expect(requests).toContainEqual({
+      path: "/api/news/sources", method: "POST",
+      body: { topicId: 1, kind: "rss", feedUrl: "https://x/feed", title: "X Feed", siteUrl: "https://x.com" },
+    }));
   });
 
   it("adds a mute term via the input and removes one via its chip", async () => {
-    const onChanged = vi.fn();
-    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={onChanged} />);
+    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
     fireEvent.change(screen.getByPlaceholderText(/mute keyword/i), { target: { value: " sponsored " } });
     fireEvent.keyDown(screen.getByPlaceholderText(/mute keyword/i), { key: "Enter" });
-    await waitFor(() => expect(api.updateNewsTopicMutedTerms)
-      .toHaveBeenCalledWith(1, ["crypto", "sponsored"]));
-    expect(onChanged).toHaveBeenCalled();
+    await waitFor(() => expect(requests).toContainEqual({
+      path: "/api/news/topics/1", method: "PATCH", body: { mutedTerms: ["crypto", "sponsored"] },
+    }));
     fireEvent.click(screen.getByRole("button", { name: /unmute crypto/i }));
-    await waitFor(() => expect(api.updateNewsTopicMutedTerms).toHaveBeenCalledWith(1, []));
+    await waitFor(() => expect(requests).toContainEqual({
+      path: "/api/news/topics/1", method: "PATCH", body: { mutedTerms: [] },
+    }));
   });
 });

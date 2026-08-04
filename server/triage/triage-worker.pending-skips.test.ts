@@ -1,19 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
+import {
+  clearCurrentDashboardEventSubscribers,
+  subscribeCurrentDashboardEvents,
+} from "../dashboard/current-events.ts";
 
-vi.mock("../dashboard/current-events.ts", async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, publishCurrentDashboardEvent: vi.fn() };
-});
-
-const publishCurrentDashboardEventMock = vi.mocked(publishCurrentDashboardEvent);
+let events: Record<string, unknown>[];
+let unsubscribe: () => void;
 
 describe("email triage worker pending skips", () => {
   beforeEach(() => {
-    publishCurrentDashboardEventMock.mockClear();
+    clearCurrentDashboardEventSubscribers();
+    events = [];
+    unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
   });
+
+  afterEach(() => unsubscribe());
 
   it("skips provider-unavailable pending rows without calling the model", async () => {
     const dbClient = await createMigratedDb();
@@ -42,8 +45,6 @@ describe("email triage worker pending skips", () => {
       source: "provider_unavailable_skip",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const jobs = await dbClient.execute({
       sql: "SELECT status, completed_at, last_error FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-1"],
@@ -84,7 +85,7 @@ describe("email triage worker pending skips", () => {
     expect(snapshots.rows).toHaveLength(0);
     // This branch does not change the rendered snapshot, so it must not force a
     // dashboard refetch/re-render (gate the triage SSE storm).
-    expect(publishCurrentDashboardEvent).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
     });
 
   it("skips user-dismissed pending rows without calling the model", async () => {
@@ -115,8 +116,6 @@ describe("email triage worker pending skips", () => {
       source: "user_dismissed_pending_skip",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const jobs = await dbClient.execute({
       sql: "SELECT status, completed_at, last_error FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-1"],
@@ -146,7 +145,7 @@ describe("email triage worker pending skips", () => {
     expect(snapshots.rows).toHaveLength(0);
     // This branch does not change the rendered snapshot, so it must not force a
     // dashboard refetch/re-render (gate the triage SSE storm).
-    expect(publishCurrentDashboardEvent).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
     });
 
   it("defers snoozed pending rows without calling the model", async () => {
@@ -177,8 +176,6 @@ describe("email triage worker pending skips", () => {
       model_calls: [],
       scheduled_for: "2026-05-04T17:46:40.000Z",
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
-
     const jobs = await dbClient.execute({
       sql: "SELECT status, locked_at, scheduled_for, last_error FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-1"],
@@ -208,6 +205,6 @@ describe("email triage worker pending skips", () => {
     expect(snapshots.rows).toHaveLength(0);
     // This branch does not change the rendered snapshot, so it must not force a
     // dashboard refetch/re-render (gate the triage SSE storm).
-    expect(publishCurrentDashboardEvent).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
     });
 });

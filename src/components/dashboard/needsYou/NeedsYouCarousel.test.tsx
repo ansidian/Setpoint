@@ -1,22 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { NeedsYouCarousel } from "./NeedsYouCarousel";
-import type { ReactNode } from "react";
 import type { NeedsYouCard } from "./needsYouModel";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-
-vi.mock("../../shared/StatusChip", () => ({
-  StatusChip: ({ label }: { label: string }) => <span data-testid="chip">{label}</span>,
-}));
-
-vi.mock("../../shared/StatusDot", () => ({
-  StatusDot: () => <span data-testid="dot" />,
-}));
-
-vi.mock("../../shared/Tooltip", () => ({
-  default: ({ children }: { children: ReactNode }) => <div data-testid="tooltip">{children}</div>,
-}));
 
 // Minimal card fixtures matching the shape produced by needsYouModel
 const createUrgentCard = (id: string | number, title = "Test card"): NeedsYouCard => ({

@@ -3,7 +3,7 @@ import { Receipt } from "lucide-react";
 import { getBillExtractModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
-import { projectAiProviderSelection } from "@/components/settings/featureDependencyModel";
+import { projectAiProviderSelection, projectAiSettingsSelectionPatch } from "@/components/settings/featureDependencyModel";
 import { isDemoMode } from "@/demo/config";
 import type { ProviderModelAvailability } from "../../../../shared/types/settings";
 import type { SettingsCardStateProps } from "../settingsTypes";
@@ -79,12 +79,12 @@ export default function BillExtractionAiCard({
     const next = selection.providers.find((p) => p.provider === nextProvider) || selection.providers[0];
     if (!next) return;
     const model = next!.models.some((m) => m.id === nextModel) ? nextModel : next!.defaultModel;
+    const update = projectAiSettingsSelectionPatch("bill_extract", nextProvider, model);
     setSettings((current) => ({
       ...(current || {}),
-      bill_extract_provider: nextProvider,
-      bill_extract_model: model,
+      ...update,
     }));
-    patch({ bill_extract_provider: nextProvider, bill_extract_model: model });
+    patch(update);
   }
 
   return (

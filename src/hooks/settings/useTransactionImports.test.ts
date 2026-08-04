@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   retryTransactionImportItem: vi.fn(),
   dismissTransactionImportItem: vi.fn(),
 }));
+// test-architecture: allow-boundary-mock -- the hook's race and polling state machine runs intact while its authenticated browser-to-server HTTP boundary is faked.
 vi.mock("@/api", () => api);
 
 const { default: useTransactionImports } = await import("./useTransactionImports");
@@ -85,16 +86,17 @@ describe("useTransactionImports", () => {
     api.getTransactionImportRun.mockResolvedValue({ ...activeRun, items: [] });
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
 
-    renderHook(() => useTransactionImports());
+    const { result } = renderHook(() => useTransactionImports());
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(api.getTransactionImportRun).toHaveBeenCalledTimes(1);
+    expect(result.current.active).toBe(true);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3_000);
     });
-    expect(api.listTransactionImportRuns.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // test-architecture: allow-boundary-interaction -- active polling is itself an outbound timer-to-server contract; hook state cannot prove the second HTTP refresh was admitted after 3 seconds.
+    expect(api.listTransactionImportRuns).toHaveBeenCalledTimes(2);
   });
 });

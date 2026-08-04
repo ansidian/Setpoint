@@ -37,14 +37,12 @@ describe("CalendarModal deadlines rail behavior", () => {
 
   it("opens existing deadline detail from an Events overlay chip without changing view", async () => {
     window.innerWidth = 1900;
-    const onViewChange = vi.fn();
-
     render(wrapWithDashboard(
       <CalendarModal
         open
         onClose={() => {}}
         view="events"
-        onViewChange={onViewChange}
+        onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{
           editable: true,
@@ -63,7 +61,7 @@ describe("CalendarModal deadlines rail behavior", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
-    expect(onViewChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/Calendar Workspace/).textContent).toContain("Events");
   });
 
   it("tints a focused Events deadline overlay chip when the focus id is a raw Todoist id", async () => {
@@ -104,14 +102,12 @@ describe("CalendarModal deadlines rail behavior", () => {
 
   it("edits selected Todoist overlay items from the Events E hotkey", async () => {
     window.innerWidth = 1900;
-    const onViewChange = vi.fn();
-
     render(wrapWithDashboard(
       <CalendarModal
         open
         onClose={() => {}}
         view="events"
-        onViewChange={onViewChange}
+        onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{
           editable: true,
@@ -134,7 +130,7 @@ describe("CalendarModal deadlines rail behavior", () => {
 
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    expect(onViewChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/Calendar Workspace/).textContent).toContain("Events");
   });
 
   it("preserves a focused deadline day and item when the modal opens into Events", async () => {

@@ -22,15 +22,18 @@ function executeCurrent(statement: string | InStatement): Promise<ResultSet> {
     ? currentDb().execute(statement)
     : currentDb().execute(statement);
 }
+// test-architecture: allow-boundary-mock -- Email-service persistence cases redirect the production singleton to a migrated ephemeral libSQL client or a narrowly controlled database failure.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => mockDb.execute(statement),
   },
 }));
+// test-architecture: allow-boundary-mock -- Credential decryption is the cryptographic boundary; service routing cases use deterministic plaintext provider credentials.
 vi.mock("../platform/encryption.ts", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, decrypt: () => "decrypted" };
 });
+// test-architecture: allow-boundary-mock -- Gmail mutations are outbound provider writes; service cases control success/failure while asserting returned and durable outcomes.
 vi.mock("./gmail.ts", () => ({
   fetchEmailBody: vi.fn(),
   markAsRead: vi.fn(),
@@ -40,6 +43,7 @@ vi.mock("./gmail.ts", () => ({
   snoozeAtGmail: vi.fn(),
   wakeAtGmail: vi.fn(),
 }));
+// test-architecture: allow-boundary-mock -- iCloud IMAP mutations are outbound provider writes; service cases control per-account failure isolation.
 vi.mock("./icloud.ts", () => ({
   fetchEmailBody: vi.fn(),
   markAsRead: vi.fn(),
@@ -47,10 +51,12 @@ vi.mock("./icloud.ts", () => ({
   trashMessage: vi.fn(),
   batchMarkAsRead: vi.fn(),
 }));
+// test-architecture: allow-boundary-mock -- Owner configuration is a database/secret-backed input boundary used to resolve provider accounts without decrypting production state.
 vi.mock("../platform/config-service.ts", () => ({ loadUserConfig: vi.fn() }));
 // Partial mock: keep every real adapter export (including findAccountByUid) and
 // override only trashEmailWithProvider
 // so the trash() tests can drive provider success/failure deterministically.
+// test-architecture: allow-boundary-mock -- The overridden adapter method is the outbound provider trash boundary; all other adapter routing executes unchanged.
 vi.mock("./email-provider-adapters.ts", async (importActual) => {
   const actual = await importActual<typeof EmailProviderAdapters>();
   return { ...actual, trashEmailWithProvider: vi.fn() };
@@ -268,6 +274,7 @@ describe("pending triage action semantics", () => {
       subject: "Pending",
     });
 
+    // test-architecture: allow-boundary-interaction -- Gmail label mutation is an outbound provider write; the exact canonical account/message target is not represented by the durable snooze rows.
     expect(gmail.snoozeAtGmail).toHaveBeenCalledWith(
       { id: "gmail-work", email: "work@example.com", type: "gmail" },
       "gmail-work-msg-1",
@@ -304,6 +311,7 @@ describe("pending triage action semantics", () => {
 
     await emailService.wake("user-1", "gmail-work-msg-1");
 
+    // test-architecture: allow-boundary-interaction -- Gmail wake mutation is an outbound provider write; the exact canonical account/message target is not represented by restored local rows.
     expect(gmail.wakeAtGmail).toHaveBeenCalledWith(
       { id: "gmail-work", email: "work@example.com", type: "gmail" },
       "gmail-work-msg-1",
@@ -368,6 +376,7 @@ describe("markAllRead", () => {
         message: "iCloud batch failed",
       }],
     });
+    // test-architecture: allow-boundary-interaction -- This controlled database boundary verifies that only provider-success UIDs are admitted to the local read-state write after a partial failure.
     expect(mockDb.execute).toHaveBeenLastCalledWith({
       sql: "UPDATE ea_email_index SET read = 1 WHERE user_id = ? AND uid IN (?)",
       args: ["u1", gmailUid],
@@ -401,6 +410,7 @@ describe("markAllRead", () => {
     const result = await emailService.markAllRead("u1", [gmailUid]);
 
     expect(result).toEqual({ updatedUids: [gmailUid], failed: [] });
+    // test-architecture: allow-boundary-interaction -- Gmail batch mutation is outbound; stale UID routing must target the canonical account while preserving the provider UID identity.
     expect(gmail.batchMarkAsRead).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "gmail-fresh",
@@ -467,6 +477,7 @@ describe("snooze atomicity (P3-60)", () => {
       args: ["user-1", "gmail-work-msg-1"],
     });
     expect(rows.rows).toEqual([]);
+    // test-architecture: allow-boundary-interaction -- Gmail snooze is an outbound provider write; a failed durable defer gate must prevent the irreversible provider mutation.
     expect(gmail.snoozeAtGmail).not.toHaveBeenCalled();
   });
 });
@@ -508,6 +519,7 @@ describe("trash post-provider cleanup (P3-74)", () => {
       emailService.trash("user-1", "gmail-work-msg-1"),
     ).resolves.toBeUndefined();
 
+    // test-architecture: allow-boundary-interaction -- Provider trash is an irreversible outbound write; local cleanup failure must not cause the exact owner/message deletion to be retried.
     expect(providerAdapters.trashEmailWithProvider).toHaveBeenCalledWith(
       "user-1",
       "gmail-work-msg-1",

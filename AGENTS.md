@@ -42,7 +42,7 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate the file under test.
 - Prefer observable results and durable state. Interaction assertions are for unavoidable outbound boundary contracts, not internal call graphs.
 - Keep direct pure tests for intentionally stable algorithms and dense policy matrices. Persistence tests should execute against an ephemeral database instead of asserting SQL text or positional arguments.
-- `scripts/lib/test-architecture-baseline.json` is ratcheted debt: reduce it when coupling is removed; never add or raise an allowance without explicit owner approval and a recorded reason.
+- `scripts/lib/test-architecture-baseline.json` is permanently zero-default: both allowance objects must remain empty. Genuine outbound/provider/browser/database/filesystem/process boundary constructs require a narrow inline rationale beside the exact construct.
 
 ## Maintainability Guardrail
 

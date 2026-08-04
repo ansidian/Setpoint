@@ -10,27 +10,30 @@ import {
 } from "./alfred-conversations.ts";
 import { htmlToPlainText } from "../email/html-to-text.ts";
 import type { AlfredEmit, AlfredToolContext } from "./alfred-types.ts";
-import type { AlfredBreakdownEvent } from "../../shared/types/alfred.ts";
+import type { AlfredBreakdownEvent, AlfredRunEvent } from "../../shared/types/alfred.ts";
 
 type TestToolContext = Omit<AlfredToolContext, "emit"> & {
-  emit: ReturnType<typeof vi.fn<AlfredEmit>>;
+  emit: AlfredEmit;
+  events: AlfredRunEvent[];
 };
 
 function ctxWith(
   deps: Record<string, unknown>,
   overrides: Partial<AlfredToolContext> = {},
 ): TestToolContext {
+  const events: AlfredRunEvent[] = [];
   return {
     userId: "user-1",
     conversation: createAlfredConversation({ now: 0 }),
     deps: deps as unknown as AlfredToolContext["deps"],
-    emit: vi.fn<AlfredEmit>(),
+    emit: (event) => { events.push(event); },
+    events,
     ...overrides,
   } as TestToolContext;
 }
 
 function firstBreakdownEvent(ctx: TestToolContext): AlfredBreakdownEvent {
-  const event = ctx.emit.mock.calls[0]?.[0];
+  const event = ctx.events[0];
   if (event?.type !== "breakdown") throw new Error("Expected Alfred breakdown event");
   return event;
 }
@@ -104,6 +107,7 @@ describe("search_email", () => {
       limit: 5,
     }, ctx);
 
+    // test-architecture: allow-boundary-interaction -- Hybrid retrieval is the email-index/database boundary; the exact owner, structured query, and safety filters are not present in the normalized tool result.
     expect(retrieve).toHaveBeenCalledWith("user-1", expect.objectContaining({
       q: "car insurance renewal",
       limit: 5,
@@ -125,6 +129,7 @@ describe("search_email", () => {
     const ctx = ctxWith({ retrieve: vi.fn() });
     const result = await executeAlfredTool("search_email", {}, ctx);
     expect(result.error).toBeTruthy();
+    // test-architecture: allow-boundary-interaction -- Retrieval crosses the email-index/database boundary; invalid tool input must be rejected before any indexed search is admitted.
     expect(ctx.deps.retrieve).not.toHaveBeenCalled();
   });
 
@@ -151,6 +156,7 @@ describe("search_email", () => {
       ctxWith({ retrieve }),
     );
 
+    // test-architecture: allow-boundary-interaction -- Hybrid retrieval is the email-index/database boundary; offset and limit forwarding are paging compatibility inputs not recoverable from a provider-controlled result.
     expect(retrieve).toHaveBeenCalledWith("user-1", expect.objectContaining({ offset: 12, limit: 12 }));
     expect(result).toMatchObject({ total: 30, has_more: true, offset: 12 });
   });
@@ -165,6 +171,7 @@ describe("get_email_body", () => {
       date: "2026-06-10T12:00:00.000Z",
     });
     const result = await executeAlfredTool("get_email_body", { uid: "em-1" }, ctxWith({ getEmailBody, htmlToPlainText }));
+    // test-architecture: allow-boundary-interaction -- Email body loading is a provider/index boundary; the owner/message identity sent outbound is not recoverable from the wrapped body result.
     expect(getEmailBody).toHaveBeenCalledWith("user-1", "em-1");
     expect(result.body).toContain("<email_content uid=\"em-1\">");
     expect(result.body).toContain("Hello");
@@ -230,6 +237,7 @@ describe("get_calendar_events", () => {
       end: "2026-06-14",
     }, ctx);
 
+    // test-architecture: allow-boundary-interaction -- Calendar fetch is the outbound Google provider boundary; enabled-account filtering must admit exactly one provider read.
     expect(fetchCalendar).toHaveBeenCalledTimes(1);
     expect(fetchCalendar.mock.calls[0]![0]).toEqual([
       { id: "g1", type: "gmail", calendar_enabled: true },
@@ -285,6 +293,7 @@ describe("get_deadlines", () => {
     const ctx = ctxWith({ readCalendarDeadlineRange });
     const result = await executeAlfredTool("get_deadlines", { start: "2026-06-12", end: "2026-06-30" }, ctx);
 
+    // test-architecture: allow-boundary-interaction -- Deadline range loading is the Todoist mirror/database boundary; exact owner and date bounds are not represented in mapped rows.
     expect(readCalendarDeadlineRange).toHaveBeenCalledWith("user-1", { start: "2026-06-12", end: "2026-06-30" });
     expect(result.deadlines![0]!).toEqual(expect.objectContaining({
       id: "td-1",
@@ -324,11 +333,11 @@ describe("show_items", () => {
 
     const result = await executeAlfredTool("show_items", { kind: "bill", ids: ["b-1", "ghost"] }, ctx);
 
-    expect(ctx.emit).toHaveBeenCalledWith({
+    expect(ctx.events).toEqual([{
       type: "rows",
       kind: "bill",
       items: [{ id: "b-1", name: "Car insurance", amount: 182.13 }],
-    });
+    }]);
     expect(result).toEqual({ shown: 1, unknown_ids: ["ghost"] });
   });
 
@@ -336,7 +345,7 @@ describe("show_items", () => {
     const ctx = ctxWith({});
     const result = await executeAlfredTool("show_items", { kind: "banana", ids: ["x"] }, ctx);
     expect(result.error).toBeTruthy();
-    expect(ctx.emit).not.toHaveBeenCalled();
+    expect(ctx.events).toEqual([]);
   });
 
   it("errors when no id resolves, so a wholly failed citation reads as is_error instead of shown:0 (C7)", async () => {
@@ -347,7 +356,7 @@ describe("show_items", () => {
 
     expect(result.error).toBeTruthy();
     expect(result.unknown_ids).toEqual(["ghost-1", "ghost-2"]);
-    expect(ctx.emit).not.toHaveBeenCalled();
+    expect(ctx.events).toEqual([]);
   });
 });
 
@@ -368,7 +377,7 @@ describe("group_items", () => {
       ],
     }, ctx);
 
-    expect(ctx.emit).toHaveBeenCalledWith({
+    expect(ctx.events).toEqual([{
       type: "breakdown",
       kind: "email",
       title: "By status",
@@ -378,7 +387,7 @@ describe("group_items", () => {
         { label: "Ghosted", count: 2, items: [{ uid: "e1", subject: "Ghost 1" }, { uid: "e2", subject: "Ghost 2" }] },
         { label: "Rejected", count: 1, items: [{ uid: "e3", subject: "Rejected 1" }] },
       ],
-    });
+    }]);
     expect(result).toEqual({ shown: 3 });
   });
 
@@ -442,14 +451,14 @@ describe("group_items", () => {
       kind: "email", title: "By status", groups: [{ label: "X", ids: ["missing"] }],
     }, ctx);
     expect(result).toEqual({ shown: 0, unknown_ids: ["missing"] });
-    expect(ctx.emit).not.toHaveBeenCalled();
+    expect(ctx.events).toEqual([]);
   });
 
   it("rejects unknown kinds and emits nothing", async () => {
     const ctx = ctxWith({});
     const result = await executeAlfredTool("group_items", { kind: "banana", title: "x", groups: [] }, ctx);
     expect(result.error).toBeTruthy();
-    expect(ctx.emit).not.toHaveBeenCalled();
+    expect(ctx.events).toEqual([]);
   });
 
   it("is domain-agnostic — no job/application vocabulary in the schema (acceptance criterion 2)", () => {
@@ -497,13 +506,14 @@ describe("transaction tools", () => {
     const ctx = ctxWith(deps);
     const result = await executeAlfredTool("search_transactions", { start: "2026-05-01", end: "2026-05-31" }, ctx);
     expect(result.total).toBe(2);
+    // test-architecture: allow-boundary-interaction -- Transaction search is the Actual/provider boundary; exact owner, date range, and bounded limit are not exposed by normalized rows.
     expect(deps.queryTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({
       start: "2026-05-01", end: "2026-05-31", limit: 25,
     }));
     // cached → show_items can resolve them
     const shown = await executeAlfredTool("show_items", { kind: "transaction", ids: ["t1", "t2"] }, ctx);
     expect(shown.shown).toBe(2);
-    expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({ type: "rows", kind: "transaction" }));
+    expect(ctx.events).toEqual([expect.objectContaining({ type: "rows", kind: "transaction" })]);
   });
 
   it("summarize_transactions returns buckets and defaults group_by to category", async () => {
@@ -515,6 +525,7 @@ describe("transaction tools", () => {
     };
     const result = await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctxWith(deps));
     expect(result.buckets).toHaveLength(2);
+    // test-architecture: allow-boundary-interaction -- Transaction summarization is the Actual/provider boundary; the default grouping input is not inferable from provider-controlled buckets.
     expect(deps.summarizeTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ group_by: "category" }));
   });
 
@@ -528,13 +539,13 @@ describe("transaction tools", () => {
     };
     const ctx = ctxWith(deps);
     await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
-    expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({
+    expect(ctx.events).toEqual([expect.objectContaining({
       type: "summary",
       total: 142,
       period,
       group_by: "category",
       buckets,
-    }));
+    })]);
   });
 
   it("summarize_transactions does NOT emit on error", async () => {
@@ -543,7 +554,7 @@ describe("transaction tools", () => {
     };
     const ctx = ctxWith(deps);
     await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
-    const summaryCalls = ctx.emit.mock.calls.filter(([e]) => e?.type === "summary");
+    const summaryCalls = ctx.events.filter((event) => event.type === "summary");
     expect(summaryCalls).toHaveLength(0);
   });
 
@@ -555,7 +566,7 @@ describe("transaction tools", () => {
     };
     const ctx = ctxWith(deps);
     await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
-    const summaryCalls = ctx.emit.mock.calls.filter(([e]) => e?.type === "summary");
+    const summaryCalls = ctx.events.filter((event) => event.type === "summary");
     expect(summaryCalls).toHaveLength(0);
   });
 });

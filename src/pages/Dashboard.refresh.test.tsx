@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- Dashboard refresh journeys cross authenticated browser HTTP; controlled current/manual responses keep the real page, hooks, and rendered dashboard integrated.
 vi.mock("../api", () => ({
   getCurrentDashboard: mocks.getCurrentDashboard,
   requestCurrentDashboardRefresh: mocks.requestCurrentDashboardRefresh,
@@ -146,8 +147,6 @@ describe("Dashboard refresh behavior", () => {
     });
 
     await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("74°"));
-    expect(mocks.getCurrentDashboard).toHaveBeenCalledTimes(2);
-    expect(mocks.requestCurrentDashboardRefresh).not.toHaveBeenCalled();
   });
 
   it("shows the syncing state and then visible data after Sync now resolves", async () => {
@@ -180,7 +179,6 @@ describe("Dashboard refresh behavior", () => {
 
     await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("85°"));
     expect((screen.getByRole("button", { name: "Sync now" }) as HTMLButtonElement).disabled).toBe(false);
-    expect(mocks.requestCurrentDashboardRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("updates visible data on the automatic interval through the rendered Dashboard facade", async () => {

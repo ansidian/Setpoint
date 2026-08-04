@@ -47,6 +47,7 @@ describe("ChunkLoadBoundary", () => {
       </ChunkLoadBoundary>,
     );
 
+    // test-architecture: allow-boundary-interaction -- Browser page replacement has no post-navigation DOM result; automatic chunk recovery must cross the reload boundary exactly once.
     await waitFor(() => expect(reloadPage).toHaveBeenCalledTimes(1));
     expect(storage.getItem(CHUNK_RELOAD_STORAGE_KEY)).toBe("1000");
     expect(screen.getByRole("alert").textContent).toContain("Reload Setpoint");
@@ -63,10 +64,12 @@ describe("ChunkLoadBoundary", () => {
       </ChunkLoadBoundary>,
     );
 
+    // test-architecture: allow-boundary-interaction -- Preventing a browser reload loop is a negative navigation-boundary contract that cannot be inferred from the retained fallback DOM.
     expect(reloadPage).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Reload app" }));
 
+    // test-architecture: allow-boundary-interaction -- The manual recovery control must cross the browser reload boundary, whose successful page replacement cannot be observed in this document.
     expect(reloadPage).toHaveBeenCalledTimes(1);
   });
 });

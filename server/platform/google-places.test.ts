@@ -76,6 +76,7 @@ describe("google-places fetch deadlines", () => {
       status: 503,
       code: "calendar_places_not_configured",
     });
+    // test-architecture: allow-boundary-interaction -- Global fetch is the outbound Google Places boundary; the safety contract is that missing credentials produce no network request.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

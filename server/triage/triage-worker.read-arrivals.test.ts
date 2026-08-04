@@ -63,7 +63,6 @@ describe("email triage worker read-arrivals preference", () => {
       lane: "fyi",
       model_calls: ["cheap"],
     });
-    expect(modelClient.classify).toHaveBeenCalledTimes(1);
     const job = await dbClient.execute({
       sql: "SELECT status, scheduled_for FROM ea_triage_jobs WHERE email_id = ?",
       args: ["msg-1"],
@@ -112,7 +111,6 @@ describe("email triage worker read-arrivals preference", () => {
       source: "rule",
       model_calls: [],
     });
-    expect(modelClient.classify).not.toHaveBeenCalled();
     await dbClient.close();
   });
 });

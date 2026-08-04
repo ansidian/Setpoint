@@ -32,6 +32,10 @@ export interface TransactionEmailScanResult {
   pages: number;
 }
 
+export interface TransactionEmailDiscoveryDependencies {
+  fetchPage?: typeof fetchGmailTransactionEmailPage;
+}
+
 function validateOptions(account: ConfiguredEmailAccount, options: TransactionEmailSearchOptions) {
   if (account.type !== "gmail") throw new Error("Transaction email discovery requires a Gmail account");
   if (!TRANSACTION_SOURCES.includes(options.source)) throw new Error("Unsupported transaction source");
@@ -51,9 +55,10 @@ function validateOptions(account: ConfiguredEmailAccount, options: TransactionEm
 export async function searchTransactionEmails(
   account: ConfiguredEmailAccount,
   options: TransactionEmailSearchOptions,
+  dependencies: TransactionEmailDiscoveryDependencies = {},
 ): Promise<TransactionEmailSearchPage> {
   const { pageSize } = validateOptions(account, options);
-  const page = await fetchGmailTransactionEmailPage(account, {
+  const page = await (dependencies.fetchPage ?? fetchGmailTransactionEmailPage)(account, {
     source: options.source,
     start: options.start,
     end: options.end,
@@ -81,6 +86,7 @@ export async function searchTransactionEmails(
 export async function scanTransactionEmails(
   account: ConfiguredEmailAccount,
   options: Omit<TransactionEmailSearchOptions, "pageToken">,
+  dependencies: TransactionEmailDiscoveryDependencies = {},
 ): Promise<TransactionEmailScanResult> {
   const emailsById = new Map<string, TransactionEmailInput>();
   const failures: GmailTransactionSearchPage["failures"] = [];
@@ -89,7 +95,7 @@ export async function scanTransactionEmails(
   let pages = 0;
 
   do {
-    const page = await searchTransactionEmails(account, { ...options, pageToken });
+    const page = await searchTransactionEmails(account, { ...options, pageToken }, dependencies);
     pages++;
     page.emails.forEach((email) => emailsById.set(email.gmailMessageId, email));
     failures.push(...page.failures);

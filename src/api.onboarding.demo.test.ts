@@ -15,6 +15,7 @@ describe("onboarding demo API", () => {
     expect((await getOnboardingProgress()).status).toBe("complete");
     expect((await updateOnboardingProgress({ action: "reopen" })).status).toBe("in_progress");
     expect((await updateOnboardingProgress({ action: "skip", stepId: "ai" })).steps.ai).toBe("skipped");
+    // test-architecture: allow-boundary-interaction -- in-memory progress results cannot prove demo onboarding avoided every private endpoint at the browser network boundary.
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

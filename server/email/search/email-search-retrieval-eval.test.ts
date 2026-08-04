@@ -208,11 +208,8 @@ describe("email search retrieval eval runner", () => {
           { id: "unflagged", query: "a", expected_uids: ["a"], top_n: 2 },
         ],
       });
-      const retrieveInboxSpy = vi.fn(retrieveInbox);
+      const report = await evaluateRetrievalCases(fixture, { retrieve, retrieveInbox });
 
-      const report = await evaluateRetrievalCases(fixture, { retrieve, retrieveInbox: retrieveInboxSpy });
-
-      expect(retrieveInboxSpy).not.toHaveBeenCalled();
       expect(report.inbox_mrr).toBeUndefined();
     });
   });

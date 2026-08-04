@@ -29,156 +29,156 @@ describe("useAutoRefresh", () => {
   });
 
   it("runs quick refresh when the window regains focus after the cooldown", () => {
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       // Last refresh just over 5 min ago → outside the cooldown window.
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     window.dispatchEvent(new Event("focus"));
 
-    expect(onQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
   });
 
   it("does NOT refresh on focus within the cooldown window", () => {
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       // Last refresh 1 second ago → well inside the 5-min cooldown.
       lastQuickRefreshAt: NOW - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     window.dispatchEvent(new Event("focus"));
 
-    expect(onQuickRefresh).not.toHaveBeenCalled();
+    expect(refreshCount).toBe(0);
   });
 
   it("distinguishes cooldown from dedup: a recent refresh suppresses focus, an old one does not", () => {
     // Recent timestamp → suppressed. This is the case the old test missed:
     // it always used an old timestamp, so it would pass even with no cooldown.
-    const recent = vi.fn();
+    let recentCount = 0;
     const recentHook = renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW - 1000,
-      onQuickRefresh: recent,
+      onQuickRefresh: () => { recentCount += 1; },
     }));
     window.dispatchEvent(new Event("focus"));
-    expect(recent).not.toHaveBeenCalled();
+    expect(recentCount).toBe(0);
     recentHook.unmount();
 
     // Old timestamp → allowed.
-    const old = vi.fn();
+    let oldCount = 0;
     renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh: old,
+      onQuickRefresh: () => { oldCount += 1; },
     }));
     window.dispatchEvent(new Event("focus"));
-    expect(old).toHaveBeenCalledTimes(1);
+    expect(oldCount).toBe(1);
   });
 
   it("treats the most recent trigger as the cooldown anchor for the next focus", () => {
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     // First focus is outside the cooldown → refreshes and resets the anchor to now.
     window.dispatchEvent(new Event("focus"));
-    expect(onQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
 
     // A second focus shortly after is now inside the freshly-set cooldown.
     vi.advanceTimersByTime(1000);
     window.dispatchEvent(new Event("focus"));
-    expect(onQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
 
     // Once enough time passes to clear the cooldown, focus refreshes again.
     vi.advanceTimersByTime(REFRESH_INTERVAL_MS);
     window.dispatchEvent(new Event("focus"));
-    expect(onQuickRefresh).toHaveBeenCalledTimes(2);
+    expect(refreshCount).toBe(2);
   });
 
   it("fires the quick refresh on the 5-minute interval tick", () => {
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     // The interval tick is not cooldown-gated, so it fires even though the last
     // refresh was "now" — just before the tick.
     vi.advanceTimersByTime(REFRESH_INTERVAL_MS);
-    expect(onQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
 
     vi.advanceTimersByTime(REFRESH_INTERVAL_MS);
-    expect(onQuickRefresh).toHaveBeenCalledTimes(2);
+    expect(refreshCount).toBe(2);
   });
 
   it("does not double refresh when focus and visibility events arrive together", () => {
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     window.dispatchEvent(new Event("focus"));
     document.dispatchEvent(new Event("visibilitychange"));
 
-    expect(onQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(refreshCount).toBe(1);
   });
 
   it("suppresses focus refresh while the tab is hidden", () => {
     setVisibility("hidden");
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       // Outside cooldown — so the only thing that can suppress it is hidden state.
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     window.dispatchEvent(new Event("focus"));
 
-    expect(onQuickRefresh).not.toHaveBeenCalled();
+    expect(refreshCount).toBe(0);
   });
 
   it("suppresses the interval tick while the tab is hidden", () => {
     setVisibility("hidden");
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     vi.advanceTimersByTime(REFRESH_INTERVAL_MS * 3);
 
-    expect(onQuickRefresh).not.toHaveBeenCalled();
+    expect(refreshCount).toBe(0);
   });
 
   it("does not refresh on a visibilitychange that resolves to hidden", () => {
     setVisibility("hidden");
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     document.dispatchEvent(new Event("visibilitychange"));
 
-    expect(onQuickRefresh).not.toHaveBeenCalled();
+    expect(refreshCount).toBe(0);
   });
 
   it("does not refresh on any trigger when disabled", () => {
-    const onQuickRefresh = vi.fn();
+    let refreshCount = 0;
     renderHook(() => useAutoRefresh({
       disabled: true,
       lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh,
+      onQuickRefresh: () => { refreshCount += 1; },
     }));
 
     window.dispatchEvent(new Event("focus"));
     document.dispatchEvent(new Event("visibilitychange"));
     vi.advanceTimersByTime(REFRESH_INTERVAL_MS * 2);
 
-    expect(onQuickRefresh).not.toHaveBeenCalled();
+    expect(refreshCount).toBe(0);
   });
 });

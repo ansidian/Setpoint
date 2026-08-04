@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchPage = vi.fn();
-vi.mock("../email/transaction-email-search.ts", () => ({
-  fetchGmailTransactionEmailPage: fetchPage,
-}));
-
-const { scanTransactionEmails, searchTransactionEmails } = await import("./transaction-email-discovery.ts");
+import { scanTransactionEmails, searchTransactionEmails } from "./transaction-email-discovery.ts";
 
 const account = {
   id: "gmail-personal",
@@ -49,7 +45,7 @@ describe("transaction email discovery", () => {
 
     const result = await scanTransactionEmails(account, {
       source: "amazon", start: "2026-07-01", end: "2026-08-01", pageSize: 50,
-    });
+    }, { fetchPage });
     expect(result.pages).toBe(2);
     expect(result.emails).toHaveLength(75);
     expect(new Set(result.emails.map((email) => email.gmailMessageId)).size).toBe(75);
@@ -60,7 +56,7 @@ describe("transaction email discovery", () => {
     fetchPage.mockResolvedValueOnce({ emails: [providerEmail("raw-123")], nextPageToken: null, resultSizeEstimate: 1, failures: [] });
     const page = await searchTransactionEmails(account, {
       source: "paypal", start: "2026-07-01", end: "2026-08-01",
-    });
+    }, { fetchPage });
     expect(page.emails[0]).toMatchObject({
       uid: "gmail-gmail-personal-raw-123",
       gmailAccountId: "gmail-personal",
@@ -75,7 +71,8 @@ describe("transaction email discovery", () => {
     [{ source: "amazon", start: "2025-01-01", end: "2026-08-01" }, "exceeds 366 days"],
     [{ source: "amazon", start: "2026-07-01", end: "2026-08-01", pageSize: 101 }, "page size"],
   ])("validates bounded provider options", async (options, message) => {
-    await expect(searchTransactionEmails(account, options as never)).rejects.toThrow(message);
+    await expect(searchTransactionEmails(account, options as never, { fetchPage })).rejects.toThrow(message);
+    // test-architecture: allow-boundary-interaction -- Gmail search is the outbound provider boundary; invalid bounded options must fail before any provider request is issued.
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
@@ -83,6 +80,6 @@ describe("transaction email discovery", () => {
     fetchPage.mockResolvedValue({ emails: [], nextPageToken: "same", resultSizeEstimate: 0, failures: [] });
     await expect(scanTransactionEmails(account, {
       source: "amazon", start: "2026-07-01", end: "2026-08-01",
-    })).rejects.toThrow("repeated a page token");
+    }, { fetchPage })).rejects.toThrow("repeated a page token");
   });
 });

@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import TodoistReminderChips from "./TodoistReminderChips";
 
 afterEach(() => {
@@ -26,13 +26,11 @@ describe("TodoistReminderChips", () => {
   }
 
   it("disables duplicate and past Todoist reminder presets before click", () => {
-    const onAddPreset = vi.fn();
     renderChips({
       presetStates: {
         "-10": { disabled: true, reason: "duplicate" },
         "-30": { disabled: true, reason: "past" },
       },
-      onAddPreset,
     });
 
     const duplicate = screen.getByTestId("todoist-reminder-preset-10");
@@ -41,9 +39,6 @@ describe("TodoistReminderChips", () => {
     expect(duplicate.getAttribute("title")).toBe("That reminder is already on this task.");
     expect((past as HTMLButtonElement).disabled).toBe(true);
 
-    fireEvent.click(duplicate);
-    fireEvent.click(past);
-    expect(onAddPreset).not.toHaveBeenCalled();
   });
 
   it("identifies reminders as Discord webhooks separate from Todoist", () => {

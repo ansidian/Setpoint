@@ -1,4 +1,9 @@
 import { createClient, type Client } from "@libsql/client";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "../db/migrations");
 
 export type CompletedTaskSeed = {
   user_id: string;
@@ -8,16 +13,13 @@ export type CompletedTaskSeed = {
 };
 export async function createCompletedTasksTestDb() {
   const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS ea_completed_tasks (
-      user_id TEXT NOT NULL,
-      todoist_id TEXT NOT NULL,
-      completed_at TEXT DEFAULT (datetime('now')),
-      due_date TEXT NOT NULL,
-      snapshot_json TEXT,
-      PRIMARY KEY (user_id, todoist_id, due_date)
-    );
-  `);
+  for (const migration of [
+    "001_ea_tables.sql",
+    "010_discord_reminders.sql",
+    "014_completed_deadline_occurrences.sql",
+  ]) {
+    await db.executeMultiple(readFileSync(join(migrationsDir, migration), "utf8"));
+  }
   return db;
 }
 

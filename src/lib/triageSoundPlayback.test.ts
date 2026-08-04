@@ -11,7 +11,8 @@ afterEach(() => {
 
 describe("triage sound playback", () => {
   it("uses a gain stage so 100 percent is louder than native audio volume", async () => {
-    const play = vi.fn(() => Promise.resolve());
+    let playCount = 0;
+    const play = () => { playCount += 1; return Promise.resolve(); };
     const addEventListener = vi.fn();
     vi.stubGlobal("Audio", vi.fn(function AudioMock(this: Record<string, unknown>, path: string) {
       this.path = path;
@@ -19,11 +20,13 @@ describe("triage sound playback", () => {
       this.play = play;
       this.addEventListener = addEventListener;
     }));
+    let gainDestination: unknown;
     const gain = {
       gain: { value: 0 },
-      connect: vi.fn(),
+      connect: (destination: unknown) => { gainDestination = destination; },
     };
-    const source = { connect: vi.fn() };
+    let sourceDestination: unknown;
+    const source = { connect: (destination: unknown) => { sourceDestination = destination; } };
     const context = {
       state: "running",
       destination: {},
@@ -43,9 +46,9 @@ describe("triage sound playback", () => {
     expect(result).toBe(true);
     expect(vi.mocked(globalThis.Audio).mock.instances[0]!.volume).toBe(1);
     expect(gain.gain.value).toBe(TRIAGE_SOUND_GAIN_MULTIPLIER);
-    expect(source.connect).toHaveBeenCalledWith(gain);
-    expect(gain.connect).toHaveBeenCalledWith(context.destination);
-    expect(play).toHaveBeenCalled();
+    expect(sourceDestination).toBe(gain);
+    expect(gainDestination).toBe(context.destination);
+    expect(playCount).toBe(1);
   });
 
   it("scales the gain from the configured slider value", async () => {
@@ -91,22 +94,24 @@ describe("triage sound playback", () => {
         listeners[eventName] = handler;
       });
     }));
+    const gainEvents: Array<[string, ...number[]]> = [];
     const gain = {
       gain: {
         value: 0,
-        cancelScheduledValues: vi.fn(),
-        setValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
+        cancelScheduledValues: (time: number) => { gainEvents.push(["cancel", time]); },
+        setValueAtTime: (value: number, time: number) => { gainEvents.push(["set", value, time]); },
+        linearRampToValueAtTime: (value: number, time: number) => { gainEvents.push(["ramp", value, time]); },
       },
       connect: vi.fn(),
     };
+    let closeCount = 0;
     const context = {
       currentTime: 10,
       state: "running",
       destination: {},
       createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
       createGain: vi.fn(() => gain),
-      close: vi.fn(),
+      close: () => { closeCount += 1; return Promise.resolve(); },
     };
     vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
       return context;
@@ -120,15 +125,17 @@ describe("triage sound playback", () => {
 
     await vi.advanceTimersByTimeAsync(455);
 
-    expect(gain.gain.cancelScheduledValues).toHaveBeenCalledWith(10);
-    expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(TRIAGE_SOUND_GAIN_MULTIPLIER, 10);
-    expect(gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10.04);
-    expect(context.close).not.toHaveBeenCalled();
+    expect(gainEvents).toEqual([
+      ["cancel", 10],
+      ["set", TRIAGE_SOUND_GAIN_MULTIPLIER, 10],
+      ["ramp", 0, 10.04],
+    ]);
+    expect(closeCount).toBe(0);
 
     listeners.ended!();
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(context.close).toHaveBeenCalled();
+    expect(closeCount).toBe(1);
   });
 
   it("closes the audio context on a terminal event other than ended (pause)", async () => {
@@ -154,13 +161,14 @@ describe("triage sound playback", () => {
       },
       connect: vi.fn(),
     };
+    let closeCount = 0;
     const context = {
       currentTime: 10,
       state: "running",
       destination: {},
       createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
       createGain: vi.fn(() => gain),
-      close: vi.fn(),
+      close: () => { closeCount += 1; return Promise.resolve(); },
     };
     vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
       return context;
@@ -171,12 +179,12 @@ describe("triage sound playback", () => {
       { volume: 1 },
     );
 
-    expect(context.close).not.toHaveBeenCalled();
+    expect(closeCount).toBe(0);
 
     listeners.pause!();
     await vi.advanceTimersByTimeAsync(60);
 
-    expect(context.close).toHaveBeenCalled();
+    expect(closeCount).toBe(1);
   });
 
   it("force-closes the audio context via the safety timeout when no terminal event fires", async () => {
@@ -200,13 +208,14 @@ describe("triage sound playback", () => {
       },
       connect: vi.fn(),
     };
+    let closeCount = 0;
     const context = {
       currentTime: 10,
       state: "running",
       destination: {},
       createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
       createGain: vi.fn(() => gain),
-      close: vi.fn(),
+      close: () => { closeCount += 1; return Promise.resolve(); },
     };
     vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
       return context;
@@ -219,11 +228,11 @@ describe("triage sound playback", () => {
 
     // Before the fallback ceiling (30s) the context is still open.
     await vi.advanceTimersByTimeAsync(29_000);
-    expect(context.close).not.toHaveBeenCalled();
+    expect(closeCount).toBe(0);
 
     // After the ceiling plus the close delay it is force-closed.
     await vi.advanceTimersByTimeAsync(1_100);
-    expect(context.close).toHaveBeenCalled();
+    expect(closeCount).toBe(1);
   });
 
   it("closes a created audio context when play() rejects", async () => {
@@ -246,13 +255,14 @@ describe("triage sound playback", () => {
       },
       connect: vi.fn(),
     };
+    let closeCount = 0;
     const context = {
       currentTime: 10,
       state: "running",
       destination: {},
       createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
       createGain: vi.fn(() => gain),
-      close: vi.fn(),
+      close: () => { closeCount += 1; return Promise.resolve(); },
     };
     vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
       return context;
@@ -266,11 +276,12 @@ describe("triage sound playback", () => {
     expect(result).toBe(false);
 
     await vi.advanceTimersByTimeAsync(60);
-    expect(context.close).toHaveBeenCalled();
+    expect(closeCount).toBe(1);
   });
 
   it("falls back to native playback if Web Audio setup fails", async () => {
-    const play = vi.fn(() => Promise.resolve());
+    let playCount = 0;
+    const play = () => { playCount += 1; return Promise.resolve(); };
     vi.stubGlobal("Audio", vi.fn(function AudioMock(this: Record<string, unknown>, path: string) {
       this.path = path;
       this.volume = 0;
@@ -291,6 +302,6 @@ describe("triage sound playback", () => {
 
     expect(result).toBe(true);
     expect(vi.mocked(globalThis.Audio).mock.instances[0]!.volume).toBe(1);
-    expect(play).toHaveBeenCalled();
+    expect(playCount).toBe(1);
   });
 });

@@ -478,13 +478,16 @@ describe("active briefing snapshots", () => {
 
     const first = syncActiveSnapshot("user-1", options);
     const second = syncActiveSnapshot("user-1", options);
+    // test-architecture: allow-boundary-interaction -- Configuration loading is an admitted database-backed operation; concurrent snapshot syncs must share the one in-flight admission.
     expect(loadUserConfigFn).toHaveBeenCalledTimes(1);
 
     releaseConfig!();
     const [firstResult, secondResult] = await Promise.all([first, second]);
 
     expect(firstResult).toBe(secondResult);
+    // test-architecture: allow-boundary-interaction -- Gmail retrieval is the outbound provider effect protected by snapshot single-flight admission.
     expect(fetchAllEmailsFn).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- Triage drain admission is a durable worker boundary; concurrent snapshot reads must request one drain.
     expect(processNextEmailTriageJobFn).toHaveBeenCalledTimes(1);
   });
 

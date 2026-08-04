@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import {
   requireCookieSessionOrApiTokenScope,
   requireRecentPasswordAuth,
@@ -13,8 +13,6 @@ import type { ActualBillWriteInput } from "../../actual/actual.ts";
 
 type HttpError = Error & { status?: number };
 
-const router = Router();
-const quickTxnRouter = Router();
 const ownerUserId = (): string => process.env.EA_USER_ID!;
 
 function isBlank(value: unknown): boolean {
@@ -56,6 +54,22 @@ function validateSendBillPayload(billData: unknown): string | null {
   return null;
 }
 
+export function createBillsRouters({
+  service = billsService,
+  recentAuth = requireRecentPasswordAuth,
+  quickTxnAuth = requireCookieSessionOrApiTokenScope("actual:write"),
+  extractLimiter = billExtractLimiter,
+  connectionLimiter = actualConnectionLimiter,
+}: {
+  service?: typeof billsService;
+  recentAuth?: RequestHandler;
+  quickTxnAuth?: RequestHandler;
+  extractLimiter?: RequestHandler;
+  connectionLimiter?: RequestHandler;
+} = {}) {
+const router = Router();
+const quickTxnRouter = Router();
+
 router.post("/actual/send", async (req, res) => {
   const billData = req.body;
   const validationError = validateSendBillPayload(billData);
@@ -63,7 +77,7 @@ router.post("/actual/send", async (req, res) => {
     return res.status(400).json({ message: validationError });
   }
   try {
-    res.json(await billsService.sendBill(ownerUserId(), billData as ActualBillWriteInput));
+    res.json(await service.sendBill(ownerUserId(), billData as ActualBillWriteInput));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error sending to Actual Budget:", err);
@@ -71,7 +85,7 @@ router.post("/actual/send", async (req, res) => {
   }
 });
 
-quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("actual:write"), async (req, res) => {
+quickTxnRouter.post("/actual/quick-txn", quickTxnAuth, async (req, res) => {
   const { account, amount, payee, type, date, notes, category } = req.body || {};
   if (!account || amount == null || !payee) {
     return res.status(400).json({ message: "account, amount, and payee are required" });
@@ -86,7 +100,7 @@ quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("ac
     return res.status(400).json({ message: "amount must be greater than 0" });
   }
   try {
-    const result = await billsService.createQuickTxn(ownerUserId(), {
+    const result = await service.createQuickTxn(ownerUserId(), {
       accountName: account,
       amount: numericAmount,
       payee: String(payee),
@@ -104,13 +118,13 @@ quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("ac
   }
 });
 
-router.post("/bills/extract", billExtractLimiter, async (req, res) => {
+router.post("/bills/extract", extractLimiter, async (req, res) => {
   const { subject, from, body } = req.body || {};
   if (!body || typeof body !== "string") {
     return res.status(400).json({ message: "body is required" });
   }
   try {
-    res.json(await billsService.extractBill(ownerUserId(), { subject, from, body }));
+    res.json(await service.extractBill(ownerUserId(), { subject, from, body }));
   } catch (error: unknown) {
     const err = error as HttpError;
     const status = err.status || 500;
@@ -131,7 +145,7 @@ router.post("/bills/resolve", async (req, res) => {
     source = "triage",
   } = req.body || {};
   try {
-    res.json(await billsService.resolveBillPaySeed(ownerUserId(), {
+    res.json(await service.resolveBillPaySeed(ownerUserId(), {
       emailId,
       accountId,
       subject,
@@ -152,7 +166,7 @@ router.post("/bills/resolve", async (req, res) => {
 router.post("/bills/resolve-sample", async (req, res) => {
   const { mappings, email, candidate } = req.body || {};
   try {
-    res.json(await billsService.resolveBillPaySample(ownerUserId(), {
+    res.json(await service.resolveBillPaySample(ownerUserId(), {
       mappings,
       email,
       candidate,
@@ -167,7 +181,7 @@ router.post("/bills/resolve-sample", async (req, res) => {
 
 router.post("/actual/bills/:id/mark-paid", async (req, res) => {
   try {
-    res.json(await billsService.markBillPaid(ownerUserId(), req.params.id));
+    res.json(await service.markBillPaid(ownerUserId(), req.params.id));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error marking bill paid:", err);
@@ -177,7 +191,7 @@ router.post("/actual/bills/:id/mark-paid", async (req, res) => {
 
 router.get("/actual/metadata", async (_req, res) => {
   try {
-    res.json(await billsService.getMetadata(ownerUserId()));
+    res.json(await service.getMetadata(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget metadata:", err.message);
@@ -187,7 +201,7 @@ router.get("/actual/metadata", async (_req, res) => {
 
 router.get("/actual/accounts", async (_req, res) => {
   try {
-    res.json(await billsService.listAccounts(ownerUserId()));
+    res.json(await service.listAccounts(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget accounts:", err.message);
@@ -197,7 +211,7 @@ router.get("/actual/accounts", async (_req, res) => {
 
 router.get("/actual/payees", async (_req, res) => {
   try {
-    res.json(await billsService.listPayees(ownerUserId()));
+    res.json(await service.listPayees(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget payees:", err.message);
@@ -207,7 +221,7 @@ router.get("/actual/payees", async (_req, res) => {
 
 router.get("/actual/categories", async (_req, res) => {
   try {
-    res.json(await billsService.listCategories(ownerUserId()));
+    res.json(await service.listCategories(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Error fetching Actual Budget categories:", err.message);
@@ -215,7 +229,7 @@ router.get("/actual/categories", async (_req, res) => {
   }
 });
 
-router.post("/actual/test", requireRecentPasswordAuth, actualConnectionLimiter, async (req, res) => {
+router.post("/actual/test", recentAuth, connectionLimiter, async (req, res) => {
   const { serverURL, password, syncId } = req.body || {};
   if (serverURL) {
     const validation = validateActualBudgetUrl(serverURL);
@@ -225,7 +239,7 @@ router.post("/actual/test", requireRecentPasswordAuth, actualConnectionLimiter, 
   }
   const overrides = serverURL && syncId ? { serverURL, password, syncId } : null;
   try {
-    res.json(await billsService.testConnection(ownerUserId(), overrides));
+    res.json(await service.testConnection(ownerUserId(), overrides));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget test failed:", err.message);
@@ -233,7 +247,7 @@ router.post("/actual/test", requireRecentPasswordAuth, actualConnectionLimiter, 
   }
 });
 
-router.post("/actual/connection", requireRecentPasswordAuth, actualConnectionLimiter, async (req, res) => {
+router.post("/actual/connection", recentAuth, connectionLimiter, async (req, res) => {
   const { serverURL, password, syncId } = req.body || {};
   if (typeof serverURL !== "string" || typeof syncId !== "string") {
     return res.status(400).json({ message: "Actual Budget server URL and sync ID are required" });
@@ -249,7 +263,7 @@ router.post("/actual/connection", requireRecentPasswordAuth, actualConnectionLim
     return res.status(400).json({ message: "Actual Budget sync ID is required", success: false });
   }
   try {
-    return res.json(await billsService.saveActualConnection(ownerUserId(), {
+    return res.json(await service.saveActualConnection(ownerUserId(), {
       serverURL: validation.value!,
       password,
       syncId: syncId.trim(),
@@ -264,9 +278,9 @@ router.post("/actual/connection", requireRecentPasswordAuth, actualConnectionLim
   }
 });
 
-router.delete("/actual/connection", requireRecentPasswordAuth, async (_req, res) => {
+router.delete("/actual/connection", recentAuth, async (_req, res) => {
   try {
-    return res.json(await billsService.removeActualConnection(ownerUserId()));
+    return res.json(await service.removeActualConnection(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget connection removal failed:", err.message);
@@ -276,7 +290,7 @@ router.delete("/actual/connection", requireRecentPasswordAuth, async (_req, res)
 
 router.post("/actual/cache/hydrate", async (_req, res) => {
   try {
-    res.json(await billsService.hydrateActualCache(ownerUserId()));
+    res.json(await service.hydrateActualCache(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget cache hydration failed:", err.message);
@@ -286,7 +300,7 @@ router.post("/actual/cache/hydrate", async (_req, res) => {
 
 router.get("/actual/cache/status", async (_req, res) => {
   try {
-    res.json(await billsService.getActualCacheStatus(ownerUserId()));
+    res.json(await service.getActualCacheStatus(ownerUserId()));
   } catch (error: unknown) {
     const err = error as HttpError;
     console.error("Actual Budget cache status check failed:", err.message);
@@ -294,5 +308,9 @@ router.get("/actual/cache/status", async (_req, res) => {
   }
 });
 
-export { quickTxnRouter };
-export default router;
+return { router, quickTxnRouter };
+}
+
+const defaultRouters = createBillsRouters();
+export const quickTxnRouter = defaultRouters.quickTxnRouter;
+export default defaultRouters.router;

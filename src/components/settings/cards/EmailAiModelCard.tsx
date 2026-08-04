@@ -3,7 +3,7 @@ import { Bot } from "lucide-react";
 import { getModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
-import { projectAiProviderSelection } from "@/components/settings/featureDependencyModel";
+import { projectAiProviderSelection, projectAiSettingsSelectionPatch } from "@/components/settings/featureDependencyModel";
 import { isDemoMode } from "@/demo/config";
 import type { ProviderModelAvailability } from "../../../../shared/types/settings";
 import type { SettingsCardStateProps } from "../settingsTypes";
@@ -88,15 +88,12 @@ export default function EmailAiModelCard({
     const next = selection.providers.find((entry) => entry.provider === nextProvider) || selection.providers[0];
     if (!next) return;
     const model = next!.models.some((entry) => entry.id === nextModel) ? nextModel : next!.defaultModel;
+    const update = projectAiSettingsSelectionPatch("email_ai", nextProvider, model);
     setSettings((current) => ({
       ...(current || {}),
-      email_ai_provider: nextProvider,
-      email_ai_model: model,
+      ...update,
     }));
-    patch({
-      email_ai_provider: nextProvider,
-      email_ai_model: model,
-    });
+    patch(update);
   }
 
   return (

@@ -280,6 +280,7 @@ describe("sweepNewsSources + worker", () => {
       dbClient: db, fetchImpl, now: new Date("2026-07-04T12:00:00.000Z"), staggerMs: 0,
     });
     expect(result.swept).toBe(0);
+    // test-architecture: allow-boundary-interaction -- Feed fetch is the outbound network boundary; backed-off sources must produce no provider request, which durable state alone cannot establish.
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -428,6 +429,7 @@ describe("sweepNewsSources + worker", () => {
     });
 
     expect(result.swept).toBe(0);
+    // test-architecture: allow-boundary-interaction -- Feed fetch is the outbound network boundary; a persisted shared-host cooldown must suppress every Reddit request while active.
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -439,8 +441,8 @@ describe("sweepNewsSources + worker", () => {
     await db.execute(`INSERT INTO ea_news_sources (topic_id, kind, title, feed_url, enabled, consecutive_failures, last_fetch_at)
                       VALUES (1, 'rss', 'r/politics', 'https://www.reddit.com/r/politics/.rss', 1, 0, '2026-07-04T11:20:00.000Z')`);
     const fetchImpl = vi.fn<NewsFetch>().mockResolvedValue(mockResponse({ status: 200, body: RSS_XML }));
-    await sweepNewsSources({ dbClient: db, fetchImpl, staggerMs: 0 });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const result = await sweepNewsSources({ dbClient: db, fetchImpl, staggerMs: 0 });
+    expect(result.swept).toBe(1);
     expect(fetchImpl.mock.calls[0]![0]).toBe("https://www.reddit.com/r/politics/.rss");
   });
 

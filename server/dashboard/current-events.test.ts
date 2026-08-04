@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const {
   formatCurrentDashboardSse,
@@ -8,11 +8,11 @@ const {
 
 describe("current dashboard events", () => {
   it("publishes normalized refetch events to subscribers for the same user", () => {
-    const listener = vi.fn();
-    const otherUserListener = vi.fn();
+    const received: unknown[] = [];
+    const otherUserReceived: unknown[] = [];
 
-    const unsubscribe = subscribeCurrentDashboardEvents("u1", listener);
-    subscribeCurrentDashboardEvents("u2", otherUserListener);
+    const unsubscribe = subscribeCurrentDashboardEvents("u1", (event) => received.push(event));
+    subscribeCurrentDashboardEvents("u2", (event) => otherUserReceived.push(event));
 
     const event = publishCurrentDashboardEvent("u1", {
       source: "todoist",
@@ -28,8 +28,8 @@ describe("current dashboard events", () => {
       state: "needs_sync",
       occurredAt: "2026-05-05T00:00:00.000Z",
     });
-    expect(listener).toHaveBeenCalledWith(event);
-    expect(otherUserListener).not.toHaveBeenCalled();
+    expect(received).toEqual([event]);
+    expect(otherUserReceived).toEqual([]);
 
     unsubscribe();
     publishCurrentDashboardEvent("u1", {
@@ -38,7 +38,7 @@ describe("current dashboard events", () => {
       state: "current",
       occurredAt: "2026-05-05T00:00:01.000Z",
     });
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(received).toEqual([event]);
   });
 
   it("preserves structured event details for typed dashboard consumers", () => {
