@@ -1,6 +1,6 @@
 import cookieParser from "cookie-parser";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoistOAuthService } from "../tasks/todoist-oauth.ts";
 

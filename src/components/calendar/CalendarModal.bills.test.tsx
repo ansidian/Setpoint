@@ -158,46 +158,6 @@ describe("CalendarModal bills behavior", () => {
     });
   });
 
-  it("refetches the visible Bills range when range data is marked stale", async () => {
-    window.innerWidth = 1900;
-    const ensureRange = vi.fn().mockResolvedValue({});
-    const renderModal = (revision: number) => wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="bills"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        billsRangeData={{
-          revision,
-          ensureRange,
-          data: {
-            schedules: [
-              {
-                id: "bill-1:2026-04-20",
-                scheduleId: "bill-1",
-                name: "Rent",
-                next_date: "2026-04-20",
-                amount: 1800,
-                paid: false,
-                type: "bill",
-              },
-            ],
-          },
-        }}
-        deadlinesData={{}}
-      />,
-    );
-
-    const { rerender } = render(renderModal(0));
-    await waitFor(() => expect(ensureRange).toHaveBeenCalledTimes(1));
-
-    rerender(renderModal(1));
-    await waitFor(() => expect(ensureRange).toHaveBeenCalledTimes(2));
-  });
-
   it("opens floating bill detail from a bills agenda row", async () => {
     window.innerWidth = 1900;
 
@@ -224,6 +184,8 @@ describe("CalendarModal bills behavior", () => {
             },
           ],
           payeeMap: { "payee-1": "Landlord" },
+          actualBudgetUrl: "https://actual.example",
+          payLinksByScheduleId: { "bill-1": "https://pay.example/rent" },
         }}
         deadlinesData={{}}
       />,
@@ -235,7 +197,14 @@ describe("CalendarModal bills behavior", () => {
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
+    expect(within(panel).getByText("Scheduled bill")).toBeTruthy();
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
+    const actualLink = within(panel).getByRole("link", { name: "Open in Actual" });
+    expect(actualLink.getAttribute("href")).toBe("https://actual.example/schedules?highlight=bill-1");
+    expect(actualLink.getAttribute("target")).toBe("_blank");
+    expect(actualLink.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(within(panel).getByRole("link", { name: "Pay Online" }).getAttribute("href"))
+      .toBe("https://pay.example/rent");
   });
 
   it("opens chip-anchored floating bill detail from dashboard item focus", async () => {

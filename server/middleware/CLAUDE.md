@@ -10,7 +10,7 @@ Cross-cutting Express request-pipeline middleware composed in `server/index.ts`:
 - `rate-limits.ts` — per-route spend guards for LLM/paid-API routes (bills/extract, alfred run, email-search, places); each limiter is exported as both a `makeXLimiter()` factory (fresh, test-isolated instance) and a singleton built from it (used by real route wiring), since `express-rate-limit` tracks counts per-instance.
 - `owner-gate.ts` — blocks all non-setup APIs until the singleton owner has been claimed; returns a fixed setup-required response.
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

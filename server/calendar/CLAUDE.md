@@ -17,7 +17,7 @@ Google Calendar integration: range reads, event mutations (including recurring s
 - `calendarSearchMirrorSync.ts` — full/incremental/repair sync engine + the -12/+18 month search-window projection (re-exports shared `addMonthsIso`)
 - `calendar-search.ts` — ranks/normalizes event, deadline, and bill search candidates
 
-Other tests are not listed; adjacent test files cover their same-named source by convention.
+Tests are not listed here; follow the behavior-ownership policy in `AGENTS.md`.
 
 ## Local patterns
 

@@ -154,9 +154,13 @@ describe("Calendar Search Mirror service", () => {
       original_start_key: "2026-05-20T17:00:00.000Z",
       title: "Final presentation",
       location: "Room 201",
+      all_day: 0,
       source_label: "Personal",
       event_color: "#d50000",
+      is_recurring: 1,
+      status: "confirmed",
       searchable_text: "final presentation room 201 slides and q&a",
+      deleted_at: null,
     });
 
     const occurrences = await listCalendarSearchMirrorOccurrences("test-user", {
@@ -188,6 +192,10 @@ describe("Calendar Search Mirror service", () => {
         expect.objectContaining({
           accountId: "gmail-main",
           calendarId: "primary",
+          accountLabel: "Google Main",
+          accountEmail: "me@example.com",
+          calendarLabel: "Personal",
+          sourceColor: "#4285f4",
           state: "current",
           windowStart: "2025-05-12",
           windowEnd: "2027-11-12",
@@ -217,7 +225,7 @@ describe("Calendar Search Mirror service", () => {
       })
       .mockResolvedValueOnce({
         events: [{ ...occurrence, status: "cancelled" }],
-        nextSyncToken: "sync-2",
+        syncToken: "sync-2",
       });
 
     await syncCalendarSearchMirror("test-user", [account], {
@@ -479,6 +487,22 @@ describe("Calendar Search Mirror service", () => {
       end: "2027-11-12",
     })).resolves.toEqual([
       expect.objectContaining({ id: "event-1", title: "Final presentation" }),
+    ]);
+    await upsertCalendarSearchMirrorOccurrence("test-user", {
+      ...occurrence,
+      title: "Updated final presentation",
+      description: "Updated slides and Q&A",
+    }, {
+      dbClient: db,
+      now: new Date("2026-05-12T19:15:00.000Z"),
+    });
+    await expect(listCalendarSearchMirrorOccurrences("test-user", {
+      dbClient: db,
+      start: "2025-05-12",
+      end: "2027-11-12",
+      query: "updated",
+    })).resolves.toEqual([
+      expect.objectContaining({ id: "event-1", title: "Updated final presentation" }),
     ]);
     await expect(getCalendarSearchMirrorHealth("test-user", {
       dbClient: db,

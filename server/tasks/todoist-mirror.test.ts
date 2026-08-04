@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient, type Client, type InStatement } from "@libsql/client";
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, "../db/migrations");
 
 const testState = vi.hoisted(() => ({
   db: { current: null as unknown as Client },
@@ -24,6 +30,9 @@ const reminderService = await import("../reminders/reminder-service.ts") as unkn
 };
 const {
   getTodoistMirrorHealth,
+  listTodoistMirrorActiveTasks,
+  listTodoistMirrorLabels,
+  listTodoistMirrorProjects,
   recordTodoistSyncRequest,
   syncTodoistMirror,
 } = await import("./todoist-mirror.ts");
@@ -34,88 +43,7 @@ const {
 
 async function createTodoistMirrorTestDb() {
   const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(`
-    CREATE TABLE ea_settings (
-      user_id TEXT PRIMARY KEY,
-      todoist_api_token_encrypted TEXT
-    );
-
-    CREATE TABLE ea_todoist_sync_state (
-      user_id TEXT PRIMARY KEY,
-      sync_token TEXT,
-      status TEXT NOT NULL DEFAULT 'idle',
-      last_sync_at TEXT,
-      last_success_at TEXT,
-      last_full_sync_at TEXT,
-      last_incremental_sync_at TEXT,
-      last_error TEXT,
-      sync_started_at TEXT,
-      sync_requested_at TEXT,
-      sync_request_reason TEXT,
-      last_check_failed_at TEXT,
-      failed_check_count INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE ea_todoist_items (
-      user_id TEXT NOT NULL,
-      item_id TEXT NOT NULL,
-      project_id TEXT,
-      section_id TEXT,
-      parent_id TEXT,
-      content TEXT NOT NULL DEFAULT '',
-      description TEXT NOT NULL DEFAULT '',
-      checked INTEGER NOT NULL DEFAULT 0,
-      is_deleted INTEGER NOT NULL DEFAULT 0,
-      due_date TEXT,
-      due_datetime TEXT,
-      due_timezone TEXT,
-      due_is_recurring INTEGER NOT NULL DEFAULT 0,
-      priority INTEGER,
-      labels_json TEXT NOT NULL DEFAULT '[]',
-      raw_json TEXT NOT NULL DEFAULT '{}',
-      synced_at TEXT,
-      deleted_at TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, item_id)
-    );
-
-    CREATE TABLE ea_todoist_projects (
-      user_id TEXT NOT NULL,
-      project_id TEXT NOT NULL,
-      name TEXT NOT NULL DEFAULT '',
-      color TEXT,
-      is_inbox_project INTEGER NOT NULL DEFAULT 0,
-      is_deleted INTEGER NOT NULL DEFAULT 0,
-      raw_json TEXT NOT NULL DEFAULT '{}',
-      synced_at TEXT,
-      deleted_at TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, project_id)
-    );
-
-    CREATE TABLE ea_todoist_labels (
-      user_id TEXT NOT NULL,
-      label_id TEXT NOT NULL,
-      name TEXT NOT NULL DEFAULT '',
-      color TEXT,
-      is_deleted INTEGER NOT NULL DEFAULT 0,
-      raw_json TEXT NOT NULL DEFAULT '{}',
-      synced_at TEXT,
-      deleted_at TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, label_id)
-    );
-
-    CREATE TABLE ea_completed_tasks (
-      user_id TEXT NOT NULL,
-      todoist_id TEXT NOT NULL,
-      completed_at TEXT DEFAULT (datetime('now')),
-      due_date TEXT NOT NULL,
-      snapshot_json TEXT,
-      PRIMARY KEY (user_id, todoist_id, due_date)
-    );
-  `);
+  await db.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
   return db;
 }
 
@@ -216,6 +144,65 @@ describe("recordTodoistSyncRequest", () => {
 });
 
 describe("syncTodoistMirror", () => {
+  it("persists normalized item, project, and label state through mirror reads", async () => {
+    await seedTodoistToken();
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient: vi.fn(async () => ({
+        full_sync: true,
+        sync_token: "field-sync-token",
+        items: [{
+          id: 7,
+          project_id: 3,
+          content: "Prepare report",
+          description: "Include the latest figures",
+          checked: false,
+          is_deleted: false,
+          due: {
+            date: "2026-05-05T09:30:00",
+            timezone: "America/Los_Angeles",
+            is_recurring: true,
+          },
+          priority: 4,
+          labels: [9],
+        }],
+        projects: [{ id: 3, name: "School", is_inbox_project: true }],
+        labels: [{ id: 9, name: "school", color: "green" }],
+      })),
+      now: new Date("2026-05-04T15:00:00.000Z"),
+      forceFull: true,
+    });
+    await expect(listTodoistMirrorActiveTasks("u1", { dbClient: testState.db.current })).resolves.toEqual([{
+      id: "7",
+      project_id: "3",
+      content: "Prepare report",
+      description: "Include the latest figures",
+      checked: false,
+      is_deleted: false,
+      due: { date: "2026-05-05T09:30:00", timezone: "America/Los_Angeles", is_recurring: true },
+      priority: 4,
+      labels: ["9"],
+    }]);
+    await expect(listTodoistMirrorProjects("u1", { dbClient: testState.db.current })).resolves.toEqual([
+      { id: "3", name: "School", color: null, isInbox: true },
+    ]);
+    await expect(listTodoistMirrorLabels("u1", { dbClient: testState.db.current })).resolves.toEqual([
+      { id: "9", name: "school", color: "green" },
+    ]);
+    const itemRow = await testState.db.current.execute(
+      "SELECT item_id, due_date, due_datetime, due_timezone, due_is_recurring, priority, labels_json FROM ea_todoist_items WHERE user_id = 'u1'",
+    );
+    expect(itemRow.rows).toEqual([{
+      item_id: "7",
+      due_date: "2026-05-05",
+      due_datetime: "2026-05-05T09:30:00",
+      due_timezone: "America/Los_Angeles",
+      due_is_recurring: 1,
+      priority: 4,
+      labels_json: "[9]",
+    }]);
+  });
+
   it("applies incremental updates without deleting absent resources", async () => {
     await seedTodoistToken();
     await syncTodoistMirror("u1", {
@@ -232,7 +219,6 @@ describe("syncTodoistMirror", () => {
       })),
       now: new Date("2026-05-04T15:00:00.000Z"),
     });
-
     const syncApiClient = vi.fn(async () => ({
       full_sync: false,
       sync_token: "sync-token-2",
@@ -248,7 +234,6 @@ describe("syncTodoistMirror", () => {
       syncApiClient,
       now: new Date("2026-05-04T15:05:00.000Z"),
     });
-
     expect(syncApiClient).toHaveBeenCalledWith({
       token: "todoist-token",
       syncToken: "sync-token-1",
@@ -275,18 +260,92 @@ describe("syncTodoistMirror", () => {
         deleted_at: "2026-05-04T15:05:00.000Z",
       }),
     ]);
-
     const projects = await testState.db.current.execute("SELECT project_id, is_deleted FROM ea_todoist_projects WHERE user_id = 'u1'");
     expect(projects.rows).toEqual([
       expect.objectContaining({ project_id: "project-1", is_deleted: 0 }),
     ]);
-
     const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
     expect(state.rows[0]).toMatchObject({
       sync_token: "sync-token-2",
       last_full_sync_at: "2026-05-04T15:00:00.000Z",
       last_incremental_sync_at: "2026-05-04T15:05:00.000Z",
     });
+  });
+
+  it("tombstones resources absent from a full sync and hides them from mirror reads", async () => {
+    await seedTodoistToken();
+    const syncApiClient = vi.fn()
+      .mockResolvedValueOnce({
+        full_sync: true,
+        sync_token: "full-sync-1",
+        items: [{ id: "item-1", content: "Keep until refresh", checked: false }],
+        projects: [{ id: "project-1", name: "School" }],
+        labels: [{ id: "label-1", is_deleted: true }],
+      })
+      .mockResolvedValueOnce({
+        full_sync: true,
+        sync_token: "full-sync-2",
+        items: [],
+        projects: [],
+        labels: [],
+      });
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+      forceFull: true,
+    });
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:10:00.000Z"),
+      forceFull: true,
+    });
+    await expect(listTodoistMirrorActiveTasks("u1", { dbClient: testState.db.current })).resolves.toEqual([]);
+    await expect(listTodoistMirrorProjects("u1", { dbClient: testState.db.current })).resolves.toEqual([]);
+    await expect(listTodoistMirrorLabels("u1", { dbClient: testState.db.current })).resolves.toEqual([]);
+
+    const [items, projects, labels] = await Promise.all([
+      testState.db.current.execute("SELECT item_id, is_deleted, deleted_at FROM ea_todoist_items WHERE user_id = 'u1'"),
+      testState.db.current.execute("SELECT project_id, is_deleted, deleted_at FROM ea_todoist_projects WHERE user_id = 'u1'"),
+      testState.db.current.execute("SELECT label_id, name, color, is_deleted, deleted_at FROM ea_todoist_labels WHERE user_id = 'u1'"),
+    ]);
+    expect(items.rows).toEqual([{ item_id: "item-1", is_deleted: 1, deleted_at: "2026-05-04T15:10:00.000Z" }]);
+    expect(projects.rows).toEqual([{ project_id: "project-1", is_deleted: 1, deleted_at: "2026-05-04T15:10:00.000Z" }]);
+    expect(labels.rows).toEqual([{ label_id: "label-1", name: "", color: null, is_deleted: 1, deleted_at: "2026-05-04T15:10:00.000Z" }]);
+  });
+
+  it("preserves a sync request raised during apply until a later sync consumes it", async () => {
+    await seedTodoistToken();
+    const syncApiClient = vi.fn(async () => {
+      await recordTodoistSyncRequest("u1", {
+        dbClient: testState.db.current,
+        reason: "todoist-webhook",
+        now: new Date("2026-05-04T15:00:05.000Z"),
+      });
+      return { sync_token: "pending-sync-token", items: [], projects: [], labels: [] };
+    });
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+    const pending = await testState.db.current.execute(
+      "SELECT sync_requested_at, sync_request_reason FROM ea_todoist_sync_state WHERE user_id = 'u1'",
+    );
+    expect(pending.rows).toEqual([{
+      sync_requested_at: "2026-05-04T15:00:05.000Z",
+      sync_request_reason: "todoist-webhook",
+    }]);
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient: vi.fn(async () => ({ sync_token: "later-sync-token", items: [], projects: [], labels: [] })),
+      now: new Date("2026-05-04T15:10:00.000Z"),
+    });
+    const consumed = await testState.db.current.execute(
+      "SELECT sync_requested_at, sync_request_reason FROM ea_todoist_sync_state WHERE user_id = 'u1'",
+    );
+    expect(consumed.rows).toEqual([{ sync_requested_at: null, sync_request_reason: null }]);
   });
 
   it("falls back to a full sync when Todoist rejects the stored sync token", async () => {
@@ -450,8 +509,8 @@ describe("syncTodoistMirror", () => {
     });
     expect(followUp).toHaveBeenCalledTimes(1);
   });
-
 });
+
 describe("syncTodoistMirror completed-occurrence reconciliation", () => {
   it("clears the stale completion tombstone when a non-recurring task is reopened in Todoist", async () => {
     await seedTodoistToken();

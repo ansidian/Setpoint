@@ -194,4 +194,70 @@ describe("CalendarModal floating detail behavior", () => {
     });
   });
 
+  it("keeps stacked fallback overflow accessible, selectable, and inside the viewport", async () => {
+    const previousWidth = window.innerWidth;
+    const previousHeight = window.innerHeight;
+    window.innerWidth = 900;
+    window.innerHeight = 360;
+
+    try {
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          focusDate="2026-04-20"
+          eventsData={{
+            getEvents: () => Array.from({ length: 7 }, (_, index) => ({
+              id: `fallback-event-${index + 1}`,
+              title: `Fallback event ${index + 1}`,
+              startMs: new Date(`2026-04-20T${String(10 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
+              endMs: new Date(`2026-04-20T${String(11 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
+              allDay: false,
+              color: "#4285f4",
+              hasUpcomingReminder: index === 6,
+            })),
+          }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const overflowTrigger = await screen.findByTestId("calendar-cell-overflow-trigger-20");
+      overflowTrigger.getBoundingClientRect = () => ({
+        top: 310,
+        bottom: 338,
+        left: 760,
+        right: 880,
+        width: 120,
+        height: 28,
+      } as DOMRect);
+
+      fireEvent.click(overflowTrigger);
+
+      const popover = await screen.findByTestId("calendar-cell-overflow-popover");
+      const top = Number.parseFloat(popover.style.top);
+      const maxHeight = Number.parseFloat(popover.style.maxHeight);
+      expect(popover.style.position).toBe("fixed");
+      expect(top).toBeGreaterThanOrEqual(16);
+      expect(top + maxHeight).toBeLessThanOrEqual(window.innerHeight - 16);
+
+      const overflowItem = within(popover).getByRole("button", { name: /Fallback event 7/i });
+      expect(overflowItem.querySelector("[data-calendar-chip-reminder-marker='true']")).toBeTruthy();
+
+      fireEvent.click(overflowItem);
+      expect(document.activeElement).toBe(overflowItem);
+      expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+
+      fireEvent.keyDown(document, { key: "Escape" });
+      await waitFor(() => {
+        expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+      });
+    } finally {
+      window.innerWidth = previousWidth;
+      window.innerHeight = previousHeight;
+    }
+  });
+
 });

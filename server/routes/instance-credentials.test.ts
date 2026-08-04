@@ -1,6 +1,6 @@
 import cookieParser from "cookie-parser";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 import { describe, expect, it, vi } from "vitest";
 import type { InstanceCredentialService } from "../platform/instance-credential-service.ts";
 import type { AiCredentialManager } from "../ai-credentials.ts";

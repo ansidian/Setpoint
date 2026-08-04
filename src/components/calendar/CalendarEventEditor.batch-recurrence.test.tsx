@@ -45,7 +45,17 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
 
     fireEvent.click(getActiveEventSaveButton());
     await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        title: "Planning block",
+        recurrence: expect.objectContaining({
+          frequency: "weekly",
+          interval: 1,
+          weekdays: ["MO"],
+          ends: { type: "never" },
+        }),
+      }));
       expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
       expect(upsertEvents).not.toHaveBeenCalled();
     });
@@ -263,7 +273,15 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        title: "Work",
+        recurrence: {
+          frequency: "monthly",
+          interval: 2,
+          monthDay: 20,
+          ends: { type: "onDate", untilDate: "2026-04-24" },
+        },
+      }));
       expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
       expect(upsertEvents).not.toHaveBeenCalled();
     });

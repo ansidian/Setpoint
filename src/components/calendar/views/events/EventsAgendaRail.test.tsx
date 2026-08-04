@@ -1,10 +1,8 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EventsAgendaRail from "./EventsAgendaRail.tsx";
 import type { ComponentProps } from "react";
 import type { CalendarItemLike } from "../calendarViewTypes";
-
-const asRect = (value: Omit<DOMRect, "x" | "y" | "toJSON">): DOMRect => value as DOMRect;
 
 afterEach(() => {
   cleanup();
@@ -44,23 +42,6 @@ function renderRail(props: Partial<ComponentProps<typeof EventsAgendaRail>> = {}
 }
 
 describe("EventsAgendaRail", () => {
-  it("opens agenda rows through the event action contract", () => {
-    const onEventAction = vi.fn();
-    renderRail({ selectedDateKey: "2026-05-04", onEventAction });
-
-    fireEvent.click(screen.getByTestId("calendar-agenda-event-row"));
-
-    expect(onEventAction).toHaveBeenCalledWith(expect.objectContaining({
-      dateKey: "2026-05-04",
-      anchorKind: "agenda-row",
-      event: expect.objectContaining({
-        id: "event-1",
-        agendaTitle: "Planning block",
-        agendaItemId: "event-1",
-      }),
-    }));
-  });
-
   it("opens the event context menu from agenda row right-click", () => {
     const openContextMenu = vi.fn(() => true);
     renderRail({
@@ -247,103 +228,6 @@ describe("EventsAgendaRail", () => {
 
     expect(screen.queryByTestId("calendar-events-rail-skeleton")).toBeNull();
     expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
-  });
-
-  it("selects date headers without opening an event or moving the agenda rail", () => {
-    const onDateAction = vi.fn();
-    const onEventAction = vi.fn();
-    renderRail({ onDateAction, onEventAction });
-    const rail = screen.getByTestId("events-agenda-rail");
-    const scrollTo = vi.fn();
-    rail.scrollTo = scrollTo;
-    rail.scrollTop = 88;
-
-    fireEvent.click(screen.getByRole("button", { name: /select monday, may 4/i }));
-
-    expect(onDateAction).toHaveBeenCalledWith("2026-05-04");
-    expect(onEventAction).not.toHaveBeenCalled();
-    expect(scrollTo).not.toHaveBeenCalled();
-    expect(rail.scrollTop).toBe(88);
-  });
-
-  it("suppresses passive date sync for pointer-induced item scroll", async () => {
-    const onPassiveDateChange = vi.fn();
-    renderRail({ selectedDateKey: "2026-05-01", onPassiveDateChange });
-    const rail = screen.getByTestId("events-agenda-rail");
-    const may1Header = screen.getByRole("button", { name: /select friday, may 1/i });
-    const may4Header = screen.getByRole("button", { name: /select monday, may 4/i });
-    const row = screen.getByTestId("calendar-agenda-event-row");
-
-    rail.getBoundingClientRect = () => asRect({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
-    may1Header.getBoundingClientRect = () => asRect({ top: -48, bottom: -14, left: 0, right: 280, width: 280, height: 34 });
-    may4Header.getBoundingClientRect = () => asRect({ top: 2, bottom: 36, left: 0, right: 280, width: 280, height: 34 });
-
-    await act(async () => {
-      fireEvent.pointerDown(row);
-      fireEvent.scroll(rail);
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-
-    expect(onPassiveDateChange).not.toHaveBeenCalled();
-  });
-
-  it("passively selects the date header tucked under the agenda row offset", async () => {
-    const onPassiveDateChange = vi.fn();
-    renderRail({
-      todayDate: 14,
-      selectedDateKey: "2026-05-01",
-      entryScrollTargetDateKey: false,
-      onPassiveDateChange,
-      events: [
-        event({
-          id: "event-13",
-          title: "Previous day",
-          start: "2026-05-13T16:00:00.000Z",
-          end: "2026-05-13T17:00:00.000Z",
-        }),
-        event({
-          id: "event-14",
-          title: "Today planning",
-          start: "2026-05-14T16:00:00.000Z",
-          end: "2026-05-14T17:00:00.000Z",
-        }),
-      ],
-    });
-    const rail = screen.getByTestId("events-agenda-rail");
-    const may13Header = screen.getByRole("button", { name: /select wednesday, may 13/i });
-    const may14Header = screen.getByRole("button", { name: /select thursday, may 14/i });
-    const may13Section = may13Header.closest("section")!;
-    const may14Section = may14Header.closest("section")!;
-
-    rail.getBoundingClientRect = () => asRect({ top: 0, bottom: 260, left: 0, right: 280, width: 280, height: 260 });
-    may13Section.getBoundingClientRect = () => asRect({ top: -72, bottom: -4, left: 0, right: 280, width: 280, height: 68 });
-    may14Section.getBoundingClientRect = () => asRect({ top: 10, bottom: 88, left: 0, right: 280, width: 280, height: 78 });
-
-    await act(async () => {
-      fireEvent.scroll(rail);
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-
-    expect(onPassiveDateChange).toHaveBeenCalledWith("2026-05-14");
-    expect(onPassiveDateChange).not.toHaveBeenCalledWith("2026-05-13");
-  });
-
-  it("pre-selects the month-start anchor on month entry", async () => {
-    const onPassiveDateChange = vi.fn();
-    renderRail({
-      currentMonth: 3,
-      todayDate: 30,
-      selectedDateKey: null,
-      onPassiveDateChange,
-    });
-
-    await waitFor(() => {
-      expect(onPassiveDateChange).toHaveBeenCalledWith("2026-05-01");
-    });
   });
 
   it("shows No Events for a selected empty date anchor", () => {

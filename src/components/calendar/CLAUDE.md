@@ -44,7 +44,7 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 - `CalendarEventEditor.test-setup.ts` — mocks event and reminder API calls
 - `CalendarEventEditor.test-utils.tsx` — renders the modal with editor interaction helpers
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention. `*.test-utils.*` / `*.test-setup.*` ARE listed — shared infra.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Related
 

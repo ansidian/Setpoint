@@ -22,7 +22,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `root-key-rotation.ts` — preflight and all-or-nothing transactional re-encryption across the credential inventory
 - `capability-projection.ts` — pure provider-neutral capability/source/health projection from injected redacted metadata
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

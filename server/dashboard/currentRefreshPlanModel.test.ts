@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BILLS_MIRROR_MAINTENANCE_TTL_MS } from "../bills/bills-service.ts";
 import { CURRENT_DATA_PROVIDERS } from "./current-providers/index.ts";
 import {
   applyProviderMaintenanceRefresh,
@@ -192,31 +193,40 @@ describe("provider refresh-plan modifiers", () => {
     expect(plan.skipped).toContainEqual({ key: "bills_current", reason: "provider_backoff" });
   });
 
-  it("schedules due Bills maintenance once, removes its fresh skip, and forces the provider", () => {
+  it("uses the real Bills provider policy at the six-hour maintenance boundary", () => {
     const rows = freshRows();
-    const plan = planCurrentDataRefresh(rows, { mode: "passive", now });
-    const forceKeys = new Set<CurrentDashboardCacheKey>();
+    const planFor = (lastSuccessAt: Date) => {
+      const plan = planCurrentDataRefresh(rows, { mode: "passive", now });
+      const forceKeys = new Set<CurrentDashboardCacheKey>();
 
-    applyProviderMaintenanceRefresh(plan, rows, {
-      forceKeys,
-      now,
-      context: {
-        billsMirror: {
-          syncHealth: {
-            state: "current",
-            configured: true,
-            lastSuccessAt: new Date(now.getTime() - 6 * 60 * 60_000 - 1).toISOString(),
+      applyProviderMaintenanceRefresh(plan, rows, {
+        forceKeys,
+        now,
+        context: {
+          billsMirror: {
+            syncHealth: {
+              state: "current",
+              configured: true,
+              lastSuccessAt: lastSuccessAt.toISOString(),
+            },
           },
         },
-      },
-    });
+      });
+      return { plan, forceKeys };
+    };
 
-    expect(plan.scheduled).toContainEqual({
+    const justBefore = planFor(new Date(now.getTime() - BILLS_MIRROR_MAINTENANCE_TTL_MS + 1));
+    expect(justBefore.plan.scheduled).not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
+    expect(justBefore.plan.skipped).toContainEqual({ key: "bills_current", reason: "fresh" });
+    expect(justBefore.forceKeys).toEqual(new Set());
+
+    const due = planFor(new Date(now.getTime() - BILLS_MIRROR_MAINTENANCE_TTL_MS));
+    expect(due.plan.scheduled).toContainEqual({
       key: "bills_current",
       reason: "bills_mirror_maintenance_due",
     });
-    expect(plan.skipped).not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
-    expect(forceKeys).toEqual(new Set(["bills_current"]));
+    expect(due.plan.skipped).not.toContainEqual(expect.objectContaining({ key: "bills_current" }));
+    expect(due.forceKeys).toEqual(new Set(["bills_current"]));
   });
 
   it("forces manual Todoist and Bills reconciliation while leaving stable providers skipped", () => {

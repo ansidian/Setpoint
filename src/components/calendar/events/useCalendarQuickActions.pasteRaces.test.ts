@@ -123,12 +123,14 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
     const clipboard = createCalendarEventClipboard(
       createCalendarEventSelectionSet([makeSource({ id: "event-paste-late" })]),
     );
+    const onSelectEvent = vi.fn();
+    const onReconcileSelection = vi.fn();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
       upsertEvents: vi.fn(),
       removeEvent: vi.fn(),
-      onSelectEvent: vi.fn(),
-      onReconcileSelection: vi.fn(),
+      onSelectEvent,
+      onReconcileSelection,
       onEventDeleted: vi.fn(),
     }));
 
@@ -136,6 +138,12 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
     await act(async () => {
       await result.current.pasteEvent(clipboard, "2026-04-22");
     });
+
+    expect(onSelectEvent.mock.calls).toHaveLength(1);
+    const [optimisticId, optimisticDay] = onSelectEvent.mock.calls[0]!;
+    expect(optimisticId).toMatch(/^optimistic-calendar-copy-/);
+    expect(optimisticDay).toBe("2026-04-22");
+    expect(onReconcileSelection.mock.calls).toEqual([[optimisticId, "google-created-paste-late"]]);
 
     // Deleting the reconciled (non-optimistic) event takes the ordinary delete
     // path — a guard that reconciliation does not leave the event flagged optimistic.

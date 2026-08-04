@@ -1,156 +1,141 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Client, InStatement, TransactionMode } from "@libsql/client";
+import cookieParser from "cookie-parser";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
+import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
+import { seedOwner, seedSession } from "../test-utils/auth-db.ts";
 
-vi.mock("../middleware/auth.ts", () => ({
-  requireCookieSession: (_req: unknown, _res: unknown, next: () => void) => next(),
+const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
+  db: { current: null },
 }));
-vi.mock("../platform/config-service.ts", () => ({
-  loadUserConfig: vi.fn(),
+
+const todoistProvider = vi.hoisted(() => ({
+  completeTodoistTask: vi.fn(),
+  createTodoistTask: vi.fn(),
+  deleteTodoistTask: vi.fn(),
+  fetchTodoistDueTaskIdSet: vi.fn(),
+  fetchTodoistTasks: vi.fn(),
+  fetchTodoistTasksAll: vi.fn(),
+  fetchTodoistTasksRange: vi.fn(),
+  fetchTodoistProjects: vi.fn(),
+  fetchTodoistLabels: vi.fn(),
+  getTodoistSyncHealth: vi.fn(),
+  updateTodoistTask: vi.fn(),
 }));
-vi.mock("../calendar/calendar.ts", () => ({
-  fetchCalendar: vi.fn(),
-  pacificDayBoundaries: vi.fn((date: Date) => ({ dayStart: date, dayEnd: date })),
-  getCalendarSourceGroups: vi.fn(),
-  createCalendarEvent: vi.fn(),
-  updateCalendarEvent: vi.fn(),
-  deleteCalendarEvent: vi.fn(),
-  formatCalendarRouteError: vi.fn((err: Error & { status?: number; code?: string }) => ({
-    status: err.status || 500,
-    body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
-  })),
-  validateCalendarRange: vi.fn(),
-  isCalendarSearchInputError: vi.fn(() => false),
-  searchCalendar: vi.fn(),
+
+function currentDb(): Client {
+  if (!testState.db.current) throw new Error("Test database is not initialized");
+  return testState.db.current;
+}
+
+// test-architecture: allow-boundary-mock -- injects an ephemeral database while real route and service modules execute together.
+vi.mock("../db/connection.ts", () => ({
+  default: {
+    execute: (statement: InStatement) => currentDb().execute(statement),
+    batch: (
+      statements: Parameters<Client["batch"]>[0],
+      mode?: TransactionMode,
+    ) => currentDb().batch(statements, mode),
+    transaction: (mode?: TransactionMode) => currentDb().transaction(mode),
+  },
 }));
-vi.mock("../platform/google-places.ts", () => ({
-  getGooglePlaceDetails: vi.fn(),
-  suggestGooglePlaces: vi.fn(),
-}));
-vi.mock("../tasks/deadlines-read.ts", () => ({
-  readCalendarDeadlines: vi.fn(),
-  readCalendarDeadlineRange: vi.fn(),
-}));
-vi.mock("../tasks/tasks-service.ts", () => ({
-  completeDeadlineOccurrence: vi.fn(),
-  createDeadline: vi.fn(),
-  deleteDeadline: vi.fn(),
-  updateDeadline: vi.fn(),
-}));
-vi.mock("../bills/bills-service.ts", () => ({
-  billMirrorRefreshRange: vi.fn(() => ({ start: "2026-05-01", end: "2026-05-31" })),
-  isBillsMirrorMaintenanceDue: vi.fn(),
-  readBillsMirrorRange: vi.fn(),
-  scheduleBillsMirrorRefresh: vi.fn(),
-}));
-vi.mock("../dashboard/current-service.ts", () => ({
-  applyDeadlineCurrentStatus: vi.fn(),
-  requestBillsCurrentMaintenanceRefresh: vi.fn(),
-}));
-vi.mock("../reminders/reminder-service.ts", () => ({
-  deleteSourceReminders: vi.fn(),
-  recomputeUnsentRemindersForSource: vi.fn(),
-}));
-vi.mock("../reminders/reminder-hydration.ts", () => ({
-  calendarEventAnchorAt: vi.fn(),
-  hydrateCalendarEventsWithReminderState: vi.fn(async (_userId, events) => events),
-}));
-vi.mock("../calendar/calendar-search", () => ({
-  deadlineSearchCandidates: vi.fn(() => []),
-  normalizeBillSearchCandidate: vi.fn((bill: unknown) => bill),
-  normalizeEventSearchCandidate: vi.fn((event: unknown) => event),
-  normalizeLimit: vi.fn(() => 20),
-  rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
-}));
-vi.mock("../calendar/calendar-search-mirror.ts", async (importActual) => ({
-  // Keep the real pure helpers (addMonthsIso powers the route's range helpers);
-  // only the DB-touching functions are stubbed below.
-  ...(await importActual()),
-  deleteCalendarSearchMirrorOccurrence: vi.fn(),
-  getCalendarSearchMirrorHealth: vi.fn(),
-  listCalendarSearchMirrorOccurrences: vi.fn(),
-  markCalendarSearchMirrorDirty: vi.fn(),
-  requestCalendarSearchMirrorSync: vi.fn(),
-  upsertCalendarSearchMirrorOccurrence: vi.fn(),
-}));
+
+// test-architecture: allow-boundary-mock -- Todoist is the outbound provider boundary for the real deadline service.
+vi.mock("../tasks/todoist.ts", () => todoistProvider);
 
 process.env.EA_USER_ID = "user-1";
+process.env.NODE_ENV = "test";
 
-const tasksService = await import("../tasks/tasks-service.ts");
-const { applyDeadlineCurrentStatus } = await import("../dashboard/current-service.ts");
 const calendarRoutes = (await import("./calendar.ts")).default;
-const createDeadlineMock = tasksService.createDeadline as Mock;
-const updateDeadlineMock = tasksService.updateDeadline as Mock;
-const deleteDeadlineMock = tasksService.deleteDeadline as Mock;
-const completeDeadlineOccurrenceMock = tasksService.completeDeadlineOccurrence as Mock;
-const applyDeadlineCurrentStatusMock = applyDeadlineCurrentStatus as Mock;
 
 function makeApp() {
   const app = express();
   app.use(express.json());
+  app.use(cookieParser());
   app.use("/api/calendar", calendarRoutes);
   return app;
 }
 
-function serviceError(message: string, status: number) {
-  const err = new Error(message) as Error & { status: number };
-  err.status = status;
-  return err;
+function authenticatedRequest() {
+  return request(makeApp());
 }
 
 describe("calendar deadline mutation routes", () => {
-  beforeEach(() => {
-    createDeadlineMock.mockReset().mockResolvedValue({ id: "td-new", title: "Pay invoice" });
-    updateDeadlineMock.mockReset().mockResolvedValue({ id: "td-1", title: "Renamed" });
-    deleteDeadlineMock.mockReset().mockResolvedValue(undefined);
-    completeDeadlineOccurrenceMock.mockReset().mockResolvedValue({
-      completed: true,
-      alreadyCompleted: false,
-      deadlineId: "td-rec",
-      occurrenceDate: "2026-05-12",
+  beforeEach(async () => {
+    testState.db.current = await createMigratedDb();
+    await seedOwner(currentDb(), { passwordHash: "test-password-hash" });
+    await seedSession(currentDb());
+    todoistProvider.completeTodoistTask.mockReset().mockResolvedValue(undefined);
+    todoistProvider.createTodoistTask.mockReset().mockResolvedValue({ id: "td-new", title: "Pay invoice" });
+    todoistProvider.deleteTodoistTask.mockReset().mockResolvedValue(undefined);
+    todoistProvider.fetchTodoistTasksAll.mockReset().mockResolvedValue([]);
+    todoistProvider.getTodoistSyncHealth.mockReset().mockResolvedValue({
+      state: "current",
+      configured: true,
+      ageMs: 30_000,
     });
-    applyDeadlineCurrentStatusMock.mockReset().mockResolvedValue({ updated: true });
+    todoistProvider.updateTodoistTask.mockReset().mockResolvedValue({ id: "td-1", title: "Renamed" });
   });
 
-  it("creates deadlines through the calendar deadline domain endpoint", async () => {
-    const body = {
-      title: "Pay invoice",
-      dueDate: "2026-05-12",
-      dueTime: "2:00 PM",
-      projectId: "project-1",
-      labelIds: ["finance"],
-    };
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+    vi.clearAllMocks();
+  });
 
-    const res = await request(makeApp()).post("/api/calendar/deadlines").send(body);
+  it("returns the created deadline through the real task service", async () => {
+    const res = await authenticatedRequest()
+      .post("/api/calendar/deadlines")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        title: "Pay invoice",
+        dueDate: "2026-05-12",
+        dueTime: "2:00 PM",
+        projectId: "project-1",
+        labelIds: ["finance"],
+      });
 
     expect(res.status).toBe(201);
     expect(res.body).toEqual({ deadline: { id: "td-new", title: "Pay invoice" } });
-    expect(tasksService.createDeadline).toHaveBeenCalledWith("user-1", body);
   });
 
-  it("updates deadlines through the calendar deadline domain endpoint", async () => {
-    const body = { title: "Renamed", dueString: "tomorrow at 9am" };
-
-    const res = await request(makeApp()).patch("/api/calendar/deadlines/td-1").send(body);
+  it("returns the updated deadline through the real task service", async () => {
+    const res = await authenticatedRequest()
+      .patch("/api/calendar/deadlines/td-1")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ title: "Renamed", dueString: "tomorrow at 9am" });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ deadline: { id: "td-1", title: "Renamed" } });
-    expect(tasksService.updateDeadline).toHaveBeenCalledWith("user-1", "td-1", body);
   });
 
-  it("deletes deadlines through the calendar deadline domain endpoint", async () => {
-    const res = await request(makeApp()).delete("/api/calendar/deadlines/td-1");
+  it("returns the delete HTTP contract through the real task service", async () => {
+    const res = await authenticatedRequest()
+      .delete("/api/calendar/deadlines/td-1")
+      .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
-    expect(tasksService.deleteDeadline).toHaveBeenCalledWith("user-1", "td-1");
   });
 
-  it("completes an explicit deadline occurrence and updates the current cache", async () => {
-    const res = await request(makeApp())
+  it("persists a completed occurrence before returning the route result", async () => {
+    todoistProvider.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-rec",
+      title: "Weekly review",
+      due_date: "2026-05-12",
+      status: "incomplete",
+    }]);
+
+    const res = await authenticatedRequest()
       .post("/api/calendar/deadlines/td-rec/completed-occurrences/2026-05-12")
+      .set("Cookie", ["ea_session=cookie-session"])
       .send({});
 
+    const completed = await currentDb().execute({
+      sql: "SELECT todoist_id, due_date FROM ea_completed_tasks WHERE user_id = ?",
+      args: ["user-1"],
+    });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       completed: true,
@@ -158,22 +143,16 @@ describe("calendar deadline mutation routes", () => {
       deadlineId: "td-rec",
       occurrenceDate: "2026-05-12",
     });
-    expect(tasksService.completeDeadlineOccurrence).toHaveBeenCalledWith("user-1", "td-rec", "2026-05-12");
-    expect(applyDeadlineCurrentStatus).toHaveBeenCalledWith("user-1", "td-rec", "complete");
+    expect(completed.rows).toEqual([{ todoist_id: "td-rec", due_date: "2026-05-12" }]);
   });
 
-  it("does not update current cache when occurrence completion fails validation", async () => {
-    completeDeadlineOccurrenceMock.mockRejectedValueOnce(
-      serviceError("Deadline occurrence date must be YYYY-MM-DD", 400),
-    );
-
-    const res = await request(makeApp())
+  it("rejects an invalid occurrence date at the HTTP boundary", async () => {
+    const res = await authenticatedRequest()
       .post("/api/calendar/deadlines/td-rec/completed-occurrences/not-a-date")
+      .set("Cookie", ["ea_session=cookie-session"])
       .send({});
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "Deadline occurrence date must be YYYY-MM-DD" });
-    expect(tasksService.completeDeadlineOccurrence).not.toHaveBeenCalled();
-    expect(applyDeadlineCurrentStatus).not.toHaveBeenCalled();
   });
 });

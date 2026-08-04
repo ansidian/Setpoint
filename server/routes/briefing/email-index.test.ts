@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import request from "supertest";
+import request from "../../test-utils/supertest.ts";
 
 const mockDb = { execute: vi.fn() };
 

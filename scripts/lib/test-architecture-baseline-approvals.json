@@ -1,0 +1,5 @@
+{
+  "_comment": "Explicit owner approvals for architecture-baseline increases. Entries must match the previous and proposed allowance exactly and include the approving owner plus a concrete boundary rationale.",
+  "localModuleMocks": {},
+  "interactionAssertions": {}
+}

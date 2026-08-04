@@ -13,7 +13,7 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 - `currentCacheStore.ts` — all `ea_current_data_cache` reads/writes (load, save, mark-failed, mark-refreshing)
 - `currentRefreshRunner.ts` — async orchestration: fetch-timeout race, refreshRows, background dedup map
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

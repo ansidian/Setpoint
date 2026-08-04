@@ -17,7 +17,7 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 - `snooze-waker.ts` — wakes due snoozes, reattaches arrival-grace emails
 - `arrival-grace.ts` — arrival grace window before new email is triaged
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

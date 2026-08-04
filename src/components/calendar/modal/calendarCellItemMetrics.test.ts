@@ -1,35 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  createCalendarCellMetricsResolver,
   getCalendarCellCapacity,
   getVisibleCellItemCount,
 } from "./calendarCellItemMetrics.ts";
 
 describe("calendar cell item metrics", () => {
-  it("caches computed metrics by the intentional layout-object identity boundary", () => {
-    const compute = vi.fn((layout?: { tier?: string } | null) => ({ tier: layout?.tier || "md" }));
-    const resolve = createCalendarCellMetricsResolver(compute);
-    const layout = { tier: "lg" };
-
-    const first = resolve(layout);
-    expect(resolve(layout)).toBe(first);
-    expect(compute).toHaveBeenCalledTimes(1);
-
-    const equivalentLayout = { tier: "lg" };
-    expect(resolve(equivalentLayout)).toEqual(first);
-    expect(resolve(equivalentLayout)).not.toBe(first);
-    expect(compute).toHaveBeenCalledTimes(2);
-  });
-
-  it("computes uncached fallback metrics when no layout object exists", () => {
-    const compute = vi.fn(() => ({ tier: "md" }));
-    const resolve = createCalendarCellMetricsResolver(compute);
-
-    expect(resolve(undefined)).toEqual({ tier: "md" });
-    expect(resolve(null)).toEqual({ tier: "md" });
-    expect(compute).toHaveBeenCalledTimes(2);
-  });
-
   it.each([
     ["uhd", 11, 10],
     ["xl", 6, 5],

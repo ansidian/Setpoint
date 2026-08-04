@@ -21,7 +21,7 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 - `todoist-setup.ts` — documented route-facing entry module for Todoist setup services
 - `tombstones.ts` — tombstones for completed recurring tasks (resurrection guard)
 
-(Other tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

@@ -69,7 +69,7 @@ calendar since it triggers a real fetch on mount). Desktop-only in v1.
   topic — lead/fresh/divider/older selection and caps, including the
   hide-seen branch)
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

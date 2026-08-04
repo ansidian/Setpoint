@@ -214,17 +214,19 @@ export function addCalendarEventSelection(
   };
 }
 
-export function removeCalendarEventSelection(
+export function removeCalendarEventsFromSelection(
   selection: CalendarEventSelectionSet | null | undefined,
-  eventOrIdentity: SelectableCalendarEvent | string | null | undefined,
+  events: SelectableCalendarEvent | SelectableCalendarEvent[],
 ) {
-  const identity = typeof eventOrIdentity === "string"
-    ? eventOrIdentity
-    : calendarEventSelectionIdentity(eventOrIdentity);
+  const identities = new Set(
+    (Array.isArray(events) ? events : [events])
+      .map((event) => calendarEventSelectionIdentity(event))
+      .filter((identity): identity is string => Boolean(identity)),
+  );
   const current = normalizeSelection(selection);
-  if (!identity) return current;
+  if (identities.size === 0) return current;
   return {
-    items: current.items.filter((item) => item.identity !== identity),
+    items: current.items.filter((item) => !identities.has(item.identity)),
   };
 }
 

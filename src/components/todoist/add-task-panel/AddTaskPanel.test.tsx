@@ -16,6 +16,7 @@ const mockListReminders = vi.fn();
 const mockCreateReminder = vi.fn();
 const mockDeleteReminder = vi.fn();
 
+// test-architecture: allow-boundary-mock -- src/api.ts is the client/server Todoist boundary; provider responses stay deterministic.
 vi.mock("../../../api", () => ({
   createDeadline: (...args: Parameters<typeof Api.createDeadline>) => mockCreateDeadline(...args),
   updateDeadline: (...args: Parameters<typeof Api.updateDeadline>) => mockUpdateDeadline(...args),
@@ -54,7 +55,7 @@ function PanelHarness(props: Omit<Partial<AddTaskPanelProps>, "anchorRef" | "onC
   );
 }
 
-describe("AddTaskPanel due picker", () => {
+describe("AddTaskPanel behaviors", () => {
   // Warm the shared lazy chrono singleton before fake timers so NLP behavior is
   // independent of shuffled test order.
   beforeAll(async () => {

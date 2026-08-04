@@ -64,7 +64,7 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 ### Effects
 - `useCalendarGridEffects.ts` — wheel month nav, escape/outside overflow close, anchor refresh
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

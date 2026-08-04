@@ -29,4 +29,4 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `transactionImportApi.ts` — typed transaction-import mapping, scan, review, mutation, and per-email status client calls
 - `utils.ts` — `cn()` — clsx + tailwind-merge className combinator
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)

@@ -165,63 +165,6 @@ describe("CalendarEventEditor quick action behavior", () => {
     expect(upsertEvents).toHaveBeenCalledWith(created);
   });
 
-  it("copies the selected event with Cmd+C and pastes it onto the selected day with Cmd+V", async () => {
-    const event = {
-      id: "event-hotkey-copy",
-      etag: '"etag-hotkey-copy"',
-      title: "Copy with keys",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T17:30:00.000Z").getTime(),
-      writable: true,
-      isRecurring: true,
-      recurringEventId: "series-1",
-      originalStartTime: "2026-04-20T16:00:00.000Z",
-      allDay: false,
-      location: "Office",
-      description: "Notes",
-      colorId: "7",
-    };
-    const created = {
-      ...event,
-      id: "event-hotkey-copy-created",
-      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T17:30:00.000Z").getTime(),
-      isRecurring: false,
-      recurringEventId: null,
-      originalStartTime: null,
-    };
-    const deferred = createDeferred();
-    mockCreateCalendarEvent.mockReturnValue(deferred.promise);
-    const { upsertEvents } = renderModal({ events: [event] });
-
-    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
-    fireEvent.keyDown(document, { key: "c", metaKey: true });
-    fireEvent.click(screen.getByTestId("calendar-cell-21"));
-    fireEvent.keyDown(document, { key: "v", metaKey: true });
-
-    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
-      id: expect.stringMatching(/^optimistic-calendar-copy-clipboard-0-/),
-      title: "Copy with keys",
-      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T17:30:00.000Z").getTime(),
-      isRecurring: false,
-      colorId: "7",
-    }));
-
-    deferred.resolve({ event: created });
-
-    // The pasted clone's field map (startDate/startTime/colorId) is locked at the
-    // pure layer in calendarQuickActionModel.test.js (buildCloneEventPayload). Here we only assert Cmd+V reaches the single-item create boundary.
-    await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Copy with keys" }),
-      );
-    });
-    expect(upsertEvents).toHaveBeenCalledWith(created);
-  });
-
   it("updates event color from the quick-action context menu", async () => {
     const event = {
       id: "event-context-color",

@@ -60,7 +60,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `primitives.tsx` — Kbd, Avatar, Eyebrow, StickyHeader, LaneIcon, QuickAction
 - `test-utils/inboxFixtures.ts` — email/account test factories
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention. `test-utils/*` ARE listed — shared infra.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

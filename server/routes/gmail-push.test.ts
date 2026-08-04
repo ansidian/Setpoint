@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 
 const gmailSyncApi = vi.hoisted(() => ({
   enqueueHistorySyncFromPubSub: vi.fn(async () => ({

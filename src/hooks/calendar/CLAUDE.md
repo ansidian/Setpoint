@@ -65,12 +65,12 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useDashboardDetailFocus.ts` — dashboard-detail focus-retry machine (pending-request derivation + attach attempt + retry wiring) extracted from `useCalendarModalController.tsx`
 - `useViewportWidth.ts` — RAF-debounced viewport width listener
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 
 - Calendar hooks/models live here, UI in `src/components/calendar/` — do not add calendar files elsewhere.
-- Model files are pure and unit-tested directly; hooks consume them and own side effects.
+- Model files are pure; test them directly only when their input/output algorithm is the stable contract. Hooks consume them and own side effects.
 
 ## Related
 

@@ -19,7 +19,7 @@ The Notes tab: a fourth shell tab for quick markdown jots with search, `#tag` fi
 - `notesModel.ts` — `parseTags`, `collectTags`, `selectVisibleNotes` (takes a `view: "active"|"archived"`; search/tag filters apply within the view), `splitNoteForTask`, `parseNoteDate`, `formatNoteAge`, `noteEditedAge` (created-vs-updated, Date-compared across formats), `stripTags` (remove anchored tags from a body, line-count-stable so checkbox indices hold).
 - `NoteContextMenu.tsx` — portal action menu (Edit / Add to Todoist / Archive **or** Unarchive / Delete) positioned at the cursor, viewport-clamped. Renders Archive when given `onArchive`, Unarchive when given `onUnarchive`. A `count > 1` suffixes the action labels ("Archive 3", "Delete 3") for the bulk menu (the bulk caller omits Edit/Promote).
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

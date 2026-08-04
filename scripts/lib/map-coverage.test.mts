@@ -107,6 +107,20 @@ describe("checkMaps", () => {
       }).warnings,
     ).toEqual([])
   })
+
+  test.each([
+    "Other tests are not listed; adjacent test files cover their same-named source by convention.",
+    "The same-named test file by convention owns this source.",
+    "X.test.tsx covers X.",
+  ])("rejects file-triggered test ownership wording: %s", (wording) => {
+    const maps = [{
+      dir: "src/widgets",
+      text: `- \`alpha.ts\` — a\n- \`beta.tsx\` — b\n${wording}\n`,
+    }]
+    expect(checkMaps({ files, maps }).failures).toContain(
+      "src/widgets/CLAUDE.md must not make production-file creation imply same-named test ownership",
+    )
+  })
 })
 
 describe("uncoveredThresholdViolations", () => {

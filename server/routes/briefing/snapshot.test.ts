@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import request from "supertest";
+import request from "../../test-utils/supertest.ts";
 import { errorHandler } from "../../middleware/async-handler.ts";
 import type { HttpError } from "../../snapshots/snapshot-types.ts";
 

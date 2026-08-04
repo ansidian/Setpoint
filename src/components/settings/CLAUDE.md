@@ -65,7 +65,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `shared/ProviderModelSelect.tsx` — dual select for LLM provider + model
 - `shared/selectMock.test-utils.tsx` — native-`<select>` test double for the Radix Select, used in settings-card tests
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

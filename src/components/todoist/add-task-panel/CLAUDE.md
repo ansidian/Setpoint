@@ -18,7 +18,7 @@ This directory owns the Todoist create/edit panel used by Notes promotion, Dashb
 - `TodoistDuePicker.tsx` — anchored date/time picker layer.
 - `types.ts` — frontend-only editor, parser, placement, and reminder-draft types; shared wire/domain contracts remain in `shared/types/`.
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Contracts
 

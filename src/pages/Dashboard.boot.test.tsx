@@ -1,136 +1,74 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserRouter } from "react-router";
-import Dashboard from "./Dashboard";
+import { describe, expect, it } from "vitest";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 
-interface ShellMockProps {
-  bd: { briefing?: { emails?: { accounts?: unknown[] } } | null };
-  activeSnapshot?: { snapshot?: unknown };
-}
-
-const mocks = vi.hoisted(() => ({
-  getCalendarDeadlines: vi.fn(),
-  activeSnapshot: {
-    snapshot: { id: 10 },
-    lanes: {
-      needs_attention: [{
-        id: 42,
-        uid: "gmail-a-msg-1",
-        email_id: "gmail-a-msg-1",
-        account_id: "gmail-a",
-        subject: "Review contract",
-      }],
-      fyi: [],
-      noise: [],
-    },
-    carryover: [],
-    filters: { accounts: [], categories: [] },
-  },
-}));
-
-vi.mock("../api", () => ({
-  getCalendarDeadlines: mocks.getCalendarDeadlines,
-  getCalendarDeadlinesRange: vi.fn(),
-  getCalendarBillsRange: vi.fn(),
-  getSettings: vi.fn().mockResolvedValue({}),
-}));
-
-vi.mock("../hooks/calendar/useCalendarRange", () => ({
-  default: () => ({
-    ensureRange: vi.fn().mockResolvedValue([]),
-    markStale: vi.fn(),
-    refreshRangeInPlace: vi.fn(),
-  }),
-}));
-
-vi.mock("../hooks/calendar/useCalendarDomainRange", () => ({
-  default: () => ({
-    data: null,
-    ensureRange: vi.fn(),
-    markStale: vi.fn(),
-    loading: false,
-    error: null,
-  }),
-}));
-
-vi.mock("../hooks/useCurrentDashboard", () => ({
-  default: () => ({
-    liveData: {
-      liveEmails: [],
-      liveWeather: null,
-      liveCalendar: null,
-      liveBills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: false,
-      actualBudgetUrl: null,
-      refreshNow: vi.fn(),
-    },
-    activeSnapshot: {
-      snapshot: mocks.activeSnapshot,
-      loading: false,
-      error: null,
-      refresh: vi.fn(),
-      sync: vi.fn(),
-    },
-    briefingData: {
-      loading: false,
+describe("Dashboard boot state", () => {
+  it("waits for the current envelope when no active snapshot can render", () => {
+    expect(resolveDashboardBriefingState({
+      loading: true,
       error: null,
       briefing: null,
-      setBriefing: vi.fn(),
-      refreshing: false,
-      latestId: null,
-      schedules: [],
-      lastQuickRefreshAt: null,
-      handleQuickRefresh: vi.fn(),
-    },
-  }),
-}));
-
-vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
-vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
-
-vi.mock("../components/dashboard/DashboardShell", () => ({
-  DashboardShell: ({ bd, activeSnapshot }: ShellMockProps) => (
-    <div data-testid="dashboard-shell">
-      {bd.briefing?.emails?.accounts?.length ?? 0}
-      {activeSnapshot?.snapshot ? " active-snapshot" : ""}
-    </div>
-  ),
-  DashboardBody: () => null,
-}));
-
-describe("Dashboard boot", () => {
-  beforeEach(() => {
-    window.history.replaceState({}, "", "/");
-    mocks.getCalendarDeadlines.mockReset();
-    mocks.getCalendarDeadlines.mockResolvedValue({ upcoming: [] });
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it("mounts the active dashboard when snapshot data exists without a batch briefing", () => {
-    const bootState = resolveDashboardBriefingState({
-      loading: false,
-      error: null,
-      briefing: null,
-      activeSnapshot: mocks.activeSnapshot,
+      activeSnapshot: null,
+    })).toEqual({
+      view: "loading",
+      canRenderActiveSnapshot: false,
+      effectiveBriefing: null,
     });
+  });
 
-    expect(bootState.view).toBe("dashboard");
-    expect(bootState.effectiveBriefing).toBeNull();
+  it("shows the error state when no briefing or active snapshot is available", () => {
+    expect(resolveDashboardBriefingState({
+      loading: false,
+      error: "Current dashboard unavailable",
+      briefing: null,
+      activeSnapshot: null,
+    })).toEqual({
+      view: "error",
+      canRenderActiveSnapshot: false,
+      effectiveBriefing: null,
+      error: "Current dashboard unavailable",
+    });
+  });
 
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
+  it("shows the empty state when no dashboard data exists", () => {
+    expect(resolveDashboardBriefingState({
+      loading: false,
+      error: null,
+      briefing: null,
+      activeSnapshot: null,
+    })).toEqual({
+      view: "empty",
+      canRenderActiveSnapshot: false,
+      effectiveBriefing: null,
+    });
+  });
 
-    expect(screen.getByTestId("dashboard-shell").textContent).toContain("active-snapshot");
-    expect(screen.queryByText(/no briefings yet/i)).toBeNull();
-    expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
+  it("renders the dashboard from an active snapshot without a separate briefing", () => {
+    const activeSnapshot = { snapshot: { id: 42 } };
+
+    expect(resolveDashboardBriefingState({
+      loading: true,
+      error: null,
+      briefing: null,
+      activeSnapshot,
+    })).toEqual({
+      view: "dashboard",
+      canRenderActiveSnapshot: true,
+      effectiveBriefing: null,
+    });
+  });
+
+  it("prefers the current briefing when both briefing and snapshot data exist", () => {
+    const briefing = { calendar: [{ id: "event-1" }] };
+
+    expect(resolveDashboardBriefingState({
+      loading: false,
+      error: null,
+      briefing,
+      activeSnapshot: { snapshot: { id: 42 } },
+    })).toEqual({
+      view: "dashboard",
+      canRenderActiveSnapshot: true,
+      effectiveBriefing: briefing,
+    });
   });
 });

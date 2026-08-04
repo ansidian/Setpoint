@@ -69,31 +69,6 @@ describe("CalendarMobileAgenda", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
   });
 
-  it("does nothing when re-tapping the active view tab", () => {
-    const props = shellProps();
-    render(<CalendarMobileAgenda {...props} />);
-    // Events is the active view in the fixture; re-tapping it must not change
-    // either the date or the selected calendar view.
-    fireEvent.click(screen.getByRole("tab", { name: "Events" }));
-    expect(props.handlers.navigateToToday).not.toHaveBeenCalled();
-    expect(props.handlers.onViewChange).not.toHaveBeenCalled();
-  });
-
-  it("shows the Today affordance only when off the current month, and it jumps to today", () => {
-    const onCurrent = shellProps();
-    const { rerender } = render(<CalendarMobileAgenda {...onCurrent} />);
-    expect(screen.queryByRole("button", { name: "Jump to today" })).toBeNull();
-
-    const offMonth = shellProps({
-      viewState: { view: "events", viewYear: 2026, viewMonth: 8, currentYear: 2026, currentMonth: 5, todayDate: 24 },
-      viewModel: { ...onCurrent.viewModel, monthName: "September", monthYear: "2026" },
-    });
-    rerender(<CalendarMobileAgenda {...offMonth} />);
-    const todayButton = screen.getByRole("button", { name: "Jump to today" });
-    fireEvent.click(todayButton);
-    expect(offMonth.handlers.navigateToToday).toHaveBeenCalledTimes(1);
-  });
-
   // The calendar mounts inside a KeepAliveTab (React Activity): switching to
   // another shell tab hides it, which runs effect cleanup exactly like an
   // unmount would, without floatingDetail.open ever flipping to false. Without

@@ -63,9 +63,10 @@ Composition root and cross-cutting server concerns that don't belong to a single
 ### `test-utils/` — shared test-only helpers (not themselves test files, so mapped explicitly)
 - `test-utils/auth-db.ts` — spins up an in-memory auth-schema db for tests
 - `test-utils/completed-tasks-db.ts` — spins up an in-memory completed-tasks-schema db for tests
+- `test-utils/supertest.ts` — managed HTTP test transport; multiplexes test apps through one listener and keep-alive client per file to prevent ephemeral-port exhaustion
 - `test-utils/temp-dir.ts` — Windows-safe temp-directory cleanup (libsql keeps file locks after close())
 
-(Other tests are not listed: each file above has a same-named test file by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

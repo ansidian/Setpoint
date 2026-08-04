@@ -21,7 +21,7 @@ AI email classification: the batch worker, model client, preflight rules, escala
 - `triage-eval.ts` — accuracy eval harness for the triage model
 - `triage-worker.test-utils.ts` — shared triage worker test helpers
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention; the worker is covered by a family of `triage-worker.<aspect>.test.ts(x)` files.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

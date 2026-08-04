@@ -1,56 +1,22 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
 import type { ConnectionId, ConnectionRowView, ConnectionState } from "../connectionModel";
 
-vi.mock("@/components/settings/cards/EmailTriageModeCard", () => ({
-  default: function EmailTriageModeCardMock() {
-    return <div data-testid="email-triage-mode-card" />;
-  },
+const mockApi = vi.hoisted(() => ({
+  getAlfredModels: vi.fn(),
+  getBillExtractModels: vi.fn(),
+  getImportantSenders: vi.fn(),
+  getModels: vi.fn(),
+  getTriageCacheStats: vi.fn(),
 }));
 
-vi.mock("@/components/settings/cards/EmailAiModelCard", () => ({
-  default: function EmailAiModelCardMock() {
-    return <div data-testid="email-ai-model-card" />;
-  },
-}));
+// test-architecture: allow-boundary-mock -- model catalogs, triage stats, and sender persistence are external Settings API boundaries; real cards render together below them.
+vi.mock("@/api", () => mockApi);
 
-vi.mock("@/components/settings/cards/AlfredAiModelCard", () => ({
-  default: function AlfredAiModelCardMock() {
-    return <div data-testid="alfred-ai-model-card" />;
-  },
-}));
-
-vi.mock("@/components/settings/cards/TriageSoundSettingsCard", () => ({
-  default: function TriageSoundSettingsCardMock() {
-    return <div data-testid="triage-sound-settings-card" />;
-  },
-}));
-
-vi.mock("@/components/settings/cards/CoreProviderCredentialsCard", () => ({
-  default: function CoreProviderCredentialsCardMock() {
-    return <div data-testid="core-provider-credentials-card" />;
-  },
-}));
-
-vi.mock("@/components/settings/cards/BillExtractionAiCard", () => ({
-  default: function BillExtractionAiCardMock() {
-    return <div data-testid="bill-extraction-card" />;
-  },
-}));
-
-vi.mock("@/components/settings/cards/ImportantSendersCard", () => ({
-  default: function ImportantSendersCardMock() {
-    return <div data-testid="important-senders-card" />;
-  },
-}));
-
-vi.mock("@/components/settings/cards/BriefingSchedulesCard", () => ({
-  default: function BriefingSchedulesCardMock() {
-    return <div data-testid="snapshot-boundaries-card" />;
-  },
-}));
+// test-architecture: allow-boundary-mock -- the existing Radix Select double preserves labeled value/disabled/change behavior while avoiding portal mechanics in this section workflow test.
+vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils"));
 
 const { default: EmailAutomationSettingsSection } = await import("./EmailAutomationSettingsSection");
 
@@ -106,6 +72,28 @@ function Harness({ initialSettings = { email_interests: [] }, patch, connections
 
 afterEach(() => {
   cleanup();
+  vi.resetAllMocks();
+});
+
+beforeEach(() => {
+  const providers = [{
+    provider: "anthropic",
+    label: "Anthropic",
+    available: true,
+    defaultModel: "claude-sonnet-4-6",
+    models: [{ id: "claude-sonnet-4-6", label: "Claude Sonnet" }],
+  }, {
+    provider: "openai",
+    label: "OpenAI",
+    available: true,
+    defaultModel: "gpt-5",
+    models: [{ id: "gpt-5", label: "GPT-5" }],
+  }];
+  mockApi.getAlfredModels.mockResolvedValue(providers);
+  mockApi.getBillExtractModels.mockResolvedValue(providers);
+  mockApi.getModels.mockResolvedValue(providers);
+  mockApi.getImportantSenders.mockResolvedValue([]);
+  mockApi.getTriageCacheStats.mockResolvedValue({ openaiCalls: 0, windowDays: 7 });
 });
 
 describe("EmailAutomationSettingsSection", () => {
@@ -127,9 +115,9 @@ describe("EmailAutomationSettingsSection", () => {
       .toBe("/settings?tab=connections#google-workspace");
     expect(screen.getByRole("link", { name: "iCloud Mail" }).getAttribute("href"))
       .toBe("/settings?tab=connections#icloud-mail");
-    expect(screen.queryByTestId("email-triage-mode-card")).toBeNull();
-    expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
-    expect(screen.queryByTestId("alfred-ai-model-card")).toBeNull();
+    expect(screen.queryByText("Email Triage Automation")).toBeNull();
+    expect(screen.queryByText("Inbox Triage AI")).toBeNull();
+    expect(screen.queryByText("Alfred AI")).toBeNull();
   });
 
   it("keeps Alfred model settings available when AI is connected but email is not", () => {
@@ -145,9 +133,9 @@ describe("EmailAutomationSettingsSection", () => {
       />,
     );
 
-    expect(screen.getByTestId("alfred-ai-model-card")).toBeTruthy();
+    expect(screen.getByText("Alfred AI")).toBeTruthy();
     expect(screen.getByText("Connect an email source")).toBeTruthy();
-    expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
+    expect(screen.queryByText("Inbox Triage AI")).toBeNull();
   });
 
   it("shows email behavior plus an AI setup prompt when only email is connected", () => {
@@ -163,20 +151,20 @@ describe("EmailAutomationSettingsSection", () => {
       />,
     );
 
-    expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
+    expect(screen.getByText("Email Triage Automation")).toBeTruthy();
     expect(screen.getByText("Connect an AI provider")).toBeTruthy();
-    expect(screen.queryByTestId("email-ai-model-card")).toBeNull();
-    expect(screen.queryByTestId("bill-extraction-card")).toBeNull();
-    expect(screen.queryByTestId("alfred-ai-model-card")).toBeNull();
+    expect(screen.queryByText("Inbox Triage AI")).toBeNull();
+    expect(screen.queryByText("Bill Extraction AI")).toBeNull();
+    expect(screen.queryByText("Alfred AI")).toBeNull();
   });
 
   it("shows email and AI behavior when both dependency groups are connected", () => {
     render(<Harness patch={vi.fn()} />);
 
-    expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
-    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
-    expect(screen.getByTestId("alfred-ai-model-card")).toBeTruthy();
-    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+    expect(screen.getByText("Email Triage Automation")).toBeTruthy();
+    expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
+    expect(screen.getByText("Alfred AI")).toBeTruthy();
+    expect(screen.getByText("Bill Extraction AI")).toBeTruthy();
     expect(screen.queryByText("Connect an AI provider")).toBeNull();
   });
 
@@ -201,17 +189,17 @@ describe("EmailAutomationSettingsSection", () => {
     expect(screen.getByText("OpenAI needs attention")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Repair OpenAI" }).getAttribute("href"))
       .toBe("/settings?tab=connections#openai");
-    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
-    expect(screen.getByTestId("alfred-ai-model-card")).toBeTruthy();
-    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+    expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
+    expect(screen.getByText("Alfred AI")).toBeTruthy();
+    expect(screen.getByText("Bill Extraction AI")).toBeTruthy();
   });
 
   it("keeps provider credential forms out of Automation while retaining model controls", () => {
     render(<Harness patch={vi.fn()} />);
 
-    expect(screen.queryByTestId("core-provider-credentials-card")).toBeNull();
-    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
-    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+    expect(screen.queryByText(/credentials/i)).toBeNull();
+    expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
+    expect(screen.getByText("Bill Extraction AI")).toBeTruthy();
   });
 
   describe("email lookback clamp", () => {
@@ -256,7 +244,7 @@ describe("EmailAutomationSettingsSection", () => {
 
       const input = screen.getByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
       fireEvent.change(input, { target: { value: "GitHub" } });
-      fireEvent.click(screen.getByRole("button", { name: "Add" }));
+      fireEvent.click(within(input.closest("form")!).getByRole("button", { name: "Add" }));
 
       expect(patch).toHaveBeenCalledWith({ email_interests_json: ["Anthropic", "GitHub"] });
     });
@@ -267,7 +255,7 @@ describe("EmailAutomationSettingsSection", () => {
 
       const input = screen.getByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
       fireEvent.change(input, { target: { value: "   " } });
-      fireEvent.click(screen.getByRole("button", { name: "Add" }));
+      fireEvent.click(within(input.closest("form")!).getByRole("button", { name: "Add" }));
 
       expect(patch).not.toHaveBeenCalled();
     });

@@ -18,8 +18,11 @@ const mockDb = {
   execute: vi.fn<(statement: TestStatement) => Promise<{ rows: Array<Record<string, unknown>>; rowsAffected?: number }>>(),
   batch: vi.fn<(statements: TestStatement[]) => Promise<unknown>>(),
 };
+// test-architecture: allow-boundary-mock -- Actual Budget is the external provider boundary for mirror refresh and degraded-state behavior.
 vi.mock("../actual/actual.ts", () => mockActual);
+// test-architecture: allow-boundary-mock -- The local Actual cache is a filesystem/provider boundary whose returned metadata drives durable mirror outcomes.
 vi.mock("../actual/actual-local-metadata.ts", () => mockActualLocal);
+// test-architecture: allow-boundary-mock -- The mirror store is the persistence boundary; statement effects and scheduling state are asserted at this seam.
 vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 
 beforeEach(() => {
@@ -79,12 +82,12 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { // test-architecture: allow-boundary-interaction -- Refresh must read the local Actual projection without a provider refresh before replacing mirror state.
       refresh: false,
       localOnly: true,
     });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
-    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
+    expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Mirror refresh must not spawn the provider fallback after a successful local projection read.
+    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Range reads are excluded because the full local projection is the authoritative refresh boundary.
     // The refresh upserts fresh rows and prunes stale ones rather than deleting all and
     // re-inserting. Assert that behavior without pinning statement order or whitespace:
     // (1) the occurrence rows are written via an upsert (INSERT ... ON CONFLICT), and
@@ -212,11 +215,11 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { // test-architecture: allow-boundary-interaction -- A normal refresh must use the local-only Actual projection contract.
       refresh: false,
       localOnly: true,
     });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Successful local hydration must not fall through to the provider worker.
     expect(out.allSchedules).toEqual([
       expect.objectContaining({
         name: "Water Bill",
@@ -266,8 +269,8 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-18T20:00:00.000Z"),
     });
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1);
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1); // test-architecture: allow-boundary-interaction -- Forced refresh performs exactly one external projection refresh to avoid duplicate Actual work.
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { // test-architecture: allow-boundary-interaction -- The forced provider boundary must receive the explicit refresh contract.
       refresh: true,
     });
     expect(out.allSchedules).toEqual([
@@ -317,14 +320,16 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Degraded recovery must not switch to the unrelated range provider path.
+    expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Degraded recovery stays on the lightweight projection boundary rather than spawning the SDK worker.
+    // test-architecture: allow-boundary-interaction -- Recovery first attempts a non-refreshing local read.
     expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(1, "u1", {
       refresh: false,
       localOnly: true,
     });
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "u1", { refresh: true });
-    expect(mockDb.batch).not.toHaveBeenCalled();
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "u1", { refresh: true }); // test-architecture: allow-boundary-interaction -- Recovery retries once with an explicit Actual refresh after the local cache miss.
+    expect(mockDb.batch).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- A failed refresh must not destructively replace the durable mirror rows.
+    // test-architecture: allow-boundary-interaction -- The persistence boundary must record degraded mirror health for later reads.
     expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/ea_bills_mirror_state/i),
     }));
@@ -376,13 +381,13 @@ describe("Bills mirror", () => {
     });
     await Promise.resolve();
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1);
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1); // test-architecture: allow-boundary-interaction -- Coalesced refresh callers must share one Actual projection read.
+    expect(mockActual.getMetadata).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Coalescing must not invoke the SDK provider fallback.
     finishBatch!();
 
     const [firstOut, secondOut] = await Promise.all([first, second]);
     expect(firstOut.allSchedules).toEqual(secondOut.allSchedules);
-    expect(mockDb.batch).toHaveBeenCalledTimes(1);
+    expect(mockDb.batch).toHaveBeenCalledTimes(1); // test-architecture: allow-boundary-interaction -- Coalesced callers must produce one durable mirror replacement.
   });
 
   it("schedules and consumes server-owned delayed refreshes", async () => {
@@ -395,6 +400,7 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
+    // test-architecture: allow-boundary-interaction -- Scheduling is a persistence-boundary contract for the requested due timestamp.
     expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
       args: expect.arrayContaining(["2026-05-06T12:01:00.000Z"]),
     }));
@@ -407,7 +413,8 @@ describe("Bills mirror", () => {
     });
 
     expect(due).toBe(true);
-    expect(mockDb.execute).toHaveBeenCalledTimes(1);
+    expect(mockDb.execute).toHaveBeenCalledTimes(1); // test-architecture: allow-boundary-interaction -- A due refresh is claimed by one atomic persistence operation.
+    // test-architecture: allow-boundary-interaction -- The atomic claim must clear the durable pending timestamp when it succeeds.
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/pending_refresh_at = NULL/i),
     }));
@@ -429,7 +436,7 @@ describe("Bills mirror", () => {
 
     expect([first, second].sort()).toEqual([false, true]);
     // No SELECT-then-UPDATE: each claim is exactly one conditional UPDATE.
-    expect(mockDb.execute).toHaveBeenCalledTimes(2);
+    expect(mockDb.execute).toHaveBeenCalledTimes(2); // test-architecture: allow-boundary-interaction -- Two competing consumers each issue one atomic claim and only one can win.
     for (const call of mockDb.execute.mock.calls) {
       expect(call[0].sql).toMatch(/UPDATE ea_bills_mirror_state/i);
       expect(call[0].sql).toMatch(/pending_refresh_at IS NOT NULL/i);
@@ -517,7 +524,7 @@ describe("Bills mirror", () => {
     });
 
     // Destructive replace was skipped entirely.
-    expect(mockDb.batch).not.toHaveBeenCalled();
+    expect(mockDb.batch).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Empty provider output cannot destructively replace a previously healthy mirror.
     // A degraded state was written (catch-block INSERT with 'degraded' literal), not an
     // empty 'current'. No success-path UPDATE ... SET status = 'current' ran.
     const degradedWrite = mockDb.execute.mock.calls.find((call) =>
@@ -553,7 +560,7 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockDb.batch).toHaveBeenCalledTimes(1);
+    expect(mockDb.batch).toHaveBeenCalledTimes(1); // test-architecture: allow-boundary-interaction -- Confirmed empty provider state replaces the mirror exactly once.
     expect(out.billsSyncHealth).toMatchObject({ state: "current" });
     expect(out.allSchedules).toEqual([]);
   });
@@ -579,7 +586,7 @@ describe("Bills mirror", () => {
       stopBillsMirrorRefreshWorker();
       await vi.advanceTimersByTimeAsync(5000);
 
-      expect(mockDb.execute).not.toHaveBeenCalled();
+      expect(mockDb.execute).not.toHaveBeenCalled(); // test-architecture: allow-boundary-interaction -- Stopping the worker must prevent further persistence polling at the timer boundary.
     });
 
     it("allows a fresh start after stop", async () => {

@@ -11,6 +11,8 @@ interface MapCheckResult {
   warnings: string[]
 }
 
+const SAME_NAMED_TEST_OWNERSHIP_RE = /X\.test\.tsx?[^\n]{0,40}covers?\s+`?X|(?:same[- ]named|adjacent)[^\n.]{0,100}(?:tests?|test files?)[^\n.]{0,100}(?:cover|own|by convention)|(?:tests?|test files?)[^\n.]{0,100}(?:cover|own)[^\n.]{0,100}(?:same[- ]named|adjacent)/i
+
 export function isRequiredEntry(relPath: string): boolean {
   return SOURCE_RE.test(relPath) && !TEST_RE.test(relPath)
 }
@@ -34,6 +36,9 @@ export function checkMaps({ files, maps }: { files: string[]; maps: AreaMap[] })
   const fileSet = new Set(files)
   const mapDirs = maps.map((m) => m.dir)
   for (const { dir, text } of maps) {
+    if (SAME_NAMED_TEST_OWNERSHIP_RE.test(text)) {
+      failures.push(`${dir}/CLAUDE.md must not make production-file creation imply same-named test ownership`)
+    }
     const scope = scopeOf(dir, mapDirs, files).filter(isRequiredEntry)
     for (const file of scope) {
       const base = file.slice(file.lastIndexOf("/") + 1)

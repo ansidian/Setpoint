@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import MiniCalendar from "./MiniCalendar.tsx";
 
 afterEach(() => {
@@ -96,57 +96,4 @@ describe("MiniCalendar", () => {
     expect(marker.getAttribute("data-marker-contrast-ring")).toBe("dark");
   });
 
-  it("exposes compact month controls through provided callbacks only", () => {
-    const onPreviousMonth = vi.fn();
-    const onNextMonth = vi.fn();
-
-    render(
-      <MiniCalendar
-        viewYear={2026}
-        viewMonth={4}
-        todayKey="2026-05-15"
-        selectedDateKey="2026-05-20"
-        canGoPrev
-        onPreviousMonth={onPreviousMonth}
-        onNextMonth={onNextMonth}
-      />,
-    );
-
-    expect(screen.getByTestId("calendar-mini-calendar-month-label").textContent).toBe("May");
-    expect(screen.getByTestId("calendar-mini-calendar-year-label").textContent).toBe("2026");
-
-    fireEvent.click(screen.getByRole("button", { name: /previous mini calendar month/i }));
-    fireEvent.click(screen.getByRole("button", { name: /next mini calendar month/i }));
-
-    expect(onPreviousMonth).toHaveBeenCalledTimes(1);
-    expect(onNextMonth).toHaveBeenCalledTimes(1);
-  });
-
-  it("uses ordinary date controls for click, Enter, Space, and double-click create callbacks", () => {
-    const onDateAction = vi.fn();
-    const onDateCreate = vi.fn();
-
-    render(
-      <MiniCalendar
-        viewYear={2026}
-        viewMonth={4}
-        todayKey="2026-05-15"
-        selectedDateKey="2026-05-20"
-        onDateAction={onDateAction}
-        onDateCreate={onDateCreate}
-      />,
-    );
-
-    const date = screen.getByRole("button", { name: /Thursday, May 21/i });
-
-    fireEvent.click(date);
-    fireEvent.keyDown(date, { key: "Enter" });
-    fireEvent.keyDown(date, { key: " " });
-    fireEvent.doubleClick(date);
-
-    expect(onDateAction).toHaveBeenCalledTimes(3);
-    expect(onDateAction).toHaveBeenCalledWith("2026-05-21");
-    expect(onDateCreate).toHaveBeenCalledTimes(1);
-    expect(onDateCreate).toHaveBeenCalledWith("2026-05-21");
-  });
 });

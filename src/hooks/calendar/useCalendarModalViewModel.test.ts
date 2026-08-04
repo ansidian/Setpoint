@@ -105,38 +105,4 @@ describe("useCalendarModalViewModel compute keying", () => {
     expect(activeView.compute.mock.results[1]!.value.totalEvents).toBe(2);
   });
 
-  it("keeps bills compute keyed on the full viewData object", () => {
-    const billsView = {
-      compute: vi.fn(({ data }) => ({
-        itemsByDay: {},
-        itemsByDate: {},
-        scheduleCount: (data?.schedules || []).length,
-      })),
-      label: "Bills",
-    };
-    const schedules = [{ next_date: "2026-06-10", amount: 5 }];
-    let props = baseProps({
-      view: "bills",
-      activeView: billsView,
-      visibleCalendarEvents: [],
-      deadlineOverlay: null,
-      viewData: { schedules, payeeMap: {}, isLoading: false },
-    });
-
-    const { rerender } = renderHook((p) => useCalendarModalViewModel(p), { initialProps: props });
-    expect(billsView.compute).toHaveBeenCalledTimes(1);
-    expect(billsView.compute.mock.results[0]!.value.scheduleCount).toBe(1);
-
-    // New viewData identity (the bills view has no isolated narrow inputs) must
-    // re-run compute to stay behavior-preserving for the bills shape.
-    props = baseProps({
-      view: "bills",
-      activeView: billsView,
-      visibleCalendarEvents: [],
-      deadlineOverlay: null,
-      viewData: { schedules, payeeMap: {}, isLoading: true },
-    });
-    rerender(props);
-    expect(billsView.compute).toHaveBeenCalledTimes(2);
-  });
 });

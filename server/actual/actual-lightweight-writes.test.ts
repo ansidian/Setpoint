@@ -15,6 +15,7 @@ import {
 } from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// test-architecture: allow-boundary-mock -- Encryption is an external credential boundary; this fixture supplies already-decrypted test credentials.
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value: unknown) => value }));
 
 const { sendBillLightweight } = await import("./actual-lightweight-writes.ts");
@@ -194,11 +195,13 @@ describe("sendBillLightweight", () => {
       "transactions",
     ]));
 
+    // test-architecture: allow-boundary-interaction -- Actual's HTTP login and sync sequence is a wire-compatibility contract verified against the durable local write below.
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
       "https://actual.example.test/account/login",
       expect.objectContaining({ method: "POST" }),
     );
+    // test-architecture: allow-boundary-interaction -- The second outbound request must use Actual's binary sync endpoint and authentication headers.
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
       "https://actual.example.test/sync/sync",

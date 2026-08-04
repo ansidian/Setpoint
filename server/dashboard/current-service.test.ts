@@ -11,12 +11,7 @@ interface CurrentServiceTestState {
   getTodoistSyncHealth: TestMock;
   hydrateRecurringTombstones: TestMock;
   filterCompletedTodoistTasks: TestMock;
-  readBillsMirrorCurrent: TestMock;
-  refreshBillsMirror: TestMock;
-  getBillsMirrorState: TestMock;
-  consumeDueBillsMirrorRefresh: TestMock;
-  clearPendingBillsMirrorRefresh: TestMock;
-  scheduleBillsMirrorRefresh: TestMock;
+  readLocalActualMetadata: TestMock;
   getActiveSnapshotView: TestMock;
   syncActiveSnapshot: TestMock;
 }
@@ -30,12 +25,7 @@ const testState = vi.hoisted((): CurrentServiceTestState => ({
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
   filterCompletedTodoistTasks: vi.fn(),
-  readBillsMirrorCurrent: vi.fn(),
-  refreshBillsMirror: vi.fn(),
-  getBillsMirrorState: vi.fn(),
-  consumeDueBillsMirrorRefresh: vi.fn(),
-  clearPendingBillsMirrorRefresh: vi.fn(),
-  scheduleBillsMirrorRefresh: vi.fn(),
+  readLocalActualMetadata: vi.fn(),
   getActiveSnapshotView: vi.fn(),
   syncActiveSnapshot: vi.fn(),
 }));
@@ -81,25 +71,9 @@ vi.mock("../tasks/todoist.ts", () => ({
 vi.mock("../tasks/tombstones.ts", () => ({
   hydrateRecurringTombstones: (...args: unknown[]) => testState.hydrateRecurringTombstones(...args),
 }));
-vi.mock("../bills/bills-service.ts", () => ({
-  readBillsMirrorCurrent: (...args: unknown[]) => testState.readBillsMirrorCurrent(...args),
-  refreshBillsMirror: (...args: unknown[]) => testState.refreshBillsMirror(...args),
-  getBillsMirrorState: (...args: unknown[]) => testState.getBillsMirrorState(...args),
-  isBillsMirrorMaintenanceDue: (health: Record<string, unknown> | null, { now = new Date() }: { now?: Date } = {}) => {
-    if (!health || health.configured !== true) return false;
-    if (health.pendingRefreshAt || health.refreshStartedAt) return false;
-    if (health.state !== "current" && health.state !== "degraded") return false;
-    const lastSuccess = new Date(String(health.lastSuccessAt || "")).getTime();
-    return Number.isFinite(lastSuccess) && now.getTime() - lastSuccess >= 15 * 60 * 1000;
-  },
-  consumeDueBillsMirrorRefresh: (...args: unknown[]) => testState.consumeDueBillsMirrorRefresh(...args),
-  clearPendingBillsMirrorRefresh: (...args: unknown[]) => testState.clearPendingBillsMirrorRefresh(...args),
-  scheduleBillsMirrorRefresh: (...args: unknown[]) => testState.scheduleBillsMirrorRefresh(...args),
-  shouldScheduleImmediateBillsRefresh: (health: Record<string, unknown> | null, now?: Date) => {
-    if (health?.state !== "needs_sync") return false;
-    const pendingAt = health?.pendingRefreshAt ? new Date(String(health.pendingRefreshAt)).getTime() : null;
-    return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
-  },
+// test-architecture: allow-boundary-mock -- Actual's local metadata reader is the filesystem/provider boundary; the real Bills mirror and dashboard services persist and compose its result.
+vi.mock("../actual/actual-local-metadata.ts", () => ({
+  readLocalActualMetadata: (...args: unknown[]) => testState.readLocalActualMetadata(...args),
 }));
 vi.mock("../snapshots/snapshot-service.ts", () => ({
   getActiveSnapshotView: (...args: unknown[]) => testState.getActiveSnapshotView(...args),
@@ -111,6 +85,24 @@ process.env.EA_USER_ID = "u1";
 const EMPTY_DEADLINES_FOR_TEST = {
   upcoming: [],
   stats: null,
+};
+
+const ACTUAL_METADATA_FOR_TEST = {
+  accounts: [{ id: "checking", name: "Checking" }],
+  payees: [{ id: "payee-synced", name: "Synced Payee" }],
+  payeeMap: { "payee-synced": "Synced Payee" },
+  categories: [],
+  schedules: [{
+    id: "synced-bill",
+    name: "Synced Bill",
+    next_date: "2026-05-04",
+    type: "bill",
+    conditions: [
+      { field: "payee", value: "payee-synced" },
+      { field: "amount", value: -12345 },
+    ],
+  }],
+  recentTransactions: [],
 };
 
 const {
@@ -138,6 +130,63 @@ async function createMigratedDb() {
       refresh_failure_count INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, cache_key)
+    );
+
+    CREATE TABLE ea_bills_mirror_state (
+      user_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'needs_sync',
+      actual_configured INTEGER NOT NULL DEFAULT 0,
+      actual_budget_url TEXT,
+      last_success_at TEXT,
+      last_attempt_at TEXT,
+      last_error TEXT,
+      pending_refresh_at TEXT,
+      refresh_started_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE ea_bill_schedule_mirror (
+      user_id TEXT NOT NULL,
+      schedule_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      payee TEXT,
+      amount REAL NOT NULL,
+      type TEXT NOT NULL,
+      next_date TEXT NOT NULL,
+      paid INTEGER NOT NULL DEFAULT 0,
+      raw_json TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, schedule_id)
+    );
+
+    CREATE TABLE ea_bill_occurrence_mirror (
+      user_id TEXT NOT NULL,
+      occurrence_id TEXT NOT NULL,
+      schedule_id TEXT NOT NULL,
+      occurrence_date TEXT NOT NULL,
+      name TEXT NOT NULL,
+      payee TEXT,
+      amount REAL NOT NULL,
+      type TEXT NOT NULL,
+      paid INTEGER NOT NULL DEFAULT 0,
+      open_action_disabled INTEGER NOT NULL DEFAULT 0,
+      raw_json TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, occurrence_id)
+    );
+
+    CREATE TABLE ea_actual_metadata_mirror (
+      user_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'needs_sync',
+      accounts_json TEXT,
+      payees_json TEXT,
+      categories_json TEXT,
+      schedules_json TEXT,
+      recent_transactions_json TEXT,
+      last_success_at TEXT,
+      last_attempt_at TEXT,
+      last_error TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE ea_reminders (
@@ -212,10 +261,10 @@ async function requestRefreshResponse() {
   };
 }
 
-async function syncResponse() {
+async function syncResponse(now = new Date("2026-05-04T12:00:00.000Z")) {
   return {
     status: 200,
-    body: await syncCurrentDashboard("u1", { dbClient: testState.db.current }),
+    body: await syncCurrentDashboard("u1", { dbClient: testState.db.current, now }),
   };
 }
 
@@ -242,29 +291,7 @@ describe("GET /api/dashboard/current", () => {
       ageMs: 30_000,
     });
     testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
-    testState.readBillsMirrorCurrent.mockReset().mockResolvedValue({
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-      billsSyncHealth: { state: "current", configured: true },
-    });
-    testState.refreshBillsMirror.mockReset().mockResolvedValue({
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-      billsSyncHealth: { state: "current", configured: true },
-    });
-    testState.getBillsMirrorState.mockReset().mockResolvedValue({
-      syncHealth: { state: "current", configured: true, pendingRefreshAt: null },
-      actualBudgetUrl: "https://actual.example.test",
-    });
-    testState.consumeDueBillsMirrorRefresh.mockReset().mockResolvedValue(false);
-    testState.clearPendingBillsMirrorRefresh.mockReset().mockResolvedValue(undefined);
-    testState.scheduleBillsMirrorRefresh.mockReset().mockResolvedValue({ pendingRefreshAt: "2026-05-04T12:00:00.000Z" });
+    testState.readLocalActualMetadata.mockReset().mockResolvedValue(ACTUAL_METADATA_FOR_TEST);
     testState.getActiveSnapshotView.mockReset().mockResolvedValue({
       snapshot: { id: 42 },
       lanes: { needs_attention: [], fyi: [], noise: [] },
@@ -296,7 +323,6 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchWeather.mockReturnValueOnce(pending);
     testState.fetchCalendar.mockReturnValueOnce(pending);
     testState.fetchTodoistTasks.mockReturnValueOnce(pending);
-    testState.refreshBillsMirror.mockReturnValueOnce(pending);
 
     const res = await requestRefreshResponse();
 
@@ -406,25 +432,7 @@ describe("POST /api/dashboard/current/sync", () => {
       ageMs: 30_000,
     });
     testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
-    testState.refreshBillsMirror.mockReset().mockResolvedValue({
-      bills: [{ id: "synced-bill" }],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-      billsSyncHealth: { state: "current", configured: true },
-    });
-    testState.readBillsMirrorCurrent.mockReset().mockResolvedValue({
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-      billsSyncHealth: { state: "current", configured: true },
-    });
-    testState.consumeDueBillsMirrorRefresh.mockReset().mockResolvedValue(false);
-    testState.clearPendingBillsMirrorRefresh.mockReset().mockResolvedValue(undefined);
-    testState.scheduleBillsMirrorRefresh.mockReset().mockResolvedValue({ pendingRefreshAt: "2026-05-04T12:00:00.000Z" });
+    testState.readLocalActualMetadata.mockReset().mockResolvedValue(ACTUAL_METADATA_FOR_TEST);
     testState.getActiveSnapshotView.mockReset().mockResolvedValue({ snapshot: { id: 41 } });
     testState.syncActiveSnapshot.mockReset().mockResolvedValue({ snapshot: { id: 99 } });
   });
@@ -453,21 +461,23 @@ describe("POST /api/dashboard/current/sync", () => {
     expect(res.body).toMatchObject({
       weather: { temp: 80, summary: "Synced", location: "El Monte, CA" },
       calendar: [{ id: "synced-event" }],
-      bills: [{ id: "synced-bill" }],
+      bills: [expect.objectContaining({ scheduleId: "synced-bill", name: "Synced Bill" })],
       activeSnapshot: { snapshot: { id: 99 } },
       providerHealth: {
         currentData: { state: "current" },
       },
     });
-    expect(testState.fetchWeather).toHaveBeenCalledTimes(1);
-    expect(testState.fetchCalendar).toHaveBeenCalledTimes(1);
-    expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: true });
-    expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
-      actualBudgetUrl: "https://actual.example.test",
-      force: true,
-      refreshLocalActual: true,
-    }));
-    expect(testState.syncActiveSnapshot).toHaveBeenCalledWith("u1");
+    const mirrorState = await testState.db.current.execute({
+      sql: `SELECT status, actual_configured, actual_budget_url, last_success_at, last_error
+            FROM ea_bills_mirror_state WHERE user_id = 'u1'`,
+    });
+    expect(mirrorState.rows[0]).toMatchObject({
+      status: "current",
+      actual_configured: 1,
+      actual_budget_url: "https://actual.example.test",
+      last_error: null,
+    });
+    expect(mirrorState.rows[0]?.last_success_at).toBe("2026-05-04T12:00:00.000Z");
   });
 });
 

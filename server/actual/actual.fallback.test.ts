@@ -1,32 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Covers the 3-way bill-write branch in actual.ts sendBill:
-// lightweight CRDT sync -> SDK worker fallback (only on
-// ACTUAL_LIGHTWEIGHT_UNSUPPORTED with the fallback allowed) -> in-process SDK.
-
+// Actual Budget lightweight wire and worker process are provider/process
+// boundaries here: the tests inject compatibility outcomes and assert the
+// facade result, while durable local-write evidence lives in the slow fixture.
+// test-architecture: allow-boundary-mock -- Actual Budget lightweight wire and worker process boundaries are injected to produce unsupported, success, and sync-failure outcomes without asserting routing.
 vi.mock("./actual-lightweight-writes.ts", () => ({
   sendBillLightweight: vi.fn(),
 }));
+// test-architecture: allow-boundary-mock -- The forked Actual SDK worker is a process boundary; only its returned result/error matters to this facade behavior suite.
 vi.mock("./actual-worker.ts", () => ({
   runActualWorkerOperation: vi.fn(),
 }));
-vi.mock("./actual-connection-test.ts", () => ({
-  testActualConnectionHttp: vi.fn(),
-}));
-vi.mock("./actual-local-metadata.ts", () => ({
-  readLocalActualMetadata: vi.fn(),
-  actualDataDir: vi.fn(() => "/tmp/ea-actual-fallback-test"),
-  findLocalBudgetDir: vi.fn(async () => null),
-  getActualConfig: vi.fn(async () => ({})),
-  pruneActualBudgetBackups: vi.fn(async () => {}),
-}));
-// The in-process branch dynamically imports actual-core; keep its heavyweight
-// dependencies inert.
-vi.mock("@actual-app/api", () => ({ default: {} }));
-vi.mock("../db/connection.ts", () => ({
-  default: { execute: vi.fn(async () => ({ rows: [] })), batch: vi.fn(async () => []) },
-}));
-vi.mock("../platform/encryption.ts", () => ({ decrypt: vi.fn((value: unknown) => value) }));
 
 const { sendBillLightweight } = await import("./actual-lightweight-writes.ts");
 const { runActualWorkerOperation } = await import("./actual-worker.ts");
@@ -37,7 +21,6 @@ const mockRunActualWorkerOperation = vi.mocked(runActualWorkerOperation);
 const BILL = { type: "expense", payee: "Power Co", amount: 12.34, due_date: "2026-05-20" };
 const originalNodeEnv = process.env.NODE_ENV;
 const originalFallbackFlag = process.env.EA_ACTUAL_SDK_WRITE_FALLBACK;
-const originalWorkerDisabled = process.env.EA_ACTUAL_WORKER_DISABLED;
 
 function unsupportedError() {
   return Object.assign(new Error("Encrypted Actual budgets are not supported"), {
@@ -46,59 +29,58 @@ function unsupportedError() {
   });
 }
 
-describe("actual.ts sendBill write-path selection", () => {
+describe("actual.ts sendBill compatibility outcomes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NODE_ENV = "production";
     delete process.env.EA_ACTUAL_SDK_WRITE_FALLBACK;
-    delete process.env.EA_ACTUAL_WORKER_DISABLED;
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     process.env.NODE_ENV = originalNodeEnv;
     if (originalFallbackFlag == null) delete process.env.EA_ACTUAL_SDK_WRITE_FALLBACK;
     else process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = originalFallbackFlag;
-    if (originalWorkerDisabled == null) delete process.env.EA_ACTUAL_WORKER_DISABLED;
-    else process.env.EA_ACTUAL_WORKER_DISABLED = originalWorkerDisabled;
   });
 
-  it("uses the lightweight path and never touches the SDK worker on success", async () => {
-    mockSendBillLightweight.mockResolvedValue({ success: true, lightweight: true, message: "Bill sent" });
+  it("returns the lightweight provider result when the write succeeds", async () => {
+    mockSendBillLightweight.mockResolvedValue({
+      success: true,
+      lightweight: true,
+      message: "Bill sent",
+      transactionId: "lightweight-1",
+    });
 
-    const result = await sendBill(BILL, "u1");
-
-    expect(result).toMatchObject({ lightweight: true });
-    expect(sendBillLightweight).toHaveBeenCalledWith("u1", BILL);
-    expect(runActualWorkerOperation).not.toHaveBeenCalled();
+    await expect(sendBill(BILL, "u1")).resolves.toEqual({
+      success: true,
+      lightweight: true,
+      message: "Bill sent",
+      transactionId: "lightweight-1",
+    });
   });
 
-  it("falls back to the SDK worker when lightweight is unsupported and the fallback is enabled", async () => {
+  it("returns the compatible worker result when lightweight support is unavailable", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = "1";
     mockSendBillLightweight.mockRejectedValue(unsupportedError());
-    mockRunActualWorkerOperation.mockResolvedValue({ success: true });
+    mockRunActualWorkerOperation.mockResolvedValue({ success: true, transactionId: "worker-1" });
 
-    const result = await sendBill(BILL, "u1");
-
-    expect(result).toMatchObject({ success: true });
-    expect(runActualWorkerOperation).toHaveBeenCalledWith(
-      "sendBill",
-      [BILL, "u1"],
-      expect.objectContaining({ shutdownAfterOperation: true }),
-    );
+    await expect(sendBill(BILL, "u1")).resolves.toEqual({
+      success: true,
+      transactionId: "worker-1",
+    });
   });
 
-  it("refuses the SDK fallback when it is not enabled in production", async () => {
+  it("surfaces the unsupported error when no compatible fallback is enabled", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mockSendBillLightweight.mockRejectedValue(unsupportedError());
 
     await expect(sendBill(BILL, "u1")).rejects.toMatchObject({
       code: "ACTUAL_LIGHTWEIGHT_UNSUPPORTED",
     });
-    expect(runActualWorkerOperation).not.toHaveBeenCalled();
   });
 
-  it("never falls back after the lightweight local write was applied (would duplicate)", async () => {
+  it("preserves the local-write-applied error so callers cannot retry a duplicate", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = "1";
     mockSendBillLightweight.mockRejectedValue(Object.assign(new Error("sync failed"), {
@@ -111,18 +93,20 @@ describe("actual.ts sendBill write-path selection", () => {
       code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
       localWriteApplied: true,
     });
-    expect(runActualWorkerOperation).not.toHaveBeenCalled();
   });
 
-  it("uses the in-process SDK directly in test mode without trying lightweight", async () => {
-    process.env.NODE_ENV = "test";
-    process.env.EA_ACTUAL_WORKER_DISABLED = "1";
+  it("surfaces a worker timeout after an unsupported lightweight result", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    process.env.EA_ACTUAL_SDK_WRITE_FALLBACK = "1";
+    mockSendBillLightweight.mockRejectedValue(unsupportedError());
+    mockRunActualWorkerOperation.mockRejectedValue(Object.assign(new Error("worker timed out"), {
+      status: 504,
+      code: "ACTUAL_WORKER_TIMEOUT",
+    }));
 
-    // In-process mode dynamically imports actual-core, which is heavyweight;
-    // asserting the lightweight path was skipped is the contract under test.
-    await sendBill(BILL, "u1").catch(() => {});
-
-    expect(sendBillLightweight).not.toHaveBeenCalled();
-    expect(runActualWorkerOperation).not.toHaveBeenCalled();
+    await expect(sendBill(BILL, "u1")).rejects.toMatchObject({
+      status: 504,
+      code: "ACTUAL_WORKER_TIMEOUT",
+    });
   });
 });

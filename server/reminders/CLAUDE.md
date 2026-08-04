@@ -10,7 +10,7 @@ Reminder domain: CRUD, schedule persistence, trigger firing, and notification fo
 - `reminder-hydration.ts` — hydrates tasks/events with reminder state and next trigger
 - `discord-reminders.ts` — formats reminder payloads as Discord embeds
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import express from "express";
-import request from "supertest";
+import request from "./test-utils/supertest.ts";
 import {
   applySecurityMiddleware,
   buildContentSecurityPolicy,

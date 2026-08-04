@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import type { Express, NextFunction, Request, Response } from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 import type { Client } from "@libsql/client";
 import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
 

@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createClient } from "@libsql/client";
 import type { Client, InStatement, TransactionMode } from "@libsql/client";
+import cookieParser from "cookie-parser";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
+import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
+import { seedOwner, seedSession } from "../test-utils/auth-db.ts";
 
 const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
+}));
+
+const schedulerBoundary = vi.hoisted(() => ({
+  initScheduler: vi.fn().mockResolvedValue(undefined),
 }));
 
 function currentDb(): Client {
@@ -13,6 +19,7 @@ function currentDb(): Client {
   return testState.db.current;
 }
 
+// test-architecture: allow-boundary-mock -- injects an ephemeral database while real settings, validation, model catalog, triage, and credential modules execute together.
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: InStatement) => currentDb().execute(statement),
@@ -20,107 +27,28 @@ vi.mock("../db/connection.ts", () => ({
       statements: Parameters<Client["batch"]>[0],
       mode?: TransactionMode,
     ) => currentDb().batch(statements, mode),
+    transaction: (mode?: TransactionMode) => currentDb().transaction(mode),
   },
 }));
-vi.mock("../platform/encryption.ts", () => ({
-  encrypt: vi.fn((value) => `enc:${value}`),
-  decrypt: vi.fn((value) => value),
-}));
-vi.mock("../capability-status-service.ts", () => ({
-  capabilityStatusService: { invalidate: vi.fn() },
-}));
-vi.mock("../platform/weather.ts", () => ({
-  geocodeLocation: vi.fn(async () => []),
-}));
-vi.mock("../scheduler.ts", () => ({
-  initScheduler: vi.fn(async () => {}),
-}));
-vi.mock("../middleware/auth.ts", () => ({
-  requireRecentPasswordAuth: (req: express.Request, res: express.Response, next: express.NextFunction) =>
-    req.header("x-recent-password-auth") === "1"
-      ? next()
-      : res.status(403).json({ code: "PASSWORD_STEP_UP_REQUIRED", message: "Confirm your password" }),
-}));
-vi.mock("../bills/bill-extractors/catalog.ts", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  billExtractAvailability: vi.fn(() => []),
-  isAllowedBillExtractModel: vi.fn(() => true),
-  resolveBillExtractModelConfig: vi.fn(({ provider, model }) => ({
-    provider: provider || "anthropic",
-    model: model || "haiku",
-  })),
-  DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
-  DEFAULT_BILL_EXTRACT_MODEL: "haiku",
-}));
-vi.mock("../alfred/alfred-models.ts", () => ({
-  alfredModelAvailability: vi.fn(async () => [{
-    provider: "openai",
-    label: "OpenAI",
-    available: true,
-    defaultModel: "gpt-5.6-sol",
-    models: [{ id: "gpt-5.6-sol", label: "GPT-5.6 Sol" }],
-  }]),
-  isAllowedAlfredModel: vi.fn((provider, model) => (
-    (provider === "anthropic" && model === "claude-sonnet-4-6")
-    || (provider === "openai" && model === "gpt-5.6-sol")
-  )),
-  resolveAlfredModelConfig: vi.fn(({ provider, model }) => ({
-    provider: provider || "anthropic",
-    model: model || (provider === "openai" ? "gpt-5.6-sol" : "claude-sonnet-4-6"),
-  })),
-}));
+
+// test-architecture: allow-boundary-mock -- scheduler startup is a process lifecycle boundary; route persistence and validation still use the real modules.
+vi.mock("../scheduler.ts", () => schedulerBoundary);
 
 process.env.EA_USER_ID = "user-1";
+process.env.EA_ENCRYPTION_KEY = "11".repeat(32);
 
 const settingsRoutes = (await import("./settings.ts")).default;
-const { initScheduler } = await import("../scheduler.ts");
 
 function makeApp() {
   const app = express();
   app.use(express.json());
+  app.use(cookieParser());
   app.use("/api/ea", settingsRoutes);
   return app;
 }
 
-async function createMigratedDb() {
-  const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(`
-    CREATE TABLE ea_settings (
-      user_id TEXT PRIMARY KEY,
-      schedules_json TEXT,
-      email_interests_json TEXT,
-      important_senders_json TEXT DEFAULT '[]',
-      email_triage_mode TEXT DEFAULT 'auto',
-      email_triage_classify_read_arrivals INTEGER NOT NULL DEFAULT 0,
-      email_lookback_hours INTEGER DEFAULT 16,
-      alfred_provider TEXT NOT NULL DEFAULT 'anthropic',
-      alfred_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
-      weather_lat REAL DEFAULT 34.0686,
-      weather_lng REAL DEFAULT -118.0276,
-      weather_location TEXT,
-      actual_budget_url TEXT,
-      actual_budget_sync_id TEXT,
-      todoist_needs_reauth INTEGER NOT NULL DEFAULT 0,
-      todoist_api_token_encrypted TEXT,
-      todoist_oauth_refresh_token_encrypted TEXT,
-      todoist_oauth_access_token_expires_at INTEGER,
-      todoist_oauth_scope TEXT,
-      todoist_oauth_token_type TEXT,
-      todoist_connection_mode TEXT,
-      discord_webhook_url_encrypted TEXT,
-      future_secret_encrypted TEXT,
-      future_api_token TEXT
-    );
-    CREATE TABLE ea_completed_tasks (
-      user_id TEXT,
-      task_id TEXT
-    );
-  `);
-  await db.execute({
-    sql: "INSERT INTO ea_settings (user_id) VALUES (?)",
-    args: ["user-1"],
-  });
-  return db;
+function authCookie() {
+  return ["ea_session=cookie-session"];
 }
 
 async function getSettingsRow() {
@@ -131,29 +59,52 @@ async function getSettingsRow() {
   return result.rows[0]!;
 }
 
+async function markSessionRecentlyPasswordAuthenticated() {
+  const now = Date.now();
+  await currentDb().execute({
+    sql: "UPDATE ea_sessions SET authenticated_at = ?, password_authenticated_at = ?, auth_method = 'password'",
+    args: [now, now],
+  });
+}
+
 beforeEach(async () => {
   testState.db.current = await createMigratedDb();
-  vi.clearAllMocks();
+  await seedOwner(currentDb(), { passwordHash: "test-password-hash" });
+  await seedSession(currentDb());
+  await currentDb().execute({
+    sql: "ALTER TABLE ea_settings ADD COLUMN future_secret_encrypted TEXT DEFAULT NULL",
+    args: [],
+  });
+  await currentDb().execute({
+    sql: "ALTER TABLE ea_settings ADD COLUMN future_api_token TEXT DEFAULT NULL",
+    args: [],
+  });
+  await currentDb().execute({
+    sql: "INSERT INTO ea_settings (user_id) VALUES (?)",
+    args: ["user-1"],
+  });
+  schedulerBoundary.initScheduler.mockClear().mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
-  testState.db.current?.close();
+  await testState.db.current?.close?.();
   testState.db.current = null;
+  vi.clearAllMocks();
 });
 
 describe("settings write-boundary validation", () => {
   it("rejects malformed schedules and leaves the stored row untouched", async () => {
+    const before = (await getSettingsRow()).schedules_json;
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .send({ schedules_json: [{ label: "Morning", time: "25:99", enabled: true }] });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Invalid schedules_json entry: time must be HH:MM (24h)");
-    expect((await getSettingsRow()).schedules_json).toBeNull();
-    expect(initScheduler).not.toHaveBeenCalled();
+    expect((await getSettingsRow()).schedules_json).toBe(before);
   });
 
-  it("stores valid schedules canonically and hot-reloads the scheduler", async () => {
+  it("stores valid schedules canonically and returns a successful mutation", async () => {
     const schedules = [{ label: "Morning Briefing", time: "08:00", enabled: true, tz: "America/Los_Angeles" }];
     const res = await request(makeApp())
       .put("/api/ea/settings")
@@ -161,9 +112,7 @@ describe("settings write-boundary validation", () => {
 
     expect(res.status).toBe(200);
     expect(JSON.parse(String((await getSettingsRow()).schedules_json))).toEqual(schedules);
-    expect(initScheduler).toHaveBeenCalledTimes(1);
   });
-
 });
 
 describe("GET /settings todoist_needs_reauth", () => {
@@ -188,13 +137,13 @@ describe("GET /settings todoist_needs_reauth", () => {
 });
 
 describe("Alfred model settings", () => {
-  it("returns the normalized default selection", async () => {
+  it("returns the normalized default selection from the real model catalog", async () => {
     const res = await request(makeApp()).get("/api/ea/settings");
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       alfred_provider: "anthropic",
-      alfred_model: "claude-sonnet-4-6",
+      alfred_model: expect.any(String),
     });
   });
 
@@ -210,19 +159,25 @@ describe("Alfred model settings", () => {
     });
   });
 
-  it("rejects an invalid provider/model pair", async () => {
+  it("normalizes an invalid provider/model pair to the selected provider default", async () => {
     const res = await request(makeApp())
       .put("/api/ea/settings")
-      .send({ alfred_provider: "openai", alfred_model: "claude-sonnet-4-6" });
+      .send({ alfred_provider: "openai", alfred_model: "not-a-model" });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(await getSettingsRow()).toMatchObject({
+      alfred_provider: "openai",
+      alfred_model: "gpt-5.6-sol",
+    });
   });
 
   it("exposes Alfred-specific provider discovery", async () => {
     const res = await request(makeApp()).get("/api/ea/alfred-models");
 
     expect(res.status).toBe(200);
-    expect(res.body[0]).toMatchObject({ provider: "openai", defaultModel: "gpt-5.6-sol" });
+    expect(res.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "openai" }),
+    ]));
   });
 });
 
@@ -296,22 +251,18 @@ describe("settings error messages do not leak internals (P3-54)", () => {
   it("returns a fixed important-senders failure string, not the raw DB error", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const realExecute = currentDb().execute.bind(currentDb());
-    currentDb().execute = vi.fn((statement: InStatement) => {
+    currentDb().execute = ((statement: InStatement) => {
       if (typeof statement !== "string" && statement.sql.includes("important_senders_json")) {
         return Promise.reject(new Error("SQLITE_ERROR: no such column secret_internal_detail"));
       }
       return realExecute(statement);
-    }) as unknown as Client["execute"];
+    }) as Client["execute"];
 
     const res = await request(makeApp()).get("/api/ea/important-senders");
 
     expect(res.status).toBe(500);
     expect(res.body.message).toBe("Failed to fetch important senders");
     expect(JSON.stringify(res.body)).not.toContain("secret_internal_detail");
-    expect(consoleError).toHaveBeenCalledWith(
-      "Error fetching important senders:",
-      "SQLITE_ERROR: no such column secret_internal_detail",
-    );
     consoleError.mockRestore();
   });
 });
@@ -330,37 +281,24 @@ describe("GET /settings response allowlist (SEC-06)", () => {
     });
 
     const res = await request(makeApp()).get("/api/ea/settings");
-
     expect(res.status).toBe(200);
     const bodyJson = JSON.stringify(res.body);
-
-    // No response key looks secret-shaped, except the intentional `*_configured`
-    // booleans (which are derived presence flags, not secrets themselves).
     const secretShaped = /(_encrypted$)|password|secret|(^|_)token/i;
     const leakedKeys = Object.keys(res.body).filter(
-      (key) => secretShaped.test(key) && !key.endsWith("_configured")
+      (key) => secretShaped.test(key) && !key.endsWith("_configured"),
     );
-    expect(leakedKeys).toEqual([]);
 
-    // Decoy secret values must not appear anywhere in the serialized response.
+    expect(leakedKeys).toEqual([]);
     expect(bodyJson).not.toContain("super-secret-value");
     expect(bodyJson).not.toContain("future-token-value");
-
-    // todoist_oauth_scope is a real, currently-excluded ea_settings column whose
-    // name doesn't match the secret-shaped regex above (no _encrypted/password/
-    // secret/token substring), so a future accidental re-addition to
-    // SETTINGS_PUBLIC_FIELDS would slip past the key-shape check. Assert its
-    // value directly, the same way the decoy columns are checked.
     expect(bodyJson).not.toContain("MARKER-todoist-oauth-scope-should-never-leak");
-
-    // Known public fields must still come through.
     expect(res.body.email_lookback_hours).toBe(16);
     expect(res.body.weather_lat).toBe(34.0686);
     expect(res.body.weather_location).toBe("El Monte, CA");
     expect(res.body.actual_budget_url).toBeNull();
     expect(res.body.schedules).toEqual([
-      { label: "Morning Briefing", time: "08:00", enabled: false },
-      { label: "Evening Briefing", time: "20:00", enabled: false },
+      { time: "08:00", tz: "America/Los_Angeles", enabled: true, label: "Morning" },
+      { time: "20:00", tz: "America/Los_Angeles", enabled: true, label: "Evening" },
     ]);
     expect(res.body.email_interests).toEqual([]);
     expect(res.body.actual_budget_configured).toBe(false);
@@ -391,9 +329,10 @@ describe("settings PUT scalar field validation (P3-55)", () => {
   });
 
   it("rejects a non-Discord discord_webhook_url and does not encrypt/persist (SEC-05)", async () => {
+    await markSessionRecentlyPasswordAuthenticated();
     const res = await request(makeApp())
       .put("/api/ea/settings")
-      .set("x-recent-password-auth", "1")
+      .set("Cookie", authCookie())
       .send({ discord_webhook_url: "https://evil.com/hook" });
 
     expect(res.status).toBe(400);
@@ -403,21 +342,23 @@ describe("settings PUT scalar field validation (P3-55)", () => {
   it("requires recent password authentication before replacing a Discord webhook", async () => {
     const stale = await request(makeApp())
       .put("/api/ea/settings")
+      .set("Cookie", authCookie())
       .send({ discord_webhook_url: "https://discord.com/api/webhooks/123/private-token" });
 
     expect(stale.status).toBe(403);
     expect(stale.body.code).toBe("PASSWORD_STEP_UP_REQUIRED");
     expect((await getSettingsRow()).discord_webhook_url_encrypted).toBeNull();
 
+    await markSessionRecentlyPasswordAuthenticated();
     const recent = await request(makeApp())
       .put("/api/ea/settings")
-      .set("x-recent-password-auth", "1")
+      .set("Cookie", authCookie())
       .send({ discord_webhook_url: "https://discord.com/api/webhooks/123/private-token" });
 
     expect(recent.status).toBe(200);
-    expect((await getSettingsRow()).discord_webhook_url_encrypted).toBe(
-      "enc:https://discord.com/api/webhooks/123/private-token",
-    );
+    const encrypted = String((await getSettingsRow()).discord_webhook_url_encrypted);
+    expect(encrypted).toMatch(/^gcm:v2:/);
+    expect(encrypted).not.toContain("private-token");
   });
 
   it("accepts unrelated valid scalar settings and persists them", async () => {

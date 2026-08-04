@@ -8,7 +8,6 @@ afterEach(() => {
 
 describe("CalendarInlineOverflowLayer", () => {
   it("keeps compact time labels visible and renders deadline status icons", () => {
-    const onSelectItem = vi.fn();
     render(
       <CalendarInlineOverflowLayer
         overflow={{
@@ -37,7 +36,6 @@ describe("CalendarInlineOverflowLayer", () => {
           ],
         }}
         selectedItemId={null}
-        onSelectItem={onSelectItem}
       />,
     );
 
@@ -54,53 +52,6 @@ describe("CalendarInlineOverflowLayer", () => {
     expect(secondIcon?.getAttribute("aria-hidden")).toBe("true");
     expect(chips[1]!.textContent).toContain("Project Deliverables");
 
-    fireEvent.click(chips[1]!);
-    expect(onSelectItem).toHaveBeenCalledWith("todoist:todo-done", expect.objectContaining({
-      detailKind: "deadline",
-      dateKey: "2026-05-12",
-    }));
-  });
-
-  it("keeps the selected and unselected inline title-fit policy equal", () => {
-    render(
-      <CalendarInlineOverflowLayer
-        overflow={{
-          inlineAnchor: { top: 0, left: 0, width: 320 },
-          dateKey: "2026-05-12",
-          leadingColumnWidth: 35,
-          items: [
-            {
-              id: "event-plain",
-              leadingLabel: "9:00 AM",
-              title: "Advanced machine learning project review and lab planning",
-            },
-            {
-              id: "event-selected",
-              leadingLabel: "9:00 AM",
-              title: "Advanced machine learning project review and lab planning",
-            },
-          ],
-        }}
-        selectedItemId="event-selected"
-      />,
-    );
-
-    const titles = screen
-      .getAllByTestId("calendar-cell-item-chip")
-      .map((chip) => chip.querySelector<HTMLElement>("[data-calendar-chip-title='true']"));
-
-    const titlePolicy = (title: HTMLElement | null | undefined) => {
-      const titleTextStyle = title?.querySelector<HTMLElement>("[data-calendar-chip-title-text='true']")?.style as
-        | (CSSStyleDeclaration & { WebkitLineClamp: string })
-        | undefined;
-      return {
-        fontSize: title?.style.fontSize,
-        lineHeight: title?.style.lineHeight,
-        lineClamp: titleTextStyle?.WebkitLineClamp,
-      };
-    };
-    expect(titlePolicy(titles[0])).toEqual(titlePolicy(titles[1]));
-    expect(titlePolicy(titles[0])).toEqual({ fontSize: "10px", lineHeight: "1.08", lineClamp: "2" });
   });
 
   it("moves focus to the clicked hidden item", () => {

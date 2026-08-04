@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mockDeleteCalendarEvent } from "./CalendarEventEditor.test-setup.ts";
 import { renderModal, openFloatingEventEditorFromSelectedChip } from "./CalendarEventEditor.test-utils.tsx";
-import { renderEventEditor } from "./events/CalendarEventEditor.test-utils.tsx";
+import { createDeferred, renderEventEditor } from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor create and edit lifecycle", () => {
   it("auto focuses the title when opening the create editor", async () => {
@@ -80,6 +80,8 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
       allDay: false,
       htmlLink: "https://calendar.google.com",
     };
+    const deleteRequest = createDeferred();
+    mockDeleteCalendarEvent.mockReturnValue(deleteRequest.promise);
     const { refreshRange, removeEvent } = renderEventEditor({ event });
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
@@ -92,13 +94,22 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     await waitFor(() => {
       expect(screen.queryByText("Confirm delete")).toBeTruthy();
     });
-    fireEvent.click(screen.getByText("Confirm delete"));
+    const confirmDelete = screen.getByText("Confirm delete");
+    fireEvent.click(confirmDelete);
+    // The ref guard must reject a second synchronous confirmation before the
+    // disabled state has a chance to render.
+    fireEvent.click(confirmDelete);
     await waitFor(() => {
       expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-1", {
         accountId: "gmail-main",
         calendarId: "primary",
         etag: '"etag-1"',
       });
+    });
+    expect(mockDeleteCalendarEvent.mock.calls).toHaveLength(1);
+    deleteRequest.resolve({ event });
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
     });
     expect(removeEvent).toHaveBeenCalledWith("event-1");
     expect(refreshRange).not.toHaveBeenCalled();

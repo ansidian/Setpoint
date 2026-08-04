@@ -7,7 +7,7 @@ import {
 async function openCalendar(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
-  await page.keyboard.press("c");
+  await page.getByRole("tab", { name: "Calendar" }).click();
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
 }
 
@@ -17,7 +17,7 @@ test("creates a calendar event from the header action using deterministic fixtur
   await openCalendar(page);
 
   await expect(page.getByTestId(`calendar-cell-${fixture.day}`)).toBeVisible();
-  await expect(page.getByTestId("calendar-selected-empty-rail")).toBeVisible();
+  await expect(page.getByTestId("events-agenda-rail")).toBeVisible();
 
   await page.getByRole("button", { name: "New event" }).click();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
@@ -44,28 +44,26 @@ test("creates a calendar event from the header action using deterministic fixtur
 
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
   await page.getByTestId("calendar-cell-item-chip").filter({ hasText: fixture.createdTitle }).first().click();
-  await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.createdTitle);
-  await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.createdTitle);
+  const detail = page.getByTestId("calendar-floating-detail-panel");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByTestId("calendar-selected-event-title")).toContainText(fixture.createdTitle);
 });
 
-test("opens a fresh event editor from the dashboard Add Event action every time", async ({ page }) => {
+test("opens a fresh event editor from the Calendar workspace every time", async ({ page }) => {
   await installDashboardCalendarCreateFixtures(page);
 
   await page.goto("/");
   await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
 
-  await page.getByRole("button", { name: "Add Event" }).click();
+  await page.getByRole("tab", { name: "Calendar" }).click();
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await page.getByRole("button", { name: "New event" }).click();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
   await page.getByTestId("calendar-event-title").fill("Temporary draft");
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByTestId("calendar-event-editor-mode-create").getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
 
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("calendar-modal-panel")).toBeHidden();
-
-  await page.getByRole("button", { name: "Add Event" }).click();
-  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await page.getByRole("button", { name: "New event" }).click();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
   await expect(page.getByTestId("calendar-event-title")).toHaveValue("");
 });
@@ -107,8 +105,9 @@ test("requires a recurring scope before saving recurring event edits", async ({ 
   expect(updatePayload.recurrence).toBeUndefined();
 
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
-  await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.updatedTitle);
-  await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.updatedTitle);
+  const detail = page.getByTestId("calendar-floating-detail-panel");
+  await expect(detail).toBeVisible();
+  await expect(detail.getByTestId("calendar-selected-event-title")).toContainText(fixture.updatedTitle);
 });
 
 test("deletes recurring events using the selected scope", async ({ page }) => {
@@ -145,6 +144,6 @@ test("deletes recurring events using the selected scope", async ({ page }) => {
   });
 
   await expect(page.getByTestId("calendar-event-editor-rail")).toHaveCount(0);
-  await expect(page.getByTestId("calendar-selected-empty-rail")).toBeVisible();
+  await expect(page.getByTestId("calendar-floating-detail-panel")).toHaveCount(0);
   await expect(page.getByTestId("calendar-selected-event-title")).toHaveCount(0);
 });

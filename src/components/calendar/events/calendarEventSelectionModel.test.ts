@@ -8,7 +8,7 @@ import {
   isCalendarEventSelectionEligible,
   isEventSelectionModifier,
   planCalendarEventClipboardPaste,
-  removeCalendarEventSelection,
+  removeCalendarEventsFromSelection,
   resolveCalendarEventActionScope,
   clearCalendarEventSelection,
   calendarEventSelectionSize,
@@ -190,17 +190,31 @@ describe("calendarEventSelectionModel", () => {
     const third = googleEvent({ id: "event-third", title: "Third" });
     const selection = createCalendarEventSelectionSet([first, second]);
 
-    const afterMissingRemove = removeCalendarEventSelection(selection, third);
+    const afterMissingRemove = removeCalendarEventsFromSelection(selection, third);
     expect(calendarEventSelectionSize(afterMissingRemove)).toBe(2);
     expect(isCalendarEventSelected(afterMissingRemove, first)).toBe(true);
     expect(isCalendarEventSelected(afterMissingRemove, second)).toBe(true);
 
-    const afterRemove = removeCalendarEventSelection(afterMissingRemove, first);
+    const afterRemove = removeCalendarEventsFromSelection(afterMissingRemove, first);
     expect(calendarEventSelectionSize(afterRemove)).toBe(1);
     expect(isCalendarEventSelected(afterRemove, first)).toBe(false);
     expect(isCalendarEventSelected(afterRemove, second)).toBe(true);
 
     expect(clearCalendarEventSelection()).toEqual({ items: [] });
+  });
+
+  it("prunes only successfully deleted events from a partial batch selection", () => {
+    const first = googleEvent({ id: "first" });
+    const second = googleEvent({ id: "second", startMs: first.startMs + 60_000 });
+    const failed = googleEvent({ id: "failed", startMs: first.startMs + 120_000 });
+    const selection = createCalendarEventSelectionSet([first, second, failed]);
+
+    const reconciled = removeCalendarEventsFromSelection(selection, [first, second]);
+
+    expect(calendarEventSelectionSize(reconciled)).toBe(1);
+    expect(isCalendarEventSelected(reconciled, first)).toBe(false);
+    expect(isCalendarEventSelected(reconciled, second)).toBe(false);
+    expect(isCalendarEventSelected(reconciled, failed)).toBe(true);
   });
 
   it("creates internal clipboards and plans standalone paste payloads with relative offsets", () => {

@@ -265,12 +265,16 @@ describe("calendar detail timeline rendering", () => {
       selectedItemId: "income-1",
       onSelectItem,
       items: billsView.getDayState([
-        { id: "income-1", name: "Employer", payee: "Employer", amount: 5000, date: "2026-04-19", direction: "income", category: "Income", account: "Checking", type: "transaction" },
+        { id: "income-1", name: "Employer", payee: "Employer", amount: 5000, date: "2026-04-19", direction: "income", category: "Income", account: "Checking", notes: "May payroll", type: "transaction" },
         { id: "expense-1", name: "Market", payee: "Market", amount: 42, date: "2026-04-19", direction: "expense", category: "Groceries", account: "Checking", type: "transaction" },
       ]),
     }));
 
     expect(screen.getAllByText("+$5,000.00").length).toBeGreaterThan(0);
+    expect(screen.getByText("May payroll")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByText("Open in Actual")).toBeNull();
+    expect(screen.queryByText("Pay Online")).toBeNull();
     expect(screen.getByText("Inflows")).toBeTruthy();
     expect(screen.getByText("Outflows")).toBeTruthy();
     fireEvent.click(screen.getByText("Market").closest("[data-testid='timeline-detail-row']")!);

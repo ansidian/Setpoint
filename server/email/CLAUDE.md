@@ -37,7 +37,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `dev-service.ts` — dev/test helper: re-index recent emails
 - `test-utils/email-index-db.ts` — in-memory email index DB for tests
 
-(Other tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

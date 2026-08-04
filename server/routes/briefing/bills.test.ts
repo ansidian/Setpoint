@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import cookieParser from "cookie-parser";
 import express from "express";
-import request from "supertest";
+import request from "../../test-utils/supertest.ts";
 import { requireCookieSession } from "../../middleware/auth.ts";
 
 const mockDb = vi.hoisted(() => ({ execute: vi.fn() }));

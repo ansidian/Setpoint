@@ -1,10 +1,6 @@
-import { useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router";
-import type { SettingsPatch } from "@/components/settings/settingsTypes";
-import type { TriageSoundSettings } from "../../shared/types/settings";
-import type { OnboardingProgress } from "../../shared/types/onboarding";
 
 const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
@@ -12,89 +8,37 @@ const mockApi = vi.hoisted(() => ({
   getInstanceCredentials: vi.fn(),
   getOnboardingProgress: vi.fn(),
   getSettings: vi.fn(),
+  getTriageCacheStats: vi.fn(),
+  getImportantSenders: vi.fn(),
+  listApiTokens: vi.fn(),
+  listPasskeys: vi.fn(),
   updateSettings: vi.fn(),
-  targetReadyDelayMs: 0,
-  soundSettingsPayload: {
-    laneScope: "needs_attention_and_fyi",
-    volume: 1,
-    triggers: {
-      needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-      email_queued: { enabled: true, soundId: "quick_chime" },
-      fyi_finalized: { enabled: true, soundId: "smooth_modern" },
-      weak_security_grace: { enabled: true, soundId: "low_tone" },
-      triage_failed: { enabled: false, soundId: "low_tone" },
-      event_upcoming: { enabled: true, soundId: "clear_chime" },
-      task_completed: { enabled: true, soundId: "smooth_modern" },
-    },
-  } as TriageSoundSettings,
+}));
+const mockSecurity = vi.hoisted(() => ({
+  getCanonicalOriginStatus: vi.fn(),
+}));
+const mockTodoist = vi.hoisted(() => ({
+  getTodoistConnectionStatus: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- the Settings page talks to API wrappers at this external network boundary while real sections and cards render below it.
 vi.mock("@/api", () => ({
-  getAccounts: mockApi.getAccounts,
-  getCapabilities: mockApi.getCapabilities,
-  getInstanceCredentials: mockApi.getInstanceCredentials,
-  getSettings: mockApi.getSettings,
-  updateSettings: mockApi.updateSettings,
+  ...mockApi,
 }));
 
+// test-architecture: allow-boundary-mock -- onboarding progress is an authenticated server boundary; the real Settings page consumes its returned projection.
 vi.mock("@/lib/onboardingApi", () => ({
   getOnboardingProgress: mockApi.getOnboardingProgress,
 }));
 
-vi.mock("@/components/settings/sections/ConnectionsSettingsSection", () => ({
-  default: function ConnectionsSettingsSectionMock({ onboardingProgress }: { onboardingProgress: OnboardingProgress | null }) {
-    const [targetReady, setTargetReady] = useState(mockApi.targetReadyDelayMs === 0);
-    useEffect(() => {
-      if (targetReady) return;
-      const timer = window.setTimeout(() => setTargetReady(true), mockApi.targetReadyDelayMs);
-      return () => window.clearTimeout(timer);
-    }, [targetReady]);
-    return (
-      <div data-settings-flash-container data-testid="settings-connection-card">
-        <div
-          id="todoist"
-          tabIndex={-1}
-          aria-busy={!targetReady}
-          data-settings-target-ready={targetReady ? "true" : "false"}
-          data-onboarding-status={onboardingProgress?.status ?? "loading"}
-          data-testid="settings-connections-section"
-        >
-          connections section
-          <details open>
-            <summary id="todoist-advanced-setup">Advanced OAuth and webhooks</summary>
-          </details>
-        </div>
-      </div>
-    );
-  },
+// test-architecture: allow-boundary-mock -- security status is a server-owned credential boundary; System renders the real security cards around this fake response.
+vi.mock("@/auth/securityApi", () => ({
+  getCanonicalOriginStatus: mockSecurity.getCanonicalOriginStatus,
 }));
 
-vi.mock("@/components/settings/sections/ActualBudgetSettingsSection", () => ({
-  default: function ActualBudgetSettingsSectionMock() {
-    return <div data-testid="settings-finance-section">finance section</div>;
-  },
-}));
-
-vi.mock("@/components/settings/sections/EmailAutomationSettingsSection", () => ({
-  default: function EmailAutomationSettingsSectionMock({ patch }: { patch: SettingsPatch }) {
-    return (
-      <div data-testid="settings-automation-section">
-        automation section
-        <button
-          type="button"
-          onClick={() => patch({ triage_sound_settings: mockApi.soundSettingsPayload })}
-        >
-          Mock Save Sound Track
-        </button>
-      </div>
-    );
-  },
-}));
-
-vi.mock("@/components/settings/sections/SystemSettingsSection", () => ({
-  default: function SystemSettingsSectionMock() {
-    return <div data-testid="settings-system-section">system section</div>;
-  },
+// test-architecture: allow-boundary-mock -- Todoist status is an external provider-health boundary; the real Todoist card remains mounted for deep-link behavior.
+vi.mock("@/lib/todoistSetupApi", () => ({
+  getTodoistConnectionStatus: mockTodoist.getTodoistConnectionStatus,
 }));
 
 const { default: Settings } = await import("./Settings");
@@ -126,8 +70,39 @@ beforeEach(() => {
     updatedAt: 1,
   });
   mockApi.getSettings.mockResolvedValue({});
+  mockApi.getTriageCacheStats.mockResolvedValue({ openaiCalls: 0, windowDays: 7 });
+  mockApi.getImportantSenders.mockResolvedValue([]);
+  mockApi.listApiTokens.mockResolvedValue([]);
+  mockApi.listPasskeys.mockResolvedValue({
+    passkeys: [],
+    authMode: "password_or_passkey",
+    recovery: { remaining: 0, generatedAt: null },
+  });
   mockApi.updateSettings.mockResolvedValue({ success: true });
-  mockApi.targetReadyDelayMs = 0;
+  mockSecurity.getCanonicalOriginStatus.mockResolvedValue({
+    currentOrigin: "https://setpoint.example",
+    proposedOrigin: "https://setpoint.example",
+    affectedPasskeys: 0,
+    callbacks: [],
+    recentAuth: false,
+  });
+  mockTodoist.getTodoistConnectionStatus.mockResolvedValue({
+    mode: "disconnected",
+    configured: false,
+    oauthRefreshable: false,
+    needsReauth: false,
+    application: {
+      configured: false,
+      source: "absent",
+      pendingConfigured: false,
+      pendingStagedAt: null,
+      pendingExpiresAt: null,
+      candidateVersions: null,
+    },
+    callbackUrl: "https://setpoint.example/api/ea/accounts/todoist/callback",
+    webhookUrl: "https://setpoint.example/api/todoist/webhook",
+    deliveryMode: "periodic",
+  });
 });
 
 describe("Settings page", () => {
@@ -136,46 +111,42 @@ describe("Settings page", () => {
 
     renderSettings();
 
-    expect(await screen.findByTestId("settings-automation-section")).toBeTruthy();
-    expect(screen.queryByTestId("settings-connections-section")).toBeNull();
+    expect(await screen.findByText("Connect an email source")).toBeTruthy();
+    expect(screen.getByRole("tabpanel").getAttribute("aria-label")).toBe("Automation");
+    expect(screen.queryByText("Connections directory")).toBeNull();
   });
 
-  it("coordinates onboarding progress once for the Connections header", async () => {
+  it("coordinates onboarding progress once for the Connections workflow", async () => {
     renderSettings();
 
-    const section = await screen.findByTestId("settings-connections-section");
-    await waitFor(() => expect(section.getAttribute("data-onboarding-status")).toBe("in_progress"));
+    expect(await screen.findByText("Connections directory")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Continue setup" })).toBeTruthy();
     expect(mockApi.getOnboardingProgress).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for a linked settings card to finish loading, then flashes it after scrolling ends", async () => {
+  it("locates and focuses a deep-linked connection row, then flashes it after scrolling ends", async () => {
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(performance.now());
       return 1;
     });
-    mockApi.targetReadyDelayMs = 40;
     window.history.replaceState({}, "", "/settings?tab=connections#todoist");
 
     renderSettings();
 
-    const target = await screen.findByTestId("settings-connections-section");
-    expect(target.getAttribute("data-settings-target-ready")).toBe("false");
-    expect(scrollIntoView).not.toHaveBeenCalled();
+    const target = await screen.findByRole("button", { name: /Todoist/ });
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({
       behavior: "smooth",
       block: "center",
     }));
     expect(document.activeElement).toBe(target);
-    expect(target.getAttribute("data-settings-target-active")).toBeNull();
 
     window.dispatchEvent(new Event("scrollend"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("settings-connection-card").getAttribute("data-settings-target-active")).toBe("true");
+      expect(target.closest("[data-settings-flash-container]")?.getAttribute("data-settings-target-active")).toBe("true");
     });
-    expect(target.getAttribute("data-settings-target-active")).toBeNull();
   });
 
   it("does not scroll, focus, or flash a drawer expanded from inside Settings", async () => {
@@ -198,12 +169,12 @@ describe("Settings page", () => {
         await vi.runAllTimersAsync();
       });
 
-      const target = screen.getByTestId("settings-connections-section");
+      const target = screen.getByRole("button", { name: /Todoist/ });
       window.dispatchEvent(new Event("scrollend"));
 
       expect(scrollIntoView).not.toHaveBeenCalled();
       expect(document.activeElement).not.toBe(target);
-      expect(screen.getByTestId("settings-connection-card").getAttribute("data-settings-target-active")).toBeNull();
+      expect(target.closest("[data-settings-flash-container]")?.getAttribute("data-settings-target-active")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -236,43 +207,43 @@ describe("Settings page", () => {
 
     expect(screen.getByText("Settings")).toBeTruthy();
     expect(screen.getByRole("status", { name: "Loading settings" }).getAttribute("aria-busy")).toBe("true");
-    expect(screen.queryByTestId("settings-connections-section")).toBeNull();
+    expect(screen.queryByText("Connections directory")).toBeNull();
   });
 
   it("switches sections by changing page-level tab state", async () => {
     renderSettings();
 
-    expect(await screen.findByTestId("settings-connections-section")).toBeTruthy();
+    expect(await screen.findByText("Connections directory")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Finance" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("settings-finance-section")).toBeTruthy();
+      expect(screen.getByText("Connect Actual Budget")).toBeTruthy();
     });
     expect(window.location.search).toBe("?tab=finance");
 
     fireEvent.click(screen.getByRole("tab", { name: "System" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("settings-system-section")).toBeTruthy();
+      expect(screen.getByText("Sign-in & recovery")).toBeTruthy();
     });
-    expect(screen.queryByTestId("settings-connections-section")).toBeNull();
+    expect(screen.queryByText("Connections directory")).toBeNull();
   });
 
   it("uses browser back and forward to move between settings tabs", async () => {
     renderSettings();
 
-    expect(await screen.findByTestId("settings-connections-section")).toBeTruthy();
+    expect(await screen.findByText("Connections directory")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
     await waitFor(() => {
-      expect(screen.getByTestId("settings-automation-section")).toBeTruthy();
+      expect(screen.getByText("Connect an email source")).toBeTruthy();
     });
     expect(window.location.search).toBe("?tab=automation");
 
     fireEvent.click(screen.getByRole("tab", { name: "System" }));
     await waitFor(() => {
-      expect(screen.getByTestId("settings-system-section")).toBeTruthy();
+      expect(screen.getByText("Sign-in & recovery")).toBeTruthy();
     });
     expect(window.location.search).toBe("?tab=system");
 
@@ -280,30 +251,40 @@ describe("Settings page", () => {
       window.history.back();
     });
     await waitFor(() => {
-      expect(screen.getByTestId("settings-automation-section")).toBeTruthy();
+      expect(screen.getByText("Connect an email source")).toBeTruthy();
     });
 
     act(() => {
       window.history.forward();
     });
     await waitFor(() => {
-      expect(screen.getByTestId("settings-system-section")).toBeTruthy();
+      expect(screen.getByText("Sign-in & recovery")).toBeTruthy();
     });
   });
 
   it("flushes pending settings when leaving before the autosave debounce fires", async () => {
     window.history.replaceState({}, "", "/settings?tab=automation");
+    mockApi.getAccounts.mockResolvedValue([{
+      id: "icloud-1",
+      type: "icloud",
+      email: "owner@icloud.com",
+      label: "Owner",
+      color: null,
+      icon: null,
+      calendar_enabled: 0,
+      sort_order: 0,
+      created_at: "2026-07-18T00:00:00.000Z",
+      needs_reauth: false,
+    }]);
 
     const { unmount } = renderSettings();
 
-    expect(await screen.findByTestId("settings-automation-section")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Mock Save Sound Track" }));
+    const lookback = await screen.findByDisplayValue("16");
+    fireEvent.change(lookback, { target: { value: "24" } });
     unmount();
 
     await waitFor(() => {
-      expect(mockApi.updateSettings).toHaveBeenCalledWith({
-        triage_sound_settings: mockApi.soundSettingsPayload,
-      });
+      expect(mockApi.updateSettings).toHaveBeenCalledWith({ email_lookback_hours: 24 });
     });
   });
 });
@@ -311,7 +292,7 @@ describe("Settings page", () => {
 describe("Settings sections tablist (WAI-ARIA)", () => {
   it("exposes a tablist with one selected tab and a labelled tabpanel", async () => {
     renderSettings();
-    await screen.findByTestId("settings-connections-section");
+    await screen.findByText("Connections directory");
 
     const tablist = screen.getByRole("tablist", { name: "Settings sections" });
     const tabs = within(tablist).getAllByRole("tab");
@@ -332,14 +313,14 @@ describe("Settings sections tablist (WAI-ARIA)", () => {
 
   it("ArrowDown moves selection to the next section and switches content (vertical strip)", async () => {
     renderSettings();
-    await screen.findByTestId("settings-connections-section");
+    await screen.findByText("Connections directory");
 
     const activeTab = screen.getByRole("tab", { name: "Connections" });
     activeTab.focus();
     fireEvent.keyDown(activeTab, { key: "ArrowDown" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("settings-automation-section")).toBeTruthy();
+      expect(screen.getByText("Connect an email source")).toBeTruthy();
     });
     expect(screen.getByRole("tab", { name: "Automation" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tabpanel").getAttribute("aria-label")).toBe("Automation");
@@ -347,20 +328,20 @@ describe("Settings sections tablist (WAI-ARIA)", () => {
 
   it("Home and End jump to the first and last section", async () => {
     renderSettings();
-    await screen.findByTestId("settings-connections-section");
+    await screen.findByText("Connections directory");
 
     const activeTab = screen.getByRole("tab", { name: "Connections" });
     activeTab.focus();
     fireEvent.keyDown(activeTab, { key: "End" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("settings-system-section")).toBeTruthy();
+      expect(screen.getByText("Sign-in & recovery")).toBeTruthy();
     });
 
     fireEvent.keyDown(screen.getByRole("tab", { name: "System" }), { key: "Home" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("settings-connections-section")).toBeTruthy();
+      expect(screen.getByText("Connections directory")).toBeTruthy();
     });
   });
 });

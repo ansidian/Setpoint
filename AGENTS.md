@@ -35,6 +35,15 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - `npm run build` - production build.
 - `npm run check:harness` - agent-harness checks for the agent map, local-doc cleanup when present, and oversized components.
 
+## Test Architecture
+
+- A product requirement or regression triggers a test; creating or extracting a file, hook, helper, class, or component does not.
+- Test through the stable module or use-case facade and allow its internal collaborators to work together. Name one primary behavior owner before adding overlapping coverage.
+- Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate the file under test.
+- Prefer observable results and durable state. Interaction assertions are for unavoidable outbound boundary contracts, not internal call graphs.
+- Keep direct pure tests for intentionally stable algorithms and dense policy matrices. Persistence tests should execute against an ephemeral database instead of asserting SQL text or positional arguments.
+- `scripts/lib/test-architecture-baseline.json` is ratcheted debt: reduce it when coupling is removed; never add or raise an allowance without explicit owner approval and a recorded reason.
+
 ## Maintainability Guardrail
 
 - Strongly evaluate decomposition before adding significant UI or state to any component near or above 600 lines.

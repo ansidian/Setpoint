@@ -1,326 +1,245 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router";
 import Dashboard from "./Dashboard";
-import type { ReactNode } from "react";
-import type { CurrentDashboardEventInput } from "../../shared/types/dashboard";
-
-interface AutoRefreshArgs {
-  onQuickRefresh: () => unknown;
-  lastQuickRefreshAt: number | null;
-}
-interface RefreshShellProps {
-  onQuickRefresh: () => void;
-  calendarBillsData?: { pendingUpdate?: boolean };
-  loadCalendarBills: (options?: { force?: boolean }) => void;
-}
-interface DashboardHookOptions {
-  onDashboardEvent?: (event: CurrentDashboardEventInput | null) => void;
-}
-interface RefreshLiveDataFixture {
-  allSchedules: Array<Record<string, unknown>>;
-  recentTransactions: unknown[];
-  payeeMap: Record<string, string>;
-  actualBudgetUrl: string;
-  actualConfigured: boolean;
-  lastFetched?: string;
-  refreshNow: ReturnType<typeof vi.fn>;
-  providerHealth?: { currentData?: { sources?: Array<{ key: string; state: string }> } };
-  [key: string]: unknown;
-}
+import type { CurrentDashboardResponse } from "../../shared/types/dashboard";
 
 const mocks = vi.hoisted(() => ({
-  autoRefreshArgs: null as AutoRefreshArgs | null,
-  invalidateCalendarRange: vi.fn(),
-  markCalendarRangeStale: vi.fn(),
-  refreshCalendarRangeInPlace: vi.fn(),
-  markCalendarDomainRangeStale: vi.fn(),
-  currentRefreshNow: vi.fn(),
-  handleQuickRefresh: vi.fn(),
-  activeSnapshotRefresh: vi.fn(),
-  activeSnapshotSync: vi.fn(),
+  getCurrentDashboard: vi.fn(),
+  requestCurrentDashboardRefresh: vi.fn(),
+  syncCurrentDashboard: vi.fn(),
+  getActiveSnapshot: vi.fn(),
+  getCalendarRange: vi.fn(),
   getCalendarDeadlines: vi.fn(),
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
-  dashboardEventHandler: null as ((event: CurrentDashboardEventInput | null) => void) | null,
-  handleDashboardEvent: vi.fn(),
-  handleCalendarSnapshot: vi.fn(),
-  handleActiveSnapshot: vi.fn(),
-  handleTaskCompleted: vi.fn(),
-  briefing: null as Record<string, unknown> | null,
-  liveData: null as RefreshLiveDataFixture | null,
-  latestShellProps: null as RefreshShellProps | null,
+  getSettings: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
+  getCurrentDashboard: mocks.getCurrentDashboard,
+  requestCurrentDashboardRefresh: mocks.requestCurrentDashboardRefresh,
+  syncCurrentDashboard: mocks.syncCurrentDashboard,
+  getActiveSnapshot: mocks.getActiveSnapshot,
+  getCalendarRange: mocks.getCalendarRange,
   getCalendarDeadlines: mocks.getCalendarDeadlines,
   getCalendarDeadlinesRange: mocks.getCalendarDeadlinesRange,
   getCalendarBillsRange: mocks.getCalendarBillsRange,
+  getSettings: mocks.getSettings,
 }));
 
-vi.mock("../hooks/calendar/useCalendarRange", () => ({
-  default: () => ({
-    invalidate: mocks.invalidateCalendarRange,
-    markStale: mocks.markCalendarRangeStale,
-    refreshRangeInPlace: mocks.refreshCalendarRangeInPlace,
-  }),
-}));
-
-vi.mock("../hooks/calendar/useCalendarDomainRange", () => ({
-  default: () => ({
-    data: null,
-    ensureRange: vi.fn(),
-    markStale: mocks.markCalendarDomainRangeStale,
-    loading: false,
-    error: null,
-  }),
-}));
-
-vi.mock("../hooks/useCurrentDashboard", () => ({
-  default: (options: DashboardHookOptions = {}) => {
-    mocks.dashboardEventHandler = options.onDashboardEvent ?? null;
-    const liveData = mocks.liveData || {
-      allSchedules: [],
-      recentTransactions: [],
-      payeeMap: {},
-      actualBudgetUrl: "",
-      actualConfigured: false,
-      refreshNow: mocks.currentRefreshNow,
-    };
-    return {
-      liveData,
-      activeSnapshot: {
-        snapshot: null,
-        loading: false,
-        error: null,
-        refresh: mocks.activeSnapshotRefresh,
-        sync: mocks.activeSnapshotSync,
-      },
-      briefingData: {
-        loading: false,
-        error: null,
-        briefing: mocks.briefing,
-        lastQuickRefreshAt: null,
-        handleQuickRefresh: mocks.handleQuickRefresh,
-      },
-    };
+const initialPayload = {
+  weather: { temp: 72, icon: "Sun", summary: "Clear", location: "Los Angeles" },
+  calendar: [],
+  deadlines: { upcoming: [], stats: null },
+  bills: [],
+  allSchedules: [],
+  payeeMap: {},
+  actualConfigured: false,
+  actualBudgetUrl: null,
+  activeSnapshot: {
+    snapshot: { id: 42 },
+    lanes: { needs_attention: [], fyi: [], noise: [] },
+    carryover: [],
+    filters: { accounts: [], categories: [] },
   },
-}));
+  providerHealth: { currentData: { state: "current", sources: [] } },
+  fetchedAt: "2026-05-04T12:00:00.000Z",
+} as unknown as CurrentDashboardResponse;
 
-vi.mock("../hooks/useAutoRefresh", () => ({
-  default: (args: AutoRefreshArgs) => {
-    mocks.autoRefreshArgs = args;
-  },
-}));
+function renderDashboard() {
+  return render(
+    <BrowserRouter>
+      <Dashboard />
+    </BrowserRouter>,
+  );
+}
 
-vi.mock("../hooks/useNotifications", () => ({
-  default: () => {},
-}));
+type EventSourceListener = (event: MessageEvent<string>) => void;
 
-vi.mock("../hooks/useTriageNotificationSounds", () => ({
-  default: () => ({
-    handleDashboardEvent: mocks.handleDashboardEvent,
-    handleCalendarSnapshot: mocks.handleCalendarSnapshot,
-    handleActiveSnapshot: mocks.handleActiveSnapshot,
-    handleTaskCompleted: mocks.handleTaskCompleted,
-  }),
-}));
+class FakeEventSource {
+  static instances: FakeEventSource[] = [];
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 2;
+  readonly listeners = new Map<string, Set<EventSourceListener>>();
+  readonly url: string;
+  readyState = FakeEventSource.OPEN;
+  onerror: ((event: Event) => void) | null = null;
 
-vi.mock("../components/dashboard/DashboardShell", () => ({
-  DashboardBody: () => null,
-  DashboardShell: (props: RefreshShellProps) => {
-    mocks.latestShellProps = props;
-    return (
-      <div>
-        <button type="button" onClick={props.onQuickRefresh}>Sync now</button>
-        <div data-testid="bills-pending">{String(!!props.calendarBillsData?.pendingUpdate)}</div>
-      </div>
-    );
-  },
-}));
+  constructor(url: string) {
+    this.url = url;
+    FakeEventSource.instances.push(this);
+  }
 
-vi.mock("../components/shared/EmptyStateSplash", () => ({
-  default: function EmptyStateSplashMock({ actions }: { actions: ReactNode }) {
-    return <div data-testid="empty-state-splash">{actions}</div>;
-  },
-}));
+  addEventListener(type: string, listener: EventSourceListener) {
+    const listeners = this.listeners.get(type) || new Set<EventSourceListener>();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
 
-describe("Dashboard refresh wiring", () => {
+  removeEventListener(type: string, listener: EventSourceListener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  close() {
+    this.readyState = FakeEventSource.CLOSED;
+  }
+
+  emit(type: string, data: Record<string, unknown>) {
+    for (const listener of this.listeners.get(type) || []) {
+      listener(new MessageEvent(type, { data: JSON.stringify(data) }));
+    }
+  }
+}
+
+function setVisibilityState(state: DocumentVisibilityState) {
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: state });
+  Object.defineProperty(document, "hidden", { configurable: true, value: state === "hidden" });
+}
+
+describe("Dashboard refresh behavior", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-05-04T12:00:00.000Z"));
-    mocks.autoRefreshArgs = null;
-    mocks.invalidateCalendarRange.mockReset();
-    mocks.markCalendarRangeStale.mockReset();
-    mocks.refreshCalendarRangeInPlace.mockReset();
-    mocks.markCalendarDomainRangeStale.mockReset();
-    mocks.currentRefreshNow.mockReset();
-    mocks.currentRefreshNow.mockResolvedValue(null);
-    mocks.handleQuickRefresh.mockReset();
-    mocks.activeSnapshotRefresh.mockReset();
-    mocks.activeSnapshotSync.mockReset();
-    mocks.getCalendarDeadlines.mockReset();
-    mocks.getCalendarDeadlines.mockResolvedValue({ upcoming: [] });
-    mocks.dashboardEventHandler = null;
-    mocks.handleDashboardEvent.mockReset();
-    mocks.handleCalendarSnapshot.mockReset();
-    mocks.handleActiveSnapshot.mockReset();
-    mocks.handleTaskCompleted.mockReset();
-    mocks.briefing = null;
-    mocks.liveData = null;
-    mocks.latestShellProps = null;
+    vi.stubGlobal("EventSource", undefined);
+    FakeEventSource.instances = [];
+    setVisibilityState("visible");
+    mocks.getCurrentDashboard.mockReset().mockResolvedValue(initialPayload);
+    mocks.requestCurrentDashboardRefresh.mockReset().mockResolvedValue({
+      ...initialPayload,
+      weather: { temp: 85, icon: "Sun", summary: "Warm", location: "Los Angeles" },
+      activeSnapshot: { ...initialPayload.activeSnapshot, snapshot: { id: 99 } },
+      fetchedAt: "2026-05-04T12:01:00.000Z",
+      refresh: { mode: "manual", scheduled: [], skipped: [] },
+    });
+    mocks.syncCurrentDashboard.mockReset().mockResolvedValue(initialPayload);
+    mocks.getActiveSnapshot.mockReset().mockResolvedValue(initialPayload.activeSnapshot);
+    mocks.getCalendarRange.mockReset().mockResolvedValue({ events: [] });
+    mocks.getCalendarDeadlines.mockReset().mockResolvedValue({ upcoming: [], stats: null });
+    mocks.getCalendarDeadlinesRange.mockReset().mockResolvedValue({ upcoming: [], stats: null });
+    mocks.getCalendarBillsRange.mockReset().mockResolvedValue([]);
+    mocks.getSettings.mockReset().mockResolvedValue({});
+    window.localStorage.clear();
   });
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
+    setVisibilityState("visible");
     vi.useRealTimers();
   });
 
-  it("uses a light current-data fetch for timer refresh without starting a heavy snapshot sync", () => {
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
+  it("updates visible data from an automatic focus refresh through the current-data boundary", async () => {
+    mocks.getCurrentDashboard.mockResolvedValueOnce(initialPayload).mockResolvedValueOnce({
+      ...initialPayload,
+      weather: { temp: 74, icon: "Sun", summary: "Clear", location: "Los Angeles" },
+      fetchedAt: "2026-05-04T12:05:00.000Z",
+    });
 
-    mocks.autoRefreshArgs!.onQuickRefresh();
-
-    expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
-    expect(mocks.activeSnapshotRefresh).not.toHaveBeenCalled();
-    expect(mocks.currentRefreshNow).toHaveBeenCalledTimes(1);
-    expect(mocks.activeSnapshotSync).not.toHaveBeenCalled();
-    expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
-    expect(mocks.markCalendarRangeStale).not.toHaveBeenCalled();
-    expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
-    expect(mocks.markCalendarDomainRangeStale).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: /sync now/i }));
-
-    expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
-    expect(mocks.markCalendarRangeStale).toHaveBeenCalledTimes(1);
-    expect(mocks.refreshCalendarRangeInPlace).not.toHaveBeenCalled();
-    expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
-    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
-    expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
-    expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(2);
-  });
-
-  it("maps the R hotkey to Sync now", () => {
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
-
-    fireEvent.keyDown(window, { key: "r" });
-
-    expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
-    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
-  });
-
-  it("updates the auto-refresh cooldown timestamp after timer sync", async () => {
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
-
-    expect(mocks.autoRefreshArgs!.lastQuickRefreshAt).toBeNull();
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("72°"));
 
     await act(async () => {
-      await mocks.autoRefreshArgs!.onQuickRefresh();
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
     });
 
-    expect(mocks.autoRefreshArgs!.lastQuickRefreshAt).toBe(new Date("2026-05-04T12:00:00.000Z").getTime());
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("74°"));
+    expect(mocks.getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(mocks.requestCurrentDashboardRefresh).not.toHaveBeenCalled();
   });
 
-  it("marks Bills range data stale after a Bills dashboard-current event", () => {
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
-
-    act(() => {
-      mocks.dashboardEventHandler?.({
-        source: "bills",
-        reason: "maintenance_refreshed",
-        state: "current",
-      });
-    });
-
-    expect(mocks.handleDashboardEvent).toHaveBeenCalledWith(expect.objectContaining({
-      source: "bills",
-      reason: "maintenance_refreshed",
+  it("shows the syncing state and then visible data after Sync now resolves", async () => {
+    let resolveRefresh!: (value: CurrentDashboardResponse) => void;
+    mocks.requestCurrentDashboardRefresh.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveRefresh = resolve;
     }));
-    expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(1);
+
+    renderDashboard();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync now" })).toBeTruthy());
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Sync now" }).click();
+      await Promise.resolve();
+    });
+
+    const syncingButton = screen.getByRole("button", { name: "Syncing" }) as HTMLButtonElement;
+    expect(syncingButton.disabled).toBe(true);
+
+    await act(async () => {
+      resolveRefresh({
+        ...initialPayload,
+        weather: { temp: 85, icon: "Sun", summary: "Warm", location: "Los Angeles" },
+        activeSnapshot: { ...initialPayload.activeSnapshot, snapshot: { id: 99 } },
+        fetchedAt: "2026-05-04T12:01:00.000Z",
+        refresh: { mode: "manual", scheduled: [], skipped: [] },
+      } as unknown as CurrentDashboardResponse);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("85°"));
+    expect((screen.getByRole("button", { name: "Sync now" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(mocks.requestCurrentDashboardRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("reloads calendar deadlines after Todoist sync settles", () => {
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
+  it("updates visible data on the automatic interval through the rendered Dashboard facade", async () => {
+    mocks.getCurrentDashboard.mockResolvedValueOnce(initialPayload).mockResolvedValueOnce({
+      ...initialPayload,
+      weather: { temp: 76, icon: "Sun", summary: "Clear", location: "Los Angeles" },
+      fetchedAt: "2026-05-04T12:05:00.000Z",
+    });
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("72°"));
 
-    act(() => {
-      mocks.dashboardEventHandler?.({
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("76°"));
+  });
+
+  it("suppresses hidden focus work and catches up visibly when the tab returns", async () => {
+    mocks.getCurrentDashboard.mockResolvedValueOnce(initialPayload).mockResolvedValueOnce({
+      ...initialPayload,
+      weather: { temp: 78, icon: "Sun", summary: "Clear", location: "Los Angeles" },
+      fetchedAt: "2026-05-04T12:06:00.000Z",
+    });
+    renderDashboard();
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("72°"));
+
+    setVisibilityState("hidden");
+    window.dispatchEvent(new Event("focus"));
+    await act(async () => Promise.resolve());
+    expect(screen.getByTestId("context-weather").textContent).toContain("72°");
+
+    setVisibilityState("visible");
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("78°"));
+  });
+
+  it("applies an SSE-triggered refresh as a visible Dashboard outcome", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    mocks.getCurrentDashboard.mockResolvedValueOnce(initialPayload).mockResolvedValueOnce({
+      ...initialPayload,
+      weather: { temp: 81, icon: "Sun", summary: "Warm", location: "Los Angeles" },
+      fetchedAt: "2026-05-04T12:07:00.000Z",
+    });
+    renderDashboard();
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+
+    await act(async () => {
+      FakeEventSource.instances[0]!.emit("dashboard-current-changed", {
         source: "todoist",
-        reason: "sync_settled",
-        state: "current",
+        reason: "webhook_received",
+        state: "needs_sync",
       });
+      await Promise.resolve();
     });
 
-    expect(mocks.handleDashboardEvent).toHaveBeenCalledWith(expect.objectContaining({
-      source: "todoist",
-      reason: "sync_settled",
-    }));
-    expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(1);
-    expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
-  });
-
-  it("clears the Bills pending snapshot once current-data refresh settles", () => {
-    mocks.briefing = { weather: null, calendar: [], deadlines: { upcoming: [] }, emails: { accounts: [] } };
-    mocks.liveData = {
-      allSchedules: [{ id: "bill-1", payee: "Power" }],
-      recentTransactions: [],
-      payeeMap: {},
-      actualBudgetUrl: "https://actual.example.test",
-      actualConfigured: true,
-      lastFetched: "2026-05-04T12:00:00.000Z",
-      refreshNow: mocks.currentRefreshNow,
-      providerHealth: {
-        currentData: {
-          sources: [{ key: "bills_current", state: "refreshing" }],
-        },
-      },
-    };
-    const { rerender } = render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
-
-    act(() => {
-      mocks.latestShellProps!.loadCalendarBills({ force: true });
-    });
-    expect(mocks.latestShellProps!.calendarBillsData?.pendingUpdate).toBe(true);
-
-    mocks.liveData = {
-      ...mocks.liveData!,
-      lastFetched: "2026-05-04T12:00:02.000Z",
-      providerHealth: {
-        currentData: {
-          sources: [{ key: "bills_current", state: "current" }],
-        },
-      },
-    };
-    rerender(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
-
-    expect(mocks.latestShellProps!.calendarBillsData?.pendingUpdate).toBe(false);
+    await waitFor(() => expect(screen.getByTestId("context-weather").textContent).toContain("81°"));
   });
 });

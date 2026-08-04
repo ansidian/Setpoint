@@ -118,7 +118,13 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
-      expect(mockUpdateCalendarEvent).toHaveBeenCalledTimes(1);
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-move", expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "school",
+        sourceAccountId: "gmail-main",
+        sourceCalendarId: "primary",
+        etag: '"etag-move"',
+      }));
       expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
         id: "event-move",
         calendarId: "school",
@@ -465,7 +471,14 @@ describe("CalendarEventEditor source and location assist behavior", () => {
 
     await waitFor(() => {
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
         title: "Planning block",
+        allDay: false,
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "09:00",
+        endTime: "09:30",
       }));
       expect(upsertEvents).toHaveBeenCalledWith(savedEvent);
     });

@@ -55,6 +55,34 @@ function DeferredCompleteHarness() {
   );
 }
 
+function ReconciledStatusHarness({ status }: { status: string }) {
+  const task = {
+    id: "todo-reopened",
+    title: "Reopened report",
+    due_date: "2026-04-19",
+    due_time: "9:00 AM",
+    source: "todoist",
+    class_name: "Inbox",
+    status,
+  };
+  const deadlines = {
+    upcoming: [task],
+    stats: { incomplete: status === "complete" ? 0 : 1, dueToday: 1, dueThisWeek: 1, totalPoints: 0 },
+  };
+  return (
+    <DashboardProvider deadlines={deadlines} setCalendarDeadlines={() => {}}>
+      {renderDeadlinesDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        items: deadlines.upcoming,
+        selectedItemId: "todo-reopened",
+        onSelectItem: () => {},
+      })}
+    </DashboardProvider>
+  );
+}
+
 describe("deadline detail completion feedback", () => {
   it("shows an immediate pending state while deadline completion is in flight", async () => {
     let resolveComplete: ((value: unknown) => void) | undefined;
@@ -71,6 +99,9 @@ describe("deadline detail completion feedback", () => {
     });
 
     resolveComplete?.({});
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /mark complete/i })).toBeNull();
+    });
   });
 
   it("returns to the ready action when Todoist completion fails", async () => {
@@ -85,9 +116,20 @@ describe("deadline detail completion feedback", () => {
       expect(screen.getByRole("button", { name: /mark complete/i }).getAttribute("aria-busy")).toBe("true");
     });
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
+      const action = screen.getByRole<HTMLButtonElement>("button", { name: /mark complete/i });
+      expect(action.getAttribute("aria-busy")).not.toBe("true");
+      expect(action.disabled).toBe(false);
     });
 
     errorSpy.mockRestore();
+  });
+
+  it("offers completion again when a completed Todoist deadline reconciles as reopened", () => {
+    const view = render(<ReconciledStatusHarness status="complete" />);
+    expect(screen.queryByRole("button", { name: /mark complete/i })).toBeNull();
+
+    view.rerender(<ReconciledStatusHarness status="open" />);
+
+    expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
   });
 });

@@ -131,19 +131,4 @@ describe("BillsAgendaRail", () => {
     expect(marker.getAttribute("data-marker-color")).toBe("#89dceb");
   });
 
-  it("renders bills from months beyond the active month once a range provider is wired (infinite scroll)", async () => {
-    const buckets: Record<string, BillsViewData> = {
-      "2026-06": { schedules: [{ id: "june-1", name: "June Only Bill", amount: 50, next_date: "2026-06-15", type: "bill" }] },
-    };
-    const getMonthBills = (year: number, month: number) => buckets[`${year}-${String(month + 1).padStart(2, "0")}`] || { schedules: [] };
-    const billsRange = { ensureRange: vi.fn().mockResolvedValue(undefined), loading: false, revision: 1 };
-
-    renderRail({ getMonthBills, billsRange });
-
-    // June is a month after the active May view; with the multi-month pipeline on,
-    // its bill is fetched + rendered without navigating there. (Gate off — no range
-    // — keeps the single-month behavior the other tests assert.)
-    expect(await screen.findByText("June Only Bill")).toBeTruthy();
-    expect(billsRange.ensureRange).toHaveBeenCalled();
-  });
 });

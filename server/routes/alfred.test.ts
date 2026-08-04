@@ -4,8 +4,8 @@ import type { Client, InStatement } from "@libsql/client";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import express from "express";
-import request from "supertest";
-import type { Test } from "supertest";
+import request from "../test-utils/supertest.ts";
+import type { Test } from "../test-utils/supertest.ts";
 import type { RunAlfredOptions } from "../alfred/alfred-types.ts";
 
 const testState = vi.hoisted(() => ({

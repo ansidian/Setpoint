@@ -12,7 +12,7 @@ test("uses the mobile shell, hides calendar entry points, and returns from inbox
 
   await page.getByLabel("Open more actions").click();
   const overflowMenu = page.getByRole("menu", { name: "More actions" });
-  const historyItem = overflowMenu.getByRole("button", { name: "Snapshots" });
+  const historyItem = overflowMenu.getByRole("menuitem", { name: "Snapshots" });
   await expect(historyItem).toBeVisible();
   await expect(overflowMenu.getByText("Calendar", { exact: true })).toHaveCount(0);
   await page.getByLabel("Open more actions").click();
@@ -25,5 +25,5 @@ test("uses the mobile shell, hides calendar entry points, and returns from inbox
 
   await page.goBack();
   await expect(page.getByTestId("dashboard-body-mobile")).toBeVisible();
-  await expect(page.getByTestId("inbox-mobile-list")).toHaveCount(0);
+  await expect(page.getByTestId("inbox-mobile-list")).toBeHidden();
 });

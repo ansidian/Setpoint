@@ -9,10 +9,18 @@ import {
 } from './lib/component-sizes.mts'
 import { findForbiddenSourcePatterns } from './lib/design-policy.mts'
 import { findTestSourcePolicyViolations } from './lib/test-source-policy.mts'
+import {
+  checkTestArchitectureBaseline,
+  checkTestArchitectureBaselineGrowth,
+  collectTestArchitectureMetrics,
+  normalizeTestArchitecturePath,
+} from './lib/test-architecture-policy.mts'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
 const testSizeBaselinePath = 'scripts/lib/test-size-baseline.json'
+const testArchitectureBaselinePath = 'scripts/lib/test-architecture-baseline.json'
+const testArchitectureApprovalsPath = 'scripts/lib/test-architecture-baseline-approvals.json'
 
 const failures: string[] = []
 const warnings: string[] = []
@@ -75,7 +83,7 @@ async function checkAgentsMap() {
     failures.push(`AGENTS.md is ${lines.length} lines; keep it near 100 lines and move details into docs/`)
   }
 
-  for (const pointer of ['ARCHITECTURE.md', 'PRODUCT.md', 'DESIGN.md', 'gitignored for this personal single-user repo', 'npm run check:harness']) {
+  for (const pointer of ['ARCHITECTURE.md', 'PRODUCT.md', 'DESIGN.md', 'gitignored for this personal single-user repo', 'npm run check:harness', 'A product requirement or regression triggers a test']) {
     if (!agents.includes(pointer)) {
       failures.push(`AGENTS.md should point to ${pointer}`)
     }
@@ -259,6 +267,62 @@ async function checkTestSourcePolicies() {
   }
 }
 
+async function checkTestArchitecture() {
+  const testFiles = [
+    ...await collectFiles('src', isSizeCheckedTest),
+    ...await collectFiles('server', isSizeCheckedTest),
+    ...await collectFiles('scripts', isSizeCheckedTest),
+  ]
+  const files = Object.fromEntries(await Promise.all(testFiles.map(async (file) => [
+    normalizeTestArchitecturePath(file),
+    collectTestArchitectureMetrics(await readText(file)),
+  ])))
+  const baseline = JSON.parse(await readText(testArchitectureBaselinePath))
+  const approvals = JSON.parse(await readText(testArchitectureApprovalsPath))
+  const result = checkTestArchitectureBaseline({ files, baseline })
+  failures.push(...result.failures)
+  warnings.push(...result.warnings)
+
+  const configuredRef = process.env.TEST_ARCHITECTURE_BASE_REF?.trim()
+  const localBaselineChanged = !configuredRef && execFileSync(
+    "git",
+    ["status", "--porcelain", "--", testArchitectureBaselinePath],
+    { cwd: root, encoding: "utf8" },
+  ).trim().length > 0
+  const comparisonRef = configuredRef || (localBaselineChanged ? "HEAD" : "")
+  if (comparisonRef) {
+    let previousBaselineSource: string | null = null
+    try {
+      previousBaselineSource = execFileSync(
+        "git",
+        ["show", `${comparisonRef}:${testArchitectureBaselinePath}`],
+        { cwd: root, encoding: "utf8" },
+      )
+    } catch {
+      try {
+        execFileSync("git", ["rev-parse", "--verify", comparisonRef], {
+          cwd: root,
+          encoding: "utf8",
+          stdio: "pipe",
+        })
+        warnings.push(`no test-architecture baseline exists at ${comparisonRef}; treating this as the initial ratchet establishment`)
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        failures.push(`could not resolve the test-architecture comparison ref ${comparisonRef}: ${detail}`)
+      }
+    }
+    if (previousBaselineSource) {
+      try {
+        const previousBaseline = JSON.parse(previousBaselineSource)
+        failures.push(...checkTestArchitectureBaselineGrowth({ previousBaseline, baseline, approvals }))
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        failures.push(`could not parse the test-architecture baseline from ${comparisonRef}: ${detail}`)
+      }
+    }
+  }
+}
+
 async function checkStaticDesignPolicies() {
   const componentPaths = await collectFiles('src', (relativePath) =>
     /\.(?:jsx|tsx)$/.test(relativePath) && !relativePath.includes('.test.'),
@@ -309,6 +373,7 @@ checkExportReachability()
 await checkSourceFileSizes()
 await checkTestFileSizes()
 await checkTestSourcePolicies()
+await checkTestArchitecture()
 await checkStaticDesignPolicies()
 
 for (const warning of warnings) {

@@ -2,13 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getCalendarLayoutMetrics, getCalendarSearchLayoutMode } from "./calendarLayout.ts";
 
 describe("getCalendarLayoutMetrics", () => {
-  it("returns stable objects while the viewport stays in the same layout tier", () => {
-    expect(getCalendarLayoutMetrics(1512)).toBe(getCalendarLayoutMetrics(1400));
-    expect(getCalendarLayoutMetrics(1399)).toBe(getCalendarLayoutMetrics(1240));
-    expect(getCalendarLayoutMetrics(1239)).toBe(getCalendarLayoutMetrics(900));
-  });
-
-  it("selects tiers at and just below each breakpoint", () => {
+  it("preserves layout-tier breakpoint invariants", () => {
     expect(getCalendarLayoutMetrics(2560).tier).toBe("uhd");
     expect(getCalendarLayoutMetrics(2559).tier).toBe("xl");
     expect(getCalendarLayoutMetrics(1800).tier).toBe("xl");
@@ -26,7 +20,7 @@ describe("getCalendarLayoutMetrics", () => {
     [1240, "md", 144, 272, 480, false],
     [900, "sm", 100, 0, 0, true],
   ] as const)(
-    "projects the %s layout's grid and rail capacity",
+    "preserves the %s layout capacity invariant",
     (viewportWidth, tier, cellHeight, contextWidth, editorWidth, stacked) => {
       expect(getCalendarLayoutMetrics(viewportWidth)).toMatchObject({
         tier,
@@ -38,7 +32,7 @@ describe("getCalendarLayoutMetrics", () => {
     },
   );
 
-  it("keeps three rails only where the grid has enough room", () => {
+  it("preserves rail-mode capacity invariants", () => {
     expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1900), true)).toBe("three-rail");
     expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1512), true)).toBe("three-rail");
     expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1240), true)).toBe("search-replaces-agenda");

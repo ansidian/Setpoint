@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 import zlib from "zlib";
 import { responseCompression } from "./compression.ts";
 

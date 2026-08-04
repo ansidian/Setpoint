@@ -10,7 +10,7 @@ Per-source modules for the `/api/dashboard/current` engine. Each provider owns i
 - `deadlines-provider.ts` — deadlines (Todoist-backed) current data
 - `bills-provider.ts` — bills/Actual current data + maintenance-refresh reason
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Related
 

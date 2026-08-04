@@ -35,6 +35,7 @@
     "server/snapshots/snapshot-test-fixtures.ts": "Shared snapshot and migration test database fixtures with multiple active test consumers",
     "server/test-utils/auth-db.ts": "Shared in-memory authentication database fixture with multiple active test consumers",
     "server/test-utils/completed-tasks-db.ts": "Shared completed-task database fixture used by task service and tombstone tests",
+    "server/test-utils/supertest.ts": "Shared managed HTTP transport used by route suites to avoid per-request listener and client socket churn",
     "server/test-utils/temp-dir.ts": "Windows-safe test filesystem helper with its own direct contract and multiple active consumers",
     "server/triage/triage-worker.test-utils.ts": "Shared migrated triage-worker database fixture with multiple active worker-suite consumers",
     "src/components/calendar/CalendarEventEditor.test-setup.ts": "Shared event-editor provider mock setup used across the editor integration suites",

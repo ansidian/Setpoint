@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
-import request from "supertest";
+import request, { type Test } from "../../test-utils/supertest.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDb = { execute: vi.fn() };
@@ -43,7 +43,7 @@ function makeApp(service = serviceMock(), wake = vi.fn()) {
   return { app, service, wake };
 }
 
-function authenticated(requestBuilder: request.Test): request.Test {
+function authenticated(requestBuilder: Test): Test {
   return requestBuilder.set("Cookie", ["ea_session=session-token"]);
 }
 

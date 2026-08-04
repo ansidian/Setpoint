@@ -1,8 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
+import { MobileBottomNav } from "../shell/MobileBottomNav.tsx";
+import useCalendarWorkspaceState from "../dashboard/useCalendarWorkspaceState.ts";
+
+const { getCalendarSearch: getCalendarSearchApi } = await import("@/api");
+type CalendarSearchResult = Awaited<ReturnType<typeof getCalendarSearchApi>>["results"][number];
 
 describe("CalendarModal today agenda behavior", () => {
   it("dims past event days more than future days without dimming today", () => {
@@ -274,4 +280,282 @@ describe("CalendarModal today agenda behavior", () => {
     }
   });
 
+});
+
+const originalMatchMedia = window.matchMedia;
+
+function setMatchMedia(matches: boolean) {
+  window.matchMedia = vi.fn((query: string) => ({
+    matches: query.includes("max-width") ? matches : false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia;
+}
+
+function renderNavigationCalendar({
+  focusDate = "2026-09-10",
+  eventsData = { getEvents: () => [] },
+}: {
+  focusDate?: string;
+  eventsData?: Record<string, unknown>;
+} = {}) {
+  return render(wrapWithDashboard(
+    <CalendarModal
+      open
+      onClose={() => {}}
+      view="events"
+      onViewChange={() => {}}
+      focusDate={focusDate}
+      eventsData={eventsData}
+      billsData={{}}
+      deadlinesData={{}}
+    />,
+  ));
+}
+
+function MobileCalendarRetapHarness() {
+  const [tab, setTab] = useState<"calendar" | "dashboard">("calendar");
+  const [, setCalendarMounted] = useState(true);
+  const workspace = useCalendarWorkspaceState({
+    isMobile: true,
+    tab,
+    setShellTab: (next) => setTab(next === "calendar" ? "calendar" : "dashboard"),
+    setCalendarMounted,
+    liveData: { actualConfigured: false } as never,
+    loadCalendarDeadlines: () => {},
+    loadCalendarBills: () => {},
+  });
+  return (
+    <>
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view={workspace.calendarView}
+        onViewChange={workspace.changeCalendarView}
+        focusDate="2026-09-10"
+        jumpTodayRequestId={workspace.calendarJumpTodayRequestId}
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{}}
+      />
+      <MobileBottomNav
+        tab={tab}
+        onTab={(next) => setTab(next === "calendar" ? "calendar" : "dashboard")}
+        onRetap={(next) => {
+          if (next === "calendar") workspace.jumpCalendarToToday();
+        }}
+        inboxUnreadSignalCount={0}
+      />
+    </>
+  );
+}
+
+const planningEvent = {
+  id: "event-9",
+  title: "Planning target",
+  startMs: Date.parse("2026-07-14T17:00:00.000Z"),
+  endMs: Date.parse("2026-07-14T18:00:00.000Z"),
+  allDay: false,
+  color: "#4285f4",
+  writable: true,
+};
+
+const planningSearchResult: CalendarSearchResult = {
+  id: "event:event-9",
+  type: "event",
+  itemId: "event-9",
+  itemDate: "2026-07-14",
+  title: "Planning target",
+  subtitle: "10:00 AM",
+  meta: "10:00 AM",
+  sourceLabel: "Work",
+  sourceColor: "#4285f4",
+  coverageKey: "events:work",
+  activation: {
+    view: "events",
+    detailView: "events",
+    dateKey: "2026-07-14",
+    itemId: "event-9",
+  },
+  payload: planningEvent,
+};
+
+function mockCalendarSearch(result: CalendarSearchResult = planningSearchResult) {
+  vi.mocked(getCalendarSearchApi).mockResolvedValue({
+    results: [result],
+    totalMatches: 1,
+    query: "planning",
+    scope: "events",
+    limit: 50,
+    coverage: { sources: [] },
+    truncated: false,
+  });
+}
+
+describe("CalendarModal navigation behavior", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-24T19:00:00.000Z"));
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("moves the rendered mobile workspace to today from the Today affordance", async () => {
+    window.innerWidth = 390;
+    setMatchMedia(true);
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-09-10"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={{ ensureRange: vi.fn().mockResolvedValue(null) }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    expect(await screen.findByText("September 2026")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Jump to today" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("June 2026")).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: "Jump to today" })).toBeNull();
+  });
+
+  it("does not jump on initial mount, then moves the rendered mobile workspace when its active Calendar tab is re-tapped", async () => {
+    window.innerWidth = 390;
+    setMatchMedia(true);
+
+    render(wrapWithDashboard(<MobileCalendarRetapHarness />));
+    expect(await screen.findByText("September 2026")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("June 2026")).toBeTruthy();
+    });
+  });
+
+  it("keeps the mobile workspace unchanged when its active Events toggle is tapped", async () => {
+    window.innerWidth = 390;
+    setMatchMedia(true);
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-09-10"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={{ ensureRange: vi.fn().mockResolvedValue(null) }}
+        deadlinesData={{}}
+      />,
+    ));
+    expect(await screen.findByText("September 2026")).toBeTruthy();
+    const eventsTab = screen.getByRole("tab", { name: "Events" });
+    expect(eventsTab.getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.click(eventsTab);
+
+    expect(screen.getByText("September 2026")).toBeTruthy();
+    expect(eventsTab.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("navigates, selects, and opens detail when a rendered search result is activated", async () => {
+    window.innerWidth = 1900;
+    setMatchMedia(false);
+    mockCalendarSearch();
+
+    renderNavigationCalendar({
+      focusDate: "2026-05-12",
+      eventsData: {
+        getEvents: (year: number, month: number) => (
+          year === 2026 && month === 6 ? [planningEvent] : []
+        ),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-search-header-button"));
+    fireEvent.change(screen.getByRole("textbox", { name: "Calendar search" }), {
+      target: { value: "planning" },
+    });
+
+    const resultRow = await screen.findByTestId("calendar-search-result-row");
+    expect(resultRow.textContent).toContain("Planning target");
+    fireEvent.click(resultRow);
+
+    const detail = await screen.findByTestId("calendar-floating-detail-panel");
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title-month").textContent).toBe("July");
+      expect(screen.getByTestId("calendar-month-title-year").textContent).toBe("2026");
+      expect(screen.getByTestId("calendar-cell-14").getAttribute("aria-selected")).toBe("true");
+      expect(within(detail).getByTestId("calendar-selected-event-title").textContent).toContain("Planning target");
+    });
+    expect(detail.getAttribute("data-anchor-kind")).toBe("search-result-row");
+  });
+
+  it("keeps a search result on a visible trailing day in the current rendered month", async () => {
+    window.innerWidth = 1900;
+    setMatchMedia(false);
+    const trailingEvent = {
+      ...planningEvent,
+      id: "event-trailing",
+      title: "Trailing target",
+      startMs: Date.parse("2026-05-02T17:00:00.000Z"),
+      endMs: Date.parse("2026-05-02T18:00:00.000Z"),
+    };
+    mockCalendarSearch({
+      ...planningSearchResult,
+      id: "event:event-trailing",
+      itemId: "event-trailing",
+      itemDate: "2026-05-02",
+      title: "Trailing target",
+      activation: {
+        view: "events",
+        detailView: "events",
+        dateKey: "2026-05-02",
+        itemId: "event-trailing",
+      },
+      payload: trailingEvent,
+    });
+
+    renderNavigationCalendar({
+      focusDate: "2026-04-20",
+      eventsData: {
+        getEvents: (year: number, month: number) => (
+          year === 2026 && month === 4 ? [trailingEvent] : []
+        ),
+      },
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-search-header-button"));
+    fireEvent.change(screen.getByRole("textbox", { name: "Calendar search" }), {
+      target: { value: "trailing" },
+    });
+    fireEvent.click(await screen.findByTestId("calendar-search-result-row"));
+
+    const detail = await screen.findByTestId("calendar-floating-detail-panel");
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title-month").textContent).toBe("April");
+      expect(screen.getByTestId("calendar-cell-2026-05-02").getAttribute("aria-selected")).toBe("true");
+      expect(within(detail).getByTestId("calendar-selected-event-title").textContent).toContain("Trailing target");
+    });
+  });
 });

@@ -280,36 +280,6 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
   });
 
-  it("opens hidden deadline overlay rows with deadline floating detail metadata", async () => {
-    const onOpenFloatingDetail = vi.fn();
-    const deadline = {
-      id: "todo-hidden",
-      calendarItemKind: "deadline",
-      title: "Hidden deadline",
-      due_date: "2026-04-20",
-      due_time: "5:00 PM",
-      status: "incomplete",
-    };
-
-    renderGrid({
-      20: [
-        ...Array.from({ length: 5 }, (_, index) => buildEvent(20, index)),
-        deadline,
-      ],
-    }, { onOpenFloatingDetail });
-
-    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
-    const overflowLayer = await screen.findByTestId("calendar-cell-inline-overflow");
-    fireEvent.click(within(overflowLayer).getByText("Hidden deadline"));
-
-    expect(onOpenFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
-      itemId: "deadline:todo-hidden:2026-04-20",
-      view: "events",
-      detailKind: "deadline",
-      itemsSnapshot: [expect.objectContaining({ id: "todo-hidden" })],
-    }));
-  });
-
   it("renders pinned ghost spans as inert aria-hidden chips", () => {
     renderGrid({}, {
       ghostPreview: {
@@ -355,21 +325,6 @@ describe("CalendarGrid overflow motion coverage", () => {
       expect(layers).toHaveLength(1);
       expect(within(layers[0]!).getByText("Day 16 event 4")).toBeTruthy();
       expect(within(layers[0]!).queryByText("Day 15 event 4")).toBeNull();
-    });
-  });
-
-  it("closes inline overflow on Escape", async () => {
-    renderGrid({
-      15: Array.from({ length: 5 }, (_, index) => buildEvent(15, index)),
-    });
-
-    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-15"));
-    expect(await screen.findByTestId("calendar-cell-inline-overflow")).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: "Escape" });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
     });
   });
 

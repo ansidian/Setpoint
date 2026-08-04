@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import cookieParser from "cookie-parser";
-import request from "supertest";
-import type { Response as SuperTestResponse } from "supertest";
+import request from "../test-utils/supertest.ts";
+import type { Response as SuperTestResponse } from "../test-utils/supertest.ts";
 import bcrypt from "bcrypt";
 import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import type {

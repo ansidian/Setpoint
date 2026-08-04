@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 
 const webhookApi = vi.hoisted(() => ({
   handleTodoistWebhookDelivery: vi.fn(async () => ({ accepted: true, duplicate: false })),

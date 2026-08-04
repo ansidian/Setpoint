@@ -36,7 +36,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `capabilities.ts` — authenticated, metadata-only capability status projection with optional explicit refresh
 - `onboarding.ts` — authenticated, allowlisted onboarding progress, finish, and reopen mutations
 
-Tests are not listed; adjacent test files cover their same-named route by convention.
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

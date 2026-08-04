@@ -6,41 +6,38 @@ import {
   createTriageBatchContext,
   pruneCompletedTriageJobs,
 } from "./triage-worker.ts";
+import { claimNextEmailTriageJob } from "./triage-job-store.ts";
 
 describe("email triage worker jobs", () => {
-  it("does not process a job when another worker claims it first", async () => {
-    const queuedJob = {
-      id: 7,
-      user_id: "user-1",
-      account_id: "gmail-work",
-      email_id: "msg-1",
-      job_type: "email_triage",
-      status: "queued",
-    };
-    const dbClient = {
-      execute: vi.fn(async (query) => {
-        const sql = typeof query === "string" ? query : query.sql;
-        if (sql.includes("FROM ea_triage_jobs") && sql.includes("LIMIT 1")) {
-          return { rows: [queuedJob] };
-        }
-        if (sql.includes("SELECT email_triage_mode")) {
-          return { rows: [{ email_triage_mode: "real" }] };
-        }
-        if (sql.includes("UPDATE ea_triage_jobs") && sql.includes("status = 'running'")) {
-          return { rows: [], rowsAffected: 0 };
-        }
-        throw new Error(`Unexpected SQL: ${sql}`);
-      }),
-    };
+  it("allows only one worker to claim a queued job", async () => {
+    const dbClient = await createMigratedDb();
+    try {
+      await queueEmail(dbClient);
+      const now = new Date("2026-05-03T12:00:00.000Z");
 
-    await expect(processNextEmailTriageJob({ dbClient }))
-      .resolves
-      .toEqual({ processed: false });
-    // P2-18: claim-first means the lost-race path is just the claim SELECT + the
-    // 0-row claim UPDATE; the previous speculative peek SELECT (and the mode read,
-    // which no longer runs when the claim is lost) are gone.
-    expect(dbClient.execute).toHaveBeenCalledTimes(2);
-    });
+      const claims = await Promise.all([
+        claimNextEmailTriageJob(dbClient, now),
+        claimNextEmailTriageJob(dbClient, now),
+      ]);
+
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      expect(claims.find(Boolean)).toMatchObject({
+        email_id: "msg-1",
+        status: "queued",
+      });
+      const persisted = await dbClient.execute({
+        sql: "SELECT status, attempts, locked_at FROM ea_triage_jobs WHERE email_id = ?",
+        args: ["msg-1"],
+      });
+      expect(persisted.rows[0]).toMatchObject({
+        status: "running",
+        attempts: 1,
+        locked_at: now.toISOString(),
+      });
+    } finally {
+      await dbClient.close();
+    }
+  });
 
   it("recovers stale running email triage and Gmail history jobs without resetting attempts", async () => {
     const dbClient = await createMigratedDb();

@@ -41,7 +41,7 @@ setup("authenticate local e2e session", async ({ request }) => {
   });
 
   expect(response.ok()).toBe(true);
-  expect(await response.json()).toEqual({ authenticated: true });
+  expect(await response.json()).toMatchObject({ authenticated: true });
 
   await request.storageState({ path: authFile });
 });

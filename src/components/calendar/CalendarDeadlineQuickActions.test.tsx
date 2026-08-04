@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext";
 import type { ComponentType, ReactNode } from "react";
@@ -118,6 +118,69 @@ describe("Calendar deadline quick actions", () => {
     expect(onCompleteTask).toHaveBeenCalledWith("deadline-context-status", expect.objectContaining({
       id: "deadline-context-status",
     }));
+  });
+
+  it("hides completion from the context menu for a completed deadline", async () => {
+    renderDeadlineModal({
+      deadlines: [{
+        id: "deadline-context-complete",
+        title: "Submitted report",
+        due_date: "2026-04-20",
+        status: "complete",
+      }],
+    });
+
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+
+    const menu = await screen.findByTestId("calendar-deadline-context-menu");
+    expect(within(menu).getByTestId("calendar-deadline-context-edit")).toBeTruthy();
+    expect(within(menu).getByTestId("calendar-deadline-context-delete")).toBeTruthy();
+    expect(within(menu).queryByTestId("calendar-deadline-context-complete")).toBeNull();
+  });
+
+  it("routes a desktop deadline drag to the Dashboard deadline action boundary", async () => {
+    const onMoveTask = vi.fn();
+    renderDeadlineModal({
+      deadlines: [{
+        id: "todo-drag",
+        title: "Move planning task",
+        due_date: "2026-04-20",
+        due_time: "3:00 PM",
+        is_recurring: false,
+        status: "incomplete",
+      }],
+      deadlineActions: { onMoveTask },
+    });
+
+    const dataTransfer = {
+      effectAllowed: "",
+      getData: vi.fn((type: string) => type === "application/x-ea-calendar-deadline"
+        ? JSON.stringify({
+            id: "todo-drag",
+            due_date: "2026-04-20",
+            due_time: "3:00 PM",
+            is_recurring: false,
+            status: "incomplete",
+          })
+        : ""),
+      setData: vi.fn(),
+    };
+    const sourceChip = await screen.findByTestId("calendar-cell-item-chip");
+    expect(sourceChip.getAttribute("draggable")).toBe("true");
+    fireEvent.dragStart(sourceChip, { dataTransfer });
+    const targetCell = screen.getByTestId("calendar-cell-21");
+    fireEvent.dragEnter(targetCell, { dataTransfer });
+    expect(targetCell.getAttribute("data-drop-target")).toBe("true");
+    fireEvent.drop(targetCell, { dataTransfer });
+
+    // test-architecture: allow-boundary-interaction -- Calendar forwards the rendered drag result to the Dashboard deadline mutation boundary.
+    await waitFor(() => expect(onMoveTask).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "todo-drag", due_time: "3:00 PM" }),
+      "2026-04-21",
+    ));
   });
 
   it("dismisses the context menu on an outside pointerdown", async () => {

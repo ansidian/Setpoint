@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import express from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 import { activateOwner, clearOwnerContext } from "../auth/owner-context.ts";
 import { requireClaimedInstance } from "./owner-gate.ts";
 

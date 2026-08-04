@@ -27,6 +27,12 @@ export default defineConfig([
     files: ['**/*.test.{ts,tsx,mts,cts}'],
     rules: {
       'import/no-unresolved': ['error', { ignore: ['\\?', '^node:'] }],
+      'no-restricted-imports': ['error', {
+        paths: [{
+          name: 'supertest',
+          message: 'Use server/test-utils/supertest.ts so route tests share a managed listener and keep-alive agent.',
+        }],
+      }],
     },
   },
   {

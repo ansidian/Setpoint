@@ -6,7 +6,7 @@ test.describe.configure({ timeout: 60_000 });
 async function openCalendar(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("shell-header-desktop")).toBeVisible({ timeout: 15_000 });
-  await page.keyboard.press("c");
+  await page.getByRole("tab", { name: "Calendar" }).click();
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible({ timeout: 15_000 });
 }
 
@@ -26,7 +26,7 @@ test("navigates the calendar month from vertical wheel input on the grid", async
   );
 
   await page.getByTestId("calendar-grid-shell").hover();
-  await page.mouse.wheel(0, 220);
+  await page.mouse.wheel(0, 800);
 
   await expect(page.getByTestId("calendar-month-title")).toContainText(nextMonthLabel);
 });

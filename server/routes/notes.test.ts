@@ -3,7 +3,7 @@ import { createClient } from "@libsql/client";
 import type { Client, Row } from "@libsql/client";
 import express from "express";
 import type { Express, NextFunction, Request, Response } from "express";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 
 const testState = vi.hoisted<{ db: { current: Client | null }; batchCalls: unknown[][] }>(() => ({
   db: { current: null },

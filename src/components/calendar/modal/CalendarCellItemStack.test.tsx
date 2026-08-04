@@ -67,38 +67,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(chip.textContent).not.toContain("All day");
   });
 
-  it("does not report unchanged hidden composition on parent rerender", () => {
-    const onHiddenItemsChange = vi.fn();
-    const items = [
-      { id: "visible", leadingLabel: "9:00 AM", title: "Visible hold" },
-      { id: "hidden-time", leadingLabel: "11:59 PM", title: "Hidden deadline" },
-      { id: "hidden-later", leadingLabel: "10:00 PM", title: "Other hidden" },
-    ];
-    const { rerender } = render(
-      <CalendarCellItemStack
-        dateKey="2026-05-10"
-        day={10}
-        items={items}
-        metrics={{ ...metrics, fullVisibleCount: 1, overflowVisibleCount: 1 }}
-        onHiddenItemsChange={onHiddenItemsChange}
-      />,
-    );
-
-    expect(onHiddenItemsChange).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <CalendarCellItemStack
-        dateKey="2026-05-10"
-        day={10}
-        items={items.map((item) => ({ ...item }))}
-        metrics={{ ...metrics, fullVisibleCount: 1, overflowVisibleCount: 1 }}
-        onHiddenItemsChange={onHiddenItemsChange}
-      />,
-    );
-
-    expect(onHiddenItemsChange).toHaveBeenCalledTimes(1);
-  });
-
   it("uses selection id for chip anchors while preserving source occurrence id", () => {
     const onSelectItem = vi.fn();
     render(
@@ -207,57 +175,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
         expect.objectContaining({ id: "real-3" }),
       ]),
     }));
-  });
-
-  it("replaces the overflow trigger with inline hidden chips when inline overflow is open", () => {
-    render(
-      <CalendarCellItemStack
-        day={20}
-        items={[
-          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
-          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
-          { id: "real-4", leadingLabel: "12:00 PM", title: "Fourth hold" },
-        ]}
-        metrics={metrics}
-        inlineOverflowOpen
-      />,
-    );
-
-    expect(screen.queryByText("+2 more")).toBeNull();
-    expect(screen.getByTestId("calendar-cell-inline-overflow")).toBeTruthy();
-    expect(screen.getByText("Third hold").closest("[data-testid='calendar-cell-item-chip']")).toBeTruthy();
-    expect(screen.getByText("Fourth hold").closest("[data-testid='calendar-cell-item-chip']")).toBeTruthy();
-  });
-
-  it("selects inline hidden chips without closing overflow", () => {
-    const onSelectItem = vi.fn();
-    const onCloseInlineOverflow = vi.fn();
-
-    render(
-      <CalendarCellItemStack
-        day={20}
-        items={[
-          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
-          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold", detailKind: "deadline" },
-        ]}
-        metrics={metrics}
-        onSelectItem={onSelectItem}
-        inlineOverflowOpen
-        inlineOverflowVisibleCount={2}
-        onCloseInlineOverflow={onCloseInlineOverflow}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Third hold"));
-
-    expect(onSelectItem).toHaveBeenCalledWith("real-3", expect.objectContaining({
-      anchorKind: "overflow-row",
-      detailKind: "deadline",
-      triggerElement: expect.any(HTMLElement),
-    }));
-    expect(onCloseInlineOverflow).not.toHaveBeenCalled();
   });
 
   it("does not move focus into inline overflow when auto focus is disabled", () => {

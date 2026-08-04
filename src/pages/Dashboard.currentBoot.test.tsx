@@ -17,17 +17,13 @@ const mocks = vi.hoisted(() => ({
   syncActiveSnapshot: vi.fn(),
   getSettings: vi.fn(),
   getCalendarDeadlines: vi.fn(),
-  seedDeadlineRangeData: vi.fn(),
   calendarRangeEnsureRange: vi.fn(),
   calendarRangeMarkStale: vi.fn(),
   calendarRangeRefreshRangeInPlace: vi.fn(),
   deadlineRangeEnsureRange: vi.fn(),
   deadlineRangeMarkStale: vi.fn(),
-  deadlineRangeUpdateData: vi.fn(),
   billsRangeEnsureRange: vi.fn(),
   billsRangeMarkStale: vi.fn(),
-  billsRangeSeedData: vi.fn(),
-  billsRangeUpdateData: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
@@ -56,8 +52,6 @@ vi.mock("../hooks/calendar/useCalendarDomainRange", () => ({
       data: null,
       ensureRange: isDeadlineRange ? mocks.deadlineRangeEnsureRange : mocks.billsRangeEnsureRange,
       markStale: isDeadlineRange ? mocks.deadlineRangeMarkStale : mocks.billsRangeMarkStale,
-      seedData: isDeadlineRange ? mocks.seedDeadlineRangeData : mocks.billsRangeSeedData,
-      updateData: isDeadlineRange ? mocks.deadlineRangeUpdateData : mocks.billsRangeUpdateData,
       loading: false,
       error: null,
     };
@@ -139,22 +133,5 @@ describe("Dashboard current boot", () => {
     expect(screen.getByTestId("snapshot-id").textContent).toBe("42");
     expect(mocks.getCurrentDashboard).toHaveBeenCalledTimes(1);
     expect(mocks.getActiveSnapshot).not.toHaveBeenCalled();
-    await waitFor(() => {
-      expect(mocks.seedDeadlineRangeData).toHaveBeenCalledWith(currentPayload.deadlines);
-    });
-  });
-
-  it("seeds the deadline month range from current dashboard data", async () => {
-    render(
-      <BrowserRouter>
-        <Dashboard />
-      </BrowserRouter>,
-    );
-
-    await waitFor(() => expect(screen.getByTestId("dashboard-shell")).toBeTruthy());
-
-    await waitFor(() => {
-      expect(mocks.seedDeadlineRangeData).toHaveBeenCalledWith(currentPayload.deadlines);
-    });
   });
 });

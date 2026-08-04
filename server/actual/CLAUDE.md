@@ -31,7 +31,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-connection-settings.ts` — verify-before-swap persistence for Actual connection candidates
 - `actual-transactions-read.ts` — low-level on-disk transaction reader: queries `db.sqlite` directly via `@libsql/client` without booting the SDK
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

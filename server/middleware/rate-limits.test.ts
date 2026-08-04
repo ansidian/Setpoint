@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import express from "express";
-import { createServer } from "node:http";
-import request from "supertest";
+import request from "../test-utils/supertest.ts";
 import type { RequestHandler } from "express";
-import type { Response as SuperTestResponse } from "supertest";
+import type { Response as SuperTestResponse } from "../test-utils/supertest.ts";
 import {
   makeBillExtractLimiter,
   makeAlfredRunLimiter,
@@ -20,27 +19,12 @@ function buildApp(limiter: RequestHandler) {
 }
 
 async function exhaustLimiter(limiter: RequestHandler, requestCount: number) {
-  const server = createServer(buildApp(limiter));
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      server.off("error", reject);
-      resolve();
-    });
-  });
-
-  try {
-    const client = request(server);
-    let lastRes: SuperTestResponse | undefined;
-    for (let i = 0; i < requestCount; i += 1) {
-      lastRes = await client.get("/probe");
-    }
-    return lastRes!;
-  } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => error ? reject(error) : resolve());
-    });
+  const client = request(buildApp(limiter));
+  let lastRes: SuperTestResponse | undefined;
+  for (let i = 0; i < requestCount; i += 1) {
+    lastRes = await client.get("/probe");
   }
+  return lastRes!;
 }
 
 describe("rate-limits", () => {

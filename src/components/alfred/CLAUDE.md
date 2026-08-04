@@ -16,7 +16,7 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 - `AlfredTransactionBreakdown.tsx` — auto-rendered breakdown card for the summarize_transactions tool result (spending or income): accent-driven proportional bars, period/group-by header, "Other" greyed, reduced-motion-safe bar-grow animation
 - `AlfredBreakdown.tsx` — auto-rendered grouped-count card for the group_items tool result: count bars + adaptive drill-down (buckets ≤5 inline, >5 collapse) reusing the per-kind leaf row components exported from `AlfredRows.tsx`; cite-by-reference (ADR 0006)
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Local patterns
 

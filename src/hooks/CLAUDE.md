@@ -32,7 +32,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
 - `settings/useTransactionImports.ts` — Finance transaction-import mappings, recent runs, stale-safe mutations, visibility refresh, and active-only polling
 
-(Tests are not listed: `X.test.ts(x)` covers `X` by convention.)
+(Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 
 ## Related
 

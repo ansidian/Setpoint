@@ -1,47 +1,40 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { createClient, type Client, type InStatement } from "@libsql/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Client, InStatement, TransactionMode } from "@libsql/client";
 import cookieParser from "cookie-parser";
-import crypto from "crypto";
 import express, { type Express } from "express";
-import type { Server } from "http";
-import type { AddressInfo } from "net";
-import request, { type Test } from "supertest";
+import request, { fetchApp } from "../test-utils/supertest.ts";
+import { createMigratedDb } from "../triage/triage-worker.test-utils.ts";
+import { seedOwner, seedSession } from "../test-utils/auth-db.ts";
 
-interface DashboardRouteTestState {
-  db: { current: Client | null };
-  getCurrentDashboard: Mock<(...args: unknown[]) => unknown>;
-  getDashboardSystemHealth: Mock<(...args: unknown[]) => unknown>;
-  requestCurrentDashboardRefresh: Mock<(...args: unknown[]) => unknown>;
-  syncCurrentDashboard: Mock<(...args: unknown[]) => unknown>;
-}
-
-const testState = vi.hoisted((): DashboardRouteTestState => ({
+const testState = vi.hoisted<{ db: { current: Client | null } }>(() => ({
   db: { current: null },
-  getCurrentDashboard: vi.fn(),
-  getDashboardSystemHealth: vi.fn(),
-  requestCurrentDashboardRefresh: vi.fn(),
-  syncCurrentDashboard: vi.fn(),
 }));
 
+function currentDb(): Client {
+  if (!testState.db.current) throw new Error("Test database is not initialized");
+  return testState.db.current;
+}
+
+// test-architecture: allow-boundary-mock -- injects an ephemeral database while the real dashboard service composes cache, snapshot, and provider health state.
 vi.mock("../db/connection.ts", () => ({
   default: {
-    execute: (statement: string | InStatement) => testState.db.current!.execute(statement),
-    executeMultiple: (sql: string) => testState.db.current!.executeMultiple(sql),
-    batch: (statements: InStatement[]) => testState.db.current!.batch(statements),
+    execute: (statement: InStatement) => currentDb().execute(statement),
+    executeMultiple: (sql: string) => currentDb().executeMultiple(sql),
+    batch: (
+      statements: Parameters<Client["batch"]>[0],
+      mode?: TransactionMode,
+    ) => currentDb().batch(statements, mode),
+    transaction: (mode?: TransactionMode) => currentDb().transaction(mode),
   },
 }));
 
-vi.mock("../dashboard/current-service.ts", () => ({
-  getCurrentDashboard: (...args: unknown[]) => testState.getCurrentDashboard(...args),
-  getDashboardSystemHealth: (...args: unknown[]) => testState.getDashboardSystemHealth(...args),
-  requestCurrentDashboardRefresh: (...args: unknown[]) => testState.requestCurrentDashboardRefresh(...args),
-  syncCurrentDashboard: (...args: unknown[]) => testState.syncCurrentDashboard(...args),
-}));
-
 process.env.EA_USER_ID = "u1";
+process.env.NODE_ENV = "test";
 
 const { default: router } = await import("./dashboard.ts");
 const { clearCurrentDashboardEventSubscribers } = await import("../dashboard/current-events.ts");
+const { clearCurrentDashboardRefreshState } = await import("../dashboard/current-service.ts");
+const { saveCacheRow } = await import("../dashboard/currentCacheStore.ts");
 
 function makeApp(): Express {
   const app = express();
@@ -50,72 +43,38 @@ function makeApp(): Express {
   return app;
 }
 
-function listen(app: Express): Promise<Server> {
-  return new Promise<Server>((resolve) => {
-    const server = app.listen(0, () => resolve(server));
-  });
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    server.close((err) => (err ? reject(err) : resolve()));
-  });
-}
-
-function hashSessionToken(raw: string): string {
-  return `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
-}
-
-async function createMigratedDb() {
-  const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(`
-    CREATE TABLE ea_owner (
-      singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
-      user_id TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      auth_mode TEXT NOT NULL DEFAULT 'password_or_passkey',
-      security_generation INTEGER NOT NULL DEFAULT 1,
-      claimed_at INTEGER NOT NULL
-    );
-    CREATE TABLE ea_sessions (
-      token TEXT PRIMARY KEY,
-      expires_at INTEGER NOT NULL,
-      authenticated_at INTEGER NOT NULL DEFAULT 0,
-      password_authenticated_at INTEGER NOT NULL DEFAULT 0,
-      security_generation INTEGER NOT NULL DEFAULT 1,
-      auth_method TEXT NOT NULL DEFAULT 'legacy'
-    );
-    INSERT INTO ea_owner
-      (singleton_id, user_id, password_hash, auth_mode, security_generation, claimed_at)
-    VALUES (1, 'u1', 'unused-test-hash', 'password_or_passkey', 1, 1);
-  `);
-  await db.execute({
-    sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-    args: [hashSessionToken("cookie-session"), Date.now() + 60_000],
-  });
-  return db;
-}
-
-function auth(requestBuilder: Test): Test {
-  return requestBuilder.set("Cookie", ["ea_session=cookie-session"]);
-}
-
 describe("dashboard routes", () => {
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     testState.db.current = await createMigratedDb();
-    clearCurrentDashboardEventSubscribers();
-    testState.getCurrentDashboard.mockReset().mockResolvedValue({ weather: { temp: 71 } });
-    testState.getDashboardSystemHealth.mockReset().mockResolvedValue({ systemStatus: { state: "current" } });
-    testState.requestCurrentDashboardRefresh.mockReset().mockResolvedValue({
-      refresh: { mode: "manual", scheduled: [], skipped: [] },
+    await seedOwner(currentDb(), { userId: "u1", passwordHash: "test-password-hash" });
+    await seedSession(currentDb());
+    await currentDb().execute({
+      sql: "INSERT INTO ea_settings (user_id) VALUES (?)",
+      args: ["u1"],
     });
-    testState.syncCurrentDashboard.mockReset().mockResolvedValue({ weather: { temp: 80 } });
+    const now = new Date("2026-05-03T19:00:00.000Z");
+    await saveCacheRow("u1", "weather_current", { temp: 71, summary: "Clear" }, { now });
+    await saveCacheRow("u1", "calendar_current", [], { now });
+    await saveCacheRow("u1", "deadlines_current", { upcoming: [], stats: { total: 0 } }, { now });
+    await saveCacheRow("u1", "bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: false,
+      actualBudgetUrl: null,
+      billsSyncHealth: { state: "unconfigured", configured: false },
+    }, { now });
+    clearCurrentDashboardEventSubscribers();
   });
 
   afterEach(async () => {
     clearCurrentDashboardEventSubscribers();
+    clearCurrentDashboardRefreshState();
     await testState.db.current?.close?.();
     testState.db.current = null;
+    vi.useRealTimers();
   });
 
   it("requires a cookie session before loading current dashboard data", async () => {
@@ -123,49 +82,47 @@ describe("dashboard routes", () => {
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ message: "Not authenticated" });
-    expect(testState.getCurrentDashboard).not.toHaveBeenCalled();
   });
 
-  it("routes current dashboard reads to the current-dashboard service", async () => {
-    const res = await auth(request(makeApp()).get("/api/dashboard/current"));
+  it("returns the cached current-dashboard envelope through the real service", async () => {
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ weather: { temp: 71 } });
-    expect(testState.getCurrentDashboard).toHaveBeenCalledWith("u1");
+    expect(res.body).toMatchObject({
+      weather: { temp: 71, summary: "Clear" },
+      calendar: [],
+      deadlines: { upcoming: [], stats: { total: 0 } },
+      bills: [],
+      actualConfigured: false,
+      refresh: {
+        mode: "passive",
+        scheduled: [],
+        skipped: expect.arrayContaining([
+          { key: "weather_current", reason: "fresh" },
+          { key: "calendar_current", reason: "fresh" },
+        ]),
+      },
+      providerHealth: { currentData: { state: "current" } },
+    });
+    expect(res.body.contentKey).toEqual(expect.any(String));
   });
 
-  it("routes dashboard health reads to the current-dashboard service", async () => {
-    const res = await auth(request(makeApp()).get("/api/dashboard/health"));
+  it("returns dashboard health from the real cache and provider projections", async () => {
+    const res = await request(makeApp())
+      .get("/api/dashboard/health")
+      .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ systemStatus: { state: "current" } });
-    expect(testState.getDashboardSystemHealth).toHaveBeenCalledWith("u1");
-  });
-
-  it("routes manual refresh requests to the current-dashboard service", async () => {
-    const res = await auth(request(makeApp()).post("/api/dashboard/current/refresh"));
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ refresh: { mode: "manual", scheduled: [], skipped: [] } });
-    expect(testState.requestCurrentDashboardRefresh).toHaveBeenCalledWith("u1");
-  });
-
-  it("routes force sync requests to the current-dashboard service", async () => {
-    const res = await auth(request(makeApp()).post("/api/dashboard/current/sync"));
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ weather: { temp: 80 } });
-    expect(testState.syncCurrentDashboard).toHaveBeenCalledWith("u1");
-  });
-
-  it("translates current-dashboard service failures to route errors", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    testState.getCurrentDashboard.mockRejectedValueOnce(new Error("service down"));
-
-    const res = await auth(request(makeApp()).get("/api/dashboard/current"));
-
-    expect(res.status).toBe(500);
-    expect(res.body).toEqual({ message: "Failed to fetch current dashboard data" });
+    expect(res.body).toMatchObject({
+      providerHealth: {
+        currentData: { state: "current" },
+        bills: { state: "unconfigured", configured: false },
+      },
+      systemStatus: { state: "current" },
+    });
+    expect(res.body.fetchedAt).toEqual(expect.any(String));
   });
 
   it("requires a cookie session before opening the current-dashboard event stream", async () => {
@@ -176,33 +133,26 @@ describe("dashboard routes", () => {
   });
 
   it("opens an authenticated SSE stream with a connected event", async () => {
-    const server = await listen(makeApp());
-    const { port } = server.address() as AddressInfo;
-    const response = await fetch(`http://127.0.0.1:${port}/api/dashboard/current/events`, {
+    const response = await fetchApp(makeApp(), "/api/dashboard/current/events", {
       headers: { cookie: "ea_session=cookie-session" },
     });
 
-    try {
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type")).toContain("text/event-stream");
-      expect(response.headers.get("cache-control")).toContain("no-cache");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("cache-control")).toContain("no-cache");
 
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let chunk = "";
-      for (let readCount = 0; readCount < 3 && !chunk.includes("dashboard-current-connected"); readCount += 1) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        chunk += decoder.decode(value, { stream: true });
-      }
-
-      expect(chunk).toContain("retry: 5000\n");
-      expect(chunk).toContain("event: dashboard-current-connected\n");
-      expect(chunk).toContain("\"type\":\"dashboard_current_connected\"");
-      await reader.cancel();
-    } finally {
-      server.closeAllConnections?.();
-      await closeServer(server);
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let chunk = "";
+    for (let readCount = 0; readCount < 3 && !chunk.includes("dashboard-current-connected"); readCount += 1) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunk += decoder.decode(value, { stream: true });
     }
+
+    expect(chunk).toContain("retry: 5000\n");
+    expect(chunk).toContain("event: dashboard-current-connected\n");
+    expect(chunk).toContain("\"type\":\"dashboard_current_connected\"");
+    await reader.cancel();
   });
 });

@@ -82,6 +82,12 @@ export function applySnapshotTrashOptimistic(
   return next;
 }
 
+export function canSnoozeUntil(timestamp: unknown, now = Date.now()): timestamp is number {
+  return typeof timestamp === "number"
+    && Number.isFinite(timestamp)
+    && timestamp > now;
+}
+
 export function shouldHandleInboxUndoHotkey({
   key,
   metaKey = false,

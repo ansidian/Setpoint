@@ -580,6 +580,16 @@ async function installBaseDashboardFixtures(page: Page, {
     return json(route, latest.deadlines);
   });
 
+  await page.route("**/api/calendar/deadlines/range**", async (route) => {
+    const latest = buildBriefing({ events, emailAccounts, briefing });
+    return json(route, {
+      ...latest.deadlines,
+      minDate: null,
+      errors: [],
+      syncHealth: { state: "current", configured: false },
+    });
+  });
+
   await page.route("**/api/calendar/range**", async (route) => {
     const url = new URL(route.request().url());
     const start = new Date(`${url.searchParams.get("start")}T00:00:00`).getTime();
@@ -887,6 +897,27 @@ export async function installDashboardInboxFixtures(page: Page) {
     return json(route, {
       body: liveEmail?.body_preview || "Loaded email body",
     });
+  });
+
+  await page.route("**/api/briefing/email-search**", async (route) => {
+    const query = new URL(route.request().url()).searchParams.get("q") || "";
+    const matches = query.toLowerCase().includes("project")
+      ? [{
+          uid: "email-action",
+          account_id: "acc-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#89dceb",
+          from_name: "Dana",
+          from_address: "dana@example.com",
+          subject: "Project budget sign-off",
+          body_snippet: "Need your approval on the revised budget today.",
+          email_date: "2026-04-19T15:30:00.000Z",
+          read: false,
+          hasBill: true,
+        }]
+      : [];
+    return json(route, { query, results: matches, total: matches.length, has_more: false });
   });
 
   return {

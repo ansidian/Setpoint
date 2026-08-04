@@ -21,12 +21,12 @@ function settle(overrides: Partial<CalendarScrollSettleInput> = {}) {
 }
 
 describe("resolveScrollSettle", () => {
-  it("defers (and decides nothing else) while the crossing commit is still in flight", () => {
+  it("preserves the in-flight crossing defer invariant", () => {
     const result = settle({ scrollDataIndex: 1, scrollMountIndex: 0 });
     expect(result).toEqual({ shouldDefer: true });
   });
 
-  describe("user-driven settle (not suppressed)", () => {
+  describe("user-driven settle invariants", () => {
     // Settled on index 1 (a month away from the origin prevView at index 0).
     const result = settle({
       scrollDataIndex: 1,
@@ -36,16 +36,10 @@ describe("resolveScrollSettle", () => {
       wasSuppressed: false,
     });
 
-    it("does not defer", () => {
+    it("does not defer and reports the settled month invariant", () => {
       expect(result.shouldDefer).toBe(false);
-    });
-
-    it("reports the settled month and aligns the resting row", () => {
       expect(result.settledMonth).toEqual(at(1));
       expect(result.shouldAlign).toBe(true);
-    });
-
-    it("emits a scroll-driven fetch settle without re-issuing display/label changes", () => {
       // The crossing's onScroll already issued display/label; the settle must not repeat them.
       expect(result.displayMonthChange).toBeNull();
       expect(result.labelMonthChange).toBeNull();
@@ -54,7 +48,7 @@ describe("resolveScrollSettle", () => {
     });
   });
 
-  describe("suppressed settle that crossed to a new month", () => {
+  describe("suppressed cross-month settle invariants", () => {
     const result = settle({
       scrollDataIndex: 2,
       scrollMountIndex: 2,
@@ -63,20 +57,17 @@ describe("resolveScrollSettle", () => {
       wasSuppressed: true,
     });
 
-    it("re-asserts the display month and marks the panel scroll-driven again", () => {
+    it("re-asserts display, label, and scroll-driven state without alignment", () => {
       expect(result.settledAway).toBe(true);
       expect(result.displayMonthChange).toEqual(at(2));
       expect(result.scrollDrivenAfter).toBe(true);
-    });
-
-    it("still emits the label change but never aligns a programmatic landing", () => {
       expect(result.labelMonthChange).toEqual(at(2));
       expect(result.shouldAlign).toBe(false);
       expect(result.fetchSettleArgs).toEqual({ ...at(2), scrollDriven: true });
     });
   });
 
-  describe("suppressed settle that landed on the same month", () => {
+  describe("suppressed same-month settle invariants", () => {
     const result = settle({
       scrollDataIndex: 0,
       scrollMountIndex: 0,
@@ -85,20 +76,17 @@ describe("resolveScrollSettle", () => {
       wasSuppressed: true,
     });
 
-    it("does not re-issue the display change and clears scroll-driven", () => {
+    it("clears scroll-driven state without re-issuing display and preserves the echo label", () => {
       expect(result.settledAway).toBe(false);
       expect(result.displayMonthChange).toBeNull();
       expect(result.scrollDrivenAfter).toBe(false);
-    });
-
-    it("reports a non-scroll-driven fetch settle (an echo of the navigation)", () => {
       expect(result.fetchSettleArgs).toEqual({ ...at(0), scrollDriven: false });
       // The label still re-syncs even when the month did not change.
       expect(result.labelMonthChange).toEqual(at(0));
     });
   });
 
-  it("marks a same-month user settle scroll-driven (isolates the !wasSuppressed operand)", () => {
+  it("preserves the same-month user settle scroll-driven invariant", () => {
     // wasSuppressed=false AND settledAway=false: scrollDriven must still be true
     // via `!wasSuppressed`, not via settledAway.
     const result = settle({
@@ -112,13 +100,13 @@ describe("resolveScrollSettle", () => {
     expect(result.fetchSettleArgs!.scrollDriven).toBe(true);
   });
 
-  it("treats a missing prior view as settled-away", () => {
+  it("preserves the missing-prior-view settled-away invariant", () => {
     const result = settle({ scrollMountIndex: 0, prevView: null, wasSuppressed: true });
     expect(result.settledAway).toBe(true);
     expect(result.displayMonthChange).toEqual(at(0));
   });
 
-  it("derives the label-month change from labelIndex, independently of the settled month", () => {
+  it("preserves independent label-month derivation invariant", () => {
     const result = settle({
       scrollDataIndex: 2,
       scrollMountIndex: 2,

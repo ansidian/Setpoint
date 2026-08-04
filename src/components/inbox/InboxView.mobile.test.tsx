@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView";
 import type { InboxActiveSnapshotController, InboxViewProps } from "./InboxView";
-import { searchEmails, markEmailAsRead } from "../../api";
+import { searchEmails } from "../../api";
 import {
   makeActiveSnapshot,
   makeInboxAccounts,
@@ -409,7 +409,7 @@ describe("InboxView mobile", () => {
     expect(screen.getByText("Fresh live ping")).toBeTruthy();
   });
 
-  it("announces a silent toggle-read mutation via a status region and replaces the text on a subsequent toggle", async () => {
+  it("forces an empty-to-text live-region transition for repeated identical read announcements", async () => {
     // renderInbox() does not wire onLiveReadOverrideChange to real state, so
     // this test builds its own harness (mirroring the "updates active
     // snapshot read state" test below) where toggling read actually flips
@@ -438,7 +438,40 @@ describe("InboxView mobile", () => {
     }
 
     activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot(),
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [
+            {
+              id: 11,
+              snapshot_item_id: 11,
+              uid: "snapshot-msg-1",
+              email_id: "snapshot-msg-1",
+              account_id: "gmail-work",
+              lane: "needs_attention",
+              subject: "Snapshot action",
+              from_name: "Dana",
+              from_address: "dana@example.com",
+              date: "2026-05-03T15:00:00.000Z",
+              read: true,
+            },
+            {
+              id: 12,
+              snapshot_item_id: 12,
+              uid: "snapshot-msg-2",
+              email_id: "snapshot-msg-2",
+              account_id: "gmail-work",
+              lane: "needs_attention",
+              subject: "Second snapshot action",
+              from_name: "Morgan",
+              from_address: "morgan@example.com",
+              date: "2026-05-03T14:00:00.000Z",
+              read: true,
+            },
+          ],
+          fyi: [],
+          noise: [],
+        },
+      }),
       loading: false,
       error: null,
       refresh: vi.fn(),
@@ -457,31 +490,20 @@ describe("InboxView mobile", () => {
     await waitFor(() => {
       expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
     });
-    await waitFor(() => {
-      expect(markEmailAsRead).toHaveBeenCalledWith("snapshot-msg-1");
-    });
-
     fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /Mark unread/i }));
 
-    // The mutation is silent (no undo toast) but must still land in a live
-    // region so assistive tech announces it. The real text is set via a
-    // microtask (clear-to-"" then set) so the region always goes through an
-    // empty→text transition, even when consecutive announcements repeat the
-    // same string — wait for that microtask to flush.
-    await waitFor(() => {
-      expect(screen.getByRole("status").textContent).toBe("Marked as unread");
-    });
+    // The silent mutation still announces through an empty→text live-region transition.
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Marked as unread"));
 
-    // Re-open the (now unread) row and toggle it back to read: the status
-    // region's text must be replaced, not merely appended to.
-    fireEvent.click(screen.getByText("Snapshot action"));
+    // A repeated announcement must clear first so assistive tech hears it again.
+    fireEvent.click(screen.getByText("Second snapshot action"));
     fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Mark read/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Mark unread/i }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("status").textContent).toBe("Marked as read");
-    });
+    expect(screen.getByRole("status").textContent).toBe("");
+
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Marked as unread"));
   });
 
   it("deselects the active desktop email on browser back", async () => {

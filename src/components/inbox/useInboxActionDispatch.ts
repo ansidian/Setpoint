@@ -23,6 +23,7 @@ import {
   applyLiveTrashOptimistic,
   applySnapshotTrashOptimistic,
   buildTrashCommand,
+  canSnoozeUntil,
 } from "./inboxCommandModel";
 import {
   getSnapshotReopenLane,
@@ -449,7 +450,7 @@ export default function useInboxActionDispatch({
       if (catchUpSelected) return;
       if (readOnly) return;
       const untilTs = Number(payload);
-      if (!Number.isFinite(untilTs) || untilTs <= Date.now()) return;
+      if (!canSnoozeUntil(untilTs)) return;
       setSnoozedMap((prev) => {
         const next = new Map(prev);
         next.set(uid, untilTs);

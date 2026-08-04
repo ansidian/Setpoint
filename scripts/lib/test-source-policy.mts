@@ -29,6 +29,7 @@ const reviewedFullCalendarTestOwners = new Set([
   "src/components/calendar/CalendarModal.events.test.tsx",
   "src/components/calendar/CalendarModal.layout.test.tsx",
   "src/components/calendar/CalendarModal.mini-calendar.test.tsx",
+  "src/components/calendar/CalendarModal.search-workflow.test.tsx",
   "src/components/calendar/CalendarModal.todoist-deadlines.test.tsx",
   "src/components/calendar/CalendarModal.todoist-editor.test.tsx",
   "src/components/calendar/CalendarModal.workspace-create.test.tsx",
@@ -194,7 +195,7 @@ export function findTestSourcePolicyViolations(
       report(
         node,
         "full-calendar-test-harness",
-        "new tests must use a direct model, hook, or component owner instead of mounting the full CalendarModal workspace",
+        "new tests must use a stable Calendar behavior facade or a genuine pure algorithm contract instead of mounting the full CalendarModal workspace",
       )
     }
 

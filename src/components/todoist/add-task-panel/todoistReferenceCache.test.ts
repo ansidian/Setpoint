@@ -5,6 +5,7 @@ const { mockGetTodoistProjects, mockGetTodoistLabels } = vi.hoisted(() => ({
   mockGetTodoistLabels: vi.fn(),
 }));
 
+// test-architecture: allow-boundary-mock -- src/api.ts is the client/server Todoist boundary; cache tests control provider responses.
 vi.mock("../../../api", () => ({
   getTodoistProjects: mockGetTodoistProjects,
   getTodoistLabels: mockGetTodoistLabels,

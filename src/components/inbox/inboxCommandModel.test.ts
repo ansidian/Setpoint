@@ -3,6 +3,7 @@ import {
   applyLiveTrashOptimistic,
   applySnapshotTrashOptimistic,
   buildTrashCommand,
+  canSnoozeUntil,
   shouldHandleInboxUndoHotkey,
 } from "./inboxCommandModel";
 
@@ -56,6 +57,16 @@ describe("inbox command model", () => {
       pending: false,
     });
     expect(applySnapshotTrashOptimistic(hidden, "42", false).has("42")).toBe(false);
+  });
+
+  it("accepts only finite future snooze boundaries", () => {
+    const now = 1_000;
+    expect(canSnoozeUntil(1_001, now)).toBe(true);
+    expect(canSnoozeUntil(1_000, now)).toBe(false);
+    expect(canSnoozeUntil(999, now)).toBe(false);
+    expect(canSnoozeUntil(Number.NaN, now)).toBe(false);
+    expect(canSnoozeUntil(Number.POSITIVE_INFINITY, now)).toBe(false);
+    expect(canSnoozeUntil("1001", now)).toBe(false);
   });
 
   it("scopes Cmd/Ctrl+Z to a live undo slot outside editable targets", () => {

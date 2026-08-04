@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createClient } from "@libsql/client";
 import type { InStatement } from "@libsql/client";
 
 interface MetadataFixture {
@@ -31,14 +32,78 @@ const mockDb = {
   execute: vi.fn<(statement: InStatement) => Promise<{ rows: Array<Record<string, unknown>>; rowsAffected?: number }>>(),
   batch: vi.fn<(statements: InStatement[]) => Promise<unknown>>(),
 };
+// Actual Budget is the provider boundary, local metadata is the filesystem
+// boundary, and the database is the durable persistence boundary for this
+// service facade. The workflow cases inject those boundaries, then inspect a
+// real ephemeral database for reconciliation state.
+// test-architecture: allow-boundary-mock -- Actual Budget provider results are injected to exercise partial-success and hard-failure outcomes through the Bills facade.
 vi.mock("../actual/actual.ts", () => mockActual);
+// test-architecture: allow-boundary-mock -- The local Actual cache is a filesystem/provider boundary; the facade tests supply fresh metadata for invalidation.
 vi.mock("../actual/actual-local-metadata.ts", () => mockActualLocal);
 vi.mock("./bill-extract.ts", () => ({ trimBillBody: ({ body }: { body: string }) => body.slice(0, 100) }));
+// test-architecture: allow-boundary-mock -- The service's default database is replaced by an ephemeral client or controlled provider fixture per behavior case.
 vi.mock("../db/connection.ts", () => ({ default: mockDb }));
 
 const originalFetch = global.fetch;
 const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
+let reconciliationDb: ReturnType<typeof createClient> | null = null;
+
+async function useReconciliationDb() {
+  reconciliationDb = createClient({ url: "file::memory:" });
+  await reconciliationDb.executeMultiple(`
+    CREATE TABLE ea_actual_metadata_mirror (
+      user_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'needs_sync',
+      accounts_json TEXT NOT NULL DEFAULT '[]',
+      payees_json TEXT NOT NULL DEFAULT '[]',
+      categories_json TEXT NOT NULL DEFAULT '[]',
+      schedules_json TEXT NOT NULL DEFAULT '[]',
+      recent_transactions_json TEXT NOT NULL DEFAULT '[]',
+      last_success_at TEXT,
+      last_attempt_at TEXT,
+      last_error TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE ea_bills_mirror_state (
+      user_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'needs_sync',
+      actual_configured INTEGER NOT NULL DEFAULT 0,
+      actual_budget_url TEXT,
+      last_success_at TEXT,
+      last_attempt_at TEXT,
+      last_error TEXT,
+      pending_refresh_at TEXT,
+      refresh_started_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+  mockDb.execute.mockImplementation(async (statement) => {
+    const result = await reconciliationDb!.execute(statement);
+    return result as unknown as { rows: Array<Record<string, unknown>>; rowsAffected?: number };
+  });
+  return reconciliationDb;
+}
+
+async function expectReconciliationState() {
+  if (!reconciliationDb) throw new Error("reconciliation database was not initialized");
+  const mirror = await reconciliationDb.execute({
+    sql: "SELECT status, pending_refresh_at FROM ea_bills_mirror_state WHERE user_id = ?",
+    args: ["u1"],
+  });
+  expect(mirror.rows).toHaveLength(1);
+  expect(mirror.rows[0]).toMatchObject({
+    status: "needs_sync",
+    pending_refresh_at: expect.any(String),
+  });
+  await vi.waitFor(async () => {
+    const projection = await reconciliationDb!.execute({
+      sql: "SELECT status, last_error FROM ea_actual_metadata_mirror WHERE user_id = ?",
+      args: ["u1"],
+    });
+    expect(projection.rows).toEqual([expect.objectContaining({ status: "current", last_error: null })]);
+  });
+}
 
 function metadataProjectionRow(metadata: MetadataFixture = {}) {
   return {
@@ -85,10 +150,14 @@ beforeEach(() => {
   mockDb.batch.mockReset();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  vi.restoreAllMocks();
   global.fetch = originalFetch;
   process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
   process.env.OPENAI_API_KEY = originalOpenAiKey;
+  stopBillsMirrorRefreshWorker();
+  await reconciliationDb?.close();
+  reconciliationDb = null;
 });
 
 const {
@@ -200,11 +269,13 @@ describe("Bill Pay resolver service", () => {
       amount: 64.2,
       due_date: "2026-05-29",
     });
+    // test-architecture: allow-boundary-interaction -- The injected occurrence reader is the database/Actual read boundary; this date range must stay aligned with the resolved bill date.
     expect(occurrenceReader).toHaveBeenCalledWith(
       "u1",
       { start: "2026-05-29", end: "2026-05-29" },
       { dbClient: mockDb },
     );
+    // test-architecture: allow-boundary-interaction -- The injected transaction reader is the database/Actual read boundary; these filters prevent reconciliation against unrelated transactions.
     expect(transactionReader).toHaveBeenCalledWith("u1", {
       start: "2026-05-29",
       end: "2026-05-29",
@@ -212,8 +283,6 @@ describe("Bill Pay resolver service", () => {
       include_transfers: true,
       limit: 100,
     });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
-    expect(mockActualLocal.openLocalBudgetClient).not.toHaveBeenCalled();
   });
 
   it("resolves a pasted-text mapping sample without requiring an email id", async () => {
@@ -269,22 +338,14 @@ describe("Bill Pay resolver service", () => {
 
 describe("sendBill", () => {
   it("forwards to actual.sendBill and schedules a delayed mirror refresh", async () => {
+    await useReconciliationDb();
     mockActual.sendBill.mockResolvedValueOnce({ id: "bill-1" });
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
     });
-    mockDb.execute.mockResolvedValue(rowResult());
     const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
     expect(out).toEqual({ id: "bill-1" });
-    expect(mockActual.sendBill).toHaveBeenCalledWith({ payee: "x", amount: 10, type: "bill" }, "u1");
-    expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
-      sql: expect.stringMatching(/ea_bills_mirror_state/i),
-      args: expect.arrayContaining(["u1"]),
-    }));
-    await vi.waitFor(() => {
-      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
-    });
-    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
+    await expectReconciliationState();
   });
 });
 
@@ -302,24 +363,16 @@ describe("lightweight write reconciliation on sync-push failure", () => {
     });
   }
 
-  function expectMirrorRefreshScheduled() {
-    expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
-      sql: expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
-      args: expect.arrayContaining(["u1"]),
-    }));
-  }
-
   afterEach(() => {
     stopBillsMirrorRefreshWorker();
   });
 
   it("sendBill: schedules a mirror refresh and returns partial success instead of throwing", async () => {
+    await useReconciliationDb();
     mockActual.sendBill.mockRejectedValueOnce(localWriteSyncError());
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
     });
-    // SELECT pending_refresh_at (mirror state) then the upsert.
-    mockDb.execute.mockResolvedValue(rowResult());
 
     const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
 
@@ -328,58 +381,48 @@ describe("lightweight write reconciliation on sync-push failure", () => {
       localWriteApplied: true,
       code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
     });
-    expectMirrorRefreshScheduled();
-    await vi.waitFor(() => {
-      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
-    });
-    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
+    await expectReconciliationState();
   });
 
   it("markBillPaid: still reconciles and does not surface a hard failure", async () => {
+    await useReconciliationDb();
     mockActual.markBillPaid.mockRejectedValueOnce(localWriteSyncError());
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
     });
-    mockDb.execute.mockResolvedValue(rowResult());
 
     const out = await markBillPaid("u1", "sched-1");
 
     expect(out).toMatchObject({ syncPending: true, localWriteApplied: true });
-    expectMirrorRefreshScheduled();
-    await vi.waitFor(() => {
-      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
-    });
-    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
+    await expectReconciliationState();
   });
 
   it("createQuickTxn: still reconciles and does not surface a hard failure", async () => {
+    await useReconciliationDb();
     mockActual.createQuickTxn.mockRejectedValueOnce(localWriteSyncError());
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
     });
-    mockDb.execute.mockResolvedValue(rowResult());
 
     const out = await createQuickTxn("u1", { accountName: "Checking", amount: 5, payee: "p" });
 
     expect(out).toMatchObject({ syncPending: true, localWriteApplied: true });
-    expectMirrorRefreshScheduled();
-    await vi.waitFor(() => {
-      expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
-    });
-    expect(mockActual.invalidateActualMetadataCache).toHaveBeenCalledTimes(1);
+    await expectReconciliationState();
   });
 
   it("re-throws errors without localWriteApplied and skips mirror scheduling", async () => {
+    await useReconciliationDb();
     mockActual.sendBill.mockRejectedValueOnce(
       Object.assign(new Error("worker boot failed"), { code: "ACTUAL_WORKER_FAILED" }),
     );
-    mockDb.execute.mockResolvedValue(rowResult());
 
     await expect(sendBill("u1", { payee: "x", amount: 10, type: "bill" }))
       .rejects.toMatchObject({ code: "ACTUAL_WORKER_FAILED" });
-    expect(mockDb.execute).not.toHaveBeenCalledWith(expect.objectContaining({
-      sql: expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
-    }));
+    const mirror = await reconciliationDb!.execute({
+      sql: "SELECT status, pending_refresh_at FROM ea_bills_mirror_state WHERE user_id = ?",
+      args: ["u1"],
+    });
+    expect(mirror.rows).toEqual([]);
   });
 });
 
@@ -412,12 +455,6 @@ describe("hydrateActualCache", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActualLocal.hydrateLocalActualCache).toHaveBeenCalledWith("u1", { dbClient: mockDb });
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
-      refresh: false,
-      localOnly: true,
-    });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
     expect(out).toMatchObject({
       success: true,
       hydrated: true,
@@ -446,7 +483,6 @@ describe("listAccounts", () => {
     ]));
     const out = await listAccounts("u1");
     expect(out).toEqual([{ id: "a1" }]);
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
   });
 
   it("does not spawn Actual for empty degraded metadata on render-facing reads", async () => {
@@ -469,11 +505,10 @@ describe("listAccounts", () => {
       status: 503,
       message: /Actual metadata projection is unavailable/,
     });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
   });
 
   it("can explicitly refresh empty metadata projections through the worker after lightweight projection fails", async () => {
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockDb.execute
       .mockResolvedValueOnce(rowResult([
         {
@@ -498,30 +533,5 @@ describe("listAccounts", () => {
     const out = await getMetadata("u1", { allowRefresh: true });
 
     expect(out.accounts).toEqual([{ id: "a1", name: "Checking" }]);
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(1, "u1", {
-      refresh: false,
-      localOnly: true,
-    });
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "u1", { refresh: true });
-    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1", { forceWorker: true, forceRefresh: true });
-    expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
-      sql: expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
-    }));
-    expect(consoleWarn).toHaveBeenNthCalledWith(
-      1,
-      "[EA] Cached Actual metadata projection failed:",
-      "lightweight metadata unavailable",
-    );
-    expect(consoleWarn).toHaveBeenNthCalledWith(
-      2,
-      "[EA] Lightweight Actual metadata projection failed:",
-      "lightweight metadata unavailable",
-    );
-    expect(consoleWarn).toHaveBeenNthCalledWith(
-      3,
-      "[EA] Falling back to Actual worker metadata projection:",
-      "lightweight metadata unavailable",
-    );
-    consoleWarn.mockRestore();
   });
 });

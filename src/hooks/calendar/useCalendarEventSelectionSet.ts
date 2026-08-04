@@ -8,7 +8,7 @@ import {
   createCalendarEventSelectionSet,
   getOrderedCalendarEventSelection,
   isCalendarEventSelected,
-  removeCalendarEventSelection,
+  removeCalendarEventsFromSelection,
   resolveCalendarEventActionScope,
   toggleCalendarEventSelection,
   type CalendarEventClipboard,
@@ -102,16 +102,9 @@ export default function useCalendarEventSelectionSet({
     ));
   }, []);
   const removeFromCalendarEventSelectionSet = useCallback((events: CalendarEventValue | CalendarEventValue[]) => {
-    const identities = (Array.isArray(events) ? events : [events])
-      .map((event) => calendarEventSelectionIdentity(event))
-      .filter((identity): identity is string => Boolean(identity));
-    if (!identities.length) return;
     setCalendarEventSelectionSet((current) => {
       if (calendarEventSelectionSize(current) === 0) return current;
-      const next = identities.reduce(
-        (selection, identity) => removeCalendarEventSelection(selection, identity),
-        current,
-      );
+      const next = removeCalendarEventsFromSelection(current, events);
       return calendarEventSelectionSize(next) === calendarEventSelectionSize(current)
         ? current
         : next;

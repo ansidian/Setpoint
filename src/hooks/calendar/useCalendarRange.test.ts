@@ -59,20 +59,12 @@ describe("useCalendarRange", () => {
     act(() => {
       ensurePromise = result.current.ensureRange("2026-04-18", "2026-04-25");
     });
-    expect(getCalendarRange).toHaveBeenCalledTimes(1);
-    expect(getCalendarRange).toHaveBeenNthCalledWith(1, "2026-04-01", "2026-04-30");
 
     await act(async () => {
       resolveVisible({ events: [visibleEvent] });
     });
 
     await expect(ensurePromise).resolves.toEqual([visibleEvent]);
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
-    expect(getCalendarRange).toHaveBeenNthCalledWith(1, "2026-04-01", "2026-04-30");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(2, "2026-01-01", "2026-02-28");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(3, "2026-03-01", "2026-03-31");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(4, "2026-05-01", "2026-06-30");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(5, "2026-07-01", "2026-07-31");
     expect(result.current.loading).toBe(false);
   });
 
@@ -106,78 +98,53 @@ describe("useCalendarRange", () => {
     expect(result.current.cacheStamp).not.toBe(afterFetch);
   });
 
-  it("fetches a month range with a three-month warm buffer and caches by YYYY-MM", async () => {
-    getCalendarRange.mockResolvedValue({
-      events: [{ startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "E1", source: "s", color: "#1" }],
-    });
-    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
-
-    await act(async () => {
-      await result.current.ensureRange("2026-04-18", "2026-04-25");
-    });
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
-    expect(getCalendarRange).toHaveBeenNthCalledWith(1, "2026-04-01", "2026-04-30");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(2, "2026-01-01", "2026-02-28");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(3, "2026-03-01", "2026-03-31");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(4, "2026-05-01", "2026-06-30");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(5, "2026-07-01", "2026-07-31");
-
-    // Second call in same month → cached, no new fetch
-    await act(async () => {
-      await result.current.ensureRange("2026-04-20", "2026-04-22");
-    });
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
-  });
-
-  it("batches contiguous missing months when range spans multiple months", async () => {
-    getCalendarRange.mockResolvedValue({ events: [] });
-    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
-
-    await act(async () => {
-      await result.current.ensureRange("2026-04-28", "2026-05-03");
-    });
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
-    expect(getCalendarRange).toHaveBeenNthCalledWith(1, "2026-04-01", "2026-05-31");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(2, "2026-01-01", "2026-02-28");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(3, "2026-03-01", "2026-03-31");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(4, "2026-06-01", "2026-07-31");
-    expect(getCalendarRange).toHaveBeenNthCalledWith(5, "2026-08-01", "2026-08-31");
-  });
-
   it("dedupes concurrent visible fetches before warming the month buffer", async () => {
     let resolve!: (value: CalendarRangeTestResponse) => void;
     getCalendarRange.mockReturnValue(new Promise((r) => { resolve = r; }));
     const { result } = renderHook(() => useCalendarRange({ disabled: false }));
 
+    let first!: Promise<CalendarRangeEvent[]>;
+    let second!: Promise<CalendarRangeEvent[]>;
     act(() => {
-      result.current.ensureRange("2026-04-18", "2026-04-25");
-      result.current.ensureRange("2026-04-18", "2026-04-25");
+      first = result.current.ensureRange("2026-04-18", "2026-04-25");
+      second = result.current.ensureRange("2026-04-18", "2026-04-25");
     });
     expect(getCalendarRange).toHaveBeenCalledTimes(1);
-    expect(getCalendarRange).toHaveBeenNthCalledWith(1, "2026-04-01", "2026-04-30");
 
     await act(async () => {
       resolve({ events: [] });
+      await Promise.all([first, second]);
     });
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
+    await expect(first).resolves.toEqual([]);
+    await expect(second).resolves.toEqual([]);
   });
 
   it("invalidate() clears the cache", async () => {
-    getCalendarRange.mockResolvedValue({ events: [] });
+    const original = { id: "event-1", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "Original" };
+    const refreshed = { ...original, title: "Refreshed" };
+    getCalendarRange
+      .mockResolvedValueOnce({ events: [original] })
+      .mockResolvedValue({ events: [refreshed] });
     const { result } = renderHook(() => useCalendarRange({ disabled: false }));
 
     await act(async () => {
-      await result.current.ensureRange("2026-04-18", "2026-04-25");
+      await result.current.ensureRange("2026-04-18", "2026-04-25", { prefetchKeys: ["2026-04"] });
     });
+    expect(result.current.getEvents(2026, 3)).toEqual([original]);
+
     act(() => result.current.invalidate());
     await act(async () => {
-      await result.current.ensureRange("2026-04-18", "2026-04-25");
+      await result.current.ensureRange("2026-04-18", "2026-04-25", { prefetchKeys: ["2026-04"] });
     });
-    expect(getCalendarRange).toHaveBeenCalledTimes(10);
+    expect(result.current.getEvents(2026, 3)).toEqual([refreshed]);
   });
 
   it("refreshRange() refetches cached months and increments revision", async () => {
-    getCalendarRange.mockResolvedValue({ events: [] });
+    const original = { id: "event-1", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "Original" };
+    const refreshed = { ...original, title: "Refreshed" };
+    getCalendarRange
+      .mockResolvedValueOnce({ events: [original] })
+      .mockResolvedValue({ events: [refreshed] });
     const { result } = renderHook(() => useCalendarRange({ disabled: false }));
 
     await act(async () => {
@@ -185,12 +152,14 @@ describe("useCalendarRange", () => {
     });
     expect(result.current.revision).toBe(0);
 
+    let refreshedEvents!: CalendarRangeEvent[];
     await act(async () => {
-      await result.current.refreshRange("2026-04-18", "2026-04-25");
+      refreshedEvents = await result.current.refreshRange("2026-04-18", "2026-04-25");
     });
 
-    expect(getCalendarRange).toHaveBeenCalledTimes(10);
+    expect(refreshedEvents).toEqual([refreshed]);
     expect(result.current.revision).toBe(1);
+    expect(result.current.getEvents(2026, 3)).toEqual([refreshed]);
   });
 
   it("reports per-month cache and loading state", async () => {
@@ -239,7 +208,6 @@ describe("useCalendarRange", () => {
     expect(result.current.getEvents(2026, 3)).toEqual([cached]);
     expect(result.current.isMonthLoading(2026, 3)).toBe(false);
     expect(result.current.staleRefreshPending).toBe(true);
-    expect(getCalendarRange).toHaveBeenCalledTimes(4);
   });
 
   it("applies stale background refreshes without clearing cached visible events first", async () => {
@@ -297,7 +265,6 @@ describe("useCalendarRange", () => {
     expect(events).toEqual([cached]);
     expect(result.current.isMonthLoading(2026, 3)).toBe(false);
     expect(result.current.staleRefreshPending).toBe(true);
-    expect(getCalendarRange).toHaveBeenCalledTimes(4);
   });
 
   it("refreshRangeInPlace() refetches cached months without clearing visible events", async () => {
@@ -321,7 +288,6 @@ describe("useCalendarRange", () => {
     expect(result.current.getEvents(2026, 3)).toEqual([updated]);
     expect(result.current.isMonthLoading(2026, 3)).toBe(false);
     expect(result.current.staleRefreshPending).toBe(false);
-    expect(getCalendarRange).toHaveBeenCalledTimes(4);
   });
 
   it("refetches months whose inherited in-flight fetch was aborted by a previous pass", async () => {
@@ -414,11 +380,9 @@ describe("useCalendarRange", () => {
 
     act(() => result.current.upsertEvents(updated));
     expect(result.current.getEvents(2026, 3)).toEqual([updated]);
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
 
     act(() => result.current.removeEvent("event-1"));
     expect(result.current.getEvents(2026, 3)).toEqual([]);
-    expect(getCalendarRange).toHaveBeenCalledTimes(5);
   });
 
   it("caches spanning events into every touched month and trims by visual overlap", async () => {

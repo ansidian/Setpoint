@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -46,6 +48,8 @@ jobs:
 
       - name: Check agent harness
         run: npm run check:harness
+        env:
+          TEST_ARCHITECTURE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
 
       - name: Build
         run: npm run build
