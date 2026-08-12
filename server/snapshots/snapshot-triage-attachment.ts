@@ -251,6 +251,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId: string, ac
       lane: ARRIVAL_GRACE_QUEUED_LANE,
       triageSource: ARRIVAL_GRACE_SOURCE,
       reason: "email_triage_queued",
+      ...(email.read ? { read: true } : {}),
     },
   });
   return { snapshotId: snapshot!.id, triageId: Number(triageRow.id), scheduledFor };

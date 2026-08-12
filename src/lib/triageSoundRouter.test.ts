@@ -74,4 +74,16 @@ describe("triage sound router", () => {
       registry,
     )).toBeNull();
   });
+
+  it("does not route email-triage sounds for mail that is already read", () => {
+    const readEvent = {
+      ...event("needs_attention_finalized"),
+      details: {
+        ...event("needs_attention_finalized").details,
+        read: true,
+      },
+    };
+
+    expect(resolveTriageSoundForEvent(readEvent, settings, registry)).toBeNull();
+  });
 });

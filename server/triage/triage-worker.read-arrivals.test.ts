@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  clearCurrentDashboardEventSubscribers,
+  subscribeCurrentDashboardEvents,
+} from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 
 describe("email triage worker read-arrivals preference", () => {
   it("continues read arrival-grace rows through the existing triage pipeline when enabled", async () => {
+    clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       from_name: "Project Team",
@@ -50,6 +55,8 @@ describe("email triage worker read-arrivals preference", () => {
         tier,
       })),
     };
+    const events: Record<string, unknown>[] = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event: Record<string, unknown>) => events.push(event));
 
     const result = await processNextEmailTriageJob({
       dbClient,
@@ -68,6 +75,17 @@ describe("email triage worker read-arrivals preference", () => {
       args: ["msg-1"],
     });
     expect(job.rows[0]).toMatchObject({ status: "complete", scheduled_for: null });
+    expect(events).toEqual([
+      expect.objectContaining({
+        source: "email_triage",
+        reason: "email_triage_finalized",
+        details: expect.objectContaining({
+          emailId: "msg-1",
+          read: true,
+        }),
+      }),
+    ]);
+    unsubscribe();
     await dbClient.close();
   });
 

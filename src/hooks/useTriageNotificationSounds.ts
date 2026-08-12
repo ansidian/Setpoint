@@ -25,6 +25,7 @@ interface QueuedSnapshotItem {
   uid?: string | number | null;
   id?: string | number | null;
   account_id?: string | number | null;
+  read?: boolean | null;
 }
 
 interface ActiveSnapshotSoundView {
@@ -220,6 +221,7 @@ export default function useTriageNotificationSounds(): TriageNotificationSoundHa
     if (!activeSnapshot?.snapshot) return;
     const queuedRows = activeSnapshot?.lanes?.queued || [];
     const eventKeys = queuedRows
+      .filter((item) => item.read !== true)
       .map(queuedSnapshotEventKey)
       .filter((eventKey): eventKey is string => Boolean(eventKey));
     if (!queuedSnapshotBaselineSeededRef.current) {

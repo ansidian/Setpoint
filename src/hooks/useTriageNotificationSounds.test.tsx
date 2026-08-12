@@ -202,6 +202,33 @@ describe("useTriageNotificationSounds", () => {
     });
   });
 
+  it("does not play the queued sound when a newly queued snapshot row is already read", async () => {
+    const audio = installAudioBoundary();
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
+
+    act(() => {
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: { queued: [] },
+      });
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: {
+          queued: [{
+            account_id: "icloud",
+            email_id: "icloud-read",
+            read: true,
+          }],
+        },
+      });
+    });
+
+    await act(async () => {});
+    expect(audio.paths).toEqual([]);
+  });
+
   it("plays once when the same queued email arrives via SSE and a snapshot diff", async () => {
     const audio = installAudioBoundary();
     sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");

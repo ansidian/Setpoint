@@ -36,6 +36,7 @@ export interface TriageSoundDashboardEvent {
     eventKey?: unknown;
     emailId?: unknown;
     reason?: unknown;
+    read?: unknown;
   } | null;
 }
 
@@ -78,6 +79,7 @@ export function resolveTriageSoundForEvent(
 ): ResolvedDashboardSound | null {
   const details = event?.details;
   if (event?.source !== "email_triage" || typeof details?.triggerType !== "string") return null;
+  if (details.read === true) return null;
   return resolveDashboardSoundForTrigger(
     details.triggerType,
     settings,

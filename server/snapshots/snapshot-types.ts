@@ -34,6 +34,7 @@ export interface SnapshotEmailSource extends Record<string, unknown> {
   date?: string;
   email_date?: string;
   email_date_at_snapshot?: string;
+  read?: boolean | number | string | null;
   summary?: string;
   preview?: string;
   body_preview?: string;
