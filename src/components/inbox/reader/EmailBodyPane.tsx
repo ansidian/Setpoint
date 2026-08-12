@@ -1,11 +1,18 @@
 import EmailIframe from "../../email/EmailIframe";
+import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
+import type { InboxEmailLike } from "../inboxTypes";
 import type { EmailBodyState } from "./readerTypes";
 
-export default function EmailBodyPane({ state, fallback, isMobile = false }: {
+export default function EmailBodyPane({ state, fallback, isMobile = false, email }: {
   state: EmailBodyState;
   fallback?: string | null;
   isMobile?: boolean;
+  email?: InboxEmailLike | null;
 }) {
+  const accountId = email?.account_id || email?.accountId || email?._account?.account_id || email?._account?.id;
+  const senderAddress = email?.from_address || email?.fromEmail || email?.from_email;
+  const messageKey = email?.uid || email?.email_id || email?.id;
+  const remoteContentTrust = useRemoteContentTrust(accountId, senderAddress);
   const { loading, body, error } = state;
   if (loading) {
     return (
@@ -58,7 +65,16 @@ export default function EmailBodyPane({ state, fallback, isMobile = false }: {
             border: "1px solid rgba(255,255,255,0.04)",
           }}
         >
-          <EmailIframe html={text} isMobile={isMobile} />
+          <EmailIframe
+            html={text}
+            isMobile={isMobile}
+            messageKey={messageKey != null ? String(messageKey) : null}
+            remoteContentTrust={{
+              status: remoteContentTrust.status,
+              senderAddress: remoteContentTrust.senderAddress,
+              onTrustSender: remoteContentTrust.trustSender,
+            }}
+          />
         </div>
       </div>
     );

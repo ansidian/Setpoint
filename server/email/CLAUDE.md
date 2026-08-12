@@ -7,6 +7,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-service.ts` — public email API: search, fetch, read/trash mutations, backfill
 - `email-index-search.ts` — indexed-search query, ranking, pagination, and result projection behind the `email-service.ts` facade
 - `pinned-emails.ts` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)
+- `remote-content-trust.ts` — public owner-scoped persistence API for exact sender + receiving-account remote-content trust
 - `email-fetch.ts` — cross-account email fetching for Gmail and iCloud
 - `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types

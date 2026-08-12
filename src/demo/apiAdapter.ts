@@ -18,7 +18,16 @@ import { handleDemoTransactionImportRequest, NO_DEMO_TRANSACTION_IMPORT_RESPONSE
 import type { DemoSeed } from "./store.ts";
 type DemoTask = DemoSeed["deadlines"]["upcoming"][number];
 type DemoCalendarEvent = DemoSeed["calendarEvents"][number];
+type DemoRemoteContentTrustEntry = {
+  id: number;
+  account_id: string;
+  account_label: string;
+  account_email: string;
+  sender_address: string;
+  created_at: string;
+};
 const clone = <T>(value: T): T => value == null ? value : structuredClone(value);
+let demoRemoteContentTrustEntries: DemoRemoteContentTrustEntry[] = [];
 
 function route(path: string): URL {
   return new URL(path, "http://setpoint-demo.local");
@@ -221,6 +230,32 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body });
   if (transactionImportResponse !== NO_DEMO_TRANSACTION_IMPORT_RESPONSE) return transactionImportResponse;
   const request: DemoApiRequest = { path, url, pathname, method, seed, body };
+  if (pathname === "/api/briefing/email/remote-content-trust" && method === "GET") {
+    return clone(demoRemoteContentTrustEntries);
+  }
+  if (pathname === "/api/briefing/email/remote-content-trust" && method === "POST") {
+    const accountId = String(body.account_id || "");
+    const senderAddress = String(body.sender_address || "").trim().toLowerCase();
+    const account = seed.accounts.accounts.find((candidate) =>
+      String(candidate.id) === accountId);
+    const existing = demoRemoteContentTrustEntries.find((entry) =>
+      entry.account_id === accountId && entry.sender_address === senderAddress);
+    const entry = existing || {
+      id: demoRemoteContentTrustEntries.length + 1,
+      account_id: accountId,
+      account_label: String(account?.label || "Demo email"),
+      account_email: String(account?.email || "demo@example.invalid"),
+      sender_address: senderAddress,
+      created_at: new Date().toISOString(),
+    };
+    if (!existing) demoRemoteContentTrustEntries = [entry, ...demoRemoteContentTrustEntries];
+    return { ok: true, entry: clone(entry) };
+  }
+  if (pathname.match(/^\/api\/briefing\/email\/remote-content-trust\/[^/]+$/) && method === "DELETE") {
+    const id = Number(decodeURIComponent(pathSegment(pathname, 1)));
+    demoRemoteContentTrustEntries = demoRemoteContentTrustEntries.filter((entry) => entry.id !== id);
+    return { ok: true };
+  }
   const snapshotResponse = handleDemoSnapshotRequest(request);
   if (snapshotResponse !== NO_DEMO_API_RESPONSE) return snapshotResponse;
   const notesResponse = handleDemoNotesRequest(request);

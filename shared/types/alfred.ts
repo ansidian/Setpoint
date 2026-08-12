@@ -33,7 +33,7 @@ export interface AlfredEmailItem extends Record<string, unknown> {
   read?: boolean;
   body_snippet?: string | null;
   body_excerpt?: string | null;
-  account?: { email?: string | null; label?: string | null } | null;
+  account?: { id?: string | null; email?: string | null; label?: string | null } | null;
   metadata?: {
     lane?: string | null;
     category?: string | null;

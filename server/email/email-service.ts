@@ -411,3 +411,8 @@ export async function settleArrivalGrace(userId: string): Promise<{ settled: num
 }
 
 export { pin, unpin } from "./pinned-emails.ts";
+export {
+  listRemoteContentTrust,
+  removeRemoteContentTrust,
+  trustRemoteContentSender,
+} from "./remote-content-trust.ts";

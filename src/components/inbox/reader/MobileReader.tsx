@@ -227,7 +227,7 @@ export default function MobileReader({
         )}
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          <EmailBodyPane state={bodyState} fallback={email.body || email.preview} isMobile />
+          <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} isMobile />
         </div>
 
         {billMounted && (

@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import EmailIframe from "./EmailIframe";
 import { withEmailContentSecurityPolicy, withMobileViewport } from "./withMobileViewport";
 
@@ -229,11 +229,27 @@ describe("EmailIframe show remote content toggle", () => {
     expect(screen.queryByText(/images are blocked/i)).toBeNull();
   });
 
-  it("widens the CSP img-src and hides the banner after clicking Show remote content", () => {
-    render(<EmailIframe html='<img src="https://cdn.example/banner.png"><p>hi</p>' />);
-    fireEvent.click(screen.getByRole("button", { name: /show remote content/i }));
+  it("widens the CSP and reveals one inline trust confirmation after Show once", () => {
+    const onTrustSender = vi.fn(async () => {});
+    render(
+      <EmailIframe
+        html='<img src="https://cdn.example/banner.png"><p>hi</p>'
+        remoteContentTrust={{
+          status: "untrusted",
+          senderAddress: "news@example.com",
+          onTrustSender,
+        }}
+      />,
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Show once" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /always show/i })).toBeNull();
 
-    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show once" }));
+
+    expect(screen.getByText(/shown for this message/i)).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Always show from news@example.com" })).toBeTruthy();
     const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
     const cspContentMatch = out.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/);
     expect(cspContentMatch).not.toBeNull();
@@ -243,12 +259,110 @@ describe("EmailIframe show remote content toggle", () => {
     expect(policyValue).not.toContain("style-src https:");
   });
 
+  it("persists trust only on the second inline action", async () => {
+    let trustCalls = 0;
+    const onTrustSender = async () => {
+      trustCalls += 1;
+    };
+    render(
+      <EmailIframe
+        html='<img src="https://cdn.example/banner.png"><p>hi</p>'
+        remoteContentTrust={{
+          status: "untrusted",
+          senderAddress: "news@example.com",
+          onTrustSender,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show once" }));
+    expect(trustCalls).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "Always show from news@example.com" }));
+
+    await waitFor(() => expect(trustCalls).toBe(1));
+    expect(screen.queryByText(/remote content/i)).toBeNull();
+  });
+
+  it("keeps one-time content visible and reports a trust persistence failure inline", async () => {
+    const onTrustSender = vi.fn(async () => {
+      throw new Error("Could not save trusted sender.");
+    });
+    render(
+      <EmailIframe
+        html='<img src="https://cdn.example/banner.png"><p>hi</p>'
+        remoteContentTrust={{
+          status: "untrusted",
+          senderAddress: "news@example.com",
+          onTrustSender,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show once" }));
+    fireEvent.click(screen.getByRole("button", { name: "Always show from news@example.com" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Could not save trusted sender.");
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).toContain("img-src data: https:");
+  });
+
+  it("loads trusted sender content immediately without banner chrome", () => {
+    render(
+      <EmailIframe
+        html='<img src="https://cdn.example/banner.png"><p>hi</p>'
+        remoteContentTrust={{ status: "trusted", senderAddress: "news@example.com" }}
+      />,
+    );
+
+    expect(screen.queryByText(/remote content/i)).toBeNull();
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).toContain("img-src data: https:");
+  });
+
+  it("keeps content blocked without flashing the banner while trust is loading", () => {
+    render(
+      <EmailIframe
+        html='<img src="https://cdn.example/banner.png"><p>hi</p>'
+        remoteContentTrust={{ status: "loading", senderAddress: "news@example.com" }}
+      />,
+    );
+
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).toContain(CSP_POLICY);
+  });
+
+  it("offers only the one-time action when sender trust identity is unavailable", () => {
+    render(
+      <EmailIframe
+        html='<img src="https://cdn.example/banner.png"><p>hi</p>'
+        remoteContentTrust={{ status: "untrusted" }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show once" }));
+
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /always show/i })).toBeNull();
+  });
+
   it("resets to blocked when a different email (new html) is rendered", () => {
     const { rerender } = render(<EmailIframe html='<img src="https://cdn.example/banner.png"><p>first</p>' />);
-    fireEvent.click(screen.getByRole("button", { name: /show remote content/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Show once" }));
     expect(screen.queryByText(/images are blocked/i)).toBeNull();
 
     rerender(<EmailIframe html='<img src="https://cdn.example/other.png"><p>second</p>' />);
+    expect(screen.getByText(/images are blocked/i)).toBeTruthy();
+  });
+
+  it("resets the one-time grant by message identity even when two emails have identical HTML", () => {
+    const html = '<img src="https://cdn.example/banner.png"><p>same template</p>';
+    const { rerender } = render(<EmailIframe html={html} messageKey="message-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Show once" }));
+    expect(screen.queryByText(/images are blocked/i)).toBeNull();
+
+    rerender(<EmailIframe html={html} messageKey="message-2" />);
+
     expect(screen.getByText(/images are blocked/i)).toBeTruthy();
   });
 });

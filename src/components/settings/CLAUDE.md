@@ -32,6 +32,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/BillExtractionAiCard.tsx` — bill extraction model choice, separate from triage model
 - `cards/TriageSoundSettingsCard.tsx` — sound lanes, volume, per-trigger playback
 - `cards/ImportantSendersCard.tsx` — auto-learned and manual important sender lists
+- `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 
 ### Cards: bill pay mappings
 - `cards/BillPayMappingsCard.tsx` — profiles → behaviors → matchers/targets hierarchy editor

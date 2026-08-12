@@ -4,6 +4,7 @@ export type DemoLane = keyof DemoSeed["activeSnapshot"]["lanes"];
 
 export interface DemoRequestBody extends Record<string, unknown> {
   archived?: boolean;
+  account_id?: string;
   allDay?: boolean;
   at?: string;
   calendarId?: string;
@@ -30,6 +31,7 @@ export interface DemoRequestBody extends Record<string, unknown> {
   noteIds?: Array<string | number>;
   q?: string;
   senders?: DemoSeed["importantSenders"];
+  sender_address?: string;
   siteUrl?: string | null;
   start?: string;
   startIso?: string;
@@ -69,4 +71,3 @@ export function demoPathSegment(pathname: string, fromEnd: number): string {
   const segments = pathname.split("/");
   return segments[segments.length - fromEnd] ?? "";
 }
-

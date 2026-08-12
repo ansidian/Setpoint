@@ -290,6 +290,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useMotionPresence` | `src/hooks/useMotionPresence.ts` |
 | `useNews` | `src/hooks/useNews.ts` |
 | `useNotifications` | `src/hooks/useNotifications.ts` |
+| `useRemoteContentTrust` | `src/hooks/useRemoteContentTrust.ts` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.ts` |
 | `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.ts` |
 | `useWarmImport` | `src/hooks/useWarmImport.ts` |
@@ -692,6 +693,7 @@ erDiagram
 | `ea_email_backfill_state` | `001_ea_tables.sql` |
 | `ea_email_fts` | `001_ea_tables.sql` |
 | `ea_email_index` | `001_ea_tables.sql`, `013_email_index_normalized_date.sql`, `025_email_thread_identity.sql` |
+| `ea_email_remote_content_trust` | `045_email_remote_content_trust.sql` |
 | `ea_email_search_ai_usage` | `007_email_search_ai_usage.sql` |
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
@@ -839,6 +841,9 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/email/:uid/trash` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email/arrival-grace/settle` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email/mark-all-read` | `server/routes/briefing/email.ts` |
+| GET | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
+| POST | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
+| DELETE | `/api/briefing/email/remote-content-trust/:id` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/history` | `server/routes/briefing/snapshot.ts` |

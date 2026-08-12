@@ -27,6 +27,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 
 ### Preferences + notifications
 - `useNotifications.ts` — browser notifications for events, bills, important senders
+- `useRemoteContentTrust.ts` — shared cached registry for exact-sender + receiving-account remote-image trust
 - `useTriageNotificationSounds.ts` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status

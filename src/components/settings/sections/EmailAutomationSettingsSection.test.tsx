@@ -9,7 +9,10 @@ const mockApi = vi.hoisted(() => ({
   getBillExtractModels: vi.fn(),
   getImportantSenders: vi.fn(),
   getModels: vi.fn(),
+  getRemoteContentTrust: vi.fn(),
   getTriageCacheStats: vi.fn(),
+  removeRemoteContentTrust: vi.fn(),
+  trustRemoteContentSender: vi.fn(),
 }));
 
 // test-architecture: allow-boundary-mock -- model catalogs, triage stats, and sender persistence are external Settings API boundaries; real cards render together below them.
@@ -90,6 +93,7 @@ beforeEach(() => {
   mockApi.getBillExtractModels.mockResolvedValue(providers);
   mockApi.getModels.mockResolvedValue(providers);
   mockApi.getImportantSenders.mockResolvedValue([]);
+  mockApi.getRemoteContentTrust.mockResolvedValue([]);
   mockApi.getTriageCacheStats.mockResolvedValue({ openaiCalls: 0, windowDays: 7 });
 });
 
@@ -162,6 +166,7 @@ describe("EmailAutomationSettingsSection", () => {
     expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
     expect(screen.getByText("Alfred AI")).toBeTruthy();
     expect(screen.getByText("Bill Extraction AI")).toBeTruthy();
+    expect(screen.getByText("Remote Content")).toBeTruthy();
     expect(screen.queryByText("Connect an AI provider")).toBeNull();
   });
 

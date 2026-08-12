@@ -46,6 +46,20 @@ export interface EmailPlainBody {
 
 export type EmailBody = EmailHtmlBody | EmailPlainBody;
 
+export interface RemoteContentTrustEntry {
+  id: number;
+  account_id: string;
+  account_label: string;
+  account_email: string;
+  sender_address: string;
+  created_at: string;
+}
+
+export interface RemoteContentTrustMutationResponse {
+  ok: true;
+  entry?: RemoteContentTrustEntry;
+}
+
 export interface EmailMutationResponse {
   ok: true;
 }

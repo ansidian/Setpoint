@@ -13,6 +13,7 @@ import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCa
 import AlfredAiModelCard from "@/components/settings/cards/AlfredAiModelCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
+import TrustedRemoteContentCard from "@/components/settings/cards/TrustedRemoteContentCard";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import ConnectionDependencyPrompt from "../ConnectionDependencyPrompt";
 import { projectFeatureDependencies } from "../featureDependencyModel";
@@ -92,6 +93,7 @@ export default function EmailAutomationSettingsSection({
       {alfredControls}
       <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
       <TriageSoundSettingsCard settings={settings} setSettings={setSettings} patch={patch} />
+      <TrustedRemoteContentCard />
       {dependencies.ai !== "not_connected" ? (
         <>
           <EmailAiModelCard

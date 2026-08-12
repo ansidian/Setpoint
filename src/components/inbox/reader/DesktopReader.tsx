@@ -436,7 +436,7 @@ export default function DesktopReader({
 
         <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <EmailBodyPane state={bodyState} fallback={email.body || email.preview} />
+            <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} />
           </div>
           <BillDrawer
             billOpen={billOpen}

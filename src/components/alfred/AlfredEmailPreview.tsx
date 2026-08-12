@@ -11,7 +11,6 @@ import useEmailBody from "../inbox/reader/useEmailBody";
 import { formatAlfredAbsolute, formatAlfredAgo } from "./alfredPanelModel";
 import type { AlfredEmailItem } from "../../../shared/types/alfred";
 
-const dim = "rgba(205,214,244,0.55)";
 const text = "var(--sp-text)";
 
 export default function AlfredEmailPreview({ item, onClose }: { item: AlfredEmailItem; onClose: () => void }) {
@@ -64,11 +63,16 @@ export default function AlfredEmailPreview({ item, onClose }: { item: AlfredEmai
           </div>
         </div>
         <button type="button" title="Close (esc)" onClick={onClose}
-          style={{ display: "inline-flex", padding: "4px 6px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
+          className="bg-transparent text-[rgba(205,214,244,0.55)] transition-[background-color,color,transform] hover:-translate-y-px hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
+          style={{ display: "inline-flex", padding: "4px 6px", border: "none", cursor: "pointer", borderRadius: 6 }}>
           <X size={13} />
         </button>
       </div>
-      <EmailBodyPane state={bodyState} fallback={item.body_snippet || ""} />
+      <EmailBodyPane
+        state={bodyState}
+        fallback={item.body_snippet || ""}
+        email={{ uid: item.uid, account_id: item.account?.id, from_address: fromAddress }}
+      />
     </div>,
     document.body,
   );

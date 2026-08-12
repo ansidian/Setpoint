@@ -16,6 +16,41 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+router.get("/email/remote-content-trust", async (_req, res) => {
+  try {
+    res.json(await emailService.listRemoteContentTrust(ownerUserId()));
+  } catch (err) {
+    console.error("Error listing remote-content trust:", err);
+    res.status(errorStatus(err)).json({ message: errorMessage(err) });
+  }
+});
+
+router.post("/email/remote-content-trust", async (req, res) => {
+  try {
+    const entry = await emailService.trustRemoteContentSender(
+      ownerUserId(),
+      req.body?.account_id,
+      req.body?.sender_address,
+    );
+    res.status(201).json({ ok: true, entry });
+  } catch (err) {
+    const status = errorStatus(err);
+    if (status >= 500) console.error("Error trusting remote-content sender:", err);
+    res.status(status).json({ message: errorMessage(err) });
+  }
+});
+
+router.delete("/email/remote-content-trust/:id", async (req, res) => {
+  try {
+    await emailService.removeRemoteContentTrust(ownerUserId(), req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    const status = errorStatus(err);
+    if (status >= 500) console.error("Error removing remote-content trust:", err);
+    res.status(status).json({ message: errorMessage(err) });
+  }
+});
+
 router.get("/email/:uid", async (req, res) => {
   try {
     res.json(await emailService.getEmailBody(ownerUserId(), req.params.uid!));

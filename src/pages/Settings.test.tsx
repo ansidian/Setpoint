@@ -7,6 +7,7 @@ const mockApi = vi.hoisted(() => ({
   getCapabilities: vi.fn(),
   getInstanceCredentials: vi.fn(),
   getOnboardingProgress: vi.fn(),
+  getRemoteContentTrust: vi.fn(),
   getSettings: vi.fn(),
   getTriageCacheStats: vi.fn(),
   getImportantSenders: vi.fn(),
@@ -69,6 +70,7 @@ beforeEach(() => {
     completedAt: null,
     updatedAt: 1,
   });
+  mockApi.getRemoteContentTrust.mockResolvedValue([]);
   mockApi.getSettings.mockResolvedValue({});
   mockApi.getTriageCacheStats.mockResolvedValue({ openaiCalls: 0, windowDays: 7 });
   mockApi.getImportantSenders.mockResolvedValue([]);
