@@ -14,6 +14,7 @@ export type AlfredToolName =
   | "get_upcoming_bills"
   | "search_transactions"
   | "summarize_transactions"
+  | "propose_calendar_event"
   | "show_items"
   | "group_items";
 
@@ -83,6 +84,40 @@ export interface AlfredRunStartEvent {
   conversation_id: string;
   provider: AlfredProvider;
   model: AlfredModelId;
+  expires_at?: string;
+}
+
+export type AlfredCalendarProposalSource =
+  | {
+      kind: "resolved";
+      accountId: string;
+      calendarId: string;
+      calendarName: string;
+    }
+  | {
+      kind: "unavailable";
+      requestedCalendarName?: string;
+    };
+
+export interface AlfredCalendarProposal {
+  id: string;
+  revisionOf: string | null;
+  title: string;
+  allDay: boolean;
+  startDate: string;
+  endDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  location: string;
+  description: string;
+  source: AlfredCalendarProposalSource;
+  duplicateCheckUnavailable: boolean;
+  past: boolean;
+}
+
+export interface AlfredCalendarProposalEvent {
+  type: "calendar_proposal";
+  proposal: AlfredCalendarProposal;
 }
 
 export interface AlfredTextDeltaEvent {
@@ -156,6 +191,7 @@ export type AlfredRunEvent =
   | AlfredRowsEvent
   | AlfredSummaryEvent
   | AlfredBreakdownEvent
+  | AlfredCalendarProposalEvent
   | AlfredRunEndEvent
   | AlfredRunErrorEvent;
 
@@ -163,12 +199,18 @@ export interface AlfredStreamOptions {
   message: string;
   conversationId?: string | null;
   emailContextId?: string | null;
+  createdProposalIds?: string[];
   signal?: AbortSignal;
   onEvent: (event: AlfredRunEvent) => void;
 }
 
 export interface AlfredConversationDeleteResponse {
   ok: true;
+}
+
+export interface AlfredCalendarProposalCreatedResponse {
+  ok: true;
+  status: "created";
 }
 
 export type AlfredDateRangeInput = { start?: unknown; end?: unknown; query?: unknown };
@@ -198,6 +240,17 @@ export interface AlfredToolInputMap {
   get_upcoming_bills: AlfredDateRangeInput;
   search_transactions: AlfredTransactionInput & { limit?: unknown };
   summarize_transactions: AlfredTransactionInput & { group_by?: unknown };
+  propose_calendar_event: {
+    title?: unknown;
+    all_day?: unknown;
+    start_date?: unknown;
+    end_date?: unknown;
+    start_time?: unknown;
+    end_time?: unknown;
+    location?: unknown;
+    description?: unknown;
+    calendar_name?: unknown;
+  };
   show_items: { kind?: unknown; ids?: unknown };
   group_items: { kind?: unknown; title?: unknown; caption?: unknown; groups?: unknown };
 }
@@ -214,6 +267,7 @@ export interface AlfredToolResultMap {
   get_upcoming_bills: AlfredToolResultBase & { total?: number; bills?: Record<string, unknown>[] };
   search_transactions: AlfredToolResultBase & { total?: number; transactions?: Record<string, unknown>[] };
   summarize_transactions: AlfredToolResultBase & { total?: number; direction?: string; buckets?: TransactionSummaryBucket[] };
+  propose_calendar_event: AlfredToolResultBase & { staged?: true; duplicate_confirmation_required?: true };
   show_items: AlfredToolResultBase & { shown?: number };
   group_items: AlfredToolResultBase & { shown?: number };
 }

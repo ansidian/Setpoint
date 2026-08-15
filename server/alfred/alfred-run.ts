@@ -1,7 +1,7 @@
 import { DEFAULT_SEARCH_LIMIT, alfredToolSummary, executeAlfredTool } from "./alfred-tools.ts";
 import { buildAlfredSystemPrompt } from "./alfred-prompt.ts";
 import { recordAlfredUsage } from "./alfred-usage.ts";
-import type { AlfredToolName, AlfredToolResultBase } from "../../shared/types/alfred.ts";
+import type { AlfredCalendarProposal, AlfredToolName, AlfredToolResultBase } from "../../shared/types/alfred.ts";
 import type {
   AlfredProviderToolResult,
   RunAlfredOptions,
@@ -10,6 +10,7 @@ import { errorMessage } from "./alfred-types.ts";
 import { resolveAiApiKey } from "../ai-credentials.ts";
 import { getAlfredModelAdapter } from "./alfred-provider.ts";
 import { buildContextBearingAlfredMessage } from "./alfred-email-context.ts";
+import { commitStagedAlfredCalendarProposal } from "./alfred-calendar-proposals.ts";
 
 const MAX_TOOL_ITERATIONS = 12;
 
@@ -89,6 +90,9 @@ async function runAlfredInner({
   let nudgedGroup = false;
   let forceGroupItems = false;
   const groupIntent = looksLikeGroupingQuestion(message);
+  const proposalStage: { proposal: AlfredCalendarProposal | null } = {
+    proposal: null,
+  };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     // Deterministic grouping backstop: after the group nudge, pin the breakdown
@@ -146,6 +150,9 @@ async function runAlfredInner({
         adapter.appendUserText(conversation, SHOW_ITEMS_NUDGE);
         continue;
       }
+      if (proposalStage.proposal) {
+        emit(commitStagedAlfredCalendarProposal(conversation, proposalStage.proposal));
+      }
       emit({ type: "run_end", stop_reason: turn.stopReason || "end_turn" });
       return;
     }
@@ -162,6 +169,10 @@ async function runAlfredInner({
           conversation,
           deps,
           emit,
+          trustedOwnerMessage: String(message),
+          emailContext,
+          now: now(),
+          proposalStage,
         });
       } catch (err) {
         result = { error: errorMessage(err) };

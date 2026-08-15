@@ -3,7 +3,7 @@ import type { AlfredItem, AlfredItemKind, AlfredProvider } from "../../shared/ty
 import type { AlfredConversation } from "./alfred-types.ts";
 import { DEFAULT_ALFRED_MODEL, DEFAULT_ALFRED_PROVIDER } from "./alfred-models.ts";
 
-const TTL_MS = 4 * 60 * 60 * 1000;
+export const ALFRED_CONVERSATION_TTL_MS = 4 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 const MAX_CONVERSATIONS = 20;
 
@@ -24,6 +24,11 @@ export function createAlfredConversation({
     model,
     messages: [],
     items: new Map(),
+    calendarProposalState: {
+      activeProposalId: null,
+      proposals: new Map(),
+      pendingDuplicateFingerprint: null,
+    },
     touchedAt: now,
   };
   conversations.set(conversation.id, conversation);
@@ -33,7 +38,7 @@ export function createAlfredConversation({
 export function getAlfredConversation(id: string, { now = Date.now() }: { now?: number } = {}): AlfredConversation | null {
   const conversation = conversations.get(id);
   if (!conversation) return null;
-  if (now - conversation.touchedAt > TTL_MS) {
+  if (now - conversation.touchedAt > ALFRED_CONVERSATION_TTL_MS) {
     conversations.delete(id);
     return null;
   }
@@ -43,6 +48,25 @@ export function getAlfredConversation(id: string, { now = Date.now() }: { now?: 
 
 export function deleteAlfredConversation(id: string): boolean {
   return conversations.delete(id);
+}
+
+export function alfredConversationExpiresAt(conversation: AlfredConversation): string {
+  return new Date(conversation.touchedAt + ALFRED_CONVERSATION_TTL_MS).toISOString();
+}
+
+export function acknowledgeAlfredCalendarProposalCreated(
+  conversation: AlfredConversation,
+  proposalId: string,
+): "created" | "missing" {
+  const stored = conversation.calendarProposalState.proposals.get(proposalId);
+  if (!stored) return "missing";
+  if (stored.status !== "created") {
+    stored.status = "created";
+    if (conversation.calendarProposalState.activeProposalId === proposalId) {
+      conversation.calendarProposalState.activeProposalId = null;
+    }
+  }
+  return "created";
 }
 
 export function cacheAlfredItems(
@@ -74,7 +98,7 @@ export function readAlfredItems(conversation: AlfredConversation, kind: AlfredIt
 
 export function sweepAlfredConversations({ now = Date.now() }: { now?: number } = {}): void {
   for (const [id, conversation] of conversations) {
-    if (now - conversation.touchedAt > TTL_MS) conversations.delete(id);
+    if (now - conversation.touchedAt > ALFRED_CONVERSATION_TTL_MS) conversations.delete(id);
   }
 }
 

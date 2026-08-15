@@ -10,6 +10,8 @@ import {
   formatAlfredDate,
   formatAlfredModelHint,
   isNearBottom,
+  markAlfredProposalCreated,
+  clearUncreatedAlfredProposals,
   spendingBreakdownRows,
 } from "./alfredPanelModel";
 import type { AlfredPanelMessage } from "./alfredPanelModel";
@@ -31,6 +33,48 @@ function messageAt<T extends AlfredPanelMessage["type"]>(
 }
 
 describe("applyAlfredEvent", () => {
+  it("appends atomic proposals and supersedes only the referenced active card", () => {
+    const first = {
+      id: "proposal-1", revisionOf: null, title: "Project review", allDay: false,
+      startDate: "2026-08-18", endDate: "2026-08-18", startTime: "15:00", endTime: "15:30",
+      location: "", description: "", source: { kind: "unavailable" as const },
+      duplicateCheckUnavailable: true, past: false,
+    };
+    const second = { ...first, id: "proposal-2", revisionOf: "proposal-1", startTime: "16:00", endTime: "16:30" };
+    const ms = play([
+      { type: "calendar_proposal", proposal: first },
+      { type: "calendar_proposal", proposal: second },
+    ]);
+
+    expect(ms).toHaveLength(2);
+    expect(messageAt(ms, 0, "calendar-proposal").status).toBe("superseded");
+    expect(messageAt(ms, 1, "calendar-proposal")).toMatchObject({ status: "proposed", proposal: { id: "proposal-2" } });
+  });
+
+  it("uses normalized saved-event truth for Created and clears only uncreated cards at expiry", () => {
+    const proposal = {
+      id: "proposal-1", revisionOf: null, title: "Project review", allDay: false,
+      startDate: "2026-08-18", endDate: "2026-08-18", startTime: "15:00", endTime: "15:30",
+      location: "Room 1", description: "", source: { kind: "unavailable" as const },
+      duplicateCheckUnavailable: true, past: false,
+    };
+    const proposed = play([{ type: "calendar_proposal", proposal }]);
+    const created = markAlfredProposalCreated(proposed, proposal.id, {
+      id: "event-1", title: "Edited title", allDay: false,
+      startMs: new Date("2026-08-18T23:00:00.000Z").getTime(),
+      endMs: new Date("2026-08-18T23:30:00.000Z").getTime(),
+      location: "Room 2", description: "Saved truth", calendarName: "Personal",
+      accountId: "account-1", calendarId: "primary",
+    } as never);
+    expect(messageAt(created, 0, "calendar-proposal")).toMatchObject({
+      status: "created",
+      editedInCalendar: true,
+      createdEvent: { id: "event-1", title: "Edited title" },
+    });
+    expect(clearUncreatedAlfredProposals([...proposed, ...created])).toHaveLength(1);
+    expect(clearUncreatedAlfredProposals([...proposed, ...created])[0]).toMatchObject({ status: "created" });
+  });
+
   it("streams consecutive text deltas into one say message", () => {
     const ms = play([
       { type: "text_delta", text: "Two things " },

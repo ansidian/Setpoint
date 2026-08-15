@@ -30,7 +30,8 @@ describe("buildAlfredSystemPrompt", () => {
 
   it("states coverage, cite-by-reference, and untrusted-content rules", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-12T18:00:00.000Z") });
-    expect(prompt).toContain("cannot modify anything");
+    expect(prompt).toContain("cannot directly modify anything");
+    expect(prompt).toContain("propose_calendar_event");
     expect(prompt).toContain("show_items");
     expect(prompt).toContain("<email_content>");
   });

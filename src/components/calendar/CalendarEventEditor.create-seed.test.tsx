@@ -141,6 +141,8 @@ describe("CalendarEventEditor create-seed bridge", () => {
       origin: expect.anything(),
       referenceId: expect.anything(),
     }));
+    // test-architecture: allow-boundary-interaction -- The provider mutation facade is the stable boundary proving one editor commit produces exactly one write.
+    expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the seeded editor for provider retry and emits no completion on failure or cancel", async () => {

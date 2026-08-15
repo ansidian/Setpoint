@@ -4,12 +4,24 @@ import type { DeadlineRangeResult } from "../../shared/types/tasks.ts";
 import type { ActualBillOccurrence } from "../../shared/types/actual.ts";
 import type { TransactionQueryResult, TransactionSummaryResult } from "../../shared/types/transactions.ts";
 import type {
+  AlfredCalendarProposal,
   AlfredItem,
   AlfredProvider,
   AlfredRunEvent,
   AlfredToolName,
   AlfredToolResultBase,
 } from "../../shared/types/alfred.ts";
+
+export interface AlfredStoredCalendarProposal {
+  proposal: AlfredCalendarProposal;
+  status: "proposed" | "superseded" | "created";
+}
+
+export interface AlfredCalendarProposalConversationState {
+  activeProposalId: string | null;
+  proposals: Map<string, AlfredStoredCalendarProposal>;
+  pendingDuplicateFingerprint: string | null;
+}
 
 export interface AnthropicTextBlock {
   type: "text";
@@ -46,6 +58,7 @@ export interface AlfredConversation {
   model: string;
   messages: Array<AnthropicMessage | Record<string, unknown>>;
   items: Map<string, AlfredItem | Record<string, unknown>>;
+  calendarProposalState: AlfredCalendarProposalConversationState;
   touchedAt: number;
 }
 
@@ -91,6 +104,17 @@ export interface AlfredDependencies {
   fetchCalendar(accounts: CalendarAccount[], range: Record<string, unknown>): Promise<NormalizedCalendarEvent[]>;
   pacificDayBoundaries(date: Date): { dayStart: Date; dayEnd: Date };
   loadUserConfig(userId: string): Promise<AlfredUserConfig>;
+  getCalendarSourceGroups(accounts: CalendarAccount[]): Promise<Array<{
+    accountId: string;
+    accountLabel: string;
+    accountEmail: string;
+    calendars: Array<{
+      id: string;
+      summary: string;
+      writable?: boolean;
+      primary?: boolean;
+    }>;
+  }>>;
   readCalendarDeadlineRange(userId: string, range: { start: string; end: string }): Promise<DeadlineRangeResult>;
   readBillsMirrorRange(userId: string, range: { start: string; end: string }): Promise<{
     schedules?: ActualBillOccurrence[];
@@ -165,6 +189,7 @@ export interface RunAlfredOptions {
   emailContext?: {
     modelText: string;
     charCount: number;
+    timestamp?: string | null;
   } | null;
   emit: AlfredEmit;
   signal?: AbortSignal | null;
@@ -181,6 +206,12 @@ export interface AlfredToolContext {
   conversation: AlfredConversation;
   deps: AlfredDependencies;
   emit: AlfredEmit;
+  trustedOwnerMessage: string;
+  emailContext: RunAlfredOptions["emailContext"];
+  now: Date;
+  proposalStage: {
+    proposal: AlfredCalendarProposal | null;
+  };
 }
 
 export interface AnthropicTurn {

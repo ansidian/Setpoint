@@ -3,6 +3,7 @@ import { apiFetch } from "./apiFetch";
 import { readSseStream } from "./sseStream";
 import type {
   AlfredConversationDeleteResponse,
+  AlfredCalendarProposalCreatedResponse,
   AlfredEmailContextSource,
   AlfredPreparedEmailContext,
   AlfredRunEvent,
@@ -35,7 +36,7 @@ export const releaseAlfredEmailContext = (contextId: string): Promise<{ ok: true
   apiFetch(`/api/alfred/email-context/${encodeURIComponent(contextId)}`, { method: "DELETE" })
 );
 
-export async function runAlfredStream({ message, conversationId, emailContextId, signal, onEvent }: AlfredStreamOptions): Promise<void> {
+export async function runAlfredStream({ message, conversationId, emailContextId, createdProposalIds = [], signal, onEvent }: AlfredStreamOptions): Promise<void> {
   if (isDemoMode()) throw new Error("Alfred is not available in the demo");
   const res = await fetch("/api/alfred/run", {
     method: "POST",
@@ -44,6 +45,7 @@ export async function runAlfredStream({ message, conversationId, emailContextId,
       message,
       ...(conversationId ? { conversationId } : {}),
       ...(emailContextId ? { emailContextId } : {}),
+      ...(createdProposalIds.length ? { createdProposalIds } : {}),
     }),
     ...(signal ? { signal } : {}),
   });
@@ -64,3 +66,14 @@ export async function runAlfredStream({ message, conversationId, emailContextId,
 export const deleteAlfredConversation = (id: string | number): Promise<AlfredConversationDeleteResponse> => (
   apiFetch(`/api/alfred/conversations/${encodeURIComponent(id)}`, { method: "DELETE" })
 );
+
+export const acknowledgeAlfredCalendarProposalCreated = (
+  conversationId: string,
+  proposalId: string,
+): Promise<AlfredCalendarProposalCreatedResponse> => {
+  if (isDemoMode()) return Promise.reject(new Error("Alfred is not available in the demo"));
+  return apiFetch(
+    `/api/alfred/conversations/${encodeURIComponent(conversationId)}/proposals/${encodeURIComponent(proposalId)}/created`,
+    { method: "POST", body: "{}" },
+  );
+};

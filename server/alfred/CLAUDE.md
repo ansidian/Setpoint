@@ -1,6 +1,6 @@
 # Server Alfred Map
 
-Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. Entry point for routes is `alfred-run.ts`; tools wrap existing domain services and never mutate anything. Trust rules (read-only v1, cite-by-reference rows, untrusted email content) are decided in `docs/adr/0006-alfred-trust-architecture.md` — do not relax them here.
+Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tools stay read-only; `propose_calendar_event` may stage one ephemeral, non-mutating proposal for explicit owner review in Calendar. Trust rules live in `docs/adr/0006-alfred-trust-architecture.md` — do not relax them here.
 
 ## Files
 
@@ -8,11 +8,12 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 - `alfred-provider.ts` — selects the conversation-bound provider adapter
 - `anthropic-adapter.ts` / `openai-adapter.ts` — provider request, transcript, tool-result, and usage translation
 - `anthropic-stream.ts` / `openai-stream.ts` — provider SSE stream parsers
-- `alfred-tools.ts` — read-only tool definitions/executors over email, calendar, deadlines, bills, transactions/spending; `show_items` emits cached rows by reference
+- `alfred-tools.ts` — read-only domain tools plus non-mutating calendar proposal staging; `show_items` emits cached rows by reference
+- `alfred-calendar-proposals.ts` — owner authorization, field/date/source validation, duplicate policy, and atomic run-local proposal staging
 - `alfred-email-content.ts` — email-content shaping for tool results: `<email_content>` trust fencing, sender formatting, quoted-chain stripping, the compact search-candidate row
 - `alfred-email-context.ts` — whole-email preparation for deliberate reader attachments: semantic text, link/image/file shaping, metadata authority, 50k limit, and trust fencing
 - `alfred-email-context-store.ts` — bounded owner-scoped prepared-context handles with TTL and claim/release/consume lifecycle
-- `alfred-conversations.ts` — in-memory conversation store (TTL) and per-conversation item cache
+- `alfred-conversations.ts` — in-memory conversation store (TTL), item cache, and ephemeral proposal identity/status
 - `alfred-types.ts` — server-local provider, conversation, dependency, usage, and run-loop contracts
 - `alfred-prompt.ts` — system prompt: Pacific date anchor, coverage, trust rules
 - `alfred-models.ts` — centralized catalog facade plus persisted Settings resolution
@@ -29,10 +30,11 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 - Email content in tool results is wrapped in `<email_content>` tags; the prompt declares it untrusted data.
 - Direct email attachments are prepared before a run and claimed by opaque ID. Failed runs release the handle; only `run_end` consumes it.
 - Conversations are ephemeral by design (CONTEXT.md: **Alfred Conversation**); do not add durable history without revisiting that decision.
+- Calendar proposals commit to conversation state only with a successful `run_end`. Review is UI-only; Calendar's existing editor remains the sole event-write boundary.
 - Provider/model is bound when the conversation is created. Settings changes apply only after New chat; clients never submit model overrides.
 
 ## Related
 
-- `server/routes/alfred.ts` — HTTP surface (model-free email-context prepare/discard, streamed `POST /run`, conversation delete)
+- `server/routes/alfred.ts` — HTTP surface (model-free email-context prepare/discard, streamed `POST /run`, identity-only proposal Created acknowledgement, conversation delete)
 - `server/email/search/` — retrieval engine behind `search_email`
 - `docs/adr/0006-alfred-trust-architecture.md` — trust posture

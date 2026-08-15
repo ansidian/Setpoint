@@ -28,14 +28,21 @@ import AlfredComposer from "./AlfredComposer";
 import AlfredEmailPreview from "./AlfredEmailPreview";
 import AlfredTransactionBreakdown from "./AlfredTransactionBreakdown";
 import AlfredBreakdown from "./AlfredBreakdown";
+import AlfredCalendarProposalCard from "./AlfredCalendarProposalCard";
 import type { AlfredEmailItem } from "../../../shared/types/alfred";
 import type {
+  AlfredCalendarProposal,
   AlfredEmailAttachmentRef,
   AlfredEmailContextSource,
 } from "../../../shared/types/alfred";
+import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { CalendarOpenRequest } from "../dashboard/dashboardShellModel";
 import type { AlfredChipAction } from "./alfredChipActionModel";
 import type { AlfredRow } from "./alfredRowOrdering";
+import {
+  alfredCreatedEventCalendarRequest,
+  alfredProposalCalendarRequest,
+} from "./alfredCalendarProposalModel";
 import {
   emailAttachmentPreviewItem,
   pendingEmailAttachment,
@@ -53,10 +60,19 @@ export interface AlfredPanelProps {
   emailHandoff?: { id: string | number; source: AlfredEmailContextSource } | null;
   newChatTick: number;
   onOpenCalendarItem?: (request: CalendarOpenRequest) => void;
+  onReviewCalendarProposal?: (request: CalendarOpenRequest) => void;
 }
 
-function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenCalendarItem }: AlfredPanelProps) {
-  const { messages, busy, activeModel, submit, newChat } = useAlfredChat();
+function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
+  const {
+    messages,
+    busy,
+    activeModel,
+    submit,
+    newChat,
+    setProposalHandoffError,
+    completeProposal,
+  } = useAlfredChat();
   const [previewItem, setPreviewItem] = useState<AlfredEmailItem | null>(null);
   const [pendingEmail, setPendingEmailState] = useState<AlfredPendingEmailContext | null>(null);
   const [overflowRecovery, setOverflowRecovery] = useState(false);
@@ -257,6 +273,36 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
     setPreviewItem(emailAttachmentPreviewItem(attachment));
   }, []);
 
+  const reviewCalendarProposal = useCallback((proposal: AlfredCalendarProposal) => (
+    new Promise<boolean>((resolve) => {
+      if (!onReviewCalendarProposal) {
+        setProposalHandoffError(proposal.id, "Calendar could not open this proposal. Try again.");
+        resolve(false);
+        return;
+      }
+      setProposalHandoffError(proposal.id, null);
+      const request = alfredProposalCalendarRequest(proposal, {
+        onAcknowledged: (acknowledgement) => {
+          if (acknowledgement.status === "accepted") {
+            onClose();
+            resolve(true);
+            return;
+          }
+          setProposalHandoffError(proposal.id, "Calendar could not open this proposal. Try again.");
+          resolve(false);
+        },
+        onCompleted: (completion) => {
+          completeProposal(proposal.id, completion.event);
+        },
+      });
+      onReviewCalendarProposal(request);
+    })
+  ), [completeProposal, onClose, onReviewCalendarProposal, setProposalHandoffError]);
+
+  const openCreatedEvent = useCallback((event: NormalizedCalendarEvent) => {
+    onOpenCalendarItem?.(alfredCreatedEventCalendarRequest(event));
+  }, [onOpenCalendarItem]);
+
   const previewPendingEmail = useCallback(() => {
     const current = pendingEmailRef.current;
     if (current) setPreviewItem(emailAttachmentPreviewItem(pendingEmailAttachment(current)));
@@ -293,10 +339,14 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
   const suggestions = pendingEmail
     ? pendingEmail.status === "ready" ? ALFRED_EMAIL_SUGGESTIONS : null
     : ALFRED_SUGGESTIONS;
+  const latestProposalReady = [...messages].reverse().find(
+    (message) => message.type === "calendar-proposal" && message.status === "proposed",
+  );
 
   return createPortal(
     <aside
       aria-hidden={!open}
+      inert={!open ? true : undefined}
       aria-label="Alfred panel"
       data-suspend-calendar-hotkeys="all"
       style={{
@@ -361,7 +411,7 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
                 What do you need?
               </div>
               <div style={{ fontSize: 11.5, color: "var(--color-text-faint)", marginTop: 6, lineHeight: 1.55 }}>
-                I can read your calendar, deadlines, bills, and mail. Read-only for now.
+                I can read your calendar, deadlines, bills, and mail, and prepare events for Calendar review.
               </div>
             </div>
             {suggestions ? <div>
@@ -383,11 +433,28 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
               if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items as AlfredRow[]} accent={accent} onActivateItem={onActivateChip} />;
               if (m.type === "summary") return <AlfredTransactionBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;
               if (m.type === "breakdown") return <AlfredBreakdown key={m.id} kind={m.kind} title={m.title} caption={m.caption} total={m.total} buckets={m.buckets as Array<{ label: string; count: number; items: AlfredRow[] }>} accent={accent} onActivateItem={onActivateChip} />;
+              if (m.type === "calendar-proposal") return (
+                <AlfredCalendarProposalCard
+                  key={m.id}
+                  proposal={m.proposal}
+                  status={m.status}
+                  handoffError={m.handoffError}
+                  createdEvent={m.createdEvent}
+                  editedInCalendar={m.editedInCalendar}
+                  accent={accent}
+                  onReview={() => reviewCalendarProposal(m.proposal)}
+                  onOpenEvent={() => { if (m.createdEvent) openCreatedEvent(m.createdEvent); }}
+                />
+              );
               if (m.type === "error") return <ErrorLine key={m.id} text={m.text} />;
               return null;
             })}
           </div>
         )}
+      </div>
+
+      <div aria-live="polite" className="sr-only">
+        {latestProposalReady ? <span key={latestProposalReady.proposal.id}>Proposed event ready</span> : null}
       </div>
 
       {/* composer (extracted: local draft state so keystrokes don't re-render the thread) */}

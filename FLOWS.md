@@ -112,7 +112,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 ## Calendar typed create seed → existing editor → normalized completion
 
-**Trigger:** an internal dashboard caller invokes `openCalendar` with an optional typed `eventCreateRequest`. This bridge is behavior-neutral and currently exposes no Alfred capability.
+**Trigger:** an internal dashboard caller, including a validated Alfred proposal card, invokes `openCalendar` with an optional typed `eventCreateRequest`.
 
 1. `shared/types/calendar.ts` — defines the serializable seed fields, optional resolved/requested source intent, opaque client origin, acknowledgement, and normalized completion values
 2. `src/components/dashboard/useCalendarWorkspaceState.ts:openCalendar` — stores one pending request, forces Events create routing through the existing open-request counter, and clears only the identity-matching request after acknowledgement
@@ -125,6 +125,20 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 9. `src/components/calendar/events/useCalendarEventEditor.ts` — after detail routing, consumes the retained request once and returns the same normalized saved event plus unchanged origin; cancel clears coordination without completion
 
 **State:** seed, origin, callbacks, and requested source name are mounted-client-only and are never persisted. Requested-name resolution covers sources returning within the same editor session; the existing full-page Gmail OAuth reconnect cannot retain this state under the no-persistence contract. Explicit routing/editor/seed failures are acknowledged; lazy chunk-load failures remain owned by the app-level recovery boundary and are outside this narrow bridge.
+
+## Alfred owner request → ephemeral proposal → Calendar-owned commit
+
+**Trigger:** the owner explicitly asks Alfred to create or revise one calendar event, optionally with a deliberately attached untrusted email.
+
+1. `POST /api/alfred/run` keeps the owner's current message outside the email trust fence and supplies it to the tool context as the only authorization source.
+2. `propose_calendar_event` accepts only title, schedule, location, description, and calendar fields. `alfred-calendar-proposals.ts` rejects email-initiated action, unsupported fields, invalid schedules, and unowned named calendars; resolves relative dates against owner-now or the email timestamp according to phrase source; and checks exact duplicates.
+3. The run loop holds one proposal in a run-local slot. Only a successful provider turn commits it to the in-memory conversation and emits `calendar_proposal` immediately before `run_end`; failure leaves the prior proposal active.
+4. `AlfredCalendarProposalCard` renders the validated structured proposal. **Review in Calendar** maps it directly to the typed Calendar seed and performs zero event writes.
+5. `DashboardShell` opens Calendar without first closing Alfred. The panel closes only when the existing editor acknowledges seed acceptance; rejection keeps the proposal and exposes **Try again**.
+6. The editor's existing **Create event** action performs the sole provider write. Its normalized completion value updates the still-mounted Alfred card to Created and enables **Open event**.
+7. The client posts only conversation/proposal identity to the Created acknowledgement route. Calendar save remains locally authoritative if that coordination call fails, and the identity is retried on the next Alfred run.
+
+**State:** proposal identity/status/duplicate fingerprint and expiry are process-local conversation state; the normalized created event is mounted-client state only. Neither proposal nor saved-event content is durable Alfred storage.
 
 ## 5. Calendar modifier-key selection gesture
 

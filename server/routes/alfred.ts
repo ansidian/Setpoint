@@ -6,13 +6,15 @@ import {
   createAlfredConversation,
   deleteAlfredConversation,
   getAlfredConversation,
+  acknowledgeAlfredCalendarProposalCreated,
+  alfredConversationExpiresAt,
 } from "../alfred/alfred-conversations.ts";
 import { runAlfred } from "../alfred/alfred-run.ts";
 import { getAlfredUsageStats } from "../alfred/alfred-usage-stats.ts";
 import { getEmailBody } from "../email/email-service.ts";
 import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.ts";
 import { htmlToPlainText } from "../email/html-to-text.ts";
-import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.ts";
+import { fetchCalendar, getCalendarSourceGroups, pacificDayBoundaries } from "../calendar/calendar.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.ts";
 import { readBillsMirrorRange } from "../bills/bills-service.ts";
@@ -38,6 +40,7 @@ const ALFRED_DEPS = {
   fetchCalendar,
   pacificDayBoundaries,
   loadUserConfig,
+  getCalendarSourceGroups,
   readCalendarDeadlineRange,
   readBillsMirrorRange,
   queryTransactions,
@@ -163,6 +166,14 @@ export function createAlfredRouter({
       conversation_id: conversation.id,
       provider: conversation.provider,
       model: conversation.model,
+      expires_at: alfredConversationExpiresAt(conversation),
+    });
+
+    const locallyCreatedProposalIds = Array.isArray(req.body?.createdProposalIds)
+      ? req.body.createdProposalIds.map(String).filter(Boolean).slice(0, 8)
+      : [];
+    locallyCreatedProposalIds.forEach((proposalId) => {
+      acknowledgeAlfredCalendarProposalCreated(conversation, proposalId);
     });
 
     try {
@@ -211,6 +222,17 @@ export function createAlfredRouter({
   router.delete("/conversations/:id", (req, res) => {
     deleteAlfredConversation(req.params.id);
     res.json({ ok: true });
+  });
+
+  router.post("/conversations/:id/proposals/:proposalId/created", (req, res) => {
+    if (req.body && Object.keys(req.body).length > 0) {
+      return res.status(400).json({ message: "Created acknowledgement accepts identity only" });
+    }
+    const conversation = getAlfredConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ message: "Alfred conversation not found" });
+    const status = acknowledgeAlfredCalendarProposalCreated(conversation, req.params.proposalId);
+    if (status === "missing") return res.status(404).json({ message: "Alfred proposal not found" });
+    return res.json({ ok: true, status });
   });
 
   return router;

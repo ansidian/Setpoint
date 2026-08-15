@@ -262,6 +262,48 @@ describe("alfred routes", () => {
     expect(startEvent.conversation_id).toBeTruthy();
     expect(startEvent.provider).toBe("anthropic");
     expect(startEvent.model).toBe("claude-sonnet-4-6");
+    expect(new Date(startEvent.expires_at).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("acknowledges Created idempotently without accepting saved-event content", async () => {
+    let conversationId = "";
+    testState.run.mockImplementation(async ({ emit, conversation }) => {
+      conversationId = conversation.id;
+      const proposal = {
+        id: "proposal-1",
+        revisionOf: null,
+        title: "Project review",
+        allDay: false,
+        startDate: "2026-08-18",
+        endDate: "2026-08-18",
+        startTime: "15:00",
+        endTime: "15:30",
+        location: "",
+        description: "",
+        source: { kind: "unavailable" as const },
+        duplicateCheckUnavailable: true,
+        past: false,
+      };
+      conversation.calendarProposalState.proposals.set(proposal.id, { proposal, status: "proposed" });
+      conversation.calendarProposalState.activeProposalId = proposal.id;
+      emit({ type: "run_end", stop_reason: "end_turn" });
+    });
+    const app = buildApp();
+    await auth(request(app).post("/api/alfred/run")).send({ message: "Schedule a project review" });
+
+    const rejectedContent = await auth(request(app)
+      .post(`/api/alfred/conversations/${conversationId}/proposals/proposal-1/created`))
+      .send({ event: { title: "must not be stored" } });
+    expect(rejectedContent.status).toBe(400);
+
+    const first = await auth(request(app)
+      .post(`/api/alfred/conversations/${conversationId}/proposals/proposal-1/created`))
+      .send({});
+    const second = await auth(request(app)
+      .post(`/api/alfred/conversations/${conversationId}/proposals/proposal-1/created`))
+      .send({});
+    expect(first.body).toEqual({ ok: true, status: "created" });
+    expect(second.body).toEqual({ ok: true, status: "created" });
   });
 
   it("uses the OpenAI provider and credential selected in Settings", async () => {

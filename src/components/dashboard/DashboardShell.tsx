@@ -256,6 +256,9 @@ export function DashboardShell({
     closeAlfred();
     openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
   }, [closeAlfred, openCalendar]);
+  const handleAlfredReviewCalendarProposal = useCallback((request: CalendarOpenRequest) => {
+    openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+  }, [openCalendar]);
 
   // Stable ShellHeader callbacks so the memoized header (+ its chrome children)
   // stop re-rendering on every dashboard SSE/refresh re-render of DashboardShell.
@@ -575,6 +578,7 @@ export function DashboardShell({
             emailHandoff={alfredEmailHandoff}
             newChatTick={alfredNewChatTick}
             onOpenCalendarItem={handleAlfredOpenCalendarItem}
+            onReviewCalendarProposal={handleAlfredReviewCalendarProposal}
           />
         </Suspense>
       )}

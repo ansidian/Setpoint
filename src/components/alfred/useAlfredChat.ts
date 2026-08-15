@@ -1,12 +1,20 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { deleteAlfredConversation, runAlfredStream } from "../../api";
+import {
+  acknowledgeAlfredCalendarProposalCreated,
+  deleteAlfredConversation,
+  runAlfredStream,
+} from "../../api";
 import type { AlfredPreparedEmailContext, AlfredProvider } from "../../../shared/types/alfred";
+import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import {
   applyAlfredEvent,
+  clearUncreatedAlfredProposals,
   makeAlfredNotice,
   makeUserMessage,
+  markAlfredProposalCreated,
   markAlfredUserMessageFailed,
+  setAlfredProposalHandoffError,
 } from "./alfredPanelModel";
 import type { AlfredPanelMessage } from "./alfredPanelModel";
 
@@ -19,6 +27,38 @@ export default function useAlfredChat() {
   const conversationRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const runSeqRef = useRef(0);
+  const expiryTimerRef = useRef<number | null>(null);
+  const expiresAtRef = useRef<number | null>(null);
+  const pendingCreatedAckRef = useRef(new Set<string>());
+
+  const expireUncreatedProposals = useCallback(() => {
+    const expiresAt = expiresAtRef.current;
+    if (!expiresAt || Date.now() < expiresAt) return;
+    setMessages((current) => clearUncreatedAlfredProposals(current));
+    expiresAtRef.current = null;
+  }, []);
+
+  const scheduleExpiry = useCallback((expiresAt: string | undefined) => {
+    if (expiryTimerRef.current != null) window.clearTimeout(expiryTimerRef.current);
+    const deadline = new Date(expiresAt || "").getTime();
+    expiresAtRef.current = Number.isFinite(deadline) ? deadline : null;
+    if (!expiresAtRef.current) return;
+    expiryTimerRef.current = window.setTimeout(
+      expireUncreatedProposals,
+      Math.max(0, expiresAtRef.current - Date.now()),
+    );
+  }, [expireUncreatedProposals]);
+
+  useEffect(() => {
+    const checkExpiry = () => expireUncreatedProposals();
+    document.addEventListener("visibilitychange", checkExpiry);
+    window.addEventListener("focus", checkExpiry);
+    return () => {
+      document.removeEventListener("visibilitychange", checkExpiry);
+      window.removeEventListener("focus", checkExpiry);
+      if (expiryTimerRef.current != null) window.clearTimeout(expiryTimerRef.current);
+    };
+  }, [expireUncreatedProposals]);
 
   const submit = useCallback(async (
     text: string,
@@ -42,6 +82,7 @@ export default function useAlfredChat() {
         message,
         conversationId: requestedConversationId,
         emailContextId: emailContext?.contextId,
+        createdProposalIds: [...pendingCreatedAckRef.current],
         signal: controller.signal,
         onEvent: (event) => {
           if (runSeqRef.current !== run) return; // superseded by new chat
@@ -49,6 +90,8 @@ export default function useAlfredChat() {
             const expired = Boolean(requestedConversationId && requestedConversationId !== event.conversation_id);
             conversationRef.current = event.conversation_id;
             setActiveModel({ provider: event.provider, model: event.model });
+            scheduleExpiry(event.expires_at);
+            pendingCreatedAckRef.current.clear();
             if (expired) {
               setMessages([
                 makeAlfredNotice("The previous chat expired, so this started a new chat."),
@@ -98,6 +141,23 @@ export default function useAlfredChat() {
         setBusy(false);
       }
     }
+  }, [scheduleExpiry]);
+
+  const setProposalHandoffError = useCallback((proposalId: string, error: string | null) => {
+    setMessages((current) => setAlfredProposalHandoffError(current, proposalId, error));
+  }, []);
+
+  const completeProposal = useCallback((proposalId: string, event: NormalizedCalendarEvent) => {
+    setMessages((current) => markAlfredProposalCreated(current, proposalId, event));
+    const conversationId = conversationRef.current;
+    if (!conversationId) return;
+    pendingCreatedAckRef.current.add(proposalId);
+    acknowledgeAlfredCalendarProposalCreated(conversationId, proposalId)
+      .then(() => { pendingCreatedAckRef.current.delete(proposalId); })
+      .catch(() => {
+        // Calendar save is authoritative. Retry this metadata-only coordination
+        // on the next Alfred request without surfacing a false save failure.
+      });
   }, []);
 
   // Clearing the composer draft is part of the new-chat action itself (not a
@@ -108,6 +168,9 @@ export default function useAlfredChat() {
     abortRef.current?.abort();
     const id = conversationRef.current;
     conversationRef.current = null;
+    expiresAtRef.current = null;
+    if (expiryTimerRef.current != null) window.clearTimeout(expiryTimerRef.current);
+    pendingCreatedAckRef.current.clear();
     if (id) deleteAlfredConversation(id).catch(() => {});
     setMessages([]);
     setActiveModel(null);
@@ -116,7 +179,7 @@ export default function useAlfredChat() {
     setBusy(false);
   }, []);
 
-  return { messages, busy, activeModel, draft, setDraft, submit, newChat } satisfies {
+  return { messages, busy, activeModel, draft, setDraft, submit, newChat, setProposalHandoffError, completeProposal } satisfies {
     messages: AlfredPanelMessage[];
     busy: boolean;
     activeModel: { provider: AlfredProvider; model: string } | null;
@@ -124,6 +187,8 @@ export default function useAlfredChat() {
     setDraft: Dispatch<SetStateAction<string>>;
     submit: (text: string, emailContext?: AlfredPreparedEmailContext | null) => Promise<AlfredSubmitResult>;
     newChat: () => void;
+    setProposalHandoffError: (proposalId: string, error: string | null) => void;
+    completeProposal: (proposalId: string, event: NormalizedCalendarEvent) => void;
   };
 }
 

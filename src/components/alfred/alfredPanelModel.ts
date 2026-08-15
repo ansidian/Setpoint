@@ -3,6 +3,7 @@
 // No React, no fetch — everything here is unit-testable.
 import type {
   AlfredBreakdownBucket,
+  AlfredCalendarProposal,
   AlfredEmailAttachmentRef,
   AlfredItem,
   AlfredItemKind,
@@ -10,7 +11,9 @@ import type {
   AlfredRunEvent,
   AlfredToolName,
 } from "../../../shared/types/alfred";
+import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { TransactionGroupBy, TransactionSummaryBucket } from "../../../shared/types/transactions";
+import { calendarEventDiffersFromProposal } from "./alfredCalendarProposalModel";
 
 export type AlfredToolState = "running" | "done" | "error";
 export interface AlfredToolEntry {
@@ -28,7 +31,16 @@ export type AlfredPanelMessage =
   | { id: string; type: "tools"; done: boolean; tools: AlfredToolEntry[] }
   | { id: string; type: "rows"; kind: AlfredItemKind; items: AlfredItem[] }
   | { id: string; type: "summary"; total: number; period: { start: string; end: string }; group_by: TransactionGroupBy; buckets: TransactionSummaryBucket[] }
-  | { id: string; type: "breakdown"; kind: AlfredItemKind; title: string; caption: string; total: number; buckets: AlfredBreakdownBucket[] };
+  | { id: string; type: "breakdown"; kind: AlfredItemKind; title: string; caption: string; total: number; buckets: AlfredBreakdownBucket[] }
+  | {
+      id: string;
+      type: "calendar-proposal";
+      proposal: AlfredCalendarProposal;
+      status: "proposed" | "superseded" | "created";
+      handoffError: string | null;
+      createdEvent: NormalizedCalendarEvent | null;
+      editedInCalendar: boolean;
+    };
 
 export type AlfredSuggestionIcon =
   | "sun"
@@ -72,6 +84,7 @@ const TOOL_RUNNING_LABELS: Partial<Record<AlfredToolName, string>> = {
   show_items: "Gathering rows…",
   search_transactions: "Searching transactions…",
   summarize_transactions: "Tallying transactions…",
+  propose_calendar_event: "Preparing event proposal…",
 };
 
 export function alfredToolRunningLabel(name: string): string {
@@ -89,15 +102,14 @@ export const ALFRED_SUGGESTIONS: AlfredSuggestion[] = [
   { icon: "bills", label: "How much did I spend on groceries this month?" },
 ];
 
-// Common next moves for a deliberately attached email. Keep these capability-
-// accurate: Alfred can analyze, draft, search, and cross-check, but cannot save
-// a calendar event or send a reply while its tools remain read-only.
+// Common next moves for a deliberately attached email. Alfred may prepare an
+// event proposal for the existing Calendar editor, but still cannot save it.
 export const ALFRED_EMAIL_SUGGESTIONS: AlfredSuggestion[] = [
   { icon: "summary", label: "Summarize this email" },
   { icon: "inbox", label: "What needs my attention in this email?" },
   { icon: "reply", label: "Draft a reply to this email" },
   { icon: "actions", label: "Pull out action items and deadlines" },
-  { icon: "calendar", label: "Extract details for a calendar event" },
+  { icon: "calendar", label: "Schedule this in my calendar" },
   { icon: "calendar", label: "Check this email against my calendar" },
   { icon: "search", label: "Find related messages in my inbox" },
 ];
@@ -247,6 +259,27 @@ export function applyAlfredEvent(messages: AlfredPanelMessage[], event: AlfredRu
         buckets,
       }];
     }
+    case "calendar_proposal": {
+      if (messages.some((message) => message.type === "calendar-proposal" && message.proposal.id === event.proposal.id)) {
+        return messages;
+      }
+      const settled = closeOpenSay(messages).map((message) => (
+        message.type === "calendar-proposal"
+        && message.status === "proposed"
+        && message.proposal.id === event.proposal.revisionOf
+          ? { ...message, status: "superseded" as const, handoffError: null }
+          : message
+      ));
+      return [...settled, {
+        id: nextId(),
+        type: "calendar-proposal",
+        proposal: event.proposal,
+        status: "proposed",
+        handoffError: null,
+        createdEvent: null,
+        editedInCalendar: false,
+      }];
+    }
     case "run_end":
       return finishTools(closeOpenSay(messages));
     case "run_error":
@@ -256,6 +289,40 @@ export function applyAlfredEvent(messages: AlfredPanelMessage[], event: AlfredRu
     default:
       return messages;
   }
+}
+
+export function setAlfredProposalHandoffError(
+  messages: AlfredPanelMessage[],
+  proposalId: string,
+  error: string | null,
+): AlfredPanelMessage[] {
+  return messages.map((message) => message.type === "calendar-proposal"
+    && message.proposal.id === proposalId
+    && message.status === "proposed"
+    ? { ...message, handoffError: error }
+    : message);
+}
+
+export function markAlfredProposalCreated(
+  messages: AlfredPanelMessage[],
+  proposalId: string,
+  event: NormalizedCalendarEvent,
+): AlfredPanelMessage[] {
+  return messages.map((message) => message.type === "calendar-proposal"
+    && message.proposal.id === proposalId
+    && message.status === "proposed"
+    ? {
+        ...message,
+        status: "created",
+        handoffError: null,
+        createdEvent: event,
+        editedInCalendar: calendarEventDiffersFromProposal(message.proposal, event),
+      }
+    : message);
+}
+
+export function clearUncreatedAlfredProposals(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {
+  return messages.filter((message) => message.type !== "calendar-proposal" || message.status === "created");
 }
 
 export function formatAlfredMoney(amount: unknown): string {

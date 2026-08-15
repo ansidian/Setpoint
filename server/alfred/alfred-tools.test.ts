@@ -43,13 +43,14 @@ beforeEach(() => {
 });
 
 describe("tool definitions", () => {
-  it("exposes exactly the nine read-only tools", () => {
+  it("exposes the nine read tools plus the non-mutating calendar proposal tool", () => {
     expect(ALFRED_TOOL_DEFINITIONS.map((tool) => tool.name).sort()).toEqual([
       "get_calendar_events",
       "get_deadlines",
       "get_email_body",
       "get_upcoming_bills",
       "group_items",
+      "propose_calendar_event",
       "search_email",
       "search_transactions",
       "show_items",

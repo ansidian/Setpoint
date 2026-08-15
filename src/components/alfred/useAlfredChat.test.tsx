@@ -6,6 +6,7 @@ import useAlfredChat from "./useAlfredChat";
 interface RequestRecord { path: string; method: string; body: Record<string, unknown> | null }
 let requests: RequestRecord[] = [];
 let runs: Response[] = [];
+let failCreatedAck = false;
 
 function sseResponse(events: AlfredRunEvent[]): Response {
   const encoder = new TextEncoder();
@@ -47,10 +48,14 @@ function deferredRun(events: AlfredRunEvent[]): { response: Response; finish: ()
 beforeEach(() => {
   requests = [];
   runs = [];
+  failCreatedAck = false;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const path = new URL(String(input), "https://setpoint.test").pathname;
     requests.push({ path, method: init.method ?? "GET", body: init.body ? JSON.parse(String(init.body)) : null });
     if (path === "/api/alfred/run") return runs.shift() ?? sseResponse([]);
+    if (path.endsWith("/created") && failCreatedAck) {
+      return new Response(JSON.stringify({ message: "temporary" }), { status: 503, headers: { "content-type": "application/json" } });
+    }
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
   });
 });
@@ -179,5 +184,64 @@ describe("useAlfredChat", () => {
     act(() => result.current.newChat());
 
     expect(result.current.draft).toBe("");
+  });
+
+  it("clears an uncreated proposal at the advertised conversation expiry", async () => {
+    vi.useFakeTimers();
+    const expiresAt = new Date(Date.now() + 1_000).toISOString();
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6", expires_at: expiresAt },
+      { type: "calendar_proposal", proposal: {
+        id: "proposal-1", revisionOf: null, title: "Project review", allDay: false,
+        startDate: "2026-08-18", endDate: "2026-08-18", startTime: "15:00", endTime: "15:30",
+        location: "", description: "", source: { kind: "unavailable" },
+        duplicateCheckUnavailable: true, past: false,
+      } },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const { result, unmount } = renderHook(() => useAlfredChat());
+    await act(async () => { await result.current.submit("Schedule a project review"); });
+    expect(result.current.messages.some((message) => message.type === "calendar-proposal")).toBe(true);
+
+    act(() => { vi.advanceTimersByTime(1_001); });
+    expect(result.current.messages.some((message) => message.type === "calendar-proposal")).toBe(false);
+    unmount();
+    vi.useRealTimers();
+  });
+
+  it("keeps Calendar save success authoritative and retries a failed Created acknowledgement on the next run", async () => {
+    failCreatedAck = true;
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "calendar_proposal", proposal: {
+        id: "proposal-1", revisionOf: null, title: "Project review", allDay: false,
+        startDate: "2026-08-18", endDate: "2026-08-18", startTime: "15:00", endTime: "15:30",
+        location: "", description: "", source: { kind: "unavailable" },
+        duplicateCheckUnavailable: true, past: false,
+      } },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const { result } = renderHook(() => useAlfredChat());
+    await act(async () => { await result.current.submit("Schedule a project review"); });
+    await act(async () => {
+      result.current.completeProposal("proposal-1", {
+        id: "event-1", title: "Project review", allDay: false,
+        startMs: new Date("2026-08-18T22:00:00.000Z").getTime(),
+        endMs: new Date("2026-08-18T22:30:00.000Z").getTime(),
+        location: "", description: "", calendarName: "Personal",
+        accountId: "account-1", calendarId: "primary",
+      } as never);
+    });
+    expect(result.current.messages.find((message) => message.type === "calendar-proposal"))
+      .toMatchObject({ status: "created", createdEvent: { id: "event-1" } });
+
+    failCreatedAck = false;
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    await act(async () => { await result.current.submit("What is next?"); });
+    expect(requests.filter((request) => request.path === "/api/alfred/run").at(-1)?.body)
+      .toMatchObject({ createdProposalIds: ["proposal-1"] });
   });
 });

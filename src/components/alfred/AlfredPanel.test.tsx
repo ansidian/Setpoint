@@ -1,8 +1,9 @@
 import { StrictMode, useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
 import AlfredPanel from "./AlfredPanel";
+import type { CalendarOpenRequest } from "../dashboard/dashboardShellModel";
 
 let runs: Response[] = [];
 let requests: Array<{ path: string; method: string; body: Record<string, unknown> | null }> = [];
@@ -84,7 +85,7 @@ describe("AlfredPanel", () => {
   it("shows the empty state with coverage-correct copy and suggestions", () => {
     render(<AlfredPanel {...baseProps} />);
     expect(screen.getByText("What do you need?")).toBeTruthy();
-    expect(screen.getByText(/Read-only for now/)).toBeTruthy();
+    expect(screen.getByText(/prepare events for Calendar review/)).toBeTruthy();
     expect(screen.getByText("What's left today?")).toBeTruthy();
     expect(screen.queryByText(/act on Todoist/)).toBeNull();
   });
@@ -112,6 +113,73 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("Bills · 1 upcoming")).toBeTruthy();
     expect(screen.getByText("Rent")).toBeTruthy();
     expect(screen.getByText("Any bills?")).toBeTruthy();
+  });
+
+  it("keeps Alfred open until Calendar accepts Review, performs zero writes on review, and uses normalized completion truth", async () => {
+    let reviewRequest: CalendarOpenRequest | null = null;
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "calendar_proposal", proposal: {
+        id: "proposal-1", revisionOf: null, title: "Project review", allDay: false,
+        startDate: "2026-08-18", endDate: "2026-08-18", startTime: "15:00", endTime: "15:30",
+        location: "Room 1", description: "Bring the notes.",
+        source: { kind: "resolved", accountId: "account-1", calendarId: "primary", calendarName: "Personal" },
+        duplicateCheckUnavailable: false, past: false,
+      } },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return <>
+        <AlfredPanel
+          {...baseProps}
+          open={open}
+          onClose={() => setOpen(false)}
+          onReviewCalendarProposal={(request) => { reviewRequest = request; }}
+        />
+        <output>{open ? "panel open" : "panel closed"}</output>
+      </>;
+    }
+    render(<Harness />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "Schedule a project review" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await screen.findByRole("button", { name: "Review in Calendar" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Review in Calendar" }));
+    expect(reviewRequest).toBeTruthy();
+    expect(screen.getByText("panel open")).toBeTruthy();
+    expect(requests.some((request) => request.path === "/api/calendar/events")).toBe(false);
+    expect(reviewRequest!.options.eventCreateRequest?.seed).toMatchObject({
+      title: "Project review",
+      startDate: "2026-08-18",
+      startTime: "15:00",
+    });
+
+    act(() => {
+      reviewRequest!.options.eventCreateRequest?.onAcknowledged?.({
+        status: "accepted",
+        origin: { kind: "alfred-proposal", referenceId: "proposal-1" },
+      });
+    });
+    expect(screen.getByText("panel closed")).toBeTruthy();
+
+    act(() => {
+      reviewRequest!.options.eventCreateRequest?.onCompleted?.({
+        origin: { kind: "alfred-proposal", referenceId: "proposal-1" },
+        event: {
+          id: "event-1", title: "Edited project review", allDay: false,
+          startMs: new Date("2026-08-18T23:00:00.000Z").getTime(),
+          endMs: new Date("2026-08-18T23:30:00.000Z").getTime(),
+          location: "Room 2", description: "Saved truth", calendarName: "Personal",
+          accountId: "account-1", calendarId: "primary",
+        } as never,
+      });
+    });
+    expect(await screen.findByText("Created")).toBeTruthy();
+    expect(screen.getByText("Edited project review")).toBeTruthy();
+    expect(screen.getByText("Edited in Calendar")).toBeTruthy();
+    await waitFor(() => expect(requests.some((request) => request.path.endsWith("/proposals/proposal-1/created"))).toBe(true));
   });
 
   it("stages and replaces an email without a model call, preserves the draft, then sends the replacement", async () => {
@@ -192,7 +260,7 @@ describe("AlfredPanel", () => {
     await waitFor(() => expect(screen.getByText("Summarize this email")).toBeTruthy());
     expect(screen.getByText("Draft a reply to this email")).toBeTruthy();
     expect(screen.getByText("Pull out action items and deadlines")).toBeTruthy();
-    expect(screen.getByText("Extract details for a calendar event")).toBeTruthy();
+    expect(screen.getByText("Schedule this in my calendar")).toBeTruthy();
     expect(screen.getByText("Find related messages in my inbox")).toBeTruthy();
     expect(screen.queryByText("What's left today?")).toBeNull();
 
@@ -405,6 +473,7 @@ describe("AlfredPanel", () => {
 
     rerender(<AlfredPanel {...baseProps} open={false} />);
     expect(screen.queryByRole("dialog", { name: "Email preview" })).toBeNull();
+    expect(document.querySelector('aside[aria-label="Alfred panel"]')?.hasAttribute("inert")).toBe(true);
   });
 
   it("Escape closes the preview first, then the panel", async () => {
