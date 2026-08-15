@@ -29,11 +29,19 @@ export interface NormalizedFetchedEmail extends Record<string, unknown> {
   folders?: string[];
 }
 
+export interface EmailBodyAttachment {
+  filename?: string | null;
+  contentType?: string | null;
+  contentDisposition?: string | null;
+  cid?: string | null;
+}
+
 export interface EmailHtmlBody {
   html_body: string;
   subject: string;
   from: string;
   date: string;
+  attachments?: EmailBodyAttachment[];
 }
 
 export interface EmailPlainBody {
@@ -42,6 +50,7 @@ export interface EmailPlainBody {
   subject?: string;
   from?: string;
   date?: string;
+  attachments?: EmailBodyAttachment[];
 }
 
 export type EmailBody = EmailHtmlBody | EmailPlainBody;

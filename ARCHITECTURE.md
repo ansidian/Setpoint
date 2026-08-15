@@ -475,6 +475,8 @@ Settings is the durable authority for Alfred's provider/model selection through 
 
 `server/alfred/alfred-run.ts` owns the provider-neutral read-only tool loop. Anthropic uses the Messages adapter and transient cache breakpoints. OpenAI uses the Responses adapter with SSE, function tools, `store: false`, and full returned output/reasoning-item replay for stateless tool continuation. Both adapters normalize text, tool calls, stop state, and token usage into the existing Alfred SSE and analytics contracts.
 
+The desktop reader's email-context handoff is a separate model-free preparation boundary. `POST /api/alfred/email-context` fetches and canonicalizes one provider email into a 50k-character-bounded, trust-fenced snapshot held behind an owner-scoped four-hour in-memory handle. `POST /api/alfred/run` claims that handle, includes it once with the owner prompt, consumes it on `run_end`, and releases it on failure. The browser and usage ledger never receive or persist the canonical body.
+
 ### Key Optimizations
 
 **Durable Triage Queue** — Provider sync creates pending triage rows and deduped jobs. Workers can resume from durable rows after process restarts. Arrival-grace jobs retain their 30-second durable `scheduled_for`; successful writes also arm one process-local earliest-deadline wake-up so healthy processes do not add cron-boundary jitter. The unchanged 30-second cron remains the restart and missed-timer fallback.
@@ -798,6 +800,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api-tokens` | `server/routes/auth-security.ts` |
 | DELETE | `/api-tokens/:id` | `server/routes/auth-security.ts` |
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.ts` |
+| POST | `/api/alfred/email-context` | `server/routes/alfred.ts` |
+| DELETE | `/api/alfred/email-context/:id` | `server/routes/alfred.ts` |
 | POST | `/api/alfred/run` | `server/routes/alfred.ts` |
 | GET | `/api/alfred/usage` | `server/routes/alfred.ts` |
 | GET | `/api/auth/check` | `server/routes/auth.ts` |

@@ -21,7 +21,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/dev.ts` — dev-only email re-indexing endpoint
 
 ### Domains + integrations
-- `alfred.ts` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
+- `alfred.ts` — Alfred model-free email-context prepare/discard, assistant run stream (SSE `POST /run`), and conversation reset; wires read-only domain deps
 - `calendar.ts` — calendar CRUD validation/provider orchestration, deadline reads, event search, and reminder hydration; successful event-write effects delegate to the calendar domain
 - `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
 - `dashboard.ts` — dashboard state, current-data SSE stream, health checks

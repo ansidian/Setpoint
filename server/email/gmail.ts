@@ -257,6 +257,12 @@ export async function fetchEmailBody(account: ConfiguredEmailAccount, uid: strin
     subject: parsed.subject || "",
     from: parsed.from?.text || "",
     date: parsed.date ? parsed.date.toISOString() : "",
+    attachments: (parsed.attachments || []).map((attachment) => ({
+      filename: attachment.filename || null,
+      contentType: attachment.contentType || null,
+      contentDisposition: attachment.contentDisposition || null,
+      cid: attachment.cid || null,
+    })),
   };
 }
 

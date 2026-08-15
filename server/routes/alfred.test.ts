@@ -7,10 +7,12 @@ import express from "express";
 import request from "../test-utils/supertest.ts";
 import type { Test } from "../test-utils/supertest.ts";
 import type { RunAlfredOptions } from "../alfred/alfred-types.ts";
+import type { EmailBody } from "../../shared/types/email.ts";
 
 const testState = vi.hoisted(() => ({
   db: { current: null as Client | null },
   run: vi.fn<(options: RunAlfredOptions) => Promise<void>>(),
+  getEmailBody: vi.fn<(userId: string, uid: string) => Promise<EmailBody>>(),
   modelConfig: { provider: "anthropic" as "anthropic" | "openai", model: "claude-sonnet-4-6" },
 }));
 
@@ -70,6 +72,7 @@ function buildApp(): express.Express {
       provider === "openai" ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
     ) || null,
     modelConfigResolver: async () => testState.modelConfig,
+    emailContextDeps: { getEmailBody: testState.getEmailBody },
   }));
   return app;
 }
@@ -86,6 +89,13 @@ describe("alfred routes", () => {
     testState.modelConfig = { provider: "anthropic", model: "claude-sonnet-4-6" };
     testState.db.current = await createMigratedDb();
     testState.run.mockReset();
+    testState.getEmailBody.mockReset();
+    testState.getEmailBody.mockResolvedValue({
+      html_body: "<p>Complete provider body</p>",
+      subject: "Provider subject",
+      from: "Pat <pat@example.com>",
+      date: "2026-08-14T12:00:00-07:00",
+    });
     clearAlfredConversations();
   });
 
@@ -98,6 +108,73 @@ describe("alfred routes", () => {
   it("requires a session", async () => {
     const res = await request(buildApp()).post("/api/alfred/run").send({ message: "hi" });
     expect(res.status).toBe(401);
+  });
+
+  it("requires a session to prepare email context", async () => {
+    const res = await request(buildApp()).post("/api/alfred/email-context").send({ uid: "mail-1" });
+    expect(res.status).toBe(401);
+  });
+
+  it("prepares email context without a model call and consumes it only after a successful run", async () => {
+    const app = buildApp();
+    const prepared = await auth(request(app).post("/api/alfred/email-context")).send({
+      uid: "mail-1",
+      subject: "List subject",
+      senderName: "List sender",
+      timestamp: "2026-08-14T11:00:00-07:00",
+    });
+
+    expect(prepared.status).toBe(201);
+    expect(prepared.body).toMatchObject({
+      uid: "mail-1",
+      subject: "Provider subject",
+      sender: { name: "Pat", address: "pat@example.com" },
+    });
+    expect(prepared.body).not.toHaveProperty("modelText");
+    // test-architecture: allow-boundary-interaction -- Model-free preparation must not cross the Alfred runner/provider boundary before the owner sends a prompt.
+    expect(testState.run).not.toHaveBeenCalled();
+
+    testState.run.mockImplementation(async ({ emailContext, emit }) => {
+      expect(emailContext?.modelText).toContain("Complete provider body");
+      emit({ type: "run_end", stop_reason: "end_turn" });
+    });
+    const sent = await auth(request(app).post("/api/alfred/run")).send({
+      message: "What should I do?",
+      emailContextId: prepared.body.contextId,
+    });
+    expect(sent.status).toBe(200);
+    expect(sent.text).toContain("event: run_end");
+
+    const reused = await auth(request(app).post("/api/alfred/run")).send({
+      message: "Reuse it",
+      emailContextId: prepared.body.contextId,
+    });
+    expect(reused.status).toBe(409);
+    expect(reused.body.code).toBe("email_context_expired");
+  });
+
+  it("releases prepared email context when a run fails so the same handle can retry", async () => {
+    const app = buildApp();
+    const prepared = await auth(request(app).post("/api/alfred/email-context")).send({ uid: "mail-1" });
+    testState.run.mockImplementationOnce(async ({ emit }) => {
+      emit({ type: "run_error", message: "Temporary failure" });
+    });
+    const failed = await auth(request(app).post("/api/alfred/run")).send({
+      message: "Try once",
+      emailContextId: prepared.body.contextId,
+    });
+    expect(failed.status).toBe(200);
+    expect(failed.text).toContain("event: run_error");
+
+    testState.run.mockImplementationOnce(async ({ emit }) => {
+      emit({ type: "run_end", stop_reason: "end_turn" });
+    });
+    const retried = await auth(request(app).post("/api/alfred/run")).send({
+      message: "Try again",
+      emailContextId: prepared.body.contextId,
+    });
+    expect(retried.status).toBe(200);
+    expect(retried.text).toContain("event: run_end");
   });
 
   it("requires a session for usage stats", async () => {
@@ -131,6 +208,28 @@ describe("alfred routes", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "");
     const res = await auth(request(buildApp()).post("/api/alfred/run")).send({ message: "hi" });
     expect(res.status).toBe(503);
+  });
+
+  it("releases claimed email context when run setup cannot resolve a credential", async () => {
+    const app = buildApp();
+    const prepared = await auth(request(app).post("/api/alfred/email-context")).send({ uid: "mail-credential" });
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    const unavailable = await auth(request(app).post("/api/alfred/run")).send({
+      message: "Read it",
+      emailContextId: prepared.body.contextId,
+    });
+    expect(unavailable.status).toBe(503);
+
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    testState.run.mockImplementationOnce(async ({ emit }) => {
+      emit({ type: "run_end", stop_reason: "end_turn" });
+    });
+    const retried = await auth(request(app).post("/api/alfred/run")).send({
+      message: "Read it",
+      emailContextId: prepared.body.contextId,
+    });
+    expect(retried.status).toBe(200);
+    expect(retried.text).toContain("event: run_end");
   });
 
   it("does not fall back to Anthropic when the selected OpenAI credential is missing", async () => {

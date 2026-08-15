@@ -12,6 +12,11 @@ describe("shouldRelayReaderKey", () => {
     expect(shouldRelayReaderKey({ key: "Escape", targetTag: "BODY" })).toBe(true);
   });
 
+  it("relays the Alfred toggle chord from inside the email body", () => {
+    expect(shouldRelayReaderKey({ key: "\\", metaKey: true, targetTag: "BODY" })).toBe(true);
+    expect(shouldRelayReaderKey({ key: "\\", ctrlKey: true, targetTag: "BODY" })).toBe(true);
+  });
+
   it("is case-insensitive (Shift/CapsLock variants still relay)", () => {
     expect(shouldRelayReaderKey({ key: "F", targetTag: "DIV" })).toBe(true);
   });
@@ -22,7 +27,7 @@ describe("shouldRelayReaderKey", () => {
     }
   });
 
-  it("does not relay modifier combos (copy/find/shell ⌘ shortcuts stay native)", () => {
+  it("does not relay other modifier combos (copy/find stay native)", () => {
     expect(shouldRelayReaderKey({ key: "e", metaKey: true, targetTag: "DIV" })).toBe(false);
     expect(shouldRelayReaderKey({ key: "f", ctrlKey: true, targetTag: "DIV" })).toBe(false);
     expect(shouldRelayReaderKey({ key: "1", altKey: true, targetTag: "DIV" })).toBe(false);

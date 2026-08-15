@@ -10,8 +10,8 @@
 //   o              open-in-Gmail
 //   escape         Alfred preview close (AlfredPanel capture listener)
 // Stored lowercased; membership is tested case-insensitively. Deliberately excludes
-// arrows/space/page keys and ⌘/Ctrl/Alt combos so native scroll, copy, and find
-// keep working inside the email.
+// arrows/space/page keys and modifier combos except Alfred's global Cmd/Ctrl+\
+// toggle, so native scroll, copy, and find keep working inside the email.
 export const READER_RELAY_KEYS = new Set([
   "1", "2",
   "h", "d", "f", "n", "a", "s", "e",
@@ -38,6 +38,7 @@ export function shouldRelayReaderKey({
   targetTag = "",
   isContentEditable = false,
 }: ReaderKeyDescriptor = {}): boolean {
+  if ((metaKey || ctrlKey) && !altKey && key === "\\") return true;
   if (metaKey || ctrlKey || altKey) return false;
   if (isContentEditable) return false;
   if (EDITABLE_TAGS.has(String(targetTag).toUpperCase())) return false;

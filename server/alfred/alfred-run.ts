@@ -9,6 +9,7 @@ import type {
 import { errorMessage } from "./alfred-types.ts";
 import { resolveAiApiKey } from "../ai-credentials.ts";
 import { getAlfredModelAdapter } from "./alfred-provider.ts";
+import { buildContextBearingAlfredMessage } from "./alfred-email-context.ts";
 
 const MAX_TOOL_ITERATIONS = 12;
 
@@ -56,6 +57,7 @@ async function runAlfredInner({
   userId,
   conversation,
   message,
+  emailContext = null,
   emit,
   signal = null,
   fetchImpl = globalThis.fetch,
@@ -67,7 +69,9 @@ async function runAlfredInner({
   transcriptCheckpoint = 0,
 }: RunAlfredOptions & { transcriptCheckpoint: number }): Promise<void> {
   const adapter = getAlfredModelAdapter(conversation.provider);
-  adapter.appendUserText(conversation, String(message));
+  adapter.appendUserText(conversation, emailContext
+    ? buildContextBearingAlfredMessage(String(message), emailContext)
+    : String(message));
   const system = buildAlfredSystemPrompt({ now: now() });
   const currentApiKey = apiKey === undefined
     ? await credentialResolver(conversation.provider)
@@ -108,7 +112,15 @@ async function runAlfredInner({
       eventType: "alfred_run_turn",
       model: turn.model || conversation.model,
       usage: turn.usage,
-      metadata: { iteration, conversation_id: conversation.id, provider: conversation.provider },
+      metadata: {
+        iteration,
+        conversation_id: conversation.id,
+        provider: conversation.provider,
+        ...(emailContext ? {
+          has_email_context: true,
+          email_context_chars: emailContext.charCount,
+        } : {}),
+      },
     }).catch((err) => {
       console.error("[Alfred] usage recording failed:", errorMessage(err, "usage recording failed"));
     });

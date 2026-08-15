@@ -131,6 +131,32 @@ describe("EmailIframe reader-hotkey relay", () => {
     });
   });
 
+  it("relays Cmd/Ctrl+Backslash with modifiers intact so the shell can toggle Alfred", () => {
+    const received: Array<{ key: string; code: string; metaKey: boolean; ctrlKey: boolean }> = [];
+    const onParentKey = (event: KeyboardEvent) => received.push({
+      key: event.key,
+      code: event.code,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+    });
+    window.addEventListener("keydown", onParentKey);
+    try {
+      const doc = loadedIframe().contentDocument!;
+      doc.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "\\", code: "Backslash", metaKey: true, bubbles: true, cancelable: true,
+      }));
+      doc.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "\\", code: "Backslash", ctrlKey: true, bubbles: true, cancelable: true,
+      }));
+      expect(received).toEqual([
+        { key: "\\", code: "Backslash", metaKey: true, ctrlKey: false },
+        { key: "\\", code: "Backslash", metaKey: false, ctrlKey: true },
+      ]);
+    } finally {
+      window.removeEventListener("keydown", onParentKey);
+    }
+  });
+
   it("leaves scroll/native keys and modifier combos un-relayed", () => {
     withParentKeyListener((received) => {
       const doc = loadedIframe().contentDocument!;

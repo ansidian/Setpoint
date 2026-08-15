@@ -114,7 +114,7 @@ describe("DesktopReader snapshot actions", () => {
 
     const remindButton = screen.getByRole("button", { name: /remind me/i });
     expect(remindButton.closest("[data-slot='tooltip-trigger']")).toBeNull();
-    expect(screen.getByRole("button", { name: /ask alfred/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /ask alfred/i }).dataset.alfred).toBe("true");
     const clusters = screen.getByTestId("desktop-reader-action-bar")
       .querySelectorAll<HTMLElement>("[data-action-cluster]");
     expect(Array.from(clusters, (cluster) => cluster.dataset.actionCluster)).toEqual([

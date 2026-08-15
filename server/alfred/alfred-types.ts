@@ -162,6 +162,10 @@ export interface RunAlfredOptions {
   userId: string;
   conversation: AlfredConversation;
   message: string;
+  emailContext?: {
+    modelText: string;
+    charCount: number;
+  } | null;
   emit: AlfredEmit;
   signal?: AbortSignal | null;
   fetchImpl?: AlfredFetch;
@@ -196,4 +200,12 @@ export interface OpenAiTurn {
 
 export function errorMessage(error: unknown, fallback = "tool failed"): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+export function isContextWindowError(error: unknown): boolean {
+  const value = error && typeof error === "object"
+    ? error as { message?: unknown; providerDetail?: unknown }
+    : {};
+  return /context(?:_|\s|-)?length|context window|prompt (?:is )?too long|input (?:is )?too long|maximum context|too many (?:input )?tokens/i
+    .test(`${String(value.message || "")} ${String(value.providerDetail || "")}`);
 }

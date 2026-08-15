@@ -6,6 +6,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 
 - `actualMetadata.ts` — shared Actual Budget metadata cache (accounts/payees/categories), single fetch, invalidated on the bills SSE change signal
 - `apiFetch.ts` — shared JSON request transport, timeout/auth error handling, and build-time demo adapter boundary
+- `alfredApi.ts` — Alfred context preparation/discard, conversation deletion, and demo-gated POST/SSE run transport
 - `bill-utils.ts` — bill amount/date formatting helpers
 - `breakpoints.ts` — `MOBILE_MAX_WIDTH` — single source of truth for the app's mobile gate
 - `calendar-links.ts` — URL/href/bare-URL detection and Zoom-link resolution for event descriptions

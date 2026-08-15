@@ -381,6 +381,10 @@ _Avoid_: Plugin, API call row, agent action
 The single rolling thread between the owner and **Alfred**. It survives closing and reopening the **Alfred Panel** within a dashboard session, is cleared by starting a new chat (Cmd/Ctrl+Shift+\), and is ephemeral — not a durable, browsable history.
 _Avoid_: Chat history, saved conversations, multi-thread chat
 
+**Pending Email Context**:
+One whole email deliberately staged from the desktop reader for the owner's next Alfred prompt. It is visible, removable, and model-free until Send; a successful run binds it to that owner turn.
+_Avoid_: Automatic email analysis, hidden attachment, queued Alfred prompt
+
 **Alfred Coverage**:
 The honest boundary of what **Alfred** can read and truthfully answer about, told to the owner rather than papered over.
 _Avoid_: Knows everything Setpoint knows, silent best-effort
@@ -389,7 +393,8 @@ _Avoid_: Knows everything Setpoint knows, silent best-effort
 - **Alfred Coverage** in the first release is indexed inbox mail, calendar events, deadlines, and upcoming bills; budget metadata/transactions, focus windows, and weather are out of scope and Alfred should say so when asked.
 - **Alfred** answers email questions through the existing email search retrieval engine; it replaces the inbox Ask-AI answer surface, not the inbox keyword search.
 - The inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) become an Alfred handoff: the **Alfred Panel** opens and runs the inbox query immediately, with no intermediate confirmation step.
-- **Alfred** has exactly two entry points: Cmd/Ctrl+\ and the inbox Alfred handoff. There is no floating launcher pill.
+- The desktop reader's `Ask Alfred` action opens the panel with **Pending Email Context** but does not run a model until the owner sends a prompt. It never forces a new **Alfred Conversation**; mobile and demo builds omit this action.
+- **Alfred** has panel shortcuts plus inbox query and desktop-reader context handoffs. There is no floating launcher pill.
 - Embedded item rows in an Alfred answer are resolved by reference: **Alfred** chooses which retrieved items to show, but row contents render verbatim from domain data, never from model-authored values.
 
 ## Example Dialogue

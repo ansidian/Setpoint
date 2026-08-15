@@ -268,6 +268,12 @@ export async function fetchEmailBody(email: string, password: string, uid: strin
       subject: parsed.subject || msg.envelope?.subject || "",
       from: parsed.from?.text || msg.envelope?.from?.[0]?.name || "",
       date: parsed.date ? parsed.date.toISOString() : "",
+      attachments: (parsed.attachments || []).map((attachment) => ({
+        filename: attachment.filename || null,
+        contentType: attachment.contentType || null,
+        contentDisposition: attachment.contentDisposition || null,
+        cid: attachment.cid || null,
+      })),
     };
   } finally {
     lock.release();

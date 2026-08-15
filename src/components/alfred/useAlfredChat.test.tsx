@@ -88,6 +88,52 @@ describe("useAlfredChat", () => {
     expect(requests[0]?.body).toEqual({ message: "hi" });
   });
 
+  it("sends only the prepared email handle and marks the owner turn failed when the run errors", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "run_error", code: "context_window_exceeded", message: "This chat is too long." },
+    ]);
+    const { result } = renderHook(() => useAlfredChat());
+    let submitResult: Awaited<ReturnType<typeof result.current.submit>> | undefined;
+
+    await act(async () => {
+      submitResult = await result.current.submit("Summarize it", {
+        contextId: "ctx-1",
+        uid: "mail-1",
+        subject: "A long email",
+        sender: { name: "Pat", address: "pat@example.com", display: "Pat <pat@example.com>" },
+        timestamp: "2026-08-14T19:00:00Z",
+        charCount: 400,
+      });
+    });
+
+    expect(requests[0]?.body).toEqual({ message: "Summarize it", emailContextId: "ctx-1" });
+    expect(submitResult).toEqual({ status: "error", code: "context_window_exceeded", message: "This chat is too long." });
+    expect(result.current.messages[0]).toMatchObject({ type: "user", failed: true, attachment: { uid: "mail-1" } });
+  });
+
+  it("visibly resets stale local transcript when the server starts a replacement conversation", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "text_delta", text: "Old answer." },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const { result } = renderHook(() => useAlfredChat());
+    await act(async () => { await result.current.submit("First"); });
+
+    scriptedRun([
+      { type: "run_start", conversation_id: "c2", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    await act(async () => { await result.current.submit("After expiry"); });
+
+    expect(result.current.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "notice", text: expect.stringContaining("expired") }),
+      expect.objectContaining({ type: "user", text: "After expiry" }),
+    ]));
+    expect(result.current.messages.some((message) => message.type === "say" && message.text === "Old answer.")).toBe(false);
+  });
+
   it("appends an error line when the run fails", async () => {
     runs.push(new Response(JSON.stringify({ message: "api down" }), { status: 500, headers: { "content-type": "application/json" } }));
     const { result } = renderHook(() => useAlfredChat());

@@ -11,6 +11,7 @@ import type { InboxSessionState } from "./useInboxSessionState";
 import type { InboxAccount, InboxEmailLike, InboxReadOverrides, InboxSelectionId } from "./inboxTypes";
 import type { InboxActiveSnapshotLike, ResurfacedEntry } from "./inboxWorkItems";
 import type { SnoozedEntry } from "./useInboxController";
+import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
 
 export interface InboxActiveSnapshotController {
   snapshot: InboxActiveSnapshotLike | null;
@@ -42,6 +43,7 @@ export interface InboxViewProps {
   commitPendingUndoSignal?: unknown;
   isMobile?: boolean;
   onAskAlfred?: (query: string) => void;
+  onAttachEmailToAlfred?: (source: AlfredEmailContextSource) => void;
 }
 
 const EMPTY_ACTIVE_SNAPSHOT_VIEW: InboxActiveSnapshotLike & { laneCounts: Record<string, number> } = {
@@ -75,6 +77,7 @@ export default function InboxView({
   commitPendingUndoSignal,
   isMobile = false,
   onAskAlfred,
+  onAttachEmailToAlfred,
 }: InboxViewProps) {
   const [storeSessionState, setStoreSessionState] = useInboxSessionStore();
   const resolvedSessionState = sessionState || storeSessionState;
@@ -186,6 +189,7 @@ export default function InboxView({
     onOpenRecordedBill,
     onRefresh: handleRefresh,
     readOnly,
+    onAttachEmailToAlfred,
     ...controller,
   };
 

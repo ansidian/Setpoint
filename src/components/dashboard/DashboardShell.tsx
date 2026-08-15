@@ -192,10 +192,12 @@ export function DashboardShell({
     alfredMounted,
     alfredNewChatTick,
     alfredHandoff,
+    alfredEmailHandoff,
     toggleAlfred,
     closeAlfred,
     alfredNewChat,
     askAlfred,
+    attachEmailToAlfred,
   } = useAlfredPanelState();
 
   const { liveReadOverrides, handleLiveReadOverrideChange, inboxUnreadSignalCount } =
@@ -503,6 +505,7 @@ export function DashboardShell({
               commitPendingUndoSignal={calendarOpenRequestId}
               isMobile={isMobile}
               onAskAlfred={askAlfred}
+              onAttachEmailToAlfred={attachEmailToAlfred}
             />
           </Suspense>
         </DashboardTabPanel>
@@ -567,6 +570,7 @@ export function DashboardShell({
             onClose={closeAlfred}
             accent={accent}
             handoff={alfredHandoff}
+            emailHandoff={alfredEmailHandoff}
             newChatTick={alfredNewChatTick}
             onOpenCalendarItem={handleAlfredOpenCalendarItem}
           />

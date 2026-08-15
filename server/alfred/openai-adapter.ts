@@ -60,9 +60,10 @@ async function runTurn({
     ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
-    await response.text().catch(() => "");
+    const providerDetail = await response.text().catch(() => "");
     throw Object.assign(new Error(`OpenAI API error (${response.status})`), {
       status: response.status,
+      providerDetail,
     });
   }
   if (!response.body) throw new Error("OpenAI response stream was empty");

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
 import AlfredPanel from "./AlfredPanel";
 
 let runs: Response[] = [];
+let requests: Array<{ path: string; method: string; body: Record<string, unknown> | null }> = [];
 
 function scriptedRun(events: AlfredRunEvent[]) {
   const encoder = new TextEncoder();
@@ -34,9 +35,37 @@ function deferredRun(events: AlfredRunEvent[]): { response: Response; finish: ()
 
 beforeEach(() => {
   runs = [];
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+  requests = [];
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const path = new URL(String(input), "https://setpoint.test").pathname;
+    const body = init.body ? JSON.parse(String(init.body)) as Record<string, unknown> : null;
+    requests.push({ path, method: init.method ?? "GET", body });
     if (path === "/api/alfred/run") return runs.shift() ?? new Response(null, { status: 200 });
+    if (path === "/api/alfred/email-context" && init.method === "POST") {
+      const uid = String(body?.uid || "mail");
+      return new Response(JSON.stringify({
+        contextId: `ctx-${uid}`,
+        uid,
+        subject: body?.subject || "(No subject)",
+        sender: {
+          name: body?.senderName || "",
+          address: body?.senderAddress || "",
+          display: body?.senderName || body?.senderAddress || "Unknown sender",
+        },
+        timestamp: body?.timestamp || null,
+        charCount: 120,
+      }), { status: 201, headers: { "content-type": "application/json" } });
+    }
+    if (path === "/api/briefing/email/remote-content-trust") {
+      return new Response(JSON.stringify([{
+        id: 1,
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "owner@example.com",
+        sender_address: "bob@example.com",
+        created_at: "2026-08-14T19:00:00Z",
+      }]), { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (path.startsWith("/api/briefing/email/")) {
       return new Response(JSON.stringify({ body: "Body" }), { status: 200, headers: { "content-type": "application/json" } });
     }
@@ -83,6 +112,116 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("Bills · 1 upcoming")).toBeTruthy();
     expect(screen.getByText("Rent")).toBeTruthy();
     expect(screen.getByText("Any bills?")).toBeTruthy();
+  });
+
+  it("stages and replaces an email without a model call, preserves the draft, then sends the replacement", async () => {
+    const emailA = {
+      id: "a",
+      source: { uid: "mail-a", subject: "Email A", senderName: "Alice", senderAddress: "alice@example.com", timestamp: "2026-08-14T18:00:00Z" },
+    };
+    const emailB = {
+      id: "b",
+      source: { uid: "mail-b", accountId: "gmail-work", subject: "Email B", senderName: "Bob", senderAddress: "bob@example.com", timestamp: "2026-08-14T19:00:00Z" },
+    };
+    const { rerender } = render(<AlfredPanel {...baseProps} emailHandoff={emailA} />);
+
+    await waitFor(() => expect(screen.getByTestId("alfred-pending-email-context").getAttribute("data-state")).toBe("ready"));
+    const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about this email…");
+    fireEvent.change(input, { target: { value: "Does this need a reply?" } });
+    expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
+
+    rerender(<AlfredPanel {...baseProps} emailHandoff={emailB} />);
+    await waitFor(() => expect(screen.getByText("Email B")).toBeTruthy());
+    expect(input.value).toBe("Does this need a reply?");
+    expect(screen.getByText("Attachment replaced—review your prompt")).toBeTruthy();
+    expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
+
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(1));
+    expect(requests.find((request) => request.path === "/api/alfred/run")?.body).toEqual({
+      message: "Does this need a reply?",
+      emailContextId: "ctx-mail-b",
+    });
+    expect(screen.getByRole("button", { name: /Preview email attachment: Email B/ })).toBeTruthy();
+    expect(screen.queryByTestId("alfred-pending-email-context")).toBeNull();
+
+    const preparationRequest = requests.find((request) => request.path === "/api/alfred/email-context" && request.body?.uid === "mail-b");
+    expect(preparationRequest?.body).not.toHaveProperty("accountId");
+
+    fireEvent.click(screen.getByRole("button", { name: /Preview email attachment: Email B/ }));
+    await waitFor(() => expect(requests.some((request) => request.path === "/api/briefing/email/remote-content-trust")).toBe(true));
+  });
+
+  it("stages the first email handoff on the same click that lazy-mounts Alfred in Strict Mode", async () => {
+    render(
+      <StrictMode>
+        <AlfredPanel {...baseProps} emailHandoff={{
+          id: "first-click",
+          source: {
+            uid: "mail-first",
+            subject: "First-click email",
+            senderName: "Alice",
+            senderAddress: "alice@example.com",
+            timestamp: "2026-08-14T18:00:00Z",
+          },
+        }} />
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("alfred-pending-email-context").getAttribute("data-state")).toBe("ready"));
+    expect(requests.filter((request) => request.path === "/api/alfred/email-context")).toHaveLength(1);
+    expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
+  });
+
+  it("offers attached-email prompts and sends the selected prompt with its context", async () => {
+    render(<AlfredPanel {...baseProps} emailHandoff={{
+      id: "suggestions",
+      source: {
+        uid: "mail-suggestions",
+        subject: "Dinner reservation",
+        senderName: "Bistro",
+        senderAddress: "hello@bistro.example",
+        timestamp: "2026-08-14T18:00:00Z",
+      },
+    }} />);
+
+    await waitFor(() => expect(screen.getByText("Summarize this email")).toBeTruthy());
+    expect(screen.getByText("Draft a reply to this email")).toBeTruthy();
+    expect(screen.getByText("Pull out action items and deadlines")).toBeTruthy();
+    expect(screen.getByText("Extract details for a calendar event")).toBeTruthy();
+    expect(screen.getByText("Find related messages in my inbox")).toBeTruthy();
+    expect(screen.queryByText("What's left today?")).toBeNull();
+
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    fireEvent.click(screen.getByText("Summarize this email"));
+
+    await waitFor(() => expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(1));
+    expect(requests.find((request) => request.path === "/api/alfred/run")?.body).toEqual({
+      message: "Summarize this email",
+      emailContextId: "ctx-mail-suggestions",
+    });
+  });
+
+  it("removes a staged email without clearing the draft or sending it", async () => {
+    render(<AlfredPanel {...baseProps} emailHandoff={{
+      id: "a",
+      source: { uid: "mail-a", subject: "Email A", senderName: "Alice", senderAddress: "alice@example.com", timestamp: null },
+    }} />);
+    await waitFor(() => expect(screen.getByTestId("alfred-pending-email-context").getAttribute("data-state")).toBe("ready"));
+    const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about this email…");
+    fireEvent.change(input, { target: { value: "Keep this draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Remove attached email: Email A" }));
+
+    expect(screen.queryByTestId("alfred-pending-email-context")).toBeNull();
+    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…").value).toBe("Keep this draft");
+    expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
   });
 
   it("keeps every between-tool narration interleaved with its steps and identifies the final answer", async () => {

@@ -3,15 +3,19 @@
 // composer-keystroke-rerenders-thread). Keeping the draft here means a keystroke
 // re-renders only this component, not AlfredPanel and its message thread.
 //
-// Behaviour is identical to the inline composer it replaced: Enter (with a
-// non-empty trimmed draft) submits and clears; the send button is disabled while
-// busy or empty and submits+clears on click; the placeholder/disabled state and
-// the focus-after-open transition match the prior panel logic. The draft is
-// lifted to the chat hook only on submit (via onSubmit); new chat clears it
-// through clearSignal.
+// The draft is lifted to the chat hook only on submit. A failed submission is
+// restored locally, while a normal new-chat action clears it through
+// clearSignal. Pending email preparation never prevents typing, but it does
+// prevent sending until the server has returned a context handle.
 import { memo, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { ArrowUp } from "lucide-react";
+import {
+  AlfredEmailHistoryNotice,
+  AlfredPendingEmailContextCard,
+} from "./AlfredEmailContext";
+import type { AlfredPendingEmailContext } from "./alfredEmailContextModel";
+import type { AlfredSubmitResult } from "./useAlfredChat";
 
 const dim = "rgba(205,214,244,0.55)";
 const text = "var(--sp-text)";
@@ -34,12 +38,39 @@ export interface AlfredComposerProps {
   accent: string;
   modelHint: string;
   clearSignal: string | number;
-  onSubmit: (text: string) => void;
+  focusSignal?: string | number | null;
+  pendingEmail: AlfredPendingEmailContext | null;
+  priorEmailCount: number;
+  overflowRecovery: boolean;
+  onPreviewEmail: () => void;
+  onRetryEmail: () => void;
+  onRemoveEmail: () => void;
+  onStartNewChat: () => void;
+  onRecoverNewChat: () => void;
+  onSubmit: (text: string) => Promise<AlfredSubmitResult>;
 }
 
-function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }: AlfredComposerProps) {
+function AlfredComposer({
+  open,
+  busy,
+  accent,
+  modelHint,
+  clearSignal,
+  focusSignal = null,
+  pendingEmail,
+  priorEmailCount,
+  overflowRecovery,
+  onPreviewEmail,
+  onRetryEmail,
+  onRemoveEmail,
+  onStartNewChat,
+  onRecoverNewChat,
+  onSubmit,
+}: AlfredComposerProps) {
   const [draft, setDraft] = useState("");
+  const [reviewCue, setReviewCue] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sendingRef = useRef(false);
 
   // New chat (header button or ⌘⇧\) changes clearSignal; clear the local draft to
   // match. React's documented "adjust state when a prop changes during render"
@@ -49,6 +80,15 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
   if (prevClearSignal !== clearSignal) {
     setPrevClearSignal(clearSignal);
     if (draft !== "") setDraft("");
+    if (reviewCue !== null) setReviewCue(null);
+  }
+
+  const attachmentKey = pendingEmail?.key ?? null;
+  const [previousAttachmentKey, setPreviousAttachmentKey] = useState(attachmentKey);
+  if (previousAttachmentKey !== attachmentKey) {
+    const replaced = previousAttachmentKey !== null && attachmentKey !== null;
+    setPreviousAttachmentKey(attachmentKey);
+    if (replaced && draft.trim()) setReviewCue("Attachment replaced—review your prompt");
   }
 
   // focus composer after the open transition (moved verbatim from AlfredPanel)
@@ -58,29 +98,68 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
     return () => clearTimeout(t);
   }, [open]);
 
-  function send(): void {
+  useEffect(() => {
+    if (!open || focusSignal == null) return;
+    inputRef.current?.focus();
+  }, [focusSignal, open]);
+
+  async function send(): Promise<void> {
     const trimmed = draft.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
+    const contextReady = !pendingEmail || pendingEmail.status === "ready";
+    if (!trimmed || busy || sendingRef.current || !contextReady) return;
+    sendingRef.current = true;
     setDraft("");
+    setReviewCue(null);
+    const result = await onSubmit(trimmed);
+    sendingRef.current = false;
+    if (result.status === "error" || result.status === "ignored") setDraft(trimmed);
   }
 
   function onComposerKey(e: KeyboardEvent<HTMLInputElement>): void {
     if (e.key === "Enter" && draft.trim()) {
       e.preventDefault();
-      send();
+      void send();
     }
   }
 
+  const contextReady = !pendingEmail || pendingEmail.status === "ready";
+  const sendDisabled = busy || !draft.trim() || !contextReady;
+  const showHistoryNotice = Boolean(pendingEmail && priorEmailCount > 0);
+
   return (
-    <div style={{ padding: "10px 14px 12px", borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+      {pendingEmail && (overflowRecovery || showHistoryNotice) ? (
+        <AlfredEmailHistoryNotice
+          count={priorEmailCount}
+          overflowRecovery={overflowRecovery}
+          onStartNewChat={overflowRecovery ? onRecoverNewChat : onStartNewChat}
+        />
+      ) : null}
+      <div style={{ padding: "10px 14px 12px" }}>
+        {pendingEmail ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+            <AlfredPendingEmailContextCard
+              pending={pendingEmail}
+              accent={accent}
+              onPreview={onPreviewEmail}
+              onRetry={onRetryEmail}
+              onRemove={onRemoveEmail}
+            />
+            <span aria-live="polite" style={{ minHeight: reviewCue ? 13 : 0, color: "var(--sp-blue)", fontSize: 9.5, lineHeight: 1.35 }}>
+              {reviewCue || ""}
+            </span>
+          </div>
+        ) : null}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
           ref={inputRef}
           value={draft}
           disabled={busy}
-          placeholder={busy ? "Working…" : "Ask about your day…"}
-          onChange={(e) => setDraft(e.target.value)}
+          placeholder={busy ? "Working…" : pendingEmail ? "Ask about this email…" : "Ask about your day…"}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (reviewCue) setReviewCue(null);
+          }}
           onKeyDown={onComposerKey}
           className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
           style={{
@@ -91,25 +170,25 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
         />
         <button
           type="button"
-          disabled={busy || !draft.trim()}
-          onClick={send}
+          disabled={sendDisabled}
+          onClick={() => { void send(); }}
           title="Send"
           aria-label="Send message to Alfred"
           className="transition-[filter,transform] duration-150 enabled:hover:-translate-y-px enabled:hover:brightness-110 enabled:focus-visible:outline-none enabled:focus-visible:ring-2 enabled:focus-visible:ring-[color:var(--ea-accent)]/60 enabled:active:translate-y-0 enabled:active:brightness-95 motion-reduce:transition-none motion-reduce:transform-none"
           style={{
             display: "inline-flex", padding: "8px 10px", borderRadius: 8, border: "none",
-            cursor: busy || !draft.trim() ? "default" : "pointer",
-            background: busy || !draft.trim() ? "rgba(255,255,255,0.05)" : accent,
-            color: busy || !draft.trim() ? dim : "#16161e",
+            cursor: sendDisabled ? "default" : "pointer",
+            background: sendDisabled ? "rgba(255,255,255,0.05)" : accent,
+            color: sendDisabled ? dim : "#16161e",
           }}
         >
           <ArrowUp size={12} strokeWidth={2.4} />
         </button>
-      </div>
-      <div style={{
+        </div>
+        <div style={{
         display: "flex", alignItems: "center", gap: 6, marginTop: 8,
         fontSize: 9, color: "var(--color-text-faint)", fontFamily: mono,
-      }}>
+        }}>
         <Kbd>⌘</Kbd><Kbd>\</Kbd>
         <span style={{ whiteSpace: "nowrap" }}>toggle</span>
         <span>·</span>
@@ -117,6 +196,7 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
         <span style={{ whiteSpace: "nowrap" }}>new chat</span>
         <span style={{ flex: 1 }} />
         <span style={{ whiteSpace: "nowrap" }}>{modelHint}</span>
+        </div>
       </div>
     </div>
   );

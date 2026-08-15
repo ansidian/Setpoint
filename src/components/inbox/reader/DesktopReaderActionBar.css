@@ -80,6 +80,56 @@
   color: var(--reader-action-color);
 }
 
+.desktop-reader-action-button[data-alfred="true"] {
+  border-color: transparent;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--sp-panel) 94%, var(--ea-accent, #cba6da)),
+      color-mix(in srgb, var(--sp-panel) 96%, #89b4fa)
+    ) padding-box,
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, var(--ea-accent, #cba6da) 56%, transparent),
+      rgba(137, 180, 250, 0.38) 58%,
+      rgba(137, 220, 235, 0.22)
+    ) border-box;
+  color: color-mix(in srgb, var(--sp-text) 88%, var(--ea-accent, #cba6da));
+}
+
+.desktop-reader-action-button[data-alfred="true"]:hover:not(:disabled),
+.desktop-reader-action-button[data-alfred="true"]:focus-visible {
+  border-color: transparent;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--sp-panel) 90%, var(--ea-accent, #cba6da)),
+      color-mix(in srgb, var(--sp-panel) 93%, #89b4fa)
+    ) padding-box,
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, var(--ea-accent, #cba6da) 72%, transparent),
+      rgba(137, 180, 250, 0.54) 58%,
+      rgba(137, 220, 235, 0.34)
+    ) border-box;
+  color: var(--sp-text);
+}
+
+.desktop-reader-action-button[data-alfred="true"]:active:not(:disabled) {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--sp-panel) 88%, var(--ea-accent, #cba6da)),
+      color-mix(in srgb, var(--sp-panel) 91%, #89b4fa)
+    ) padding-box,
+    linear-gradient(
+      115deg,
+      color-mix(in srgb, var(--ea-accent, #cba6da) 66%, transparent),
+      rgba(137, 180, 250, 0.48) 58%,
+      rgba(137, 220, 235, 0.3)
+    ) border-box;
+}
+
 .desktop-reader-action-button[data-danger="true"] {
   --reader-action-color: var(--sp-rose);
   border-color: color-mix(in srgb, var(--sp-rose) 22%, transparent);

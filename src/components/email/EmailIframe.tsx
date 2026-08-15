@@ -74,8 +74,9 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
   // (see readerHotkeyRelay.ts) onto the PARENT DOCUMENT — not window — so the
   // event propagates window->document->window and reaches both the window-level
   // listeners (inbox j/k/triage, shell 1/2) and Alfred's document-capture Esc
-  // listener. Non-command keys (arrows/space/page, ⌘/Ctrl/Alt combos) are left
-  // native so email scroll, copy, and find still work.
+  // listener. Non-command keys (arrows/space/page and ordinary modifier combos)
+  // are left native so email scroll, copy, and find still work; Alfred's global
+  // Cmd/Ctrl+Backslash toggle is the one admitted modifier chord.
   const relayReaderHotkey = useCallback((event: KeyboardEvent) => {
     // Avoid `instanceof HTMLElement`: iframe elements belong to a different
     // realm, so that check rejects real inputs/textareas from the email document.
@@ -97,6 +98,9 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
       bubbles: true,
       cancelable: true,
       shiftKey: event.shiftKey,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
     });
     const parentDocument = window.parent?.document;
     if (!parentDocument) return;

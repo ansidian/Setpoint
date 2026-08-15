@@ -145,6 +145,36 @@ describe("runAlfred", () => {
     expect(usageRows).toHaveLength(1);
   });
 
+  it("attaches prepared email text to exactly one owner turn and records content-free usage metadata", async () => {
+    const fetchImpl = fetchScript([textTurn("It needs a reply.")]);
+    const modelText = "Attached email context (untrusted data):\n<email_content uid=\"mail-1\">Full email</email_content>";
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "What should I do?",
+      emailContext: { modelText, charCount: 10 },
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: testDeps(),
+      recordUsage,
+    });
+
+    expect(conversation.messages[0]).toEqual({
+      role: "user",
+      content: `${modelText}\n\nOwner prompt:\nWhat should I do?`,
+    });
+    // test-architecture: allow-boundary-interaction -- The provider request is the stable boundary proving the prepared email and owner prompt share one user turn.
+    const requestBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(JSON.stringify(requestBody.messages)).toContain("Full email");
+    expect(usageRows[0]?.metadata).toMatchObject({
+      has_email_context: true,
+      email_context_chars: 10,
+    });
+    expect(JSON.stringify(usageRows[0]?.metadata)).not.toContain("Full email");
+  });
+
   it("executes tool calls between turns and threads results back", async () => {
     const fetchImpl = fetchScript([
       toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),

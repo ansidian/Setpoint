@@ -3,6 +3,7 @@
 // No React, no fetch — everything here is unit-testable.
 import type {
   AlfredBreakdownBucket,
+  AlfredEmailAttachmentRef,
   AlfredItem,
   AlfredItemKind,
   AlfredProvider,
@@ -20,7 +21,8 @@ export interface AlfredToolEntry {
 }
 
 export type AlfredPanelMessage =
-  | { id: string; type: "user"; text: string }
+  | { id: string; type: "user"; text: string; attachment?: AlfredEmailAttachmentRef; failed?: boolean }
+  | { id: string; type: "notice"; text: string }
   | { id: string; type: "error"; text: string }
   | { id: string; type: "say"; text: string; done: boolean; preamble?: boolean }
   | { id: string; type: "tools"; done: boolean; tools: AlfredToolEntry[] }
@@ -28,7 +30,16 @@ export type AlfredPanelMessage =
   | { id: string; type: "summary"; total: number; period: { start: string; end: string }; group_by: TransactionGroupBy; buckets: TransactionSummaryBucket[] }
   | { id: string; type: "breakdown"; kind: AlfredItemKind; title: string; caption: string; total: number; buckets: AlfredBreakdownBucket[] };
 
-export type AlfredSuggestionIcon = "sun" | "bills" | "inbox" | "deadlines" | "calendar" | "search";
+export type AlfredSuggestionIcon =
+  | "sun"
+  | "bills"
+  | "inbox"
+  | "deadlines"
+  | "calendar"
+  | "search"
+  | "summary"
+  | "reply"
+  | "actions";
 export interface AlfredSuggestion { icon: AlfredSuggestionIcon; label: string }
 
 let alfredMsgSeq = 0;
@@ -76,6 +87,19 @@ export const ALFRED_SUGGESTIONS: AlfredSuggestion[] = [
   { icon: "calendar", label: "What's on my calendar tomorrow?" },
   { icon: "search", label: "Find the car insurance renewal email" },
   { icon: "bills", label: "How much did I spend on groceries this month?" },
+];
+
+// Common next moves for a deliberately attached email. Keep these capability-
+// accurate: Alfred can analyze, draft, search, and cross-check, but cannot save
+// a calendar event or send a reply while its tools remain read-only.
+export const ALFRED_EMAIL_SUGGESTIONS: AlfredSuggestion[] = [
+  { icon: "summary", label: "Summarize this email" },
+  { icon: "inbox", label: "What needs my attention in this email?" },
+  { icon: "reply", label: "Draft a reply to this email" },
+  { icon: "actions", label: "Pull out action items and deadlines" },
+  { icon: "calendar", label: "Extract details for a calendar event" },
+  { icon: "calendar", label: "Check this email against my calendar" },
+  { icon: "search", label: "Find related messages in my inbox" },
 ];
 
 function closeOpenSay(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {
@@ -127,8 +151,18 @@ function finishTools(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {
   return changed ? next : messages;
 }
 
-export function makeUserMessage(text: string): AlfredPanelMessage {
-  return { id: nextId(), type: "user", text };
+export function makeUserMessage(text: string, attachment?: AlfredEmailAttachmentRef): AlfredPanelMessage {
+  return { id: nextId(), type: "user", text, ...(attachment ? { attachment } : {}) };
+}
+
+export function makeAlfredNotice(text: string): AlfredPanelMessage {
+  return { id: nextId(), type: "notice", text };
+}
+
+export function markAlfredUserMessageFailed(messages: AlfredPanelMessage[], id: string): AlfredPanelMessage[] {
+  return messages.map((message) => message.id === id && message.type === "user"
+    ? { ...message, failed: true }
+    : message);
 }
 
 export function applyAlfredEvent(messages: AlfredPanelMessage[], event: AlfredRunEvent): AlfredPanelMessage[] {

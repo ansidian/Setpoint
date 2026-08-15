@@ -26,7 +26,11 @@ export function wrapEmailContent(uid: string, text: unknown): string {
   // Neutralize any attacker-supplied delimiter in the untrusted text so it can't
   // close the trust fence early and smuggle "trusted" instructions after it.
   const safe = String(text || "").replace(/<(\/?)email_content/gi, "&lt;$1email_content");
-  return `<email_content uid="${uid}">${safe}</email_content>`;
+  const safeUid = String(uid || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+  return `<email_content uid="${safeUid}">${safe}</email_content>`;
 }
 
 // htmlToPlainText collapses newlines, so the body arrives as one line — quoted

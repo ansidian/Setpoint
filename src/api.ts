@@ -1,5 +1,4 @@
 import { isDemoMode } from "./demo/config.ts";
-import { readSseStream } from "./lib/sseStream";
 import { apiFetch } from "./lib/apiFetch";
 import type {
   AuthenticationResponseJSON,
@@ -108,9 +107,6 @@ import type {
   PinnedEmailSnapshot,
 } from "../shared/types/email.ts";
 import type {
-  AlfredConversationDeleteResponse,
-  AlfredRunEvent,
-  AlfredStreamOptions,
   AlfredUsageStats,
 } from "../shared/types/alfred.ts";
 import type { CapabilityStatusResponse } from "../shared/types/capabilities.ts";
@@ -118,6 +114,7 @@ import type { InstanceCredentialMetadata, InstanceCredentialMetadataResponse } f
 export { discardGoogleOAuthPending, discardInstanceCredentialPending } from "./lib/instanceCredentialPendingApi.ts";
 export * from "./lib/remoteContentTrustApi.ts";
 export * from "./lib/transactionImportApi.ts";
+export * from "./lib/alfredApi.ts";
 
 type ApiId = string | number;
 export type AuthResponse = {
@@ -525,39 +522,6 @@ export const searchEmails = (query: string, limit?: string | number, { signal }:
   if (limit) params.set("limit", String(limit));
   return apiFetch(`/api/briefing/email-search?${params}`, { signal });
 };
-
-// Alfred — streaming run + conversation reset. Not apiFetch: the response is
-// an SSE stream, not JSON.
-export async function runAlfredStream({ message, conversationId, signal, onEvent }: AlfredStreamOptions): Promise<void> {
-  if (isDemoMode()) {
-    throw new Error("Alfred is not available in the demo");
-  }
-  const res = await fetch("/api/alfred/run", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Requested-With": "Setpoint",
-    },
-    body: JSON.stringify({
-      message,
-      ...(conversationId ? { conversationId } : {}),
-    }),
-    ...(signal ? { signal } : {}),
-  });
-  if (res.status === 401) {
-    window.location.href = "/login";
-    throw new Error("Not authenticated");
-  }
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => null);
-    throw new Error(errorMessage(body) || `API error: ${res.status}`);
-  }
-  await readSseStream(res.body as ReadableStream<Uint8Array>, (payload) => onEvent(payload as AlfredRunEvent));
-}
-
-export const deleteAlfredConversation = (id: ApiId): Promise<AlfredConversationDeleteResponse> => (
-  apiFetch(`/api/alfred/conversations/${encodeURIComponent(id)}`, { method: "DELETE" })
-);
 
 // Important Senders
 export const getImportantSenders = (): Promise<ImportantSender[]> => apiFetch("/api/ea/important-senders");

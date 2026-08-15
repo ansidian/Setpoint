@@ -9,6 +9,7 @@
 import { memo, useState } from "react";
 import type { AlfredSuggestion, AlfredToolEntry } from "./alfredPanelModel";
 import {
+  AlignLeft,
   AlertCircle,
   ArrowRight,
   Calendar,
@@ -18,7 +19,9 @@ import {
   CreditCard,
   Flag,
   Inbox,
+  ListChecks,
   RefreshCw,
+  Reply,
   Search,
   Sun,
 } from "lucide-react";
@@ -26,20 +29,51 @@ import {
   ALFRED_SUGGESTIONS,
   alfredToolRunningLabel,
 } from "./alfredPanelModel";
+import type { AlfredEmailAttachmentRef } from "../../../shared/types/alfred";
+import { AlfredSentEmailReference } from "./AlfredEmailContext";
 import AlfredRichText from "./AlfredRichText";
 
 const dimmer = "rgba(205,214,244,0.4)";
 const text = "var(--sp-text)";
 const mono = "var(--font-mono, 'Fira Code', ui-monospace, monospace)";
 
-export const UserLine = memo(function UserLine({ text: body, accent }: { text: string; accent: string }) {
+export const UserLine = memo(function UserLine({
+  text: body,
+  accent,
+  attachment,
+  failed = false,
+  onPreviewAttachment,
+}: {
+  text: string;
+  accent: string;
+  attachment?: AlfredEmailAttachmentRef;
+  failed?: boolean;
+  onPreviewAttachment?: (attachment: AlfredEmailAttachmentRef) => void;
+}) {
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+      {attachment && onPreviewAttachment ? (
+        <AlfredSentEmailReference
+          attachment={attachment}
+          failed={failed}
+          onPreview={() => onPreviewAttachment(attachment)}
+        />
+      ) : null}
       <div style={{
         maxWidth: "85%", padding: "7px 11px", borderRadius: 10,
-        background: `${accent}1a`, border: `1px solid ${accent}2e`,
+        background: failed ? "color-mix(in srgb, var(--sp-rose) 6%, transparent)" : `${accent}1a`,
+        border: `1px solid ${failed ? "color-mix(in srgb, var(--sp-rose) 28%, transparent)" : `${accent}2e`}`,
         fontSize: 12, lineHeight: 1.5, color: text,
       }}>{body}</div>
+    </div>
+  );
+});
+
+export const NoticeLine = memo(function NoticeLine({ text: body }: { text: string }) {
+  return (
+    <div role="status" style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--color-text-faint)", fontSize: 9.5, lineHeight: 1.45 }}>
+      <AlertCircle size={10} color="var(--sp-blue)" />
+      {body}
     </div>
   );
 });
@@ -161,13 +195,29 @@ export const ErrorLine = memo(function ErrorLine({ text: body }: { text: string 
 });
 
 const SUGGESTION_ICONS = {
-  sun: Sun, bills: CreditCard, inbox: Inbox, deadlines: Flag, calendar: Calendar, search: Search,
+  sun: Sun,
+  bills: CreditCard,
+  inbox: Inbox,
+  deadlines: Flag,
+  calendar: Calendar,
+  search: Search,
+  summary: AlignLeft,
+  reply: Reply,
+  actions: ListChecks,
 };
 
-export function SuggestionList({ onPick, accent }: { onPick: (label: string) => void; accent: string }) {
+export function SuggestionList({
+  suggestions = ALFRED_SUGGESTIONS,
+  onPick,
+  accent,
+}: {
+  suggestions?: AlfredSuggestion[];
+  onPick: (label: string) => void;
+  accent: string;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      {ALFRED_SUGGESTIONS.map((s) => (
+      {suggestions.map((s) => (
         <SuggestionRow key={s.label} suggestion={s} onPick={onPick} accent={accent} />
       ))}
     </div>

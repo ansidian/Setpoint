@@ -5,6 +5,7 @@ import InboxList from "./InboxList";
 import Reader from "./reader/Reader";
 import InboxUndoToast from "./InboxUndoToast";
 import type { InboxPaneProps } from "./inboxViewTypes";
+import { isDemoMode } from "../../demo/config";
 
 function InboxDesktopPane({
   accent,
@@ -39,6 +40,7 @@ function InboxDesktopPane({
   indexedSearchHasMore,
   loadMoreIndexedSearch,
   onAskAlfred,
+  onAttachEmailToAlfred,
   visibleEmails,
   laneCounts,
   liveCount,
@@ -74,6 +76,23 @@ function InboxDesktopPane({
     setWorkspaceDirty(false);
     closeSelectedEmail();
   };
+  const selectedUid = selectedEmail?.uid || selectedEmail?.email_id || selectedEmail?.id;
+  const attachSelectedEmail = !isDemoMode() && selectedEmail && selectedUid && onAttachEmailToAlfred
+    ? () => onAttachEmailToAlfred({
+      uid: String(selectedUid),
+      accountId: selectedEmail.account_id
+        || selectedEmail.accountId
+        || selectedEmail._account?.account_id
+        || selectedEmail._account?.id
+        || selectedAccount?.account_id
+        || selectedAccount?.id
+        || null,
+      subject: selectedEmail.subject,
+      senderName: selectedEmail.from || selectedEmail.from_name,
+      senderAddress: selectedEmail.fromEmail || selectedEmail.from_email || selectedEmail.from_address,
+      timestamp: selectedEmail.date || selectedEmail.email_date,
+    })
+    : undefined;
   return (
     <div
       data-testid="inbox-desktop-view"
@@ -191,6 +210,7 @@ function InboxDesktopPane({
               billOpen={billOpen}
               setBillOpen={setBillOpen}
               onOpenRecordedBill={onOpenRecordedBill}
+              onAskAlfred={attachSelectedEmail}
               isMobile={false}
               readOnly={readOnly}
             />

@@ -24,6 +24,30 @@ export interface AlfredEmailSender {
   address?: string | null;
 }
 
+export interface AlfredEmailContextSource {
+  uid: string;
+  /** Client-only preview identity; stripped before context preparation. */
+  accountId?: string | null;
+  subject?: string | null;
+  senderName?: string | null;
+  senderAddress?: string | null;
+  timestamp?: string | null;
+}
+
+export interface AlfredEmailAttachmentRef {
+  uid: string;
+  /** Client-only preview identity; never included in the model context. */
+  accountId?: string | null;
+  subject: string;
+  sender: AlfredEmailSender & { display: string };
+  timestamp: string | null;
+  charCount: number;
+}
+
+export interface AlfredPreparedEmailContext extends AlfredEmailAttachmentRef {
+  contextId: string;
+}
+
 export interface AlfredEmailItem extends Record<string, unknown> {
   uid: string;
   subject?: string | null;
@@ -121,6 +145,7 @@ export interface AlfredRunEndEvent {
 export interface AlfredRunErrorEvent {
   type: "run_error";
   message: string;
+  code?: "context_window_exceeded" | string;
 }
 
 export type AlfredRunEvent =
@@ -137,6 +162,7 @@ export type AlfredRunEvent =
 export interface AlfredStreamOptions {
   message: string;
   conversationId?: string | null;
+  emailContextId?: string | null;
   signal?: AbortSignal;
   onEvent: (event: AlfredRunEvent) => void;
 }

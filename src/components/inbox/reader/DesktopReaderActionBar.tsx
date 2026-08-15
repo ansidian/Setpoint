@@ -68,6 +68,7 @@ type ToolbarButtonProps = {
   expanded?: boolean;
   popup?: "menu";
   accent?: string;
+  alfred?: boolean;
   suspendHotkeys?: boolean;
 };
 
@@ -86,6 +87,7 @@ function ToolbarButton({
   expanded,
   popup,
   accent,
+  alfred = false,
   suspendHotkeys = false,
 }: ToolbarButtonProps) {
   const button = (
@@ -99,6 +101,7 @@ function ToolbarButton({
       data-adaptive={adaptive ? "true" : undefined}
       data-primary={primary ? "true" : undefined}
       data-danger={danger ? "true" : undefined}
+      data-alfred={alfred ? "true" : undefined}
       data-icon-only={!label ? "true" : undefined}
       data-suspend-inbox-hotkeys={suspendHotkeys ? "true" : undefined}
       disabled={disabled}
@@ -297,6 +300,7 @@ export default function DesktopReaderActionBar({
               icon={Sparkles}
               label="Ask Alfred"
               adaptive
+              alfred
               onClick={onAskAlfred}
             />
           )}

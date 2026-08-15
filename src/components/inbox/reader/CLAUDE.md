@@ -12,7 +12,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
 
 ### Desktop
-- `DesktopReaderActionBar.tsx` — desktop reader action clusters, grouped menus, and adaptive label collapse
+- `DesktopReaderActionBar.tsx` — desktop reader action clusters, grouped menus, adaptive label collapse, and the desktop-only `Ask Alfred` attachment action
 - `DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
 
 ### Mobile
@@ -48,6 +48,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 
 - Body HTML renders inside the existing iframe safety seam; do not render provider HTML directly into the app document.
 - Shared action visibility belongs in `readerActionsModel.ts` so desktop, mobile, hotkeys, and dispatch stay aligned.
+- `Ask Alfred` is intentionally passed only to the desktop reader and hidden in demo builds; it stages context without sending a prompt or starting a model run.
 - Bill and transaction-import status are projections of durable backend state; hooks own fetching and stale-response guards.
 
 ## Related

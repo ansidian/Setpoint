@@ -13,6 +13,7 @@ import {
 } from "./test-utils/inboxFixtures";
 import { resetInboxSession } from "./useInboxSessionState";
 import type { EmailSearchClientResponse, EmailSearchResult } from "../../../shared/types/email";
+import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
 
 // test-architecture: allow-boundary-mock -- Inbox behavior is rendered with real controllers, rows, readers, and state; the authenticated HTTP/API surface is the only replaced boundary.
 vi.mock("../../api", async () => {
@@ -143,6 +144,29 @@ afterEach(() => {
 });
 
 describe("InboxView action workflows", () => {
+  it("includes the receiving account when attaching a desktop reader email to Alfred", async () => {
+    let attached: AlfredEmailContextSource | null = null;
+    renderInbox({
+      isMobile: false,
+      liveEmails: [makeLiveInboxEmail({
+        uid: "live-alfred",
+        account_id: "acc-work",
+        subject: "Ask about this email",
+        from_email: "dana@example.com",
+      })],
+      onAttachEmailToAlfred: (source) => { attached = source; },
+    });
+
+    fireEvent.click(await screen.findByText("Ask about this email"));
+    fireEvent.click(screen.getByRole("button", { name: "Ask Alfred" }));
+
+    expect(attached).toMatchObject({
+      uid: "live-alfred",
+      accountId: "acc-work",
+      senderAddress: "dana@example.com",
+    });
+  });
+
   it("optimistically removes a live row and restores it through the rendered undo action", async () => {
     renderInbox({ liveEmails: [makeLiveInboxEmail({ uid: "live-trash" })] });
 
