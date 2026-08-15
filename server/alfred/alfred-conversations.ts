@@ -24,6 +24,7 @@ export function createAlfredConversation({
     model,
     messages: [],
     items: new Map(),
+    trustedOwnerTurns: [],
     calendarProposalState: {
       activeProposalId: null,
       proposals: new Map(),

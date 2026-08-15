@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { DEFAULT_SEARCH_LIMIT, alfredToolSummary, executeAlfredTool } from "./alfred-tools.ts";
 import { buildAlfredSystemPrompt } from "./alfred-prompt.ts";
 import { recordAlfredUsage } from "./alfred-usage.ts";
@@ -68,7 +69,8 @@ async function runAlfredInner({
   recordUsage = recordAlfredUsage,
   now = () => new Date(),
   transcriptCheckpoint = 0,
-}: RunAlfredOptions & { transcriptCheckpoint: number }): Promise<void> {
+  trustedOwnerTurnsCheckpoint = 0,
+}: RunAlfredOptions & { transcriptCheckpoint: number; trustedOwnerTurnsCheckpoint: number }): Promise<void> {
   const adapter = getAlfredModelAdapter(conversation.provider);
   adapter.appendUserText(conversation, emailContext
     ? buildContextBearingAlfredMessage(String(message), emailContext)
@@ -90,8 +92,9 @@ async function runAlfredInner({
   let nudgedGroup = false;
   let forceGroupItems = false;
   const groupIntent = looksLikeGroupingQuestion(message);
-  const proposalStage: { proposal: AlfredCalendarProposal | null } = {
+  const proposalStage: { proposal: AlfredCalendarProposal | null; authorizationTurnIds: string[] } = {
     proposal: null,
+    authorizationTurnIds: [],
   };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
@@ -151,7 +154,11 @@ async function runAlfredInner({
         continue;
       }
       if (proposalStage.proposal) {
-        emit(commitStagedAlfredCalendarProposal(conversation, proposalStage.proposal));
+        emit(commitStagedAlfredCalendarProposal(
+          conversation,
+          proposalStage.proposal,
+          proposalStage.authorizationTurnIds,
+        ));
       }
       emit({ type: "run_end", stop_reason: turn.stopReason || "end_turn" });
       return;
@@ -169,7 +176,6 @@ async function runAlfredInner({
           conversation,
           deps,
           emit,
-          trustedOwnerMessage: String(message),
           emailContext,
           now: now(),
           proposalStage,
@@ -218,6 +224,7 @@ async function runAlfredInner({
   // Tool-call limit reached: revert so the conversation doesn't end on a dangling
   // tool_result user turn (which would 400 on the next reuse).
   conversation.messages.length = transcriptCheckpoint;
+  conversation.trustedOwnerTurns.length = trustedOwnerTurnsCheckpoint;
   emit({
     type: "run_error",
     message: "Alfred hit the tool-call limit before finishing. Try a narrower question.",
@@ -226,12 +233,19 @@ async function runAlfredInner({
 
 export async function runAlfred(opts: RunAlfredOptions): Promise<void> {
   const transcriptCheckpoint = opts.conversation.messages.length;
+  const trustedOwnerTurnsCheckpoint = opts.conversation.trustedOwnerTurns.length;
+  opts.conversation.trustedOwnerTurns.push({
+    id: crypto.randomUUID(),
+    message: String(opts.message),
+    consumed: false,
+  });
   try {
-    return await runAlfredInner({ ...opts, transcriptCheckpoint });
+    return await runAlfredInner({ ...opts, transcriptCheckpoint, trustedOwnerTurnsCheckpoint });
   } catch (err) {
     // A mid-run failure (overload/network/abort) leaves the transcript ending on
     // a user turn; revert to the pre-run boundary so the conversation stays usable.
     opts.conversation.messages.length = transcriptCheckpoint;
+    opts.conversation.trustedOwnerTurns.length = trustedOwnerTurnsCheckpoint;
     throw err;
   }
 }

@@ -241,6 +241,8 @@ export interface AlfredToolInputMap {
   search_transactions: AlfredTransactionInput & { limit?: unknown };
   summarize_transactions: AlfredTransactionInput & { group_by?: unknown };
   propose_calendar_event: {
+    owner_instruction?: unknown;
+    duplicate_confirmation?: unknown;
     title?: unknown;
     all_day?: unknown;
     start_date?: unknown;

@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import useFloatingEditorRouting, { type FloatingEditorItem, type FloatingEditorRoutingOptions } from "./useFloatingEditorRouting";
+import type { CalendarEventCreateRequest } from "./calendarEventCreateBridge";
 
 function routingProps(overrides: Partial<FloatingEditorRoutingOptions> = {}): FloatingEditorRoutingOptions {
   return {
@@ -82,10 +83,53 @@ describe("useFloatingEditorRouting deadline editor state ownership", () => {
       result.current.setDeadlineEditor({ mode: "create", seedDate: "2026-05-01" });
       result.current.setDeadlineDraftPreview({ title: "draft" });
     });
-    act(() => result.current.openFloatingEventCreate("2026-05-01"));
+    act(() => { void result.current.openFloatingEventCreate("2026-05-01"); });
 
     expect(result.current.deadlineEditor).toBeNull();
     expect(result.current.deadlineDraftPreview).toBeNull();
+  });
+
+  it("anchors a seeded floating create workspace to its rendered event ghost", async () => {
+    const dayCell = document.createElement("div");
+    const ghostChip = document.createElement("div");
+    ghostChip.dataset.testid = "calendar-ghost-chip";
+    ghostChip.dataset.ghostKind = "event";
+    ghostChip.dataset.ghostStart = "2026-05-01";
+    document.body.appendChild(dayCell);
+    const openFloatingDetail = vi.fn();
+    const request: CalendarEventCreateRequest = {
+      seed: { title: "Test Event", allDay: false, startDate: "2026-05-01", startTime: "15:00" },
+      origin: { kind: "alfred-proposal", referenceId: "proposal-1" },
+    };
+    const { result } = renderHook(() => useFloatingEditorRouting(routingProps({
+      eventEditorRef: { current: { openCreate: vi.fn().mockImplementation(async () => {
+        let framesRemaining = 12;
+        const mountGhostAfterColdRender = () => {
+          if (framesRemaining === 0) {
+            dayCell.appendChild(ghostChip);
+            return;
+          }
+          framesRemaining -= 1;
+          window.requestAnimationFrame(mountGhostAfterColdRender);
+        };
+        mountGhostAfterColdRender();
+        return { accepted: true };
+      }) } },
+      findDateCell: () => dayCell,
+      openFloatingDetail,
+    })));
+
+    await act(async () => {
+      await result.current.openFloatingEventCreate("2026-05-01", request);
+    });
+
+    // test-architecture: allow-boundary-interaction -- The routed detail anchor is the stable boundary proving the seeded editor attaches to its ghost chip.
+    expect(openFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
+      anchorElement: ghostChip,
+      sourceCellElement: dayCell,
+      anchorKind: "chip",
+    }));
+    dayCell.remove();
   });
 
   it("clears the deadline editor after a successful save→detail transition", () => {

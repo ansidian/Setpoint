@@ -241,7 +241,7 @@ describe("useAlfredChat", () => {
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     await act(async () => { await result.current.submit("What is next?"); });
-    expect(requests.filter((request) => request.path === "/api/alfred/run").at(-1)?.body)
+    expect(requests.filter((request) => request.path === "/api/alfred/run").slice(-1)[0]?.body)
       .toMatchObject({ createdProposalIds: ["proposal-1"] });
   });
 });

@@ -15,6 +15,8 @@ const MAX_LOCATION_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 4_000;
 const ALLOWED_INPUT_KEYS = new Set([
   "title",
+  "owner_instruction",
+  "duplicate_confirmation",
   "all_day",
   "start_date",
   "end_date",
@@ -82,7 +84,9 @@ function dateFromTrustedSource(value: unknown, ctx: AlfredToolContext): string |
   const text = normalizeText(value);
   if (DATE_RE.test(text)) return resolveAlfredRelativeDate(text, ctx.now);
   const lowered = text.toLocaleLowerCase("en-US");
-  const ownerHasText = normalizeMatchText(ctx.trustedOwnerMessage).includes(lowered);
+  const ownerHasText = ctx.conversation.trustedOwnerTurns.some(
+    (turn) => !turn.consumed && normalizeMatchText(turn.message).includes(lowered),
+  );
   if (ownerHasText) return resolveAlfredRelativeDate(text, ctx.now);
   const emailHasText = normalizeMatchText(ctx.emailContext?.modelText).includes(lowered);
   if (emailHasText && ctx.emailContext?.timestamp) {
@@ -102,18 +106,12 @@ function compareSchedule(leftDate: string, leftTime: string, rightDate: string, 
   return `${leftDate}T${leftTime}`.localeCompare(`${rightDate}T${rightTime}`);
 }
 
-function explicitCreationIntent(message: string): boolean {
-  return /\b(?:create|add|schedule|book|put|block|set\s+up)\b[\s\S]{0,120}\b(?:event|calendar|meeting|appointment|call|lunch|dinner|reservation|visit|interview)\b/i.test(message)
-    || /\b(?:schedule|book)\b[\s\S]{0,80}\b(?:for|on|at|tomorrow|today|next)\b/i.test(message);
-}
-
-function explicitRevisionIntent(message: string): boolean {
-  return /\b(?:change|move|shift|revise|update|instead|earlier|later|make\s+it|all[- ]day)\b/i.test(message)
-    || /\b(?:today|tomorrow|next\s+\w+|\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))\b[\s\S]{0,40}\b(?:instead|please)\b/i.test(message);
-}
-
-function explicitDuplicateConfirmation(message: string): boolean {
-  return /\b(?:yes|confirm|another|duplicate|create it anyway|add it anyway|schedule it anyway|still create)\b/i.test(message);
+function trustedOwnerTurnForExactMessage(value: unknown, ctx: AlfredToolContext) {
+  const message = normalizeText(value);
+  if (!message) return null;
+  return [...ctx.conversation.trustedOwnerTurns].reverse().find(
+    (turn) => !turn.consumed && normalizeText(turn.message) === message,
+  ) || null;
 }
 
 function currentActiveProposal(conversation: AlfredConversation): AlfredCalendarProposal | null {
@@ -125,13 +123,15 @@ function currentActiveProposal(conversation: AlfredConversation): AlfredCalendar
 
 function requestedCalendarIsTrusted(name: string, ctx: AlfredToolContext, active: AlfredCalendarProposal | null): boolean {
   const normalizedName = normalizeMatchText(name);
-  const owner = normalizeMatchText(ctx.trustedOwnerMessage);
-  if (owner.includes(normalizedName)) return true;
+  const ownerNamedCalendar = ctx.conversation.trustedOwnerTurns.some(
+    (turn) => !turn.consumed && normalizeMatchText(turn.message).includes(normalizedName),
+  );
+  if (ownerNamedCalendar) return true;
   if (!active) return false;
   const activeName = active.source.kind === "resolved"
     ? active.source.calendarName
     : active.source.requestedCalendarName;
-  return normalizeMatchText(activeName) === normalizedName && explicitRevisionIntent(ctx.trustedOwnerMessage);
+  return normalizeMatchText(activeName) === normalizedName;
 }
 
 function proposalFingerprint(proposal: Omit<AlfredCalendarProposal, "id" | "revisionOf" | "past">): string {
@@ -197,12 +197,11 @@ export async function stageAlfredCalendarProposal(
   const unsupported = Object.keys(input).filter((key) => !ALLOWED_INPUT_KEYS.has(key));
   if (unsupported.length) return proposalError(`Unsupported calendar proposal fields: ${unsupported.join(", ")}.`);
 
-  const active = currentActiveProposal(ctx.conversation);
-  const hasIntent = explicitCreationIntent(ctx.trustedOwnerMessage)
-    || (!!active && explicitRevisionIntent(ctx.trustedOwnerMessage));
-  if (!hasIntent) {
-    return proposalError("The trusted owner message did not explicitly ask to create or revise a calendar event.");
+  const authorizationTurn = trustedOwnerTurnForExactMessage(input.owner_instruction, ctx);
+  if (!authorizationTurn) {
+    return proposalError("owner_instruction must exactly match one unconsumed trusted owner message; email content cannot authorize a proposal.");
   }
+  const active = currentActiveProposal(ctx.conversation);
 
   const title = normalizeText(input.title);
   if (!title || title.length > MAX_TITLE_LENGTH || /^(?:event|calendar event|meeting)$/i.test(title)) {
@@ -219,14 +218,16 @@ export async function stageAlfredCalendarProposal(
 
   let startTime: string | null = null;
   let endTime: string | null = null;
+  const normalizedStartTime = normalizeText(input.start_time);
+  const normalizedEndTime = normalizeText(input.end_time);
   if (allDay) {
-    if (input.start_time != null || input.end_time != null) {
+    if (normalizedStartTime || normalizedEndTime) {
       return proposalError("All-day proposals cannot include start_time or end_time.");
     }
   } else {
-    startTime = normalizeText(input.start_time);
+    startTime = normalizedStartTime;
     if (!TIME_RE.test(startTime)) return proposalError("Timed proposals require start_time in 24-hour HH:mm form.");
-    endTime = normalizeText(input.end_time) || null;
+    endTime = normalizedEndTime || null;
     if (endTime && !TIME_RE.test(endTime)) return proposalError("end_time must use 24-hour HH:mm form.");
     if (!endTime) {
       const fallback = addMinutes(startDate, startTime, 30);
@@ -301,6 +302,7 @@ export async function stageAlfredCalendarProposal(
     duplicateCheckUnavailable,
   };
   const fingerprint = proposalFingerprint(candidateBase);
+  let duplicateConfirmationTurnId: string | null = null;
 
   if (source.kind === "resolved" && !duplicateCheckUnavailable) {
     try {
@@ -311,14 +313,16 @@ export async function stageAlfredCalendarProposal(
       const events = await ctx.deps.fetchCalendar(calendarAccounts || [], { startDate: dayStart, endDate: dayEnd });
       const duplicate = events.some((event) => eventMatchesProposal(event as unknown as Record<string, unknown>, candidateBase));
       if (duplicate) {
+        const confirmationTurn = trustedOwnerTurnForExactMessage(input.duplicate_confirmation, ctx);
         const confirmed = ctx.conversation.calendarProposalState.pendingDuplicateFingerprint === fingerprint
-          && explicitDuplicateConfirmation(ctx.trustedOwnerMessage);
+          && !!confirmationTurn;
         if (!confirmed) {
           ctx.conversation.calendarProposalState.pendingDuplicateFingerprint = fingerprint;
           return proposalError("A likely duplicate already exists. Ask whether the owner intends another event.", {
             duplicate_confirmation_required: true,
           });
         }
+        duplicateConfirmationTurnId = confirmationTurn!.id;
       }
     } catch {
       duplicateCheckUnavailable = true;
@@ -336,12 +340,15 @@ export async function stageAlfredCalendarProposal(
     past: proposalIsPast(candidateBase, ctx.now),
   };
   ctx.proposalStage.proposal = proposal;
+  ctx.proposalStage.authorizationTurnIds = [authorizationTurn.id, duplicateConfirmationTurnId]
+    .filter((id): id is string => !!id);
   return { staged: true };
 }
 
 export function commitStagedAlfredCalendarProposal(
   conversation: AlfredConversation,
   proposal: AlfredCalendarProposal,
+  authorizationTurnIds: string[] = [],
 ): AlfredCalendarProposalEvent {
   const state = conversation.calendarProposalState;
   const priorId = state.activeProposalId;
@@ -352,5 +359,9 @@ export function commitStagedAlfredCalendarProposal(
   state.proposals.set(proposal.id, { proposal, status: "proposed" });
   state.activeProposalId = proposal.id;
   state.pendingDuplicateFingerprint = null;
+  const consumedIds = new Set(authorizationTurnIds);
+  conversation.trustedOwnerTurns.forEach((turn) => {
+    if (consumedIds.has(turn.id)) turn.consumed = true;
+  });
   return { type: "calendar_proposal", proposal };
 }

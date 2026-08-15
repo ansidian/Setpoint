@@ -36,6 +36,14 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toContain("<email_content>");
   });
 
+  it("uses semantic owner intent and exact trusted-message provenance without magic confirmation words", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-08-15T19:00:00.000Z") });
+    expect(prompt).toContain("owner_instruction");
+    expect(prompt).toContain("complete exact authorizing Owner message");
+    expect(prompt).toContain("do not require or suggest magic words");
+    expect(prompt).toContain("duplicate_confirmation");
+  });
+
   it("covers transactions and drops the can't-read-transactions disclaimer", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     expect(prompt).toMatch(/transactions|spending/i);

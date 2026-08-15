@@ -9,7 +9,7 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 - `anthropic-adapter.ts` / `openai-adapter.ts` — provider request, transcript, tool-result, and usage translation
 - `anthropic-stream.ts` / `openai-stream.ts` — provider SSE stream parsers
 - `alfred-tools.ts` — read-only domain tools plus non-mutating calendar proposal staging; `show_items` emits cached rows by reference
-- `alfred-calendar-proposals.ts` — owner authorization, field/date/source validation, duplicate policy, and atomic run-local proposal staging
+- `alfred-calendar-proposals.ts` — semantic owner intent with exact trusted-turn provenance, provider-empty field normalization, field/date/source validation, duplicate policy, and atomic run-local proposal staging
 - `alfred-email-content.ts` — email-content shaping for tool results: `<email_content>` trust fencing, sender formatting, quoted-chain stripping, the compact search-candidate row
 - `alfred-email-context.ts` — whole-email preparation for deliberate reader attachments: semantic text, link/image/file shaping, metadata authority, 50k limit, and trust fencing
 - `alfred-email-context-store.ts` — bounded owner-scoped prepared-context handles with TTL and claim/release/consume lifecycle
@@ -31,6 +31,7 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 - Direct email attachments are prepared before a run and claimed by opaque ID. Failed runs release the handle; only `run_end` consumes it.
 - Conversations are ephemeral by design (CONTEXT.md: **Alfred Conversation**); do not add durable history without revisiting that decision.
 - Calendar proposals commit to conversation state only with a successful `run_end`. Review is UI-only; Calendar's existing editor remains the sole event-write boundary.
+- Owner instructions and duplicate confirmations are not keyword-matched. The tool quotes a complete owner message; the server resolves it only against separate, unconsumed trusted-owner turns and consumes the evidence at proposal commit.
 - Provider/model is bound when the conversation is created. Settings changes apply only after New chat; clients never submit model overrides.
 
 ## Related

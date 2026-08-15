@@ -169,8 +169,9 @@ export function createAlfredRouter({
       expires_at: alfredConversationExpiresAt(conversation),
     });
 
-    const locallyCreatedProposalIds = Array.isArray(req.body?.createdProposalIds)
-      ? req.body.createdProposalIds.map(String).filter(Boolean).slice(0, 8)
+    const rawCreatedProposalIds: unknown = req.body?.createdProposalIds;
+    const locallyCreatedProposalIds = Array.isArray(rawCreatedProposalIds)
+      ? rawCreatedProposalIds.map((proposalId: unknown) => String(proposalId)).filter(Boolean).slice(0, 8)
       : [];
     locallyCreatedProposalIds.forEach((proposalId) => {
       acknowledgeAlfredCalendarProposalCreated(conversation, proposalId);

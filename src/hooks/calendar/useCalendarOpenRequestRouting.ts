@@ -54,6 +54,14 @@ interface CalendarOpenRequestRoutingOptions {
   floating: OpenRequestFloating;
 }
 
+const EVENT_EDITOR_READY_ATTEMPTS = 4;
+
+function nextAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
 /** Applies open-request create intent and commits selection snapshots in order. */
 export default function useCalendarOpenRequestRouting({
   request,
@@ -73,12 +81,16 @@ export default function useCalendarOpenRequestRouting({
     if (handledEventCreateRequestRef.current === requestKey) return;
     handledEventCreateRequestRef.current = requestKey;
 
-    let result: CalendarEventCreateOpenResult;
+    let result: CalendarEventCreateOpenResult = { accepted: false, reason: "editor_unavailable" };
     try {
-      const routedResult = request.usesFloatingEditor
-        ? await editors.openFloatingEventCreate(dateKey || request.focusDate || null, createRequest)
-        : await editors.openEventCreate(createRequest);
-      result = routedResult || { accepted: false, reason: "editor_unavailable" };
+      for (let attempt = 0; attempt < EVENT_EDITOR_READY_ATTEMPTS; attempt += 1) {
+        const routedResult = request.usesFloatingEditor
+          ? await editors.openFloatingEventCreate(dateKey || request.focusDate || null, createRequest)
+          : await editors.openEventCreate(createRequest);
+        result = routedResult || { accepted: false, reason: "editor_unavailable" };
+        if (result.accepted || result.reason !== "editor_unavailable") break;
+        if (attempt < EVENT_EDITOR_READY_ATTEMPTS - 1) await nextAnimationFrame();
+      }
     } catch {
       result = { accepted: false, reason: "seed_rejected" };
     }

@@ -14,6 +14,7 @@ import {
   alfredScrollKey,
   formatAlfredModelHint,
   isNearBottom,
+  type AlfredPanelMessage,
 } from "./alfredPanelModel";
 import {
   ErrorLine,
@@ -340,7 +341,9 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
     ? pendingEmail.status === "ready" ? ALFRED_EMAIL_SUGGESTIONS : null
     : ALFRED_SUGGESTIONS;
   const latestProposalReady = [...messages].reverse().find(
-    (message) => message.type === "calendar-proposal" && message.status === "proposed",
+    (message): message is Extract<AlfredPanelMessage, { type: "calendar-proposal" }> => (
+      message.type === "calendar-proposal" && message.status === "proposed"
+    ),
   );
 
   return createPortal(

@@ -72,6 +72,52 @@ function pacificDateKeyFromMs(ms: number | null | undefined) {
   }).format(new Date(ms));
 }
 
+function findEventGhostAnchor(dateCell: HTMLElement | null, dateKey: string | null): HTMLElement | null {
+  const findMatchingGhost = (root: ParentNode) => (
+    Array.from(root.querySelectorAll<HTMLElement>("[data-ghost-kind='event']"))
+      .find((element) => !dateKey || element.dataset.ghostStart === dateKey) || null
+  );
+  return (dateCell && findMatchingGhost(dateCell)) || findMatchingGhost(document);
+}
+
+const SEEDED_EVENT_GHOST_READY_TIMEOUT_MS = 1500;
+
+function resolveSeededEventCreateAnchor(
+  dateCell: HTMLElement | null,
+  dateKey: string | null,
+): Promise<HTMLElement | null> {
+  const renderedGhost = findEventGhostAnchor(dateCell, dateKey);
+  if (renderedGhost) return Promise.resolve(renderedGhost);
+  if (typeof MutationObserver === "undefined" || !document.documentElement) {
+    return Promise.resolve(dateCell);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId: number | null = null;
+    let observer: MutationObserver | null = null;
+    const finish = (anchor: HTMLElement | null) => {
+      if (settled) return;
+      settled = true;
+      observer?.disconnect();
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      resolve(anchor);
+    };
+    const resolveMatchingGhost = () => {
+      const matchingGhost = findEventGhostAnchor(dateCell, dateKey);
+      if (matchingGhost) finish(matchingGhost);
+    };
+
+    observer = new MutationObserver(resolveMatchingGhost);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    timeoutId = window.setTimeout(() => {
+      finish(findEventGhostAnchor(dateCell, dateKey) || dateCell);
+    }, SEEDED_EVENT_GHOST_READY_TIMEOUT_MS);
+    // Close the gap between the initial lookup and observer registration.
+    resolveMatchingGhost();
+  });
+}
+
 export function resolveFloatingDeadlineItemId(activeView: FloatingEditorRoutingOptions["activeView"] | null | undefined, task: FloatingEditorItem | null | undefined) {
   const itemId = activeView?.getItemId && task ? activeView.getItemId(task) : task?.id;
   return itemId != null ? String(itemId) : null;
@@ -191,22 +237,25 @@ export default function useFloatingEditorRouting({
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
     const openCreate = eventEditorRef.current?.openCreate;
-    const openDetail = () => openFloatingDetail({
+    const openDetail = (anchorElement: HTMLElement | null = dateCell) => openFloatingDetail({
       mode: "create",
       view: "events",
       dateKey,
       day: parsed?.day ?? null,
-      anchorElement: dateCell,
+      anchorElement,
       sourceCellElement: dateCell,
-      anchorKind: "day-cell",
+      anchorKind: anchorElement !== dateCell ? "chip" : "day-cell",
     });
     if (request) {
       if (!openCreate) {
         return Promise.resolve({ accepted: false, reason: "editor_unavailable" });
       }
       return openCreate(request).then((result) => {
-        if (result.accepted) openDetail();
-        return result;
+        if (!result.accepted) return result;
+        return resolveSeededEventCreateAnchor(dateCell, dateKey).then((anchorElement) => {
+          openDetail(anchorElement);
+          return result;
+        });
       });
     }
     void openCreate?.();

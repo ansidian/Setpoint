@@ -40,7 +40,7 @@ function dependencies(overrides: Partial<AlfredDependencies> = {}): AlfredDepend
 }
 
 describe("runAlfred calendar proposal commit boundary", () => {
-  let events: Array<AlfredRunEvent & Record<string, unknown>>;
+  let events: AlfredRunEvent[];
   let usageRows: Parameters<AlfredUsageRecorder>[1][];
   let recordUsage: AlfredUsageRecorder;
 
@@ -53,6 +53,7 @@ describe("runAlfred calendar proposal commit boundary", () => {
 
   it("commits and emits one staged proposal only immediately before successful run_end", async () => {
     const turns = [toolUseTurn({
+      owner_instruction: "Schedule a project review on August 18",
       title: "Project review",
       all_day: false,
       start_date: "2026-08-18",
@@ -77,7 +78,7 @@ describe("runAlfred calendar proposal commit boundary", () => {
 
     await runAlfred({
       userId: "user-1", conversation, message: "Schedule a project review on August 18",
-      emit: (event) => { events.push(event as AlfredRunEvent & Record<string, unknown>); },
+      emit: (event) => { events.push(event); },
       fetchImpl, apiKey: "key", deps, recordUsage,
       now: () => new Date("2026-08-15T19:00:00.000Z"),
     });
@@ -85,9 +86,12 @@ describe("runAlfred calendar proposal commit boundary", () => {
     expect(events.map((event) => event.type)).toEqual([
       "tool_start", "tool_result", "text_delta", "calendar_proposal", "run_end",
     ]);
-    const proposalEvent = events.at(-2)!;
+    const proposalEvent = events.find(
+      (event): event is Extract<AlfredRunEvent, { type: "calendar_proposal" }> => event.type === "calendar_proposal",
+    )!;
     expect(proposalEvent.proposal).toMatchObject({ title: "Project review", endTime: "15:30" });
     expect(conversation.calendarProposalState.activeProposalId).toBe(proposalEvent.proposal.id);
+    expect(conversation.trustedOwnerTurns).toMatchObject([{ consumed: true }]);
     expect(JSON.stringify(usageRows)).not.toContain("Project review");
     expect(JSON.stringify(usageRows)).not.toContain(String(proposalEvent.proposal.id));
   });
@@ -100,6 +104,7 @@ describe("runAlfred calendar proposal commit boundary", () => {
         return {
           ok: true, status: 200, text: async () => "",
           body: sseBody(toolUseTurn({
+            owner_instruction: "Schedule a project review on August 18",
             title: "Project review", all_day: false, start_date: "2026-08-18", start_time: "15:00",
           })),
         };
@@ -114,7 +119,7 @@ describe("runAlfred calendar proposal commit boundary", () => {
 
     await expect(runAlfred({
       userId: "user-1", conversation, message: "Schedule a project review on August 18",
-      emit: (event) => { events.push(event as AlfredRunEvent & Record<string, unknown>); },
+      emit: (event) => { events.push(event); },
       fetchImpl, apiKey: "key", deps, recordUsage,
       now: () => new Date("2026-08-15T19:00:00.000Z"),
     })).rejects.toThrow("Anthropic API error (529)");
@@ -122,5 +127,104 @@ describe("runAlfred calendar proposal commit boundary", () => {
     expect(events.some((event) => event.type === "calendar_proposal")).toBe(false);
     expect(conversation.calendarProposalState.activeProposalId).toBeNull();
     expect(conversation.calendarProposalState.proposals.size).toBe(0);
+    expect(conversation.trustedOwnerTurns).toEqual([]);
+  });
+
+  it("commits an all-day proposal after the model clears rejected time fields", async () => {
+    const turns = [
+      toolUseTurn({
+        owner_instruction: "Schedule this in my calendar",
+        title: "DigitalOcean invoice notice",
+        all_day: true,
+        start_date: "2026-08-01",
+        start_time: "09:00",
+        end_time: "10:00",
+      }),
+      toolUseTurn({
+        owner_instruction: "Schedule this in my calendar",
+        title: "DigitalOcean invoice notice",
+        all_day: true,
+        start_date: "2026-08-01",
+        start_time: "",
+        end_time: "",
+      }),
+      textTurn("The proposal is ready for Calendar review."),
+    ];
+    let call = 0;
+    const fetchImpl = vi.fn<AlfredFetch>(async () => ({
+      ok: true, status: 200, text: async () => "", body: sseBody(turns[call++] || []),
+    }));
+    const conversation = createAlfredConversation({ now: 0 });
+    const emitted: AlfredRunEvent[] = [];
+
+    await runAlfred({
+      userId: "user-1", conversation, message: "Schedule this in my calendar",
+      emit: (event) => { emitted.push(event); }, fetchImpl, apiKey: "key",
+      deps: dependencies({ loadUserConfig: vi.fn().mockResolvedValue({ accounts: [] }) }),
+      recordUsage, now: () => new Date("2026-08-15T19:00:00.000Z"),
+    });
+
+    expect(emitted.filter((event) => event.type === "tool_result").map((event) => event.ok)).toEqual([false, true]);
+    expect(emitted.find((event) => event.type === "calendar_proposal")).toMatchObject({
+      proposal: {
+        title: "DigitalOcean invoice notice",
+        allDay: true,
+        startDate: "2026-08-01",
+        startTime: null,
+        endTime: null,
+      },
+    });
+  });
+
+  it("carries an explicit schedule request through one clarification answer", async () => {
+    const conversation = createAlfredConversation({ now: 0 });
+    const deps = dependencies({
+      loadUserConfig: vi.fn().mockResolvedValue({
+        accounts: [{ id: "account-1", email: "owner@example.com", type: "gmail", calendar_enabled: true }],
+      }),
+      getCalendarSourceGroups: vi.fn().mockResolvedValue([{
+        accountId: "account-1",
+        calendars: [{ id: "primary", summary: "Personal", writable: true, primary: true }],
+      }]),
+      fetchCalendar: vi.fn().mockResolvedValue([]),
+      pacificDayBoundaries: vi.fn((date: Date) => ({ dayStart: date, dayEnd: date })),
+    });
+    const firstFetch = vi.fn<AlfredFetch>(async () => ({
+      ok: true, status: 200, text: async () => "",
+      body: sseBody(textTurn("What title, date, and Pacific-time start time should I use?")),
+    }));
+
+    await runAlfred({
+      userId: "user-1", conversation, message: "Schedule this in my calendar",
+      emit: () => {}, fetchImpl: firstFetch, apiKey: "key", deps, recordUsage,
+      now: () => new Date("2026-08-15T19:00:00.000Z"),
+    });
+
+    const turns = [toolUseTurn({
+      owner_instruction: "Schedule this in my calendar",
+      title: "Test Event",
+      all_day: false,
+      start_date: "2026-08-15",
+      start_time: "15:00",
+      end_time: "16:00",
+    }), textTurn("The proposal is ready for Calendar review.")];
+    let call = 0;
+    const secondFetch = vi.fn<AlfredFetch>(async () => ({
+      ok: true, status: 200, text: async () => "", body: sseBody(turns[call++] || []),
+    }));
+    const secondEvents: AlfredRunEvent[] = [];
+
+    await runAlfred({
+      userId: "user-1", conversation, message: "Test Event, today 3–4pm",
+      emit: (event) => { secondEvents.push(event); },
+      fetchImpl: secondFetch, apiKey: "key", deps, recordUsage,
+      now: () => new Date("2026-08-15T19:00:00.000Z"),
+    });
+
+    expect(secondEvents.some((event) => event.type === "calendar_proposal")).toBe(true);
+    expect(conversation.trustedOwnerTurns[0]).toMatchObject({
+      message: "Schedule this in my calendar",
+      consumed: true,
+    });
   });
 });

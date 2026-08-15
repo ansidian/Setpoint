@@ -306,13 +306,14 @@ export default function CalendarModalShell({
   // Hoist the rail-facing callbacks to useCallback so the memoized agenda /
   // floating rails (and any memoized header descendants) are not re-rendered by
   // a fresh inline-arrow identity on every shell render.
-  const handleOpenEventCreate = useCallback(async () => {
+  const handleOpenEventCreate: CalendarEventEditor["openCreate"] = useCallback(async () => {
     if (!layout.stacked) {
-      onOpenFloatingEventCreate?.(selectedDateKey);
-    } else {
-      onCloseFloatingDetail?.();
-      await eventEditor.openCreate?.();
+      if (!onOpenFloatingEventCreate) return { accepted: false, reason: "editor_unavailable" };
+      onOpenFloatingEventCreate(selectedDateKey);
+      return { accepted: true };
     }
+    onCloseFloatingDetail?.();
+    return eventEditor.openCreate();
   }, [eventEditor, layout.stacked, onCloseFloatingDetail, onOpenFloatingEventCreate, selectedDateKey]);
   const handleCreateTask = useCallback((seedDate?: string | null) => {
     if (!layout.stacked) {

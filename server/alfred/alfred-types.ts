@@ -17,6 +17,12 @@ export interface AlfredStoredCalendarProposal {
   status: "proposed" | "superseded" | "created";
 }
 
+export interface AlfredTrustedOwnerTurn {
+  id: string;
+  message: string;
+  consumed: boolean;
+}
+
 export interface AlfredCalendarProposalConversationState {
   activeProposalId: string | null;
   proposals: Map<string, AlfredStoredCalendarProposal>;
@@ -58,6 +64,7 @@ export interface AlfredConversation {
   model: string;
   messages: Array<AnthropicMessage | Record<string, unknown>>;
   items: Map<string, AlfredItem | Record<string, unknown>>;
+  trustedOwnerTurns: AlfredTrustedOwnerTurn[];
   calendarProposalState: AlfredCalendarProposalConversationState;
   touchedAt: number;
 }
@@ -206,11 +213,11 @@ export interface AlfredToolContext {
   conversation: AlfredConversation;
   deps: AlfredDependencies;
   emit: AlfredEmit;
-  trustedOwnerMessage: string;
   emailContext: RunAlfredOptions["emailContext"];
   now: Date;
   proposalStage: {
     proposal: AlfredCalendarProposal | null;
+    authorizationTurnIds: string[];
   };
 }
 
