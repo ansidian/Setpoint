@@ -6,7 +6,7 @@
 // objects referentially stable, so memoized leaves skip re-render on every
 // streamed token / keystroke and only the active say block re-renders. Props are
 // primitive/stable (text, tools, accent, done).
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import type { AlfredSuggestion, AlfredToolEntry } from "./alfredPanelModel";
 import {
   AlertCircle,
@@ -25,8 +25,8 @@ import {
 import {
   ALFRED_SUGGESTIONS,
   alfredToolRunningLabel,
-  splitSayText,
 } from "./alfredPanelModel";
+import AlfredRichText from "./AlfredRichText";
 
 const dimmer = "rgba(205,214,244,0.4)";
 const text = "var(--sp-text)";
@@ -74,22 +74,14 @@ export const ToolRows = memo(function ToolRows({ tools, accent }: { tools: Alfre
 });
 
 export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: { text: string; done?: boolean; preamble?: boolean }) {
-  // useMemo the lead/body split (perf audit fe-alfred::
-  // splitsaytext-rerun-per-delta-quadratic): with the memo wrap above, DONE say
-  // blocks never recompute; for the active streaming block this skips the split
-  // on render causes unrelated to body. The split itself stays O(n) per delta —
-  // inherent to splitting a growing string — but no longer reruns on keystrokes.
-  // Hooks run unconditionally (before the streaming branch) so order stays stable
-  // when `done` flips false→true on the same block.
-  const { lead, body: rest } = useMemo(() => splitSayText(body), [body]);
-
   // Render quietly as one block — don't promote the first sentence to the answer
   // lead — when the say is either (a) still streaming, or (b) a settled between-
   // tool preamble. A preamble is Alfred narrating what it's about to do; it
   // persists in the thread as plain prose (like any agentic tool) rather than
   // flashing as a header. Rendering it identically to its streaming state means
   // there's no visual jump when the next tool_start settles it. Only the finished
-  // answer (done && !preamble) resolves into the emphasized answer line.
+  // answer (done && !preamble) resolves into a single readable paragraph with
+  // only its opening sentence emphasized.
   if (!done || preamble) {
     return (
       <div
@@ -99,14 +91,15 @@ export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: {
     );
   }
   return (
-    <div data-alfred-message-kind="answer" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div className="ea-display" style={{
-        fontSize: 17, lineHeight: 1.3, color: text,
-        fontFamily: "var(--font-sans)",
-      }}>{lead}</div>
-      {rest ? (
-        <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.72)" }}>{rest}</div>
-      ) : null}
+    <div data-alfred-message-kind="answer" style={{
+      fontFamily: "var(--font-sans)",
+      fontSize: 12.5,
+      fontWeight: 400,
+      lineHeight: 1.65,
+      letterSpacing: "0.005em",
+      color: "rgba(205,214,244,0.86)",
+    }}>
+      <AlfredRichText text={body} />
     </div>
   );
 });

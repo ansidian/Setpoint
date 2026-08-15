@@ -32,11 +32,59 @@ describe("alfred message primitives", () => {
     expect(screen.queryByText("The rest can wait.")).toBeNull(); // not split out yet
   });
 
-  it("SayBlock uses Setpoint's sans-serif face for the completed answer", () => {
-    render(<SayBlock text="Clanker is due August 9, 2026." done />);
+  it("SayBlock renders a completed answer as one paragraph with a semibold opening sentence", () => {
+    const { container } = render(<SayBlock text="Two things need you. The rest can wait." done />);
+    const answer = container.querySelector<HTMLElement>('[data-alfred-message-kind="answer"]');
+    const opening = answer?.querySelector<HTMLElement>("strong");
 
-    expect(screen.getByText("Clanker is due August 9, 2026.").style.fontFamily)
-      .toBe("var(--font-sans)");
+    expect(answer?.textContent).toBe("Two things need you. The rest can wait.");
+    expect(answer?.style.fontFamily).toBe("var(--font-sans)");
+    expect(answer?.style.fontSize).toBe("12.5px");
+    expect(answer?.querySelectorAll("p")).toHaveLength(1);
+    expect(opening?.textContent).toBe("Two things need you.");
+    expect(opening?.style.fontWeight).toBe("600");
+  });
+
+  it("SayBlock does not split its automatic opening emphasis at a decimal point", () => {
+    const { container } = render(<SayBlock text="Rent is $1,850.00 due Friday. Nothing else is due." done />);
+    expect(container.querySelector("strong")?.textContent).toBe("Rent is $1,850.00 due Friday.");
+  });
+
+  it("SayBlock renders paragraphs plus unordered and numbered lists", () => {
+    const { container } = render(<SayBlock text={[
+      "Amazon changed its terms. Key updates:",
+      "",
+      "- Most disputes require **individual arbitration**.",
+      "- Small-claims court remains available.",
+      "",
+      "1. Review the changes.",
+      "2. Decide whether they matter to you.",
+    ].join("\n")} done />);
+
+    expect(container.querySelectorAll("p")).toHaveLength(1);
+    expect(container.querySelectorAll("ul > li")).toHaveLength(2);
+    expect(container.querySelectorAll("ol > li")).toHaveLength(2);
+    expect(screen.getByText("individual arbitration").tagName).toBe("STRONG");
+    expect(container.textContent).not.toContain("- Most disputes");
+  });
+
+  it("SayBlock supports inline emphasis, code, and safe links without interpreting HTML", () => {
+    const { container } = render(<SayBlock
+      text={'Details. Use *care*, run `check`, and read [the source](https://example.com). <script>alert("x")</script>'}
+      done
+    />);
+
+    expect(screen.getByText("care").tagName).toBe("EM");
+    expect(screen.getByText("check").tagName).toBe("CODE");
+    expect(screen.getByRole("link", { name: "the source" }).getAttribute("href")).toBe("https://example.com");
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.textContent).toContain('<script>alert("x")</script>');
+  });
+
+  it("SayBlock leaves unsafe Markdown links as literal text", () => {
+    const { container } = render(<SayBlock text="Details. [Open](javascript:alert(1))" done />);
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("javascript:alert(1)");
   });
 
   it("ToolSteps shows the full step trail and live count while the run is in flight", () => {

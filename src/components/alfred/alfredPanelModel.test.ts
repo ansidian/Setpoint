@@ -11,7 +11,6 @@ import {
   formatAlfredModelHint,
   isNearBottom,
   spendingBreakdownRows,
-  splitSayText,
 } from "./alfredPanelModel";
 import type { AlfredPanelMessage } from "./alfredPanelModel";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
@@ -187,29 +186,6 @@ describe("applyAlfredEvent", () => {
       { type: "run_start", conversation_id: "c", provider: "anthropic", model: "claude-sonnet-4-6" },
       { type: "mystery" } as unknown as AlfredRunEvent,
     ])).toEqual([]);
-  });
-});
-
-describe("splitSayText", () => {
-  it("splits the first sentence as the serif lead", () => {
-    expect(splitSayText("Two things need you. The rest can wait.")).toEqual({
-      lead: "Two things need you.",
-      body: "The rest can wait.",
-    });
-  });
-
-  it("does not split on decimal points and strips markdown bold", () => {
-    expect(splitSayText("**Rent** is $1,850.00 due Friday")).toEqual({
-      lead: "Rent is $1,850.00 due Friday",
-      body: "",
-    });
-  });
-
-  it("splits on the first newline when it comes before a sentence end", () => {
-    expect(splitSayText("Heads up\nRent lands Friday.")).toEqual({
-      lead: "Heads up",
-      body: "Rent lands Friday.",
-    });
   });
 });
 

@@ -224,21 +224,6 @@ export function applyAlfredEvent(messages: AlfredPanelMessage[], event: AlfredRu
   }
 }
 
-// Serif lead = first sentence (handoff: "serif = the assistant speaking",
-// one short sentence). Decimal points don't end sentences; ** is stripped
-// because the model occasionally emits markdown bold.
-export function splitSayText(text: unknown): { lead: string; body: string } {
-  const clean = String(text || "").replace(/\*\*/g, "");
-  const sentence = clean.match(/[.!?](\s|$)/);
-  const newlineIdx = clean.indexOf("\n");
-  let cut = sentence?.index != null ? sentence.index + 1 : -1;
-  if (newlineIdx !== -1 && (cut === -1 || newlineIdx < cut)) cut = newlineIdx;
-  if (cut === -1 || cut >= clean.trim().length) {
-    return { lead: clean.trim(), body: "" };
-  }
-  return { lead: clean.slice(0, cut).trim(), body: clean.slice(cut).trim() };
-}
-
 export function formatAlfredMoney(amount: unknown): string {
   const n = Number(amount);
   if (!Number.isFinite(n)) return "";

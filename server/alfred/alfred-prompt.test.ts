@@ -52,7 +52,7 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toContain("summarize_transactions");
   });
 
-  it("invites brief between-tool narration and still leads with a single title-style line", () => {
+  it("invites brief narration and allows structured Markdown only when it improves scanability", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     const lower = prompt.toLowerCase();
     // The owner wants to watch Alfred think as it works: the model is told to
@@ -61,16 +61,17 @@ describe("buildAlfredSystemPrompt", () => {
     expect(lower).not.toMatch(/work quietly|do not narrate/);
     // …but kept brief, so it reads like an agentic trail rather than a wall.
     expect(lower).toMatch(/one short|single sentence|brief/);
-    // The final-answer format is unchanged.
-    expect(lower).toContain("title-style");
+    expect(lower).toContain("opening sentence");
+    expect(lower).toMatch(/markdown bullets|numbered list/);
+    expect(lower).toMatch(/ordinary paragraph|short answer/);
     expect(lower).toMatch(/markdown header/);
+    expect(lower).toContain("raw html");
   });
 
   it("orders the headline answer after the citation tools, not before", () => {
-    // The headline must be the run's LAST prose so it lands as the serif answer
-    // line (with show_items/group_items/summarize rows rendered above it). If the
-    // model wrote the headline before citing, the panel would tag it a between-tool
-    // preamble and render it as quiet prose instead of the answer.
+    // The answer must be the run's LAST prose so it lands as the completed rich
+    // text block (with show_items/group_items/summarize rows rendered above it).
+    // If the model wrote it before citing, the panel would tag it as preamble.
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     const lower = prompt.toLowerCase();
     expect(lower).toMatch(/never before|after (any )?(show_items|citation|cite)/);
