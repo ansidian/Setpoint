@@ -98,7 +98,6 @@ function renderInbox({
   liveEmails = [makeLiveInboxEmail()],
   snoozedEntries = [],
   resurfacedEntries = [],
-  onAskAlfred,
 }: RenderInboxOptions = {}) {
   const briefing = {
     emails: {
@@ -108,9 +107,7 @@ function renderInbox({
   };
 
   function Harness() {
-    const [alfredQuestion, setAlfredQuestion] = useState("");
-    return <><output aria-label="Alfred question">{alfredQuestion}</output>
-    <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+    return <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <InboxView
         accent="#cba6da"
         customize={{
@@ -133,9 +130,8 @@ function renderInbox({
         onRefresh={() => {}}
         seedSelectedId={seedSelectedId}
         isMobile={isMobile}
-        onAskAlfred={onAskAlfred || setAlfredQuestion}
       />
-    </DashboardProvider></>;
+    </DashboardProvider>;
   }
   return render(<Harness />);
 }
@@ -347,16 +343,10 @@ describe("InboxView mobile", () => {
     expect(screen.queryByTestId("inbox-mobile-search-skeleton")).toBeNull();
   });
 
-  it("hands the Sparkles button query off to alfred", () => {
+  it("keeps desktop-only Alfred entry points out of mobile Inbox", () => {
     renderInbox({ isMobile: true, liveEmails: [] });
 
-    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
-      target: { value: "amazon return" },
-    });
-    fireEvent.click(screen.getByTestId("inbox-mobile-ask-alfred-trigger"));
-
-    expect(screen.getByLabelText("Alfred question").textContent).toBe("amazon return");
-    expect(screen.queryByTestId("inbox-ai-confirmation")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ask Alfred" })).toBeNull();
   });
 
   it("closes the reader when marking a selected live email unread", () => {

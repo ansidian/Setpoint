@@ -235,6 +235,15 @@ describe("dashboard shell model", () => {
       })).toEqual({ action: "alfred-new-chat" });
     });
 
+    it("ignores Alfred shortcuts on mobile", () => {
+      expect(resolveDashboardShellHotkey({
+        key: "\\", code: "Backslash", metaKey: true, isMobile: true,
+      })).toEqual({ action: "ignore" });
+      expect(resolveDashboardShellHotkey({
+        key: "|", code: "Backslash", metaKey: true, shiftKey: true, isMobile: true,
+      })).toEqual({ action: "ignore" });
+    });
+
     it("plain backslash still does nothing", () => {
       expect(resolveDashboardShellHotkey({ key: "\\", code: "Backslash" }))
         .toEqual({ action: "ignore" });

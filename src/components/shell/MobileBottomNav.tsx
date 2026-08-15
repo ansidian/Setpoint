@@ -10,7 +10,8 @@ const NAV_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar
 // Mobile-only bottom tab bar. Rendered as the last in-flow flex child of
 // DashboardShell's fixed inset-0 column, so it pins to the viewport bottom and
 // the flex:1 tab body shrinks to reserve its height. No position:fixed / z-index:
-// body-portal sheets (z-50) and AlfredPanel (z-60) paint above the whole column.
+// Body-portaled mobile sheets (z-50) paint above the whole column. Alfred is
+// desktop-only and does not participate in the mobile stacking context.
 interface MobileBottomNavProps {
   tab: DashboardTab;
   onTab: (tab: DashboardTab) => void;

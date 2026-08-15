@@ -390,11 +390,12 @@ The honest boundary of what **Alfred** can read and truthfully answer about, tol
 _Avoid_: Knows everything Setpoint knows, silent best-effort
 
 - **Alfred** is read-only in its first release: no **Alfred Tool** mutates Setpoint or any provider.
+- **Alfred** and the **Alfred Panel** are desktop-only. Mobile exposes no Alfred launcher, inbox handoff, reader attachment action, panel, or shortcut.
 - **Alfred Coverage** in the first release is indexed inbox mail, calendar events, deadlines, and upcoming bills; budget metadata/transactions, focus windows, and weather are out of scope and Alfred should say so when asked.
 - **Alfred** answers email questions through the existing email search retrieval engine; it replaces the inbox Ask-AI answer surface, not the inbox keyword search.
-- The inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) become an Alfred handoff: the **Alfred Panel** opens and runs the inbox query immediately, with no intermediate confirmation step.
-- The desktop reader's `Ask Alfred` action opens the panel with **Pending Email Context** but does not run a model until the owner sends a prompt. It never forces a new **Alfred Conversation**; mobile and demo builds omit this action.
-- **Alfred** has panel shortcuts plus inbox query and desktop-reader context handoffs. There is no floating launcher pill.
+- The desktop inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) become an Alfred handoff: the **Alfred Panel** opens and runs the inbox query immediately, with no intermediate confirmation step.
+- The desktop reader's `Ask Alfred` action opens the panel with **Pending Email Context** but does not run a model until the owner sends a prompt. It never forces a new **Alfred Conversation**; demo builds omit this action.
+- On desktop, **Alfred** has panel shortcuts plus inbox query and reader-context handoffs. There is no floating launcher pill.
 - Embedded item rows in an Alfred answer are resolved by reference: **Alfred** chooses which retrieved items to show, but row contents render verbatim from domain data, never from model-authored values.
 
 ## Example Dialogue

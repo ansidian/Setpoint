@@ -1,6 +1,6 @@
 # Inbox Map
 
-The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface).
+The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. On desktop, AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface). Mobile exposes no Alfred entry point.
 
 ## Sub-maps
 
@@ -12,7 +12,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `InboxView.tsx` — composes live/snapshot modes, session state, undo coordination
 - `InboxDesktopPane.tsx` — desktop layout: digest, sidebar, list, reader, undo toast
 - `inboxViewTypes.ts` — shared top-level desktop/mobile pane composition contract
-- `useInboxController.ts` — central state machine: selection, filters, search, undo, Alfred handoff
+- `useInboxController.ts` — central state machine: selection, filters, search, undo, desktop Alfred handoff
 - `inboxReadRoutingModel.ts` — read-scope routing (`resolveReadScope`) + `planMarkAllVisibleRead`; one home for the live/snapshot/indexed decision shared by mark-all and auto-mark-read
 - `useInboxActionDispatch.ts` — action handlers: trash, snooze, lane move, mark read, draft reply
 - `useInboxSessionState.ts` — external session store surviving unmount/tab switches
@@ -20,7 +20,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `useInboxUndoSlot.ts` — undo slot lifecycle: timer, pending, commit/settle
 
 ### List + rows
-- `InboxList.tsx` — list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
+- `InboxList.tsx` — desktop list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
 - `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
 - `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
 - `DigestStrip.tsx` — header strip: live/snapshot status, lane counts, processing activity
@@ -72,5 +72,5 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 
 - `server/routes/briefing/` — email/snapshot endpoints this UI calls
 - `src/lib/triageSoundGate.ts` — sound dedup gate for triage events
-- `src/components/alfred/` — Alfred Panel; receives the inbox ⌘Enter / Sparkles handoff
+- `src/components/alfred/` — desktop-only Alfred Panel; receives the desktop inbox ⌘Enter / Sparkles handoff
 - `reader/` — detail-pane sub-area (see its map)

@@ -73,6 +73,7 @@ export default function useDashboardShellHotkeys({
         anyBlockingOverlayOpen,
         analyticsOpen,
         historyOpen,
+        isMobile,
       });
 
       if (command.action === "clear-chord") {

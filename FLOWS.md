@@ -269,7 +269,7 @@ Selection path:
 
 **Trigger:** the owner clicks `Ask Alfred` on the currently open desktop-reader email.
 
-1. `InboxDesktopPane` sends provider UID plus display metadata through the dedicated email handoff and opens the already-mounted Alfred Panel; mobile and demo surfaces do not expose the action.
+1. `InboxDesktopPane` sends provider UID plus display metadata through the dedicated email handoff and opens the already-mounted Alfred Panel. Alfred is desktop-only, so mobile exposes neither this action nor the panel; demo surfaces also omit the action.
 2. `POST /api/alfred/email-context` fetches the authoritative provider body, converts it to bounded semantic text, preserves quoted/forwarded history and visible footer text, represents omitted image/file content with markers, and fences every email-controlled field as untrusted data.
 3. The server stores that snapshot in the bounded owner-scoped in-memory context store and returns only an opaque context ID plus display metadata. No model/provider call occurs.
 4. The composer shows a removable pending card and permits drafting while preparation runs; Send remains gated until the handle is ready. A later reader handoff replaces only the pending attachment and preserves the draft and current conversation.

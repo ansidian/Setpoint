@@ -207,7 +207,6 @@ export default function MobileInboxView({
   indexedSearchTotal,
   indexedSearchHasMore,
   loadMoreIndexedSearch,
-  onAskAlfred,
   visibleEmails,
   mobileChipCounts,
   totalUnread,
@@ -363,12 +362,6 @@ export default function MobileInboxView({
                   aria-label="Search indexed mail"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                      event.preventDefault();
-                      onAskAlfred(search);
-                    }
-                  }}
                   placeholder="Search indexed mail"
                   style={{
                     flex: 1,
@@ -381,14 +374,6 @@ export default function MobileInboxView({
                   }}
                 />
               </div>
-              <MobileIconButton
-                icon={Sparkles}
-                label="Ask Alfred"
-                onClick={() => onAskAlfred(search)}
-                accent={accent}
-                tinted={false}
-                testId="inbox-mobile-ask-alfred-trigger"
-              />
               <MobileIconButton
                 icon={Filter}
                 label="Open filters"

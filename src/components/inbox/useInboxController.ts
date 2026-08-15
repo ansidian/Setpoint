@@ -342,8 +342,8 @@ export default function useInboxController({
     return flatEmails.find((email) => email.id === selectedId || email.uid === selectedId) || null;
   }, [selectedId, flatEmails, indexedSearch.emails]);
 
-  // CONTEXT.md: the inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) hand off
-  // to Alfred — the panel opens and runs the query immediately.
+  // CONTEXT.md: the desktop Inbox AI entry points (Sparkles, Cmd/Ctrl+Enter)
+  // hand off to Alfred — the panel opens and runs the query immediately.
   const askAlfred = useCallback((query: string = search) => {
     const q = String(query || "").trim();
     if (!q) return;

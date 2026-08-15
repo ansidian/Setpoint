@@ -163,6 +163,7 @@ export function resolveDashboardShellHotkey({
   anyBlockingOverlayOpen = false,
   analyticsOpen = false,
   historyOpen = false,
+  isMobile = false,
 }: {
   key?: string;
   code?: string;
@@ -176,11 +177,13 @@ export function resolveDashboardShellHotkey({
   anyBlockingOverlayOpen?: boolean;
   analyticsOpen?: boolean;
   historyOpen?: boolean;
+  isMobile?: boolean;
 } = {}) {
-  // Alfred hotkeys fire everywhere, including editable targets and while a
-  // blocking overlay is open, so the panel can be toggled from its own composer
-  // (CONTEXT.md: ⌘\ toggle, ⌘⇧\ new chat).
+  // Alfred is desktop-only. On desktop its hotkeys fire everywhere, including
+  // editable targets and blocking overlays, so the panel can be toggled from
+  // its own composer (CONTEXT.md: ⌘\ toggle, ⌘⇧\ new chat).
   if ((metaKey || ctrlKey) && code === "Backslash") {
+    if (isMobile) return { action: "ignore" };
     return { action: shiftKey ? "alfred-new-chat" : "toggle-alfred" };
   }
   if (editableTarget) return { action: "clear-chord" };

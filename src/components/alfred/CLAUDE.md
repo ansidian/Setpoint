@@ -1,6 +1,6 @@
 # Alfred Panel Map
 
-The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfred/run`. Read-only v1; trust rules live in `docs/adr/0006-alfred-trust-architecture.md`. Entry points: ⌘\ toggle, ⌘⇧\ new chat, inbox query handoff (⌘Enter / Sparkles), and the desktop reader's model-free email-context handoff. No launcher pill by design.
+The desktop-only Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfred/run`. Read-only v1; trust rules live in `docs/adr/0006-alfred-trust-architecture.md`. Desktop entry points: ⌘\ toggle, ⌘⇧\ new chat, inbox query handoff (⌘Enter / Sparkles), and the reader's model-free email-context handoff. Mobile exposes no Alfred entry point or panel. No launcher pill by design.
 
 ## Files
 
@@ -34,4 +34,4 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 
 - `server/alfred/` — the run loop and SSE contract
 - `src/components/dashboard/DashboardShell.tsx` — mount + hotkey wiring
-- `src/components/inbox/` — ⌘Enter / Sparkles handoff source
+- `src/components/inbox/` — desktop ⌘Enter / Sparkles handoff source

@@ -504,8 +504,8 @@ export function DashboardShell({
               onRefresh={onQuickRefresh}
               commitPendingUndoSignal={calendarOpenRequestId}
               isMobile={isMobile}
-              onAskAlfred={askAlfred}
-              onAttachEmailToAlfred={attachEmailToAlfred}
+              onAskAlfred={isMobile ? undefined : askAlfred}
+              onAttachEmailToAlfred={isMobile ? undefined : attachEmailToAlfred}
             />
           </Suspense>
         </DashboardTabPanel>
@@ -563,7 +563,7 @@ export function DashboardShell({
         setHistoryOpen={setHistoryOpen}
       />
 
-      {alfredMounted && (
+      {!isMobile && alfredMounted && (
         <Suspense fallback={null}>
           <AlfredPanel
             open={alfredOpen}
