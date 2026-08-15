@@ -110,6 +110,22 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **UI:** month grid + agenda render through `src/components/calendar/modal/CalendarModalShell.tsx`; search results in `src/components/calendar/modal/CalendarSearchRail.tsx`; activating a result repositions the grid, selects the day/item, and opens the floating detail.
 
+## Calendar typed create seed → existing editor → normalized completion
+
+**Trigger:** an internal dashboard caller invokes `openCalendar` with an optional typed `eventCreateRequest`. This bridge is behavior-neutral and currently exposes no Alfred capability.
+
+1. `shared/types/calendar.ts` — defines the serializable seed fields, optional resolved/requested source intent, opaque client origin, acknowledgement, and normalized completion values
+2. `src/components/dashboard/useCalendarWorkspaceState.ts:openCalendar` — stores one pending request, forces Events create routing through the existing open-request counter, and clears only the identity-matching request after acknowledgement
+3. `src/components/dashboard/DashboardCalendarModalMount.tsx` → `src/hooks/calendar/useCalendarModalController.tsx` — forwards the in-memory request into Calendar without persistence or provider serialization
+4. `src/hooks/calendar/useCalendarOpenRequestRouting.ts` — consumes each request ID once across initial lazy mount and later mounted opens; unavailable/rejected editor routing emits failure without opening a false editor shell
+5. `src/components/calendar/events/useCalendarEventEditorSession.ts` — normalizes the seed into the existing draft, marks schedule/location as manual, resolves omitted/resolved/requested source behavior against writable sources, and accepts after the same-session source attempt
+6. `src/components/calendar/events/useCalendarEventTitleComposer.ts` — suppresses parsing only for the untouched structured title; owner title edits re-enable assistance while seeded schedule/location manual overrides remain authoritative
+7. `src/components/calendar/events/useCalendarEventMutations.ts:save` — the existing **Create event** action remains the sole write boundary; validation/provider failures retain the draft and emit no completion
+8. `src/hooks/calendar/useCalendarEditorScrollRouting.ts` → `src/hooks/calendar/useFloatingEditorRouting.ts:handleEventEditorSaved` — preserves the existing saved-event detail transition
+9. `src/components/calendar/events/useCalendarEventEditor.ts` — after detail routing, consumes the retained request once and returns the same normalized saved event plus unchanged origin; cancel clears coordination without completion
+
+**State:** seed, origin, callbacks, and requested source name are mounted-client-only and are never persisted. Requested-name resolution covers sources returning within the same editor session; the existing full-page Gmail OAuth reconnect cannot retain this state under the no-persistence contract. Explicit routing/editor/seed failures are acknowledged; lazy chunk-load failures remain owned by the app-level recovery boundary and are outside this narrow bridge.
+
 ## 5. Calendar modifier-key selection gesture
 
 **Trigger:** cmd/ctrl-click on any calendar event surface in the events view toggles the multi-selection set; bare cmd/ctrl while the floating detail is open promotes the focused event into the set or dismisses the panel.

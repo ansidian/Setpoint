@@ -1,12 +1,17 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { listReminders } from "@/api";
 import type {
+  CalendarEventCreateSeed,
   CalendarRecurrenceScope,
   NormalizedCalendarEvent,
 } from "../../../../shared/types/calendar";
+import type { CalendarEventCreateOpenResult } from "../../../hooks/calendar/calendarEventCreateBridge";
 import { getCalendarEditorErrorDetails } from "./calendarEventEditorErrors";
 import { eventReminderSourceFromEvent, type EventReminderLike } from "./calendarEventReminderModel";
-import { seedCalendarEventDraftFromSources } from "./calendarEventEditorSessionModel";
+import {
+  normalizeCalendarEventCreateSeed,
+  seedCalendarEventDraftFromSources,
+} from "./calendarEventEditorSessionModel";
 import {
   createManualOverrides,
   defaultDraft,
@@ -97,15 +102,31 @@ export default function useCalendarEventEditorSession({
     setErrorCode,
   } = setters;
 
-  const openCreate = useCallback(async () => {
-    if (!editable) return;
+  const openCreate = useCallback(async (
+    seed?: CalendarEventCreateSeed,
+  ): Promise<CalendarEventCreateOpenResult> => {
+    if (!editable) return { accepted: false, reason: "calendar_unavailable" };
+    if (seed && (typeof seed.title !== "string" || !seed.startDate)) {
+      return { accepted: false, reason: "seed_rejected" };
+    }
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    const nextDraft = seedCalendarEventDraftFromSources(defaultDraft(selectedDate), sourceGroupsRef.current);
+    const nextDraft = seed
+      ? normalizeCalendarEventCreateSeed(seed, sourceGroupsRef.current)
+      : seedCalendarEventDraftFromSources(defaultDraft(selectedDate), sourceGroupsRef.current);
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
-    seedTitleInput("");
-    setManualOverrides(createManualOverrides());
+    seedTitleInput(seed?.title || "");
+    setManualOverrides(seed
+      ? {
+          startDate: true,
+          endDate: true,
+          startTime: true,
+          endTime: true,
+          location: true,
+          allDay: true,
+        }
+      : createManualOverrides());
     setRecurrenceDraft(null);
     setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
@@ -123,8 +144,8 @@ export default function useCalendarEventEditorSession({
     setErrorCode(null);
     captureDirtyBaseline(normalizeDraftForDirty({
       draft: nextDraft,
-      effectiveTitle: "",
-      titleInput: "",
+      effectiveTitle: seed?.title || "",
+      titleInput: seed?.title || "",
       intentMode: "single",
       batchDrafts: [],
       recurrenceDraft: null,
@@ -132,14 +153,18 @@ export default function useCalendarEventEditorSession({
     }));
 
     const groups = await ensureSources();
-    if (requestIdRef.current !== requestId) return;
+    if (requestIdRef.current !== requestId) {
+      return { accepted: false, reason: "editor_unavailable" };
+    }
 
     setDraft((current) => {
-      const seeded = seedCalendarEventDraftFromSources(current, groups);
+      const seeded = current.accountId && current.calendarId
+        ? current
+        : seedCalendarEventDraftFromSources(current, groups, seed?.source);
       captureDirtyBaseline(normalizeDraftForDirty({
         draft: seeded,
-        effectiveTitle: "",
-        titleInput: "",
+        effectiveTitle: seed?.title || "",
+        titleInput: seed?.title || "",
         intentMode: "single",
         batchDrafts: [],
         recurrenceDraft: null,
@@ -147,17 +172,22 @@ export default function useCalendarEventEditorSession({
       }));
       return seeded;
     });
-    setCreateSeedDraft((current) => seedCalendarEventDraftFromSources(current, groups));
+    setCreateSeedDraft((current) => (
+      current.accountId && current.calendarId
+        ? current
+        : seedCalendarEventDraftFromSources(current, groups, seed?.source)
+    ));
     if (!flattenWritableCalendars(groups).length) {
       const reason = inferNoWritableReason(groups);
       setError(reason === "calendar_reauth_required"
         ? "Reconnect this Gmail account to edit calendar events."
         : "No writable calendar sources are connected.");
       setErrorCode(reason);
-      return;
+      return { accepted: true };
     }
     setError(null);
     setErrorCode(null);
+    return { accepted: true };
   }, [captureDirtyBaseline, editable, ensureSources, requestIdRef, resetLocationSuggestions, seedTitleInput, selectedDate, setConfirmDelete, setCreateSeedDraft, setCustomReminder, setDraft, setEditingEvent, setError, setErrorCode, setEventReminders, setManualOverrides, setManualRecurrenceOverride, setMode, setRecurrenceDraft, setRecurringEditScope, setReminderError, setRemovedReminderIds, setSaveAttempted, setTouchedFields, sourceGroupsRef]);
 
   const openEdit = useCallback(async (event: CalendarEventEditorInput) => {

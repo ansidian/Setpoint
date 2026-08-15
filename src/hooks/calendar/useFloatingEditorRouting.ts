@@ -3,6 +3,10 @@ import { parseYmd } from "../../components/calendar/calendarDateUtils.ts";
 import { ymdFromView } from "./calendarModalSelectionModel";
 import { initialDeadlineEditorState } from "./calendarModalInteractionModel";
 import type { CalendarFloatingDetail } from "./useCalendarFloatingDetail";
+import type {
+  CalendarEventCreateOpenResult,
+  CalendarEventCreateRequest,
+} from "./calendarEventCreateBridge";
 
 export interface FloatingEditorItem {
   id?: string | number | null;
@@ -29,7 +33,7 @@ export interface FloatingOpenOptions {
 }
 
 interface FloatingEventEditorRef {
-  openCreate?: () => void;
+  openCreate?: (request?: CalendarEventCreateRequest) => Promise<CalendarEventCreateOpenResult>;
   openEdit?: (item: FloatingEditorItem) => void;
   closeEditor?: () => void;
 }
@@ -169,7 +173,10 @@ export default function useFloatingEditorRouting({
     }
   }, [activeView, floatingDetailRef, selectedItemId, setFloatingDetail, setSelectedItemId]);
 
-  const openFloatingEventCreate = useCallback((seedDate: string | null = null) => {
+  const openFloatingEventCreate = useCallback((
+    seedDate: string | null = null,
+    request?: CalendarEventCreateRequest,
+  ): Promise<CalendarEventCreateOpenResult> | void => {
     suppressAgendaPassiveSync();
     const dateKey = seedDate || activeSelectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay });
     const parsed = parseYmd(dateKey);
@@ -183,8 +190,8 @@ export default function useFloatingEditorRouting({
     // ghost preview lingers on the grid behind the new editor.
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
-    eventEditorRef.current?.openCreate?.();
-    openFloatingDetail({
+    const openCreate = eventEditorRef.current?.openCreate;
+    const openDetail = () => openFloatingDetail({
       mode: "create",
       view: "events",
       dateKey,
@@ -193,6 +200,17 @@ export default function useFloatingEditorRouting({
       sourceCellElement: dateCell,
       anchorKind: "day-cell",
     });
+    if (request) {
+      if (!openCreate) {
+        return Promise.resolve({ accepted: false, reason: "editor_unavailable" });
+      }
+      return openCreate(request).then((result) => {
+        if (result.accepted) openDetail();
+        return result;
+      });
+    }
+    void openCreate?.();
+    openDetail();
   }, [activeSelectedDateKey, eventEditorRef, findDateCell, openFloatingDetail, selectedDay, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId, suppressAgendaPassiveSync, viewMonth, viewYear]);
 
   const openFloatingEventEdit = useCallback((item: FloatingEditorItem, options: FloatingOpenOptions = {}) => {

@@ -13,6 +13,7 @@ import type { DashboardCalendarBillsData } from "./calendarBillsData";
 import type { CalendarView } from "../../../shared/types/calendar";
 import type { DashboardCalendarEventsRange } from "./useCalendarWorkspaceState";
 import type { ActualBillOccurrence } from "../../../shared/types/actual";
+import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
 export const importCalendar = () => import("../calendar/CalendarModal");
 const CalendarModal = lazy(importCalendar);
@@ -20,6 +21,7 @@ type CalendarModalProps = ComponentProps<typeof CalendarModal>;
 export interface DashboardCalendarModalMountProps {
   [key: string]: unknown;
   calendarOpenRequestId: number;
+  calendarEventCreateRequest?: CalendarEventCreateRequest | null;
   calendarJumpTodayRequestId?: number;
   calendarView: CalendarView;
   changeCalendarView: (view: string) => void;
@@ -48,6 +50,7 @@ export interface DashboardCalendarModalMountProps {
 
 export default function DashboardCalendarModalMount({
   calendarOpenRequestId,
+  calendarEventCreateRequest,
   calendarJumpTodayRequestId,
   calendarView,
   changeCalendarView,
@@ -78,6 +81,7 @@ export default function DashboardCalendarModalMount({
       <CalendarModal
         open={true}
         openRequestId={calendarOpenRequestId}
+        eventCreateRequest={calendarEventCreateRequest}
         jumpTodayRequestId={calendarJumpTodayRequestId}
         view={calendarView}
         onViewChange={changeCalendarView}

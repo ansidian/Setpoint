@@ -205,6 +205,7 @@ export function DashboardShell({
 
   const {
     calendarOpenRequestId,
+    calendarEventCreateRequest,
     calendarJumpTodayRequestId,
     calendarView,
     calendarFocus,
@@ -399,6 +400,7 @@ export function DashboardShell({
 
   const calendarMountProps = {
     calendarOpenRequestId,
+    calendarEventCreateRequest,
     calendarJumpTodayRequestId,
     calendarView,
     changeCalendarView,

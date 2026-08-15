@@ -11,10 +11,10 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.tsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
 - `KeepAliveTab.tsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
-- `DashboardCalendarModalMount.tsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data
-- `dashboardShellModel.ts` — calendar open-state logic, request builders, hotkey resolution, and the pure glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)
+- `DashboardCalendarModalMount.tsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data plus the optional one-shot event create request
+- `dashboardShellModel.ts` — calendar open-state logic, typed event-create request routing, request builders, hotkey resolution, and the pure glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)
 - `useDashboardShellHotkeys.ts` — global shortcuts: command palette, g+d/e chords
-- `useCalendarWorkspaceState.ts` — calendar workspace state slice: view/focus/overlay deep-link state, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
+- `useCalendarWorkspaceState.ts` — calendar workspace state slice: view/focus/overlay deep-link state, one-shot typed event-create request ownership/acknowledgement consumption, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
 - `useDashboardItemSheet.ts` — dashboard glance-sheet selection/toggle state, tab-leave cleanup, direct item routing, and kind-aware "Open in calendar" handoff
 - `useMobileDashboardScrollRestoration.ts` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
 - `useAlfredPanelState.ts` — Alfred panel mount/open/new-chat/handoff state and its stable actions

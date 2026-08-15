@@ -169,6 +169,55 @@ export interface NormalizedCalendarEvent {
   reminderState?: UpcomingReminderState;
 }
 
+export type CalendarEventCreateSourceIntent =
+  | {
+      kind: "resolved";
+      accountId: string;
+      calendarId: CalendarId;
+    }
+  | {
+      kind: "requested";
+      calendarName: string;
+    };
+
+/**
+ * Calendar-owned input for opening the existing event editor in create mode.
+ * Omitting `source` preserves the editor's primary/first-writable fallback.
+ */
+export interface CalendarEventCreateSeed {
+  title: string;
+  allDay: boolean;
+  startDate: string;
+  endDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  location?: string | null;
+  description?: string | null;
+  source?: CalendarEventCreateSourceIntent;
+}
+
+/** Client coordination only; never include this value in a provider request. */
+export interface CalendarEventCreateOrigin {
+  kind: string;
+  referenceId: string;
+}
+
+export type CalendarEventCreateAcknowledgement =
+  | {
+      status: "accepted";
+      origin: CalendarEventCreateOrigin;
+    }
+  | {
+      status: "failed";
+      origin: CalendarEventCreateOrigin;
+      reason: "calendar_unavailable" | "editor_unavailable" | "seed_rejected";
+    };
+
+export interface CalendarEventCreateCompletion {
+  event: NormalizedCalendarEvent;
+  origin: CalendarEventCreateOrigin;
+}
+
 export interface CalendarRangeValidationValue {
   start: string;
   end: string;

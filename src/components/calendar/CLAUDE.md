@@ -49,4 +49,4 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 ## Related
 
 - `src/hooks/calendar/` — calendar state and models (see its map)
-- `src/components/dashboard/DashboardCalendarModalMount.tsx` — where the calendar tab mounts
+- `src/components/dashboard/DashboardCalendarModalMount.tsx` — where the calendar tab mounts and forwards the optional one-shot typed event-create request

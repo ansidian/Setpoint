@@ -28,6 +28,7 @@ import useCalendarControllerViewData, {
   type ControllerEventsData,
   type ControllerRangeData,
 } from "./useCalendarControllerViewData";
+import type { CalendarEventCreateRequest } from "./calendarEventCreateBridge";
 
 export interface CalendarModalControllerOptions {
   open: boolean;
@@ -49,6 +50,7 @@ export interface CalendarModalControllerOptions {
   openRequestId?: number;
   jumpTodayRequestId?: number;
   deadlineActions?: Record<string, unknown>;
+  eventCreateRequest?: CalendarEventCreateRequest | null;
 }
 
 export type CalendarModalControllerResult = ReactElement | null;
@@ -73,6 +75,7 @@ export default function useCalendarModalController({
   openRequestId = 0,
   jumpTodayRequestId = 0,
   deadlineActions = {},
+  eventCreateRequest = null,
 }: CalendarModalControllerOptions): CalendarModalControllerResult {
   const view = normalizeCalendarWorkspaceView(requestedView);
   const {
@@ -356,7 +359,7 @@ export default function useCalendarModalController({
   useCalendarOpenRequestRouting({
     request: {
       open, view, openRequestId, focusDate, focusItemId, forceDeadlineOverlay,
-      usesFloatingEditor, activeSelectedDateKey, todayDateKey,
+      usesFloatingEditor, activeSelectedDateKey, todayDateKey, eventCreateRequest,
     },
     syncSnapshot,
     commitSyncSnapshot: commitSelectionSyncSnapshot,

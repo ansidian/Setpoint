@@ -10,13 +10,14 @@ import { afterEach, beforeEach, vi } from "vitest";
 import "@/components/todoist/AddTaskPanel";
 
 export const mockGetCalendarSources = vi.fn();
+export const mockCreateCalendarEvent = vi.fn();
 
 vi.mock("@/api", () => ({
   getCalendarSearch: vi.fn(),
   getCalendarSources: (...args: unknown[]) => mockGetCalendarSources(...args),
   getCalendarPlaceSuggestions: vi.fn(),
   getCalendarPlaceDetails: vi.fn(),
-  createCalendarEvent: vi.fn(),
+  createCalendarEvent: (...args: unknown[]) => mockCreateCalendarEvent(...args),
   createCalendarEventsBatch: vi.fn(),
   updateCalendarEvent: vi.fn(),
   deleteCalendarEvent: vi.fn(),

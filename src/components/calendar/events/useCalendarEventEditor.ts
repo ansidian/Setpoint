@@ -8,6 +8,7 @@ import useCalendarEventMutations from "./useCalendarEventMutations";
 import useEventReminderDrafts from "./useEventReminderDrafts";
 import useEventRecurrenceDraft from "./useEventRecurrenceDraft";
 import useCalendarEventTitleComposer from "./useCalendarEventTitleComposer";
+import useCalendarEventCreateCoordination from "./useCalendarEventCreateCoordination";
 import { getCalendarEditorErrorDetails } from "./calendarEventEditorErrors";
 import {
   type CalendarBatchDraft,
@@ -91,6 +92,7 @@ export default function useCalendarEventEditor({
   const [batchDrafts, setBatchDrafts] = useState<CalendarBatchDraft[]>([]);
   const [recurringEditScope, setRecurringEditScope] = useState<CalendarRecurrenceScope | null>(null);
   const [createSeedDraft, setCreateSeedDraft] = useState(() => defaultDraft(null));
+  const [structuredCreateSeed, setStructuredCreateSeed] = useState(false);
   const [manualOverrides, setManualOverrides] = useState(() => createManualOverrides());
   const [editingEvent, setEditingEvent] = useState<NormalizedCalendarEvent | null>(null);
   const [saving, setSaving] = useState(false);
@@ -196,6 +198,7 @@ export default function useCalendarEventEditor({
     isEditingRecurring,
     recurringEditScope,
     touchedTitle: !!touchedFields.title,
+    suppressAssist: structuredCreateSeed && !touchedFields.title,
     onInputStart: clearFieldError,
     onCommitTitle: commitTitleInput,
   });
@@ -338,7 +341,7 @@ export default function useCalendarEventEditor({
     onPopState: clearEditorState,
   });
 
-  const { openCreate, openEdit } = useCalendarEventEditorSession({
+  const { openCreate: openCreateSession, openEdit: openEditSession } = useCalendarEventEditorSession({
     editable,
     selectedDate,
     requestIdRef: editorRequestIdRef,
@@ -369,9 +372,18 @@ export default function useCalendarEventEditor({
     },
   });
 
+  const { clearCreateCoordination, openCreate, openEdit, handleSaved } = useCalendarEventCreateCoordination({
+    openCreateSession, openEditSession, setStructuredCreateSeed, onSaved,
+  });
+
+  useLayoutEffect(() => {
+    if (mode !== "editor" || !open || view !== "events") clearCreateCoordination();
+  }, [clearCreateCoordination, mode, open, view]);
+
   const closeEditor = useCallback(() => {
+    clearCreateCoordination();
     clearEditorState();
-  }, [clearEditorState]);
+  }, [clearCreateCoordination, clearEditorState]);
 
   const selectRecurringEditScope = useCallback((scope: CalendarRecurrenceScope) => {
     setRecurringEditScope(scope);
@@ -511,7 +523,7 @@ export default function useCalendarEventEditor({
       upsertEvents,
       removeEvent,
       onFocusDate,
-      onSaved,
+      onSaved: handleSaved,
       onDeleted,
       closeEditor,
     },

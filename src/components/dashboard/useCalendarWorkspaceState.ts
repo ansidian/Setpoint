@@ -9,6 +9,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { CalendarView } from "../../../shared/types/calendar";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { CalendarOpenOptions, DashboardTab } from "./dashboardShellModel";
+import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
 export interface DashboardCalendarEventsRange { start?: string | null; end?: string | null }
 export interface DashboardCalendarWorkspaceState {
@@ -50,6 +51,8 @@ export default function useCalendarWorkspaceState({
   onCalendarWorkspaceChange,
 }: CalendarWorkspaceOptions) {
   const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
+  const [calendarEventCreateRequest, setCalendarEventCreateRequest] = useState<CalendarEventCreateRequest | null>(null);
+  const calendarEventCreateRequestTokenRef = useRef<symbol | null>(null);
   // Bumped when the active Calendar nav tab is re-tapped on mobile; the calendar
   // controller consumes the counter to scroll the agenda back to today + recenter
   // the month (the bare navigateToToday reset, overlay-preserving — same semantics
@@ -88,6 +91,28 @@ export default function useCalendarWorkspaceState({
     setCalendarFocusItemId(request.focusItemId);
     setCalendarFocusOpenDetail(request.focusOpenDetail);
     setCalendarForceOverlays({ events: request.forceEventOverlay, deadlines: request.forceDeadlineOverlay, completedDeadlines: request.forceCompletedDeadlineOverlay });
+    if (request.eventCreateRequest) {
+      const input = request.eventCreateRequest;
+      const requestToken = Symbol("calendar-event-create-request");
+      let settled = false;
+      const routedRequest: CalendarEventCreateRequest = {
+        ...input,
+        onAcknowledged: (acknowledgement) => {
+          if (settled) return;
+          settled = true;
+          if (calendarEventCreateRequestTokenRef.current === requestToken) {
+            calendarEventCreateRequestTokenRef.current = null;
+            setCalendarEventCreateRequest(null);
+          }
+          input.onAcknowledged?.(acknowledgement);
+        },
+      };
+      calendarEventCreateRequestTokenRef.current = requestToken;
+      setCalendarEventCreateRequest(routedRequest);
+    } else {
+      calendarEventCreateRequestTokenRef.current = null;
+      setCalendarEventCreateRequest(null);
+    }
     setCalendarOpenRequestId((value) => value + 1);
     setCalendarMounted(true);
     setShellTab("calendar");
@@ -138,6 +163,8 @@ export default function useCalendarWorkspaceState({
     setCalendarFocusItemId((cur) => (cur ? null : cur));
     setCalendarFocusOpenDetail((cur) => (cur ? false : cur));
     setCalendarFocus((cur) => (cur ? null : cur));
+    calendarEventCreateRequestTokenRef.current = null;
+    setCalendarEventCreateRequest(null);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [tab]);
 
@@ -152,6 +179,7 @@ export default function useCalendarWorkspaceState({
 
   return {
     calendarOpenRequestId,
+    calendarEventCreateRequest,
     calendarJumpTodayRequestId,
     calendarView,
     calendarFocus,

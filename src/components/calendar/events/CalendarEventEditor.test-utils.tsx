@@ -12,6 +12,7 @@ import type {
 } from "./useCalendarEventEditor.ts";
 import type { CalendarDraftGhostPreview } from "./CalendarDraftPreviewPanel.tsx";
 import type { CalendarEventLike, EventEditorLike } from "../ghostPreview.ts";
+import type { CalendarEventCreateRequest } from "../../../hooks/calendar/calendarEventCreateBridge.ts";
 
 type CalendarEventEditor = ReturnType<typeof useCalendarEventEditor>;
 type RefreshRange = NonNullable<CalendarEventEditorOptions["refreshRange"]>;
@@ -23,6 +24,7 @@ type Deleted = NonNullable<CalendarEventEditorOptions["onDeleted"]>;
 
 interface EditorHarnessProps {
   event?: CalendarEventEditorInput | null;
+  createRequest?: CalendarEventCreateRequest;
   events: CalendarEventLike[];
   focusDate: string;
   refreshRange: RefreshRange;
@@ -36,6 +38,7 @@ interface EditorHarnessProps {
 
 function EditorHarness({
   event,
+  createRequest,
   events,
   focusDate,
   refreshRange,
@@ -87,8 +90,8 @@ function EditorHarness({
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    void (event ? editor.openEdit(event) : editor.openCreate());
-  }, [editor, event]);
+    void (event ? editor.openEdit(event) : editor.openCreate(createRequest));
+  }, [createRequest, editor, event]);
 
   // The production ghost adapter serializes this hook result into the narrower
   // EventEditorLike shape. The focused harness can pass the same runtime data
@@ -109,6 +112,7 @@ function EditorHarness({
 
 export function renderEventEditor({
   event = null,
+  createRequest,
   events = [],
   focusDate = "2026-04-20",
   refreshRange = vi.fn<RefreshRange>().mockResolvedValue([]),
@@ -119,6 +123,7 @@ export function renderEventEditor({
   onDeleted = vi.fn<Deleted>(),
 }: {
   event?: CalendarEventEditorInput | null;
+  createRequest?: CalendarEventCreateRequest;
   events?: CalendarEventLike[];
   focusDate?: string;
   refreshRange?: RefreshRange;
@@ -132,6 +137,7 @@ export function renderEventEditor({
   const result = render(
     <EditorHarness
       event={event}
+      createRequest={createRequest}
       events={events}
       focusDate={focusDate}
       refreshRange={refreshRange}

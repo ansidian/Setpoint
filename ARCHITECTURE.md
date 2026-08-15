@@ -208,6 +208,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useBillBadgeForm` | `src/components/bills/useBillBadgeForm.ts` |
 | `useCalendarEditorHistory` | `src/components/calendar/events/useCalendarEditorHistory.ts` |
 | `useCalendarEditorPickers` | `src/components/calendar/events/useCalendarEditorPickers.ts` |
+| `useCalendarEventCreateCoordination` | `src/components/calendar/events/useCalendarEventCreateCoordination.ts` |
 | `useCalendarEventEditor` | `src/components/calendar/events/useCalendarEventEditor.ts` |
 | `useCalendarEventEditorSession` | `src/components/calendar/events/useCalendarEventEditorSession.ts` |
 | `useCalendarEventMutations` | `src/components/calendar/events/useCalendarEventMutations.ts` |
@@ -301,6 +302,8 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 Calendar is the largest frontend feature area (~240 files). File-level maps live in `src/components/calendar/CLAUDE.md` (router for `modal/`, `events/`, `views/`, root rail files) and `src/hooks/calendar/CLAUDE.md` (hooks + pure models); server-side calendar files are mapped in `server/calendar/CLAUDE.md` and `server/routes/CLAUDE.md`.
 
 Placement rule: new calendar hooks and models go in `src/hooks/calendar/`. Colocate a hook under `src/components/calendar/` only when it is private to one component subtree (the `events/` editor hooks are the precedent). Do not add calendar files outside these two client roots.
+
+Calendar also exposes an internal, behavior-neutral event create-seed bridge. `shared/types/calendar.ts` owns the serializable seed, explicit source intent, origin, acknowledgement, and completion values; `src/hooks/calendar/calendarEventCreateBridge.ts` owns the client-only callback envelope. `useCalendarWorkspaceState` carries one pending request through the existing open-request counter, `useCalendarOpenRequestRouting` consumes and acknowledges it once, and the existing event editor retains origin/completion only in memory until cancel or successful save. Provider writes still occur exclusively through the editor's existing **Create event** action, and completion uses the normalized event already returned by that mutation flow.
 
 ### Data Flow
 

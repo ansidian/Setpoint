@@ -2,6 +2,11 @@ import { useEffect, useEffectEvent, useLayoutEffect, useRef, type Dispatch, type
 import type { CalendarModalSyncSnapshot } from "./calendarModalSelectionModel";
 import type { CalendarFloatingDetail } from "./useCalendarFloatingDetail";
 import type { DeadlineEditorState } from "./useFloatingEditorRouting";
+import {
+  acknowledgeCalendarEventCreateRequest,
+  type CalendarEventCreateOpenResult,
+  type CalendarEventCreateRequest,
+} from "./calendarEventCreateBridge";
 
 interface OpenRequestState {
   open: boolean;
@@ -13,13 +18,17 @@ interface OpenRequestState {
   usesFloatingEditor: boolean;
   activeSelectedDateKey: string | null;
   todayDateKey: string;
+  eventCreateRequest?: CalendarEventCreateRequest | null;
 }
 
 interface OpenRequestEditors {
   eventEditorEditable: boolean;
   closeEventEditor: () => void;
-  openEventCreate: () => void;
-  openFloatingEventCreate: (dateKey?: string | null) => void;
+  openEventCreate: (request?: CalendarEventCreateRequest) => Promise<CalendarEventCreateOpenResult>;
+  openFloatingEventCreate: (
+    dateKey?: string | null,
+    request?: CalendarEventCreateRequest,
+  ) => Promise<CalendarEventCreateOpenResult> | void;
   openFloatingDeadlineCreate: (
     dateKey?: string | null,
     options?: { allowSelectionFallback?: boolean },
@@ -55,6 +64,47 @@ export default function useCalendarOpenRequestRouting({
   floating,
 }: CalendarOpenRequestRoutingOptions) {
   const handledInitialDeadlineCreateRef = useRef<string | null>(null);
+  const handledEventCreateRequestRef = useRef<string | null>(null);
+
+  const routeEventCreateRequest = useEffectEvent(async (dateKey?: string | null) => {
+    const createRequest = request.eventCreateRequest;
+    if (!createRequest) return;
+    const requestKey = String(request.openRequestId);
+    if (handledEventCreateRequestRef.current === requestKey) return;
+    handledEventCreateRequestRef.current = requestKey;
+
+    let result: CalendarEventCreateOpenResult;
+    try {
+      const routedResult = request.usesFloatingEditor
+        ? await editors.openFloatingEventCreate(dateKey || request.focusDate || null, createRequest)
+        : await editors.openEventCreate(createRequest);
+      result = routedResult || { accepted: false, reason: "editor_unavailable" };
+    } catch {
+      result = { accepted: false, reason: "seed_rejected" };
+    }
+    acknowledgeCalendarEventCreateRequest(createRequest, result);
+  });
+
+  useEffect(() => {
+    if (
+      !request.open
+      || request.view !== "events"
+      || request.focusItemId !== "new"
+      || !request.eventCreateRequest
+    ) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      void routeEventCreateRequest(request.focusDate || request.activeSelectedDateKey || null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    request.activeSelectedDateKey,
+    request.eventCreateRequest,
+    request.focusDate,
+    request.focusItemId,
+    request.open,
+    request.openRequestId,
+    request.view,
+  ]);
 
   useEffect(() => {
     const shouldOpenDeadlineCreate = request.focusItemId === "new"
@@ -103,7 +153,9 @@ export default function useCalendarOpenRequestRouting({
         editors.setDeadlineEditor({ mode: "create", seedDate: createDeadlineSeedDate });
       }
     } else if (snapshot?.openCreate && request.view === "events" && editors.eventEditorEditable) {
-      if (request.usesFloatingEditor) {
+      if (request.eventCreateRequest) {
+        void routeEventCreateRequest(request.focusDate || snapshot.nextSelectedDateKey || null);
+      } else if (request.usesFloatingEditor) {
         editors.openFloatingEventCreate(request.focusDate || snapshot.nextSelectedDateKey || null);
       } else {
         editors.openEventCreate();

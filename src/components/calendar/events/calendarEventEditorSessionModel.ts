@@ -1,5 +1,6 @@
 import {
   flattenWritableCalendars,
+  defaultDraft,
   type CalendarBatchDraft,
   type CalendarEventDraft,
   type CalendarManualOverrides,
@@ -11,6 +12,11 @@ import {
   validateSingleDraft,
 } from "./calendarEventEditorModel";
 import type { CalendarRecurrenceScope } from "../../../../shared/types/calendar";
+import type {
+  CalendarEventCreateSeed,
+  CalendarEventCreateSourceIntent,
+} from "../../../../shared/types/calendar";
+import { addMinutesToDraftDateTime } from "./calendarEditorUtils";
 
 export function updateCalendarEventBatchDraft(
   batchDrafts: CalendarBatchDraft[],
@@ -35,10 +41,38 @@ export function removeCalendarEventBatchDraft(batchDrafts: CalendarBatchDraft[],
 export function seedCalendarEventDraftFromSources(
   draft: CalendarEventDraft,
   sourceGroups: CalendarSourceGroup[] | null | undefined,
+  sourceIntent?: CalendarEventCreateSourceIntent | null,
 ) {
-  if (draft.accountId && draft.calendarId) return draft;
   const writable = flattenWritableCalendars(sourceGroups);
-  const preferred = writable.find((entry) => entry.primary) || writable[0];
+  let preferred = null;
+
+  if (sourceIntent?.kind === "resolved") {
+    const matches = writable.filter((entry) => (
+      entry.accountId === sourceIntent.accountId
+      && entry.calendarId === sourceIntent.calendarId
+    ));
+    preferred = matches.length === 1 ? matches[0]! : null;
+  } else if (sourceIntent?.kind === "requested") {
+    const requestedName = sourceIntent.calendarName.trim().toLocaleLowerCase();
+    const matches = requestedName
+      ? writable.filter((entry) => entry.summary.trim().toLocaleLowerCase() === requestedName)
+      : [];
+    preferred = matches.length === 1 ? matches[0]! : null;
+  } else {
+    if (draft.accountId && draft.calendarId) return draft;
+    preferred = writable.find((entry) => entry.primary) || writable[0] || null;
+  }
+
+  if (!preferred && sourceIntent) {
+    return {
+      ...draft,
+      accountId: "",
+      calendarId: "",
+      colorId: null,
+      sourceColor: null,
+      sourceColorId: null,
+    };
+  }
   if (!preferred) return draft;
   return {
     ...draft,
@@ -48,6 +82,37 @@ export function seedCalendarEventDraftFromSources(
     sourceColor: preferred.color || null,
     sourceColorId: preferred.defaultEventColorId || null,
   };
+}
+
+export function normalizeCalendarEventCreateSeed(
+  seed: CalendarEventCreateSeed,
+  sourceGroups: CalendarSourceGroup[] | null | undefined,
+) {
+  const startDate = seed.startDate;
+  const base = defaultDraft(startDate);
+  const startTime = seed.startTime || base.startTime;
+  const defaultEnd = addMinutesToDraftDateTime(startDate, startTime, 30);
+  const allDay = !!seed.allDay;
+  const endDate = allDay
+    ? seed.endDate || startDate
+    : seed.endTime
+      ? seed.endDate || startDate
+      : defaultEnd.date;
+  const endTime = allDay
+    ? base.endTime
+    : seed.endTime || defaultEnd.time;
+
+  return seedCalendarEventDraftFromSources({
+    ...base,
+    title: String(seed.title || ""),
+    allDay,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    location: String(seed.location || ""),
+    description: String(seed.description || ""),
+  }, sourceGroups, seed.source);
 }
 
 export function applyCalendarTitleAssistToDraft({
@@ -82,10 +147,13 @@ export function applyCalendarTitleAssistToDraft({
   if (!manualOverrides.endTime) {
     next.endTime = derivedDraft?.endTime || parsed?.endTime || createSeedDraft.endTime;
   }
-  if (titleAssist.locationQuery && titleAssist.locationQuery !== lastCommittedLocationQuery) {
+  if (!manualOverrides.location && titleAssist.locationQuery && titleAssist.locationQuery !== lastCommittedLocationQuery) {
     next.location = titleAssist.locationQuery;
   } else if (!manualOverrides.location) {
     next.location = createSeedDraft.location;
+  }
+  if (!manualOverrides.allDay) {
+    next.allDay = derivedDraft?.allDay ?? parsed?.allDay ?? createSeedDraft.allDay;
   }
 
   if (
@@ -95,6 +163,7 @@ export function applyCalendarTitleAssistToDraft({
     && next.startTime === draft.startTime
     && next.endTime === draft.endTime
     && next.location === draft.location
+    && next.allDay === draft.allDay
   ) {
     return draft;
   }

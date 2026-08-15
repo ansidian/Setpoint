@@ -2,6 +2,7 @@ import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarMod
 import type { CalendarView } from "../../../shared/types/calendar";
 import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
 import type { RefObject } from "react";
+import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
 export type DashboardTab = "dashboard" | "inbox" | "calendar" | "notes" | "news";
 export type DashboardGlanceSheet = {
@@ -17,6 +18,7 @@ export interface CalendarOpenOptions {
   forceDeadlineOverlay?: boolean;
   forceEventOverlay?: boolean;
   forceCompletedDeadlineOverlay?: boolean;
+  eventCreateRequest?: CalendarEventCreateRequest;
 }
 export interface CalendarOpenRequest {
   viewKey: CalendarView;
@@ -42,18 +44,22 @@ export function resolveCalendarOpenState({
   focusItemId?: string | number | null;
   options?: CalendarOpenOptions;
 } = {}) {
-  const requested = viewKey ? normalizeCalendarWorkspaceView(viewKey) : null;
+  const eventCreateRequest = options.eventCreateRequest || null;
+  const requested = eventCreateRequest
+    ? "events"
+    : viewKey ? normalizeCalendarWorkspaceView(viewKey) : null;
   const fallbackView = normalizeCalendarWorkspaceView(currentView);
   const view = requested === "bills" && !showBills
     ? "events"
     : requested || fallbackView;
-  const nextFocusItemId = focusItemId ? String(focusItemId) : null;
+  const nextFocusDate = eventCreateRequest?.seed.startDate || focusDate || null;
+  const nextFocusItemId = eventCreateRequest ? "new" : focusItemId ? String(focusItemId) : null;
   const forceDeadlineOverlay = !!options.forceDeadlineOverlay;
   const forceEventOverlay = !!options.forceEventOverlay;
   const forceCompletedDeadlineOverlay = !!options.forceCompletedDeadlineOverlay;
   return {
     view,
-    focusDate: focusDate || null,
+    focusDate: nextFocusDate,
     focusItemId: nextFocusItemId,
     focusOpenDetail: !!options.openDetail && !!nextFocusItemId && nextFocusItemId !== "new",
     forceEventOverlay,
@@ -61,6 +67,7 @@ export function resolveCalendarOpenState({
     forceCompletedDeadlineOverlay,
     shouldLoadDeadlines: forceDeadlineOverlay,
     shouldLoadBills: view === "bills",
+    eventCreateRequest,
   };
 }
 

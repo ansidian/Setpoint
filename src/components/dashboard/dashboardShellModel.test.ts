@@ -38,6 +38,7 @@ describe("dashboard shell model", () => {
       forceCompletedDeadlineOverlay: false,
       shouldLoadDeadlines: true,
       shouldLoadBills: false,
+      eventCreateRequest: null,
     });
 
     expect(resolveCalendarOpenState({
@@ -58,6 +59,34 @@ describe("dashboard shell model", () => {
     })).toMatchObject({
       view: "events",
       shouldLoadBills: false,
+    });
+  });
+
+  it("routes a typed event create request to Calendar create mode unchanged", () => {
+    const eventCreateRequest = {
+      seed: {
+        title: "Planning",
+        allDay: false,
+        startDate: "2026-09-10",
+        startTime: "09:00",
+        endTime: "09:30",
+      },
+      origin: { kind: "test", referenceId: "request-1" },
+    };
+
+    expect(resolveCalendarOpenState({
+      viewKey: "bills",
+      currentView: "bills",
+      showBills: true,
+      focusDate: "2026-01-01",
+      focusItemId: "old-item",
+      options: { eventCreateRequest },
+    })).toMatchObject({
+      view: "events",
+      focusDate: "2026-09-10",
+      focusItemId: "new",
+      focusOpenDetail: false,
+      eventCreateRequest,
     });
   });
 

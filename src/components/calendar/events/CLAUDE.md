@@ -5,14 +5,15 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 ## Files
 
 ### Editor core
-- `useCalendarEventEditor.ts` — composes editor draft/picker/reminder/source state with the focused mutation, history, and open-session hooks; preserves the caller-facing editor controller
+- `useCalendarEventEditor.ts` — composes editor draft/picker/reminder/source state with mutation, history, and open-session hooks; retains typed create origin/completion through save while preserving the caller-facing controller
+- `useCalendarEventCreateCoordination.ts` — focused in-memory create-request/origin lifecycle: session open wrapping, cancel/edit cleanup, existing saved-route composition, and exactly-once completion
 - `useCalendarEventMutations.ts` — save/delete/reconnect mutation lifecycle: duplicate guards, batch/partial failures, reminder reconciliation, validation projection, and recurring scopes
 - `useCalendarEditorHistory.ts` — browser-history ownership, dirty-state tracking, and cancel/pop coordination for the editor
-- `useCalendarEventEditorSession.ts` — open create/edit lifecycle: request cancellation, source seeding, existing-event draft/reminder hydration, and location state
+- `useCalendarEventEditorSession.ts` — open create/edit lifecycle: request cancellation, typed create-seed application, intent-aware source seeding, existing-event draft/reminder hydration, and location state
 - `calendarEventEditorErrors.ts` — editor error detail projection shared by the editor orchestrator and mutation hook
 - `useCalendarEditorPickers.ts` — floating panel visibility and field anchor refs
 - `calendarEventEditorModel.ts` — draft normalization, validation, recurrence serialization, batch ops
-- `calendarEventEditorSessionModel.ts` — pure editor-session projections and transitions (validation visibility, title-assist draft sync, source seeding, batch edits)
+- `calendarEventEditorSessionModel.ts` — pure editor-session projections and transitions (create-seed normalization, source-intent resolution, validation visibility, title-assist draft sync, batch edits)
 - `calendarEventEditorActions.ts` — CRUD/reminder API calls and error formatting
 - `calendarEditorUtils.ts` — date/time formatting, style constants, field helpers
 
@@ -30,7 +31,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `parseCalendarTitle.ts` — natural-language date/time extraction (Chrono, weekday patterns)
 - `calendarTitleIntent.ts` — classifies title intent and builds batch/recurring/single drafts over the recurrence clause matcher
 - `calendarRecurrenceClauseModel.ts` — pure general recurrence-clause recognition for biweekly/every-other, every-N, ordinal-weekday, and standalone-frequency phrases
-- `useCalendarEventTitleComposer.ts` — title input debounce/flush, Chrono readiness, parse projection, and uncontrolled-input synchronization
+- `useCalendarEventTitleComposer.ts` — title input debounce/flush, Chrono readiness, parse projection, structured-seed initial parser suppression, and uncontrolled-input synchronization
 
 ### Schedule + recurrence
 - `CalendarEventCompactSchedulePicker.tsx` — compact month + time picker
