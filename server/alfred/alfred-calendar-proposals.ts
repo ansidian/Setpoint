@@ -234,8 +234,8 @@ export async function stageAlfredCalendarProposal(
       endDate = fallback.date;
       endTime = fallback.time;
     }
-    if (compareSchedule(endDate, endTime, startDate, startTime) <= 0) {
-      return proposalError("The event must end after it starts.");
+    if (compareSchedule(endDate, endTime, startDate, startTime) < 0) {
+      return proposalError("The event must end on or after it starts.");
     }
   }
 
