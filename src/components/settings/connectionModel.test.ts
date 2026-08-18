@@ -92,7 +92,7 @@ describe("connectionModel definitions", () => {
       "An active Anthropic key that is not invalid",
       "A configured Discord webhook",
       "An active key and saved weather location",
-      "An active Google Places key that is not invalid",
+      "An active Maps key with Places and Routes enabled",
     ]);
   });
 });

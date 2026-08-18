@@ -70,6 +70,7 @@ export default function CalendarFloatingDetailPanel({
   const open = !!detail?.open && !!children;
   const mode = detail?.mode || "detail";
   const editorMode = mode === "edit" || mode === "create";
+  const eventEditorMode = editorMode && detail?.view === "events";
   const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
 
   const {
@@ -199,6 +200,7 @@ export default function CalendarFloatingDetailPanel({
           />
         ) : null}
         <div
+          data-testid="calendar-floating-detail-shell"
           data-calendar-floating-editor-feedback={
             feedbackVisible ? "active" : undefined
           }
@@ -265,10 +267,14 @@ export default function CalendarFloatingDetailPanel({
           </div>
           <div
             data-calendar-local-scroll="true"
+            data-calendar-floating-content-layout={eventEditorMode ? "event-editor" : "scroll"}
             style={{
               position: "relative",
               zIndex: 1,
-              overflowY: "auto",
+              display: eventEditorMode ? "flex" : "block",
+              flexDirection: eventEditorMode ? "column" : undefined,
+              flex: eventEditorMode ? 1 : undefined,
+              overflowY: eventEditorMode ? "hidden" : "auto",
               overscrollBehavior: "contain",
               padding: 12,
               minHeight: 0,
@@ -276,7 +282,16 @@ export default function CalendarFloatingDetailPanel({
               scrollbarGutter: "stable",
             }}
           >
-            <div key={contentKey}>{children}</div>
+            <div
+              key={contentKey}
+              style={eventEditorMode ? {
+                display: "flex",
+                flex: 1,
+                minHeight: 0,
+              } : undefined}
+            >
+              {children}
+            </div>
           </div>
         </div>
       </Motion.div>

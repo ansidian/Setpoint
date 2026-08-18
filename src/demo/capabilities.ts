@@ -22,7 +22,7 @@ export function getDemoCapabilityStatus(): CapabilityStatusResponse {
       { ...base, id: "notifications", state: "ready", source: "settings", mode: "discord", availableActions: ["manage", "test"], guidanceRef: "setup.notifications" },
       { ...base, id: "gmail_realtime", state: "not_configured", mode: "periodic", guidanceRef: "setup.gmail_realtime" },
       { ...base, id: "todoist_advanced", state: "not_configured", mode: "periodic", guidanceRef: "setup.todoist_advanced" },
-      { ...base, id: "calendar_places", state: "not_configured", guidanceRef: "setup.calendar_places" },
+      { ...base, id: "calendar_places", state: "ready", source: "stored", mode: "maps_platform", availableActions: ["manage", "test", "disable"], guidanceRef: "setup.calendar_places" },
     ],
   };
 }
@@ -33,6 +33,7 @@ export function getDemoInstanceCredentialMetadata(): InstanceCredentialMetadataR
     "google.oauth_client_id",
     "google.oauth_client_secret",
     "weather.pirate_weather_api_key",
+    "calendar.google_places_api_key",
   ]);
   const nonSecretKeys = new Set([
     "gmail.pubsub_topic",

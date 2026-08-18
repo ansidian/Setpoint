@@ -13,6 +13,7 @@ import {
   markReminderSent,
 } from "./reminder-service.ts";
 import type { Reminder } from "../../shared/types/reminders.ts";
+import { processTimeToLeaveRefreshBatch } from "./time-to-leave-refresh-service.ts";
 
 type DateInput = string | number | Date;
 interface DiscordSettings {
@@ -33,6 +34,7 @@ interface ProcessDueReminderBatchOptions {
   dbClient?: Client;
   decryptFn?: (encrypted: string) => string;
   sendFn?: ReminderSendFn | null;
+  refreshTimeToLeaveFn?: typeof processTimeToLeaveRefreshBatch;
 }
 export interface ReminderBatchResult { processed: number; sent: number; missed: number; failed: number }
 
@@ -100,8 +102,10 @@ export async function processDueReminderBatch({
   dbClient = db,
   decryptFn,
   sendFn = null,
+  refreshTimeToLeaveFn = processTimeToLeaveRefreshBatch,
 }: ProcessDueReminderBatchOptions = {}): Promise<ReminderBatchResult> {
   const nowIso = new Date(now).toISOString();
+  await refreshTimeToLeaveFn({ now: nowIso, limit, dbClient });
   const due = await listDueReminders({ now: nowIso, limit }, { dbClient });
   const result = { processed: 0, sent: 0, missed: 0, failed: 0 };
 
@@ -132,7 +136,19 @@ export async function processDueReminderBatch({
     // Per-item isolation (P1-10): a throw from decrypt/send/db inside one
     // reminder must not abort the batch or block every later due reminder.
     try {
-      if (computeReminderState({ remindAt: reminder.remind_at, now: nowIso }) === "missed") {
+      if (
+        reminder.reminder_kind === "time_to_leave"
+        && new Date(reminder.anchor_at).getTime() <= new Date(nowIso).getTime()
+      ) {
+        await markReminderMissed(reminder.id, { missedAt: nowIso }, { dbClient });
+        publishReminderChange(reminder, "reminder_missed");
+        result.missed += 1;
+        continue;
+      }
+      if (
+        reminder.reminder_kind === "fixed"
+        && computeReminderState({ remindAt: reminder.remind_at, now: nowIso }) === "missed"
+      ) {
         await markReminderMissed(reminder.id, { missedAt: nowIso }, { dbClient });
         publishReminderChange(reminder, "reminder_missed");
         result.missed += 1;

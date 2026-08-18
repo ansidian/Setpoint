@@ -309,3 +309,21 @@ Selection path:
 **Caches/state:** one pending attachment in mounted panel state; short-lived server context handles (4-hour TTL, bounded per owner and process); the full body remains only in that in-memory handle and then the ephemeral provider-replayed Alfred conversation.
 
 **Failure boundary:** unavailable, expired, or oversized content is visible and cannot fall through to a prompt without its requested context. Provider context overflow restores both inputs and offers a New chat recovery that preserves them.
+
+## 15. Home settings → initial Time-to-Leave route → durable dynamic reminder
+
+**Trigger:** the authenticated owner saves or clears Home through `PUT /api/ea/settings`, then creates a `time_to_leave` reminder through `POST /api/ea/reminders` for one future timed calendar occurrence.
+
+1. `server/routes/settings.ts` → `server/platform/settings-schemas.ts` — accepts Home only as one complete address/place-ID/coordinate tuple (or one complete clear), persists it in `ea_settings`, and returns it only through the reviewed Settings allowlist.
+2. `shared/types/reminders.ts` → `server/routes/reminders.ts` — discriminates legacy `fixed` creation from `time_to_leave`; dynamic input carries one event identity, start, physical location, recurrence flag/occurrence identity, and optional 0–120 minute arrival buffer.
+3. `server/reminders/time-to-leave-model.ts` — rejects unsupported sources, missing recurring occurrence identity, all-day/past events, non-physical locations, and invalid buffers before provider work; pure functions calculate the effective leave time and bounded next-check cadence.
+4. `server/reminders/reminder-service.ts` → `server/reminders/time-to-leave-service.ts` — the existing reminders facade delegates dynamic creation, reads the current complete Home tuple, and performs provider work before any reminder insert.
+5. `server/location-credentials.ts` → `server/platform/google-routes.ts` — resolves the existing internal `calendar.google_places_api_key` as the shared Maps Platform key and sends one `DRIVE` / `TRAFFIC_AWARE_OPTIMAL` Compute Routes request with the exact field mask `routes.duration,routes.distanceMeters`.
+6. `server/reminders/time-to-leave-service.ts` — persists one pending `time_to_leave` row with normalized event location, initial duration/distance, effective `remind_at`, route check timestamps/status, and no Home coordinates or provider response body.
+7. `src/components/settings/cards/HomeLocationCard.tsx` → `src/components/calendar/events/CalendarEventReminderChips.tsx` → `calendarEventEditorActions.ts` — Settings commits Home atomically; one eligible physical occurrence can stage a default 15-minute buffer; event mutation succeeds before the initial grounded reminder request is created.
+8. `server/reminders/reminder-scheduler.ts` → `time-to-leave-refresh-service.ts` — each existing scheduler batch first selects a bounded set of due dynamic rows, reloads exact current occurrence and Home state, calls Routes, and conditionally updates only when the reminder, Home tuple, and occurrence version still match.
+9. `server/calendar/calendar-event-write-effects.ts` → `server/routes/settings.ts` — event start/location writes and Home replacement requeue pending dynamic rows; cancellation/deletion prevents an unsent delivery.
+10. `server/reminders/reminder-scheduler.ts` → `discord-reminders.ts` — the same cycle re-selects due reminders after refresh, rejects dynamic delivery at/after event start, and sends one destination/drive/buffer Discord payload without Home data.
+11. `src/api.ts` → `src/demo/apiAdapter.ts` — demo builds keep Home, writable calendar events, full dynamic reminder rows, filtering, and deletion in refresh-reset in-memory state; provider/network boundaries remain unreachable.
+
+**Failure boundary:** transient Routes failure retains the last grounded leave time with a redacted error code and bounded retry. Missing/ambiguous occurrence or Home state blocks the row, and CAS rejection discards stale provider results rather than reviving changed/deleted/sent state.

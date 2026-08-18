@@ -248,6 +248,14 @@
       ],
       "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
     },
+    "server/routes/reminders.test.ts": {
+      "owner": "03",
+      "classification": "false-positive",
+      "signals": [
+        "manual-execute-fake"
+      ],
+      "reason": "The execute function is a singleton adapter that delegates every statement to migrated ephemeral libSQL; the heuristic flags adapter syntax, not fake persistence."
+    },
     "server/routes/settings.test.ts": {
       "owner": "03",
       "classification": "false-positive",

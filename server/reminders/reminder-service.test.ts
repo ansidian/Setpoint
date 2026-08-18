@@ -2,10 +2,12 @@ import { createClient } from "@libsql/client";
 import type { Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ReminderSourceIdentity } from "../../shared/types/reminders.ts";
+import { GoogleRoutesError } from "../platform/google-routes.ts";
 import {
   createReminder,
   deleteReminder,
   deleteSourceReminders,
+  getReminderById,
   listDueReminders,
   listUpcomingReminderStatesForSources,
   listRemindersForSource,
@@ -21,9 +23,17 @@ describe("reminder service", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.executeMultiple(`
+      CREATE TABLE ea_settings (
+        user_id TEXT PRIMARY KEY,
+        home_location_address TEXT,
+        home_location_place_id TEXT,
+        home_location_lat REAL,
+        home_location_lng REAL
+      );
       CREATE TABLE ea_reminders (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
+        reminder_kind TEXT NOT NULL DEFAULT 'fixed',
         source_type TEXT NOT NULL,
         source_account_id TEXT,
         source_calendar_id TEXT,
@@ -40,6 +50,13 @@ describe("reminder service", () => {
         retry_after TEXT,
         last_error TEXT,
         payload_snapshot_json TEXT,
+        arrival_buffer_minutes INTEGER,
+        route_duration_seconds INTEGER,
+        route_distance_meters INTEGER,
+        route_checked_at TEXT,
+        next_route_check_at TEXT,
+        route_status TEXT,
+        route_error_code TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -66,6 +83,7 @@ describe("reminder service", () => {
 
     expect(reminder).toMatchObject({
       id: "reminder-1",
+      reminder_kind: "fixed",
       user_id: "u1",
       source_type: "calendar_event",
       source_item_id: "event-1",
@@ -95,6 +113,136 @@ describe("reminder service", () => {
       sourceType: "calendar_event",
       sourceItemId: "event-1",
     }, { dbClient: db })).toEqual([]);
+  });
+
+  it("creates and round-trips one occurrence-scoped Time to Leave reminder after a successful route", async () => {
+    await db.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, home_location_address, home_location_place_id,
+               home_location_lat, home_location_lng)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: ["u1", "1 Home Way", "home-place", 47.61, -122.33],
+    });
+    const routeInputs: unknown[] = [];
+
+    const reminder = await createReminder({
+      userId: "u1",
+      reminderKind: "time_to_leave",
+      sourceType: "calendar_event",
+      sourceAccountId: "gmail-1",
+      sourceCalendarId: "primary",
+      sourceItemId: "event-ttl",
+      sourceOccurrenceId: "2026-08-18T20:00:00.000Z",
+      isRecurring: true,
+      eventStart: "2026-08-18T20:00:00.000Z",
+      eventLocation: "  500 Pine St, Seattle, WA  ",
+      arrivalBufferMinutes: 15,
+      payloadSnapshot: { title: "Appointment" },
+    }, {
+      dbClient: db,
+      idFactory: () => "ttl-1",
+      now: "2026-08-18T16:00:00.000Z",
+      computeRoute: async (input) => {
+        routeInputs.push(input);
+        return { durationSeconds: 1_800, distanceMeters: 12_345 };
+      },
+    });
+
+    expect(routeInputs).toEqual([{
+      origin: { lat: 47.61, lng: -122.33 },
+      destination: "500 Pine St, Seattle, WA",
+    }]);
+    expect(reminder).toMatchObject({
+      id: "ttl-1",
+      reminder_kind: "time_to_leave",
+      source_type: "calendar_event",
+      source_occurrence_id: "2026-08-18T20:00:00.000Z",
+      anchor_kind: "event_start",
+      anchor_at: "2026-08-18T20:00:00.000Z",
+      offset_minutes: 0,
+      arrival_buffer_minutes: 15,
+      route_duration_seconds: 1_800,
+      route_distance_meters: 12_345,
+      route_checked_at: "2026-08-18T16:00:00.000Z",
+      next_route_check_at: "2026-08-18T16:15:00.000Z",
+      route_status: "ready",
+      route_error_code: null,
+      remind_at: "2026-08-18T19:15:00.000Z",
+      payload_snapshot: {
+        title: "Appointment",
+        location: "500 Pine St, Seattle, WA",
+      },
+    });
+
+    expect(await deleteReminder("u1", "ttl-1", { dbClient: db })).toBe(true);
+  });
+
+  it("admits an already-due dynamic reminder to delivery after the refresh gate", async () => {
+    await db.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, home_location_address, home_location_place_id,
+               home_location_lat, home_location_lng)
+            VALUES ('u1', '1 Home Way', 'home-place', 47.61, -122.33)`,
+      args: [],
+    });
+    await createReminder({
+      userId: "u1",
+      reminderKind: "time_to_leave",
+      sourceType: "calendar_event",
+      sourceAccountId: "gmail-1",
+      sourceCalendarId: "primary",
+      sourceItemId: "event-due",
+      eventStart: "2026-08-18T17:00:00.000Z",
+      eventLocation: "500 Pine St",
+      arrivalBufferMinutes: 15,
+    }, {
+      dbClient: db,
+      idFactory: () => "ttl-due",
+      now: "2026-08-18T16:30:00.000Z",
+      computeRoute: async () => ({ durationSeconds: 1_800, distanceMeters: 10_000 }),
+    });
+
+    expect((await getReminderById("ttl-due", { dbClient: db }))?.remind_at)
+      .toBe("2026-08-18T16:15:00.000Z");
+    expect(await listDueReminders({
+      now: "2026-08-18T16:30:00.000Z",
+    }, { dbClient: db })).toHaveLength(1);
+  });
+
+  it("rejects missing Home and provider failures before persisting dynamic rows", async () => {
+    const input = {
+      userId: "u1",
+      reminderKind: "time_to_leave" as const,
+      sourceType: "calendar_event" as const,
+      sourceAccountId: "gmail-1",
+      sourceCalendarId: "primary",
+      sourceItemId: "event-fail",
+      eventStart: "2026-08-18T20:00:00.000Z",
+      eventLocation: "500 Pine St",
+    };
+
+    await expect(createReminder(input, {
+      dbClient: db,
+      now: "2026-08-18T16:00:00.000Z",
+      computeRoute: async () => ({ durationSeconds: 600, distanceMeters: 1_000 }),
+    })).rejects.toMatchObject({ code: "time_to_leave_home_not_configured" });
+
+    await db.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, home_location_address, home_location_place_id,
+               home_location_lat, home_location_lng)
+            VALUES ('u1', '1 Home Way', 'home-place', 47.61, -122.33)`,
+      args: [],
+    });
+    await expect(createReminder(input, {
+      dbClient: db,
+      now: "2026-08-18T16:00:00.000Z",
+      computeRoute: async () => {
+        throw new GoogleRoutesError("no_route", "No route", 400);
+      },
+    })).rejects.toMatchObject({ code: "time_to_leave_no_route", status: 400 });
+
+    expect((await db.execute("SELECT COUNT(*) AS count FROM ea_reminders")).rows[0]?.count).toBe(0);
   });
 
   it("returns recompute mutations without executing them in collect mode (P2-21)", async () => {

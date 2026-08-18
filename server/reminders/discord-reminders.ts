@@ -1,15 +1,19 @@
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import type { FetchFunction } from "../platform/fetch-with-timeout.ts";
-import type { ReminderPayloadSnapshot, ReminderSourceType } from "../../shared/types/reminders.ts";
+import type { ReminderKind, ReminderPayloadSnapshot, ReminderSourceType } from "../../shared/types/reminders.ts";
 
 const FALLBACK_COLOR = 0xcba6da;
 const DISCORD_WEBHOOK_TIMEOUT_MS = 10_000;
 
 interface DiscordReminderInput {
+  reminder_kind?: ReminderKind;
   source_type: ReminderSourceType;
   anchor_at: string;
   remind_at: string;
   offset_minutes: number;
+  arrival_buffer_minutes?: number | null;
+  route_duration_seconds?: number | null;
+  route_distance_meters?: number | null;
   payload_snapshot?: ReminderPayloadSnapshot | null;
   payload_snapshot_json?: string | null;
 }
@@ -80,8 +84,58 @@ function formatDateTime(value: string | null | undefined): string {
   }).format(new Date(value));
 }
 
+function safeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function driveDurationLabel(seconds: number | null | undefined): string {
+  const minutes = Math.max(1, Math.round(Number(seconds || 0) / 60));
+  return `About ${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function formatTimeToLeavePayload(
+  reminder: DiscordReminderInput,
+  snapshot: ReminderPayloadSnapshot,
+  discordUserId: string | null,
+): DiscordWebhookPayload {
+  const title = snapshot.title || snapshot.name || "Calendar event";
+  const destination = String(snapshot.location || "Destination unavailable");
+  const eventUrl = safeHttpUrl(snapshot.url);
+  const mapsUrl = destination === "Destination unavailable"
+    ? undefined
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+  const buffer = Math.max(0, Number(reminder.arrival_buffer_minutes || 0));
+
+  return {
+    content: discordUserId ? `<@${discordUserId}>` : undefined,
+    embeds: [{
+      title: `Time to leave for ${title}`,
+      url: eventUrl || mapsUrl,
+      description: `Head to ${destination}.`,
+      color: colorToInteger(snapshot.color),
+      fields: [
+        { name: "Drive", value: driveDurationLabel(reminder.route_duration_seconds), inline: true },
+        { name: "Arrive early", value: `${buffer} minute${buffer === 1 ? "" : "s"}`, inline: true },
+        { name: "Event starts", value: formatDateTime(reminder.anchor_at), inline: false },
+        { name: "Leave by", value: formatDateTime(reminder.remind_at), inline: false },
+      ],
+      footer: { text: "Setpoint · Calendar" },
+      timestamp: reminder.remind_at,
+    }],
+  };
+}
+
 export function formatDiscordReminderPayload({ reminder, discordUserId = null }: { reminder: DiscordReminderInput; discordUserId?: string | null }): DiscordWebhookPayload {
   const snapshot = parseSnapshot(reminder);
+  if (reminder.reminder_kind === "time_to_leave") {
+    return formatTimeToLeavePayload(reminder, snapshot, discordUserId);
+  }
   const title = snapshot.title || snapshot.name || "Setpoint reminder";
   const context = snapshot.context || snapshot.sourceLabel || sourceLabel(reminder.source_type);
   const fields = [

@@ -5,6 +5,14 @@ import {
   assertReminderShape,
   computeRemindAt,
 } from "./reminder-model.ts";
+import {
+  createTimeToLeaveReminderRecord,
+  type TimeToLeaveServiceOptions,
+} from "./time-to-leave-service.ts";
+import {
+  calculateTimeToLeave,
+  isPhysicalEventLocation,
+} from "./time-to-leave-model.ts";
 import type {
   CreateReminderInput,
   Reminder,
@@ -17,12 +25,15 @@ import type {
   UpcomingReminderState,
 } from "../../shared/types/reminders.ts";
 
+export { TimeToLeaveError } from "./time-to-leave-model.ts";
+
 type DateInput = string | number | Date;
 interface ReminderServiceOptions {
   dbClient?: Client;
   idFactory?: () => string;
   now?: DateInput;
   collect?: boolean;
+  computeRoute?: TimeToLeaveServiceOptions["computeRoute"];
 }
 interface SourceRequest extends ReminderSourceIdentity { userId: string }
 interface RecomputeRequest extends SourceRequest {
@@ -54,11 +65,16 @@ function nullableString(value: unknown): string | null {
   return value == null ? null : String(value);
 }
 
+function nullableNumber(value: unknown): number | null {
+  return value == null ? null : Number(value);
+}
+
 function normalizeRow(row: Row | undefined | null): Reminder | null {
   if (!row) return null;
   return {
     id: String(row.id),
     user_id: String(row.user_id),
+    reminder_kind: row.reminder_kind === "time_to_leave" ? "time_to_leave" : "fixed",
     source_type: String(row.source_type) as ReminderSourceType,
     source_account_id: nullableString(row.source_account_id),
     source_calendar_id: nullableString(row.source_calendar_id),
@@ -78,7 +94,14 @@ function normalizeRow(row: Row | undefined | null): Reminder | null {
     payload_snapshot: parseJson(row.payload_snapshot_json),
     created_at: nullableString(row.created_at),
     updated_at: nullableString(row.updated_at),
-  };
+    arrival_buffer_minutes: nullableNumber(row.arrival_buffer_minutes),
+    route_duration_seconds: nullableNumber(row.route_duration_seconds),
+    route_distance_meters: nullableNumber(row.route_distance_meters),
+    route_checked_at: nullableString(row.route_checked_at),
+    next_route_check_at: nullableString(row.next_route_check_at),
+    route_status: row.route_status == null ? null : String(row.route_status) as Reminder["route_status"],
+    route_error_code: nullableString(row.route_error_code),
+  } as Reminder;
 }
 
 function sourceWhere({ sourceType, sourceItemId, sourceOccurrenceId }: ReminderSourceIdentity): { sql: string; args: InValue[] } {
@@ -107,6 +130,15 @@ const UPCOMING_REMINDER_SOURCE_BATCH_SIZE = 50;
 
 export async function createReminder(input: CreateReminderInput, options: ReminderServiceOptions = {}): Promise<Reminder> {
   const dbClient = client(options);
+  if (input.reminderKind === "time_to_leave") {
+    const id = await createTimeToLeaveReminderRecord(input, {
+      dbClient,
+      idFactory: options.idFactory,
+      now: options.now,
+      computeRoute: options.computeRoute,
+    });
+    return (await getReminderById(id, { dbClient }))!;
+  }
   const id = options.idFactory?.() || crypto.randomUUID();
   const anchorKind = input.anchorKind;
   const sourceType = input.sourceType;
@@ -269,7 +301,9 @@ export async function recomputeUnsentRemindersForSource({
     sourceItemId,
     sourceOccurrenceId,
   }, options);
-  const pending = reminders.filter((reminder) => reminder.status === "pending");
+  const pending = reminders.filter(
+    (reminder) => reminder.status === "pending" && reminder.reminder_kind === "fixed",
+  );
   const nowMs = new Date(options.now || now).getTime();
 
   // Build the per-reminder mutations as pure data first (computeRemindAt is pure),
@@ -320,11 +354,182 @@ export async function listDueReminders({
           WHERE status = 'pending'
             AND remind_at <= ?
             AND (retry_after IS NULL OR retry_after <= ?)
+            AND (
+              reminder_kind = 'fixed'
+              OR (
+                reminder_kind = 'time_to_leave'
+                AND route_status IN ('ready', 'degraded')
+                AND anchor_at > ?
+              )
+            )
           ORDER BY remind_at ASC
           LIMIT ?`,
-    args: [nowIso, nowIso, limit],
+    args: [nowIso, nowIso, nowIso, limit],
   });
   return result.rows.map((row) => normalizeRow(row)!);
+}
+
+export async function listDueTimeToLeaveReminders({
+  now = new Date(),
+  limit = 10,
+}: { now?: DateInput; limit?: number } = {}, options: ReminderServiceOptions = {}): Promise<Reminder[]> {
+  const nowIso = new Date(now).toISOString();
+  const result = await client(options).execute({
+    sql: `SELECT * FROM ea_reminders
+          WHERE status = 'pending'
+            AND reminder_kind = 'time_to_leave'
+            AND (
+              next_route_check_at <= ?
+              OR (
+                remind_at <= ?
+                AND route_status = 'ready'
+                AND route_error_code IS NULL
+              )
+              OR anchor_at <= ?
+            )
+          ORDER BY COALESCE(next_route_check_at, remind_at) ASC
+          LIMIT ?`,
+    args: [nowIso, nowIso, nowIso, limit],
+  });
+  return result.rows.map((row) => normalizeRow(row)!);
+}
+
+export async function scheduleTimeToLeaveRefreshForUser({
+  userId,
+  homeAvailable,
+  now = new Date(),
+}: { userId: string; homeAvailable: boolean; now?: DateInput }, options: ReminderServiceOptions = {}): Promise<number> {
+  const result = await client(options).execute({
+    sql: `UPDATE ea_reminders
+          SET route_status = ?,
+              route_error_code = ?,
+              next_route_check_at = ?,
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND reminder_kind = 'time_to_leave'
+            AND status = 'pending'`,
+    args: homeAvailable
+      ? ["degraded", null, new Date(now).toISOString(), userId]
+      : ["blocked", "time_to_leave_home_not_configured", null, userId],
+  });
+  return Number(result.rowsAffected || 0);
+}
+
+export async function scheduleTimeToLeaveRefreshForSource({
+  userId,
+  sourceType,
+  sourceItemId,
+  sourceOccurrenceId,
+  now = new Date(),
+}: SourceRequest & { now?: DateInput }, options: ReminderServiceOptions = {}): Promise<number> {
+  const where = sourceWhere({ sourceType, sourceItemId, sourceOccurrenceId });
+  const result = await client(options).execute({
+    sql: `UPDATE ea_reminders
+          SET route_status = 'degraded',
+              next_route_check_at = ?,
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND ${where.sql}
+            AND reminder_kind = 'time_to_leave'
+            AND status = 'pending'`,
+    args: [new Date(now).toISOString(), userId, ...where.args],
+  });
+  return Number(result.rowsAffected || 0);
+}
+
+export async function reconcileTimeToLeaveReminderForEvent({
+  userId,
+  sourceItemId,
+  sourceOccurrenceId,
+  event,
+  now = new Date(),
+}: {
+  userId: string;
+  sourceItemId: string;
+  sourceOccurrenceId?: string | null;
+  event: {
+    startMs?: number | null;
+    allDay?: boolean;
+    location?: string | null;
+    title?: string | null;
+    htmlLink?: string | null;
+    openUrl?: string | null;
+    color?: string | null;
+    sourceColor?: string | null;
+    calendarName?: string | null;
+    sourceLabel?: string | null;
+  };
+  now?: DateInput;
+}, options: ReminderServiceOptions = {}): Promise<number> {
+  const reminders = await listRemindersForSource({
+    userId,
+    sourceType: "calendar_event",
+    sourceItemId,
+    sourceOccurrenceId,
+  }, options);
+  const pending = reminders.filter((reminder) => (
+    reminder.reminder_kind === "time_to_leave" && reminder.status === "pending"
+  ));
+  const dbClient = client(options);
+  const nowIso = new Date(now).toISOString();
+  const anchorAt = Number.isFinite(event.startMs) ? new Date(Number(event.startMs)).toISOString() : null;
+  const location = String(event.location || "").trim();
+
+  for (const reminder of pending) {
+    if (
+      !anchorAt
+      || event.allDay
+      || new Date(anchorAt).getTime() <= new Date(nowIso).getTime()
+      || !isPhysicalEventLocation(location)
+    ) {
+      await dbClient.execute({
+        sql: `UPDATE ea_reminders
+              SET status = 'missed',
+                  missed_at = ?,
+                  route_status = 'blocked',
+                  route_error_code = ?,
+                  next_route_check_at = NULL,
+                  updated_at = datetime('now')
+              WHERE id = ? AND reminder_kind = 'time_to_leave' AND status = 'pending'`,
+        args: [
+          nowIso,
+          !anchorAt || event.allDay
+            ? "time_to_leave_all_day"
+            : !isPhysicalEventLocation(location)
+              ? "time_to_leave_location_unsupported"
+              : "time_to_leave_event_started",
+          reminder.id,
+        ],
+      });
+      continue;
+    }
+
+    const snapshot = {
+      ...(reminder.payload_snapshot || {}),
+      title: event.title || reminder.payload_snapshot?.title || "Calendar event",
+      context: event.calendarName || event.sourceLabel || reminder.payload_snapshot?.context || "Calendar",
+      url: event.openUrl || event.htmlLink || reminder.payload_snapshot?.url || null,
+      color: event.color || event.sourceColor || reminder.payload_snapshot?.color || null,
+      location,
+    };
+    const remindAt = calculateTimeToLeave(
+      anchorAt,
+      Number(reminder.arrival_buffer_minutes),
+      Number(reminder.route_duration_seconds),
+    );
+    await dbClient.execute({
+      sql: `UPDATE ea_reminders
+            SET anchor_at = ?,
+                remind_at = ?,
+                payload_snapshot_json = ?,
+                route_status = 'degraded',
+                next_route_check_at = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND reminder_kind = 'time_to_leave' AND status = 'pending'`,
+      args: [anchorAt, remindAt, JSON.stringify(snapshot), nowIso, reminder.id],
+    });
+  }
+  return pending.length;
 }
 
 // P3-45: atomic delivery claim. The `AND status = 'pending'` guard is the durable
@@ -355,7 +560,7 @@ export async function markReminderMissed(id: ReminderId, { missedAt = new Date()
               missed_at = ?,
               retry_after = NULL,
               updated_at = datetime('now')
-          WHERE id = ?`,
+          WHERE id = ? AND status = 'pending'`,
     args: [new Date(missedAt).toISOString(), id],
   });
 }
@@ -370,7 +575,7 @@ export async function markReminderDeliveryFailed(id: ReminderId, {
               retry_after = ?,
               last_error = ?,
               updated_at = datetime('now')
-          WHERE id = ?`,
+          WHERE id = ? AND status = 'pending'`,
     args: [
       retryAfter ? new Date(retryAfter).toISOString() : null,
       String(error || "Discord delivery failed").slice(0, 500),

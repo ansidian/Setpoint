@@ -1,8 +1,10 @@
 export type ReminderId = string;
+export type ReminderKind = "fixed" | "time_to_leave";
 export type ReminderSourceType = "calendar_event" | "todoist_task";
 export type ReminderAnchorKind = "event_start" | "todoist_due_datetime" | "todoist_date_9am_pacific";
 export type ReminderStatus = "pending" | "sent" | "missed";
 export type ReminderTriggerState = "pending" | "due" | "missed";
+export type TimeToLeaveRouteStatus = "ready" | "degraded" | "blocked";
 
 export interface ReminderSourceIdentity {
   sourceType: ReminderSourceType;
@@ -23,11 +25,13 @@ export interface ReminderPayloadSnapshot extends Record<string, unknown> {
   url?: string | null;
   description?: string;
   color?: string | null;
+  location?: string | null;
 }
 
-export interface Reminder {
+interface ReminderBase {
   id: ReminderId;
   user_id: string;
+  reminder_kind: ReminderKind;
   source_type: ReminderSourceType;
   source_account_id: string | null;
   source_calendar_id: string | null;
@@ -49,13 +53,38 @@ export interface Reminder {
   updated_at: string | null;
 }
 
+export interface FixedReminder extends ReminderBase {
+  reminder_kind: "fixed";
+  arrival_buffer_minutes: null;
+  route_duration_seconds: null;
+  route_distance_meters: null;
+  route_checked_at: null;
+  next_route_check_at: null;
+  route_status: null;
+  route_error_code: null;
+}
+
+export interface TimeToLeaveReminder extends ReminderBase {
+  reminder_kind: "time_to_leave";
+  arrival_buffer_minutes: number;
+  route_duration_seconds: number;
+  route_distance_meters: number;
+  route_checked_at: string;
+  next_route_check_at: string | null;
+  route_status: TimeToLeaveRouteStatus;
+  route_error_code: string | null;
+}
+
+export type Reminder = FixedReminder | TimeToLeaveReminder;
+
 export interface UpcomingReminderState {
   hasUpcomingReminder: boolean;
   upcomingCount: number;
   nextReminderAt: string | null;
 }
 
-export interface CreateReminderRequest extends ReminderSourceIdentity {
+export interface CreateFixedReminderRequest extends ReminderSourceIdentity {
+  reminderKind?: "fixed";
   sourceAccountId?: string | null;
   sourceCalendarId?: string | null;
   anchorKind: ReminderAnchorKind;
@@ -64,9 +93,24 @@ export interface CreateReminderRequest extends ReminderSourceIdentity {
   payloadSnapshot?: ReminderPayloadSnapshot | null;
 }
 
-export interface CreateReminderInput extends CreateReminderRequest {
-  userId: string;
+export interface CreateTimeToLeaveReminderRequest extends ReminderSourceIdentity {
+  reminderKind: "time_to_leave";
+  sourceType: "calendar_event";
+  sourceAccountId?: string | null;
+  sourceCalendarId?: string | null;
+  eventStart: string;
+  eventLocation: string;
+  isAllDay?: boolean;
+  isRecurring?: boolean;
+  arrivalBufferMinutes?: number;
+  payloadSnapshot?: ReminderPayloadSnapshot | null;
 }
+
+export type CreateReminderRequest = CreateFixedReminderRequest | CreateTimeToLeaveReminderRequest;
+
+export type CreateReminderInput = CreateReminderRequest & {
+  userId: string;
+};
 
 export type ReminderListOptions = Partial<ReminderSourceIdentity>;
 export interface ReminderListResponse { reminders: Reminder[] }

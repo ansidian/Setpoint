@@ -88,4 +88,87 @@ describe("CalendarEventReminderChips", () => {
     expect(screen.queryByLabelText("Custom reminder date")).toBeNull();
     expect(screen.queryByLabelText("Custom reminder time")).toBeNull();
   });
+
+  it("shows default enablement and a grounded degraded estimate", () => {
+    const { rerender } = renderChips({
+      timeToLeaveEligible: true,
+      onEnableTimeToLeave: () => {},
+    });
+    expect(screen.getByTestId("calendar-time-to-leave-enable").textContent).toContain("15 min early");
+
+    rerender(
+      <CalendarEventReminderChips
+        reminders={[]}
+        reminderError={null}
+        customReminder={{ date: "", time: "" }}
+        disabled={false}
+        presetStates={{}}
+        onAddPreset={() => {}}
+        onUpdateCustomReminder={() => {}}
+        onAddCustom={() => {}}
+        onRemoveReminder={() => {}}
+        timeToLeaveEligible
+        timeToLeaveReminder={{
+          id: "ttl-1",
+          reminder_kind: "time_to_leave",
+          remind_at: "2026-05-10T16:15:00.000Z",
+          arrival_buffer_minutes: 15,
+          route_duration_seconds: 1_800,
+          route_status: "degraded",
+        }}
+      />,
+    );
+    expect(screen.getByText(/Leave by 9:15 AM/)).toBeTruthy();
+    expect(screen.getByText(/about 30 min drive/)).toBeTruthy();
+    expect(screen.getByText("Estimate needs refresh")).toBeTruthy();
+    expect(screen.queryAllByTestId("calendar-event-reminder-chip")).toHaveLength(0);
+  });
+
+  it("moves the active buffer border between presets and a custom value", () => {
+    function TimeToLeaveHarness() {
+      const [arrivalBufferMinutes, setArrivalBufferMinutes] = useState(15);
+      return (
+        <CalendarEventReminderChips
+          reminders={[]}
+          reminderError={null}
+          customReminder={{ date: "", time: "" }}
+          disabled={false}
+          presetStates={{}}
+          onAddPreset={() => {}}
+          onUpdateCustomReminder={() => {}}
+          onAddCustom={() => {}}
+          onRemoveReminder={() => {}}
+          timeToLeaveEligible
+          timeToLeaveReminder={{
+            clientId: "ttl-draft",
+            reminder_kind: "time_to_leave",
+            arrival_buffer_minutes: arrivalBufferMinutes,
+            status: "pending",
+          }}
+          onUpdateTimeToLeaveBuffer={setArrivalBufferMinutes}
+        />
+      );
+    }
+    render(<TimeToLeaveHarness />);
+
+    const fifteenMinutes = screen.getByRole("button", { name: "15 min" });
+    const thirtyMinutes = screen.getByRole("button", { name: "30 min" });
+    const custom = screen.getByLabelText("Custom arrival buffer minutes") as HTMLInputElement;
+    expect(fifteenMinutes.getAttribute("aria-pressed")).toBe("true");
+    expect(thirtyMinutes.getAttribute("aria-pressed")).toBe("false");
+    expect(custom.dataset.selected).toBe("false");
+
+    fireEvent.click(thirtyMinutes);
+    expect(fifteenMinutes.getAttribute("aria-pressed")).toBe("false");
+    expect(thirtyMinutes.getAttribute("aria-pressed")).toBe("true");
+    expect(custom.dataset.selected).toBe("false");
+
+    fireEvent.change(custom, { target: { value: "45" } });
+    expect(thirtyMinutes.getAttribute("aria-pressed")).toBe("false");
+    expect(custom.dataset.selected).toBe("true");
+
+    fireEvent.click(thirtyMinutes);
+    expect(thirtyMinutes.getAttribute("aria-pressed")).toBe("true");
+    expect(custom.dataset.selected).toBe("false");
+  });
 });

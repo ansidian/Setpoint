@@ -20,6 +20,41 @@ export interface CalendarMirrorSqlStatement {
   args: InValue[];
 }
 
+export function currentCalendarOccurrenceStatement({
+  userId,
+  accountId,
+  calendarId,
+  eventId,
+  originalStartTime = null,
+}: {
+  userId: string;
+  accountId: string;
+  calendarId: string;
+  eventId: string;
+  originalStartTime?: string | null;
+}): CalendarMirrorSqlStatement {
+  const occurrenceSql = originalStartTime ? " AND original_start_key = ?" : "";
+  return {
+    sql: `SELECT account_id, calendar_id, event_id, original_start_key,
+                 title, location, start_ms, all_day, status, html_link,
+                 open_url, source_label, source_color, event_color, updated_at
+          FROM ea_calendar_search_occurrences
+          WHERE user_id = ?
+            AND account_id = ?
+            AND calendar_id = ?
+            AND event_id = ?${occurrenceSql}
+          ORDER BY updated_at DESC
+          LIMIT 2`,
+    args: [
+      userId,
+      accountId,
+      calendarId,
+      eventId,
+      ...(originalStartTime ? [originalStartTime] : []),
+    ],
+  };
+}
+
 type MirrorStatementAccount = Pick<CalendarAccount, "id"> & Partial<CalendarAccount>;
 type MirrorStatementCalendar = Pick<GoogleCalendarSource, "id"> & Partial<GoogleCalendarSource>;
 

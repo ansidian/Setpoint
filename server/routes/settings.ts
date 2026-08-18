@@ -42,9 +42,11 @@ import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
 import { requireRecentPasswordAuth } from "../middleware/auth.ts";
+import { scheduleTimeToLeaveRefreshForUser } from "../reminders/reminder-service.ts";
 import {
   validateDiscordWebhookUrl,
   validateEmailInterests,
+  validateHomeLocation,
   validateImportantSenders,
   validateSchedules,
   validateUtilityPayLinks,
@@ -84,6 +86,11 @@ const requireRecentAuthForSecretSettings: RequestHandler = (req, res, next) => {
 const SETTINGS_PUBLIC_FIELDS = [
   "user_id",
   "email_lookback_hours",
+  "home_location_label",
+  "home_location_address",
+  "home_location_place_id",
+  "home_location_lat",
+  "home_location_lng",
   "weather_lat",
   "weather_lng",
   "weather_location",
@@ -224,7 +231,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
+  const { schedules_json, email_lookback_hours, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -236,6 +243,7 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
     const updates: string[] = [];
     const args: Value[] = [];
+    let homeMutationAvailable: boolean | null = null;
 
     if (schedules_json !== undefined) {
       const validation = validateSchedules(schedules_json);
@@ -253,6 +261,40 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
         return res.status(400).json({ message: "email_lookback_hours must be an integer between 1 and 168" });
       }
       updates.push("email_lookback_hours = ?"); args.push(email_lookback_hours);
+    }
+    if (
+      home_location_label !== undefined
+      || home_location_address !== undefined
+      || home_location_place_id !== undefined
+      || home_location_lat !== undefined
+      || home_location_lng !== undefined
+    ) {
+      const validation = validateHomeLocation({
+        home_location_label,
+        home_location_address,
+        home_location_place_id,
+        home_location_lat,
+        home_location_lng,
+      });
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message! });
+      }
+      const home = validation.value!;
+      homeMutationAvailable = home.home_location_address !== null;
+      updates.push(
+        "home_location_label = ?",
+        "home_location_address = ?",
+        "home_location_place_id = ?",
+        "home_location_lat = ?",
+        "home_location_lng = ?",
+      );
+      args.push(
+        home.home_location_label,
+        home.home_location_address,
+        home.home_location_place_id,
+        home.home_location_lat,
+        home.home_location_lng,
+      );
     }
     if (weather_lat !== undefined) {
       if (typeof weather_lat !== "number" || !Number.isFinite(weather_lat) || weather_lat < -90 || weather_lat > 90) {
@@ -370,6 +412,12 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
     if (updates.length > 0) {
       args.push(userId);
       await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
+    }
+    if (homeMutationAvailable !== null) {
+      await scheduleTimeToLeaveRefreshForUser({
+        userId,
+        homeAvailable: homeMutationAvailable,
+      });
     }
     if (todoist_oauth_token_response !== undefined) {
       const response = typeof todoist_oauth_token_response === "string"

@@ -23,6 +23,7 @@ describe("reminder hydration module", () => {
       CREATE TABLE ea_reminders (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
+        reminder_kind TEXT NOT NULL DEFAULT 'fixed',
         source_type TEXT NOT NULL,
         source_account_id TEXT,
         source_calendar_id TEXT,
@@ -39,6 +40,13 @@ describe("reminder hydration module", () => {
         retry_after TEXT,
         last_error TEXT,
         payload_snapshot_json TEXT,
+        arrival_buffer_minutes INTEGER,
+        route_duration_seconds INTEGER,
+        route_distance_meters INTEGER,
+        route_checked_at TEXT,
+        next_route_check_at TEXT,
+        route_status TEXT,
+        route_error_code TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );

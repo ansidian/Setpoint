@@ -308,6 +308,75 @@ describe("GET /settings response allowlist (SEC-06)", () => {
   });
 });
 
+describe("Home location settings", () => {
+  const home = {
+    home_location_label: "Home",
+    home_location_address: "1 Home Way, Seattle, WA",
+    home_location_place_id: "place-home-1",
+    home_location_lat: 47.61,
+    home_location_lng: -122.33,
+  };
+
+  it("saves, returns, and replaces only the allowlisted complete Home tuple", async () => {
+    const saved = await request(makeApp()).put("/api/ea/settings").send(home);
+    expect(saved.status).toBe(200);
+
+    const firstRead = await request(makeApp()).get("/api/ea/settings");
+    expect(firstRead.body).toMatchObject(home);
+
+    const replacement = {
+      home_location_label: "My place",
+      home_location_address: "2 New Home Ave, Seattle, WA",
+      home_location_place_id: "place-home-2",
+      home_location_lat: 47.62,
+      home_location_lng: -122.34,
+    };
+    expect((await request(makeApp()).put("/api/ea/settings").send(replacement)).status).toBe(200);
+    expect((await request(makeApp()).get("/api/ea/settings")).body).toMatchObject(replacement);
+  });
+
+  it("clears the entire Home tuple together", async () => {
+    await request(makeApp()).put("/api/ea/settings").send(home);
+    const cleared = await request(makeApp()).put("/api/ea/settings").send({
+      home_location_label: null,
+      home_location_address: null,
+      home_location_place_id: null,
+      home_location_lat: null,
+      home_location_lng: null,
+    });
+
+    expect(cleared.status).toBe(200);
+    expect(await getSettingsRow()).toMatchObject({
+      home_location_label: null,
+      home_location_address: null,
+      home_location_place_id: null,
+      home_location_lat: null,
+      home_location_lng: null,
+    });
+  });
+
+  it("rejects partial tuples and out-of-range coordinates without changing Home", async () => {
+    const partial = await request(makeApp()).put("/api/ea/settings").send({
+      home_location_address: home.home_location_address,
+      home_location_place_id: home.home_location_place_id,
+      home_location_lat: home.home_location_lat,
+    });
+    expect(partial.status).toBe(400);
+
+    const invalidCoordinate = await request(makeApp()).put("/api/ea/settings").send({
+      ...home,
+      home_location_lat: 91,
+    });
+    expect(invalidCoordinate.status).toBe(400);
+    expect(await getSettingsRow()).toMatchObject({
+      home_location_address: null,
+      home_location_place_id: null,
+      home_location_lat: null,
+      home_location_lng: null,
+    });
+  });
+});
+
 describe("settings PUT scalar field validation (P3-55)", () => {
   it("rejects a dangerous-scheme actual_budget_url and does not persist (SEC-05)", async () => {
     const res = await request(makeApp())

@@ -16,6 +16,12 @@ export default function CalendarEventEditorStatusMessages({
   showValidation = true,
 }: CalendarEventEditorStatusMessagesProps) {
   if (error) {
+    const mapsError = errorCode?.startsWith("time_to_leave_") && [
+      "time_to_leave_home_not_configured",
+      "time_to_leave_maps_not_configured",
+      "time_to_leave_routes_not_enabled",
+      "time_to_leave_credential_rejected",
+    ].includes(errorCode);
     return (
       <div
         style={{
@@ -23,7 +29,7 @@ export default function CalendarEventEditorStatusMessages({
           borderRadius: 8,
           border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
           background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
-          color: "#f5c2e7",
+          color: "var(--sp-rose)",
           fontSize: 11.5,
           lineHeight: 1.5,
         }}
@@ -32,6 +38,17 @@ export default function CalendarEventEditorStatusMessages({
         {errorCode === "calendar_reauth_required" ? (
           <div style={{ marginTop: 8 }}>
             <ActionButton onClick={reconnect}>Reconnect Gmail</ActionButton>
+          </div>
+        ) : null}
+        {mapsError ? (
+          <div style={{ marginTop: 8 }}>
+            <a
+              href="/settings?tab=connections#google-places"
+              className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+              style={{ color: "var(--sp-accent)", fontWeight: 650, textUnderlineOffset: 3 }}
+            >
+              Open Google Maps Platform settings
+            </a>
           </div>
         ) : null}
       </div>
@@ -48,7 +65,7 @@ export default function CalendarEventEditorStatusMessages({
         borderRadius: 8,
         border: "1px solid color-mix(in srgb, var(--sp-orange) 24%, transparent)",
         background: "color-mix(in srgb, var(--sp-orange) 8%, transparent)",
-        color: "#fdba74",
+        color: "var(--sp-orange)",
         fontSize: 11.5,
         lineHeight: 1.5,
       }}

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { deleteReminder } from "@/api";
 import {
   createEventReminderDraftFromCustom,
   createEventReminderDraftFromOffset,
@@ -6,6 +7,8 @@ import {
   type EventReminderLike,
   type EventReminderScheduleDraft,
   EVENT_REMINDER_PRESETS,
+  createTimeToLeaveDraft,
+  findTimeToLeaveReminder,
   getEventReminderPresetState,
 } from "./calendarEventReminderModel";
 
@@ -66,6 +69,42 @@ export default function useEventReminderDrafts({ draft }: EventReminderDraftOpti
     ]));
   }, [draft, eventReminders]);
 
+  const timeToLeaveReminder = useMemo(
+    () => findTimeToLeaveReminder(eventReminders),
+    [eventReminders],
+  );
+
+  const enableTimeToLeave = useCallback(() => {
+    setEventReminders((current) => (
+      findTimeToLeaveReminder(current) ? current : [...current, createTimeToLeaveDraft()]
+    ));
+    setReminderError(null);
+  }, []);
+
+  const updateTimeToLeaveBuffer = useCallback((arrivalBufferMinutes: number) => {
+    if (!Number.isInteger(arrivalBufferMinutes) || arrivalBufferMinutes < 0 || arrivalBufferMinutes > 120) {
+      setReminderError("Arrival buffer must be a whole number from 0 through 120 minutes.");
+      return;
+    }
+    setEventReminders((current) => current.map((reminder) => {
+      if (reminder.reminder_kind !== "time_to_leave" || reminder.status === "missed") return reminder;
+      if (reminder.id) {
+        setRemovedReminderIds((ids) => (
+          ids.includes(reminder.id!) ? ids : [...ids, reminder.id!]
+        ));
+        return {
+          ...reminder,
+          id: null,
+          clientId: `time-to-leave-${arrivalBufferMinutes}`,
+          arrival_buffer_minutes: arrivalBufferMinutes,
+          route_status: null,
+        };
+      }
+      return { ...reminder, arrival_buffer_minutes: arrivalBufferMinutes };
+    }));
+    setReminderError(null);
+  }, []);
+
   const removeEventReminder = useCallback((reminder: EventReminderLike) => {
     const reminderId = reminder?.id;
     if (reminderId) {
@@ -79,6 +118,26 @@ export default function useEventReminderDrafts({ draft }: EventReminderDraftOpti
     }));
     setReminderError(null);
   }, []);
+
+  const removeTimeToLeave = useCallback(async () => {
+    const reminder = findTimeToLeaveReminder(eventReminders);
+    if (!reminder) return;
+    if (!reminder.id) {
+      removeEventReminder(reminder);
+      return;
+    }
+
+    setEventReminders((current) => current.filter((entry) => entry.id !== reminder.id));
+    setReminderError(null);
+    try {
+      await deleteReminder(reminder.id);
+    } catch {
+      setEventReminders((current) => (
+        current.some((entry) => entry.id === reminder.id) ? current : [...current, reminder]
+      ));
+      setReminderError("Time to Leave could not be removed. The reminder was restored; try again.");
+    }
+  }, [eventReminders, removeEventReminder]);
 
   return {
     eventReminders,
@@ -94,5 +153,9 @@ export default function useEventReminderDrafts({ draft }: EventReminderDraftOpti
     addCustomEventReminder,
     removeEventReminder,
     eventReminderPresetStates,
+    timeToLeaveReminder,
+    enableTimeToLeave,
+    updateTimeToLeaveBuffer,
+    removeTimeToLeave,
   };
 }

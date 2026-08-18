@@ -1,6 +1,7 @@
 import db from "../db/connection.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
 import {
+  currentCalendarOccurrenceStatement,
   iso,
   normalizeText,
   mirrorOccurrenceStatement,
@@ -35,6 +36,14 @@ type GetHealthFn = (userId: string) => Promise<{
   sources?: Array<{ lastSuccessAt?: string | null }>;
 }>;
 type EventSearchInput = CalendarEventSearchInput & Record<string, unknown>;
+
+export async function getCurrentCalendarSearchMirrorOccurrence(
+  input: Parameters<typeof currentCalendarOccurrenceStatement>[0],
+  { dbClient = db }: { dbClient?: Pick<Client, "execute"> } = {},
+) {
+  const result = await dbClient.execute(currentCalendarOccurrenceStatement(input));
+  return result.rows;
+}
 
 interface PendingSync {
   reason: string;

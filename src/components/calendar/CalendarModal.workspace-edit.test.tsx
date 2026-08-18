@@ -48,6 +48,10 @@ describe("CalendarModal floating event edit workspace behavior", () => {
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
     });
+    expect(panel.querySelector("[data-calendar-floating-content-layout='event-editor']")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-editor-action-dock").contains(
+      screen.getByTestId("calendar-event-save"),
+    )).toBe(true);
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
   });
 

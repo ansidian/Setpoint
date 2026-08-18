@@ -207,10 +207,17 @@ describe("ConnectionPanelContent user-visible ownership", () => {
   it.each([
     ["openai", "ai.openai_api_key", "OpenAI API key"],
     ["anthropic", "ai.anthropic_api_key", "Anthropic API key"],
-    ["google-places", "calendar.google_places_api_key", "Google Places API key"],
+    ["google-places", "calendar.google_places_api_key", "Google Maps Platform API key"],
   ] as const)("shows the %s credential editor in its connection", (id, key, label) => {
     renderConnection(id, null, [credential(key)]);
     expect(screen.getByLabelText(label)).toBeTruthy();
+  });
+
+  it("keeps Home inside the stable Google Maps Platform panel", () => {
+    renderConnection("google-places", null, [credential("calendar.google_places_api_key")]);
+    expect(screen.getByText("Home")).toBeTruthy();
+    expect(screen.getByLabelText("Choose Home")).toBeTruthy();
+    expect(screen.getByText(/Routes calculates traffic-aware departure time/)).toBeTruthy();
   });
 
   it("keeps the Pirate Weather key and weather location in one service panel", () => {

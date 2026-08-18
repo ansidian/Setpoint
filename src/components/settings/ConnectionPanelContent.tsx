@@ -8,6 +8,7 @@ import GoogleWorkspaceAccountsPanel from "@/components/settings/cards/GoogleWork
 import ICloudMailAccountsPanel from "@/components/settings/cards/ICloudMailAccountsPanel";
 import TodoistCard from "@/components/settings/cards/TodoistCard";
 import WeatherLocationCard from "@/components/settings/cards/WeatherLocationCard";
+import HomeLocationCard from "@/components/settings/cards/HomeLocationCard";
 import { FieldHint, StatusPill } from "@/components/settings/settings-ui";
 import type { ConnectionRowView, ConnectionState } from "./connectionModel";
 import type { ConnectionSetupTarget } from "./connectionDirectoryModel";
@@ -155,19 +156,22 @@ export default function ConnectionPanelContent({
       break;
     case "google-places":
       controls = (
-        <CoreProviderCredentialsCard
-          title="Google Places credentials"
-          icon={<MapPin size={14} />}
-          description="Write-only key for optional Calendar place suggestions and details."
-          credentials={[{
-            key: "calendar.google_places_api_key",
-            label: "Google Places",
-            inputLabel: "Google Places API key",
-            placeholder: "Enter a new API key",
-            help: "Optional Calendar enhancement for place autocomplete and details.",
-          }]}
-          {...credentialProps}
-        />
+        <>
+          <CoreProviderCredentialsCard
+            title="Google Maps Platform credentials"
+            icon={<MapPin size={14} />}
+            description="One write-only key for Calendar place selection and traffic-aware Routes estimates."
+            credentials={[{
+              key: "calendar.google_places_api_key",
+              label: "Google Maps Platform",
+              inputLabel: "Google Maps Platform API key",
+              placeholder: "Enter a new API key",
+              help: "Enable Places API (New) for location selection and Routes API for Time to Leave.",
+            }]}
+            {...credentialProps}
+          />
+          <HomeLocationCard settings={settings} onRefreshConnections={onRefreshConnections} />
+        </>
       );
       break;
   }

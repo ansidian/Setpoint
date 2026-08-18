@@ -719,9 +719,9 @@ erDiagram
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |
 | `ea_pinned_emails` | `022_pinned_emails.sql`, `023_pinned_emails_rebuild.sql` |
-| `ea_reminders` | `010_discord_reminders.sql` |
+| `ea_reminders` | `010_discord_reminders.sql`, `046_time_to_leave_foundation.sql` |
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |
@@ -781,6 +781,8 @@ Reference implementations: `BriefingHistoryPanel.tsx`, `src/components/shared/pi
 ### Scheduler
 
 Database-driven cron jobs via `node-cron`. Schedules stored as JSON array in `ea_settings.schedules_json`. Each entry: `{ label, time, tz, enabled, skipped_until? }`. Hot-reloaded on settings update (all jobs cleared and recreated). Schedule ticks advance the active email snapshot boundary through `snapshot-service`; they do not run a batch generator. Skip functionality sets `skipped_until` to midnight tomorrow in the schedule's timezone.
+
+Reminder work stays under the scheduler's existing single-flight/drain ownership. Each reminder batch refreshes a bounded set of due `time_to_leave` rows from the exact current calendar mirror occurrence and complete Home tuple before selecting deliveries. Conditional updates bind the reminder check version, Home tuple, and occurrence version so concurrent edits win; fixed reminders retain their existing path. Dynamic delivery uses Discord once and has an event-start cutoff instead of the fixed reminder grace window.
 
 ### Recurring Todoist Tombstones
 

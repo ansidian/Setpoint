@@ -16,6 +16,7 @@ import {
 import type { UpcomingReminderState } from "../../../../shared/types/reminders";
 import {
   buildEventReminderCreatePayload,
+  buildTimeToLeaveReminderCreatePayload,
   type EventReminderLike,
   isUnsavedReminder,
 } from "./calendarEventReminderModel";
@@ -110,6 +111,15 @@ export function formatCalendarEditorError(error: unknown, fallback = "Failed to 
   }
   if (code === "calendar_google_error" && looksLikeRawProviderError(message)) {
     return "Google Calendar could not save this event. Refresh the calendar and try again.";
+  }
+  if (code === "time_to_leave_home_not_configured") {
+    return "Save Home in Google Maps Platform settings before enabling Time to Leave.";
+  }
+  if (code === "time_to_leave_routes_not_enabled") {
+    return "Enable the Routes API for the Google Maps Platform key, then try again.";
+  }
+  if (code === "time_to_leave_maps_not_configured" || code === "time_to_leave_credential_rejected") {
+    return "Repair the Google Maps Platform connection, then try Time to Leave again.";
   }
   return message || fallback;
 }
@@ -352,10 +362,22 @@ export async function saveCalendarEventAction(
   const reminderCreates = [];
   for (const reminder of eventReminders?.items || []) {
     if (!isUnsavedReminder(reminder)) continue;
-    reminderCreates.push(await client.createReminder?.(buildEventReminderCreatePayload({
-      event: savedEvent,
-      reminder,
-    })));
+    if (reminder.reminder_kind === "time_to_leave") {
+      if (
+        intentMode === "batch"
+        || (!editingEvent && intentMode === "recurring")
+        || (isEditingRecurring && recurringEditScope !== "one")
+      ) continue;
+      reminderCreates.push(await client.createReminder?.(buildTimeToLeaveReminderCreatePayload({
+        event: savedEvent,
+        reminder,
+      })));
+    } else {
+      reminderCreates.push(await client.createReminder?.(buildEventReminderCreatePayload({
+        event: savedEvent,
+        reminder,
+      })));
+    }
   }
   const reminderItems = eventReminders?.items || [];
   const remindersChanged = removedIds.length > 0 || reminderCreates.length > 0;

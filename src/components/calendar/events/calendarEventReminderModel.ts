@@ -1,4 +1,9 @@
-import type { CreateReminderRequest } from "../../../../shared/types/reminders";
+import type {
+  CreateReminderRequest,
+  ReminderKind,
+  ReminderPayloadSnapshot,
+  TimeToLeaveRouteStatus,
+} from "../../../../shared/types/reminders";
 
 const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 
@@ -17,6 +22,13 @@ export interface EventReminderLike {
   sent?: boolean;
   remindAt?: string | null;
   remind_at?: string | null;
+  reminder_kind?: ReminderKind;
+  arrival_buffer_minutes?: number | null;
+  route_duration_seconds?: number | null;
+  route_distance_meters?: number | null;
+  route_status?: TimeToLeaveRouteStatus | null;
+  route_error_code?: string | null;
+  payload_snapshot?: ReminderPayloadSnapshot | null;
 }
 
 export interface EventReminderDraftCandidate extends EventReminderLike {
@@ -40,6 +52,8 @@ export interface EventReminderSourceEvent {
   url?: string | null;
   color?: string | null;
   sourceColor?: string | null;
+  allDay?: boolean;
+  location?: string | null;
 }
 
 interface ReminderDraftOptions {
@@ -241,6 +255,102 @@ export function buildEventReminderCreatePayload({ event, reminder }: {
   } as CreateReminderRequest;
 }
 
+export function buildTimeToLeaveReminderCreatePayload({ event, reminder }: {
+  event: EventReminderSourceEvent & { id: string; startMs: number };
+  reminder: EventReminderLike;
+}): CreateReminderRequest {
+  const source = eventReminderSourceFromEvent(event);
+  return {
+    reminderKind: "time_to_leave",
+    sourceType: "calendar_event",
+    sourceAccountId: source.sourceAccountId,
+    sourceCalendarId: source.sourceCalendarId,
+    sourceItemId: event.id,
+    sourceOccurrenceId: source.sourceOccurrenceId,
+    eventStart: source.anchorAt!,
+    eventLocation: String(event.location || "").trim(),
+    isAllDay: !!event.allDay,
+    isRecurring: !!event.isRecurring,
+    arrivalBufferMinutes: Number(reminder.arrival_buffer_minutes ?? 15),
+    payloadSnapshot: {
+      ...source.payloadSnapshot,
+      location: String(event.location || "").trim(),
+    },
+  };
+}
+
+const URL_ONLY_RE = /^(?:(?:https?:\/\/|www\.)\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/\S*)?)$/i;
+const ZOOM_ONLY_RE = /^(?:zoom(?: meeting| call| video conference)?|join zoom)$/i;
+
+export function isPhysicalCalendarLocation(value: unknown) {
+  const location = String(value || "").trim();
+  return !!location && !URL_ONLY_RE.test(location) && !ZOOM_ONLY_RE.test(location);
+}
+
+export function projectTimeToLeaveEligibility({
+  draft,
+  contextAllowed = true,
+  now = new Date(),
+}: {
+  draft: EventReminderScheduleDraft & { location?: string | null };
+  contextAllowed?: boolean;
+  now?: Date | string | number;
+}) {
+  if (!contextAllowed) return { eligible: false, reason: "occurrence_only" as const };
+  if (draft.allDay) return { eligible: false, reason: "timed_only" as const };
+  const anchorAt = eventAnchorFromDraft(draft);
+  if (!anchorAt || new Date(anchorAt).getTime() <= new Date(now).getTime()) {
+    return { eligible: false, reason: "future_only" as const };
+  }
+  if (!isPhysicalCalendarLocation(draft.location)) {
+    return { eligible: false, reason: "physical_location" as const };
+  }
+  return { eligible: true, reason: null };
+}
+
+export function createTimeToLeaveDraft(arrivalBufferMinutes = 15): EventReminderLike {
+  return {
+    clientId: `time-to-leave-${arrivalBufferMinutes}`,
+    reminder_kind: "time_to_leave",
+    arrival_buffer_minutes: arrivalBufferMinutes,
+    offsetMinutes: 0,
+    status: "pending",
+  };
+}
+
+export function findTimeToLeaveReminder(reminders: EventReminderLike[] | null | undefined) {
+  return (reminders || []).find((reminder) => (
+    reminder.reminder_kind === "time_to_leave" && reminder.status !== "missed"
+  )) || null;
+}
+
+function formatClock(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: PACIFIC_TIME_ZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export function projectTimeToLeaveDisplay(reminder: EventReminderLike | null | undefined) {
+  if (!reminder) return null;
+  const durationMinutes = reminder.route_duration_seconds == null
+    ? null
+    : Math.max(1, Math.round(Number(reminder.route_duration_seconds) / 60));
+  return {
+    leaveBy: formatClock(reminder.remind_at || reminder.remindAt),
+    durationMinutes,
+    arrivalBufferMinutes: Number(reminder.arrival_buffer_minutes ?? 15),
+    routeStatus: reminder.route_status || null,
+    routeErrorCode: reminder.route_error_code || null,
+    sent: reminder.status === "sent",
+    persisted: !!reminder.id,
+  };
+}
+
 export function formatEventReminderLabel(reminder: EventReminderLike) {
   const offset = normalizeOffset(reminder);
   const absolute = Math.abs(offset);
@@ -257,7 +367,7 @@ export function formatEventReminderLabel(reminder: EventReminderLike) {
 }
 
 export function projectEventReminderChips(reminders: EventReminderLike[] | null | undefined) {
-  return (reminders || []).map((reminder) => ({
+  return (reminders || []).filter((reminder) => reminder.reminder_kind !== "time_to_leave").map((reminder) => ({
     key: reminder.id || reminder.clientId,
     id: reminder.id || null,
     label: formatEventReminderLabel(reminder),

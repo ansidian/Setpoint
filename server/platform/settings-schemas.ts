@@ -41,6 +41,86 @@ function parseMaybeJson(value: unknown, label: string): ParseResult {
   }
 }
 
+export interface HomeLocationPatch {
+  home_location_label?: unknown;
+  home_location_address?: unknown;
+  home_location_place_id?: unknown;
+  home_location_lat?: unknown;
+  home_location_lng?: unknown;
+}
+
+export function validateHomeLocation(value: HomeLocationPatch) {
+  const core = [
+    value.home_location_address,
+    value.home_location_place_id,
+    value.home_location_lat,
+    value.home_location_lng,
+  ];
+  if (core.some((entry) => entry === undefined)) {
+    return { valid: false, message: "Home address, place ID, latitude, and longitude must be updated together" };
+  }
+
+  if (core.every((entry) => entry === null)) {
+    if (value.home_location_label != null && String(value.home_location_label).trim() !== "") {
+      return { valid: false, message: "Clearing Home must clear the entire location" };
+    }
+    return {
+      valid: true,
+      value: {
+        home_location_label: null,
+        home_location_address: null,
+        home_location_place_id: null,
+        home_location_lat: null,
+        home_location_lng: null,
+      },
+    };
+  }
+
+  if (core.some((entry) => entry === null)) {
+    return { valid: false, message: "Home address, place ID, latitude, and longitude must all be present" };
+  }
+
+  const address = typeof value.home_location_address === "string"
+    ? value.home_location_address.trim()
+    : "";
+  const placeId = typeof value.home_location_place_id === "string"
+    ? value.home_location_place_id.trim()
+    : "";
+  if (!address || address.length > 500) {
+    return { valid: false, message: "home_location_address must be a non-empty string of at most 500 characters" };
+  }
+  if (!placeId || placeId.length > 500) {
+    return { valid: false, message: "home_location_place_id must be a non-empty string of at most 500 characters" };
+  }
+
+  const lat = value.home_location_lat;
+  const lng = value.home_location_lng;
+  if (typeof lat !== "number" || !Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return { valid: false, message: "home_location_lat must be a finite number between -90 and 90" };
+  }
+  if (typeof lng !== "number" || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return { valid: false, message: "home_location_lng must be a finite number between -180 and 180" };
+  }
+
+  const label = value.home_location_label == null
+    ? null
+    : String(value.home_location_label).trim();
+  if (label && label.length > 120) {
+    return { valid: false, message: "home_location_label must be at most 120 characters" };
+  }
+
+  return {
+    valid: true,
+    value: {
+      home_location_label: label || null,
+      home_location_address: address,
+      home_location_place_id: placeId,
+      home_location_lat: lat,
+      home_location_lng: lng,
+    },
+  };
+}
+
 // Schedule entries drive cron registration in scheduler.ts: `time` is split
 // into hour/minute, `label` + `time` identify the row for skip checks, `tz`
 // is passed to node-cron, `skipped_until` is compared against `new Date()`.

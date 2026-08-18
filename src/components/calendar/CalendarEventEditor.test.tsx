@@ -40,7 +40,11 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/apr 20, 2026/i);
     expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/personal/i);
     expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/does not repeat/i);
-    expect(screen.getByTestId("calendar-event-save")).toBeTruthy();
+    const scrollRegion = screen.getByTestId("calendar-event-editor-scroll-region");
+    const actionDock = screen.getByTestId("calendar-event-editor-action-dock");
+    const save = screen.getByTestId("calendar-event-save");
+    expect(scrollRegion.contains(save)).toBe(false);
+    expect(actionDock.contains(save)).toBe(true);
   });
 
   it("opens compact popovers from the icon action row one at a time", async () => {

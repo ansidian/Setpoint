@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEventReminderCreatePayload,
+  buildTimeToLeaveReminderCreatePayload,
   createEventReminderDraftFromCustom,
   createEventReminderDraftFromOffset,
   eventReminderSourceFromEvent,
   formatEventReminderLabel,
   getEventReminderPresetState,
   projectEventReminderChips,
+  projectTimeToLeaveDisplay,
+  projectTimeToLeaveEligibility,
 } from "./calendarEventReminderModel";
 
 describe("calendarEventReminderModel", () => {
@@ -163,5 +166,63 @@ describe("calendarEventReminderModel", () => {
       expect.objectContaining({ key: "sent", label: "1 hour before", sent: true }),
       expect.objectContaining({ key: "pending", label: "30 minutes before", sent: false }),
     ]);
+  });
+
+  it("enforces future timed physical single-occurrence eligibility", () => {
+    const eligibleDraft = {
+      ...draft,
+      location: "500 Pine St",
+    };
+    expect(projectTimeToLeaveEligibility({
+      draft: eligibleDraft,
+      now: "2026-05-10T15:00:00.000Z",
+    })).toEqual({ eligible: true, reason: null });
+    expect(projectTimeToLeaveEligibility({
+      draft: { ...eligibleDraft, location: "https://zoom.us/j/123" },
+      now: "2026-05-10T15:00:00.000Z",
+    })).toMatchObject({ eligible: false, reason: "physical_location" });
+    expect(projectTimeToLeaveEligibility({
+      draft: eligibleDraft,
+      contextAllowed: false,
+      now: "2026-05-10T15:00:00.000Z",
+    })).toMatchObject({ eligible: false, reason: "occurrence_only" });
+  });
+
+  it("builds occurrence-scoped dynamic payloads and projects grounded estimates", () => {
+    const event = {
+      id: "event-recurring",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: Date.parse("2026-05-10T17:00:00.000Z"),
+      title: "Dentist",
+      location: "500 Pine St",
+      isRecurring: true,
+      originalStartTime: "2026-05-10T17:00:00.000Z",
+    };
+    expect(buildTimeToLeaveReminderCreatePayload({
+      event,
+      reminder: { reminder_kind: "time_to_leave", arrival_buffer_minutes: 30 },
+    })).toMatchObject({
+      reminderKind: "time_to_leave",
+      sourceAccountId: "gmail-main",
+      sourceCalendarId: "primary",
+      sourceOccurrenceId: "2026-05-10T17:00:00.000Z",
+      eventLocation: "500 Pine St",
+      arrivalBufferMinutes: 30,
+    });
+    expect(projectTimeToLeaveDisplay({
+      id: "ttl-1",
+      reminder_kind: "time_to_leave",
+      remind_at: "2026-05-10T16:15:00.000Z",
+      arrival_buffer_minutes: 15,
+      route_duration_seconds: 1_800,
+      route_status: "degraded",
+    })).toMatchObject({
+      leaveBy: "9:15 AM",
+      durationMinutes: 30,
+      arrivalBufferMinutes: 15,
+      routeStatus: "degraded",
+      persisted: true,
+    });
   });
 });

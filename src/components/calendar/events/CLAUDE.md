@@ -43,9 +43,9 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 
 ### Notes, reminders, location, source
 - `CalendarEventNotesField.tsx` — description textarea with compact collapse
-- `CalendarEventReminderChips.tsx` — reminder chips with status badges and removal
-- `calendarEventReminderModel.ts` — reminder offsets, presets, sent-status tracking
-- `useEventReminderDrafts.ts` — reminder-draft sub-machine (drafts, removal ids, custom picker state, preset states memo) lifted from useCalendarEventEditor; wraps calendarEventReminderModel
+- `CalendarEventReminderChips.tsx` — fixed reminder chips plus occurrence-scoped Time-to-Leave status, buffer, and removal controls
+- `calendarEventReminderModel.ts` — fixed offsets/presets plus Time-to-Leave eligibility, create payload, and grounded display projection
+- `useEventReminderDrafts.ts` — fixed/dynamic reminder-draft sub-machine, including optimistic Time-to-Leave removal rollback
 - `CalendarLocationSuggestionsPanel.tsx` — Places autocomplete results with keyboard nav
 - `useCalendarLocationSuggestions.ts` — async Places fetching with session tokens
 - `CalendarSourcePickerPanel.tsx` — account/calendar selector with grouping

@@ -57,10 +57,16 @@ export function resolvePirateWeatherApiKey(
   return resolveValue("weather.pirate_weather_api_key", credentials);
 }
 
-export function resolveGooglePlacesApiKey(
+export function resolveGoogleMapsApiKey(
   credentials?: Pick<InstanceCredentialService, "resolve">,
 ): Promise<string | null> {
   return resolveValue("calendar.google_places_api_key", credentials);
+}
+
+export function resolveGooglePlacesApiKey(
+  credentials?: Pick<InstanceCredentialService, "resolve">,
+): Promise<string | null> {
+  return resolveGoogleMapsApiKey(credentials);
 }
 
 function validationRequest(key: LocationCredentialKey, value: string): { url: string; init: RequestInit } {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createLocationCredentialManager,
+  resolveGoogleMapsApiKey,
   resolveGooglePlacesApiKey,
   resolvePirateWeatherApiKey,
 } from "./location-credentials.ts";
@@ -15,7 +16,12 @@ describe("location provider credentials", () => {
 
     await expect(resolvePirateWeatherApiKey({ resolve } as never)).resolves.toBe("weather.pirate_weather_api_key-value");
     await expect(resolveGooglePlacesApiKey({ resolve } as never)).resolves.toBe("calendar.google_places_api_key-value");
-    expect(resolvedKeys).toEqual(["weather.pirate_weather_api_key", "calendar.google_places_api_key"]);
+    await expect(resolveGoogleMapsApiKey({ resolve } as never)).resolves.toBe("calendar.google_places_api_key-value");
+    expect(resolvedKeys).toEqual([
+      "weather.pirate_weather_api_key",
+      "calendar.google_places_api_key",
+      "calendar.google_places_api_key",
+    ]);
   });
 
   it("tests and promotes a valid pending weather key without returning it", async () => {

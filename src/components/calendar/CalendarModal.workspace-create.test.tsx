@@ -61,6 +61,9 @@ describe("CalendarModal floating event create workspace behavior", () => {
       expect(screen.getByTestId("calendar-ghost-chip")).toBeTruthy();
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
     });
+    const floatingShell = screen.getByTestId("calendar-floating-detail-shell");
+    expect(floatingShell.style.height).toBe("");
+    expect(floatingShell.style.maxHeight).not.toBe("");
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull());

@@ -36,6 +36,42 @@ describe("Discord reminder delivery", () => {
     ]));
   });
 
+  it("formats Time to Leave without leaking Home or raw route errors", () => {
+    const payload = formatDiscordReminderPayload({
+      reminder: {
+        reminder_kind: "time_to_leave",
+        source_type: "calendar_event",
+        anchor_at: "2026-05-10T17:00:00.000Z",
+        remind_at: "2026-05-10T16:20:00.000Z",
+        offset_minutes: 0,
+        arrival_buffer_minutes: 15,
+        route_duration_seconds: 1_500,
+        route_distance_meters: 11_200,
+        payload_snapshot: {
+          title: "Dentist",
+          location: "500 Pine St",
+          url: "https://calendar.example/event-1",
+          description: "Home is 1 Secret Way; coordinates 47.61,-122.33",
+        },
+      },
+      discordUserId: "123456789",
+    });
+
+    expect(payload.content).toBe("<@123456789>");
+    expect(payload.embeds[0]).toMatchObject({
+      title: "Time to leave for Dentist",
+      url: "https://calendar.example/event-1",
+      description: "Head to 500 Pine St.",
+    });
+    expect(payload.embeds[0]!.fields).toEqual(expect.arrayContaining([
+      { name: "Drive", value: "About 25 minutes", inline: true },
+      { name: "Arrive early", value: "15 minutes", inline: true },
+    ]));
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("1 Secret Way");
+    expect(serialized).not.toContain("47.61");
+  });
+
   it("reports Discord 429 backoff without dropping the reminder", async () => {
     const fetchFn = vi.fn<FetchFunction<DiscordResponse>>(async () => ({
       ok: false,

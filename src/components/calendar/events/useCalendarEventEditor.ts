@@ -84,6 +84,7 @@ export default function useCalendarEventEditor({
     addCustomEventReminder,
     removeEventReminder,
     eventReminderPresetStates,
+    timeToLeaveReminder, enableTimeToLeave, updateTimeToLeaveBuffer, removeTimeToLeave,
   } = useEventReminderDrafts({ draft });
   const draftRef = useRef(draft);
   useLayoutEffect(() => {
@@ -560,6 +561,7 @@ export default function useCalendarEventEditor({
     confirmDelete,
     eventReminders,
     eventReminderPresetStates,
+    timeToLeaveReminder, enableTimeToLeave, updateTimeToLeaveBuffer, removeTimeToLeave,
     reminderError,
     customReminder,
     locationSuggestions,

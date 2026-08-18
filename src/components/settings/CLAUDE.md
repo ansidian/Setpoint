@@ -47,6 +47,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/TodoistCard.tsx` — personal-token default plus advanced Todoist app migration, OAuth, callback, and webhook setup
 - `cards/DiscordRemindersCard.tsx` — Discord webhook URL + user ID for private reminder delivery, with test-send
 - `cards/WeatherLocationCard.tsx` — city geocode → lat/lng patch for dashboard weather snapshots
+- `cards/HomeLocationCard.tsx` — Places-backed atomic Home selection/removal for driving Time-to-Leave estimates
 - `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration
 - `cards/EmailTransactionImportCard.tsx` — Amazon/PayPal Actual mappings, observe/automatic modes, bounded historical scans, durable progress, and review
 - `cards/transaction-import/TransactionImportReviewList.tsx` — candidate bulk selection, corrections, confirmation, retry, and dismiss

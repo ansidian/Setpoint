@@ -18,19 +18,22 @@ describe("demo calendar API handlers", () => {
     vi.resetModules();
   });
 
-  it("returns an empty reminders list instead of an unhandled error (P3-16)", async () => {
+  it("persists and removes demo reminders in memory (P3-16)", async () => {
     const { api, networkAttempted } = await importDemoApi();
 
     expect(await api.listReminders({ sourceType: "calendar_event", sourceItemId: "demo-event-review" }))
       .toEqual({ reminders: [] });
-    expect(await api.createReminder({
+    const created = await api.createReminder({
       sourceType: "calendar_event",
       sourceItemId: "demo-event-review",
       anchorKind: "event_start",
       anchorAt: "2026-05-12T17:00:00.000Z",
       offsetMinutes: 10,
-    })).toMatchObject({ demo: true });
-    expect(await api.deleteReminder("demo-reminder-1")).toEqual({ ok: true });
+    });
+    expect(created).toMatchObject({ reminder: { reminder_kind: "fixed" } });
+    expect((await api.listReminders({ sourceType: "calendar_event", sourceItemId: "demo-event-review" })).reminders).toHaveLength(1);
+    expect(await api.deleteReminder(created.reminder.id)).toEqual({ success: true });
+    expect((await api.listReminders({ sourceType: "calendar_event", sourceItemId: "demo-event-review" })).reminders).toEqual([]);
     expect(networkAttempted()).toBe(false);
   });
 
@@ -67,11 +70,51 @@ describe("demo calendar API handlers", () => {
     expect(range.events.some((event) => event.title === "Late Pacific boundary demo")).toBe(true);
   });
 
-  it("reports place suggestions as an empty list rather than an unhandled error (P3-18)", async () => {
+  it("offers a fictional Places-backed Home without network access (P3-18)", async () => {
     const { api, networkAttempted } = await importDemoApi();
 
-    expect(await api.getCalendarPlaceSuggestions("coffee", "session-token")).toEqual({ places: [] });
-    expect(await api.getCalendarPlaceDetails("demo-place-1", "session-token")).toEqual({ place: null });
+    expect(await api.getCalendarPlaceSuggestions("home", "session-token")).toMatchObject({
+      places: [expect.objectContaining({ placeId: "demo-home-place" })],
+    });
+    expect(await api.getCalendarPlaceDetails("demo-home-place", "session-token")).toMatchObject({
+      place: expect.objectContaining({ displayName: "Demo Home", lat: 34.1478 }),
+    });
+    expect(networkAttempted()).toBe(false);
+  });
+
+  it("exposes writable fictional calendars and events for the editor walkthrough", async () => {
+    const { api, networkAttempted } = await importDemoApi();
+    const sources = await api.getCalendarSources();
+    const range = await api.getCalendarRange("2026-05-12", "2026-05-13");
+
+    expect(sources.accounts).toEqual([
+      expect.objectContaining({
+        accountId: "demo-gmail",
+        accountLabel: "Demo Gmail",
+        calendars: expect.arrayContaining([
+          expect.objectContaining({ id: "demo-work", writable: true, accessRole: "owner" }),
+        ]),
+      }),
+    ]);
+    expect(range.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ writable: true, eventType: "default" }),
+    ]));
+    expect(networkAttempted()).toBe(false);
+  });
+
+  it("exposes writable fictional calendars for the event-editor walkthrough", async () => {
+    const { api, networkAttempted } = await importDemoApi();
+    const sources = await api.getCalendarSources();
+
+    expect(sources.accounts).toEqual([
+      expect.objectContaining({
+        accountId: "demo-gmail",
+        accountLabel: "Demo Gmail",
+        calendars: expect.arrayContaining([
+          expect.objectContaining({ id: "demo-work", writable: true, accessRole: "owner" }),
+        ]),
+      }),
+    ]);
     expect(networkAttempted()).toBe(false);
   });
 

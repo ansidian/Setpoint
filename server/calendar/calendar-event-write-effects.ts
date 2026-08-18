@@ -9,7 +9,9 @@ import {
 } from "./calendar-search-mirror.ts";
 import {
   deleteSourceReminders,
+  reconcileTimeToLeaveReminderForEvent,
   recomputeUnsentRemindersForSource,
+  scheduleTimeToLeaveRefreshForSource,
 } from "../reminders/reminder-service.ts";
 
 type RecurrenceIdentity = {
@@ -170,6 +172,21 @@ async function applyUpdateEffects(effect: Extract<CalendarEventWriteEffect, { ty
       anchorKind: "event_start",
       anchorAt,
     });
+    if (scope && scope !== "one") {
+      await scheduleTimeToLeaveRefreshForSource({
+        userId,
+        sourceType: "calendar_event",
+        sourceItemId: eventId,
+        sourceOccurrenceId: undefined,
+      });
+    } else {
+      await reconcileTimeToLeaveReminderForEvent({
+        userId,
+        sourceItemId: eventId,
+        sourceOccurrenceId: occurrenceIdentity(event, recurrence),
+        event,
+      });
+    }
   } catch (err) {
     console.error(
       "[Calendar] reminder recompute after event update failed:",

@@ -23,6 +23,7 @@ describe("reminder scheduler", () => {
       CREATE TABLE ea_reminders (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
+        reminder_kind TEXT NOT NULL DEFAULT 'fixed',
         source_type TEXT NOT NULL,
         source_account_id TEXT,
         source_calendar_id TEXT,
@@ -39,6 +40,13 @@ describe("reminder scheduler", () => {
         retry_after TEXT,
         last_error TEXT,
         payload_snapshot_json TEXT,
+        arrival_buffer_minutes INTEGER,
+        route_duration_seconds INTEGER,
+        route_distance_meters INTEGER,
+        route_checked_at TEXT,
+        next_route_check_at TEXT,
+        route_status TEXT,
+        route_error_code TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -267,5 +275,49 @@ describe("reminder scheduler", () => {
     // Backoff must be set (1 min from now), not NULL — otherwise it re-fires every 10s.
     expect(rows.rows[0]!.retry_after).toBe("2026-05-10T16:01:00.000Z");
     expect(rows.rows[0]!.status).toBe("pending");
+  });
+
+  it("awaits traffic refresh before selecting a due Time to Leave reminder", async () => {
+    const order: string[] = [];
+    await db.execute({
+      sql: `INSERT INTO ea_reminders
+              (id, user_id, reminder_kind, source_type, source_account_id,
+               source_calendar_id, source_item_id, anchor_kind, anchor_at,
+               offset_minutes, remind_at, status, arrival_buffer_minutes,
+               route_duration_seconds, route_distance_meters, route_checked_at,
+               next_route_check_at, route_status, payload_snapshot_json)
+            VALUES (?, ?, 'time_to_leave', 'calendar_event', ?, ?, ?,
+                    'event_start', ?, 0, ?, 'pending', 15, 900, 8000, ?, ?,
+                    'ready', ?)`,
+      args: [
+        "ttl-due",
+        "u1",
+        "gmail-1",
+        "primary",
+        "event-1",
+        "2026-05-10T17:00:00.000Z",
+        "2026-05-10T16:30:00.000Z",
+        "2026-05-10T16:25:00.000Z",
+        "2026-05-10T16:30:00.000Z",
+        JSON.stringify({ title: "Dentist", location: "500 Pine St" }),
+      ],
+    });
+
+    const result = await processDueReminderBatch({
+      now: "2026-05-10T16:31:00.000Z",
+      dbClient: db,
+      decryptFn: () => "https://discord.example/webhook",
+      refreshTimeToLeaveFn: async () => {
+        order.push("refresh");
+        return { processed: 1, refreshed: 1, degraded: 0, missed: 0, stale: 0 };
+      },
+      sendFn: async () => {
+        order.push("send");
+        return { ok: true, status: 204 };
+      },
+    });
+
+    expect(order).toEqual(["refresh", "send"]);
+    expect(result).toMatchObject({ sent: 1 });
   });
 });

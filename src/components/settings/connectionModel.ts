@@ -130,9 +130,9 @@ export const CONNECTIONS = [
   {
     id: "google-places",
     group: "supporting_services",
-    label: "Google Places",
-    description: "Optional Calendar place suggestions and details.",
-    minimumViable: "An active Google Places key that is not invalid",
+    label: "Google Maps Platform",
+    description: "Place selection and traffic-aware departure estimates.",
+    minimumViable: "An active Maps key with Places and Routes enabled",
     hash: "google-places",
   },
 ] as const satisfies readonly ConnectionDefinition[];

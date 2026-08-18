@@ -16,6 +16,7 @@ import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "
 import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
 import { handleDemoTransactionImportRequest, NO_DEMO_TRANSACTION_IMPORT_RESPONSE } from "./transactionImports.ts";
 import type { DemoSeed } from "./store.ts";
+import type { Reminder } from "../../shared/types/reminders.ts";
 type DemoTask = DemoSeed["deadlines"]["upcoming"][number];
 type DemoCalendarEvent = DemoSeed["calendarEvents"][number];
 type DemoRemoteContentTrustEntry = {
@@ -53,6 +54,73 @@ function mutateTask(seed: DemoSeed, taskId: string, updater: (task: DemoTask) =>
   for (const task of seed.deadlines.upcoming || []) {
     if (String(task.id || task.todoist_id) === String(taskId)) updater(task);
   }
+}
+
+function makeDemoReminder(seed: DemoSeed, body: DemoRequestBody): Reminder {
+  const now = new Date();
+  let sequence = seed.reminders.length + 1;
+  while (seed.reminders.some((reminder) => reminder.id === `demo-reminder-${sequence}`)) sequence += 1;
+  const id = `demo-reminder-${sequence}`;
+  const reminderKind = body.reminderKind === "time_to_leave" ? "time_to_leave" : "fixed";
+  const anchorAt = String(
+    reminderKind === "time_to_leave" ? body.eventStart : body.anchorAt,
+  );
+  const arrivalBuffer = Number(body.arrivalBufferMinutes ?? 15);
+  const durationSeconds = 1_500;
+  const remindAt = reminderKind === "time_to_leave"
+    ? new Date(new Date(anchorAt).getTime() - (arrivalBuffer * 60 + durationSeconds) * 1000).toISOString()
+    : new Date(new Date(anchorAt).getTime() + Number(body.offsetMinutes || 0) * 60_000).toISOString();
+  const payloadSnapshot = {
+    ...(body.payloadSnapshot || {}),
+    ...(reminderKind === "time_to_leave" ? { location: String(body.eventLocation || "") } : {}),
+  };
+  const common = {
+    id,
+    user_id: "demo-owner",
+    reminder_kind: reminderKind,
+    source_type: body.sourceType || "calendar_event",
+    source_account_id: body.sourceAccountId || "demo-gmail",
+    source_calendar_id: body.sourceCalendarId || "demo-work",
+    source_item_id: String(body.sourceItemId || "demo-event"),
+    source_occurrence_id: body.sourceOccurrenceId || null,
+    anchor_kind: body.anchorKind || "event_start",
+    anchor_at: anchorAt,
+    offset_minutes: reminderKind === "time_to_leave" ? 0 : Number(body.offsetMinutes || 0),
+    remind_at: remindAt,
+    status: "pending" as const,
+    sent_at: null,
+    missed_at: null,
+    retry_count: 0,
+    retry_after: null,
+    last_error: null,
+    payload_snapshot_json: JSON.stringify(payloadSnapshot),
+    payload_snapshot: payloadSnapshot,
+    created_at: now.toISOString(),
+    updated_at: now.toISOString(),
+  };
+  return reminderKind === "time_to_leave"
+    ? {
+        ...common,
+        reminder_kind: "time_to_leave",
+        arrival_buffer_minutes: arrivalBuffer,
+        route_duration_seconds: durationSeconds,
+        route_distance_meters: 11_200,
+        route_checked_at: now.toISOString(),
+        next_route_check_at: new Date(now.getTime() + 15 * 60_000).toISOString(),
+        route_status: "ready",
+        route_error_code: null,
+      }
+    : {
+        ...common,
+        reminder_kind: "fixed",
+        arrival_buffer_minutes: null,
+        route_duration_seconds: null,
+        route_distance_meters: null,
+        route_checked_at: null,
+        next_route_check_at: null,
+        route_status: null,
+        route_error_code: null,
+      };
 }
 
 const DEMO_CALENDARS: Record<string, { name: string; color: string }> = {
@@ -102,6 +170,8 @@ function makeCalendarEvent(data: DemoRequestBody | DemoCalendarEvent, id = `demo
     startMs,
     endMs,
     allDay: !!input.allDay,
+    writable: true,
+    eventType: "default",
     location: input.location || "",
     description: input.description || "Fictional demo calendar event.",
   };
@@ -341,21 +411,21 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     return { ok: true };
   }
 
-  // Reminders are not modeled in the demo seed; the calendar editor still calls
-  // these routes when opening/saving an event. Return inert demo-safe shapes so
-  // the editor never surfaces DEMO_API_UNHANDLED. See P3-16.
   if (pathname === "/api/ea/reminders" && method === "POST") {
-    const id = `demo-reminder-${Date.now()}`;
-    return clone({ id, ...body, demo: true });
+    const reminder = makeDemoReminder(seed, body);
+    seed.reminders.push(reminder);
+    return clone({ reminder });
   }
 
   if (pathname.match(/^\/api\/ea\/reminders\/[^/]+$/) && method === "DELETE") {
-    return { ok: true };
+    const reminderId = decodeURIComponent(pathSegment(pathname, 1));
+    seed.reminders = seed.reminders.filter((reminder) => reminder.id !== reminderId);
+    return { success: true };
   }
 
   if (pathname === "/api/ea/settings" && method === "PUT") {
     Object.assign(seed.settings, body);
-    return clone(seed.settings);
+    return { success: true };
   }
 
   if (pathname === "/api/ea/important-senders" && method === "PUT") {
@@ -394,12 +464,12 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     return {
       accounts: [{
         accountId: "demo-gmail",
-        label: "Demo Gmail",
-        email: "alex@demo.example",
+        accountLabel: "Demo Gmail",
+        accountEmail: "alex@demo.example",
         calendars: [
-          { id: "demo-work", summary: "Demo Work", backgroundColor: "#89b4fa", primary: true },
-          { id: "demo-personal", summary: "Demo Personal", backgroundColor: "#cba6f7" },
-          { id: "demo-career", summary: "Demo Career", backgroundColor: "#f5c2e7" },
+          { id: "demo-work", summary: "Demo Work", backgroundColor: "#89b4fa", primary: true, accessRole: "owner", writable: true },
+          { id: "demo-personal", summary: "Demo Personal", backgroundColor: "#cba6f7", accessRole: "owner", writable: true },
+          { id: "demo-career", summary: "Demo Career", backgroundColor: "#f5c2e7", accessRole: "owner", writable: true },
         ],
       }],
     };
@@ -486,15 +556,42 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   if (pathname === "/api/ea/triage/cache-stats") return { enabled: false, demo: true };
   if (pathname === "/api/alfred/usage") return { enabled: false, demo: true };
   if (pathname === "/api/ea/email-search/usage") return { enabled: false, demo: true };
-  // GET reminders: the editor reads `result.reminders || []`. No demo reminders
-  // exist, so return an empty list rather than DEMO_API_UNHANDLED. See P3-16.
-  if (pathname === "/api/ea/reminders") return { reminders: [] };
-  // Location autocomplete (Google Places) has no demo backend. Return empty,
-  // demo-safe shapes so typing in the location field never surfaces the raw
-  // DEMO_API_UNHANDLED string. The consumer reads `data.places` / `data.place`.
-  // See P3-18.
-  if (pathname === "/api/calendar/places/suggest") return { places: [] };
-  if (pathname.match(/^\/api\/calendar\/places\/[^/]+$/)) return { place: null };
+  if (pathname === "/api/ea/reminders") {
+    const sourceType = url.searchParams.get("sourceType");
+    const sourceItemId = url.searchParams.get("sourceItemId");
+    const sourceOccurrenceId = url.searchParams.get("sourceOccurrenceId");
+    return {
+      reminders: clone(seed.reminders.filter((reminder) => (
+        (!sourceType || reminder.source_type === sourceType)
+        && (!sourceItemId || reminder.source_item_id === sourceItemId)
+        && (sourceOccurrenceId === null || (reminder.source_occurrence_id || "") === sourceOccurrenceId)
+      ))),
+    };
+  }
+  if (pathname === "/api/calendar/places/suggest") {
+    return {
+      places: [{
+        placeId: "demo-home-place",
+        primaryText: "Demo Home",
+        secondaryText: "123 Fictional Way, Pasadena, CA",
+        fullText: "Demo Home, 123 Fictional Way, Pasadena, CA",
+        distanceMeters: null,
+      }],
+    };
+  }
+  if (pathname.match(/^\/api\/calendar\/places\/[^/]+$/)) {
+    return {
+      place: {
+        placeId: "demo-home-place",
+        displayName: "Demo Home",
+        formattedAddress: "123 Fictional Way, Pasadena, CA 91101",
+        location: "123 Fictional Way, Pasadena, CA 91101",
+        lat: 34.1478,
+        lng: -118.1445,
+        googleMapsUri: "https://maps.google.com/?q=Demo+Home",
+      },
+    };
+  }
   return unsupported(path);
 }
 

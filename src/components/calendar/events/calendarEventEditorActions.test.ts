@@ -266,6 +266,110 @@ describe("calendarEventEditorActions", () => {
     expect(client.createReminder).not.toHaveBeenCalled();
   });
 
+  it("creates a Time-to-Leave reminder from the authoritative saved occurrence after the event update", async () => {
+    const order: string[] = [];
+    const editingEvent = {
+      id: "event-1",
+      etag: '"etag-1"',
+      title: "Old appointment",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2099-05-05T16:00:00.000Z").getTime(),
+      endMs: new Date("2099-05-05T16:30:00.000Z").getTime(),
+      allDay: false,
+    };
+    const savedEvent = {
+      ...editingEvent,
+      title: "Dentist",
+      location: "500 Pine Street",
+      startMs: new Date("2099-05-06T18:00:00.000Z").getTime(),
+      endMs: new Date("2099-05-06T18:30:00.000Z").getTime(),
+    };
+    const client = {
+      update: vi.fn().mockImplementation(async () => {
+        order.push("event");
+        return { event: savedEvent };
+      }),
+      createReminder: vi.fn().mockImplementation(async () => {
+        order.push("reminder");
+        return { reminder: { id: "ttl-1" } };
+      }),
+    };
+
+    await saveCalendarEventAction({
+      draft: { ...draft, location: "500 Pine Street" },
+      effectiveTitle: "Dentist",
+      editingEvent,
+      intentMode: "single",
+      eventReminders: {
+        items: [{
+          clientId: "ttl-draft",
+          reminder_kind: "time_to_leave",
+          arrival_buffer_minutes: 30,
+          status: "pending",
+        }],
+        removedIds: [],
+      },
+    }, client);
+
+    expect(order).toEqual(["event", "reminder"]);
+    // test-architecture: allow-boundary-interaction -- Time to Leave must anchor to the provider-returned occurrence, and that outbound reminders payload is not included in the action result.
+    expect(client.createReminder).toHaveBeenCalledWith({
+      reminderKind: "time_to_leave",
+      sourceType: "calendar_event",
+      sourceAccountId: "gmail-main",
+      sourceCalendarId: "primary",
+      sourceItemId: "event-1",
+      sourceOccurrenceId: null,
+      eventStart: "2099-05-06T18:00:00.000Z",
+      eventLocation: "500 Pine Street",
+      isAllDay: false,
+      isRecurring: false,
+      arrivalBufferMinutes: 30,
+      payloadSnapshot: {
+        title: "Dentist",
+        context: "Calendar",
+        url: null,
+        color: null,
+        location: "500 Pine Street",
+      },
+    });
+  });
+
+  it("does not create Time to Leave when the provider event update fails", async () => {
+    const editingEvent = {
+      id: "event-1",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2099-05-05T16:00:00.000Z").getTime(),
+      endMs: new Date("2099-05-05T16:30:00.000Z").getTime(),
+      allDay: false,
+    };
+    const client = {
+      update: vi.fn().mockRejectedValue(new Error("Google Calendar failed")),
+      createReminder: vi.fn(),
+    };
+
+    await expect(saveCalendarEventAction({
+      draft: { ...draft, location: "500 Pine Street" },
+      effectiveTitle: "Dentist",
+      editingEvent,
+      intentMode: "single",
+      eventReminders: {
+        items: [{
+          clientId: "ttl-draft",
+          reminder_kind: "time_to_leave",
+          arrival_buffer_minutes: 15,
+          status: "pending",
+        }],
+        removedIds: [],
+      },
+    }, client)).rejects.toThrow("Google Calendar failed");
+
+    // test-architecture: allow-boundary-interaction -- A rejected provider update must not emit the separate outbound Time-to-Leave write; no action result exists on this path.
+    expect(client.createReminder).not.toHaveBeenCalled();
+  });
+
   it("deletes removed reminder chips after an event update succeeds", async () => {
     const editingEvent = {
       id: "event-1",

@@ -11,6 +11,7 @@ Cross-domain infrastructure: config, account canonicalization, settings validati
 - `credential-encryption-context.ts` — canonical table/field/record AAD contexts for encrypted credential families
 - `encrypted-credential-inventory.ts` — allowlisted inventory of every encrypted database field used by audits and rotation
 - `google-places.ts` — Google Places autocomplete/details client with radius biasing
+- `google-routes.ts` — narrow Google Routes Compute Routes client for traffic-aware driving duration/distance only
 - `weather.ts` — Pirate Weather fetch and condition → lucide icon mapping
 - `fetch-with-timeout.ts` — shared timeout helper for external provider fetches and non-fetch async operations
 - `provider-reauth.ts` — OAuth reconnect signaling: check for `invalid_grant` errors, flag/clear needs-reauth on accounts and Todoist

@@ -15,6 +15,7 @@ import useCalendarEditorPickers from "./useCalendarEditorPickers";
 import { EDITOR_ENTRANCE_TRANSITION } from "../detailRailMotion";
 import type useCalendarEventEditor from "./useCalendarEventEditor";
 import type { CalendarDraftGhostPreview } from "./CalendarDraftPreviewPanel";
+import { projectTimeToLeaveEligibility } from "./calendarEventReminderModel";
 
 interface CalendarEventEditorRailProps {
   editor: ReturnType<typeof useCalendarEventEditor>;
@@ -65,6 +66,10 @@ export default function CalendarEventEditorRail({
     updateCustomReminder,
     addCustomEventReminder,
     removeEventReminder,
+    timeToLeaveReminder,
+    enableTimeToLeave,
+    updateTimeToLeaveBuffer,
+    removeTimeToLeave,
   } = editor;
 
   const pickers = useCalendarEditorPickers(editor);
@@ -96,6 +101,10 @@ export default function CalendarEventEditorRail({
   const floatingHost = host === "floating";
   const showBatchReview = isBatchMode && batchDrafts.length > 0;
   const editorModeKey = isEditing ? "edit" : "create";
+  const timeToLeaveEligibility = projectTimeToLeaveEligibility({
+    draft,
+    contextAllowed: !isRecurringMode || (isEditingRecurring && recurringEditScope === "one"),
+  });
 
   return (
     <div
@@ -112,8 +121,8 @@ export default function CalendarEventEditorRail({
         setOpenPicker(null);
       }}
       style={{
-        padding: floatingHost ? 0 : "16px 20px",
-        overflow: floatingHost ? "visible" : "auto",
+        padding: 0,
+        overflow: "hidden",
         overscrollBehavior: "contain",
         flex: 1,
         display: "flex",
@@ -121,57 +130,69 @@ export default function CalendarEventEditorRail({
         minHeight: 0,
       }}
     >
-      <CalendarEventEditorHeader
-        isEditing={isEditing}
-        isEditingRecurring={isEditingRecurring}
-        recurringEditScope={recurringEditScope}
-        isBatchMode={isBatchMode}
-        isRecurringMode={isRecurringMode}
-        batchDrafts={batchDrafts}
-      />
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16, flex: 1, minHeight: 0 }}>
-        <CalendarEventTitleField
-          titleRef={titleRef}
-          titleInputRef={titleInputRef}
-          titleInputKey={titleInputKey}
-          onTitleKeyDown={onTitleKeyDown}
-          onTitleChange={onTitleChange}
-          disabled={disabled}
+      <div
+        data-testid="calendar-event-editor-scroll-region"
+        data-calendar-local-scroll="true"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          scrollbarGutter: "stable",
+          padding: floatingHost ? 0 : "16px 20px 0",
+        }}
+      >
+        <CalendarEventEditorHeader
           isEditing={isEditing}
-          validationMessage={validationMessage}
-        />
-        <CalendarEventNotesField
-          draft={draft}
-          disabled={disabled}
-          updateField={updateField}
-          compact
+          isEditingRecurring={isEditingRecurring}
+          recurringEditScope={recurringEditScope}
+          isBatchMode={isBatchMode}
+          isRecurringMode={isRecurringMode}
+          batchDrafts={batchDrafts}
         />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
-          <AnimatePresence initial={false} mode="sync">
-            <Motion.div
-              key={editorModeKey}
-              data-testid={`calendar-event-editor-mode-${editorModeKey}`}
-              data-calendar-intent-mode={editorModeKey === "create" ? intentState.mode : "edit"}
-              initial={{ opacity: 0, y: 20, scale: 0.982 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.99 }}
-              transition={{
-                opacity: editorModeTransition,
-                y: editorModeTransition,
-                scale: editorModeTransition,
-              }}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 14,
-                flex: 1,
-                minHeight: 0,
-                transformOrigin: "top center",
-                willChange: "opacity, transform",
-              }}
-            >
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16, minHeight: 0 }}>
+          <CalendarEventTitleField
+            titleRef={titleRef}
+            titleInputRef={titleInputRef}
+            titleInputKey={titleInputKey}
+            onTitleKeyDown={onTitleKeyDown}
+            onTitleChange={onTitleChange}
+            disabled={disabled}
+            isEditing={isEditing}
+            validationMessage={validationMessage}
+          />
+          <CalendarEventNotesField
+            draft={draft}
+            disabled={disabled}
+            updateField={updateField}
+            compact
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
+            <AnimatePresence initial={false} mode="sync">
+              <Motion.div
+                key={editorModeKey}
+                data-testid={`calendar-event-editor-mode-${editorModeKey}`}
+                data-calendar-intent-mode={editorModeKey === "create" ? intentState.mode : "edit"}
+                initial={{ opacity: 0, y: 20, scale: 0.982 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -12, scale: 0.99 }}
+                transition={{
+                  opacity: editorModeTransition,
+                  y: editorModeTransition,
+                  scale: editorModeTransition,
+                }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                  minHeight: 0,
+                  paddingBottom: 16,
+                  transformOrigin: "top center",
+                  willChange: "opacity, transform",
+                }}
+              >
               {showRecurringScopePrompt ? (
                 <CalendarRecurringScopePrompt
                   selectedScope={recurringEditScope}
@@ -239,18 +260,14 @@ export default function CalendarEventEditorRail({
                   onUpdateCustomReminder={updateCustomReminder}
                   onAddCustom={addCustomEventReminder}
                   onRemoveReminder={removeEventReminder}
+                  timeToLeaveReminder={timeToLeaveReminder}
+                  timeToLeaveEligible={timeToLeaveEligibility.eligible}
+                  onEnableTimeToLeave={enableTimeToLeave}
+                  onUpdateTimeToLeaveBuffer={updateTimeToLeaveBuffer}
+                  onRemoveTimeToLeave={removeTimeToLeave}
                 />
               ) : null}
 
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 14,
-                  flex: 1,
-                  minHeight: 0,
-                }}
-              >
                 {showBatchReview ? (
                   <CalendarBatchReviewSection
                     batchDrafts={batchDrafts}
@@ -260,31 +277,29 @@ export default function CalendarEventEditorRail({
                     onRemoveDraft={removeBatchDraft}
                   />
                 ) : null}
-
-                <div
-                  style={{
-                    marginTop: "auto",
-                    paddingTop: floatingHost ? 6 : 0,
-                    position: floatingHost ? "sticky" : "static",
-                    bottom: floatingHost ? -12 : "auto",
-                    zIndex: floatingHost ? 2 : "auto",
-                    background: floatingHost
-                      ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-panel) 0%, transparent), var(--sp-panel) 18%)"
-                      : "transparent",
-                  }}
-                >
-                  <CalendarEventEditorActionBar
-                    editor={editor}
-                    disabled={disabled}
-                    saveDisabled={saveDisabled}
-                    isBatchMode={isBatchMode}
-                    isRecurringMode={isRecurringMode}
-                  />
-                </div>
-              </div>
-            </Motion.div>
-          </AnimatePresence>
+              </Motion.div>
+            </AnimatePresence>
+          </div>
         </div>
+      </div>
+
+      <div
+        data-testid="calendar-event-editor-action-dock"
+        style={{
+          position: "relative",
+          zIndex: 2,
+          flexShrink: 0,
+          padding: floatingHost ? "0 0 2px" : "0 20px 16px",
+          background: "var(--sp-panel)",
+        }}
+      >
+        <CalendarEventEditorActionBar
+          editor={editor}
+          disabled={disabled}
+          saveDisabled={saveDisabled}
+          isBatchMode={isBatchMode}
+          isRecurringMode={isRecurringMode}
+        />
       </div>
 
       <CalendarEventEditorPanels editor={editor} pickers={pickers} />

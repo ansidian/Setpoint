@@ -5,8 +5,11 @@ Reminder domain: CRUD, schedule persistence, trigger firing, and notification fo
 ## Files
 
 - `reminder-service.ts` — public reminders API: CRUD, schedules, triggers
-- `reminder-scheduler.ts` — persists schedules, arms timers, fires notifications
+- `reminder-scheduler.ts` — refreshes dynamic departure estimates, then fires due notifications inside one scheduler-owned batch
 - `reminder-model.ts` — reminder validation/normalization: anchor kinds, missed-grace, Pacific TZ
+- `time-to-leave-model.ts` — provider-free Time-to-Leave validation, leave-time math, and bounded route-check cadence
+- `time-to-leave-service.ts` — initial Home-to-event route computation and durable dynamic-reminder creation
+- `time-to-leave-refresh-service.ts` — bounded current-occurrence/Home refresh with conditional stale-result rejection
 - `reminder-hydration.ts` — hydrates tasks/events with reminder state and next trigger
 - `discord-reminders.ts` — formats reminder payloads as Discord embeds
 

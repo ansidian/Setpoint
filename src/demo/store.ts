@@ -2,6 +2,7 @@ import { buildDemoNews } from "./newsData.ts";
 import { buildDemoTransactions } from "./financeData.ts";
 import { buildDemoWeather } from "./weatherData.ts";
 import { buildDemoInboxSeed } from "./inboxData.ts";
+import type { Reminder } from "../../shared/types/reminders.ts";
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
 const CAREER_COLOR = "#f5c2e7";
@@ -113,6 +114,8 @@ function event({
     startMs: new Date(start).getTime(),
     endMs: new Date(end).getTime(),
     allDay: false,
+    writable: true,
+    eventType: "default",
     location,
     description,
   };
@@ -300,8 +303,14 @@ function makeDemoSeed(now = new Date()) {
     triage_sound_enabled: false,
     briefing_schedule_enabled: false,
     discord_reminder_webhook_url: "",
+    discord_webhook_configured: true,
     actual_budget_url: "https://actual.example.invalid/demo",
     actual_configured: true,
+    home_location_label: null,
+    home_location_address: null,
+    home_location_place_id: null,
+    home_location_lat: null,
+    home_location_lng: null,
     alfred_provider: "demo",
     alfred_model: "demo-alfred-model",
   };
@@ -332,6 +341,7 @@ function makeDemoSeed(now = new Date()) {
     transactions,
     activeSnapshot: inboxSeed.activeSnapshot,
     settings,
+    reminders: [] as Reminder[],
     accounts: inboxSeed.accounts,
     actualMetadata: {
       accounts: [

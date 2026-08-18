@@ -18,7 +18,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `timing.ts` — request/phase timing log helpers
 - `ai-credentials.ts` — OpenAI/Anthropic runtime credential resolution and pending-key validation/promotion
 - `ai-model-catalog.ts` — centralized AI provider metadata, curated OpenAI models, cached Anthropic discovery, defaults, and stored/selectable model policy
-- `location-credentials.ts` — Pirate Weather/Google Places runtime credential resolution and pending-key validation/promotion
+- `location-credentials.ts` — Pirate Weather/Google Maps Platform runtime credential resolution and pending-key validation/promotion
 - `capability-status-service.ts` — composes redacted registry, account, settings, and operational evidence into cached capability status
 - `onboarding-progress-store.ts` — versioned, owner-keyed onboarding presentation progress; independent from live capability health
 - `google-oauth-credentials.ts` — Google application credential-pair staging, active/pending selection, callback version binding, and atomic promotion
