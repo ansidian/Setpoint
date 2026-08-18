@@ -9,6 +9,7 @@ import type {
 } from "@/lib/triageSoundSettings";
 
 export const TRIAGE_SOUND_SPACING_MS = 650;
+export const EMAIL_TRIAGE_SOUND_FRESHNESS_MS = 5 * 60 * 1000;
 
 const TRIGGER_TO_SETTING_KEY = {
   needs_attention_finalized: TRIAGE_SOUND_TRIGGER_KEYS.NEEDS_ATTENTION_FINALIZED,
@@ -31,13 +32,21 @@ export interface ResolvedDashboardSound {
 
 export interface TriageSoundDashboardEvent {
   source?: unknown;
+  occurredAt?: unknown;
   details?: {
     triggerType?: unknown;
     eventKey?: unknown;
     emailId?: unknown;
+    emailReceivedAt?: unknown;
     reason?: unknown;
     read?: unknown;
   } | null;
+}
+
+function triageSoundReferenceTime(event: TriageSoundDashboardEvent): number {
+  const referenceAt = event.details?.emailReceivedAt ?? event.occurredAt;
+  if (typeof referenceAt !== "string" && typeof referenceAt !== "number") return Number.NaN;
+  return Date.parse(String(referenceAt));
 }
 
 export function resolveDashboardSoundForTrigger(
@@ -76,10 +85,13 @@ export function resolveTriageSoundForEvent(
   event: TriageSoundDashboardEvent | null | undefined,
   settings: unknown,
   registry: unknown,
+  now = Date.now(),
 ): ResolvedDashboardSound | null {
   const details = event?.details;
   if (event?.source !== "email_triage" || typeof details?.triggerType !== "string") return null;
   if (details.read === true) return null;
+  const referenceTime = triageSoundReferenceTime(event);
+  if (!Number.isFinite(referenceTime) || now - referenceTime > EMAIL_TRIAGE_SOUND_FRESHNESS_MS) return null;
   return resolveDashboardSoundForTrigger(
     details.triggerType,
     settings,

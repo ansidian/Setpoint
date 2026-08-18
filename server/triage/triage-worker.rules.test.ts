@@ -176,6 +176,7 @@ describe("email triage worker rule finalization", () => {
           triggerType: "fyi_finalized",
           eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
           emailId: "msg-1",
+          emailReceivedAt: "2026-05-03T12:00:00.000Z",
           lane: "fyi",
           triageSource: "rule",
           reason: "email_triage_finalized",

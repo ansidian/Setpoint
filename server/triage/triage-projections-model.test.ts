@@ -66,13 +66,18 @@ describe("triage projections model", () => {
 
   it("emailTriageEventDetails builds the stable eventKey + payload", () => {
     expect(emailTriageEventDetails(
-      { account_id: "gmail-work", email_id: "msg-1" },
+      {
+        account_id: "gmail-work",
+        email_id: "msg-1",
+        email_date_utc: "2026-05-05T00:00:00.000Z",
+      },
       { reason: "email_triage_finalized", lane: "fyi", triageSource: "cheap_model" },
     )).toEqual({
       triggerType: "fyi_finalized",
       eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
       emailId: "msg-1", lane: "fyi", triageSource: "cheap_model",
       reason: "email_triage_finalized",
+      emailReceivedAt: "2026-05-05T00:00:00.000Z",
     });
   });
 

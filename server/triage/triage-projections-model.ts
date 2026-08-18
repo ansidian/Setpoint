@@ -46,11 +46,12 @@ export function triageSoundTriggerType(reason: string, lane: TriageLane | null =
   return "triage_event";
 }
 
-export function emailTriageEventDetails(email: Pick<TriageEmail, "account_id" | "email_id" | "read">, { reason, lane, triageSource }: { reason: string; lane: TriageLane; triageSource: string }): Record<string, unknown> {
+export function emailTriageEventDetails(email: Pick<TriageEmail, "account_id" | "email_id" | "email_date" | "email_date_utc" | "read">, { reason, lane, triageSource }: { reason: string; lane: TriageLane; triageSource: string }): Record<string, unknown> {
   return {
     triggerType: triageSoundTriggerType(reason, lane),
     eventKey: `email_triage:${email.account_id}:${email.email_id}:${reason}`,
     emailId: email.email_id,
+    emailReceivedAt: email.email_date_utc || email.email_date || null,
     lane,
     triageSource,
     reason,

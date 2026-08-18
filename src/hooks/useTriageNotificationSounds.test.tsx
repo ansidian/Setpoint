@@ -27,15 +27,17 @@ const settings = {
   ],
 };
 
-function triageEvent(eventKey = "event-1") {
+function triageEvent(eventKey = "event-1", emailReceivedAt = new Date().toISOString()) {
   return {
     source: "email_triage",
     reason: "email_triage_finalized",
+    occurredAt: new Date().toISOString(),
     details: {
       triggerType: "needs_attention_finalized",
       eventKey,
       emailId: "msg-1",
       reason: "email_triage_finalized",
+      emailReceivedAt,
     },
   };
 }
@@ -44,6 +46,7 @@ function queueEvent(eventKey = "queued-1") {
   return {
     source: "email_triage",
     reason: "email_triage_queued",
+    occurredAt: new Date().toISOString(),
     details: {
       triggerType: "email_queued",
       eventKey,
@@ -156,6 +159,23 @@ describe("useTriageNotificationSounds", () => {
     await waitFor(() => {
       expect(audio.paths).toHaveLength(1);
     });
+  });
+
+  it("does not play finalized-email sounds after the five-minute arrival window", async () => {
+    const audio = installAudioBoundary();
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(settingsRequestCount).toBe(1));
+
+    act(() => {
+      result.current.handleDashboardEvent(triageEvent(
+        "stale-event",
+        new Date(Date.now() - 5 * 60 * 1000 - 1).toISOString(),
+      ));
+    });
+
+    await act(async () => {});
+    expect(audio.paths).toEqual([]);
   });
 
   it("plays configured sounds when mail enters the triage queue", async () => {

@@ -82,6 +82,7 @@ describe("email triage worker grace flows", () => {
           triggerType: "weak_security_grace",
           eventKey: "email_triage:gmail-work:msg-1:weak_security_grace_delayed",
           emailId: "msg-1",
+          emailReceivedAt: "2026-05-03T12:00:00.000Z",
           lane: "needs_attention",
           triageSource: "weak_security_grace",
           reason: "weak_security_grace_delayed",

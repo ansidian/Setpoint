@@ -22,13 +22,16 @@ const settings = {
 };
 
 function event(triggerType: string, eventKey = `event:${triggerType}`) {
+  const now = new Date().toISOString();
   return {
     source: "email_triage",
     reason: triggerType === "triage_failed" ? "email_triage_failed" : "email_triage_finalized",
+    occurredAt: now,
     details: {
       triggerType,
       eventKey,
       emailId: "msg-1",
+      emailReceivedAt: now,
       reason: triggerType,
     },
   };
