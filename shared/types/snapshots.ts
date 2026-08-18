@@ -1,3 +1,5 @@
+import type { VerificationCodeKind } from "./email.ts";
+
 export const SNAPSHOT_LANES = [
   "queued",
   "needs_attention",
@@ -38,6 +40,13 @@ export interface SnapshotBillCandidate extends Record<string, unknown> {
   amount: unknown;
   due_date: string | null;
   type: string;
+}
+
+export interface SnapshotVerificationCode {
+  code: string;
+  kind: VerificationCodeKind;
+  active_until: string;
+  label: "Verification code";
 }
 
 export interface SnapshotItem {
@@ -83,6 +92,7 @@ export interface SnapshotItem {
   extractedBill: SnapshotBillCandidate | null;
   _catchUp: boolean;
   previous_snapshot_item_id: number | null;
+  verification_code: SnapshotVerificationCode | null;
 }
 
 export interface SnapshotJobCounts {

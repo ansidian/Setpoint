@@ -1,3 +1,5 @@
+import type { SnapshotVerificationCode } from "../../shared/types/snapshots.ts";
+
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
 
@@ -37,6 +39,7 @@ interface DemoSnapshotEmailInput {
   day: Date;
   read?: boolean;
   category?: string;
+  urgency?: string;
   source?: string | null;
   sourceAt?: string | null;
   laneAtSnapshot?: DemoLaneKey | null;
@@ -44,6 +47,7 @@ interface DemoSnapshotEmailInput {
   escalationBadge?: string | null;
   receivedHour?: number | null;
   receivedMinute?: number | null;
+  verificationCode?: SnapshotVerificationCode | null;
 }
 
 function snapshotEmail({
@@ -58,6 +62,7 @@ function snapshotEmail({
   day,
   read = false,
   category = "work",
+  urgency = lane === "needs_attention" ? "high" : "normal",
   source = null,
   sourceAt = null,
   laneAtSnapshot = null,
@@ -65,6 +70,7 @@ function snapshotEmail({
   escalationBadge = null,
   receivedHour = null,
   receivedMinute = null,
+  verificationCode = null,
 }: DemoSnapshotEmailInput) {
   const numericItemId = Number(itemId) || 0;
   const hour = receivedHour ?? (8 + (numericItemId % 10));
@@ -84,12 +90,13 @@ function snapshotEmail({
     action: lane === "needs_attention" ? "Review" : lane === "queued" ? "Classify" : "Read later",
     date: atLocalIso(day, hour, minute),
     read,
-    urgency: lane === "needs_attention" ? "high" : "normal",
+    urgency,
     source,
     source_at: sourceAt,
     lane_at_snapshot: laneAtSnapshot,
     handled_at: handledAt,
     escalation_badge: escalationBadge,
+    verification_code: verificationCode,
     _activeSnapshot: true,
   };
 }
@@ -200,6 +207,27 @@ export function buildDemoInboxSeed(now: Date) {
         summary: "Morgan needs approval on the fictional demo rollout budget before noon.",
         day: today,
         category: "finance",
+      }),
+      snapshotEmail({
+        itemId: 24,
+        uid: "demo-email-verification-code",
+        accountId: "demo-gmail",
+        lane: "needs_attention",
+        subject: "Your Northstar sign-in code",
+        fromName: "Northstar Security",
+        fromAddress: "security@northstar.example",
+        summary: "A fictional sign-in code is ready to copy for the demo walkthrough.",
+        day: today,
+        category: "security",
+        urgency: "low",
+        receivedHour: now.getHours(),
+        receivedMinute: Math.max(0, now.getMinutes() - 2),
+        verificationCode: {
+          code: "0A7-KQ2",
+          kind: "hyphenated",
+          active_until: new Date(now.getTime() + 30 * 60_000).toISOString(),
+          label: "Verification code",
+        },
       }),
       snapshotEmail({
         itemId: 7,

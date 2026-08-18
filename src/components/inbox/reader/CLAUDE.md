@@ -26,6 +26,8 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
 - `TriagePanel.tsx` — AI summary, bullets, urgency, and lane tag display
 - `DraftReply.tsx` — AI-drafted reply with send/discard
+- `VerificationCodeCallout.tsx` — shared desktop/mobile fresh-code display and copy-before-trash action
+- `verificationCodeModel.ts` — pure freshness, expiry, and trash-eligibility projection for verification codes
 - `useEmailBody.ts` — fetches and caches body HTML with preview fallback
 
 ### Actual, bills, and transaction imports

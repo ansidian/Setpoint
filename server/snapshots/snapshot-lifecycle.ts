@@ -4,6 +4,7 @@ import type {
   SnapshotLane,
   SnapshotRecord,
   SnapshotStoredLane,
+  SnapshotVerificationCode,
   SnapshotWindow,
 } from "../../shared/types/snapshots.ts";
 
@@ -55,6 +56,9 @@ export interface SnapshotItemRow extends Record<string, unknown> {
   handled_at?: string | null;
   provider_removed_at?: string | null;
   read?: string | number | bigint | boolean | null;
+  verification_code?: string | null;
+  verification_code_kind?: string | null;
+  verification_code_active_until?: string | null;
 }
 
 function localDateParts(date: Date, timeZone: string): LocalDateParts {
@@ -172,6 +176,10 @@ export function normalizeBillCandidate(candidate: unknown): SnapshotBillCandidat
   };
 }
 
+function isVerificationCodeKind(value: unknown): value is SnapshotVerificationCode["kind"] {
+  return value === "numeric" || value === "alphanumeric" || value === "hyphenated";
+}
+
 export function normalizeSnapshotItem(row: SnapshotItemRow): SnapshotItem {
   const source = row.source || null;
   const resurfacedAt = row.resurfaced_at == null ? null : Number(row.resurfaced_at);
@@ -181,6 +189,17 @@ export function normalizeSnapshotItem(row: SnapshotItemRow): SnapshotItem {
     ? JSON.parse(row.bill_candidate_json) as Record<string, unknown>
     : null;
   const extractedBill = normalizeBillCandidate(billCandidate);
+  const verificationKind = row.verification_code_kind;
+  const verificationCode = row.verification_code
+    && row.verification_code_active_until
+    && isVerificationCodeKind(verificationKind)
+    ? {
+      code: row.verification_code,
+      kind: verificationKind,
+      active_until: row.verification_code_active_until,
+      label: "Verification code" as const,
+    }
+    : null;
   return {
     id: catchUp ? `catch_up:${Number(row.id)}` : Number(row.id),
     snapshot_id: Number(row.snapshot_id),
@@ -224,5 +243,6 @@ export function normalizeSnapshotItem(row: SnapshotItemRow): SnapshotItem {
     extractedBill,
     _catchUp: catchUp,
     previous_snapshot_item_id: catchUp ? Number(row.id) : null,
+    verification_code: verificationCode,
   };
 }

@@ -235,7 +235,8 @@ export async function getSnapshotHistory(userId: string, {
 
 export async function getSnapshotViewById(userId: string, snapshotId: number, {
   dbClient = db,
-}: { dbClient?: SnapshotWriteDb } = {}): Promise<SnapshotView> {
+  now = new Date(),
+}: { dbClient?: SnapshotWriteDb; now?: Date } = {}): Promise<SnapshotView> {
   const snapshot = await loadSnapshotById(dbClient, userId, snapshotId);
   if (!snapshot) {
     throw makeHttpError("Snapshot not found", 404);
@@ -244,7 +245,7 @@ export async function getSnapshotViewById(userId: string, snapshotId: number, {
   const processing = snapshot.status === "active"
     ? await loadProcessingState(dbClient, userId)
     : emptyProcessingState();
-  return buildSnapshotView(snapshot, items, processing);
+  return buildSnapshotView(snapshot, items, processing, null, 0, now);
 }
 
 export async function getActiveSnapshotView(userId: string, {
@@ -273,7 +274,7 @@ export async function getActiveSnapshotView(userId: string, {
     loadPinnedEntries(userId, { dbClient: dbClient as Client }),
   ]);
   return {
-    ...buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut),
+    ...buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut, now),
     pinned: pinned as unknown[],
   };
 }

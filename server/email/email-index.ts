@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { normalizeEmailDateUtc } from "./email-date.ts";
+import { detectVerificationCode } from "./verification-code-detector.ts";
 import type { InStatement } from "@libsql/client";
 import type {
   EmailIndexBackfillResponse,
@@ -254,7 +255,10 @@ async function loadExistingIndexRows(userId: string, uids: string[], { dbClient 
     const chunk = uids.slice(i, i + EMAIL_INDEX_LOOKUP_CHUNK_SIZE);
     const result = await dbClient.execute({
       sql: `SELECT rowid, uid, from_name, from_address, subject, body_snippet, body_text,
-                   email_date, email_date_utc, read, thread_id, message_id
+                   email_date, email_date_utc, read, thread_id, message_id,
+                   verification_code, verification_code_kind,
+                   verification_code_detected_at, verification_code_active_until,
+                   verification_code_detector_version
             FROM ea_email_index
             WHERE user_id = ?
               AND uid IN (${chunk.map(() => "?").join(",")})`,
@@ -274,7 +278,10 @@ function dedupeEmailsByUid(emails: NormalizedFetchedEmail[]): NormalizedFetchedE
   return [...byUid.values()];
 }
 
-export async function indexEmails(userId: string, emails: NormalizedFetchedEmail[], { dbClient = db }: { dbClient?: EmailWriteDb } = {}): Promise<void> {
+export async function indexEmails(userId: string, emails: NormalizedFetchedEmail[], {
+  dbClient = db,
+  now = new Date(),
+}: { dbClient?: EmailWriteDb; now?: Date } = {}): Promise<void> {
   if (!emails.length) return;
   const uniqueEmails = dedupeEmailsByUid(emails);
   if (!uniqueEmails.length) return;
@@ -296,6 +303,26 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
     const threadId = email.thread_id || null;
     const messageId = email.message_id || null;
     const existing = existingRows.get(uid);
+    const verificationDetection = detectVerificationCode({
+      subject,
+      snippet: bodySnippet,
+      bodyText,
+      emailTimestamp: emailDateUtc,
+    });
+    const verificationCode = verificationDetection?.code ?? null;
+    const verificationCodeKind = verificationDetection?.kind ?? null;
+    const verificationCodeActiveUntil = verificationDetection?.activeUntil ?? null;
+    const verificationCodeDetectorVersion = verificationDetection?.detectorVersion ?? null;
+    const verificationMetadataChanged = !existing
+      || (existing.verification_code ?? null) !== verificationCode
+      || (existing.verification_code_kind ?? null) !== verificationCodeKind
+      || (existing.verification_code_active_until ?? null) !== verificationCodeActiveUntil
+      || (existing.verification_code_detector_version ?? null) !== verificationCodeDetectorVersion;
+    const verificationCodeDetectedAt = verificationDetection
+      ? verificationMetadataChanged
+        ? now.toISOString()
+        : existing?.verification_code_detected_at ?? now.toISOString()
+      : null;
     // P3-2: body_snippet is the volatile Gmail preview and is NOT part of the
     // searchable-content set. A snippet-only drift (common at backfill window
     // boundaries) must not trigger the 3-statement FTS rewrite + embedding
@@ -311,7 +338,8 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
       || existing.email_date !== emailDate
       || existing.email_date_utc !== emailDateUtc
       || (threadId && threadId !== existing.thread_id)
-      || (messageId && messageId !== existing.message_id);
+      || (messageId && messageId !== existing.message_id)
+      || verificationMetadataChanged;
     if (!searchableChanged) {
       if (!indexMetadataChanged && !snippetChanged && Number(existing.read) === read) return [];
       // Identity columns COALESCE so a fetch path that lacks them (or a
@@ -323,9 +351,18 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
                   email_date_utc = ?,
                   read = ?,
                   thread_id = COALESCE(?, thread_id),
-                  message_id = COALESCE(?, message_id)
+                  message_id = COALESCE(?, message_id),
+                  verification_code = ?,
+                  verification_code_kind = ?,
+                  verification_code_detected_at = ?,
+                  verification_code_active_until = ?,
+                  verification_code_detector_version = ?
               WHERE uid = ? AND user_id = ?`,
-        args: [bodySnippet, emailDate, emailDateUtc, read, threadId, messageId, uid, userId],
+        args: [
+          bodySnippet, emailDate, emailDateUtc, read, threadId, messageId,
+          verificationCode, verificationCodeKind, verificationCodeDetectedAt,
+          verificationCodeActiveUntil, verificationCodeDetectorVersion, uid, userId,
+        ],
       }];
     }
 
@@ -335,6 +372,8 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
       email.account_icon || "Mail", fromName, fromAddress,
       subject, bodySnippet, bodyText,
       emailDate, emailDateUtc, read, threadId, messageId,
+      verificationCode, verificationCodeKind, verificationCodeDetectedAt,
+      verificationCodeActiveUntil, verificationCodeDetectorVersion,
     ];
     // When an already-indexed email's searchable content changed, drop any
     // existing search embedding so the re-embedding worker re-selects it as a
@@ -359,8 +398,10 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
               (uid, user_id, account_id, account_label, account_email,
                account_color, account_icon, from_name, from_address,
                subject, body_snippet, body_text, email_date, email_date_utc, read,
-               thread_id, message_id)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               thread_id, message_id, verification_code, verification_code_kind,
+               verification_code_detected_at, verification_code_active_until,
+               verification_code_detector_version)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(uid) DO UPDATE SET
                 account_id = excluded.account_id,
                 account_label = excluded.account_label,
@@ -376,7 +417,12 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
                 email_date_utc = excluded.email_date_utc,
                 read = excluded.read,
                 thread_id = COALESCE(excluded.thread_id, ea_email_index.thread_id),
-                message_id = COALESCE(excluded.message_id, ea_email_index.message_id)`,
+                message_id = COALESCE(excluded.message_id, ea_email_index.message_id),
+                verification_code = excluded.verification_code,
+                verification_code_kind = excluded.verification_code_kind,
+                verification_code_detected_at = excluded.verification_code_detected_at,
+                verification_code_active_until = excluded.verification_code_active_until,
+                verification_code_detector_version = excluded.verification_code_detector_version`,
         args,
       },
       {

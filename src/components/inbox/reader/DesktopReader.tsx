@@ -14,6 +14,7 @@ import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 import ActualActionStatus from "./ActualActionStatus";
 import TransactionImportStatus from "./TransactionImportStatus";
+import VerificationCodeCallout from "./VerificationCodeCallout";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActionGroups } from "./readerActionsModel";
 import { resolveBillSeed } from "./billSeedModel";
@@ -415,6 +416,13 @@ export default function DesktopReader({
             </div>
           </div>
         </div>
+
+        <VerificationCodeCallout
+          key={String(email.uid || email.id || "verification-code")}
+          email={email}
+          readOnly={readOnly}
+          onTrash={() => onAction("trash")}
+        />
 
         {showTriage && email.claude && (
           <div style={{ flexShrink: 0 }}>

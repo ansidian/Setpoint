@@ -19,6 +19,7 @@ const CORE_MIGRATION_FILES = [
   "005_email_search_embeddings.sql",
   "013_email_index_normalized_date.sql",
   "025_email_thread_identity.sql",
+  "047_email_verification_codes.sql",
 ];
 
 const DEFAULT_EXTRA_MIGRATION_FILES = [

@@ -1,5 +1,5 @@
 import type { EmailAccountSummary, PinnedEmailEntry } from "../../../shared/types/email";
-import type { SnapshotLane } from "../../../shared/types/snapshots";
+import type { SnapshotLane, SnapshotVerificationCode } from "../../../shared/types/snapshots";
 
 export type InboxId = string | number;
 export type InboxSelectionId = InboxId | null;
@@ -67,6 +67,7 @@ export interface InboxEmailLike {
   handled_at?: string | null;
   pinned_at?: string;
   provider_state?: string | null;
+  verification_code?: SnapshotVerificationCode | null;
   hasBill?: boolean;
   extractedBill?: Record<string, unknown> | null;
   bill_candidate?: Record<string, unknown> | null;

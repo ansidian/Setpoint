@@ -169,6 +169,9 @@ export async function loadSnapshotItems(dbClient: SnapshotReadDb, snapshotId: nu
                  idx.read,
                  idx.from_name AS index_from_name,
                  idx.from_address AS index_from_address,
+                 idx.verification_code,
+                 idx.verification_code_kind,
+                 idx.verification_code_active_until,
                  t.bill_candidate_json
           FROM ea_briefing_snapshot_items i
           LEFT JOIN ea_email_index idx
@@ -208,6 +211,9 @@ export async function loadActiveCatchUpItems(
                  0 AS read,
                  idx.from_name AS index_from_name,
                  idx.from_address AS index_from_address,
+                 idx.verification_code,
+                 idx.verification_code_kind,
+                 idx.verification_code_active_until,
                  'catch_up' AS source,
                  1 AS catch_up,
                  t.bill_candidate_json

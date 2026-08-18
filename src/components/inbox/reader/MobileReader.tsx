@@ -30,6 +30,7 @@ import type { ReaderSurfaceProps } from "./readerTypes";
 import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import ActualActionStatus from "./ActualActionStatus";
 import TransactionImportStatus from "./TransactionImportStatus";
+import VerificationCodeCallout from "./VerificationCodeCallout";
 import {
   isActualActioned,
   resolveActualCalendarTarget,
@@ -193,6 +194,13 @@ export default function MobileReader({
           onAction={onAction}
           onSnooze={openSnoozePicker}
           snapshotPending={snapshotPending}
+        />
+
+        <VerificationCodeCallout
+          key={String(email.uid || email.id || "verification-code")}
+          email={email}
+          readOnly={readOnly}
+          onTrash={() => onAction("trash")}
         />
 
         <TransactionImportStatus

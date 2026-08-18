@@ -52,6 +52,7 @@ function item(overrides: Record<string, unknown> = {}): SnapshotItem {
     extractedBill: null,
     _catchUp: false,
     previous_snapshot_item_id: null,
+    verification_code: null,
     ...overrides,
   } as SnapshotItem;
 }

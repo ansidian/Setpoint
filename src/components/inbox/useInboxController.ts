@@ -265,11 +265,10 @@ export default function useInboxController({
   ]);
 
   // Bump nowTick at the soonest moment a derived value actually changes: a snooze
-  // boundary passing (the snooze sweep) OR a pending-security-grace row crossing a
-  // label bucket (EmailRow derives that countdown from _pendingSecurityGraceAt +
-  // nowTick). Idle when neither is pending, so an inbox with no near-term snooze
-  // or grace transition never re-filters/re-renders. flatEmails is the dep that
-  // carries the grace rows; rescheduling on nowTick advances through the buckets.
+  // boundary passing (the snooze sweep), a pending-security-grace row crossing a
+  // label bucket, or a verification marker reaching its active deadline. Idle when
+  // none is pending. flatEmails carries both timed row states; rescheduling on
+  // nowTick advances through their boundaries.
   useEffect(() => {
     const delay = computeNextTickDelay(snoozedMap, flatEmails, Date.now());
     if (delay == null) return undefined;

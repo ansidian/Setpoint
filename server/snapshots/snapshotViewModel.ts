@@ -141,8 +141,20 @@ export function buildSnapshotView(
   processing: SnapshotProcessingState = emptyProcessingState(),
   accountOrder: SnapshotAccountOrder | null = null,
   carryoverAgedOut = 0,
+  now = new Date(),
 ): SnapshotView {
-  const { lanes, carryover } = buildLanes(items);
+  const nowMs = now.getTime();
+  const projectFreshCodes = snapshot?.status === "active" && Number.isFinite(nowMs);
+  const projectedItems = items.map((item): SnapshotItem => {
+    const activeUntil = Date.parse(item.verification_code?.active_until || "");
+    const fresh = projectFreshCodes && Number.isFinite(activeUntil) && activeUntil > nowMs;
+    if (!fresh) {
+      return item.verification_code ? { ...item, verification_code: null } : item;
+    }
+    if (item.handled_at || item.is_carryover) return item;
+    return item.lane === "needs_attention" ? item : { ...item, lane: "needs_attention" };
+  });
+  const { lanes, carryover } = buildLanes(projectedItems);
   const laneCounts: SnapshotLaneCounts = {
     queued: lanes.queued.length,
     needs_attention: lanes.needs_attention.length,
@@ -162,6 +174,6 @@ export function buildSnapshotView(
     carryoverAgedOut,
     laneCounts,
     processing,
-    filters: buildFilters(items, accountOrder),
+    filters: buildFilters(projectedItems, accountOrder),
   };
 }

@@ -1,9 +1,10 @@
 import { memo, useState } from "react";
-import { Clock, Pin } from "lucide-react";
+import { Clock, KeyRound, Pin } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { pendingSecurityGraceLabel, timeAgo } from "./helpers";
 import type { InboxAccount, InboxEmailLike } from "./inboxTypes";
 import { Avatar, LaneIcon } from "./primitives";
+import { isVerificationCodeFresh } from "./reader/verificationCodeModel";
 
 interface EmailRowProps {
   email: InboxEmailLike;
@@ -52,6 +53,7 @@ function EmailRow({
   const pendingGraceLabel = email._pendingSecurityGrace
     ? pendingSecurityGraceLabel(email._pendingSecurityGraceAt, nowTick)
     : null;
+  const freshVerificationCode = isVerificationCodeFresh(email, nowTick);
 
   return (
     <div
@@ -139,6 +141,22 @@ function EmailRow({
             {email.subject}
           </span>
           {email._pinned && <Pin size={10} color="#b4befe" data-testid="email-row-pin" style={{ flexShrink: 0 }} />}
+          {freshVerificationCode && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+                padding: "2px 6px", borderRadius: 4,
+                color: "rgba(205,214,244,0.78)",
+                background: "rgba(205,214,244,0.06)",
+                border: "1px solid rgba(205,214,244,0.16)",
+              }}
+              title="Verification code ready"
+            >
+              <KeyRound size={8} aria-hidden="true" />
+              Code ready
+            </span>
+          )}
           {untriaged && email._resurfaced && (
             <span
               style={{
@@ -201,7 +219,7 @@ function EmailRow({
               Read
             </span>
           )}
-          {!untriaged && email.urgentFlag && email._lane !== "noise" && (
+          {!freshVerificationCode && !untriaged && email.urgentFlag && email._lane !== "noise" && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
@@ -213,7 +231,7 @@ function EmailRow({
               {email.urgentFlag.label || email.urgency}
             </span>
           )}
-          {showLaneTag && !untriaged && L && (
+          {!freshVerificationCode && showLaneTag && !untriaged && L && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
@@ -227,7 +245,7 @@ function EmailRow({
               {L.label}
             </span>
           )}
-          {!showLaneTag && !untriaged && !arrivalGraceQueued && !untriagedRead && email.category && (
+          {!freshVerificationCode && !showLaneTag && !untriaged && !arrivalGraceQueued && !untriagedRead && email.category && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center",
@@ -274,6 +292,7 @@ function rowKeyFields(email: InboxEmailLike): unknown[] {
     email.urgentFlag?.label, email.urgentFlag,
     email._pinned, email._providerRemoved,
     email._optimisticSnapshotPending,
+    email.verification_code?.code, email.verification_code?.active_until,
   ];
 }
 
@@ -293,7 +312,10 @@ function areEqual(prev: EmailRowProps, next: EmailRowProps) {
   // (the live countdown label). Ignore it for every other row so a tick does
   // not re-render the whole list — that is the whole point of the memo.
   if (
-    (prev.email._pendingSecurityGrace || next.email._pendingSecurityGrace)
+    (prev.email._pendingSecurityGrace
+      || next.email._pendingSecurityGrace
+      || prev.email.verification_code
+      || next.email.verification_code)
     && prev.nowTick !== next.nowTick
   ) {
     return false;

@@ -33,4 +33,9 @@ export interface ExistingEmailIndexRow extends Record<string, unknown> {
   read?: number | boolean | null;
   thread_id?: string | null;
   message_id?: string | null;
+  verification_code?: string | null;
+  verification_code_kind?: string | null;
+  verification_code_detected_at?: string | null;
+  verification_code_active_until?: string | null;
+  verification_code_detector_version?: number | null;
 }

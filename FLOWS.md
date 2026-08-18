@@ -40,7 +40,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 0. `server/email/gmail-pubsub.ts:verifyToken` — performs one narrow shared-database hash/tombstone read for every delivery, hashes the candidate, and compares fixed-length hashes with `timingSafeEqual`; no TTL cache is used, so rotation/revocation is immediate across processes and restarts. Database failure returns a retryable `503` without queueing work or logging token material.
 1. `server/email/gmail-sync.ts:processNextGmailHistorySyncJob` — claims a queued job, loads the account
 2. `server/email/gmail-sync.ts:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state
-3. `server/email/email-index.ts:indexEmails` — parses and writes emails into `ea_email_index`
+3. `server/email/email-index.ts:indexEmails` → `server/email/verification-code-detector.ts:detectVerificationCode` — parses and writes emails into `ea_email_index`; the local deterministic detector atomically replaces nullable code metadata without an external/model call or persisted evidence
 4. `server/email/gmailTriageStatements.ts:triageStatementsForEmail` — inserts a pending `ea_email_triage` row and an arrival-grace-scheduled triage job
 5. `server/snapshots/snapshot-triage-attachment.ts:attachArrivalGraceEmailToActiveSnapshot` — upserts a queued-lane snapshot item, publishes `email_triage_queued`
 6. `server/scheduler.ts:requestEmailTriageDrainAt` / `runEmailTriageWorker` — successful arrival-grace writes arm one process-local timer for the earliest durable `scheduled_for`; a timer firing during an active drain queues one follow-up check, while the unchanged 30-second cron remains restart/missed-timer recovery (jobs are also drained inline by `server/snapshots/snapshot-service.ts:syncActiveSnapshot`)
@@ -50,11 +50,11 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 10. `server/triage/triage-finalize-store.ts:attachToActiveSnapshot` — upserts `ea_briefing_snapshot_items` with the decided lane
 11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — fans `email_triage_finalized`/`email_triage_failed` to SSE subscribers
 12. `src/hooks/dashboardEventRefreshModel.ts:refreshScopeForDashboardEvent` / `src/hooks/useCurrentDashboard.ts:handleChanged` — forwards the payload to the dashboard event handler, routes `email_triage` to the existing active-snapshot read, and keeps every other or unknown source on the full-current read; queued bursts retain the strongest pending scope and snapshot-read failure falls back once to full current
-13. `src/components/inbox/inboxWorkItems.ts:collectActiveSnapshotEmails` — flattens snapshot lanes into normalized inbox rows
+13. `server/snapshots/snapshotStore.ts:loadSnapshotItems` → `server/snapshots/snapshotViewModel.ts:buildSnapshotView` → `src/components/inbox/inboxWorkItems.ts:collectActiveSnapshotEmails` — joins verification metadata, promotes a still-fresh candidate into active Needs You without rewriting its durable lane, then flattens snapshot lanes into normalized inbox rows; expiry/frozen history strip the actionable metadata and retain the stored lane
 14. `src/hooks/useTriageNotificationSounds.ts:handleDashboardEvent` — resolves the sound for the trigger type
 15. `src/lib/triageSoundGate.ts:createTriageSoundGate` — gate's accept() dedupes by eventKey and coalesces per trigger (4s window)
 
-**Caches:** `ea_gmail_watch_state` history cursor (`server/email/gmail-sync.ts`, reset on 404 recovery); `ea_email_index` (`server/email/email-index.ts`); `ea_triage_jobs` queue + `ea_email_triage` decisions (written by the sync, settled by the worker); `ea_briefing_snapshot_items` (upserted at queue-attach and finalize); sessionStorage `ea_triage_sound_event_keys` (`src/lib/triageSoundGate.ts`, capped 200).
+**Caches:** `ea_gmail_watch_state` history cursor (`server/email/gmail-sync.ts`, reset on 404 recovery); `ea_email_index` (`server/email/email-index.ts`, including nullable verification metadata whose active deadline derives from the normalized email timestamp); `ea_triage_jobs` queue + `ea_email_triage` decisions (written by the sync, settled by the worker); `ea_briefing_snapshot_items` (upserted at queue-attach and finalize; never rewritten for verification promotion); sessionStorage `ea_triage_sound_event_keys` (`src/lib/triageSoundGate.ts`, capped 200).
 
 **SSE:** `dashboard-current-changed` (reasons `email_triage_queued`/`email_triage_finalized`/`email_triage_failed`) — emitted by `server/dashboard/current-events.ts:publishCurrentDashboardEvent`, streamed by GET `/current/events` in `server/routes/dashboard.ts` — consumed by `src/hooks/useCurrentDashboard.ts:handleChanged`, routed to `src/hooks/useTriageNotificationSounds.ts` via `src/pages/Dashboard.tsx`.
 
@@ -74,8 +74,8 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 6. `server/snapshots/snooze-waker.ts:wakeDueSnoozes` — 5-min cron flips snoozed → resurfaced, re-attaches to the active snapshot
 7. `server/snapshots/snapshot-snooze-lifecycle.ts:attachResurfacedSnoozeToActiveSnapshot` — upserts the resurfaced item, lane normalized by `server/snapshots/snapshot-state-machine.ts:resurfacedTriageLane`
 8. `server/snapshots/snapshot-item-mutations.ts:moveSnapshotItemLane` — user lane transitions (plus handled/reopen mutations) via the snapshot item routes
-9. `server/snapshots/snapshot-service.ts:getActiveSnapshotView` — loads items, derives lanes and read-only state (frozen snapshots are read-only)
-10. `server/snapshots/snapshot-lifecycle.ts:normalizeSnapshotItem` — normalizes DB rows: lane, catch-up id, resurfaced flags, bill candidate
+9. `server/snapshots/snapshot-service.ts:getActiveSnapshotView` — loads items, derives lanes and read-only state, and supplies the view clock for 30-minute verification-code freshness (frozen snapshots are read-only)
+10. `server/snapshots/snapshot-lifecycle.ts:normalizeSnapshotItem` → `server/snapshots/snapshotViewModel.ts:buildSnapshotView` — normalizes DB rows (lane, catch-up id, resurfaced flags, bill candidate, verification metadata), then promotes only fresh active candidates while preserving `lane_at_snapshot`; frozen/expired views expose no actionable code metadata
 11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — lifecycle changes publish dashboard events
 12. `src/hooks/useCurrentDashboard.ts:handleChanged` — SSE-triggered refetch embeds the fresh snapshot view in the dashboard payload
 13. `src/hooks/useActiveSnapshot.ts:useActiveSnapshot` — standalone fallback fetch; 15s poll while processing is active

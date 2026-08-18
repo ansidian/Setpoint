@@ -6,8 +6,8 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 
 - `snapshot-service.ts` — snapshot orchestration API: build, fetch, sync, triage attach, provider-removal; thin orchestrator over snapshotStore.ts + snapshotViewModel.ts
 - `snapshot-types.ts` — local database, provider-like input, and error-boundary types shared within the snapshot backend
-- `snapshotStore.ts` — snapshot persistence: ea_briefing_snapshots/_items reads + lifecycle writes (find/freeze/carryover), item loads, processing-state counts, history rows/counts
-- `snapshotViewModel.ts` — pure view projection: shapes loaded items into the lane/filter/laneCount briefing view
+- `snapshotStore.ts` — snapshot persistence: ea_briefing_snapshots/_items reads + lifecycle writes (find/freeze/carryover), item loads (including joined email-index verification metadata), processing-state counts, history rows/counts
+- `snapshotViewModel.ts` — pure view projection: shapes loaded items into the lane/filter/laneCount briefing view and applies active-only fresh verification-code promotion without changing stored lanes
 - `snapshot-lifecycle.ts` — normalizes lifecycle state transitions
 - `snapshot-state-machine.ts` — canonical snapshot state enum and transition rules
 - `snapshot-snooze-lifecycle.ts` — snooze end conditions and due-fire decisions

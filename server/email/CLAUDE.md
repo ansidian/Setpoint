@@ -12,6 +12,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
 - `email-index.ts` — parses headers, truncates bodies, writes `ea_email_index`
+- `verification-code-detector.ts` — pure conservative verification-code extraction from normalized subject/snippet/body context; returns one exact bounded token or null
 - `email-persistence-types.ts` — local index/pin database client and raw-row contracts
 - `email-backfill-worker.ts` — paginated backward-in-time index backfill worker
 - `email-date.ts` — email date header → ISO UTC
@@ -43,6 +44,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 ## Local patterns
 
 - All index writes go through `email-index.ts`; provider clients never write `ea_email_index` directly.
+- Verification-code detection runs locally in that shared index path; it never calls a provider/model and persists no surrounding evidence.
 - Provider differences are absorbed in `email-provider-adapters.ts`; consumers see one account-shaped interface.
 
 ## Related

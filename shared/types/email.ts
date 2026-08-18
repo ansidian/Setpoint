@@ -1,5 +1,7 @@
 export type EmailProvider = "gmail" | "icloud";
 
+export type VerificationCodeKind = "numeric" | "alphanumeric" | "hyphenated";
+
 export interface EmailAccountSummary {
   id: string;
   type: EmailProvider;
