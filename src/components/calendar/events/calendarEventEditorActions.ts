@@ -96,6 +96,12 @@ function looksLikeRawProviderError(message: unknown) {
     || text.length > 260;
 }
 
+function reminderFromCreateResponse(response: unknown): EventReminderLike | null {
+  if (!response || typeof response !== "object") return null;
+  const reminder = (response as { reminder?: unknown }).reminder;
+  return reminder && typeof reminder === "object" ? reminder as EventReminderLike : null;
+}
+
 export function formatCalendarEditorError(error: unknown, fallback = "Failed to save event.") {
   const candidate: CalendarEditorErrorLike = error && typeof error === "object"
     ? error as CalendarEditorErrorLike
@@ -360,26 +366,30 @@ export async function saveCalendarEventAction(
   }
 
   const reminderCreates = [];
-  for (const reminder of eventReminders?.items || []) {
+  const reminderItems = [...(eventReminders?.items || [])];
+  for (const [index, reminder] of reminderItems.entries()) {
     if (!isUnsavedReminder(reminder)) continue;
+    let createResponse;
     if (reminder.reminder_kind === "time_to_leave") {
       if (
         intentMode === "batch"
         || (!editingEvent && intentMode === "recurring")
         || (isEditingRecurring && recurringEditScope !== "one")
       ) continue;
-      reminderCreates.push(await client.createReminder?.(buildTimeToLeaveReminderCreatePayload({
+      createResponse = await client.createReminder?.(buildTimeToLeaveReminderCreatePayload({
         event: savedEvent,
         reminder,
-      })));
+      }));
     } else {
-      reminderCreates.push(await client.createReminder?.(buildEventReminderCreatePayload({
+      createResponse = await client.createReminder?.(buildEventReminderCreatePayload({
         event: savedEvent,
         reminder,
-      })));
+      }));
     }
+    reminderCreates.push(createResponse);
+    const createdReminder = reminderFromCreateResponse(createResponse);
+    if (createdReminder) reminderItems[index] = { ...reminder, ...createdReminder };
   }
-  const reminderItems = eventReminders?.items || [];
   const remindersChanged = removedIds.length > 0 || reminderCreates.length > 0;
   const shouldProjectReminderState = remindersChanged || reminderItems.length > 0;
   const projectedSavedEvent = shouldProjectReminderState

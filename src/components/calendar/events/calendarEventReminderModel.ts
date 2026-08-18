@@ -156,7 +156,9 @@ export function isDuplicateReminderOffset(
 ) {
   const offset = Number(offsetMinutes);
   return (existingReminders || []).some((reminder) =>
-    reminder.status !== "missed" && normalizeOffset(reminder) === offset
+    reminder.reminder_kind !== "time_to_leave"
+      && reminder.status !== "missed"
+      && normalizeOffset(reminder) === offset
   );
 }
 
@@ -313,7 +315,6 @@ export function createTimeToLeaveDraft(arrivalBufferMinutes = 15): EventReminder
     clientId: `time-to-leave-${arrivalBufferMinutes}`,
     reminder_kind: "time_to_leave",
     arrival_buffer_minutes: arrivalBufferMinutes,
-    offsetMinutes: 0,
     status: "pending",
   };
 }

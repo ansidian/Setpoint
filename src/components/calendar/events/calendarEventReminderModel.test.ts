@@ -99,6 +99,24 @@ describe("calendarEventReminderModel", () => {
     });
   });
 
+  it("does not treat a variable Time-to-Leave reminder as a fixed at-start duplicate", () => {
+    expect(getEventReminderPresetState({
+      draft,
+      offsetMinutes: 0,
+      now: "2026-05-10T15:00:00.000Z",
+      existingReminders: [{
+        reminder_kind: "time_to_leave",
+        offset_minutes: 0,
+        remind_at: "2026-05-10T16:15:00.000Z",
+        status: "pending",
+      }],
+    })).toMatchObject({
+      disabled: false,
+      reason: null,
+      remindAt: "2026-05-10T17:00:00.000Z",
+    });
+  });
+
   it("builds source payloads for single and recurring event occurrences", () => {
     const single = eventReminderSourceFromEvent({
       id: "event-1",

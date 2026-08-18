@@ -2,7 +2,7 @@ const REMINDER_TIME_ZONE = "America/Los_Angeles";
 const SOON_REMINDER_WINDOW_MS = 6 * 60 * 60 * 1000;
 interface ReminderState { hasUpcomingReminder: boolean; upcomingCount: number; nextReminderAt: string | null }
 interface ReminderItem { reminderState?: ReminderState; hasUpcomingReminder?: boolean; upcomingReminderCount?: number; nextReminderAt?: string | null; [key: string]: unknown }
-interface Reminder { offsetMinutes?: number; offset_minutes?: number; remind_at?: string | null; remindAt?: string | null; status?: string; [key: string]: unknown }
+interface Reminder { reminder_kind?: string; offsetMinutes?: number; offset_minutes?: number; remind_at?: string | null; remindAt?: string | null; status?: string; [key: string]: unknown }
 function asReminderItem(item: unknown): ReminderItem | null {
   return item && typeof item === "object" ? item as ReminderItem : null;
 }
@@ -91,6 +91,9 @@ function reminderOffset(reminder: Reminder): number {
 }
 
 function projectedReminderTime(reminder: Reminder, anchorAt: string | Date | null): string | null {
+  if (reminder.reminder_kind === "time_to_leave") {
+    return reminder.remind_at ?? reminder.remindAt ?? null;
+  }
   const offset = reminderOffset(reminder);
   if (anchorAt && Number.isFinite(offset)) {
     const anchorMs = new Date(anchorAt).getTime();
