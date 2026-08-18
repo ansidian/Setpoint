@@ -81,28 +81,29 @@ export function DashboardProvider({
     setCalendarDeadlines?.((prev) => transform(prev || deadlinesRef.current || EMPTY_DEADLINES));
   }, [setCalendarDeadlines]);
 
-  const removeCompletedTask = useCallback((taskId: string) => {
+  const removeCompletedTask = useCallback((taskId: string, occurrenceDate: string) => {
     // The 600ms timer that schedules this can fire after a refetch already
     // dropped the task from view (moved out of range, deleted, etc). Bail
     // before touching the store so a genuinely absent task never triggers a
     // cache write — applyDeadlineComplete is identity-no-op-safe on its own,
     // but useStaleDomainCache/useCalendarDomainRange don't compare identities,
     // so a same-reference return alone wouldn't stop the republish.
-    const liveTask = deadlinesRef.current?.upcoming?.find((t) => deadlineMatches(t, taskId));
+    const liveTask = deadlinesRef.current?.upcoming?.find((t) => deadlineMatches(t, taskId, occurrenceDate));
     if (!liveTask) return;
 
     // Keep completed tasks visible everywhere (dashboard + calendar): flip
     // status to "complete" and clear the transient _completing flash flag so
     // the row renders with the strikethrough/dim treatment.
-    applyTaskMutation((root) => applyDeadlineComplete(root, taskId));
+    applyTaskMutation((root) => applyDeadlineComplete(root, taskId, { occurrenceDate }));
   }, [applyTaskMutation]);
 
   const handleCompleteTask = useCallback(async (taskId: string, taskSnapshot: DashboardDeadline | null = null) => {
     const existingTask = deadlinesRef.current?.upcoming?.find((t) => deadlineMatches(t, taskId))
       || (deadlineMatches(taskSnapshot, taskId) ? taskSnapshot : null);
     if (!existingTask || !existingTask.due_date || existingTask._completing || existingTask.status === "complete") return;
+    const occurrenceDate = existingTask.due_date;
 
-    applyTaskMutation((root) => applyDeadlineCompleting(root, taskId));
+    applyTaskMutation((root) => applyDeadlineCompleting(root, taskId, occurrenceDate));
     onTaskCompletionIntent?.(taskId);
 
     // Await the server so we can revert the optimistic flag on failure.
@@ -110,10 +111,10 @@ export function DashboardProvider({
     // upstream: if provider completion fails, the row must return to its pre-click
     // state instead of lingering as half-complete until the next refresh.
     try {
-      await completeDeadlineOccurrence(taskId, existingTask.due_date);
+      await completeDeadlineOccurrence(taskId, occurrenceDate);
     } catch (err: unknown) {
       console.error("[Briefing] Complete task failed:", errorMessage(err));
-      applyTaskMutation((root) => clearDeadlineCompleting(root, taskId));
+      applyTaskMutation((root) => clearDeadlineCompleting(root, taskId, occurrenceDate));
       return false;
     }
 
@@ -122,7 +123,7 @@ export function DashboardProvider({
     // the id so an unmount can cancel it before it fires.
     const timerId = setTimeout(() => {
       completionTimersRef.current.delete(timerId);
-      removeCompletedTask(taskId);
+      removeCompletedTask(taskId, occurrenceDate);
     }, 600);
     completionTimersRef.current.add(timerId);
     return true;

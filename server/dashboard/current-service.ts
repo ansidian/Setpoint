@@ -115,11 +115,11 @@ async function loadProviderHealth(
   return { currentData, todoist, bills };
 }
 
-export async function applyDeadlineCurrentStatus(userId: string, taskId: unknown, status: string, {
+export async function applyDeadlineCurrentStatus(userId: string, taskId: unknown, occurrenceDate: string, status: string, {
   dbClient = db,
   now = new Date(),
 }: { dbClient?: Client; now?: Date } = {}): Promise<{ updated: boolean; payload?: DeadlinesPayload }> {
-  if (!userId || taskId == null || !status) return { updated: false };
+  if (!userId || taskId == null || !occurrenceDate || !status) return { updated: false };
   const result = await dbClient.execute({
     sql: `SELECT payload_json
           FROM ea_current_data_cache
@@ -132,7 +132,10 @@ export async function applyDeadlineCurrentStatus(userId: string, taskId: unknown
   const payload = asDeadlinesPayload(parsePayload(row as CurrentDashboardCacheRow, EMPTY_DEADLINES));
   let updated = false;
   for (const task of payload?.upcoming || []) {
-    if (String(task?.id) !== String(taskId)) continue;
+    if (
+      String(task?.id) !== String(taskId)
+      || String(task?.due_date || "") !== occurrenceDate
+    ) continue;
     task.status = status;
     delete task._completing;
     updated = true;
@@ -159,6 +162,7 @@ export async function applyDeadlineCurrentStatus(userId: string, taskId: unknown
     occurredAt: now.toISOString(),
     details: {
       taskId: String(taskId),
+      occurrenceDate,
       status,
     },
   });

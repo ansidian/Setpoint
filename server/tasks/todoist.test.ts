@@ -253,10 +253,10 @@ describe("Todoist write mirror coherence", () => {
     });
     const { completeTodoistTask } = await import("./todoist.ts");
 
-    await completeTodoistTask("u1", "task-1");
+    await completeTodoistTask("u1", "task-1", "2026-05-05");
 
     // test-architecture: allow-boundary-interaction -- Provider close success must durably remove the exact task from the active mirror before later reads.
-    expect(testState.mirror.markTodoistMirrorItemCompleted).toHaveBeenCalledWith("u1", "task-1");
+    expect(testState.mirror.markTodoistMirrorItemCompleted).toHaveBeenCalledWith("u1", "task-1", "2026-05-05");
     // test-architecture: allow-boundary-interaction -- Post-close reconciliation crosses the background-worker boundary and must retain its exact reason.
     expect(testState.requestTodoistMirrorSync).toHaveBeenCalledWith("u1", {
       reason: "todoist-write",

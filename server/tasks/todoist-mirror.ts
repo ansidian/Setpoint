@@ -351,21 +351,25 @@ export async function upsertTodoistMirrorItem(userId: string, item: RawTodoistIt
   }
 }
 
-export async function markTodoistMirrorItemCompleted(userId: string, itemId: unknown, {
+export async function markTodoistMirrorItemCompleted(userId: string, itemId: unknown, occurrenceDate: string, {
   dbClient = db,
   now = new Date(),
   recordPendingSync = true,
 }: TodoistMirrorWriteOptions = {}): Promise<void> {
   const timestamp = iso(now);
+  // Todoist reuses the same id when a recurring task advances. Restrict the
+  // optimistic write to the occurrence that was actually closed so a webhook
+  // sync that already installed the next occurrence cannot be overwritten by
+  // this later post-close write.
   await dbClient.execute({
-    sql: `INSERT INTO ea_todoist_items
-            (user_id, item_id, content, checked, is_deleted, raw_json, synced_at, updated_at)
-          VALUES (?, ?, '', 1, 0, '{}', ?, ?)
-          ON CONFLICT(user_id, item_id) DO UPDATE SET
-            checked = 1,
-            synced_at = excluded.synced_at,
-            updated_at = excluded.updated_at`,
-    args: [userId, normalizeId(itemId), timestamp, timestamp],
+    sql: `UPDATE ea_todoist_items
+          SET checked = 1,
+              synced_at = ?,
+              updated_at = ?
+          WHERE user_id = ?
+            AND item_id = ?
+            AND due_date = ?`,
+    args: [timestamp, timestamp, userId, normalizeId(itemId), occurrenceDate],
   });
   if (recordPendingSync) {
     await recordTodoistSyncRequest(userId, {

@@ -106,6 +106,7 @@ const ACTUAL_METADATA_FOR_TEST = {
 };
 
 const {
+  applyDeadlineCurrentStatus,
   clearCurrentDashboardRefreshState,
   getCurrentDashboard,
   requestCurrentDashboardRefresh,
@@ -267,6 +268,43 @@ async function syncResponse(now = new Date("2026-05-04T12:00:00.000Z")) {
     body: await syncCurrentDashboard("u1", { dbClient: testState.db.current, now }),
   };
 }
+
+describe("applyDeadlineCurrentStatus", () => {
+  beforeEach(async () => {
+    testState.db.current = await createMigratedDb();
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null as unknown as Client;
+  });
+
+  it("does not complete the next recurring occurrence after the provider advances the shared task id", async () => {
+    await seedCache("deadlines_current", {
+      upcoming: [{ id: "recur-1", due_date: "2026-08-18", status: "incomplete" }],
+      stats: { incomplete: 1, dueToday: 1, dueThisWeek: 1, totalPoints: 0 },
+    });
+
+    const result = await applyDeadlineCurrentStatus(
+      "u1",
+      "recur-1",
+      "2026-08-15",
+      "complete",
+      { dbClient: testState.db.current, now: new Date("2026-08-16T16:20:09.000Z") },
+    );
+
+    expect(result).toEqual({ updated: false });
+    const cache = await testState.db.current.execute({
+      sql: "SELECT payload_json FROM ea_current_data_cache WHERE user_id = ? AND cache_key = 'deadlines_current'",
+      args: ["u1"],
+    });
+    expect(JSON.parse(String(cache.rows[0]?.payload_json)).upcoming[0]).toMatchObject({
+      id: "recur-1",
+      due_date: "2026-08-18",
+      status: "incomplete",
+    });
+  });
+});
 
 describe("GET /api/dashboard/current", () => {
   beforeEach(async () => {

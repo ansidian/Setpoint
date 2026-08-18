@@ -38,6 +38,10 @@ function DeadlineHarness({ initial, task, moveTarget }: { initial: DashboardDead
     <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setDeadlines}>
       <Probe task={task} moveTarget={moveTarget} />
       <button type="button" onClick={() => setDeadlines({ upcoming: [], stats: stats(0) })}>Drop all</button>
+      <button type="button" onClick={() => setDeadlines({
+        upcoming: [{ ...task, due_date: "2026-04-23", status: "incomplete", _completing: undefined }],
+        stats: stats(1),
+      })}>Advance recurring</button>
       <output aria-label="deadline state">{JSON.stringify(deadlines)}</output>
     </DashboardProvider>
   );
@@ -127,6 +131,21 @@ describe("DashboardContext deadline facade", () => {
     fireEvent.click(screen.getByText("Drop all"));
     await act(async () => vi.advanceTimersByTimeAsync(600));
     expect(readDeadlines().upcoming).toEqual([]);
+  });
+
+  it("does not complete the next recurring occurrence when a refetch advances the shared id before the timer fires", async () => {
+    const task = { id: "todo-recurring", title: "Check-in (IHSS)", due_date: "2026-04-21", status: "incomplete", is_recurring: true };
+    render(<DeadlineHarness initial={{ upcoming: [task], stats: stats(1) }} task={task} />);
+    await act(async () => fireEvent.click(screen.getByText("Complete")));
+
+    fireEvent.click(screen.getByText("Advance recurring"));
+    await act(async () => vi.advanceTimersByTimeAsync(600));
+
+    expect(readDeadlines().upcoming[0]).toMatchObject({
+      id: "todo-recurring",
+      due_date: "2026-04-23",
+      status: "incomplete",
+    });
   });
 
   it("cancels the completion timer when the provider unmounts", async () => {

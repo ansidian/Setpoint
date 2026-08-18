@@ -471,11 +471,11 @@ export async function fetchTodoistDueTaskIdSet(userId: string, options: { refres
   return listTodoistMirrorDueTaskIds(userId);
 }
 
-export async function completeTodoistTask(userId: string, taskId: string): Promise<void> {
+export async function completeTodoistTask(userId: string, taskId: string, occurrenceDate: string): Promise<void> {
   const token = await getToken(userId);
   if (!token) throw new Error("Todoist not configured");
   await todoistFetch<null>(token, `/tasks/${taskId}/close`, { method: "POST" });
-  await markTodoistMirrorItemCompleted(userId, taskId);
+  await markTodoistMirrorItemCompleted(userId, taskId, occurrenceDate);
   requestTodoistWriteReconciliation(userId);
 }
 

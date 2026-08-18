@@ -16,7 +16,7 @@ vi.mock("../db/connection.ts", () => ({
 }));
 // test-architecture: allow-boundary-mock -- Test credentials are already plaintext at the encryption boundary.
 vi.mock("../platform/encryption.ts", () => ({ decrypt: (value: unknown) => value }));
-const { listTodoistMirrorActiveTasks, syncTodoistMirror } = await import("./todoist-mirror.ts");
+const { listTodoistMirrorActiveTasks, markTodoistMirrorItemCompleted, syncTodoistMirror } = await import("./todoist-mirror.ts");
 
 beforeEach(async () => {
   testState.db.current = createClient({ url: "file::memory:" });
@@ -78,5 +78,43 @@ describe("Todoist mirror resource defaults", () => {
       label_id: "deleted-label", name: "", color: null, is_deleted: 1,
       deleted_at: "2026-05-04T15:20:00.000Z",
     }]);
+  });
+});
+
+describe("Todoist mirror occurrence-aware completion", () => {
+  it("does not complete a recurring task after Todoist has advanced it to a later occurrence", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_todoist_items
+              (user_id, item_id, content, checked, is_deleted, due_date,
+               due_is_recurring, raw_json, synced_at, updated_at)
+            VALUES (?, ?, ?, 0, 0, ?, 1, ?, ?, ?)`,
+      args: [
+        "u1",
+        "recur-1",
+        "Check-in (IHSS)",
+        "2026-08-18",
+        JSON.stringify({ id: "recur-1", checked: false, due: { date: "2026-08-18", is_recurring: true } }),
+        "2026-08-16T16:20:08.892Z",
+        "2026-08-16T16:20:08.892Z",
+      ],
+    });
+
+    await markTodoistMirrorItemCompleted("u1", "recur-1", "2026-08-15", {
+      dbClient: testState.db.current,
+      now: new Date("2026-08-16T16:20:08.900Z"),
+      recordPendingSync: false,
+    });
+
+    const result = await testState.db.current.execute({
+      sql: `SELECT checked, due_date, json_extract(raw_json, '$.checked') AS raw_checked
+            FROM ea_todoist_items
+            WHERE user_id = ? AND item_id = ?`,
+      args: ["u1", "recur-1"],
+    });
+    expect(result.rows[0]).toMatchObject({
+      checked: 0,
+      due_date: "2026-08-18",
+      raw_checked: 0,
+    });
   });
 });

@@ -215,7 +215,7 @@ export async function completeDeadlineOccurrence(userId: string, deadlineId: str
   }
 
   try {
-    await completeTodoistTask(userId, deadlineId);
+    await completeTodoistTask(userId, deadlineId, occurrenceDate);
   } catch (err) {
     // Roll back the claim so a retry can re-attempt the close.
     await dbClient.execute({

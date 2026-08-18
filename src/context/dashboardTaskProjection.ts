@@ -34,6 +34,7 @@ export interface DashboardDeadlineRoot {
 
 interface ProjectionOptions {
   now?: Date;
+  occurrenceDate?: string | null;
 }
 
 const EMPTY_DEADLINE_STATS = {
@@ -71,8 +72,10 @@ function dateWindow(now = new Date()): { today: string; weekFromNow: string } {
 export function deadlineMatches(
   deadline: DashboardDeadline | null | undefined,
   deadlineId: unknown,
+  occurrenceDate: string | null = null,
 ): boolean {
   if (deadline?._tombstone || String(deadline?.id) !== String(deadlineId)) return false;
+  if (occurrenceDate && String(deadline?.due_date || "") !== occurrenceDate) return false;
   return true;
 }
 
@@ -163,10 +166,11 @@ export function applyDeadlineDelete(
 export function applyDeadlineCompleting(
   root: DashboardDeadlineRoot,
   deadlineId: unknown,
+  occurrenceDate: string | null = null,
 ): DashboardDeadlineRoot {
   if (!root) return root;
   const updated = clone(root);
-  const deadline = updated.upcoming?.find((entry) => deadlineMatches(entry, deadlineId));
+  const deadline = updated.upcoming?.find((entry) => deadlineMatches(entry, deadlineId, occurrenceDate));
   if (deadline) deadline._completing = true;
   return updated;
 }
@@ -174,12 +178,13 @@ export function applyDeadlineCompleting(
 export function clearDeadlineCompleting(
   root: DashboardDeadlineRoot,
   deadlineId: unknown,
+  occurrenceDate: string | null = null,
 ): DashboardDeadlineRoot {
   if (!root) return root;
   // Identity no-op when the deadline is gone: skip the clone entirely so a
   // failed-completion revert that races an in-flight refetch doesn't hand the
   // range cache a fresh reference to republish (see applyDeadlineComplete).
-  const index = root.upcoming?.findIndex((entry) => deadlineMatches(entry, deadlineId)) ?? -1;
+  const index = root.upcoming?.findIndex((entry) => deadlineMatches(entry, deadlineId, occurrenceDate)) ?? -1;
   if (index < 0) return root;
   const updated = clone(root);
   delete updated.upcoming[index]!._completing;
@@ -189,14 +194,14 @@ export function clearDeadlineCompleting(
 export function applyDeadlineComplete(
   root: DashboardDeadlineRoot,
   deadlineId: unknown,
-  { now = new Date() }: ProjectionOptions = {},
+  { now = new Date(), occurrenceDate = null }: ProjectionOptions = {},
 ): DashboardDeadlineRoot {
   if (!root) return root;
   // Identity no-op when the deadline is gone (e.g. the 600ms post-complete
   // timer fires after a refetch already dropped the task): return the SAME
   // reference so callers can skip the cache write, instead of clone()-ing the
   // whole root just to hand back a deep-equal-but-new object every time.
-  const index = root.upcoming?.findIndex((entry) => deadlineMatches(entry, deadlineId)) ?? -1;
+  const index = root.upcoming?.findIndex((entry) => deadlineMatches(entry, deadlineId, occurrenceDate)) ?? -1;
   if (index < 0) return root;
   const updated = clone(root);
   const deadline = updated.upcoming[index]!;

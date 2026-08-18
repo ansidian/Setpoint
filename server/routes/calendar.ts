@@ -132,7 +132,7 @@ router.post("/deadlines/:deadlineId/completed-occurrences/:date", async (req, re
       req.params.deadlineId,
       req.params.date,
     );
-    applyDeadlineCurrentStatus(userId, req.params.deadlineId, "complete").catch((err: unknown) => {
+    applyDeadlineCurrentStatus(userId, req.params.deadlineId, req.params.date, "complete").catch((err: unknown) => {
       console.error("[Calendar] Failed to update current Todoist deadline cache:", routeError(err).message);
     });
     res.json(result);

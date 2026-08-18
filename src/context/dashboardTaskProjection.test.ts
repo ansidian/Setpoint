@@ -187,6 +187,21 @@ describe("dashboard task projection", () => {
     expect(result).toBe(root);
   });
 
+  it("does not complete a later recurring occurrence with the same provider id", () => {
+    const root = {
+      upcoming: [{ id: "shared", due_date: "2026-05-08", status: "incomplete" }],
+      stats: null,
+    };
+
+    const result = applyDeadlineComplete(root, "shared", {
+      occurrenceDate: "2026-05-07",
+      now,
+    });
+
+    expect(result).toBe(root);
+    expect(result.upcoming[0]?.status).toBe("incomplete");
+  });
+
   it("clearDeadlineCompleting is an identity no-op when the deadline is absent", () => {
     const root = {
       upcoming: [{ id: "shared", due_date: "2026-05-07", status: "incomplete", _completing: true }],

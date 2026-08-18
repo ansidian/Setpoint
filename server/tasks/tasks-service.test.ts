@@ -245,7 +245,7 @@ describe("deadline-domain mutations", () => {
       occurrenceDate: "2026-05-12",
     });
     // test-architecture: allow-boundary-interaction -- Todoist close is the outbound provider commit point; it must target the claimed recurring task exactly once.
-    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec");
+    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec", "2026-05-12");
     // The pre-close claim persisted the completion row, so the occurrence is
     // recorded even though the post-close reminder cleanup threw.
     expect(await listCompletedTasks(testState.db.current, "u1")).toHaveLength(1);
@@ -301,7 +301,7 @@ describe("deadline-domain mutations", () => {
       occurrenceDate: "2026-05-12",
     });
     // test-architecture: allow-boundary-interaction -- Todoist close is the outbound provider commit point and must target the active claimed occurrence.
-    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec");
+    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec", "2026-05-12");
     expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
       { todoist_id: "td-rec", due_date: "2026-05-12" },
     ]);
