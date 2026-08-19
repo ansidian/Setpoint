@@ -117,16 +117,7 @@ export default function useCalendarEventEditorSession({
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
     seedTitleInput(seed?.title || "");
-    setManualOverrides(seed
-      ? {
-          startDate: true,
-          endDate: true,
-          startTime: true,
-          endTime: true,
-          location: true,
-          allDay: true,
-        }
-      : createManualOverrides());
+    setManualOverrides(createManualOverrides());
     setRecurrenceDraft(null);
     setManualRecurrenceOverride(false);
     setRecurringEditScope(null);

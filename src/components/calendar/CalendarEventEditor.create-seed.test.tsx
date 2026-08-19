@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   mockCreateCalendarEvent,
   mockGetCalendarSources,
+  mockGetCalendarPlaceSuggestions,
 } from "./CalendarEventEditor.test-setup.ts";
 import {
   getActiveEventSaveButton,
@@ -98,6 +99,49 @@ describe("CalendarEventEditor create-seed bridge", () => {
       target: { value: "Updated agenda" },
     });
     expect((screen.getByTestId("calendar-event-description") as HTMLTextAreaElement).value).toBe("Updated agenda");
+  });
+
+  it("preserves an Alfred seed until title edits restore NLP and place suggestions", async () => {
+    mockGetCalendarPlaceSuggestions.mockResolvedValue({
+      places: [{
+        placeId: "da-vien",
+        primaryText: "Da Vien Coffee",
+        secondaryText: "Garden Grove, CA",
+        fullText: "Da Vien Coffee, Garden Grove, CA",
+      }],
+    });
+
+    renderEventEditor({ createRequest: createRequest({
+      seed: {
+        title: "DA VIEN BOGO: UBE MATCHA at 9am-9am @davien",
+        allDay: false,
+        startDate: "2026-09-10",
+        endDate: "2026-09-10",
+        startTime: "09:00",
+        endTime: "09:00",
+        location: null,
+        description: null,
+      },
+      origin: { kind: "alfred-proposal", referenceId: "proposal-da-vien" },
+    }) });
+
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/9:00 am/i);
+      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/9:00 am/i);
+      expect(screen.queryByTestId("calendar-event-title-location-preview")).toBeNull();
+    });
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "DA VIEN BOGO: UBE MATCHA at 4pm @davien" },
+    });
+
+    await waitFor(() => {
+      expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("davien");
+      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/4:00 pm/i);
+      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/4:30 pm/i);
+    });
+    expect(await screen.findByRole("button", { name: /Da Vien Coffee/i }, { timeout: 5000 })).toBeTruthy();
   });
 
   it("returns the normalized saved event and unchanged origin once without serializing origin", async () => {
