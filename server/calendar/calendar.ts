@@ -234,6 +234,7 @@ export async function fetchCalendarMirrorEvents(
     const query = syncToken
       ? {
           syncToken,
+          singleEvents: true,
           showDeleted: true,
           maxResults: pageSize,
           pageToken,

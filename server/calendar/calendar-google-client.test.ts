@@ -414,6 +414,21 @@ describe("getRawEvent auth reuse", () => {
 
 });
 
+describe("Calendar mirror incremental sync", () => {
+  it("preserves recurring-instance expansion when continuing from a sync token", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [], nextSyncToken: "sync-2" }));
+
+    await fetchCalendarMirrorEvents(account, { id: "primary", summary: "Primary" }, {
+      syncToken: "sync-1",
+    });
+
+    const [url] = fetchCall(0);
+    const requestUrl = new URL(String(url));
+    expect(requestUrl.searchParams.get("syncToken")).toBe("sync-1");
+    expect(requestUrl.searchParams.get("singleEvents")).toBe("true");
+  });
+});
+
 describe("Google error mapping", () => {
   it("maps a 412 precondition failure to a 409 calendar_event_conflict", async () => {
     fetchMock
