@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildSnoozePresets,
   defaultSnoozeTs,
-  pendingSecurityGraceLabel,
 } from "./helpers";
 
 // Renders an epoch-ms value as "YYYY-MM-DD HH:mm" wall-clock in a given TZ so
@@ -53,14 +52,5 @@ describe("inbox helpers", () => {
 
       expect(wallClock(ts, "America/Los_Angeles")).toBe("2026-01-16 09:00");
     });
-  });
-
-  it("uses coarse pending security labels", () => {
-    const classifyAt = Date.parse("2026-05-03T16:05:00.000Z");
-
-    expect(pendingSecurityGraceLabel(classifyAt, Date.parse("2026-05-03T15:55:00.000Z"))).toBe("Triage delayed");
-    expect(pendingSecurityGraceLabel(classifyAt, Date.parse("2026-05-03T16:03:30.000Z"))).toBe("Classifying soon");
-    expect(pendingSecurityGraceLabel(classifyAt, Date.parse("2026-05-03T16:04:30.000Z"))).toBe("Classifying in <1m");
-    expect(pendingSecurityGraceLabel(classifyAt, Date.parse("2026-05-03T16:05:01.000Z"))).toBe("Classifying");
   });
 });

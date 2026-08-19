@@ -113,7 +113,6 @@ function renderInbox(options: RenderInboxOptions = {}) {
         accent="#cba6da"
         emailAccounts={emailAccounts}
         briefingSummary="Handle the approval first."
-        briefingGeneratedAt="2026-05-03 15:00:00"
         liveEmails={liveEmails}
         liveReadOverrides={liveReadOverrides}
         onLiveReadOverrideChange={onLiveReadOverrideChange}

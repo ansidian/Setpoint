@@ -10,7 +10,6 @@ export {
   isCatchUpEmail,
   makeSynthAccount,
   mergeReadState,
-  pendingSecurityGraceLabel,
   readOverrideForUid,
 } from "./inboxWorkItems";
 

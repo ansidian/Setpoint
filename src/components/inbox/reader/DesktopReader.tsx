@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import {
   Reply,
@@ -6,7 +6,7 @@ import {
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { pendingSecurityGraceLabel, timeClock, timeSince } from "../helpers";
+import { timeClock, timeSince } from "../helpers";
 import { Avatar, QuickAction } from "../primitives";
 import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
@@ -28,99 +28,6 @@ import type { InboxEmailLike } from "../inboxTypes";
 import type { BillResolutionState, EmailBodyState, ReaderSurfaceProps } from "./readerTypes";
 import { asBillCandidate, IDLE_BILL_RESOLUTION } from "./readerTypes";
 import { motionDuration, motionTransition } from "../../../lib/motion";
-
-function LiveEmailNotice({ email }: { email: InboxEmailLike }) {
-  const pendingGrace = !!email?._pendingSecurityGrace;
-  // Compute the countdown label live so it advances while the reader is open,
-  // rather than freezing at the value baked when the snapshot row was built.
-  // A 30s local tick (only mounted for pending-grace emails) mirrors the
-  // controller's now-tick cadence without threading nowTick through the reader.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!pendingGrace) return undefined;
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, [pendingGrace]);
-  const status = pendingGrace
-    ? pendingSecurityGraceLabel(email._pendingSecurityGraceAt, now)
-    : "Live · not yet triaged";
-  const detail = email?._pendingSecurityGrace
-    ? "Security triage is delayed briefly before classification."
-    : "Arrived after the current snapshot. Not yet triaged.";
-  return (
-    <div
-      style={{
-        margin: "16px 20px 0",
-        borderRadius: 12,
-        padding: "10px 14px",
-        background: "linear-gradient(135deg, color-mix(in srgb, var(--sp-blue) 6%, transparent), color-mix(in srgb, var(--sp-blue) 2%, transparent))",
-        border: "1px dashed color-mix(in srgb, var(--sp-blue) 28%, transparent)",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          position: "relative",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 22,
-          height: 22,
-          borderRadius: 6,
-          background: "color-mix(in srgb, var(--sp-blue) 12%, transparent)",
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            inset: 4,
-            borderRadius: 999,
-            background: "var(--sp-blue)",
-            opacity: 0.3,
-            animation: "livepulse 2s ease-out infinite",
-          }}
-        />
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: 999,
-            background: "var(--sp-blue)",
-            boxShadow: "0 0 6px var(--sp-blue)",
-            position: "relative",
-          }}
-        />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: 2,
-            textTransform: "uppercase",
-            color: "var(--sp-blue)",
-          }}
-        >
-          {status}
-        </div>
-        <div
-          className="ea-display"
-          style={{
-            fontSize: 11,
-            color: "rgba(205,214,244,0.7)",
-            marginTop: 3,
-            fontStyle: "italic",
-          }}
-        >
-          {detail}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, billResolution }: {
   billOpen: boolean;
@@ -429,8 +336,6 @@ export default function DesktopReader({
             <TriagePanel email={email} accent={accent} />
           </div>
         )}
-
-        {email._untriaged && <LiveEmailNotice email={email} />}
 
         <TransactionImportStatus
           emailUid={String(email.uid || email.email_id || "")}

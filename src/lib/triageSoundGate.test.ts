@@ -23,7 +23,7 @@ describe("triage sound gate", () => {
     const gate = createTriageSoundGate();
 
     expect(gate.accept({ eventKey: "email-1", triggerType: "needs_attention_finalized" }, 10_000)).toBe(true);
-    expect(gate.accept({ eventKey: "email-2", triggerType: "weak_security_grace" }, 10_500)).toBe(true);
+    expect(gate.accept({ eventKey: "email-2", triggerType: "fyi_finalized" }, 10_500)).toBe(true);
   });
 
   it("applies the coalesce window uniformly to queued-email triggers", () => {

@@ -27,7 +27,6 @@ function renderCard(initialSettings: SettingsState = {}) {
           needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
           email_queued: { enabled: true, soundId: "quick_chime" },
           fyi_finalized: { enabled: true, soundId: "smooth_modern" },
-          weak_security_grace: { enabled: true, soundId: "low_tone" },
           triage_failed: { enabled: false, soundId: "low_tone" },
           event_upcoming: { enabled: true, soundId: "clear_chime" },
           task_completed: { enabled: true, soundId: "smooth_modern" },
@@ -61,7 +60,6 @@ describe("TriageSoundSettingsCard", () => {
     expect(screen.getByText("Needs attention finalized")).toBeTruthy();
     expect(screen.getByText("Queued mail")).toBeTruthy();
     expect(screen.getByText("FYI finalized")).toBeTruthy();
-    expect(screen.getByText("Weak-security grace")).toBeTruthy();
     expect(screen.getByText("Triage failed")).toBeTruthy();
     expect(screen.getByText("Upcoming event")).toBeTruthy();
     expect(screen.getByText("Task completed")).toBeTruthy();

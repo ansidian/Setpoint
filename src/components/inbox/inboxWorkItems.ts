@@ -70,15 +70,6 @@ export function isCatchUpEmail(email: InboxEmailLike | null | undefined): boolea
     || email?.source === "catch_up";
 }
 
-export function pendingSecurityGraceLabel(classifyAtMs: number | null | undefined, nowMs: number = Date.now()): string {
-  if (typeof classifyAtMs !== "number" || !Number.isFinite(classifyAtMs)) return "Triage delayed";
-  const remainingMs = classifyAtMs - nowMs;
-  if (remainingMs <= 0) return "Classifying";
-  if (remainingMs <= 60_000) return "Classifying in <1m";
-  if (remainingMs <= 2 * 60_000) return "Classifying soon";
-  return "Triage delayed";
-}
-
 export function collectActiveSnapshotEmails(
   activeSnapshot: InboxActiveSnapshotLike | null | undefined,
   liveReadOverrides: InboxReadOverrides = {},
@@ -115,12 +106,10 @@ export function collectActiveSnapshotEmails(
   return rows.map((item) => {
     const uid = item.uid || item.email_id || item.id;
     const resurfaced = item.source === "resurfaced_snooze" || item._resurfaced;
-    const pendingSecurityGrace = item.source === "pending_security_grace";
     const arrivalGraceQueued = item.lane === "queued" || item.source === "arrival_grace";
     const untriagedRead = item.lane === "untriaged_read" || item.source === "arrival_grace_read";
     const catchUp = item._snapshotCatchUp || item.lane === "catch_up" || item.source === "catch_up";
     const resurfacedAt = item.resurfaced_at || item._resurfacedAt || (item.source_at ? Date.parse(item.source_at) : null);
-    const pendingSecurityGraceAt = pendingSecurityGrace && item.source_at ? Date.parse(item.source_at) : null;
     const accountId = item.account_id || "";
     const account = accountMap.get(accountId) || {
       id: accountId,
@@ -143,7 +132,6 @@ export function collectActiveSnapshotEmails(
       lane: catchUp ? "catch_up" : item.lane,
       displayLane: lane,
       activeSnapshot: true,
-      untriaged: resurfaced || pendingSecurityGrace,
       resurfaced,
       resurfacedAt,
       extras: {
@@ -156,11 +144,6 @@ export function collectActiveSnapshotEmails(
         _catchUp: lane === "catch_up",
         _arrivalGraceQueued: arrivalGraceQueued,
         _untriagedRead: untriagedRead,
-        _pendingSecurityGrace: pendingSecurityGrace,
-        _pendingSecurityGraceAt: pendingSecurityGraceAt,
-        // The human countdown label is computed live in EmailRow / LiveEmailNotice
-        // from _pendingSecurityGraceAt + the controller's nowTick, so it advances
-        // on each tick instead of freezing at row-build time.
         urgentFlag: item.escalation_badge
           ? { label: item.escalation_badge }
           : item.urgency === "high"
@@ -194,10 +177,12 @@ export function collectLiveEmails(
       account: acc,
       read: e.read,
       readOverrides: liveReadOverrides,
+      lane: "queued",
+      displayLane: "queued",
       live: true,
-      untriaged: true,
       resurfaced: !!resurfacedHit,
       resurfacedAt: resurfacedHit ? resurfacedHit.resurfaced_at : null,
+      extras: { _arrivalGraceQueued: true },
     }));
   }
   return out;
@@ -231,8 +216,9 @@ export function collectResurfaced(
       // re-read actions stay visible before the next live poll lands.
       read: entry.read,
       readOverrides: liveReadOverrides,
+      lane: snap.lane || snap._lane || "needs_attention",
+      displayLane: snapshotInboxLaneForItem(snap) || "needs_attention",
       live: true,
-      untriaged: true,
       resurfaced: true,
       resurfacedAt: entry.resurfaced_at,
     }));

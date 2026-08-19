@@ -121,7 +121,6 @@ function renderInbox({
         }}
         emailAccounts={briefing.emails.accounts}
         briefingSummary={briefing.emails.summary}
-        briefingGeneratedAt="2026-04-19 15:00:00"
         activeSnapshot={activeSnapshotMock.state.snapshot || activeSnapshotMock.state.loading ? activeSnapshotMock.state : undefined}
         liveEmails={liveEmails}
         snoozedEntries={snoozedEntries}
@@ -390,7 +389,6 @@ describe("InboxView mobile", () => {
           accent="#cba6da"
           emailAccounts={[]}
           briefingSummary=""
-          briefingGeneratedAt="2026-05-03 15:00:00"
           activeSnapshot={activeSnapshotMock.state}
           liveEmails={[]}
           liveReadOverrides={readOverrides}

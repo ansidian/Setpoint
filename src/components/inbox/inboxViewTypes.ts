@@ -6,7 +6,6 @@ import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
 export type InboxPaneProps = InboxControllerState & {
   accent: string;
   briefingSummary?: ReactNode;
-  briefingGeneratedAt?: string | null;
   emailAccounts: InboxAccount[];
   liveEmailsLoading?: boolean;
   processingCount?: number;

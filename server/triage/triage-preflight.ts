@@ -77,7 +77,7 @@ export const DEFAULT_PREFLIGHT_RULES = loadDefaultPreflightRules();
 
 const VALID_LANES = new Set(["needs_attention", "fyi", "noise"]);
 const VALID_URGENCIES = new Set(["high", "medium", "normal", "low"]);
-const VALID_ACTIONS = new Set(["finalize", "audit", "grace", "route_model"]);
+const VALID_ACTIONS = new Set(["finalize", "audit", "route_model"]);
 const DEFAULT_CONFIDENCE = 0.8;
 
 const HARD_RISK_PATTERNS = [
@@ -435,13 +435,11 @@ function metadataForRule(match: TriageRuleMatch, parts: EmailTextParts): Record<
 export function evaluateTriagePreflight(email: Partial<TriageEmail>, {
   rules = [],
   includeDefaults = true,
-  graceAlreadyUsed = false,
   emailInterests = [],
   disabledProfileGroups = [],
 }: {
   rules?: TriageRule[];
   includeDefaults?: boolean;
-  graceAlreadyUsed?: boolean;
   emailInterests?: unknown[];
   disabledProfileGroups?: unknown[];
 } = {}): TriagePreflightResult {
@@ -490,15 +488,6 @@ export function evaluateTriagePreflight(email: Partial<TriageEmail>, {
     if (!matchesRule(email, rule, parts)) continue;
     const action = mode === "route_model" ? "route_model" : mode;
     const result = resultForRule(rule, match, action, parts);
-    if (action === "grace" && graceAlreadyUsed) {
-      return {
-        ...result,
-        action: "route_model",
-        modelTier: "cheap",
-        reasonCode: "weak_security_grace_elapsed",
-        modelSaved: false,
-      };
-    }
     if (action === "finalize" && !canFinalizeLane(match, parts, result.lane, result.sensitivity)) {
       return {
         ...result,

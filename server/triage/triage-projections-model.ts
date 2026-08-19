@@ -1,4 +1,3 @@
-import { createTriageDecision } from "./triage-decision-normalize.ts";
 import type { TriageDecision, TriageEmail, TriageLane } from "./triage-types.ts";
 
 // Pure, DB-free triage projections lifted from triage-worker.ts so they can be
@@ -37,7 +36,6 @@ export function normalizeEmailInterests(raw: unknown): string[] {
 }
 
 export function triageSoundTriggerType(reason: string, lane: TriageLane | null = null): string {
-  if (reason === "weak_security_grace_delayed") return "weak_security_grace";
   if (reason === "email_triage_failed") return "triage_failed";
   if (reason === "email_triage_finalized") {
     if (lane === "needs_attention") return "needs_attention_finalized";
@@ -73,23 +71,4 @@ export function maybeBillCandidate(email: Record<string, unknown>, decision: Par
     due_date: decision.deadline_at || null,
     requires_confirmation: true,
   };
-}
-
-export function weakSecurityReadDecision(): TriageDecision {
-  return createTriageDecision({
-    lane: "fyi",
-    category: "security",
-    urgency: "low",
-    summary: "Security notification was read during the grace window.",
-    action: "No action needed.",
-    confidence: 0.86,
-    triage_source: "weak_security_grace_read",
-    last_decision_reason: "weak_security_grace_read",
-    decision_metadata: {
-      weakSecurityGrace: {
-        outcome: "read_in_inbox",
-        modelSaved: true,
-      },
-    },
-  });
 }

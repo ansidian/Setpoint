@@ -14,10 +14,10 @@
     "reason": "One-time authentication code."
   },
   {
-    "key": "default_weak_security_grace",
+    "key": "default_weak_security_model",
     "priority": 20,
     "match_json": {
-      "action": "grace",
+      "action": "route_model",
       "any_includes": [
         "new sign-in",
         "new signin",
@@ -36,12 +36,12 @@
         "locked",
         "disabled"
       ],
-      "reason_code": "weak_security_grace"
+      "reason_code": "weak_security_notification"
     },
     "category": "security",
     "urgency": "normal",
     "confidence": 0.74,
-    "reason": "Weak-risk security notification should be delayed before model spend."
+    "reason": "Weak-risk security notification requires immediate model review."
   },
   {
     "key": "default_delivery_digest_fyi",

@@ -25,7 +25,7 @@ describe("active snapshot workflow model", () => {
     expect(snapshotInboxLaneForItem({ lane: "queued", source: "arrival_grace" })).toBe("queued");
     expect(snapshotInboxLaneForItem({ lane: "untriaged_read", source: "arrival_grace_read" })).toBe("untriaged_read");
     expect(snapshotInboxLaneForItem({ lane: "fyi", handled_at: "2026-05-05T12:00:00.000Z" })).toBe("handled");
-    expect(snapshotInboxLaneForItem({ lane: "noise", source: "pending_security_grace" })).toBeNull();
+    expect(snapshotInboxLaneForItem({ lane: "noise", source: "resurfaced_snooze" })).toBe("noise");
   });
 
   it.each([

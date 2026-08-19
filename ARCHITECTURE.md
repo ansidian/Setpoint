@@ -466,7 +466,7 @@ flowchart TD
 
 ### Durable Email AI
 
-Incoming email classification is handled by `server/triage/triage-worker.ts` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.ts` can resolve no-model, trusted-sender, weak-security, pending-security, and obvious-noise cases before provider calls. Provider-backed calls use the selected email AI provider/model from `email-ai-models.ts`; bill extraction uses `bill-extract.ts` and the bill extraction provider/model settings.
+Incoming email classification is handled by `server/triage/triage-worker.ts` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.ts` can finalize trusted-sender and obvious-noise cases or route ambiguous and high-risk mail to the appropriate model tier. Security notifications that are not obvious verification-code noise route immediately to the cheap model. Provider-backed calls use the selected email AI provider/model from `email-ai-models.ts`; bill extraction uses `bill-extract.ts` and the bill extraction provider/model settings.
 
 Email interests from settings influence classification. Scheduled payments from Actual Budget are cross-referenced during bill extraction to suppress duplicate bill detections.
 

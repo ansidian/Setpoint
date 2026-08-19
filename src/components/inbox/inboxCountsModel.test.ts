@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   computeScopedNoiseUnreadCount,
   computeLaneCounts,
-  computeLiveCount,
   computeMobileChipCounts,
   computeUnreadCount,
   selectVisibleMobileChips,
@@ -59,7 +58,7 @@ describe("computeScopedNoiseUnreadCount", () => {
 });
 
 describe("computeLaneCounts", () => {
-  it("tallies per-lane counts in the account scope, skipping untriaged rows", () => {
+  it("tallies per-lane counts in the account scope", () => {
     const counts = computeLaneCounts([
       email({ uid: "q1", _lane: "queued" }),
       email({ uid: "na1", _lane: "needs_attention" }),
@@ -68,7 +67,7 @@ describe("computeLaneCounts", () => {
       email({ uid: "other-acct", _lane: "fyi", _accountKey: "personal" }),
     ], { accountId: "work" });
 
-    expect(counts.queued).toBe(1);
+    expect(counts.queued).toBe(2);
     expect(counts.needs_attention).toBe(2);
     expect(counts.fyi).toBe(0);
   });
@@ -91,21 +90,8 @@ describe("computeLaneCounts", () => {
   });
 });
 
-describe("computeLiveCount", () => {
-  it("counts untriaged rows in the account scope", () => {
-    const emails = [
-      email({ uid: "live1", _untriaged: true }),
-      email({ uid: "live2", _untriaged: true }),
-      email({ uid: "triaged", _untriaged: false }),
-      email({ uid: "other", _untriaged: true, _accountKey: "personal" }),
-    ];
-    expect(computeLiveCount(emails, { accountId: "work" })).toBe(2);
-    expect(computeLiveCount(emails, { accountId: "__all" })).toBe(3);
-  });
-});
-
 describe("computeMobileChipCounts", () => {
-  it("honors snooze, counts untriaged toward __live, and tracks __all", () => {
+  it("honors snooze and tracks lane and __all counts", () => {
     const nowTick = 1_000;
     const counts = computeMobileChipCounts([
       email({ uid: "live1", _untriaged: true, _lane: "queued" }),
@@ -118,7 +104,7 @@ describe("computeMobileChipCounts", () => {
     });
 
     expect(counts.__all).toBe(2);
-    expect(counts.__live).toBe(1);
+    expect(counts.queued).toBe(1);
     expect(counts.needs_attention).toBe(1);
     expect(counts.action).toBe(1);
     expect(counts.fyi).toBe(0);
@@ -139,7 +125,6 @@ describe("computeUnreadCount", () => {
 describe("selectVisibleMobileChips", () => {
   const chips = [
     { key: "__all", label: "All" },
-    { key: "__live", label: "New" },
     { key: "needs_attention", label: "Needs" },
     { key: "fyi", label: "FYI" },
     { key: "noise", label: "Noise" },
@@ -147,23 +132,23 @@ describe("selectVisibleMobileChips", () => {
 
   it("hides zero-count lane chips but always keeps __all", () => {
     const visible = selectVisibleMobileChips(chips, {
-      __all: 3, __live: 0, needs_attention: 2, fyi: 0, noise: 1,
+      __all: 3, needs_attention: 2, fyi: 0, noise: 1,
     }, { activeLane: "__all" });
     expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
   });
 
   it("keeps the active lane even when its count is zero", () => {
     const visible = selectVisibleMobileChips(chips, {
-      __all: 3, __live: 0, needs_attention: 0, fyi: 0, noise: 1,
+      __all: 3, needs_attention: 0, fyi: 0, noise: 1,
     }, { activeLane: "needs_attention" });
     expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
   });
 
   it("preserves the source order of the surviving chips", () => {
     const visible = selectVisibleMobileChips(chips, {
-      __all: 1, __live: 1, needs_attention: 1, fyi: 1, noise: 1,
+      __all: 1, needs_attention: 1, fyi: 1, noise: 1,
     });
-    expect(visible.map((c) => c.key)).toEqual(["__all", "__live", "needs_attention", "fyi", "noise"]);
+    expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "fyi", "noise"]);
   });
 
   it("hides a chip whose key is absent from counts, unless it is active", () => {

@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import { Clock, KeyRound, Pin } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
-import { pendingSecurityGraceLabel, timeAgo } from "./helpers";
+import { timeAgo } from "./helpers";
 import type { InboxAccount, InboxEmailLike } from "./inboxTypes";
 import { Avatar, LaneIcon } from "./primitives";
 import { isVerificationCodeFresh } from "./reader/verificationCodeModel";
@@ -30,7 +30,6 @@ function EmailRow({
   showLaneTag = false,
 }: EmailRowProps) {
   const [hover, setHover] = useState(false);
-  const untriaged = email._untriaged;
   const arrivalGraceQueued = email._arrivalGraceQueued;
   const untriagedRead = email._untriagedRead;
   const laneKey = email._lane;
@@ -41,18 +40,9 @@ function EmailRow({
   const dimmed = email.read;
   const snapshotPending = !!email._optimisticSnapshotPending;
   const summaryColor = dimmed ? "rgba(205,214,244,0.76)" : "rgba(205,214,244,0.82)";
-  const barColor = untriaged ? "#89b4fa" : (L ? L.color : "#6c7086");
+  const barColor = L ? L.color : "#6c7086";
   const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
   const hPad = 14;
-  // Compute the pending-security-grace countdown label live from the grace
-  // timestamp + the controller's nowTick, so the 30s tick actually advances it
-  // (it was previously baked at row-build time and frozen between snapshots).
-  // Pass nowTick straight through; when it is undefined (e.g. a row rendered
-  // outside the controller in isolation) the helper falls back to Date.now()
-  // in its own module scope, keeping the render body pure.
-  const pendingGraceLabel = email._pendingSecurityGrace
-    ? pendingSecurityGraceLabel(email._pendingSecurityGraceAt, nowTick)
-    : null;
   const freshVerificationCode = isVerificationCodeFresh(email, nowTick);
 
   return (
@@ -84,12 +74,9 @@ function EmailRow({
         style={{
           position: "absolute", left: 0, top: vPad, bottom: vPad,
           width: 3, borderRadius: 2,
-          background: untriaged
-            ? `repeating-linear-gradient(180deg, ${barColor} 0 4px, transparent 4px 7px)`
-            : barColor,
-          opacity: untriaged ? 0.55 : 0.7,
-          boxShadow: untriaged ? "none"
-                   : `0 0 6px ${barColor}40`,
+          background: barColor,
+          opacity: 0.7,
+          boxShadow: `0 0 6px ${barColor}40`,
         }}
       />
       {density === "compact" ? (
@@ -157,7 +144,7 @@ function EmailRow({
               Code ready
             </span>
           )}
-          {untriaged && email._resurfaced && (
+          {email._resurfaced && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
@@ -170,25 +157,6 @@ function EmailRow({
             >
               <Clock size={8} />
               Snoozed
-            </span>
-          )}
-          {untriaged && !email._resurfaced && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: "var(--sp-blue)", background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
-                border: "1px dashed color-mix(in srgb, var(--sp-blue) 28%, transparent)",
-              }}
-            >
-              <span
-                style={{
-                  width: 4, height: 4, borderRadius: 999, background: "var(--sp-blue)",
-                  boxShadow: "0 0 5px var(--sp-blue)",
-                }}
-              />
-              {email._pendingSecurityGrace ? pendingGraceLabel : "Live"}
             </span>
           )}
           {arrivalGraceQueued && (
@@ -219,7 +187,7 @@ function EmailRow({
               Read
             </span>
           )}
-          {!freshVerificationCode && !untriaged && email.urgentFlag && email._lane !== "noise" && (
+          {!freshVerificationCode && email.urgentFlag && email._lane !== "noise" && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
@@ -231,7 +199,7 @@ function EmailRow({
               {email.urgentFlag.label || email.urgency}
             </span>
           )}
-          {!freshVerificationCode && showLaneTag && !untriaged && L && (
+          {!freshVerificationCode && showLaneTag && L && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
@@ -245,7 +213,7 @@ function EmailRow({
               {L.label}
             </span>
           )}
-          {!freshVerificationCode && !showLaneTag && !untriaged && !arrivalGraceQueued && !untriagedRead && email.category && (
+          {!freshVerificationCode && !showLaneTag && !arrivalGraceQueued && !untriagedRead && email.category && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center",
@@ -284,9 +252,8 @@ function EmailRow({
 function rowKeyFields(email: InboxEmailLike): unknown[] {
   return [
     email.id, email.uid,
-    email.read, email._lane, email._untriaged, email._resurfaced,
+    email.read, email._lane, email._resurfaced,
     email._arrivalGraceQueued, email._untriagedRead,
-    email._pendingSecurityGrace, email._pendingSecurityGraceAt,
     email.urgency, email.category, email.from, email.fromEmail,
     email.subject, email.preview, email.date,
     email.urgentFlag?.label, email.urgentFlag,
@@ -308,13 +275,11 @@ function areEqual(prev: EmailRowProps, next: EmailRowProps) {
   ) {
     return false;
   }
-  // nowTick only changes the rendered output for pending-security-grace rows
-  // (the live countdown label). Ignore it for every other row so a tick does
-  // not re-render the whole list — that is the whole point of the memo.
+  // nowTick only changes the rendered output for rows with expiring verification
+  // codes. Ignore it for every other row so a tick does not re-render the whole
+  // list — that is the whole point of the memo.
   if (
-    (prev.email._pendingSecurityGrace
-      || next.email._pendingSecurityGrace
-      || prev.email.verification_code
+    (prev.email.verification_code
       || next.email.verification_code)
     && prev.nowTick !== next.nowTick
   ) {

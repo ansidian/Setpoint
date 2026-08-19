@@ -141,7 +141,7 @@ describe("triage preflight engine", () => {
     });
   });
 
-  it("returns one-time weak-security grace candidates separately from OTP noise", () => {
+  it("routes ambiguous security notifications to the cheap model separately from OTP noise", () => {
     const weak = evaluateTriagePreflight(email({
       from_name: "Account Security",
       from_address: "security@example.com",
@@ -150,11 +150,12 @@ describe("triage preflight engine", () => {
     }));
 
     expect(weak).toMatchObject({
-      action: "grace",
+      action: "route_model",
       lane: null,
       category: "security",
-      reasonCode: "weak_security_grace",
-      matchedRuleKey: "default_weak_security_grace",
+      reasonCode: "weak_security_notification",
+      matchedRuleKey: "default_weak_security_model",
+      modelTier: "cheap",
     });
 
     const otp = evaluateTriagePreflight(email({
@@ -212,7 +213,7 @@ describe("triage preflight engine", () => {
     expect(unrelatedSender.matchedInterest).toBeNull();
   });
 
-  it("does not let email interests override hard risk, grace, or model-routing mail", () => {
+  it("does not let email interests override hard risk or model-routing mail", () => {
     const hardRisk = evaluateTriagePreflight(email({
       from_name: "Da Vien Coffee",
       from_address: "billing@davien.example",
@@ -228,7 +229,7 @@ describe("triage preflight engine", () => {
       matchedInterest: null,
     });
 
-    const grace = evaluateTriagePreflight(email({
+    const security = evaluateTriagePreflight(email({
       from_name: "Da Vien Coffee",
       from_address: "security@davien.example",
       subject: "New sign-in to your account",
@@ -236,9 +237,9 @@ describe("triage preflight engine", () => {
     }), {
       emailInterests: ["Da Vien"],
     });
-    expect(grace).toMatchObject({
-      action: "grace",
-      reasonCode: "weak_security_grace",
+    expect(security).toMatchObject({
+      action: "route_model",
+      reasonCode: "weak_security_notification",
       matchedInterest: null,
     });
 

@@ -60,9 +60,22 @@ describe("triage eval fixtures", () => {
           expected_lane: "fyi",
           expected_category: "security",
           expected_urgency: "normal",
-          expected_preflight_action: "grace",
-          expected_reason_code: "weak_security_grace",
+          expected_preflight_action: "route_model",
+          expected_reason_code: "weak_security_notification",
           labels_verified: true,
+          mock_model_outputs: {
+            cheap: {
+              lane: "fyi",
+              category: "security",
+              urgency: "normal",
+              escalation_badge: null,
+              summary: "New sign-in notification.",
+              action: "Review if unexpected",
+              deadline_at: null,
+              confidence: 0.9,
+              bill_candidate: null,
+            },
+          },
         },
       ],
     });
@@ -92,8 +105,8 @@ describe("triage eval fixtures", () => {
         expected: expect.objectContaining({
           lane: "fyi",
           category: "security",
-          preflight_action: "grace",
-          reason_code: "weak_security_grace",
+          preflight_action: "route_model",
+          reason_code: "weak_security_notification",
         }),
       }),
     ]);
@@ -230,13 +243,13 @@ describe("triage eval runner", () => {
     });
   });
 
-  it("reports weak-security grace expectations without requiring model output", async () => {
+  it("reports immediate weak-security model routing", async () => {
     const dir = await createEvalTempDir();
     const fixturePath = join(dir, "labeled.json");
     await writeFile(fixturePath, JSON.stringify({
       eval_seed: [
         {
-          sample_id: "weak-security-grace",
+          sample_id: "weak-security-model",
           sender_display: "Account Security",
           from_address: "security@example.com",
           subject: "New sign-in to your account",
@@ -244,9 +257,22 @@ describe("triage eval runner", () => {
           expected_lane: "fyi",
           expected_category: "security",
           expected_urgency: "normal",
-          expected_preflight_action: "grace",
-          expected_reason_code: "weak_security_grace",
+          expected_preflight_action: "route_model",
+          expected_reason_code: "weak_security_notification",
           labels_verified: true,
+          mock_model_outputs: {
+            cheap: {
+              lane: "fyi",
+              category: "security",
+              urgency: "normal",
+              escalation_badge: null,
+              summary: "New sign-in notification.",
+              action: "Review if unexpected",
+              deadline_at: null,
+              confidence: 0.9,
+              bill_candidate: null,
+            },
+          },
         },
       ],
     }));

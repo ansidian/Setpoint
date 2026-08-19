@@ -104,14 +104,14 @@ describe("snapshot item mutations", () => {
     expect(view.lanes.fyi).toHaveLength(0);
   });
 
-  it("durably skips pending snapshot triage when dismissing pending grace rows", async () => {
+  it("durably skips pending snapshot triage when dismissing queued rows", async () => {
     const dbClient = await createMigratedDb();
     const now = new Date("2026-05-03T16:00:00.000Z");
     const snapshot = await getOrCreateActiveSnapshot("user-1", { dbClient, now });
     const triageResult = await dbClient.execute({
       sql: `INSERT INTO ea_email_triage
               (user_id, account_id, email_id, lane, category, triage_status, triage_source)
-            VALUES (?, ?, ?, 'needs_attention', 'security', 'pending', 'weak_security_grace')
+            VALUES (?, ?, ?, 'queued', 'updates', 'pending', 'arrival_grace')
             RETURNING id`,
       args: ["user-1", "gmail-work", "msg-pending-grace"],
     });
@@ -124,7 +124,7 @@ describe("snapshot item mutations", () => {
                source, source_at)
             VALUES (?, ?, ?, ?, ?, 'needs_attention', 'Security triage pending.',
                     'Classifying soon', 'normal', 'security', 'New sign-in',
-                    'pending_security_grace', '2026-05-03T16:10:00.000Z')
+                    'arrival_grace', '2026-05-03T16:00:30.000Z')
             RETURNING id`,
       args: [snapshot.id, triageId, "user-1", "gmail-work", "msg-pending-grace"],
     });
@@ -137,7 +137,7 @@ describe("snapshot item mutations", () => {
         "user-1",
         "gmail-work",
         "msg-pending-grace",
-        "2026-05-03T16:10:00.000Z",
+        "2026-05-03T16:00:30.000Z",
         "email_triage:user-1:gmail-work:msg-pending-grace",
       ],
     });
@@ -173,7 +173,7 @@ describe("snapshot item mutations", () => {
         dismissed_at: "2026-05-03T16:05:00.000Z",
         triage_status: "skipped",
         triage_source: "user_dismissed_pending",
-        lane: "needs_attention",
+        lane: "queued",
         status: "complete",
         completed_at: "2026-05-03T16:05:00.000Z",
         scheduled_for: null,
@@ -185,8 +185,8 @@ describe("snapshot item mutations", () => {
       dbClient,
       now: new Date("2026-05-03T16:05:00.000Z"),
     });
-    expect(view.lanes.needs_attention).toHaveLength(0);
-    expect(view.laneCounts.needs_attention).toBe(0);
+    expect(view.lanes.queued).toHaveLength(0);
+    expect(view.laneCounts.queued).toBe(0);
   });
 
   it("restores a dismissed active snapshot item without changing completed triage", async () => {

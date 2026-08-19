@@ -98,14 +98,11 @@ export interface InboxEmailLike {
   _carryover?: boolean;
   _arrivalGraceQueued?: boolean;
   _untriagedRead?: boolean;
-  _pendingSecurityGrace?: boolean;
-  _pendingSecurityGraceAt?: number | null;
   _pinned?: boolean;
   _pinnedAt?: number;
   _providerRemoved?: boolean;
   _optimisticSnapshotPending?: boolean;
   _optimisticSnapshotAction?: string;
-  _pendingSecurityGraceLabel?: string;
 }
 
 export interface NormalizedInboxRow extends InboxEmailLike {

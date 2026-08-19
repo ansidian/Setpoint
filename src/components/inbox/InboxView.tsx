@@ -26,7 +26,6 @@ export interface InboxViewProps {
   customize?: unknown;
   emailAccounts: InboxAccount[];
   briefingSummary?: ReactNode;
-  briefingGeneratedAt?: string | null;
   liveEmails?: InboxEmailLike[];
   liveEmailsLoading?: boolean;
   activeSnapshot?: InboxActiveSnapshotController | null;
@@ -60,7 +59,6 @@ export default function InboxView({
   accent,
   emailAccounts,
   briefingSummary,
-  briefingGeneratedAt,
   liveEmails = [],
   liveEmailsLoading = false,
   activeSnapshot: controlledActiveSnapshot = null,
@@ -178,7 +176,6 @@ export default function InboxView({
   const sharedProps = {
     accent,
     briefingSummary,
-    briefingGeneratedAt: activeSnapshotView?.snapshot?.updated_at || briefingGeneratedAt,
     emailAccounts: displayedAccounts,
     liveEmailsLoading: snapshotInboxMode
       ? triageActivity.syncing

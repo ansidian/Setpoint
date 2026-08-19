@@ -8,7 +8,7 @@ import type {
 export type TriageLane = "needs_attention" | "fyi" | "noise";
 export type TriageUrgency = "high" | "medium" | "normal" | "low";
 export type TriageModelTier = "cheap" | "strong";
-export type TriagePreflightAction = "finalize" | "audit" | "grace" | "route_model";
+export type TriagePreflightAction = "finalize" | "audit" | "route_model";
 export type TriageJobStatus = "queued" | "running" | "complete" | "failed";
 
 export interface TriageDbResult {

@@ -28,7 +28,6 @@ function renderInboxList(props: InboxListTestProps = {}) {
       totalCount={0}
       unreadCount={0}
       briefingAgoLabel={null}
-      briefingGeneratedAt={null}
       searchRef={null}
       {...props}
     />,
@@ -144,7 +143,7 @@ describe("InboxList", () => {
         accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
         density="default" layout="swimlanes" showPreview searchQuery="" onSearchChange={() => {}}
         onMarkAllRead={() => {}} onRefresh={() => {}} totalCount={0} unreadCount={0}
-        briefingGeneratedAt={null} searchRef={null}
+        searchRef={null}
         activeSnapshotMode categoryFilter={categoryFilter} onCategoryFilterChange={setCategoryFilter}
         snapshotCategories={[
           { category: "marketing", count: 20 }, { category: "finance", count: 1 },
@@ -182,7 +181,7 @@ describe("InboxList", () => {
         accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
         density="default" layout="swimlanes" showPreview searchQuery="" onSearchChange={() => {}}
         onMarkAllRead={() => {}} onRefresh={() => {}} totalCount={0} unreadCount={0}
-        briefingGeneratedAt={null} searchRef={null}
+        searchRef={null}
         activeSnapshotMode categoryFilter={categoryFilter} onCategoryFilterChange={setCategoryFilter}
         snapshotCategories={[
           { category: "finance", count: 1 }, { category: "security", count: 2 },
@@ -262,7 +261,7 @@ describe("InboxList", () => {
         accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
         density="default" layout="swimlanes" showPreview searchQuery="amazon return"
         onSearchChange={() => {}} onMarkAllRead={() => {}} onRefresh={() => {}}
-        totalCount={0} unreadCount={0} briefingGeneratedAt={null}
+        totalCount={0} unreadCount={0}
         searchRef={null} onAskAlfred={setQuestion}
       /></>;
     }
@@ -331,7 +330,7 @@ describe("InboxList", () => {
         accountsById={{}} selectedId={null} onOpen={() => {}} density="default" layout="flat"
         showPreview searchQuery="" onSearchChange={() => {}} onMarkAllRead={() => {}}
         onRefresh={() => {}} totalCount={30} unreadCount={0}
-        briefingGeneratedAt={null} searchRef={null} indexedSearchActive indexedSearchTotal={42}
+        searchRef={null} indexedSearchActive indexedSearchTotal={42}
         indexedSearchHasMore={hasMore} onLoadMoreSearch={() => setHasMore(false)}
       />;
     }

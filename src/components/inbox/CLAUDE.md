@@ -1,6 +1,6 @@
 # Inbox Map
 
-The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. On desktop, AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface). Mobile exposes no Alfred entry point.
+The email triage and reading surface, desktop and mobile: active snapshots (triage windows), an initial-load live fallback, indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. On desktop, AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface). Mobile exposes no Alfred entry point.
 
 ## Sub-maps
 
@@ -9,7 +9,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 ## Files
 
 ### Views + orchestration
-- `InboxView.tsx` — composes live/snapshot modes, session state, undo coordination
+- `InboxView.tsx` — composes active/historical snapshot modes and the initial-load live fallback, session state, undo coordination
 - `InboxDesktopPane.tsx` — desktop layout: digest, sidebar, list, reader, undo toast
 - `inboxViewTypes.ts` — shared top-level desktop/mobile pane composition contract
 - `useInboxController.ts` — central state machine: selection, filters, search, undo, desktop Alfred handoff
@@ -23,14 +23,14 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `InboxList.tsx` — desktop list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
 - `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
 - `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
-- `DigestStrip.tsx` — header strip: live/snapshot status, lane counts, processing activity
+- `DigestStrip.tsx` — header strip: snapshot status, lane counts, processing activity
 - `Sidebar.tsx` — account and lane navigation
 - `sidebarCompactStore.ts` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
 - `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
-- `inboxWorkItems.ts` — work item pipelines: active-snapshot, live, resurfaced-snooze
-- `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/category/lane filter + untriaged/lane/recency sort)
-- `inboxCountsModel.ts` — scoped unread counts under account/category filters, plus lane/live/mobile-chip/unread count projections
-- `inboxNowTick.ts` — schedules the `nowTick` timeout to the soonest snooze boundary or grace-label transition
+- `inboxWorkItems.ts` — work item pipelines: active-snapshot, initial-load live fallback, and resurfaced-snooze
+- `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/category/lane filter + lane/recency sort)
+- `inboxCountsModel.ts` — scoped unread counts under account/category filters, plus lane/mobile-chip/unread count projections
+- `inboxNowTick.ts` — schedules the `nowTick` timeout to the soonest snooze or verification-code boundary
 - `inboxProcessingModel.ts` — triage activity counts from processing state
 - `snapshotSummary.ts` — lane breakdown text for the digest header
 - `activeSnapshotWorkflowModel.ts` — lane routing, mutable/dismissible rules, reopen logic
@@ -52,7 +52,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 ### Snooze, undo, hotkeys
 - `SnoozePicker.tsx` — floating date/time picker anchored to the snooze button
 - `InboxUndoToast.tsx` — bottom-center undo toast
-- `inboxHotkeys.ts` — key → action resolution per workflow (snapshot vs live)
+- `inboxHotkeys.ts` — key → action resolution per workflow (snapshot vs live fallback)
 - `useInboxKeyboardCommands.ts` — window hotkeys: undo, search focus, j/k nav, actions
 
 ### Shared

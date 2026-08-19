@@ -25,14 +25,11 @@ function isCatchUpEmail(email: InboxEmailLike | null | undefined): boolean {
 }
 
 export function snapshotInboxLaneForItem(item: InboxEmailLike = {}): InboxLane {
-  const resurfaced = item.source === "resurfaced_snooze" || item._resurfaced;
-  const pendingSecurityGrace = item.source === "pending_security_grace";
   const arrivalGraceQueued = item.lane === "queued" || item.source === "arrival_grace";
   const untriagedRead = item.lane === "untriaged_read" || item.source === "arrival_grace_read";
   const catchUp = item._snapshotCatchUp || item.lane === "catch_up" || item.source === "catch_up";
 
   if (item.handled_at) return "handled";
-  if (resurfaced || pendingSecurityGrace) return null;
   if (arrivalGraceQueued) return "queued";
   if (untriagedRead) return "untriaged_read";
   if (catchUp) return "catch_up";

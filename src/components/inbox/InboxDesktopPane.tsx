@@ -11,7 +11,6 @@ function InboxDesktopPane({
   accent,
   nowTick,
   briefingSummary,
-  briefingGeneratedAt,
   liveEmailsLoading = false,
   processingCount = 0,
   activeSnapshotError = null,
@@ -43,7 +42,6 @@ function InboxDesktopPane({
   onAttachEmailToAlfred,
   visibleEmails,
   laneCounts,
-  liveCount,
   totalUnread,
   noiseUnreadCount,
   unreadInView,
@@ -109,7 +107,6 @@ function InboxDesktopPane({
       <DigestStrip
         accent={accent}
         counts={laneCounts}
-        liveCount={liveCount}
         liveLoading={liveEmailsLoading}
         processingCount={processingCount}
         summary={briefingSummary}
@@ -188,7 +185,6 @@ function InboxDesktopPane({
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
               noiseUnreadCount={noiseUnreadCount}
-              briefingGeneratedAt={briefingGeneratedAt}
               searchRef={searchRef}
               activeSnapshotMode={activeSnapshotMode}
               snapshotCategories={snapshotCategories}

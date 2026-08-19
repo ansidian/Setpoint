@@ -11,7 +11,6 @@ export const TRIAGE_SOUND_TRIGGER_KEYS = {
   NEEDS_ATTENTION_FINALIZED: "needs_attention_finalized",
   EMAIL_QUEUED: "email_queued",
   FYI_FINALIZED: "fyi_finalized",
-  WEAK_SECURITY_GRACE: "weak_security_grace",
   TRIAGE_FAILED: "triage_failed",
   EVENT_UPCOMING: "event_upcoming",
   TASK_COMPLETED: "task_completed",
@@ -56,10 +55,6 @@ export const DEFAULT_TRIAGE_SOUND_SETTINGS = {
       enabled: true,
       soundId: "smooth_modern",
     },
-    [TRIAGE_SOUND_TRIGGER_KEYS.WEAK_SECURITY_GRACE]: {
-      enabled: true,
-      soundId: "low_tone",
-    },
     [TRIAGE_SOUND_TRIGGER_KEYS.TRIAGE_FAILED]: {
       enabled: false,
       soundId: "low_tone",
@@ -90,11 +85,6 @@ export const TRIAGE_SOUND_TRIGGER_ROWS = [
     key: TRIAGE_SOUND_TRIGGER_KEYS.FYI_FINALIZED,
     label: "FYI finalized",
     description: "Informational mail that should still be noticed.",
-  },
-  {
-    key: TRIAGE_SOUND_TRIGGER_KEYS.WEAK_SECURITY_GRACE,
-    label: "Weak-security grace",
-    description: "Security mail waiting through the grace window.",
   },
   {
     key: TRIAGE_SOUND_TRIGGER_KEYS.TRIAGE_FAILED,

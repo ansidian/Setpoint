@@ -2,10 +2,9 @@ import { useState, useMemo, useCallback } from "react";
 import type { MouseEventHandler, RefObject } from "react";
 import {
   Mail, Search, CheckCheck, RefreshCw,
-  ChevronRight, ChevronDown, X,
+  X,
 } from "lucide-react";
-import { briefingPhaseLabel } from "../../lib/shell-helpers";
-import { Kbd, StickyHeader, IconBtn } from "./primitives";
+import { Kbd, IconBtn } from "./primitives";
 import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +16,6 @@ import type { InboxAccount, InboxCategoryFilter, InboxEmailLike, InboxId } from 
 type CollapsedLanes = Record<string, boolean | undefined>;
 type GroupedEmails = Record<string, InboxEmailLike[]> & {
   pinned: InboxEmailLike[];
-  live: InboxEmailLike[];
   queued: InboxEmailLike[];
   carryover: InboxEmailLike[];
   needs_attention: InboxEmailLike[];
@@ -31,7 +29,7 @@ type GroupedEmails = Record<string, InboxEmailLike[]> & {
 
 function createGroupedEmails(): GroupedEmails {
   return {
-    pinned: [], live: [], queued: [], carryover: [], needs_attention: [],
+    pinned: [], queued: [], carryover: [], needs_attention: [],
     action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [],
   };
 }
@@ -99,7 +97,7 @@ export default function InboxList({
   accent, nowTick, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
-  totalCount, unreadCount, noiseUnreadCount = 0, briefingGeneratedAt, searchRef,
+  totalCount, unreadCount, noiseUnreadCount = 0, searchRef,
   liveEmailsLoading = false,
   indexedSearchActive = false,
   indexedSearchLoading = false,
@@ -132,7 +130,6 @@ export default function InboxList({
   totalCount: number;
   unreadCount: number;
   noiseUnreadCount?: number;
-  briefingGeneratedAt?: string | number | Date | null;
   searchRef: RefObject<HTMLInputElement | null> | null;
   liveEmailsLoading?: boolean;
   indexedSearchActive?: boolean;
@@ -164,18 +161,11 @@ export default function InboxList({
     if (layout !== "swimlanes") return g;
     for (const e of emails) {
       if (e._pinned) g.pinned.push(e);
-      else if (e._untriaged) g.live.push(e);
       else {
         const laneKey = e._lane === "action" ? "needs_attention" : e._lane;
         if (laneKey) g[laneKey]?.push(e);
       }
     }
-    // Use resurfaced_at as the sort key for woken snooze emails so they land
-    // near the top of "live" alongside freshly-arrived mail. This re-sorts the
-    // live bucket purely by date, intentionally overriding the controller's
-    // lane-order sub-sort — do NOT drop it.
-    const liveKey = (e: InboxEmailLike) => e._resurfacedAt || new Date(e.date || 0).getTime();
-    g.live.sort((a, b) => liveKey(b) - liveKey(a));
     return g;
   }, [emails, layout]);
 
@@ -409,83 +399,6 @@ export default function InboxList({
                 onToggle={toggleLane}
                 renderRows={renderRows}
               />
-            )}
-            {grouped.live.length > 0 && (
-              <div>
-                <StickyHeader borderColor="color-mix(in srgb, var(--sp-blue) 12%, transparent)">
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleLane("live")}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleLane("live"); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%",
-                      cursor: "pointer", background: "transparent", border: "none",
-                      fontFamily: "inherit", color: "inherit", padding: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: "relative", display: "inline-flex",
-                        alignItems: "center", justifyContent: "center",
-                        width: 10, height: 10,
-                      }}
-                    >
-                      <span
-                        style={{
-                          position: "absolute", inset: 0, borderRadius: 999,
-                          background: "var(--sp-blue)", opacity: 0.3,
-                          animation: "livepulse 2s ease-out infinite",
-                        }}
-                      />
-                      <span
-                        style={{
-                          width: 5, height: 5, borderRadius: 999, background: "var(--sp-blue)",
-                          boxShadow: "0 0 8px var(--sp-blue)",
-                        }}
-                      />
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10, fontWeight: 700, letterSpacing: 2,
-                        textTransform: "uppercase", color: "var(--sp-blue)",
-                        minWidth: 0, whiteSpace: "nowrap",
-                        overflow: "hidden", textOverflow: "ellipsis",
-                      }}
-                    >
-                      {briefingPhaseLabel(briefingGeneratedAt)}
-                    </span>
-                    <span
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-                        background: "color-mix(in srgb, var(--sp-blue) 14%, transparent)", color: "color-mix(in srgb, var(--sp-blue) 90%, transparent)",
-                        fontVariantNumeric: "tabular-nums",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {grouped.live.length} new
-                    </span>
-                    <span style={{ flex: 1 }} />
-                    <span
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 9, fontWeight: 600, letterSpacing: 0.5,
-                        textTransform: "uppercase", color: "var(--color-text-faint)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Not yet triaged
-                    </span>
-                    {effectiveCollapsed.live ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
-                  </div>
-                </StickyHeader>
-                {!effectiveCollapsed.live && (
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {renderRows(grouped.live)}
-                  </div>
-                )}
-              </div>
             )}
             {["queued", "carryover", "needs_attention", "catch_up", "fyi", "handled", "untriaged_read", "noise"].map((k) => (
               grouped[k]!.length > 0 && (

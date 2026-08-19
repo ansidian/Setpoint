@@ -87,30 +87,6 @@ export function overdueLabel(dueAtMs: number, now = Date.now()): string | null {
   return `${mo}mo overdue`;
 }
 
-export function phaseIndex(date = new Date()): number {
-  const hour = parseInt(date.toLocaleTimeString("en-US", {
-    timeZone: "America/Los_Angeles", hour: "numeric", hour12: false,
-  }), 10);
-  if (hour < 5)  return 0; // late night
-  if (hour < 12) return 1; // morning
-  if (hour < 17) return 2; // afternoon
-  if (hour < 21) return 3; // evening
-  return 4;                // night
-}
-
-const SNAPSHOT_PHASE_PHRASES = [
-  "Since last night's snapshot",
-  "Since this morning's snapshot",
-  "Since this afternoon's snapshot",
-  "Since this evening's snapshot",
-  "Since tonight's snapshot",
-];
-
-export function briefingPhaseLabel(ts: string | number | Date | null | undefined): string {
-  if (ts == null) return "Since current snapshot";
-  return SNAPSHOT_PHASE_PHRASES[phaseIndex(new Date(ts))]!;
-}
-
 export function pacificClock(date = new Date()): string {
   return date.toLocaleTimeString("en-US", {
     timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit",

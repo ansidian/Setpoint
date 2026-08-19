@@ -19,7 +19,6 @@ export type TriageSoundTriggerKey =
   | "needs_attention_finalized"
   | "email_queued"
   | "fyi_finalized"
-  | "weak_security_grace"
   | "triage_failed"
   | "event_upcoming"
   | "task_completed";

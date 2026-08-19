@@ -20,7 +20,6 @@ import { useState } from "react";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
-  { key: "__live", label: "New" },
   { key: "queued", label: "Queue" },
   { key: "carryover", label: "Carry" },
   { key: "needs_attention", label: "Needs" },
@@ -42,6 +41,7 @@ function MobileChip({ active, label, count, onClick, accent }: {
     <button
       type="button"
       onClick={onClick}
+      className="transition-transform duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -123,6 +123,7 @@ function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = fa
       aria-label={label}
       data-testid={testId}
       onClick={onClick}
+      className="transition-transform duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
       onFocus={(event) => Object.assign(event.currentTarget.style, focusStyle)}
       onBlur={(event) => Object.assign(event.currentTarget.style, baseStyle)}
       style={baseStyle}
@@ -529,6 +530,7 @@ export default function MobileInboxView({
                       type="button"
                       onClick={loadMoreIndexedSearch}
                       disabled={indexedSearchLoading}
+                      className="transition-transform duration-150 enabled:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 enabled:active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
                       style={{
                         width: "100%",
                         minHeight: "var(--sp-touch-min)",

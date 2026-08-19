@@ -10,7 +10,6 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
 export default function DigestStrip({
   accent,
   counts,
-  liveCount,
   liveLoading = false,
   processingCount = 0,
   summary,
@@ -21,7 +20,6 @@ export default function DigestStrip({
 }: {
   accent: string;
   counts: Record<string, number | undefined>;
-  liveCount: number;
   liveLoading?: boolean;
   processingCount?: number;
   summary?: ReactNode;
@@ -37,14 +35,14 @@ export default function DigestStrip({
     { key: "noise",  count: counts.noise,  verb: "filtered", ...LANE.noise },
   ];
   const queuedCount = counts.queued || 0;
-  const activityActive = !readOnly && (liveCount > 0 || liveLoading || processingCount > 0);
+  const activityActive = !readOnly && (liveLoading || processingCount > 0);
   const headline = activeSnapshotMode ? readOnly ? "Snapshot" : "Active snapshot" : "Inbox snapshot";
   const resolvedSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(counts, accountCount)
     : summary;
   const statusLabel = activeSnapshotMode
     ? readOnly ? "Read-only" : activityActive ? "Triage · syncing" : "Triage · current"
-    : liveLoading ? "Live · checking" : liveCount > 0 ? "Live · untriaged" : "Live · quiet";
+    : liveLoading ? "Inbox · syncing" : "Inbox · current";
   const statusDetail = activeSnapshotMode
     ? readOnly
       ? "Historical email window"
@@ -56,22 +54,10 @@ export default function DigestStrip({
           ? `${pluralize(queuedCount, "message")} visible in Queue`
           : "No pending triage"
     : liveLoading
-      ? "Retrieving live mail"
-      : liveCount > 0
-        ? (
-          <>
-            <span
-              style={{
-                fontWeight: 600, color: "#fff",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {liveCount}
-            </span>{" "}
-            not yet triaged
-          </>
-        )
-        : "No new live mail";
+      ? "Retrieving inbox state"
+      : queuedCount > 0
+        ? `${pluralize(queuedCount, "message")} visible in Queue`
+        : "No pending triage";
 
   return (
     <div
@@ -127,6 +113,7 @@ export default function DigestStrip({
             key={it.key}
             type="button"
             onClick={() => onJumpLane(it.key)}
+            className="transition-transform duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
             style={{
               background: "transparent", border: "none", cursor: "pointer",
               display: "flex", alignItems: "center", gap: 10, padding: "2px 6px",

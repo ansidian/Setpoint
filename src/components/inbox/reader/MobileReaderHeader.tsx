@@ -108,9 +108,6 @@ export default function MobileReaderHeader({
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-        {email._untriaged && (
-          <MobileStatusPill color="#89b4fa" label="Live" />
-        )}
         {isQueuedSnapshot && (
           <MobileStatusPill color="#89b4fa" label="Queued" subtle />
         )}

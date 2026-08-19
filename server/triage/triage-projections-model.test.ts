@@ -5,7 +5,6 @@ import {
   maybeBillCandidate,
   triageSoundTriggerType,
   emailTriageEventDetails,
-  weakSecurityReadDecision,
 } from "./triage-projections-model.ts";
 
 describe("triage projections model", () => {
@@ -57,7 +56,6 @@ describe("triage projections model", () => {
   });
 
   it("triageSoundTriggerType maps reasons/lanes", () => {
-    expect(triageSoundTriggerType("weak_security_grace_delayed")).toBe("weak_security_grace");
     expect(triageSoundTriggerType("email_triage_failed")).toBe("triage_failed");
     expect(triageSoundTriggerType("email_triage_finalized", "needs_attention")).toBe("needs_attention_finalized");
     expect(triageSoundTriggerType("email_triage_finalized", "fyi")).toBe("fyi_finalized");
@@ -78,16 +76,6 @@ describe("triage projections model", () => {
       emailId: "msg-1", lane: "fyi", triageSource: "cheap_model",
       reason: "email_triage_finalized",
       emailReceivedAt: "2026-05-05T00:00:00.000Z",
-    });
-  });
-
-  it("weakSecurityReadDecision returns the fyi/security read decision", () => {
-    const d = weakSecurityReadDecision();
-    expect(d).toMatchObject({
-      lane: "fyi", category: "security", urgency: "low",
-      triage_source: "weak_security_grace_read",
-      last_decision_reason: "weak_security_grace_read",
-      decision_metadata: { weakSecurityGrace: { outcome: "read_in_inbox", modelSaved: true } },
     });
   });
 });

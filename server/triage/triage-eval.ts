@@ -167,9 +167,9 @@ function hasEscalation(decision: Record<string, unknown> = {}): boolean {
   return Boolean(decision.escalation_badge || decision.escalation_expected);
 }
 
-function validateDecision(decision: Record<string, unknown> = {}, expected: Partial<TriageEvalExpected> = {}): string[] {
+function validateDecision(decision: Record<string, unknown> = {}): string[] {
   const failures: string[] = [];
-  if ((typeof decision.lane !== "string" || !VALID_LANES.has(decision.lane)) && expected.preflight_action !== "grace") failures.push("invalid_lane");
+  if (typeof decision.lane !== "string" || !VALID_LANES.has(decision.lane)) failures.push("invalid_lane");
   if (!("category" in decision)) {
     failures.push("missing_category");
   } else if (decision.category != null && (typeof decision.category !== "string" || !VALID_CATEGORIES.has(decision.category))) {
@@ -188,7 +188,7 @@ function validateDecision(decision: Record<string, unknown> = {}, expected: Part
 function compareEvalResult(result: TriageEvalResult): { problems: string[]; schemaFailures: string[] } {
   const expected = result.expected || {};
   const actual = result.actual || {};
-  const schemaFailures = validateDecision(actual, expected);
+  const schemaFailures = validateDecision(actual);
   const problems: string[] = [];
 
   if (expected.lane === "needs_attention" && actual.lane !== "needs_attention") {
@@ -209,7 +209,6 @@ function compareEvalResult(result: TriageEvalResult): { problems: string[]; sche
   if (
     expected.lane
     && actual.lane !== expected.lane
-    && expected.preflight_action !== "grace"
     && !problems.includes("false_negative_needs_attention")
   ) {
     problems.push("lane_mismatch");
@@ -365,26 +364,15 @@ export async function runTriageEval({
       dbClient,
       modelClient: useRealModels ? undefined : createMockModelClient(example),
     });
-    const preflight = routed.preflight;
     const decisionMetadata = routed.decision && isRecord(routed.decision.decision_metadata)
       ? routed.decision.decision_metadata
       : {};
     const preflightMetadata = isRecord(decisionMetadata.preflight) ? decisionMetadata.preflight : {};
-    const actual = routed.grace && preflight
-      ? {
-        lane: null,
-        category: preflight.category,
-        urgency: preflight.urgency,
-        escalation_badge: preflight.escalation_badge || null,
-        deadline_at: null,
-        preflight_action: "grace",
-        reason_code: preflight.reasonCode,
-      }
-      : {
-        ...routed.decision,
-        preflight_action: preflightMetadata.action,
-        reason_code: preflightMetadata.reasonCode,
-      };
+    const actual = {
+      ...routed.decision,
+      preflight_action: preflightMetadata.action,
+      reason_code: preflightMetadata.reasonCode,
+    };
     results.push({
       id: example.id,
       expected: example.expected,

@@ -93,7 +93,7 @@ describe("inbox work items", () => {
     ]);
   });
 
-  it("projects resurfaced and pending-security snapshot sources as untriaged metadata", () => {
+  it("projects resurfaced snapshot rows in their stored lane", () => {
     const snapshot = makeActiveSnapshot({
       lanes: {
         needs_attention: [
@@ -107,15 +107,6 @@ describe("inbox work items", () => {
             source_at: "2026-05-04T17:30:00.000Z",
             resurfaced_at: 1777915800000,
           },
-          {
-            id: 12,
-            snapshot_item_id: 12,
-            uid: "security-pending",
-            account_id: "gmail-work",
-            lane: "needs_attention",
-            source: "pending_security_grace",
-            source_at: "2026-05-03T16:05:00.000Z",
-          },
         ],
         fyi: [],
         noise: [],
@@ -127,23 +118,13 @@ describe("inbox work items", () => {
 
     expect(rows[0]).toMatchObject({
       uid: "snapshot-resurfaced",
-      _untriaged: true,
+      _untriaged: false,
       _live: false,
       _activeSnapshot: true,
       _resurfaced: true,
       _resurfacedAt: 1777915800000,
-      _lane: null,
+      _lane: "needs_attention",
     });
-    expect(rows[1]).toMatchObject({
-      uid: "security-pending",
-      _untriaged: true,
-      _live: false,
-      _activeSnapshot: true,
-      _lane: null,
-      _pendingSecurityGrace: true,
-      _pendingSecurityGraceAt: Date.parse("2026-05-03T16:05:00.000Z"),
-    });
-    expect(rows[1]!._pendingSecurityGraceLabel).toBeUndefined();
   });
 
   it("projects handled and catch-up rows while read overrides only change read state", () => {
@@ -222,7 +203,9 @@ describe("inbox work items", () => {
       read: true,
       _accountKey: "work",
       _live: true,
-      _untriaged: true,
+      _untriaged: false,
+      _lane: "queued",
+      _arrivalGraceQueued: true,
       _resurfaced: true,
       _resurfacedAt: 123,
     });
@@ -232,6 +215,8 @@ describe("inbox work items", () => {
       _live: true,
       _resurfaced: true,
       _resurfacedAt: 456,
+      _untriaged: false,
+      _lane: "needs_attention",
     });
   });
 

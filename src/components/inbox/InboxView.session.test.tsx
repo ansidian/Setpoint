@@ -156,7 +156,6 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
           }}
           emailAccounts={[]}
           briefingSummary={briefing.emails.summary}
-          briefingGeneratedAt="2026-04-19 15:00:00"
           activeSnapshot={activeSnapshot}
           liveEmails={[]}
           snoozedEntries={[]}
@@ -266,7 +265,6 @@ describe("InboxView session state", () => {
           }}
           emailAccounts={[]}
           briefingSummary=""
-          briefingGeneratedAt="2026-05-03 15:00:00"
           activeSnapshot={activeSnapshot}
           liveEmails={[]}
           snoozedEntries={[]}
@@ -325,7 +323,6 @@ describe("InboxView session state", () => {
           }}
           emailAccounts={[]}
           briefingSummary="Prior summary"
-          briefingGeneratedAt="2026-05-03 15:00:00"
           activeSnapshot={activeSnapshot}
           liveEmails={[]}
           snoozedEntries={[]}
@@ -410,7 +407,6 @@ describe("InboxView session state", () => {
           }}
           emailAccounts={[]}
           briefingSummary=""
-          briefingGeneratedAt="2026-05-03 15:00:00"
           activeSnapshot={activeSnapshot}
           liveEmails={[]}
           snoozedEntries={[]}

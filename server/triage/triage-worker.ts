@@ -14,7 +14,6 @@ import {
 import {
   normalizeEmailInterests,
   emailTriageEventDetails,
-  weakSecurityReadDecision,
 } from "./triage-projections-model.ts";
 import { heuristicNoModelDecision } from "./triage-heuristic-scorer.ts";
 import { createTriageModelClient, loadTriageModelConfig } from "./triage-model-client.ts";
@@ -33,7 +32,6 @@ import {
   loadEmailForJob,
   updateTriageRow,
   attachToActiveSnapshot,
-  delayWeakSecurityGrace,
 } from "./triage-finalize-store.ts";
 import type {
   TriageBatchContext,
@@ -42,7 +40,6 @@ import type {
   TriageEmail,
   TriageModelClient,
   TriageModelTier,
-  TriagePreflightResult,
   TriageRule,
 } from "./triage-types.ts";
 import { triageError } from "./triage-types.ts";
@@ -51,10 +48,8 @@ export { recoverStaleRunningTriageJobs, pruneCompletedTriageJobs, triageRetryBac
 const ARRIVAL_GRACE_READ_EXIT_DEFER_MS = 30 * 60 * 1000;
 
 interface RouteEmailResult {
-  decision: TriageDecision | null;
+  decision: TriageDecision;
   modelCalls: TriageModelTier[];
-  grace?: boolean;
-  preflight?: TriagePreflightResult;
 }
 
 async function loadRules(userId: string, dbClient: TriageDb): Promise<TriageRule[]> {
@@ -138,11 +133,7 @@ export async function routeEmailForTriage(email: TriageEmail, {
       loadRules(email.user_id, dbClient),
       loadEmailInterests(email.user_id, dbClient),
     ]);
-  const preflight = evaluateTriagePreflight(email, {
-    rules,
-    emailInterests: interests,
-    graceAlreadyUsed: email.triage_source === "weak_security_grace",
-  });
+  const preflight = evaluateTriagePreflight(email, { rules, emailInterests: interests });
   const modelCalls: TriageModelTier[] = [];
   let resolvedModelClient = modelClient;
   const getModelClient = async () => {
@@ -163,15 +154,6 @@ export async function routeEmailForTriage(email: TriageEmail, {
         ...preflightDecision,
         last_decision_reason: `preflight:${preflight.reasonCode}`,
       },
-      modelCalls,
-    };
-  }
-
-  if (preflight.action === "grace") {
-    return {
-      grace: true,
-      preflight,
-      decision: null,
       modelCalls,
     };
   }
@@ -274,7 +256,7 @@ export async function processNextEmailTriageJob({
   let modelCalls: TriageModelTier[] = [];
   let status = "complete";
   try {
-    if (email.triage_source !== "weak_security_grace" && email.provider_state !== "available") {
+    if (email.provider_state !== "available") {
       await completeJob(job, dbClient, now, `Skipped pending triage; provider state ${email.provider_state}`);
       // No dashboard publish: this skip attaches nothing to the snapshot and leaves
       // the email in its existing lane, so the rendered view is unchanged. Publishing
@@ -338,44 +320,12 @@ export async function processNextEmailTriageJob({
       };
     }
 
-    if (email.triage_source === "weak_security_grace" && email.provider_state !== "available") {
-      await completeJob(job, dbClient, now, `Skipped weak-security grace; provider state ${email.provider_state}`);
-      // No dashboard publish: provider unavailable during the weak-security grace,
-      // so nothing is attached to the snapshot and the email stays in its lane — the
-      // rendered view is unchanged.
-      return {
-        processed: true,
-        job_id: Number(job.id),
-        email_id: email.email_id,
-        skipped: true,
-        source: "weak_security_grace_skip",
-        model_calls: [],
-      };
-    }
-    if (email.triage_source === "weak_security_grace" && email.read) {
-      decision = weakSecurityReadDecision();
-      modelCalls = [];
-    } else if (mode.effective_email_triage_mode === "no_model") {
+    if (mode.effective_email_triage_mode === "no_model") {
       // Dev-only heuristic classifier (sender/subject/body bands -> lane).
       decision = heuristicNoModelDecision(email);
       modelCalls = [];
     } else {
       const routed = await routeEmailForTriage(email, { dbClient, modelClient, batch });
-      if (routed.grace) {
-        const classifyAfter = await delayWeakSecurityGrace(job, email, routed.preflight!, {
-          dbClient,
-          now,
-        });
-        return {
-          processed: true,
-          job_id: Number(job.id),
-          email_id: email.email_id,
-          delayed: true,
-          scheduled_for: classifyAfter,
-          source: "weak_security_grace",
-          model_calls: [],
-        };
-      }
       decision = routed.decision;
       modelCalls = routed.modelCalls;
     }

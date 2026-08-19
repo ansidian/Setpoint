@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateTriageSoundSettings } from "./triage-sound-settings.ts";
+import { normalizeTriageSoundSettings, validateTriageSoundSettings } from "./triage-sound-settings.ts";
 
 // A fully-valid settings object; each failure test mutates one field so the
 // branch under test is the only reason validation fails.
@@ -22,6 +22,16 @@ describe("validateTriageSoundSettings", () => {
     const settings = validSettings();
     delete settings.volume;
     expect(validateTriageSoundSettings(settings)).toEqual({ valid: true });
+  });
+
+  it("accepts and drops the retired weak-security trigger from persisted settings", () => {
+    const settings = validSettings();
+    settings.triggers = {
+      weak_security_grace: { enabled: true, soundId: "low_tone" },
+    };
+
+    expect(validateTriageSoundSettings(settings)).toEqual({ valid: true });
+    expect(normalizeTriageSoundSettings(settings).triggers).not.toHaveProperty("weak_security_grace");
   });
 
   it("rejects a non-object value", () => {

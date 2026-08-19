@@ -4,7 +4,7 @@ import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
 
 describe("email triage worker grace flows", () => {
-  it("delays weak-risk security once and exposes pending snapshot metadata", async () => {
+  it("classifies weak-risk security immediately through the cheap model", async () => {
     clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
@@ -16,7 +16,23 @@ describe("email triage worker grace flows", () => {
     });
     const events: Record<string, unknown>[] = [];
     const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event: Record<string, unknown>) => events.push(event));
-    const modelClient = { classify: vi.fn() };
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "fyi",
+          category: "security",
+          urgency: "normal",
+          escalation_badge: null,
+          summary: "Routine sign-in confirmation.",
+          action: "No action needed.",
+          deadline_at: null,
+          confidence: 0.9,
+          bill_candidate: null,
+        },
+        usage: { input_tokens: 80, output_tokens: 20 },
+        tier,
+      })),
+    };
 
     const result = await processNextEmailTriageJob({
       dbClient,
@@ -27,9 +43,9 @@ describe("email triage worker grace flows", () => {
     expect(result).toMatchObject({
       processed: true,
       email_id: "msg-1",
-      delayed: true,
-      source: "weak_security_grace",
-      model_calls: [],
+      lane: "fyi",
+      source: "cheap_model",
+      model_calls: ["cheap"],
     });
     const jobs = await dbClient.execute({
       sql: `SELECT status, attempts, locked_at, scheduled_for, completed_at
@@ -38,11 +54,11 @@ describe("email triage worker grace flows", () => {
       args: ["msg-1"],
     });
     expect(jobs.rows[0]).toMatchObject({
-      status: "queued",
+      status: "complete",
       attempts: 1,
       locked_at: null,
-      scheduled_for: "2026-05-03T12:10:00.000Z",
-      completed_at: null,
+      scheduled_for: null,
+      completed_at: "2026-05-03T12:00:00.000Z",
     });
 
     const triage = await dbClient.execute({
@@ -52,13 +68,13 @@ describe("email triage worker grace flows", () => {
       args: ["msg-1"],
     });
     expect(triage.rows[0]).toMatchObject({
-      triage_status: "pending",
-      triage_source: "weak_security_grace",
+      triage_status: "complete",
+      triage_source: "cheap_model",
     });
     expect(JSON.parse(String(triage.rows[0]!.decision_metadata_json))).toMatchObject({
       preflight: {
-        action: "grace",
-        reasonCode: "weak_security_grace",
+        action: "route_model",
+        reasonCode: "weak_security_notification",
       },
     });
 
@@ -69,23 +85,23 @@ describe("email triage worker grace flows", () => {
       args: ["msg-1"],
     });
     expect(items.rows[0]).toMatchObject({
-      lane_at_snapshot: "needs_attention",
-      source: "pending_security_grace",
-      source_at: "2026-05-03T12:10:00.000Z",
-      summary_at_snapshot: "Security triage pending.",
+      lane_at_snapshot: "fyi",
+      source: null,
+      source_at: null,
+      summary_at_snapshot: "Routine sign-in confirmation.",
     });
     expect(events).toEqual([
       expect.objectContaining({
         source: "email_triage",
-        reason: "weak_security_grace_delayed",
+        reason: "email_triage_finalized",
         details: {
-          triggerType: "weak_security_grace",
-          eventKey: "email_triage:gmail-work:msg-1:weak_security_grace_delayed",
+          triggerType: "fyi_finalized",
+          eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
           emailId: "msg-1",
           emailReceivedAt: "2026-05-03T12:00:00.000Z",
-          lane: "needs_attention",
-          triageSource: "weak_security_grace",
-          reason: "weak_security_grace_delayed",
+          lane: "fyi",
+          triageSource: "cheap_model",
+          reason: "email_triage_finalized",
         },
       }),
     ]);
@@ -257,179 +273,7 @@ describe("email triage worker grace flows", () => {
     await dbClient.close();
     });
 
-  it("finalizes read weak-security grace rows as FYI on the second run without model calls", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      from_name: "Account Security",
-      from_address: "security@example.com",
-      subject: "New sign-in to your account",
-      body_snippet: "We noticed a sign-in from Chrome on macOS.",
-      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
-    });
-    const modelClient = { classify: vi.fn() };
-
-    await processNextEmailTriageJob({
-      dbClient,
-      modelClient,
-      now: new Date("2026-05-03T12:00:00.000Z"),
-    });
-    await dbClient.execute({
-      sql: "UPDATE ea_email_index SET read = 1 WHERE uid = ?",
-      args: ["msg-1"],
-    });
-
-    const result = await processNextEmailTriageJob({
-      dbClient,
-      modelClient,
-      now: new Date("2026-05-03T12:11:00.000Z"),
-    });
-
-    expect(result).toMatchObject({
-      processed: true,
-      email_id: "msg-1",
-      lane: "fyi",
-      source: "weak_security_grace_read",
-      model_calls: [],
-    });
-    const rows = await dbClient.execute({
-      sql: `SELECT t.lane,
-                   t.triage_status,
-                   t.triage_source,
-                   t.last_triaged_at,
-                   t.decision_metadata_json,
-                   j.status AS job_status,
-                   j.completed_at,
-                   j.scheduled_for
-            FROM ea_email_triage t
-            JOIN ea_triage_jobs j ON j.email_id = t.email_id
-            WHERE t.email_id = ?`,
-      args: ["msg-1"],
-    });
-    expect(rows.rows[0]).toMatchObject({
-      lane: "fyi",
-      triage_status: "complete",
-      triage_source: "weak_security_grace_read",
-      last_triaged_at: "2026-05-03T12:11:00.000Z",
-      job_status: "complete",
-      completed_at: "2026-05-03T12:11:00.000Z",
-      scheduled_for: null,
-    });
-    expect(JSON.parse(String(rows.rows[0]!.decision_metadata_json))).toMatchObject({
-      weakSecurityGrace: {
-        outcome: "read_in_inbox",
-        modelSaved: true,
-      },
-    });
-
-    const items = await dbClient.execute({
-      sql: `SELECT lane_at_snapshot,
-                   summary_at_snapshot,
-                   action_at_snapshot,
-                   urgency_at_snapshot,
-                   category_at_snapshot,
-                   source,
-                   source_at
-            FROM ea_briefing_snapshot_items
-            WHERE email_id = ?`,
-      args: ["msg-1"],
-    });
-    expect(items.rows).toEqual([
-      {
-        lane_at_snapshot: "fyi",
-        summary_at_snapshot: "Security notification was read during the grace window.",
-        action_at_snapshot: "No action needed.",
-        urgency_at_snapshot: "low",
-        category_at_snapshot: "security",
-        source: null,
-        source_at: null,
-      },
-    ]);
-    await dbClient.close();
-    });
-
-  it("completes unavailable weak-security grace rows without finalizing stale snapshot state", async () => {
-    const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
-      from_name: "Account Security",
-      from_address: "security@example.com",
-      subject: "New sign-in to your account",
-      body_snippet: "We noticed a sign-in from Chrome on macOS.",
-      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
-    });
-    const modelClient = { classify: vi.fn() };
-    clearCurrentDashboardEventSubscribers();
-    const events: Record<string, unknown>[] = [];
-    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event: Record<string, unknown>) => events.push(event));
-
-    await processNextEmailTriageJob({
-      dbClient,
-      modelClient,
-      now: new Date("2026-05-03T12:00:00.000Z"),
-    });
-    await dbClient.execute({
-      sql: `UPDATE ea_email_triage
-            SET provider_state = 'trashed'
-            WHERE email_id = ?`,
-      args: ["msg-1"],
-    });
-    // The first run delayed the grace (a legitimate publish); the skip below must add none.
-    const eventCountBeforeSkip = events.length;
-
-    const result = await processNextEmailTriageJob({
-      dbClient,
-      modelClient,
-      now: new Date("2026-05-03T12:11:00.000Z"),
-    });
-
-    expect(result).toMatchObject({
-      processed: true,
-      email_id: "msg-1",
-      skipped: true,
-      source: "weak_security_grace_skip",
-      model_calls: [],
-    });
-    const rows = await dbClient.execute({
-      sql: `SELECT t.triage_status,
-                   t.triage_source,
-                   t.last_triaged_at,
-                   j.status AS job_status,
-                   j.completed_at,
-                   j.last_error
-            FROM ea_email_triage t
-            JOIN ea_triage_jobs j ON j.email_id = t.email_id
-            WHERE t.email_id = ?`,
-      args: ["msg-1"],
-    });
-    expect(rows.rows[0]).toMatchObject({
-      triage_status: "pending",
-      triage_source: "weak_security_grace",
-      last_triaged_at: null,
-      job_status: "complete",
-      completed_at: "2026-05-03T12:11:00.000Z",
-      last_error: "Skipped weak-security grace; provider state trashed",
-    });
-
-    const items = await dbClient.execute({
-      sql: `SELECT lane_at_snapshot, source, source_at
-            FROM ea_briefing_snapshot_items
-            WHERE email_id = ?`,
-      args: ["msg-1"],
-    });
-    expect(items.rows).toEqual([
-      {
-        lane_at_snapshot: "needs_attention",
-        source: "pending_security_grace",
-        source_at: "2026-05-03T12:10:00.000Z",
-      },
-    ]);
-    // The weak-security skip leaves the snapshot lane unchanged, so it must not
-    // publish a dashboard-current event (would force a redundant /current re-render).
-    expect(events.length).toBe(eventCountBeforeSkip);
-    unsubscribe();
-    await dbClient.close();
-    });
-
-  it("classifies unread weak-security grace rows on the second run without delaying again", async () => {
+  it("does not reprocess an already-classified read security email", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       from_name: "Account Security",
@@ -461,11 +305,184 @@ describe("email triage worker grace flows", () => {
       modelClient,
       now: new Date("2026-05-03T12:00:00.000Z"),
     });
+    await dbClient.execute({
+      sql: "UPDATE ea_email_index SET read = 1 WHERE uid = ?",
+      args: ["msg-1"],
+    });
 
     const result = await processNextEmailTriageJob({
       dbClient,
       modelClient,
       now: new Date("2026-05-03T12:11:00.000Z"),
+    });
+
+    expect(result).toEqual({ processed: false });
+    const rows = await dbClient.execute({
+      sql: `SELECT t.lane,
+                   t.triage_status,
+                   t.triage_source,
+                   t.last_triaged_at,
+                   t.decision_metadata_json,
+                   j.status AS job_status,
+                   j.completed_at,
+                   j.scheduled_for
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.email_id = t.email_id
+            WHERE t.email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "fyi",
+      triage_status: "complete",
+      triage_source: "cheap_model",
+      last_triaged_at: "2026-05-03T12:00:00.000Z",
+      job_status: "complete",
+      completed_at: "2026-05-03T12:00:00.000Z",
+      scheduled_for: null,
+    });
+    expect(JSON.parse(String(rows.rows[0]!.decision_metadata_json))).toMatchObject({
+      preflight: {
+        action: "route_model",
+        reasonCode: "weak_security_notification",
+      },
+    });
+
+    const items = await dbClient.execute({
+      sql: `SELECT lane_at_snapshot,
+                   summary_at_snapshot,
+                   action_at_snapshot,
+                   urgency_at_snapshot,
+                   category_at_snapshot,
+                   source,
+                   source_at
+            FROM ea_briefing_snapshot_items
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(items.rows).toEqual([
+      {
+        lane_at_snapshot: "fyi",
+        summary_at_snapshot: "Routine sign-in confirmation.",
+        action_at_snapshot: "No action needed.",
+        urgency_at_snapshot: "normal",
+        category_at_snapshot: "security",
+        source: null,
+        source_at: null,
+      },
+    ]);
+    await dbClient.close();
+    });
+
+  it("skips an unavailable security email without publishing", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Account Security",
+      from_address: "security@example.com",
+      subject: "New sign-in to your account",
+      body_snippet: "We noticed a sign-in from Chrome on macOS.",
+      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
+    });
+    const modelClient = { classify: vi.fn() };
+    clearCurrentDashboardEventSubscribers();
+    const events: Record<string, unknown>[] = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event: Record<string, unknown>) => events.push(event));
+
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET provider_state = 'trashed'
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    const eventCountBeforeSkip = events.length;
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      skipped: true,
+      source: "provider_unavailable_skip",
+      model_calls: [],
+    });
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status,
+                   t.triage_source,
+                   t.last_triaged_at,
+                   j.status AS job_status,
+                   j.completed_at,
+                   j.last_error
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.email_id = t.email_id
+            WHERE t.email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      triage_status: "pending",
+      triage_source: "unknown",
+      last_triaged_at: null,
+      job_status: "complete",
+      completed_at: "2026-05-03T12:00:00.000Z",
+      last_error: "Skipped pending triage; provider state trashed",
+    });
+
+    const items = await dbClient.execute({
+      sql: `SELECT lane_at_snapshot, source, source_at
+            FROM ea_briefing_snapshot_items
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(items.rows).toEqual([]);
+    expect(events.length).toBe(eventCountBeforeSkip);
+    unsubscribe();
+    await dbClient.close();
+    });
+
+  it("classifies a queued legacy weak-security row immediately", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Account Security",
+      from_address: "security@example.com",
+      subject: "New sign-in to your account",
+      body_snippet: "We noticed a sign-in from Chrome on macOS.",
+      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
+    });
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "fyi",
+          category: "security",
+          urgency: "normal",
+          escalation_badge: null,
+          summary: "Routine sign-in confirmation.",
+          action: "No action needed.",
+          deadline_at: null,
+          confidence: 0.9,
+          bill_candidate: null,
+        },
+        usage: { input_tokens: 80, output_tokens: 20 },
+        tier,
+      })),
+    };
+
+    await dbClient.batch([
+      {
+        sql: "UPDATE ea_email_triage SET triage_source = 'weak_security_grace' WHERE email_id = ?",
+        args: ["msg-1"],
+      },
+      {
+        sql: "UPDATE ea_triage_jobs SET scheduled_for = ? WHERE email_id = ?",
+        args: ["2026-05-03T12:00:00.000Z", "msg-1"],
+      },
+    ]);
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:00:00.000Z"),
     });
 
     expect(result).toMatchObject({
@@ -481,7 +498,7 @@ describe("email triage worker grace flows", () => {
     });
     expect(jobs.rows[0]).toMatchObject({
       status: "complete",
-      attempts: 2,
+      attempts: 1,
       scheduled_for: null,
     });
     });

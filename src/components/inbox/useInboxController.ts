@@ -19,7 +19,6 @@ import type { InboxActiveSnapshotLike, ResurfacedEntry } from "./inboxWorkItems"
 import {
   computeScopedNoiseUnreadCount,
   computeLaneCounts,
-  computeLiveCount,
   computeMobileChipCounts,
   computeUnreadCount,
 } from "./inboxCountsModel";
@@ -265,8 +264,8 @@ export default function useInboxController({
   ]);
 
   // Bump nowTick at the soonest moment a derived value actually changes: a snooze
-  // boundary passing (the snooze sweep), a pending-security-grace row crossing a
-  // label bucket, or a verification marker reaching its active deadline. Idle when
+  // boundary passing (the snooze sweep) or a verification marker reaching its
+  // active deadline. Idle when
   // none is pending. flatEmails carries both timed row states; rescheduling on
   // nowTick advances through their boundaries.
   useEffect(() => {
@@ -309,11 +308,6 @@ export default function useInboxController({
 
   const laneCounts = useMemo(
     () => computeLaneCounts(flatEmails, { accountId }),
-    [flatEmails, accountId],
-  );
-
-  const liveCount = useMemo(
-    () => computeLiveCount(flatEmails, { accountId }),
     [flatEmails, accountId],
   );
 
@@ -476,7 +470,6 @@ export default function useInboxController({
     onAskAlfred: askAlfred,
     visibleEmails,
     laneCounts,
-    liveCount,
     mobileChipCounts,
     totalUnread,
     noiseUnreadCount,

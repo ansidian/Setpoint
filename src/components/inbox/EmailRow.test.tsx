@@ -40,9 +40,9 @@ describe("EmailRow lane tag (mobile)", () => {
     expect(screen.queryByText("Needs Attention")).toBeNull();
   });
 
-  it("suppresses the lane tag on untriaged (live) rows", () => {
+  it("uses the stored lane even when legacy untriaged metadata is present", () => {
     renderRow({ email: { _untriaged: true }, showLaneTag: true });
-    expect(screen.queryByText("Needs Attention")).toBeNull();
+    expect(screen.getByText("Needs Attention")).toBeTruthy();
   });
 
   it("replaces the category pill with the lane tag when showLaneTag is set", () => {

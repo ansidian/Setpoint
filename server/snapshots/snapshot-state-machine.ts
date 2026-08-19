@@ -98,7 +98,5 @@ export function resurfacedTriageLane(snapshot: Record<string, unknown> | null | 
 // Items whose triage has not settled yet; dismissing one must also skip the
 // pending triage so the worker does not resurrect the row.
 export function isPendingSnapshotTriage(item: Record<string, unknown> | null | undefined): boolean {
-  return item?.triage_status === "pending"
-    || item?.triage_source === "weak_security_grace"
-    || item?.source === "pending_security_grace";
+  return item?.triage_status === "pending";
 }

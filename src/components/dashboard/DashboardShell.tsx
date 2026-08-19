@@ -496,7 +496,6 @@ export function DashboardShell({
               customize={SHELL_PREFS}
               emailAccounts={[]}
               briefingSummary=""
-              briefingGeneratedAt={undefined}
               liveEmails={liveData.liveEmails}
               liveEmailsLoading={liveEmailsLoading}
               activeSnapshot={inboxActiveSnapshot}

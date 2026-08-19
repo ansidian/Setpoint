@@ -68,8 +68,6 @@ describe("snapshot lane state machine", () => {
   describe("isPendingSnapshotTriage", () => {
     it("flags rows whose triage has not settled", () => {
       expect(isPendingSnapshotTriage({ triage_status: "pending" })).toBe(true);
-      expect(isPendingSnapshotTriage({ triage_source: "weak_security_grace" })).toBe(true);
-      expect(isPendingSnapshotTriage({ source: "pending_security_grace" })).toBe(true);
     });
 
     it("treats settled or missing rows as not pending", () => {

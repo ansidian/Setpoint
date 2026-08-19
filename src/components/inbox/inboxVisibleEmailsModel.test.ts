@@ -75,16 +75,7 @@ describe("selectVisibleEmails", () => {
     expect(result.map((e) => e.uid)).toEqual(["work-mkt"]);
   });
 
-  it("treats lane '__live' as the untriaged bucket", () => {
-    const flatEmails = [
-      email({ uid: "triaged", _untriaged: false }),
-      email({ uid: "untriaged", _untriaged: true, _lane: "queued" }),
-    ];
-    const result = selectVisibleEmails({ flatEmails, lane: "__live" });
-    expect(result.map((e) => e.uid)).toEqual(["untriaged"]);
-  });
-
-  it("sorts untriaged first, then by lane order, then newest-first", () => {
+  it("sorts by lane order, then newest-first", () => {
     const flatEmails = [
       email({ uid: "fyi-old", _lane: "fyi", date: "2026-01-01T00:00:00.000Z" }),
       email({ uid: "queued", _lane: "queued", date: "2026-01-01T00:00:00.000Z" }),
@@ -92,7 +83,7 @@ describe("selectVisibleEmails", () => {
       email({ uid: "fyi-new", _lane: "fyi", date: "2026-06-01T00:00:00.000Z" }),
     ];
     const result = selectVisibleEmails({ flatEmails });
-    expect(result.map((e) => e.uid)).toEqual(["untriaged", "queued", "fyi-new", "fyi-old"]);
+    expect(result.map((e) => e.uid)).toEqual(["queued", "untriaged", "fyi-new", "fyi-old"]);
   });
 
   it("uses _resurfacedAt as the recency key, ranking a row up when it resurfaced recently", () => {

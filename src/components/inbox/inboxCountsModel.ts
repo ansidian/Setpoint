@@ -23,29 +23,20 @@ export function computeScopedNoiseUnreadCount(emails: InboxEmailLike[] = [], {
   return count;
 }
 
-// Per-lane totals for the sidebar/digest. Skips untriaged rows entirely (they
-// are the "live" bucket, counted separately) and ignores snooze; `action`
-// mirrors `needs_attention`.
+// Per-lane totals for the sidebar/digest. Ignores snooze; `action` mirrors
+// `needs_attention`.
 export function computeLaneCounts(emails: InboxEmailLike[] = [], { accountId = "__all" }: { accountId?: string; snoozedMap?: ReadonlyMap<string | number, number> } = {}): LaneCounts {
   const counts: LaneCounts = { queued: 0, needs_attention: 0, action: 0, carryover: 0, catch_up: 0, fyi: 0, handled: 0, untriaged_read: 0, noise: 0 };
   for (const email of emails) {
     if (accountId !== "__all" && email._accountKey !== accountId) continue;
-    if (email._untriaged) continue;
     if (email._lane && email._lane in counts) counts[email._lane] = (counts[email._lane] ?? 0) + 1;
   }
   counts.action = counts.needs_attention ?? 0;
   return counts;
 }
 
-// Count of untriaged ("live") rows in the current account scope.
-export function computeLiveCount(emails: InboxEmailLike[] = [], { accountId = "__all" }: { accountId?: string } = {}): number {
-  return emails.filter(
-    (email) => email._untriaged && (accountId === "__all" || email._accountKey === accountId),
-  ).length;
-}
-
-// Mobile chip-bar counts: unlike computeLaneCounts these honor snooze, include a
-// running `__all`/`__live` total, and count untriaged rows toward `__live`.
+// Mobile chip-bar counts: unlike computeLaneCounts these honor snooze and include
+// a running `__all` total.
 export function computeMobileChipCounts(emails: InboxEmailLike[] = [], {
   accountId = "__all",
   snoozedMap = new Map(),
@@ -53,7 +44,6 @@ export function computeMobileChipCounts(emails: InboxEmailLike[] = [], {
 }: { accountId?: string; snoozedMap?: ReadonlyMap<string | number, number>; nowTick?: number } = {}): LaneCounts {
   const counts: LaneCounts = {
     __all: 0,
-    __live: 0,
     queued: 0,
     needs_attention: 0,
     action: 0,
@@ -70,8 +60,7 @@ export function computeMobileChipCounts(emails: InboxEmailLike[] = [], {
     if (snoozeUntil && snoozeUntil > nowTick) continue;
     if (accountId !== "__all" && email._accountKey !== accountId) continue;
     counts.__all = (counts.__all ?? 0) + 1;
-    if (email._untriaged) counts.__live = (counts.__live ?? 0) + 1;
-    else if (email._lane && counts[email._lane] != null) counts[email._lane] = (counts[email._lane] ?? 0) + 1;
+    if (email._lane && counts[email._lane] != null) counts[email._lane] = (counts[email._lane] ?? 0) + 1;
   }
   counts.action = counts.needs_attention ?? 0;
   return counts;

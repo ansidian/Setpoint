@@ -1,7 +1,5 @@
 import { getOrCreateActiveSnapshot } from "../snapshots/snapshot-service.ts";
-import { preflightDecisionMetadata } from "./triage-preflight.ts";
-import { maybeBillCandidate, emailTriageEventDetails } from "./triage-projections-model.ts";
-import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
+import { maybeBillCandidate } from "./triage-projections-model.ts";
 import { nowIso } from "./triage-job-store.ts";
 import type { SnapshotWriteDb } from "../snapshots/snapshot-types.ts";
 import type {
@@ -10,7 +8,6 @@ import type {
   TriageEmail,
   TriageJob,
   TriageLane,
-  TriagePreflightResult,
   TriageUrgency,
 } from "./triage-types.ts";
 
@@ -28,11 +25,9 @@ interface SnapshotTriageProjection {
 
 // ea_email_triage + ea_briefing_snapshot_items persistence lifted from
 // triage-worker.ts: load the email for a job, write the triage decision row,
-// attach/upsert the snapshot item, and the weak-security grace defer. Keeps the
+// attach/upsert the snapshot item. Keeps the
 // attach-before-complete ordering invariant in the worker (it sequences attach ->
 // update -> complete); this store owns the individual writes.
-
-const WEAK_SECURITY_GRACE_MS = 10 * 60 * 1000;
 
 export async function loadEmailForJob(job: TriageJob, dbClient: TriageDb): Promise<TriageEmail | null> {
   const result = await dbClient.execute({
@@ -200,61 +195,4 @@ export async function attachToActiveSnapshot(email: TriageEmail, decision: Snaps
       decision.snapshot_source_at || null,
     ],
   });
-}
-
-export async function delayWeakSecurityGrace(job: TriageJob, email: TriageEmail, preflight: TriagePreflightResult, { dbClient, now }: { dbClient: TriageDb; now: Date }): Promise<string> {
-  const classifyAfter = new Date(now.getTime() + WEAK_SECURITY_GRACE_MS).toISOString();
-  const decisionMetadata = preflightDecisionMetadata(preflight);
-  await dbClient.execute({
-    sql: `UPDATE ea_email_triage
-          SET triage_status = 'pending',
-              triage_source = 'weak_security_grace',
-              category = 'security',
-              urgency = 'normal',
-              summary = 'Security triage pending.',
-              action = 'Classifying soon',
-              decision_metadata_json = ?,
-              last_decision_reason = 'weak_security_grace_pending',
-              updated_at = datetime('now')
-          WHERE id = ?`,
-    args: [JSON.stringify(decisionMetadata), email.triage_id ?? null],
-  });
-
-  await attachToActiveSnapshot(email, {
-    lane: "needs_attention",
-    category: "security",
-    urgency: "normal",
-    escalation_badge: null,
-    summary: "Security triage pending.",
-    action: "Classifying soon",
-    deadline_at: null,
-    snapshot_source: "pending_security_grace",
-    snapshot_source_at: classifyAfter,
-  }, { dbClient, now });
-
-  await dbClient.execute({
-    sql: `UPDATE ea_triage_jobs
-          SET status = 'queued',
-              locked_at = NULL,
-              scheduled_for = ?,
-              completed_at = NULL,
-              last_error = '',
-              updated_at = datetime('now')
-          WHERE id = ?`,
-    args: [classifyAfter, job.id],
-  });
-
-  publishCurrentDashboardEvent(email.user_id, {
-    source: "email_triage",
-    reason: "weak_security_grace_delayed",
-    state: "current",
-    occurredAt: nowIso(now),
-    details: emailTriageEventDetails(email, {
-      reason: "weak_security_grace_delayed",
-      lane: "needs_attention",
-      triageSource: "weak_security_grace",
-    }),
-  });
-
-  return classifyAfter;
 }

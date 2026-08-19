@@ -7,12 +7,11 @@ afterEach(() => {
   cleanup();
 });
 
-function renderStrip(liveCount: number, liveLoading = false, extraProps: Partial<ComponentProps<typeof DigestStrip>> = {}) {
+function renderStrip(liveLoading = false, extraProps: Partial<ComponentProps<typeof DigestStrip>> = {}) {
   render(
     <DigestStrip
       accent="#cba6da"
       counts={{ action: 2, fyi: 1, noise: 3 }}
-      liveCount={liveCount}
       liveLoading={liveLoading}
       summary="Brief summary"
       onJumpLane={vi.fn()}
@@ -22,30 +21,22 @@ function renderStrip(liveCount: number, liveLoading = false, extraProps: Partial
 }
 
 describe("DigestStrip", () => {
-  it("keeps the live slot rendered when there is no live mail", () => {
-    renderStrip(0);
+  it("shows the current inbox state when idle", () => {
+    renderStrip();
 
-    expect(screen.getByTestId("digest-live-slot").textContent).toContain("No new live mail");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Inbox · current");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("No pending triage");
   });
 
-  it("shows live counts without changing the slot structure", () => {
-    renderStrip(4);
+  it("shows inbox syncing while retrieval is in flight", () => {
+    renderStrip(true);
 
-    expect(screen.getByText("Inbox snapshot")).toBeTruthy();
-    expect(screen.getByTestId("digest-live-slot").textContent).toContain("4");
-    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Live");
-    expect(screen.getByTestId("digest-live-slot").textContent).toContain("not yet triaged");
-  });
-
-  it("shows the live retrieval state while the poll is in flight", () => {
-    renderStrip(0, true);
-
-    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Live · checking");
-    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Retrieving live mail");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Inbox · syncing");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Retrieving inbox state");
   });
 
   it("uses active snapshot language while triage sync is in flight", () => {
-    renderStrip(0, true, {
+    renderStrip(true, {
       activeSnapshotMode: true,
       accountCount: 2,
       processingCount: 4,
@@ -60,7 +51,7 @@ describe("DigestStrip", () => {
   });
 
   it("treats visible queued lane messages as current instead of syncing", () => {
-    renderStrip(0, false, {
+    renderStrip(false, {
       activeSnapshotMode: true,
       accountCount: 2,
       counts: { queued: 3, action: 2, fyi: 1, noise: 3 },
