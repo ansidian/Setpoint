@@ -2,14 +2,14 @@
 // Poll worker for news feeds: conditional GET, normalize, upsert, prune.
 // All IO is injectable (dbClient, fetchImpl) so tests never touch the network.
 import Parser from "rss-parser";
-import type { Client } from "@libsql/client";
+import type { Client, InStatement } from "@libsql/client";
 import db from "../db/connection.ts";
 import {
   canonicalizeNewsUrl, excerptFromHtml, resolveSourceFeedUrl, shouldPollSource,
 } from "./news-model.ts";
 import type { NewsSourceRow } from "./news-model.ts";
 
-type NewsDbClient = Pick<Client, "execute">;
+type NewsDbClient = Pick<Client, "execute" | "batch">;
 export interface FeedFetchResponse {
   status: number;
   url: string;
@@ -69,6 +69,7 @@ export const NEWS_POLL_INTERVAL_MS = 20 * 60 * 1000;
 const NEWS_FETCH_TIMEOUT_MS = 10_000;
 const NEWS_RETENTION_DAYS = 14;
 const NEWS_RETAINED_PER_SOURCE = 30;
+const NEWS_INSERT_BATCH_SIZE = 50;
 const MANUAL_SWEEP_MIN_GAP_MS = 60_000;
 
 export function parseRetryAfterAt(value: unknown, now: Date | string | number = new Date()): string | null {
@@ -218,18 +219,38 @@ export async function syncNewsSource(
     await recordSourceFailure(source, "parse_error", { dbClient, nowIso });
     return { ok: false, status: "parse_error" };
   }
-  const items = (feed.items || []).map(normalizeFeedItem).filter((item) => item.guid && item.url);
+  const itemsByGuid = new Map(
+    (feed.items || [])
+      .map(normalizeFeedItem)
+      .filter((item) => item.guid && item.url)
+      .map((item) => [item.guid, item]),
+  );
+  const existing = itemsByGuid.size
+    ? await dbClient.execute({
+        sql: "SELECT guid FROM ea_news_items WHERE source_id = ?",
+        args: [source.id],
+      })
+    : { rows: [] };
+  const existingGuids = new Set(existing.rows.map((row) => String(row.guid)));
+  const newItems = [...itemsByGuid.values()].filter((item) => !existingGuids.has(item.guid));
   let inserted = 0;
-  for (const item of items) {
-    const result = await dbClient.execute({
+  const insertStatements: InStatement[] = [];
+  for (let index = 0; index < newItems.length; index += NEWS_INSERT_BATCH_SIZE) {
+    const chunk = newItems.slice(index, index + NEWS_INSERT_BATCH_SIZE);
+    insertStatements.push({
       sql: `INSERT INTO ea_news_items
               (source_id, guid, url, canonical_url, title, excerpt, author, published_at, fetched_at, thumbnail_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ")}
             ON CONFLICT (source_id, guid) DO NOTHING`,
-      args: [source.id, item.guid, item.url, item.canonical_url, item.title, item.excerpt,
-        item.author, item.published_at, nowIso, item.thumbnail_url],
+      args: chunk.flatMap((item) => [
+        source.id, item.guid, item.url, item.canonical_url, item.title, item.excerpt,
+        item.author, item.published_at, nowIso, item.thumbnail_url,
+      ]),
     });
-    inserted += result.rowsAffected || 0;
+  }
+  if (insertStatements.length) {
+    const results = await dbClient.batch(insertStatements);
+    inserted = results.reduce((total, result) => total + Number(result.rowsAffected || 0), 0);
   }
   // 301 self-heal: persist where the redirect chain landed (rss only; hn URLs
   // are rebuilt from hn_query/min_points every poll).
