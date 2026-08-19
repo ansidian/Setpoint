@@ -101,8 +101,8 @@ describe("AddTaskPanel behaviors", () => {
     fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
       target: { value: "Call dentist tomorrow at 10am" },
     });
-    fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
-    expect(screen.getByTestId("todoist-reminder-chip").textContent).toContain("30 minutes before");
+    fireEvent.click(screen.getByTestId("todoist-reminder-preset-0"));
+    expect(screen.getByTestId("todoist-reminder-chip").textContent).toContain("At start");
 
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
@@ -118,7 +118,7 @@ describe("AddTaskPanel behaviors", () => {
       sourceItemId: "todo-new",
       anchorKind: "todoist_due_datetime",
       anchorAt: "2026-04-20T17:00:00.000Z",
-      offsetMinutes: -30,
+      offsetMinutes: 0,
     }));
     expect(screen.getByLabelText("Last task event").textContent).toContain('"hasUpcomingReminder":true');
   });

@@ -9,6 +9,7 @@ import type {
 } from "./types";
 
 export const TODOIST_REMINDER_PRESETS = [
+  { offsetMinutes: 0, label: "At start" },
   { offsetMinutes: -10, label: "10 min" },
   { offsetMinutes: -30, label: "30 min" },
   { offsetMinutes: -60, label: "1 hour" },
@@ -194,7 +195,7 @@ export function buildTodoistReminderCreatePayload({
 export function formatTodoistReminderLabel(reminder: TodoistReminderEntry) {
   const offset = normalizeOffset(reminder);
   const absolute = Math.abs(offset);
-  if (absolute === 0) return "At due time";
+  if (absolute === 0) return "At start";
   if (absolute % 1440 === 0) {
     const days = absolute / 1440;
     return `${days} day${days === 1 ? "" : "s"} ${offset < 0 ? "before" : "after"}`;
