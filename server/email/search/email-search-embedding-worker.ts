@@ -23,6 +23,7 @@ import type { EmailSearchEmbeddingSourceRow } from "./email-search-embeddings.ts
 const DEFAULT_BATCH_LIMIT = 25;
 const DEFAULT_EMBEDDING_BATCH_SIZE = 16;
 const CORPUS_EMBEDDING_EVENT_TYPE = "corpus_embedding";
+const CONTENT_HASH_AUDIT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface CoverageCounts {
   total_indexed: number;
@@ -45,8 +46,13 @@ interface WorkerStateRow extends Record<string, unknown> {
   mode?: unknown;
   last_error_class?: unknown;
   attempts?: unknown;
+  last_completed_at?: unknown;
   updated_at?: unknown;
 }
+
+type FastCoverageStatus = EmailSearchEmbeddingCoverageStatus & {
+  last_completed_at: unknown;
+};
 
 interface CoverageOptions {
   dbClient?: Client;
@@ -348,13 +354,27 @@ export async function getEmailSearchEmbeddingCoverageRatio(userId: string, { dbC
   return counts.coverage_ratio;
 }
 
-async function getCoverageStatusFast(userId: string, { dbClient = db, capability = null }: CoverageOptions = {}): Promise<EmailSearchEmbeddingCoverageStatus> {
+async function getCoverageStatusFast(userId: string, { dbClient = db, capability = null }: CoverageOptions = {}): Promise<FastCoverageStatus> {
   const [counts, state] = await Promise.all([
     loadCoverageCounts(dbClient, userId),
     loadWorkerState(dbClient, userId),
   ]);
   const mode = capability?.mode || String(state?.mode || "fallback");
-  return buildCoverageStatus(counts, state, mode);
+  return {
+    ...buildCoverageStatus(counts, state, mode),
+    last_completed_at: state?.last_completed_at || null,
+  };
+}
+
+function needsEmbeddingCandidateScan(status: FastCoverageStatus, now = new Date()): boolean {
+  if (
+    status.semantic_status === "unavailable"
+    || status.missing_embeddings > 0
+    || status.stale_embeddings > 0
+  ) return true;
+  const lastCompletedAt = new Date(String(status.last_completed_at || "")).getTime();
+  return !Number.isFinite(lastCompletedAt)
+    || now.getTime() - lastCompletedAt >= CONTENT_HASH_AUDIT_INTERVAL_MS;
 }
 
 export async function processEmailSearchEmbeddingBatch(userId: string, {
@@ -373,6 +393,15 @@ export async function processEmailSearchEmbeddingBatch(userId: string, {
     dbClient,
     capability: resolvedCapability,
   });
+  if (!needsEmbeddingCandidateScan(before)) {
+    return {
+      status: "active",
+      semantic_status: before.semantic_status,
+      selected: 0,
+      embedded: 0,
+      failed: 0,
+    };
+  }
   await upsertWorkerState(dbClient, {
     userId,
     status: "running",

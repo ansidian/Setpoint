@@ -26,6 +26,8 @@ export { addMonthsIso };
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 const MIRROR_HISTORY_MONTHS = 12;
 const MIRROR_FUTURE_MONTHS = 18;
+const GOOGLE_HOLIDAY_CALENDAR_ID_SUFFIX = "#holiday@group.v.calendar.google.com";
+const GOOGLE_HOLIDAY_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 // Cancelled rows exist only so search readers skip deleted events; if one is
 // purged early, the next sync that re-delivers the cancellation simply
 // recreates it, so a short retention is safe and keeps the table bounded.
@@ -40,6 +42,9 @@ interface MirrorWindow {
 
 interface MirrorStateRow {
   sync_token?: string | null;
+  last_full_sync_at?: string | null;
+  sync_requested_at?: string | null;
+  dirty_since?: string | null;
 }
 
 interface MirrorSyncResponse {
@@ -81,6 +86,23 @@ function enabledCalendarAccounts(accounts: StoredCalendarAccount[] = []) {
   return accounts.filter((account) => account?.type === "gmail" && account.calendar_enabled);
 }
 
+function canReuseRecentGoogleHolidaySnapshot(
+  calendar: GoogleCalendarSource,
+  state: MirrorStateRow | null,
+  timestamp: string,
+  forceFull: boolean,
+) {
+  if (forceFull || state?.sync_requested_at || state?.dirty_since) return false;
+  if (!String(calendar?.id || "").toLowerCase().endsWith(GOOGLE_HOLIDAY_CALENDAR_ID_SUFFIX)) {
+    return false;
+  }
+  const lastFullSyncAt = new Date(String(state?.last_full_sync_at || "")).getTime();
+  const now = new Date(timestamp).getTime();
+  return Number.isFinite(lastFullSyncAt)
+    && Number.isFinite(now)
+    && now - lastFullSyncAt < GOOGLE_HOLIDAY_REFRESH_INTERVAL_MS;
+}
+
 async function loadState(
   userId: string,
   accountId: string,
@@ -110,6 +132,27 @@ async function markSyncing(
               updated_at = ?
           WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
     args: [timestamp, timestamp, userId, accountId, calendarId],
+  });
+}
+
+async function markSnapshotReused(
+  userId: string,
+  accountId: string,
+  calendarId: string,
+  dbClient: MirrorDbClient,
+  timestamp: string,
+) {
+  await dbClient.execute({
+    sql: `UPDATE ea_calendar_search_mirror_state
+          SET status = 'idle',
+              last_sync_at = ?,
+              last_success_at = ?,
+              last_error = NULL,
+              last_check_failed_at = NULL,
+              failed_check_count = 0,
+              updated_at = ?
+          WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
+    args: [timestamp, timestamp, timestamp, userId, accountId, calendarId],
   });
 }
 
@@ -228,6 +271,10 @@ async function syncCalendar(
   },
 ) {
   const state = await loadState(userId, account.id, calendar.id, dbClient);
+  if (canReuseRecentGoogleHolidaySnapshot(calendar, state, timestamp, forceFull)) {
+    await markSnapshotReused(userId, account.id, calendar.id, dbClient, timestamp);
+    return { fullSync: false, occurrences: 0 };
+  }
   const canIncrement = !forceFull && state?.sync_token;
   await markSyncing(userId, account.id, calendar.id, dbClient, timestamp);
 
