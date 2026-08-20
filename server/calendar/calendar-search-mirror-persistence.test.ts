@@ -9,6 +9,7 @@ const migrationsDir = join(__dirname, "../db/migrations");
 
 async function applyMirrorMigration(db: Client) {
   await db.executeMultiple(readFileSync(join(migrationsDir, "011_calendar_search_mirror.sql"), "utf8"));
+  await db.executeMultiple(readFileSync(join(migrationsDir, "049_calendar_mirror_snapshot_hash.sql"), "utf8"));
 }
 
 const account = {

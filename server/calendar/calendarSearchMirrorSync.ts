@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import db from "../db/connection.ts";
 import {
   fetchCalendarMirrorEvents,
@@ -42,8 +43,10 @@ interface MirrorWindow {
 
 interface MirrorStateRow {
   sync_token?: string | null;
+  snapshot_hash?: string | null;
   last_full_sync_at?: string | null;
   sync_requested_at?: string | null;
+  sync_request_reason?: string | null;
   dirty_since?: string | null;
 }
 
@@ -86,16 +89,38 @@ function enabledCalendarAccounts(accounts: StoredCalendarAccount[] = []) {
   return accounts.filter((account) => account?.type === "gmail" && account.calendar_enabled);
 }
 
+function isGoogleHolidayCalendar(calendar: GoogleCalendarSource) {
+  return String(calendar?.id || "").toLowerCase().endsWith(GOOGLE_HOLIDAY_CALENDAR_ID_SUFFIX);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function calendarSnapshotHash(events: MirrorEvent[]) {
+  const canonicalEvents = events.map(stableJson).sort();
+  return createHash("sha256").update(canonicalEvents.join("\n")).digest("hex");
+}
+
 function canReuseRecentGoogleHolidaySnapshot(
   calendar: GoogleCalendarSource,
   state: MirrorStateRow | null,
   timestamp: string,
   forceFull: boolean,
 ) {
-  if (forceFull || state?.sync_requested_at || state?.dirty_since) return false;
-  if (!String(calendar?.id || "").toLowerCase().endsWith(GOOGLE_HOLIDAY_CALENDAR_ID_SUFFIX)) {
-    return false;
-  }
+  const explicitRequest = state?.sync_requested_at
+    && state.sync_request_reason !== "calendar-search-backstop";
+  if (forceFull || explicitRequest || state?.dirty_since) return false;
+  if (!isGoogleHolidayCalendar(calendar)) return false;
+  if (!state?.snapshot_hash) return false;
   const lastFullSyncAt = new Date(String(state?.last_full_sync_at || "")).getTime();
   const now = new Date(timestamp).getTime();
   return Number.isFinite(lastFullSyncAt)
@@ -275,7 +300,13 @@ async function syncCalendar(
     await markSnapshotReused(userId, account.id, calendar.id, dbClient, timestamp);
     return { fullSync: false, occurrences: 0 };
   }
-  const canIncrement = !forceFull && state?.sync_token;
+  // Google's subscribed holiday calendars return a nextSyncToken from a full
+  // events.list request, then reject that fresh token immediately with 410 for
+  // every valid incremental query shape. Treat those read-only feeds as
+  // content-addressed snapshots instead of entering a permanent 410/full-sync
+  // loop. Other calendars retain normal incremental synchronization.
+  const snapshotCalendar = isGoogleHolidayCalendar(calendar);
+  const canIncrement = !snapshotCalendar && !forceFull && state?.sync_token;
   await markSyncing(userId, account.id, calendar.id, dbClient, timestamp);
 
   let mode: "incremental" | "full" = canIncrement ? "incremental" : "full";
@@ -322,24 +353,38 @@ async function syncCalendar(
 
   const isFullSync = mode === "full" || !!response.fullSync;
   const events = response.events || [];
+  const snapshotHash = snapshotCalendar ? calendarSnapshotHash(events) : null;
+  const unchangedSnapshot = snapshotCalendar
+    && !!state?.snapshot_hash
+    && state.snapshot_hash === snapshotHash;
   const statements = [];
-  if (isFullSync) statements.push(tombstoneCalendarStatement(userId, account, calendar, timestamp));
-  statements.push(
-    ...events
-      .filter(shouldTombstoneRecurringFamily)
-      .map((event) => tombstoneRecurringFamilyStatement(userId, account, calendar, event, timestamp)),
-  );
-  statements.push(...events.map((event) => mirrorOccurrenceStatement(userId, {
-    ...event,
-    accountId: event.accountId || account.id,
-    accountLabel: event.accountLabel || account.label,
-    accountEmail: event.accountEmail || account.email,
-    calendarId: event.calendarId || calendar.id,
-    calendarName: event.calendarName || calendar.summary,
-    source: event.source || calendar.summary,
-    sourceColor: event.sourceColor || calendar.backgroundColor || account.color || undefined,
-  }, timestamp)));
-  statements.push(stateSuccessStatement(userId, account, calendar, response, timestamp, isFullSync));
+  if (!unchangedSnapshot) {
+    if (isFullSync) statements.push(tombstoneCalendarStatement(userId, account, calendar, timestamp));
+    statements.push(
+      ...events
+        .filter(shouldTombstoneRecurringFamily)
+        .map((event) => tombstoneRecurringFamilyStatement(userId, account, calendar, event, timestamp)),
+    );
+    statements.push(...events.map((event) => mirrorOccurrenceStatement(userId, {
+      ...event,
+      accountId: event.accountId || account.id,
+      accountLabel: event.accountLabel || account.label,
+      accountEmail: event.accountEmail || account.email,
+      calendarId: event.calendarId || calendar.id,
+      calendarName: event.calendarName || calendar.summary,
+      source: event.source || calendar.summary,
+      sourceColor: event.sourceColor || calendar.backgroundColor || account.color || undefined,
+    }, timestamp)));
+  }
+  statements.push(stateSuccessStatement(
+    userId,
+    account,
+    calendar,
+    response,
+    timestamp,
+    isFullSync,
+    snapshotHash,
+  ));
   await dbClient.batch(statements);
   return { fullSync: isFullSync, occurrences: events.filter((event) => event.status !== "cancelled" && !event.is_deleted).length };
 }

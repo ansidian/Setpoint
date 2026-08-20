@@ -39,15 +39,16 @@ describe("calendar search mirror refresh policy", () => {
     db = null;
   });
 
-  it("reuses a recent Google holiday snapshot until its daily refresh is due", async () => {
+  it("stores Google holidays as a daily content-addressed snapshot without using their invalid sync tokens", async () => {
     db = createClient({ url: "file::memory:" });
     await db.executeMultiple(readFileSync(join(migrationsDir, "011_calendar_search_mirror.sql"), "utf8"));
+    await db.executeMultiple(readFileSync(join(migrationsDir, "049_calendar_mirror_snapshot_hash.sql"), "utf8"));
     let providerFetch = 0;
-    const syncClient = async () => {
+    const syncClient = async ({ syncToken }: { syncToken: string | null }) => {
       providerFetch += 1;
-      return providerFetch === 1
-        ? { events: [holidayOccurrence], nextSyncToken: "holiday-sync-1" }
-        : { events: [{ ...holidayOccurrence, id: "holiday-2" }], nextSyncToken: "holiday-sync-2" };
+      return syncToken
+        ? { events: [{ ...holidayOccurrence, id: "unexpected-incremental" }], nextSyncToken: "unexpected-sync" }
+        : { events: [holidayOccurrence], nextSyncToken: `invalid-holiday-sync-${providerFetch}` };
     };
     const options = {
       dbClient: db,
@@ -73,12 +74,20 @@ describe("calendar search mirror refresh policy", () => {
     expect(reused.occurrences).toBe(0);
     expect(refreshed.occurrences).toBe(1);
     const state = await db.execute(
-      "SELECT sync_token, last_full_sync_at, last_sync_at FROM ea_calendar_search_mirror_state",
+      "SELECT sync_token, snapshot_hash, last_full_sync_at, last_sync_at FROM ea_calendar_search_mirror_state",
     );
     expect(state.rows[0]).toMatchObject({
-      sync_token: "holiday-sync-2",
-      last_full_sync_at: "2026-05-12T19:00:00.000Z",
+      sync_token: null,
+      last_full_sync_at: "2026-05-13T20:00:00.000Z",
       last_sync_at: "2026-05-13T20:00:00.000Z",
     });
+    expect(String(state.rows[0]!.snapshot_hash)).toHaveLength(64);
+    const occurrences = await db.execute(
+      "SELECT event_id, updated_at FROM ea_calendar_search_occurrences ORDER BY event_id",
+    );
+    expect(occurrences.rows).toEqual([{
+      event_id: "holiday-1",
+      updated_at: "2026-05-12T19:00:00.000Z",
+    }]);
   });
 });

@@ -224,6 +224,7 @@ export function stateSuccessStatement(
   response: MirrorSyncResponse,
   timestamp: string,
   isFullSync: boolean,
+  snapshotHash: string | null = null,
 ): CalendarMirrorSqlStatement {
   return {
     // dirty_since / sync_requested_at are only cleared if they predate this sync's
@@ -232,6 +233,7 @@ export function stateSuccessStatement(
     // (otherwise the mirror serves stale occurrences — a lost-update race).
     sql: `UPDATE ea_calendar_search_mirror_state
           SET sync_token = ?,
+              snapshot_hash = ?,
               status = 'idle',
               last_sync_at = ?,
               last_success_at = ?,
@@ -248,7 +250,8 @@ export function stateSuccessStatement(
               updated_at = ?
           WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
     args: [
-      response.nextSyncToken || response.syncToken || null,
+      snapshotHash ? null : response.nextSyncToken || response.syncToken || null,
+      snapshotHash,
       timestamp,
       timestamp,
       isFullSync ? timestamp : null,
