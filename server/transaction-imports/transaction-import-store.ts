@@ -557,7 +557,19 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
       runsRecovered: numberValue(recoveredRuns.rowsAffected),
     };
   }
-
+  async function getNextWakeAt(): Promise<number | null> {
+    const timestamp = now();
+    const result = await dbClient.execute({
+      sql: `SELECT MIN(wake_at) AS next_wake_at FROM (
+              SELECT MIN(COALESCE(next_attempt_at, ?)) AS wake_at FROM ea_transaction_import_runs WHERE status IN ('queued', 'retry')
+              UNION ALL SELECT MIN(COALESCE(next_attempt_at, ?)) AS wake_at FROM ea_transaction_import_items WHERE status IN ('queued', 'ready')
+            )`,
+      args: [timestamp, timestamp],
+    });
+    const value = result.rows[0]?.next_wake_at;
+    const nextWakeAt = value == null ? Number.NaN : Number(value);
+    return Number.isFinite(nextWakeAt) ? nextWakeAt : null;
+  }
   return {
     listMappings,
     upsertMapping,
@@ -580,6 +592,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     settleItem,
     recoverStaleClaims,
     recoverAbandonedHistoricalRuns,
+    getNextWakeAt,
   };
 }
 

@@ -209,6 +209,21 @@ describe("transaction import store", () => {
     })).resolves.toBe(true);
   });
 
+  it("reports the earliest durable queue wake and ignores terminal work", async () => {
+    const subject = store();
+    await expect(subject.getNextWakeAt()).resolves.toBeNull();
+
+    await createRun();
+    await subject.insertItem(itemInput());
+    await db.execute("UPDATE ea_transaction_import_runs SET status = 'retry', next_attempt_at = 6000 WHERE id = 'run-1'");
+    await db.execute("UPDATE ea_transaction_import_items SET status = 'ready', next_attempt_at = 5000 WHERE id = 'item-1'");
+    await expect(subject.getNextWakeAt()).resolves.toBe(5_000);
+
+    await db.execute("UPDATE ea_transaction_import_runs SET status = 'completed' WHERE id = 'run-1'");
+    await db.execute("UPDATE ea_transaction_import_items SET status = 'added' WHERE id = 'item-1'");
+    await expect(subject.getNextWakeAt()).resolves.toBeNull();
+  });
+
   it("recovers stale claims below the ceiling and terminally fails exhausted work", async () => {
     await createRun();
     const subject = store();

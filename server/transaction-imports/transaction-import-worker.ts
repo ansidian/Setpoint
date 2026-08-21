@@ -277,7 +277,17 @@ export function createTransactionImportWorker({
     return store.recoverAbandonedHistoricalRuns();
   }
 
-  return { processNextHistoricalPage, processNextItemBatch, recoverStaleClaims, recoverAbandonedHistoricalRuns };
+  async function getNextWakeAt(): Promise<number | null> {
+    return store.getNextWakeAt();
+  }
+
+  return {
+    processNextHistoricalPage,
+    processNextItemBatch,
+    recoverStaleClaims,
+    recoverAbandonedHistoricalRuns,
+    getNextWakeAt,
+  };
 }
 
 export const transactionImportWorker = createTransactionImportWorker();
