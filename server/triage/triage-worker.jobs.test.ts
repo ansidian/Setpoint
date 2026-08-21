@@ -6,9 +6,45 @@ import {
   createTriageBatchContext,
   pruneCompletedTriageJobs,
 } from "./triage-worker.ts";
-import { claimNextEmailTriageJob } from "./triage-job-store.ts";
+import { claimNextEmailTriageJob, getNextEmailTriageWakeAt } from "./triage-job-store.ts";
 
 describe("email triage worker jobs", () => {
+  it("returns the earliest durable email-triage wake and ignores other queue types", async () => {
+    const dbClient = await createMigratedDb();
+    try {
+      await dbClient.batch([
+        {
+          sql: `INSERT INTO ea_triage_jobs
+                  (user_id, account_id, email_id, job_type, status, idempotency_key, scheduled_for)
+                VALUES ('user-1', 'gmail-work', 'future-msg', 'email_triage', 'queued', 'future', ?)`,
+          args: ["2026-05-03T12:10:00.000Z"],
+        },
+        {
+          sql: `INSERT INTO ea_triage_jobs
+                  (user_id, account_id, email_id, job_type, status, idempotency_key, scheduled_for)
+                VALUES ('user-1', 'gmail-work', NULL, 'gmail_history_sync', 'queued', 'history', NULL)`,
+          args: [],
+        },
+      ]);
+
+      const now = new Date("2026-05-03T12:00:00.000Z");
+      expect(await getNextEmailTriageWakeAt({ dbClient, now })).toBe(
+        Date.parse("2026-05-03T12:10:00.000Z"),
+      );
+      await dbClient.execute({
+        sql: `INSERT INTO ea_triage_jobs
+                (user_id, account_id, email_id, job_type, status, idempotency_key, scheduled_for)
+              VALUES ('user-1', 'gmail-work', 'due-msg', 'email_triage', 'queued', 'due', NULL)`,
+        args: [],
+      });
+      expect(await getNextEmailTriageWakeAt({ dbClient, now })).toBe(now.getTime());
+      await dbClient.execute("UPDATE ea_triage_jobs SET status = 'complete' WHERE job_type = 'email_triage'");
+      expect(await getNextEmailTriageWakeAt({ dbClient, now })).toBeNull();
+    } finally {
+      await dbClient.close();
+    }
+  });
+
   it("allows only one worker to claim a queued job", async () => {
     const dbClient = await createMigratedDb();
     try {

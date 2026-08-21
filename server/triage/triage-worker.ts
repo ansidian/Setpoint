@@ -43,7 +43,12 @@ import type {
   TriageRule,
 } from "./triage-types.ts";
 import { triageError } from "./triage-types.ts";
-export { recoverStaleRunningTriageJobs, pruneCompletedTriageJobs, triageRetryBackoffIso } from "./triage-job-store.ts";
+export {
+  getNextEmailTriageWakeAt,
+  recoverStaleRunningTriageJobs,
+  pruneCompletedTriageJobs,
+  triageRetryBackoffIso,
+} from "./triage-job-store.ts";
 
 const ARRIVAL_GRACE_READ_EXIT_DEFER_MS = 30 * 60 * 1000;
 

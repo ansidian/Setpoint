@@ -24,6 +24,8 @@ function createHarness() {
   let historyHandler: () => Promise<HistoryResult> = async () => ({ processed: false });
   let triageHandler: () => Promise<TriageResult> = async () => ({ processed: false });
   let reminderHandler: () => Promise<ReminderResult> = async () => ({ processed: 0, sent: 0, missed: 0, failed: 0 });
+  let reminderWakeHandler: () => Promise<number | null> = async () => null;
+  let triageWakeHandler: () => Promise<number | null> = async () => null;
   let embeddingHandler = async () => ({ processed: false, users: [] as Array<{ user_id: string; embedded: number; selected: number }> });
   let snapshotHandler = async () => ({ snapshot: { id: 42, status: "active" } });
 
@@ -51,6 +53,7 @@ function createHarness() {
       state.recoveries += 1;
       return { recovered: 0 } as never;
     },
+    getNextTriageWakeAt: async () => triageWakeHandler(),
     createTriageContext: () => ({}) as never,
     pruneTriageJobs: async () => 0,
     processEmbeddings: (async () => {
@@ -61,6 +64,7 @@ function createHarness() {
       state.reminderBatches += 1;
       return reminderHandler();
     },
+    getNextReminderWakeAt: async () => reminderWakeHandler(),
     advanceSnapshot: async (userId, options) => {
       state.snapshotAdvances.push({ userId, options });
       return snapshotHandler() as never;
@@ -75,6 +79,8 @@ function createHarness() {
     setHistoryHandler: (handler: typeof historyHandler) => { historyHandler = handler; },
     setTriageHandler: (handler: typeof triageHandler) => { triageHandler = handler; },
     setReminderHandler: (handler: typeof reminderHandler) => { reminderHandler = handler; },
+    setReminderWakeHandler: (handler: typeof reminderWakeHandler) => { reminderWakeHandler = handler; },
+    setTriageWakeHandler: (handler: typeof triageWakeHandler) => { triageWakeHandler = handler; },
     setEmbeddingHandler: (handler: typeof embeddingHandler) => { embeddingHandler = handler; },
     setSnapshotHandler: (handler: typeof snapshotHandler) => { snapshotHandler = handler; },
   };
@@ -220,18 +226,51 @@ describe("reminder scheduler", () => {
     consoleCapture.restore();
   });
 
-  it("runs first after two seconds and then every ten seconds", async () => {
+  it("wakes at the earliest durable timestamp and otherwise waits for the five-minute backstop", async () => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
     const harness = createHarness();
     const consoleCapture = captureConsole();
+    harness.setReminderWakeHandler(async () => harness.state.reminderBatches === 1
+      ? Date.parse("2026-07-14T12:01:00.000Z")
+      : null);
 
     harness.runtime.startReminderSchedulerWorker();
     await vi.advanceTimersByTimeAsync(1_999);
     expect(harness.state.reminderBatches).toBe(0);
     await vi.advanceTimersByTimeAsync(1);
     expect(harness.state.reminderBatches).toBe(1);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(57_999);
+    expect(harness.state.reminderBatches).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
     expect(harness.state.reminderBatches).toBe(2);
+    await vi.advanceTimersByTimeAsync(239_999);
+    expect(harness.state.reminderBatches).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(harness.state.reminderBatches).toBe(3);
+    await harness.runtime.stopScheduler();
+    consoleCapture.restore();
+  });
+
+  it("does not lose a reminder wake that fires during an active batch", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
+    const harness = createHarness();
+    const consoleCapture = captureConsole();
+    let resolveFirst: ((result: ReminderResult) => void) | undefined;
+    harness.setReminderHandler(() => harness.state.reminderBatches === 1
+      ? new Promise<ReminderResult>((resolve) => { resolveFirst = resolve; })
+      : Promise.resolve({ processed: 0, sent: 0, missed: 0, failed: 0 }));
+
+    const active = harness.runtime.runReminderSchedulerWorker();
+    harness.runtime.requestReminderDrainAt(Date.now());
+    await vi.advanceTimersByTimeAsync(0);
+    resolveFirst?.({ processed: 0, sent: 0, missed: 0, failed: 0 });
+    await active;
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(harness.state.reminderBatches).toBe(2);
+    await harness.runtime.stopScheduler();
     consoleCapture.restore();
   });
 });
@@ -255,6 +294,27 @@ describe("embedding scheduler", () => {
 });
 
 describe("email triage scheduling", () => {
+  it("discovers a durable future job at startup and uses a five-minute safety cron", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
+    const harness = createHarness();
+    const consoleCapture = captureConsole();
+    harness.setTriageWakeHandler(async () => harness.state.triageClaims === 1
+      ? Date.parse("2026-07-14T12:00:30.000Z")
+      : null);
+
+    harness.runtime.startBackgroundIndexer();
+    expect(harness.scheduled[3]!.expression).toBe("*/5 * * * *");
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(harness.state).toMatchObject({ triageClaims: 1, recoveries: 1 });
+    await vi.advanceTimersByTimeAsync(17_999);
+    expect(harness.state.triageClaims).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(harness.state).toMatchObject({ triageClaims: 2, recoveries: 1 });
+    await harness.runtime.stopScheduler();
+    consoleCapture.restore();
+  });
+
   it("runs at the requested deadline, never before it", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));

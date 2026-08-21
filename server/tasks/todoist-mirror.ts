@@ -8,6 +8,7 @@ import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,
 } from "../reminders/reminder-service.ts";
+import { requestReminderDrainAt } from "../scheduler-reminder-drain.ts";
 import { todoistReminderAnchorFromTask } from "./todoist-reminder-source.ts";
 import { getTodoistApiToken } from "./todoist-token.ts";
 import {
@@ -468,6 +469,7 @@ async function applySyncResponse(userId: string, response: TodoistSyncResponse, 
   );
   statements.push(...reminderStatements);
   await dbClient.batch(statements);
+  if (reminderStatements.length) requestReminderDrainAt(timestamp);
 }
 
 // P3-63: three independent trigger paths (background read sync, refresh-blocking

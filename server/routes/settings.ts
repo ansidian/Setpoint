@@ -6,6 +6,7 @@ import { encrypt } from "../platform/encryption.ts";
 import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
 import { geocodeLocation } from "../platform/weather.ts";
 import { initScheduler } from "../scheduler.ts";
+import { requestEmailTriageDrainAt } from "../scheduler-email-triage-drain.ts";
 import {
   billExtractAvailability,
   isAllowedBillExtractModel,
@@ -418,6 +419,9 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
         userId,
         homeAvailable: homeMutationAvailable,
       });
+    }
+    if (email_triage_mode !== undefined && email_triage_mode !== "paused") {
+      requestEmailTriageDrainAt(Date.now());
     }
     if (todoist_oauth_token_response !== undefined) {
       const response = typeof todoist_oauth_token_response === "string"

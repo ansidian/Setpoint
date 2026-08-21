@@ -6,6 +6,7 @@ Reminder domain: CRUD, schedule persistence, trigger firing, and notification fo
 
 - `reminder-service.ts` — public reminders API: CRUD, schedules, triggers
 - `reminder-scheduler.ts` — refreshes dynamic departure estimates, then fires due notifications inside one scheduler-owned batch
+- `reminder-wake-store.ts` — derives and queries the earliest durable delivery, retry, route-check, or event-anchor wake
 - `reminder-model.ts` — reminder validation/normalization: anchor kinds, missed-grace, Pacific TZ
 - `time-to-leave-model.ts` — provider-free Time-to-Leave validation, leave-time math, and bounded route-check cadence
 - `time-to-leave-service.ts` — initial Home-to-event route computation and durable dynamic-reminder creation

@@ -164,6 +164,23 @@ export async function claimNextEmailTriageJob(dbClient: TriageDb, now: Date): Pr
   return job;
 }
 
+export async function getNextEmailTriageWakeAt({
+  dbClient = db as unknown as TriageDb,
+  now = new Date(),
+}: { dbClient?: TriageDb; now?: Date } = {}): Promise<number | null> {
+  const nowValue = nowIso(now);
+  const result = await dbClient.execute({
+    sql: `SELECT MIN(COALESCE(scheduled_for, ?)) AS next_wake_at
+          FROM ea_triage_jobs
+          WHERE job_type = 'email_triage' AND status = 'queued'`,
+    args: [nowValue],
+  });
+  const value = result.rows[0]?.next_wake_at;
+  if (value == null) return null;
+  const wakeAt = Date.parse(String(value));
+  return Number.isFinite(wakeAt) ? wakeAt : null;
+}
+
 // P2-18: return a claimed job to the queue without consuming a retry attempt
 // (claimNextEmailTriageJob incremented attempts; reset it to the pre-claim value).
 export async function requeueClaimedJob(job: TriageJob, dbClient: TriageDb): Promise<void> {

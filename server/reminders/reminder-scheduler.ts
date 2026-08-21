@@ -15,6 +15,8 @@ import {
 import type { Reminder } from "../../shared/types/reminders.ts";
 import { processTimeToLeaveRefreshBatch } from "./time-to-leave-refresh-service.ts";
 
+export { getNextReminderWakeAt } from "./reminder-wake-store.ts";
+
 type DateInput = string | number | Date;
 interface DiscordSettings {
   discord_webhook_url_encrypted: string | null;

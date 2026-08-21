@@ -14,6 +14,10 @@ const schedulerBoundary = vi.hoisted(() => ({
   initScheduler: vi.fn().mockResolvedValue(undefined),
 }));
 
+const triageDrainBoundary = vi.hoisted(() => ({
+  requestEmailTriageDrainAt: vi.fn(() => true),
+}));
+
 function currentDb(): Client {
   if (!testState.db.current) throw new Error("Test database is not initialized");
   return testState.db.current;
@@ -33,6 +37,9 @@ vi.mock("../db/connection.ts", () => ({
 
 // test-architecture: allow-boundary-mock -- scheduler startup is a process lifecycle boundary; route persistence and validation still use the real modules.
 vi.mock("../scheduler.ts", () => schedulerBoundary);
+
+// test-architecture: allow-boundary-mock -- triage admission is a background-process boundary; settings persistence and mode validation still execute through the real route and database.
+vi.mock("../scheduler-email-triage-drain.ts", () => triageDrainBoundary);
 
 process.env.EA_USER_ID = "user-1";
 process.env.EA_ENCRYPTION_KEY = "11".repeat(32);
@@ -84,6 +91,7 @@ beforeEach(async () => {
     args: ["user-1"],
   });
   schedulerBoundary.initScheduler.mockClear().mockResolvedValue(undefined);
+  triageDrainBoundary.requestEmailTriageDrainAt.mockClear().mockReturnValue(true);
 });
 
 afterEach(async () => {
@@ -182,6 +190,29 @@ describe("Alfred model settings", () => {
 });
 
 describe("email triage read-arrivals setting", () => {
+  it("wakes queued triage immediately when leaving paused mode", async () => {
+    await currentDb().execute({
+      sql: "UPDATE ea_settings SET email_triage_mode = 'paused' WHERE user_id = ?",
+      args: ["user-1"],
+    });
+
+    const paused = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ email_triage_mode: "paused" });
+    expect(paused.status).toBe(200);
+    // test-architecture: allow-boundary-interaction -- Pausing must not admit the durable worker and create a queued-job polling loop.
+    expect(triageDrainBoundary.requestEmailTriageDrainAt).not.toHaveBeenCalled();
+
+    const resumed = await request(makeApp())
+      .put("/api/ea/settings")
+      .send({ email_triage_mode: "auto" });
+    expect(resumed.status).toBe(200);
+    // test-architecture: allow-boundary-interaction -- Resuming triage must promptly admit queued durable work instead of waiting for the five-minute safety cron.
+    expect(triageDrainBoundary.requestEmailTriageDrainAt).toHaveBeenCalledOnce();
+    // test-architecture: allow-boundary-interaction -- The triage scheduler boundary accepts an absolute wake timestamp; a resumed mode must request a concrete immediate deadline.
+    expect(triageDrainBoundary.requestEmailTriageDrainAt).toHaveBeenCalledWith(expect.any(Number));
+  });
+
   it("returns false by default and persists a boolean update", async () => {
     const initial = await request(makeApp()).get("/api/ea/settings");
 

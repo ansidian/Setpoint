@@ -9,7 +9,9 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scheduler.ts` — cron composition root; starts/stops all background workers across domains
 - `scheduler-snapshot-boundaries.ts` — saved-schedule snapshot-boundary lifecycle: parsing, cron registration, hot-reload coalescing, skip rechecks, and stop behavior
 - `scheduler-work-registry.ts` — shared admission/single-flight registry that lets scheduler shutdown await every admitted task
-- `scheduler-email-triage-drain.ts` — scheduler-owned earliest-deadline controller and request seam for durable email-triage jobs
+- `scheduler-deadline-controller.ts` — shared one-shot earliest-deadline timer controller with long-timeout rearming
+- `scheduler-email-triage-drain.ts` — request seam that lets durable email-triage writes rearm the scheduler
+- `scheduler-reminder-drain.ts` — request seam that lets reminder mutations rearm the scheduler
 - `shutdown.ts` — generic, injectable graceful-shutdown sequencer (`createGracefulShutdown`); pure sequencing logic over an injected `server` + `stopFns` array, no knowledge of which workers it's draining
 - `env.ts` — required-env-var validation (dev vs. production)
 - `security.ts` — trust-proxy setting, Content-Security-Policy, security middleware

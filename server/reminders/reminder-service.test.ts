@@ -1,6 +1,6 @@
 import { createClient } from "@libsql/client";
 import type { Client } from "@libsql/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReminderSourceIdentity } from "../../shared/types/reminders.ts";
 import { GoogleRoutesError } from "../platform/google-routes.ts";
 import {
@@ -16,6 +16,8 @@ import {
   markReminderSent,
   recomputeUnsentRemindersForSource,
 } from "./reminder-service.ts";
+import { getNextReminderWakeAt } from "./reminder-wake-store.ts";
+import { registerReminderDrainRequester } from "../scheduler-reminder-drain.ts";
 
 describe("reminder service", () => {
   let db: Client;
@@ -64,7 +66,69 @@ describe("reminder service", () => {
   });
 
   afterEach(async () => {
+    registerReminderDrainRequester(() => false);
     await db?.close?.();
+  });
+
+  it("signals the scheduler at a newly persisted fixed reminder's delivery time", async () => {
+    const requestDrainAt = vi.fn(() => true);
+    registerReminderDrainRequester(requestDrainAt);
+
+    await createReminder({
+      userId: "u1",
+      sourceType: "calendar_event",
+      sourceItemId: "event-wake",
+      anchorKind: "event_start",
+      anchorAt: "2026-05-10T17:00:00.000Z",
+      offsetMinutes: -30,
+    }, { dbClient: db, idFactory: () => "wake-1" });
+
+    // test-architecture: allow-boundary-interaction -- Persisting reminder work must notify the background scheduler at the exact durable delivery boundary.
+    expect(requestDrainAt).toHaveBeenCalledWith("2026-05-10T16:30:00.000Z");
+  });
+
+  it("returns the earliest actionable reminder timestamp across route checks and delivery retries", async () => {
+    expect(await getNextReminderWakeAt({ dbClient: db })).toBeNull();
+    await db.batch([
+      {
+        sql: `INSERT INTO ea_reminders
+                (id, user_id, source_type, source_item_id, anchor_kind, anchor_at,
+                 offset_minutes, remind_at, retry_after)
+              VALUES (?, ?, 'calendar_event', ?, 'event_start', ?, 0, ?, ?)`,
+        args: [
+          "fixed-retry",
+          "u1",
+          "fixed-event",
+          "2026-05-10T18:00:00.000Z",
+          "2026-05-10T16:30:00.000Z",
+          "2026-05-10T16:45:00.000Z",
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_reminders
+                (id, user_id, reminder_kind, source_type, source_item_id,
+                 anchor_kind, anchor_at, offset_minutes, remind_at,
+                 next_route_check_at, route_status)
+              VALUES (?, ?, 'time_to_leave', 'calendar_event', ?,
+                      'event_start', ?, 0, ?, ?, 'ready')`,
+        args: [
+          "ttl-route",
+          "u1",
+          "ttl-event",
+          "2026-05-10T18:00:00.000Z",
+          "2026-05-10T17:15:00.000Z",
+          "2026-05-10T16:15:00.000Z",
+        ],
+      },
+    ]);
+
+    expect(await getNextReminderWakeAt({ dbClient: db })).toBe(
+      Date.parse("2026-05-10T16:15:00.000Z"),
+    );
+    await db.execute("UPDATE ea_reminders SET status = 'sent' WHERE id = 'ttl-route'");
+    expect(await getNextReminderWakeAt({ dbClient: db })).toBe(
+      Date.parse("2026-05-10T16:45:00.000Z"),
+    );
   });
 
   it("creates, lists, recomputes, and deletes reminders for a polymorphic source", async () => {

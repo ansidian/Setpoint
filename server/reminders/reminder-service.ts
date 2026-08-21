@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import type { Client, InStatement, InValue, Row } from "@libsql/client";
 import db from "../db/connection.ts";
+import { requestReminderDrainAt } from "../scheduler-reminder-drain.ts";
+import { earliestReminderWakeAt } from "./reminder-wake-store.ts";
 import {
   assertReminderShape,
   computeRemindAt,
@@ -137,7 +139,9 @@ export async function createReminder(input: CreateReminderInput, options: Remind
       now: options.now,
       computeRoute: options.computeRoute,
     });
-    return (await getReminderById(id, { dbClient }))!;
+    const reminder = (await getReminderById(id, { dbClient }))!;
+    requestReminderDrainAt(earliestReminderWakeAt(reminder));
+    return reminder;
   }
   const id = options.idFactory?.() || crypto.randomUUID();
   const anchorKind = input.anchorKind;
@@ -167,7 +171,9 @@ export async function createReminder(input: CreateReminderInput, options: Remind
     ],
   });
 
-  return (await getReminderById(id, { dbClient }))!;
+  const reminder = (await getReminderById(id, { dbClient }))!;
+  requestReminderDrainAt(reminder.remind_at);
+  return reminder;
 }
 
 export async function getReminderById(id: ReminderId, options: ReminderServiceOptions = {}): Promise<Reminder | null> {
@@ -340,6 +346,10 @@ export async function recomputeUnsentRemindersForSource({
   const dbClient = client(options);
   for (const statement of statements) {
     await dbClient.execute(statement);
+    if (statement.sql.includes("UPDATE ea_reminders")) {
+      const remindAt = statement.args?.[2];
+      if (typeof remindAt === "string") requestReminderDrainAt(remindAt);
+    }
   }
   return pending.length;
 }
@@ -412,7 +422,9 @@ export async function scheduleTimeToLeaveRefreshForUser({
       ? ["degraded", null, new Date(now).toISOString(), userId]
       : ["blocked", "time_to_leave_home_not_configured", null, userId],
   });
-  return Number(result.rowsAffected || 0);
+  const affected = Number(result.rowsAffected || 0);
+  if (affected && homeAvailable) requestReminderDrainAt(new Date(now).toISOString());
+  return affected;
 }
 
 export async function scheduleTimeToLeaveRefreshForSource({
@@ -434,7 +446,9 @@ export async function scheduleTimeToLeaveRefreshForSource({
             AND status = 'pending'`,
     args: [new Date(now).toISOString(), userId, ...where.args],
   });
-  return Number(result.rowsAffected || 0);
+  const affected = Number(result.rowsAffected || 0);
+  if (affected) requestReminderDrainAt(new Date(now).toISOString());
+  return affected;
 }
 
 export async function reconcileTimeToLeaveReminderForEvent({
@@ -529,6 +543,7 @@ export async function reconcileTimeToLeaveReminderForEvent({
       args: [anchorAt, remindAt, JSON.stringify(snapshot), nowIso, reminder.id],
     });
   }
+  if (pending.length) requestReminderDrainAt(nowIso);
   return pending.length;
 }
 
