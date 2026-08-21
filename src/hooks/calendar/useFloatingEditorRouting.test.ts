@@ -132,6 +132,67 @@ describe("useFloatingEditorRouting deadline editor state ownership", () => {
     dayCell.remove();
   });
 
+  it("anchors an Alfred-seeded create workspace after a programmatic month scroll settles", async () => {
+    const initialDayCell = document.createElement("div");
+    const settledDayCell = document.createElement("div");
+    const ghostChip = document.createElement("div");
+    ghostChip.dataset.ghostKind = "event";
+    ghostChip.dataset.ghostStart = "2026-08-18";
+    let currentDayCell = initialDayCell;
+    let ghostTop = 120;
+    ghostChip.getBoundingClientRect = vi.fn(() => DOMRect.fromRect({
+      x: 240,
+      y: ghostTop,
+      width: 120,
+      height: 24,
+    }));
+    initialDayCell.appendChild(ghostChip);
+    document.body.append(initialDayCell, settledDayCell);
+
+    let openedAtTop: number | null = null;
+    const openFloatingDetail = vi.fn((detail) => {
+      openedAtTop = detail.anchorElement?.getBoundingClientRect().top ?? null;
+    });
+    const request: CalendarEventCreateRequest = {
+      seed: { title: "Distant Event", allDay: false, startDate: "2026-08-18", startTime: "15:00" },
+      origin: { kind: "alfred-proposal", referenceId: "proposal-distant" },
+    };
+    const { result } = renderHook(() => useFloatingEditorRouting(routingProps({
+      eventEditorRef: { current: { openCreate: vi.fn().mockImplementation(async () => {
+        const positions = [210, 315, 420];
+        const advanceProgrammaticScroll = () => {
+          const nextTop = positions.shift();
+          if (nextTop == null) return;
+          ghostTop = nextTop;
+          if (positions.length === 0) {
+            currentDayCell = settledDayCell;
+            settledDayCell.appendChild(ghostChip);
+          } else {
+            window.requestAnimationFrame(advanceProgrammaticScroll);
+          }
+        };
+        window.requestAnimationFrame(advanceProgrammaticScroll);
+        return { accepted: true };
+      }) } },
+      findDateCell: () => currentDayCell,
+      openFloatingDetail,
+    })));
+
+    await act(async () => {
+      await result.current.openFloatingEventCreate("2026-08-18", request);
+    });
+
+    expect(openedAtTop).toBe(420);
+    // test-architecture: allow-boundary-interaction -- The routed detail anchor is the stable boundary proving the Alfred handoff waits for the calendar's final scrolled geometry.
+    expect(openFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
+      anchorElement: ghostChip,
+      sourceCellElement: settledDayCell,
+      anchorKind: "chip",
+    }));
+    initialDayCell.remove();
+    settledDayCell.remove();
+  });
+
   it("clears the deadline editor after a successful save→detail transition", () => {
     const floatingDetailRef = {
       current: { open: true, detailKind: "deadline", mode: "edit", itemId: "t1", dateKey: "2026-04-20", day: 20 },

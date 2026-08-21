@@ -81,40 +81,85 @@ function findEventGhostAnchor(dateCell: HTMLElement | null, dateKey: string | nu
 }
 
 const SEEDED_EVENT_GHOST_READY_TIMEOUT_MS = 1500;
+const SEEDED_EVENT_GHOST_MIN_TRACKED_FRAMES = 4;
+const SEEDED_EVENT_GHOST_STABLE_FRAMES = 2;
+
+function elementRectSignature(element: HTMLElement): string {
+  const rect = element.getBoundingClientRect();
+  return [rect.top, rect.right, rect.bottom, rect.left, rect.width, rect.height].join(":");
+}
 
 function resolveSeededEventCreateAnchor(
   dateCell: HTMLElement | null,
   dateKey: string | null,
 ): Promise<HTMLElement | null> {
-  const renderedGhost = findEventGhostAnchor(dateCell, dateKey);
-  if (renderedGhost) return Promise.resolve(renderedGhost);
   if (typeof MutationObserver === "undefined" || !document.documentElement) {
-    return Promise.resolve(dateCell);
+    return Promise.resolve(findEventGhostAnchor(dateCell, dateKey) || dateCell);
   }
 
   return new Promise((resolve) => {
     let settled = false;
     let timeoutId: number | null = null;
+    let frameId: number | null = null;
     let observer: MutationObserver | null = null;
+    let trackedAnchor: HTMLElement | null = null;
+    let trackedRect = "";
+    let trackedFrames = 0;
+    let stableFrames = 0;
     const finish = (anchor: HTMLElement | null) => {
       if (settled) return;
       settled = true;
       observer?.disconnect();
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       resolve(anchor);
     };
-    const resolveMatchingGhost = () => {
+    const trackMatchingGhost = () => {
+      frameId = null;
       const matchingGhost = findEventGhostAnchor(dateCell, dateKey);
-      if (matchingGhost) finish(matchingGhost);
+      if (!matchingGhost?.isConnected) {
+        trackedAnchor = null;
+        trackedRect = "";
+        trackedFrames = 0;
+        stableFrames = 0;
+        return;
+      }
+
+      const rect = elementRectSignature(matchingGhost);
+      if (matchingGhost === trackedAnchor && rect === trackedRect) {
+        stableFrames += 1;
+      } else {
+        trackedAnchor = matchingGhost;
+        trackedRect = rect;
+        stableFrames = 1;
+      }
+      trackedFrames += 1;
+
+      // The target ghost can render before CalendarScrollContainer's effect has
+      // started its smooth/instant jump. Give that navigation a few frames to
+      // begin, then require consecutive stable geometry before positioning the
+      // floating editor against the ghost.
+      if (
+        trackedFrames >= SEEDED_EVENT_GHOST_MIN_TRACKED_FRAMES
+        && stableFrames >= SEEDED_EVENT_GHOST_STABLE_FRAMES
+      ) {
+        finish(matchingGhost);
+        return;
+      }
+      frameId = window.requestAnimationFrame(trackMatchingGhost);
+    };
+    const scheduleMatchingGhostTrack = () => {
+      if (frameId !== null || !findEventGhostAnchor(dateCell, dateKey)) return;
+      frameId = window.requestAnimationFrame(trackMatchingGhost);
     };
 
-    observer = new MutationObserver(resolveMatchingGhost);
+    observer = new MutationObserver(scheduleMatchingGhostTrack);
     observer.observe(document.documentElement, { childList: true, subtree: true });
     timeoutId = window.setTimeout(() => {
       finish(findEventGhostAnchor(dateCell, dateKey) || dateCell);
     }, SEEDED_EVENT_GHOST_READY_TIMEOUT_MS);
     // Close the gap between the initial lookup and observer registration.
-    resolveMatchingGhost();
+    scheduleMatchingGhostTrack();
   });
 }
 
@@ -237,14 +282,17 @@ export default function useFloatingEditorRouting({
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
     const openCreate = eventEditorRef.current?.openCreate;
-    const openDetail = (anchorElement: HTMLElement | null = dateCell) => openFloatingDetail({
+    const openDetail = (
+      anchorElement: HTMLElement | null = dateCell,
+      sourceCellElement: HTMLElement | null = dateCell,
+    ) => openFloatingDetail({
       mode: "create",
       view: "events",
       dateKey,
       day: parsed?.day ?? null,
       anchorElement,
-      sourceCellElement: dateCell,
-      anchorKind: anchorElement !== dateCell ? "chip" : "day-cell",
+      sourceCellElement,
+      anchorKind: anchorElement !== sourceCellElement ? "chip" : "day-cell",
     });
     if (request) {
       if (!openCreate) {
@@ -253,7 +301,7 @@ export default function useFloatingEditorRouting({
       return openCreate(request).then((result) => {
         if (!result.accepted) return result;
         return resolveSeededEventCreateAnchor(dateCell, dateKey).then((anchorElement) => {
-          openDetail(anchorElement);
+          openDetail(anchorElement, findDateCell(dateKey) || dateCell);
           return result;
         });
       });
