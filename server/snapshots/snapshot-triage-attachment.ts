@@ -248,6 +248,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId: string, ac
       triggerType: "email_queued",
       eventKey: `email_triage:${accountId}:${emailId}:email_triage_queued`,
       emailId,
+      emailReceivedAt: email.email_date || email.date || null,
       lane: ARRIVAL_GRACE_QUEUED_LANE,
       triageSource: ARRIVAL_GRACE_SOURCE,
       reason: "email_triage_queued",

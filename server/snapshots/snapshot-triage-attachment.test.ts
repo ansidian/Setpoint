@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  clearCurrentDashboardEventSubscribers,
+  subscribeCurrentDashboardEvents,
+} from "../dashboard/current-events.ts";
+import {
   attachArrivalGraceEmailToActiveSnapshot,
   requeueArrivalGraceTriageForEmail,
   restorePendingTriageEligibilityForEmail,
@@ -12,6 +16,54 @@ import { createMigratedDb } from "./snapshot-test-fixtures.ts";
 import type { SnapshotDbResult, SnapshotWriteDb } from "./snapshot-types.ts";
 
 describe("snapshot triage attachment", () => {
+  it("publishes the received time for queued emails so stale sounds can be suppressed", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-03T16:00:00.000Z");
+    await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES (?, ?, ?, 'pending', 'arrival_grace')`,
+      args: ["user-1", "gmail-work", "msg-stale-queued"],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'queued', ?, ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "msg-stale-queued",
+        "2026-05-03T16:00:30.000Z",
+        "email_triage:user-1:gmail-work:msg-stale-queued",
+      ],
+    });
+
+    let publishedEvent: Record<string, unknown> | null = null;
+    clearCurrentDashboardEventSubscribers();
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => {
+      publishedEvent = event;
+    });
+    try {
+      await attachArrivalGraceEmailToActiveSnapshot("user-1", "gmail-work", {
+        uid: "msg-stale-queued",
+        subject: "Stale queued email",
+        email_date: "2026-05-03T08:00:00.000Z",
+      }, { dbClient, now });
+    } finally {
+      unsubscribe();
+      clearCurrentDashboardEventSubscribers();
+    }
+
+    expect(publishedEvent).toMatchObject({
+      source: "email_triage",
+      reason: "email_triage_queued",
+      details: {
+        eventKey: "email_triage:gmail-work:msg-stale-queued:email_triage_queued",
+        emailReceivedAt: "2026-05-03T08:00:00.000Z",
+      },
+    });
+  });
+
   it("requests a triage drain only after the arrival-grace job is durable", async () => {
     const dbClient = await createMigratedDb();
     const requestEmailTriageDrainAtFn = vi.fn();
