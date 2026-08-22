@@ -4,7 +4,10 @@ import { monthIndexToDate } from "../../../hooks/calendar/calendarScrollModel";
 // Months that do not start on Sunday render their leading cells from the
 // previous month, so its events and deadlines must ride along in the preview.
 // Shared identities are deduped in favor of the current month's instance.
-export interface CalendarPreviewEvent { id: unknown }
+export interface CalendarPreviewEvent {
+  id?: unknown;
+  originalStartTime?: unknown;
+}
 
 export interface CalendarDeadlineOverlay<T = unknown> {
   enabled: boolean;
@@ -33,12 +36,21 @@ export function mergeAdjacentEventLists<TEvent extends CalendarPreviewEvent>(cur
   if (previousMonthEvents == null) return current.length ? current : null;
   if (!previousMonthEvents.length) return current.length ? current : null;
   if (!current.length) return previousMonthEvents;
-  const seen = new Set(current.map((event) => event.id));
+  const identity = (event: TEvent) => event.originalStartTime
+    ? `${String(event.id)}::${String(event.originalStartTime)}`
+    : String(event.id);
+  const seen = new Set(current.map(identity));
   const merged = [...current];
+  let added = false;
   for (const event of previousMonthEvents) {
-    if (!seen.has(event.id)) merged.push(event);
+    const key = identity(event);
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(event);
+      added = true;
+    }
   }
-  return merged;
+  return added ? merged : currentMonthEvents ?? null;
 }
 
 interface CalendarPreviewDeadlineItem {
@@ -77,17 +89,80 @@ export function mergeAdjacentDeadlineData<TDeadline>(
 
   const seen = new Set(current.upcoming.map(deadlineIdentity));
   const upcoming = [...current.upcoming];
+  let added = false;
   for (const deadline of previous.upcoming) {
     const identity = deadlineIdentity(deadline);
     if (!seen.has(identity)) {
       seen.add(identity);
       upcoming.push(deadline);
+      added = true;
     }
   }
+  if (!added) return currentMonthDeadlines;
   return {
     ...current,
     upcoming,
   } as TDeadline;
+}
+
+export function buildCalendarMonthPreviewComputed<TEvent extends CalendarPreviewEvent, TDeadline, TComputed>({
+  fullDataDeadlineOverlay,
+  fullDataEvents,
+  hasFullData,
+  activeView,
+  previewDeadlineOverlay,
+  previewEvents,
+  viewMonth,
+  viewYear,
+}: {
+  fullDataDeadlineOverlay?: CalendarDeadlineOverlay<TDeadline> | null;
+  fullDataEvents?: TEvent[];
+  hasFullData: boolean;
+  activeView: {
+    monthAgnosticItemsByDate?: boolean;
+    compute?: (options: {
+      data: { events: TEvent[]; deadlineOverlay: CalendarDeadlineOverlay<TDeadline> | null };
+      viewYear: number;
+      viewMonth: number;
+    }) => TComputed;
+  };
+  previewDeadlineOverlay: CalendarDeadlineOverlay<TDeadline> | null;
+  previewEvents: TEvent[] | null;
+  viewMonth: number;
+  viewYear: number;
+}): TComputed | null {
+  if (typeof activeView.compute !== "function") return null;
+  if (activeView.monthAgnosticItemsByDate) return null;
+
+  const mergedEvents = hasFullData
+    ? mergeAdjacentEventLists(fullDataEvents, previewEvents)
+    : null;
+  let resolvedDeadlineOverlay = fullDataDeadlineOverlay ?? null;
+  let deadlineDataChanged = false;
+  if (fullDataDeadlineOverlay?.enabled && previewDeadlineOverlay?.data) {
+    const mergedData = mergeAdjacentDeadlineData(fullDataDeadlineOverlay.data, previewDeadlineOverlay.data);
+    if (mergedData !== fullDataDeadlineOverlay.data) {
+      resolvedDeadlineOverlay = { ...fullDataDeadlineOverlay, data: mergedData as TDeadline };
+      deadlineDataChanged = true;
+    }
+  }
+  if (hasFullData) {
+    if (mergedEvents === (fullDataEvents ?? null) && !deadlineDataChanged) return null;
+    return activeView.compute({
+      data: {
+        events: mergedEvents || [],
+        deadlineOverlay: resolvedDeadlineOverlay,
+      },
+      viewYear,
+      viewMonth,
+    });
+  }
+  if (!previewEvents?.length && !previewDeadlineOverlay?.data) return null;
+  return activeView.compute({
+    data: { events: previewEvents || [], deadlineOverlay: previewDeadlineOverlay },
+    viewYear,
+    viewMonth,
+  });
 }
 
 function buildMonthDeadlineOverlay<TDeadline>(activeOverlay: CalendarDeadlineOverlay<TDeadline>, monthDeadlines: TDeadline | null): CalendarDeadlineOverlay<TDeadline> | null {

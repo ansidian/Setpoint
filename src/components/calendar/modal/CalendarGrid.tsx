@@ -31,7 +31,11 @@ import type {
 } from "./calendarEventSpanLayout";
 import type { CalendarGhostLike } from "./calendarGridUtils";
 import type { CalendarGridOverflowState } from "./useCalendarGridOverflow";
-import type { CalendarDeadlineOverlay } from "./calendarMonthPreviewModel";
+import {
+  buildCalendarMonthPreviewComputed,
+  mergeAdjacentEventLists,
+  type CalendarDeadlineOverlay,
+} from "./calendarMonthPreviewModel";
 
 export interface CalendarGridLayout {
   cellHeight: number;
@@ -266,29 +270,24 @@ export default memo(function CalendarGrid({
     [eventCellCount, currentMonth, currentYear, firstDay, viewMonth, viewYear],
   );
 
+  const hasFullData = isActiveMonth || viewData != null;
+  const resolvedEvents = useMemo(() => (
+    hasFullData
+      ? mergeAdjacentEventLists(viewData?.events, previewEvents) || emptyEvents
+      : previewEvents || emptyEvents
+  ), [hasFullData, previewEvents, viewData?.events]);
   const previewComputed = useMemo(() => {
-    if (isActiveMonth) return null;
-    // Month-agnostic views (bills) render every mounted month from the single
-    // shared itemsByDate, so they must not run the per-month events/deadlines
-    // preview compute — feeding events-shaped data to bills' compute yields an
-    // empty itemsByDate that would shadow the shared map and blank the month.
-    if (activeView.monthAgnosticItemsByDate) return null;
-    if (!previewEvents?.length && !previewDeadlineOverlay?.data) return null;
-    if (typeof activeView.compute !== "function") return null;
-    return activeView.compute({
-      data: {
-        events: previewEvents || [],
-        deadlineOverlay: previewDeadlineOverlay,
-      },
-      viewYear,
-      viewMonth,
+    return buildCalendarMonthPreviewComputed({
+      fullDataDeadlineOverlay: viewData?.deadlineOverlay,
+      fullDataEvents: viewData?.events,
+      hasFullData, activeView, previewDeadlineOverlay, previewEvents,
+      viewMonth, viewYear,
     });
-  }, [isActiveMonth, previewEvents, previewDeadlineOverlay, activeView, viewYear, viewMonth]);
+  }, [hasFullData, previewEvents, previewDeadlineOverlay, activeView, viewData?.deadlineOverlay, viewData?.events, viewYear, viewMonth]);
 
   const resolvedItemsByDate = previewComputed?.itemsByDate || itemsByDate;
   const resolvedItemsByDay = previewComputed?.itemsByDay || itemsByDay;
 
-  const resolvedEvents = viewData?.events || previewEvents || emptyEvents;
   const spanLayoutGhosts = useStableSpanLayoutGhosts(ghostPreview?.ghosts);
   const spanLayout = useMemo<CalendarEventSpanLayout>(() => {
     if (view !== "events") {

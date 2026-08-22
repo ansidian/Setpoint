@@ -74,7 +74,7 @@ export default function CalendarMonthBlock({
 }: CalendarMonthBlockProps) {
   const { firstDay, daysInMonth } = getMonthData(year, month);
   const monthCached = isMonthCached ? isMonthCached(year, month) : false;
-  const { isActive, isCached, hasFullData, blockSkeleton } = resolveMonthBlockState({
+  const { isActive, isCached, blockSkeleton } = resolveMonthBlockState({
     year,
     month,
     viewYear,
@@ -84,9 +84,9 @@ export default function CalendarMonthBlock({
     showGridSkeleton,
     shareItemsByDate,
   });
-  const preview = hasFullData ? null : previewByIndex.get(index);
+  const preview = previewByIndex.get(index);
   const previewEvents = preview?.events ?? null;
-  const monthDeadlineOverlay = preview ? preview.deadlineOverlay : null;
+  const monthDeadlineOverlay = preview?.deadlineOverlay ?? null;
   const monthData = resolveMountedMonthData({
     isActive,
     isCached,
