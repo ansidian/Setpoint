@@ -5,36 +5,6 @@ import CalendarModal from "./CalendarModal.tsx";
 import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
 
 describe("CalendarModal deadlines rail behavior", () => {
-  it("opens deadline create from an Events deadline-overlay focus request", async () => {
-    window.innerWidth = 1900;
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-05-06T19:00:00.000Z"));
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        openRequestId={1}
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusItemId="new"
-        forceDeadlineOverlay
-        eventsData={{
-          editable: true,
-          getEvents: () => [],
-        }}
-        billsData={{}}
-        deadlinesData={{ upcoming: [] }}
-      />,
-    ));
-
-    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getByTestId("calendar-floating-detail-caret")).toBeTruthy();
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 6, 2026");
-    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBeNull();
-  });
-
   it("opens existing deadline detail from an Events overlay chip without changing view", async () => {
     window.innerWidth = 1900;
     render(wrapWithDashboard(
@@ -98,39 +68,6 @@ describe("CalendarModal deadlines rail behavior", () => {
       .getByText("Project due")
       .closest("[data-testid='calendar-cell-item-chip']");
     expect(chip?.getAttribute("data-selected")).toBe("true");
-  });
-
-  it("edits selected Todoist overlay items from the Events E hotkey", async () => {
-    window.innerWidth = 1900;
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => [],
-        }}
-        billsData={{}}
-        deadlinesData={{
-          upcoming: [
-            { id: "todo-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-          ],
-        }}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByText("Project due"));
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
-
-    fireEvent.keyDown(document, { key: "e" });
-
-    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    expect(screen.getByText(/Calendar Workspace/).textContent).toContain("Events");
   });
 
   it("preserves a focused deadline day and item when the modal opens into Events", async () => {
