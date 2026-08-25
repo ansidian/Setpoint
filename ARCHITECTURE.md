@@ -125,7 +125,8 @@ server/
 ├── dashboard/
 │   └── current-providers/
 ├── db/
-│   └── migrations/
+│   ├── migrations/
+│   └── tldraw-assets/
 ├── email/
 │   ├── search/
 │   │   └── evals/
@@ -140,6 +141,7 @@ server/
 ├── snapshots/
 ├── tasks/
 ├── test-utils/
+├── tldraw/
 ├── transaction-imports/
 │   └── parsers/
 ├── transactions/
@@ -241,6 +243,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.ts` |
 | `useIndexedSearch` | `src/components/inbox/useIndexedSearch.ts` |
 | `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.ts` |
+| `useTldrawAutosave` | `src/components/notes/useTldrawAutosave.ts` |
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.ts` |
 | `useAddTaskPanelPlacement` | `src/components/todoist/add-task-panel/useAddTaskPanelPlacement.ts` |
 | `useDirtyCloseConfirmation` | `src/components/todoist/add-task-panel/useDirtyCloseConfirmation.ts` |
@@ -448,7 +451,7 @@ Generating or importing a token invalidates the previous Setpoint credential imm
 
 ## Current Dashboard Pipeline
 
-Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
+Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, and Actual are fetched through domain services and assembled into the `/api/dashboard/current` envelope. Desktop Notes loads its tldraw document independently from `/api/tldraw/bootstrap` only after the tab is opened.
 
 ```mermaid
 flowchart TD
@@ -712,7 +715,6 @@ erDiagram
 | `ea_news_items` | `026_news.sql` |
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
-| `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
 | `ea_onboarding_progress` | `037_onboarding_progress.sql` |
 | `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql` |
 | `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
@@ -723,6 +725,7 @@ erDiagram
 | `ea_sessions` | `001_ea_tables.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `039_password_step_up_window.sql` |
 | `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql`, `026_news.sql`, `028_provider_needs_reauth.sql`, `036_todoist_oauth_setup.sql`, `043_email_triage_classify_read_arrivals.sql`, `044_alfred_model_settings.sql`, `046_time_to_leave_foundation.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
+| `ea_tldraw_documents` | `050_tldraw_workspace.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |
 | `ea_todoist_oauth_states` | `036_todoist_oauth_setup.sql` |

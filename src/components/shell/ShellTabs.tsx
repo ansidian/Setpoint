@@ -22,12 +22,13 @@ const TABS = ["dashboard", "inbox", "calendar", "notes", "news"] as const satisf
 // activation-follows-focus roving tabindex. There are only 5 cheap, always-
 // mounted (KeepAliveTab) panels, so moving focus with the arrow keys also
 // switches the tab immediately instead of requiring a separate activation key.
-export function ShellTabs({ tab, onTab, inboxUnreadSignalCount }: {
+export function ShellTabs({ tab, onTab, inboxUnreadSignalCount, notesEnabled = true }: {
   tab: DashboardTab;
   onTab: (tab: DashboardTab) => void;
   inboxUnreadSignalCount: number;
+  notesEnabled?: boolean;
 }) {
-  const tabs = TABS;
+  const tabs: readonly DashboardTab[] = notesEnabled ? TABS : TABS.filter((candidate) => candidate !== "notes");
   const tabRefs = useRef<Partial<Record<DashboardTab, HTMLButtonElement | null>>>({});
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {

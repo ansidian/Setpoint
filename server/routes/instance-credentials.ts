@@ -26,6 +26,10 @@ import {
   todoistOAuthCredentialManager,
   type TodoistOAuthCredentialManager,
 } from "../tasks/todoist-setup.ts";
+import {
+  tldrawCredentialManager,
+  type TldrawCredentialManager,
+} from "../tldraw/tldraw-license.ts";
 
 const MAX_CREDENTIAL_LENGTH = 65_536;
 
@@ -75,6 +79,7 @@ export function createInstanceCredentialsRouter(
     cookie: requireCookieSession,
     recent: requireRecentPasswordAuth,
   },
+  tldrawManager: TldrawCredentialManager = tldrawCredentialManager,
 ) {
   const router = Router();
   wrapRouterAsync(router);
@@ -177,9 +182,11 @@ export function createInstanceCredentialsRouter(
   router.post("/:key/test", auth.recent, async (req, res) => {
     const key = req.params.key!;
     if (rejectGenericGroupMutation(key, res)) return;
-    const result = key === "weather.pirate_weather_api_key" || key === "calendar.google_places_api_key"
-      ? await locationManager.testPending(key)
-      : await aiManager.testPending(key);
+    const result = key === "notes.tldraw_license_key"
+      ? await tldrawManager.testPending()
+      : key === "weather.pirate_weather_api_key" || key === "calendar.google_places_api_key"
+        ? await locationManager.testPending(key)
+        : await aiManager.testPending(key);
     return res.status(result.ok ? 200 : 422).json(result);
   });
 

@@ -17,6 +17,7 @@ const states: Record<string, ConnectionState> = {
   "discord-reminders": "not_connected",
   "pirate-weather": "needs_setup",
   "google-places": "not_connected",
+  tldraw: "not_connected",
 };
 
 const rows: ConnectionRowView[] = CONNECTIONS.map((definition) => ({

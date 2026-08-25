@@ -2,7 +2,7 @@
 
 ![Setpoint](docs/assets/repo-hero.png)
 
-A personal executive-assistant dashboard that consolidates email, calendar, tasks, reminders, weather, bills, and notes into one current operational view. It is built to solve the daily problem of managing multiple inboxes, calendars, tasks, and financial signals without losing important work in the noise.
+A personal executive-assistant dashboard that consolidates email, calendar, tasks, reminders, weather, bills, and a desktop ideas canvas into one current operational view. It is built to solve the daily problem of managing multiple inboxes, calendars, tasks, and financial signals without losing important work in the noise.
 
 Setpoint is a private BYOK system. Bring your own OpenAI or Anthropic API key: email triage and bill extraction can run on either provider, while semantic inbox search uses OpenAI embeddings and answer generation.
 
@@ -33,7 +33,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 - **Snapshot boundaries** — Cron-based schedule entries advance active email snapshot windows without running a batch generator.
 - **Snapshot history** — Browses prior inbox snapshot windows from the current snapshot store.
 - **Important senders and notifications** — Configures priority senders, browser notifications, triage notification sounds, and private Discord reminder delivery.
-- **Notes and quick capture** — Keeps local operational notes beside the current dashboard view.
+- **Desktop Notes canvas** — Uses a licensed tldraw workspace as an infinite dumping ground for project plans, bugs, feature lists, and personal ideas. The document is revision-safe across devices and refresh-based rather than realtime.
 - **Multi-account support** — Supports multiple Gmail OAuth and iCloud IMAP accounts with custom labels, colors, and icons.
 - **Operational controls** — Includes settings for provider credentials, model selection, account order, schedules, Actual Budget, Todoist, reminders, passkeys, and scoped API tokens.
 
@@ -42,7 +42,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 | Layer | Tech |
 |-------|------|
 | Frontend | React 19, Vite 8, React Router 7, Tailwind CSS 4 |
-| UI | shadcn/ui, Radix, Framer Motion |
+| UI | shadcn/ui, Radix, Framer Motion, tldraw |
 | Backend | Express.js (Node.js 24.x) |
 | Database | Turso (LibSQL) |
 | AI | BYOK Anthropic and OpenAI providers for email triage and bill extraction; OpenAI for semantic inbox search |
@@ -52,6 +52,8 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 | Weather | Pirate Weather API |
 | Finances | Actual Budget API |
 | Tasks | Todoist API |
+
+The Notes tab is intentionally desktop-only and absent from the static demo. Production requires a tldraw hobby license under **Settings → Connections → tldraw**; local development opens Notes without a key, matching tldraw's development license behavior. A configured key is encrypted at rest but returned to the authenticated production browser because tldraw validates it client-side. Images and videos are stored privately under `EA_TLDRAW_ASSET_DIR`; production Render deployments require the persistent disk declared in `render.yaml`.
 
 For a detailed look at how everything fits together, see [ARCHITECTURE.md](ARCHITECTURE.md).
 

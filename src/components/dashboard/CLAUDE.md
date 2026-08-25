@@ -70,7 +70,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ## Related
 
-- `src/components/notes/` — Notes tab (key `4`): CodeMirror live-markdown editor, search, tags, archive, promote (see its map)
+- `src/components/notes/` — desktop-only Notes tab (key `4`): licensed tldraw canvas with refresh-based cross-device persistence (see its map)
 - `src/components/calendar/` — calendar tab mounted via `DashboardCalendarModalMount.tsx`
 - `src/components/alfred/` — desktop-only Alfred Panel mounted by `DashboardShell.tsx` (⌘\ toggle, ⌘⇧\ new chat); mobile neither mounts nor exposes it
 - `server/routes/dashboard.ts` — state fetch + SSE stream backing this view

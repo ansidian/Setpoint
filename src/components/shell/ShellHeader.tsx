@@ -80,12 +80,14 @@ function ShellHeader({
           || event.target.isContentEditable
         ),
         anyBlockingOverlayOpen,
+        activeTab: tab,
+        notesEnabled: !isMobile && !demoMode,
       });
       if (nextTab) onTab(nextTab);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onTab, anyBlockingOverlayOpen]);
+  }, [onTab, anyBlockingOverlayOpen, demoMode, isMobile, tab]);
 
   return (
     <div
@@ -143,6 +145,7 @@ function ShellHeader({
           tab={tab}
           onTab={onTab}
           inboxUnreadSignalCount={inboxUnreadSignalCount}
+          notesEnabled={!demoMode}
         />
       )}
       <div style={{ flex: 1 }} />

@@ -1,11 +1,11 @@
-import { CalendarDays, Inbox, LayoutList, Notebook } from "lucide-react";
+import { CalendarDays, Inbox, LayoutList } from "lucide-react";
 import type { DashboardTab } from "../dashboard/dashboardShellModel";
 
-type MobileDashboardTab = Exclude<DashboardTab, "news">;
+type MobileDashboardTab = Exclude<DashboardTab, "news" | "notes">;
 
-const NAV_TABS = ["dashboard", "inbox", "calendar", "notes"] as const satisfies readonly MobileDashboardTab[];
-const NAV_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays, notes: Notebook };
-const NAV_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes" };
+const NAV_TABS = ["dashboard", "inbox", "calendar"] as const satisfies readonly MobileDashboardTab[];
+const NAV_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays };
+const NAV_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar" };
 
 // Mobile-only bottom tab bar. Rendered as the last in-flow flex child of
 // DashboardShell's fixed inset-0 column, so it pins to the viewport bottom and

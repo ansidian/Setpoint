@@ -209,6 +209,7 @@ export default function Dashboard() {
       }, {
         refreshing: bd.refreshing,
         syncing: currentSyncing,
+        activeTab: document.documentElement.dataset.activeTab,
       })) return;
       handleExplicitQuickRefresh();
     }

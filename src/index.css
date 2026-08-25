@@ -723,7 +723,6 @@
   --sp-touch-min: 44px;                                /* minimum touch-target dimension */
   --sp-safe-top: env(safe-area-inset-top, 0px);        /* notch / status-bar inset (sticky header) */
   --sp-safe-bottom: env(safe-area-inset-bottom, 0px);  /* home-indicator inset (sheets; Phase-1 nav) */
-  --sp-note-editor-font: 13px;                         /* CM editor base font; flipped to 16px ≤639px (Task 5) */
   --sp-motion-fast: 150ms;
   --sp-motion-panel: 360ms;
   --sp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -874,13 +873,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Mobile input font floor — ≥16px stops iOS focus-zoom. Inputs are styled with
-   inline fontSize (which out-specifies this rule), so the inline surfaces flip
-   via isMobile (see NotesTab / MobileInboxView / DraftReply); this block is the
-   safety net for class-based inputs + the variable flip the CodeMirror theme reads. */
+/* Mobile input font floor — ≥16px stops iOS focus-zoom. */
 @media (max-width: 639px) {
   input, textarea, select { font-size: 16px; }
-  :root { --sp-note-editor-font: 16px; }
   .sp-agenda-touch { min-height: var(--sp-touch-min) !important; }
 
   .sp-mobile-agenda-control {
@@ -915,21 +910,467 @@ body {
   font-family: var(--serif-choice, "Instrument Serif"), Georgia, serif;
 }
 
-/* Notes search input: match the CM capture field placeholder (.cm-placeholder in
-   noteEditorExtensions.ts noteTheme) so both notes placeholders read identically.
-   opacity:1 stops Firefox/UA from dimming the already-faint token further. */
-.notes-search-input::placeholder {
-  color: var(--color-text-faint);
+/* Desktop Notes is a precise full-bleed tldraw surface inside Setpoint's shell. */
+.notes-canvas-root,
+.notes-canvas-loading,
+.notes-canvas-state {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #11111b;
+}
+
+.notes-canvas-root .tl-container {
+  width: 100%;
+  height: 100%;
+}
+
+.notes-canvas-loading {
+  background:
+    linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.035) 45%, transparent 60%) 0 0 / 240% 100%,
+    #11111b;
+  animation: notes-canvas-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes notes-canvas-shimmer {
+  to { background-position: -240% 0, 0 0; }
+}
+
+.notes-canvas-state {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.notes-canvas-state-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--sp-accent) 26%, transparent);
+  border-radius: 12px;
+  color: var(--sp-accent);
+  background: color-mix(in srgb, var(--sp-accent) 8%, transparent);
+}
+
+.notes-canvas-state h2 {
+  margin: 0;
+  color: var(--sp-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notes-canvas-state p {
+  max-width: 52ch;
+  margin: 8px 0 18px;
+  color: var(--sp-subtext);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.notes-canvas-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--sp-accent) 30%, transparent);
+  border-radius: 8px;
+  color: var(--sp-text);
+  background: color-mix(in srgb, var(--sp-accent) 12%, var(--sp-panel));
+  font: 600 11px/1 Montserrat, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform var(--sp-motion-fast) var(--sp-ease-out), border-color var(--sp-motion-fast) ease, background-color var(--sp-motion-fast) ease;
+}
+
+.notes-canvas-button:hover,
+.notes-canvas-button:focus-visible {
+  border-color: color-mix(in srgb, var(--sp-accent) 52%, transparent);
+  background: color-mix(in srgb, var(--sp-accent) 18%, var(--sp-panel));
+  transform: translateY(-1px);
+}
+
+.notes-canvas-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sp-accent) 64%, transparent);
+  outline-offset: 2px;
+}
+
+.notes-canvas-button:active { transform: translateY(0) scale(0.98); }
+.notes-canvas-button--quiet { background: var(--sp-panel); }
+
+.notes-save-indicator {
+  position: absolute;
+  z-index: 400;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
+  color: var(--sp-subtext);
+  background: rgba(22,22,30,0.92);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.25px;
+  pointer-events: none;
+}
+
+.notes-save-indicator--conflict,
+.notes-save-indicator--error { color: var(--sp-rose); }
+
+.notes-save-indicator--saved {
+  animation: notes-saved-confirmation 3s var(--sp-ease-out) forwards;
+}
+
+@keyframes notes-saved-confirmation {
+  0%, 72% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-3px); }
+}
+
+.notes-conflict-panel {
+  position: absolute;
+  z-index: 410;
+  top: 44px;
+  left: 50%;
+  display: flex;
+  width: min(720px, calc(100% - 32px));
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--sp-rose) 28%, transparent);
+  border-radius: 12px;
+  color: var(--sp-rose);
+  background: #16161e;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+}
+
+.notes-conflict-panel > div { flex: 1; min-width: 0; }
+.notes-conflict-panel strong { color: var(--sp-text); font-size: 11px; }
+.notes-conflict-panel p { margin: 2px 0 0; color: var(--sp-subtext); font-size: 10px; line-height: 1.45; }
+
+.notes-save-error {
+  position: absolute;
+  z-index: 405;
+  top: 42px;
+  left: 50%;
+  padding: 7px 10px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--sp-rose) 24%, transparent);
+  border-radius: 8px;
+  color: var(--sp-rose);
+  background: #16161e;
+  font-size: 10px;
+}
+
+.setpoint-checklist {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 14px;
+  border: 1px solid rgba(203, 166, 218, 0.26);
+  border-radius: 12px;
+  color: #cdd6f4;
+  background: #24243a;
+  font-family: Montserrat, sans-serif;
+}
+
+.setpoint-checklist__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.setpoint-checklist__title-row {
+  display: grid;
+  height: 31px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(205, 214, 244, 0.08);
+}
+
+.setpoint-checklist__title-row:focus-within {
+  border-bottom-color: rgba(203, 166, 218, 0.64);
+}
+
+.setpoint-checklist__title,
+.setpoint-checklist__item-input {
+  box-sizing: border-box;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #cdd6f4;
+  background: transparent;
+  font-family: Montserrat, sans-serif;
+}
+
+.setpoint-checklist__title {
+  width: 100%;
+  height: 31px;
+  padding: 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 27px;
+}
+
+.setpoint-checklist__title::placeholder,
+.setpoint-checklist__item-input::placeholder {
+  color: #9399b2;
   opacity: 1;
 }
 
-/* Note rows: subtle hover lift. box-shadow only — the row is the dnd-kit sortable
-   root and owns `transform` inline, so a hover translate would fight drag. */
-.note-row {
-  transition: box-shadow 150ms ease, border-color 150ms ease;
+.setpoint-checklist__count {
+  color: #a6adc8;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
 }
-.note-row:hover {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+
+.setpoint-checklist__items {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.setpoint-checklist__row-slot {
+  position: relative;
+  border-radius: 8px;
+}
+
+.setpoint-checklist__row-slot--active {
+  z-index: 3;
+}
+
+.setpoint-checklist__row-slot--active::before {
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed rgba(203, 166, 218, 0.5);
+  border-radius: 7px;
+  background: rgba(203, 166, 218, 0.055);
+  content: "";
+  pointer-events: none;
+}
+
+.setpoint-checklist__row {
+  position: relative;
+  display: grid;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  grid-template-columns: 14px 20px minmax(0, 1fr) 24px;
+  align-items: start;
+  gap: 5px;
+  padding: 0 2px;
+  border-radius: 8px;
+  transition: background-color var(--sp-motion-fast) ease, box-shadow var(--sp-motion-fast) var(--sp-ease-out), opacity var(--sp-motion-fast) ease;
+}
+
+.setpoint-checklist__row:hover,
+.setpoint-checklist__row:focus-within {
+  background: rgba(205, 214, 244, 0.045);
+}
+
+.setpoint-checklist__row--dragging {
+  z-index: 2;
+  color: #dfe5ff;
+  background: #302f49;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  cursor: grabbing;
+}
+
+.setpoint-checklist__row--dragging .setpoint-checklist__drag {
+  color: #e3c7ee;
+  background: rgba(203, 166, 218, 0.16);
+  opacity: 1;
+  transform: none;
+}
+
+.setpoint-checklist__row--dragging .setpoint-checklist__remove {
+  opacity: 0;
+}
+
+.setpoint-checklist__drag,
+.setpoint-checklist__check,
+.setpoint-checklist__remove,
+.setpoint-checklist__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  color: #a6adc8;
+  background: transparent;
+  font-family: Montserrat, sans-serif;
+  cursor: pointer;
+  transition: transform var(--sp-motion-fast) var(--sp-ease-out), color var(--sp-motion-fast) ease, background-color var(--sp-motion-fast) ease, border-color var(--sp-motion-fast) ease;
+}
+
+.setpoint-checklist__drag {
+  width: 14px;
+  height: 22px;
+  margin-top: 4px;
+  padding: 0;
+  border-radius: 4px;
+  opacity: 0.42;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.setpoint-checklist__drag:active { cursor: grabbing; }
+
+.setpoint-checklist__check {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #6c7086;
+  border-radius: 4px;
+  margin-top: 7px;
+}
+
+.setpoint-checklist__check[aria-checked="true"] {
+  border-color: #cba6da;
+  color: #11111b;
+  background: #cba6da;
+}
+
+.setpoint-checklist__check[aria-checked="true"]:hover,
+.setpoint-checklist__check[aria-checked="true"]:focus-visible {
+  color: #11111b;
+  background: #d8b7e5;
+}
+
+.setpoint-checklist__drag svg,
+.setpoint-checklist__check svg,
+.setpoint-checklist__remove svg,
+.setpoint-checklist__add svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.setpoint-checklist__item-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  resize: none;
+  white-space: pre-wrap;
+}
+
+.setpoint-checklist__item-input:focus-visible {
+  box-shadow: inset 0 -1px rgba(203, 166, 218, 0.54);
+}
+
+.setpoint-checklist__row--checked .setpoint-checklist__item-input {
+  color: #9399b2;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.setpoint-checklist__remove {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  margin-top: 4px;
+  opacity: 0;
+}
+
+.setpoint-checklist__remove:disabled {
+  cursor: default;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.setpoint-checklist__row:hover .setpoint-checklist__remove,
+.setpoint-checklist__row:focus-within .setpoint-checklist__remove {
+  opacity: 1;
+}
+
+.setpoint-checklist__add {
+  align-self: flex-start;
+  min-height: 28px;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 0 7px 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.setpoint-checklist__drag:hover,
+.setpoint-checklist__drag:focus-visible,
+.setpoint-checklist__check:hover,
+.setpoint-checklist__check:focus-visible,
+.setpoint-checklist__remove:hover,
+.setpoint-checklist__remove:focus-visible,
+.setpoint-checklist__add:hover,
+.setpoint-checklist__add:focus-visible {
+  color: #cdd6f4;
+  background-color: rgba(203, 166, 218, 0.12);
+  transform: translateY(-1px);
+}
+
+.setpoint-checklist__drag:focus-visible,
+.setpoint-checklist__check:focus-visible,
+.setpoint-checklist__remove:focus-visible,
+.setpoint-checklist__add:focus-visible {
+  outline: 2px solid rgba(203, 166, 218, 0.72);
+  outline-offset: 2px;
+}
+
+.setpoint-checklist__drag:active,
+.setpoint-checklist__check:active,
+.setpoint-checklist__remove:active,
+.setpoint-checklist__add:active {
+  transform: translateY(0) scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notes-save-indicator--saved { animation: none; }
+
+  .setpoint-checklist__row,
+  .setpoint-checklist__drag,
+  .setpoint-checklist__check,
+  .setpoint-checklist__remove,
+  .setpoint-checklist__add {
+    transition: none;
+  }
+
+  .setpoint-checklist__drag:hover,
+  .setpoint-checklist__drag:focus-visible,
+  .setpoint-checklist__check:hover,
+  .setpoint-checklist__check:focus-visible,
+  .setpoint-checklist__remove:hover,
+  .setpoint-checklist__remove:focus-visible,
+  .setpoint-checklist__add:hover,
+  .setpoint-checklist__add:focus-visible,
+  .setpoint-checklist__drag:active,
+  .setpoint-checklist__check:active,
+  .setpoint-checklist__remove:active,
+  .setpoint-checklist__add:active {
+    transform: none;
+  }
 }
 
 /* News reading surface: a stable topic index beside full-width topic bands.

@@ -43,10 +43,11 @@ import type {
   UpdateNewsSourceRequest,
 } from "../shared/types/news.ts";
 import type {
-  Note,
-  NoteId,
-  NoteMutationResponse,
-} from "../shared/types/notes.ts";
+  SaveTldrawDocumentRequest,
+  SaveTldrawDocumentResponse,
+  TldrawAssetUploadResponse,
+  TldrawBootstrapResponse,
+} from "../shared/types/tldraw.ts";
 import type {
   CurrentDashboardHealthResponse,
   CurrentDashboardResponse,
@@ -527,14 +528,24 @@ export const searchEmails = (query: string, limit?: string | number, { signal }:
 export const getImportantSenders = (): Promise<ImportantSender[]> => apiFetch("/api/ea/important-senders");
 export const updateImportantSenders = (senders: ImportantSender[]): Promise<SettingsMutationResponse> => apiFetch("/api/ea/important-senders", { method: "PUT", body: JSON.stringify({ senders }) });
 
-// Notes
-export const getNotes = (): Promise<Note[]> => apiFetch("/api/notes");
-export const createNote = (content: string): Promise<Note> => apiFetch("/api/notes", { method: "POST", body: JSON.stringify({ content }) });
-export const updateNote = (id: NoteId, content: string): Promise<NoteMutationResponse> => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ content }) });
-export const deleteNote = (id: NoteId): Promise<NoteMutationResponse> => apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: "DELETE" });
-export const reorderNotes = (noteIds: NoteId[]): Promise<NoteMutationResponse> => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
-export const archiveNote = (id: NoteId, archived: boolean): Promise<NoteMutationResponse> =>
-  apiFetch(`/api/notes/${encodeURIComponent(id)}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) });
+// Notes canvas. The demo shell never loads these APIs.
+export const getTldrawBootstrap = (): Promise<TldrawBootstrapResponse> => apiFetch("/api/tldraw/bootstrap");
+export const saveTldrawDocument = (request: SaveTldrawDocumentRequest): Promise<SaveTldrawDocumentResponse> => (
+  apiFetch("/api/tldraw/document", { method: "PUT", body: JSON.stringify(request) })
+);
+export const uploadTldrawAsset = (
+  hash: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<TldrawAssetUploadResponse> => apiFetch(`/api/tldraw/assets/${encodeURIComponent(hash)}`, {
+  method: "PUT",
+  body: file,
+  signal,
+  headers: {
+    "Content-Type": file.type,
+    "X-Tldraw-File-Name": encodeURIComponent(file.name),
+  },
+});
 
 // News
 export const getNews = (): Promise<NewsPageEnvelope> => apiFetch("/api/news");

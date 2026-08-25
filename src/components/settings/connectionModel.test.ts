@@ -65,7 +65,7 @@ const googleCredentials = [
 ];
 
 describe("connectionModel definitions", () => {
-  it("keeps the nine services in the parent-locked groups and order", () => {
+  it("keeps the ten services in the parent-locked groups and order", () => {
     expect(CONNECTION_GROUPS).toEqual([
       { id: "data_sources", label: "Data sources" },
       { id: "ai_providers", label: "AI providers" },
@@ -81,6 +81,7 @@ describe("connectionModel definitions", () => {
       ["supporting_services", "discord-reminders"],
       ["supporting_services", "pirate-weather"],
       ["supporting_services", "google-places"],
+      ["supporting_services", "tldraw"],
     ]);
     expect(CONNECTIONS.map(({ hash }) => hash)).toEqual(CONNECTIONS.map(({ id }) => id));
     expect(CONNECTIONS.map(({ minimumViable }) => minimumViable)).toEqual([
@@ -93,6 +94,7 @@ describe("connectionModel definitions", () => {
       "A configured Discord webhook",
       "An active key and saved weather location",
       "An active Maps key with Places and Routes enabled",
+      "An active tldraw hobby license for this deployment domain",
     ]);
   });
 });
@@ -131,6 +133,21 @@ describe("projectConnectionRows", () => {
 
     expect(rows.find(({ id }) => id === "openai")?.state).toBe("connected");
     expect(rows.find(({ id }) => id === "anthropic")?.state).toBe("needs_attention");
+  });
+
+  it("projects the tldraw license independently from other providers", () => {
+    const rows = projectConnectionRows({
+      accounts: [],
+      settings: {},
+      capabilities: [],
+      credentialMetadata: [credential("notes.tldraw_license_key", {
+        source: "stored",
+        activeConfigured: true,
+        validationState: "valid",
+      })],
+    });
+
+    expect(rows.find(({ id }) => id === "tldraw")?.state).toBe("connected");
   });
 
   it("keeps Todoist personal-token periodic mode connected without advanced OAuth or webhooks", () => {

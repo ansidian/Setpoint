@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-25T14:17:36-07:00",
+  "title": "Design System: Setpoint",
+  "extensions": {
+    "colorMeta": {
+      "page": {
+        "role": "neutral",
+        "displayName": "Mocha Page",
+        "canonical": "#1e1e2e",
+        "tonalRamp": ["#0b0b11", "#14141f", "#1e1e2e", "#343447", "#545469", "#7d7d91", "#b7b7c5", "#eeeeF3"]
+      },
+      "page-deep": {
+        "role": "neutral",
+        "displayName": "Deep Page",
+        "canonical": "#0b0b13",
+        "tonalRamp": ["#050509", "#08080e", "#0b0b13", "#27272f", "#505056", "#7a7a7f", "#b3b3b6", "#eeeeef"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Panel Surface",
+        "canonical": "#24243a",
+        "tonalRamp": ["#0d0d16", "#171725", "#24243a", "#3a3a50", "#5a5a70", "#818195", "#b9b9c8", "#efeff4"]
+      },
+      "surface-elevated": {
+        "role": "neutral",
+        "displayName": "Input Surface",
+        "canonical": "#313244",
+        "tonalRamp": ["#111218", "#20212d", "#313244", "#47485b", "#646577", "#878895", "#bcbcc5", "#f0f0f3"]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Translucent Card",
+        "canonical": "#24243a66",
+        "tonalRamp": ["#0d0d1666", "#17172566", "#24243a66", "#3a3a5066", "#5a5a7066", "#81819566", "#b9b9c866", "#efeff466"]
+      },
+      "floating-panel": {
+        "role": "neutral",
+        "displayName": "Floating Panel Solid",
+        "canonical": "#16161e",
+        "tonalRamp": ["#08080b", "#0f0f14", "#16161e", "#303037", "#55555b", "#7d7d82", "#b7b7ba", "#efeff0"]
+      },
+      "notes-canvas": {
+        "role": "neutral",
+        "displayName": "Notes Canvas Black",
+        "canonical": "#11111b",
+        "tonalRamp": ["#06060a", "#0b0b12", "#11111b", "#2c2c34", "#525258", "#7b7b80", "#b5b5b8", "#efeff0"]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Primary Text",
+        "canonical": "#cdd6f4",
+        "tonalRamp": ["#16171b", "#34363d", "#525762", "#737987", "#959eaf", "#b8c1d5", "#dbe2f7", "#f3f6ff"]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Text",
+        "canonical": "#a6adc8",
+        "tonalRamp": ["#121316", "#2b2d34", "#454852", "#626670", "#808590", "#a0a5b1", "#c5c9d2", "#f0f1f4"]
+      },
+      "text-subtle": {
+        "role": "neutral",
+        "displayName": "Subtle Text",
+        "canonical": "#6c7086",
+        "tonalRamp": ["#101114", "#24262d", "#393b47", "#50535f", "#696d79", "#898c97", "#b9bbc2", "#eeeeF0"]
+      },
+      "accent-primary": {
+        "role": "primary",
+        "displayName": "Lavender Control",
+        "canonical": "#cba6da",
+        "tonalRamp": ["#1a141d", "#392c3f", "#594460", "#795d82", "#9b77a7", "#bd92cc", "#dcb9e7", "#f4eaf7"]
+      },
+      "accent-secondary": {
+        "role": "secondary",
+        "displayName": "Warning Orange",
+        "canonical": "#f97316",
+        "tonalRamp": ["#211005", "#4a2108", "#73330b", "#9d470e", "#c85b11", "#ef7219", "#f9ad76", "#fde9d8"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Urgent Rose",
+        "canonical": "#f38ba8",
+        "tonalRamp": ["#211217", "#482731", "#713d4c", "#9b5568", "#c76e86", "#eb8ba5", "#f5b9c9", "#fce9ee"]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Due Soon Cream",
+        "canonical": "#f9e2af",
+        "tonalRamp": ["#201d16", "#47402f", "#6f6449", "#988965", "#c2af82", "#e7d29f", "#f5e6c5", "#fdf7e9"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Success Green",
+        "canonical": "#a6e3a1",
+        "tonalRamp": ["#142014", "#2c472b", "#446e42", "#5e985b", "#79c276", "#9cdd98", "#c4edc1", "#eef9ed"]
+      },
+      "info": {
+        "role": "tertiary",
+        "displayName": "Info Blue",
+        "canonical": "#89b4fa",
+        "tonalRamp": ["#111721", "#26344a", "#3b5274", "#52719f", "#6a92cb", "#88b1f2", "#b4d0fb", "#e8f1ff"]
+      },
+      "sky-info": {
+        "role": "tertiary",
+        "displayName": "Sky Info",
+        "canonical": "#89dceb",
+        "tonalRamp": ["#111d20", "#264248", "#3b6871", "#52909c", "#6ab9c8", "#86d7e6", "#b4e8f0", "#e8f9fb"]
+      },
+      "finance-income": {
+        "role": "tertiary",
+        "displayName": "Income Cyan",
+        "canonical": "#89dceb",
+        "tonalRamp": ["#111d20", "#264248", "#3b6871", "#52909c", "#6ab9c8", "#86d7e6", "#b4e8f0", "#e8f9fb"]
+      },
+      "finance-outflow": {
+        "role": "tertiary",
+        "displayName": "Outflow Periwinkle",
+        "canonical": "#b4befe",
+        "tonalRamp": ["#171820", "#333648", "#505470", "#6e7499", "#8d95c4", "#adb7ed", "#cdd4fe", "#f0f2ff"]
+      },
+      "finance-transfer": {
+        "role": "tertiary",
+        "displayName": "Transfer Blue",
+        "canonical": "#89b4fa",
+        "tonalRamp": ["#111721", "#26344a", "#3b5274", "#52719f", "#6a92cb", "#88b1f2", "#b4d0fb", "#e8f1ff"]
+      },
+      "v3-page": {
+        "role": "neutral",
+        "displayName": "V3 Lavender Paper",
+        "canonical": "#f4f1f8",
+        "tonalRamp": ["#1d1c1e", "#413f43", "#656269", "#8b8790", "#b1adb8", "#d2ced9", "#e8e4ee", "#faf8fc"]
+      },
+      "v3-app": {
+        "role": "neutral",
+        "displayName": "V3 App White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#262626", "#4d4d4d", "#737373", "#999999", "#bfbfbf", "#d9d9d9", "#ededed", "#ffffff"]
+      },
+      "v3-rail": {
+        "role": "neutral",
+        "displayName": "V3 Rail White",
+        "canonical": "#fbf9fe",
+        "tonalRamp": ["#1e1d1f", "#434244", "#68666a", "#8e8c90", "#b5b2b8", "#d5d2d9", "#ebe8ef", "#fcfbfe"]
+      },
+      "v3-card-tint": {
+        "role": "neutral",
+        "displayName": "V3 Card Tint",
+        "canonical": "#f4edfb",
+        "tonalRamp": ["#1d1b1e", "#413e43", "#656168", "#8b858f", "#b1aab7", "#d2cad8", "#e8e1ed", "#faf7fc"]
+      },
+      "v3-text": {
+        "role": "neutral",
+        "displayName": "V3 Ink",
+        "canonical": "#171528",
+        "tonalRamp": ["#090810", "#100f1c", "#171528", "#312f40", "#565462", "#7e7c87", "#b8b7bd", "#efeff1"]
+      },
+      "v3-muted": {
+        "role": "neutral",
+        "displayName": "V3 Muted Ink",
+        "canonical": "#69647a",
+        "tonalRamp": ["#100f13", "#24222a", "#383541", "#4e4a58", "#676270", "#87828e", "#b8b5bd", "#eeeeF0"]
+      },
+      "v3-accent": {
+        "role": "primary",
+        "displayName": "V3 Violet",
+        "canonical": "#7c3aed",
+        "tonalRamp": ["#140927", "#2b1453", "#421f80", "#5a2aad", "#7335dc", "#955ff0", "#bea0f7", "#eee7fd"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Assistant Voice",
+        "purpose": "Hero greetings and deliberately editorial summaries only."
+      },
+      "headline": {
+        "displayName": "Page Headline",
+        "purpose": "Settings headings and major empty states."
+      },
+      "title": {
+        "displayName": "Dense Title",
+        "purpose": "Card titles, row titles, inputs, and primary operational labels."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Dense repeated UI, descriptions, previews, and supporting summaries."
+      },
+      "label": {
+        "displayName": "Operational Label",
+        "purpose": "Section headings, compact metadata, and controls."
+      },
+      "mono": {
+        "displayName": "Technical Label",
+        "purpose": "Keyboard hints and tabular technical text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-panel",
+        "value": "0 20px 60px rgba(0,0,0,0.7)",
+        "purpose": "Portaled panels and the Notes revision-conflict recovery panel."
+      },
+      {
+        "name": "accent-glow",
+        "value": "0 0 6px {color}30 to 0 0 8px {color}60",
+        "purpose": "Small active indicators and focused accents; never ordinary card lift."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Hover, focus, press, and compact disclosure feedback."
+      },
+      {
+        "name": "panel",
+        "value": "360ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Drawers, sheets, and spatial panel changes."
+      },
+      {
+        "name": "notes-loading-shimmer",
+        "value": "1.5s ease-in-out infinite",
+        "purpose": "Quiet canvas bootstrap feedback before tldraw is ready."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Global suppression of nonessential animation and transition under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "639px",
+        "purpose": "Mobile shell behavior; Notes is omitted at and below this breakpoint."
+      }
+    ]
+  },
+  "components": [
+      {
+        "name": "Primary Button",
+        "kind": "button",
+        "refersTo": "button-primary",
+        "description": "Compact lavender action for meaningful state changes.",
+        "html": "<button class=\"ds-button-primary\">Generate</button>",
+        "css": ".ds-button-primary { border: 1px solid color-mix(in srgb, var(--ea-accent, #cba6da) 20%, transparent); border-radius: 12px; padding: 8px 12px; color: var(--sp-deep, #0b0b13); background: var(--ea-accent, #cba6da); font: 600 12px/1.2 Montserrat, sans-serif; cursor: pointer; transition: transform var(--sp-motion-fast, 150ms) var(--sp-ease-out, cubic-bezier(0.16, 1, 0.3, 1)), filter var(--sp-motion-fast, 150ms) ease; } .ds-button-primary:hover { filter: brightness(1.06); transform: translateY(-1px); } .ds-button-primary:focus-visible { outline: 2px solid color-mix(in srgb, var(--ea-accent, #cba6da) 64%, transparent); outline-offset: 2px; } .ds-button-primary:active { transform: translateY(0) scale(0.98); }"
+      },
+      {
+        "name": "Dense Card",
+        "kind": "card",
+        "refersTo": "card-default",
+        "description": "Inline operational container separated by tonal fill and a quiet border.",
+        "html": "<section class=\"ds-card\"><h3>Upcoming</h3><p>Two deadlines need attention today.</p></section>",
+        "css": ".ds-card { border: 1px solid rgba(255,255,255,0.04); border-radius: 12px; padding: 16px; color: var(--sp-text, #cdd6f4); background: rgba(36,36,58,0.4); box-shadow: none; } .ds-card h3 { margin: 0 0 6px; font: 500 13px/1.35 Montserrat, sans-serif; } .ds-card p { margin: 0; color: var(--sp-subtext, #a6adc8); font: 400 12px/1.5 Montserrat, sans-serif; }"
+      },
+      {
+        "name": "Floating Panel",
+        "kind": "custom",
+        "refersTo": "floating-panel",
+        "description": "Opaque top-layer surface for pickers, menus, search, and history.",
+        "html": "<div class=\"ds-floating-panel\" role=\"dialog\">Panel content</div>",
+        "css": ".ds-floating-panel { position: relative; isolation: isolate; overscroll-behavior: contain; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; color: var(--sp-text, #cdd6f4); background: var(--sp-panel, #16161e); box-shadow: 0 20px 60px rgba(0,0,0,0.7); font: 400 12px/1.5 Montserrat, sans-serif; }"
+      },
+      {
+        "name": "Notes Save Indicator",
+        "kind": "custom",
+        "refersTo": "notes-save-indicator",
+        "description": "Tiny non-interactive status for ambient canvas persistence.",
+        "html": "<span class=\"ds-notes-save\" role=\"status\">Saved</span>",
+        "css": ".ds-notes-save { display: inline-block; border: 1px solid rgba(255,255,255,0.08); border-radius: 9999px; padding: 4px 8px; color: var(--sp-subtext, #a6adc8); background: rgba(22,22,30,0.92); font: 600 9px/1.2 Montserrat, sans-serif; letter-spacing: 0.25px; pointer-events: none; } .ds-notes-save[data-state=\"error\"], .ds-notes-save[data-state=\"conflict\"] { color: var(--sp-rose, #f38ba8); }"
+      },
+      {
+        "name": "Notes Recovery Button",
+        "kind": "button",
+        "refersTo": "notes-recovery-button",
+        "description": "Compact recovery action used only when setup, saving, or revision state requires intervention.",
+        "html": "<button class=\"ds-notes-recovery\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12a9 9 0 1 0 3-6.7L3 8\"/><path d=\"M3 3v5h5\"/></svg>Reload latest</button>",
+        "css": ".ds-notes-recovery { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--sp-accent, #cba6da) 30%, transparent); border-radius: 8px; color: var(--sp-text, #cdd6f4); background: color-mix(in srgb, var(--sp-accent, #cba6da) 12%, var(--sp-panel, #16161e)); font: 600 11px/1 Montserrat, sans-serif; cursor: pointer; transition: transform var(--sp-motion-fast, 150ms) var(--sp-ease-out, cubic-bezier(0.16, 1, 0.3, 1)), border-color var(--sp-motion-fast, 150ms) ease, background-color var(--sp-motion-fast, 150ms) ease; } .ds-notes-recovery:hover, .ds-notes-recovery:focus-visible { border-color: color-mix(in srgb, var(--sp-accent, #cba6da) 52%, transparent); background: color-mix(in srgb, var(--sp-accent, #cba6da) 18%, var(--sp-panel, #16161e)); transform: translateY(-1px); } .ds-notes-recovery:focus-visible { outline: 2px solid color-mix(in srgb, var(--sp-accent, #cba6da) 64%, transparent); outline-offset: 2px; } .ds-notes-recovery:active { transform: translateY(0) scale(0.98); }"
+      },
+      {
+        "name": "Notes Conflict Panel",
+        "kind": "custom",
+        "description": "Actionable revision-conflict recovery that preserves the local canvas without overwriting a newer server document.",
+        "html": "<section class=\"ds-notes-conflict\" role=\"alert\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/></svg><div><strong>Newer canvas found</strong><p>Your local canvas has not overwritten it.</p></div><button class=\"ds-notes-conflict-action\">Reload latest</button></section>",
+        "css": ".ds-notes-conflict { display: flex; width: min(720px, calc(100% - 32px)); align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--sp-rose, #f38ba8) 28%, transparent); border-radius: 12px; color: var(--sp-rose, #f38ba8); background: var(--sp-panel, #16161e); box-shadow: 0 20px 60px rgba(0,0,0,0.7); font-family: Montserrat, sans-serif; } .ds-notes-conflict > div { flex: 1; min-width: 0; } .ds-notes-conflict strong { color: var(--sp-text, #cdd6f4); font-size: 11px; } .ds-notes-conflict p { margin: 2px 0 0; color: var(--sp-subtext, #a6adc8); font-size: 10px; line-height: 1.45; } .ds-notes-conflict-action { min-height: 34px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--sp-accent, #cba6da) 30%, transparent); border-radius: 8px; color: var(--sp-text, #cdd6f4); background: color-mix(in srgb, var(--sp-accent, #cba6da) 12%, var(--sp-panel, #16161e)); font: 600 11px/1 Montserrat, sans-serif; cursor: pointer; transition: transform var(--sp-motion-fast, 150ms) var(--sp-ease-out, cubic-bezier(0.16, 1, 0.3, 1)), border-color var(--sp-motion-fast, 150ms) ease, background-color var(--sp-motion-fast, 150ms) ease; } .ds-notes-conflict-action:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--sp-accent, #cba6da) 52%, transparent); } .ds-notes-conflict-action:focus-visible { outline: 2px solid color-mix(in srgb, var(--sp-accent, #cba6da) 64%, transparent); outline-offset: 2px; } .ds-notes-conflict-action:active { transform: translateY(0) scale(0.98); }"
+      },
+      {
+        "name": "Canvas Checklist",
+        "kind": "custom",
+        "refersTo": "notes-checklist-card",
+        "description": "Flat, directly editable checklist instrument embedded as a movable tldraw shape.",
+        "html": "<section class=\"ds-checklist\"><header class=\"ds-checklist-title-row\"><input class=\"ds-checklist-title\" aria-label=\"Checklist title\" value=\"Checklist\"><span class=\"ds-checklist-count\">1/2</span></header><div class=\"ds-checklist-items\"><div class=\"ds-checklist-row ds-checklist-row-checked\"><button class=\"ds-checklist-check\" role=\"checkbox\" aria-checked=\"true\" aria-label=\"Mark incomplete\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"m3.2 8.2 3 3.1 6.6-6.7\"/></svg></button><input class=\"ds-checklist-item\" aria-label=\"Checklist item\" value=\"Completed item\"><button class=\"ds-checklist-remove\" aria-label=\"Remove item\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"m4.5 4.5 7 7m0-7-7 7\"/></svg></button></div><div class=\"ds-checklist-row\"><button class=\"ds-checklist-check\" role=\"checkbox\" aria-checked=\"false\" aria-label=\"Mark complete\"></button><input class=\"ds-checklist-item\" aria-label=\"Checklist item\" value=\"Next item\"><button class=\"ds-checklist-remove\" aria-label=\"Remove item\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"m4.5 4.5 7 7m0-7-7 7\"/></svg></button></div></div><button class=\"ds-checklist-add\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M8 3.25v9.5M3.25 8h9.5\"/></svg>Add item</button></section>",
+        "css": ".ds-checklist { box-sizing: border-box; width: 320px; min-width: 260px; padding: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--sp-accent, #cba6da) 26%, transparent); border-radius: 12px; color: var(--sp-text, #cdd6f4); background: var(--sp-surface, #24243a); box-shadow: none; font-family: Montserrat, sans-serif; } .ds-checklist-title-row { display: grid; height: 31px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; border-bottom: 1px solid rgba(205,214,244,0.08); } .ds-checklist-title-row:focus-within { border-bottom-color: color-mix(in srgb, var(--sp-accent, #cba6da) 64%, transparent); } .ds-checklist-title, .ds-checklist-item { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; color: inherit; background: transparent; font-family: inherit; } .ds-checklist-title { height: 31px; font-size: 13px; font-weight: 600; } .ds-checklist-count { color: var(--sp-subtext, #a6adc8); font-size: 9px; font-weight: 600; } .ds-checklist-items { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; } .ds-checklist-row { display: grid; height: 32px; grid-template-columns: 20px minmax(0, 1fr) 24px; align-items: center; gap: 7px; padding: 0 2px; border-radius: 8px; transition: background-color var(--sp-motion-fast, 150ms) ease; } .ds-checklist-row:hover, .ds-checklist-row:focus-within { background: rgba(205,214,244,0.045); } .ds-checklist-check, .ds-checklist-remove, .ds-checklist-add { display: inline-flex; align-items: center; justify-content: center; border: 0; color: var(--sp-subtext, #a6adc8); background: transparent; font-family: inherit; cursor: pointer; transition: transform var(--sp-motion-fast, 150ms) var(--sp-ease-out, cubic-bezier(0.16, 1, 0.3, 1)), color var(--sp-motion-fast, 150ms) ease, background-color var(--sp-motion-fast, 150ms) ease; } .ds-checklist-check { width: 18px; height: 18px; padding: 0; border: 1px solid #6c7086; border-radius: 4px; } .ds-checklist-check[aria-checked=\"true\"] { border-color: var(--sp-accent, #cba6da); color: #11111b; background: var(--sp-accent, #cba6da); } .ds-checklist-item { height: 28px; font-size: 12px; font-weight: 450; } .ds-checklist-item:focus-visible { box-shadow: inset 0 -1px color-mix(in srgb, var(--sp-accent, #cba6da) 54%, transparent); } .ds-checklist-row-checked .ds-checklist-item { color: #9399b2; text-decoration: line-through; } .ds-checklist-remove { width: 24px; height: 24px; padding: 0; border-radius: 6px; opacity: 0; } .ds-checklist-row:hover .ds-checklist-remove, .ds-checklist-row:focus-within .ds-checklist-remove { opacity: 1; } .ds-checklist-add { min-height: 28px; gap: 5px; margin-top: 8px; padding: 0 7px 0 4px; border-radius: 8px; font-size: 10px; font-weight: 600; } .ds-checklist svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-checklist-check:hover, .ds-checklist-check:focus-visible, .ds-checklist-remove:hover, .ds-checklist-remove:focus-visible, .ds-checklist-add:hover, .ds-checklist-add:focus-visible { color: var(--sp-text, #cdd6f4); background: color-mix(in srgb, var(--sp-accent, #cba6da) 12%, transparent); transform: translateY(-1px); } .ds-checklist-check:focus-visible, .ds-checklist-remove:focus-visible, .ds-checklist-add:focus-visible { outline: 2px solid color-mix(in srgb, var(--sp-accent, #cba6da) 72%, transparent); outline-offset: 2px; } .ds-checklist-check:active, .ds-checklist-remove:active, .ds-checklist-add:active { transform: translateY(0) scale(0.96); } @media (prefers-reduced-motion: reduce) { .ds-checklist-row, .ds-checklist-check, .ds-checklist-remove, .ds-checklist-add { transition: none; } .ds-checklist-check:hover, .ds-checklist-check:focus-visible, .ds-checklist-remove:hover, .ds-checklist-remove:focus-visible, .ds-checklist-add:hover, .ds-checklist-add:focus-visible, .ds-checklist-check:active, .ds-checklist-remove:active, .ds-checklist-add:active { transform: none; } }"
+      }
+    ],
+    "narrative": {
+      "northStar": "The Private Ops Desk",
+      "overview": "Setpoint is a private product surface, not a brand page. The physical scene is a single user checking the day from a laptop in a quiet room before moving into meetings, schoolwork, errands, or finance admin. The interface chooses a restrained dark theme because it is used repeatedly, often around calendar transitions or early in the day, when low glare and stable hierarchy matter more than spectacle.\n\nThe visual system is compact, border-led, and data-first. Purple is the default primary accent, but it should appear as a control signal, not a wash over the product. The shell can support a scoped V3 light mode, but new work must respect this file's normative frontmatter and its `.impeccable/design.json` extension sidecar.",
+      "keyCharacteristics": [
+        "Dense operational surfaces with stable scan paths.",
+        "Muted tinted neutrals with one primary accent and domain status colors.",
+        "Portaled panels that feel solid, opaque, and separate from page scroll.",
+        "Serif display moments reserved for assistant voice, not routine UI chrome.",
+        "Subtle motion for orientation only."
+      ],
+      "rules": [
+        { "name": "The Accent Rarity Rule", "body": "Lavender should guide attention, not coat the interface. On dense product screens, keep it to active controls, focus rings, selected states, and small emphasis.", "section": "colors" },
+        { "name": "The Source Color Rule", "body": "Domain colors map to data meaning. Do not repurpose task, transaction, urgency, or source colors as decorative theme colors.", "section": "colors" },
+        { "name": "The Finance Direction Rule", "body": "Inflows use cyan, outflows use periwinkle, and transfers use info blue. Rose remains reserved for overdue, missed, or error states; direction must also be conveyed by sign and label.", "section": "colors" },
+        { "name": "The Voice Split Rule", "body": "Use display serif only for high-level summaries with a deliberately editorial role. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, conversational panel responses such as Alfred answers, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).", "section": "typography" },
+        { "name": "The Instrument Owns the Work Area Rule", "body": "When a native spatial tool is the product surface, let it occupy the full available workspace; keep Setpoint framing at the shell boundary.", "section": "layout" },
+        { "name": "The Portal Shadow Rule", "body": "Shadows belong to things that escape normal layout. Cards, rails, rows, and inline sections should not gain decorative drop shadows.", "section": "elevation" },
+        { "name": "The Flush Canvas Rule", "body": "Never round or inset the Notes work surface. Rounded shapes belong to Setpoint's compact overlays and recovery controls, not to the canvas boundary.", "section": "shapes" },
+        { "name": "The Native Canvas Rule", "body": "Do not add legacy note search, archive, list, dashboard-card, or mobile-substitute UI over or around tldraw. The infinite canvas is Notes.", "section": "components" },
+        { "name": "The Ambient Until Actionable Rule", "body": "Normal saving stays tiny and non-interactive. Only failure, missing setup, or a revision conflict earns a Setpoint panel and controls.", "section": "components" },
+        { "name": "The Embedded Instrument Rule", "body": "Canvas-native structured tools should stay compact, movable, and editable in place. Extend the canvas with one focused action model; do not surround the shape with dashboard chrome or turn it into a second provider-backed task system.", "section": "components" }
+      ],
+      "dos": [
+        "**Do** treat this file's frontmatter as the normative token source and `.impeccable/design.json` as its extension sidecar.",
+        "**Do** give every enabled button a hover animation plus keyboard-visible focus treatment. Static buttons should be rare and intentional.",
+        "**Do** keep new spacing on the 4px grid: 2, 4, 6, 8, 12, 14, 16, 20, 24, 32.",
+        "**Do** use 1px borders and tonal fills for product depth.",
+        "**Do** reserve `#f97316` for warnings, snooze, notifications, and suspended-service states.",
+        "**Do** keep panel backgrounds opaque when they escape the document flow.",
+        "**Do** support reduced motion, keyboard navigation, and non-color status cues.",
+        "**Do** let the desktop Notes canvas fill the available tab workspace and keep normal save feedback compact."
+      ],
+      "donts": [
+        "**Don't** create public-SaaS hero sections, marketing metric layouts, or decorative landing-page compositions inside the product.",
+        "**Don't** use glassmorphism, gradient text, neon cyberpunk styling, or generic finance-dashboard navy-and-gold treatment.",
+        "**Don't** build repeated identical icon-card grids for dense product information.",
+        "**Don't** use side-stripe borders wider than 1px as accents on cards, list items, callouts, or alerts.",
+        "**Don't** add shadows to ordinary cards or rows. Reserve shadows for portaled overlays.",
+        "**Don't** make every feed equally loud. Urgency and next action need the strongest visual priority.",
+        "**Don't** wrap tldraw in a dashboard card, reskin its native chrome, or recreate the retired list-and-editor Notes UI."
+      ]
+    }
+}

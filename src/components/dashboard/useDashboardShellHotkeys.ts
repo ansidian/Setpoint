@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { resolveDashboardShellHotkey } from "./dashboardShellModel";
 import type { Dispatch, SetStateAction } from "react";
 import type { CalendarOpenOptions } from "./dashboardShellModel";
+import type { DashboardTab } from "./dashboardShellModel";
 
 interface DashboardShellHotkeysOptions {
   isMobile: boolean;
@@ -16,6 +17,7 @@ interface DashboardShellHotkeysOptions {
   setHistoryOpen: Dispatch<SetStateAction<boolean>>;
   toggleAlfred: () => void;
   alfredNewChat: () => void;
+  activeTab: DashboardTab;
 }
 
 // Global shell hotkeys: ⌘K palette, a analytics, y snapshots,
@@ -35,6 +37,7 @@ export default function useDashboardShellHotkeys({
   setHistoryOpen,
   toggleAlfred,
   alfredNewChat,
+  activeTab,
 }: DashboardShellHotkeysOptions) {
   const actionChordRef = useRef<string | null>(null);
   const actionChordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,6 +77,7 @@ export default function useDashboardShellHotkeys({
         analyticsOpen,
         historyOpen,
         isMobile,
+        activeTab,
       });
 
       if (command.action === "clear-chord") {
@@ -125,5 +129,5 @@ export default function useDashboardShellHotkeys({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyticsOpen, historyOpen, anyBlockingOverlayOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
+  }, [activeTab, analyticsOpen, historyOpen, anyBlockingOverlayOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
 }

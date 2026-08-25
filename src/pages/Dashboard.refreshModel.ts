@@ -21,10 +21,15 @@ export type DashboardRefreshTrigger = "timer" | "explicit";
 
 export function shouldTriggerSyncHotkey(
   event: SyncHotkeyEvent = {},
-  { refreshing = false, syncing = false }: { refreshing?: boolean; syncing?: boolean } = {},
+  {
+    refreshing = false,
+    syncing = false,
+    activeTab,
+  }: { refreshing?: boolean; syncing?: boolean; activeTab?: string | null } = {},
 ): boolean {
   return (
     event.key === "r"
+    && activeTab !== "notes"
     && !refreshing
     && !syncing
     && !event.repeat

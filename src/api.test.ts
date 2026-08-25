@@ -181,17 +181,6 @@ describe("path-interpolated ids", () => {
     ]);
   });
 
-  it("encodes reserved characters in a note id", async () => {
-    const fetch = vi.fn<TestFetch>(() => Promise.resolve(jsonOk({})));
-    vi.stubGlobal("fetch", fetch);
-    const api = await importApi();
-
-    await api.updateNote("note/one", "updated");
-
-    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; request count, abort signal, method, and encoded route are observable only on the outbound request.
-    expect(fetch.mock.calls[0]![0]).toBe("/api/notes/note%2Fone");
-  });
-
   it("encodes reserved characters in a news topic id", async () => {
     const fetch = vi.fn<TestFetch>(() => Promise.resolve(jsonOk({})));
     vi.stubGlobal("fetch", fetch);

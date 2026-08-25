@@ -16,6 +16,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   HOST_CREDENTIAL_UNAVAILABLE: "No host-managed value is available for this credential.",
   AI_CREDENTIAL_PENDING_REQUIRED: "Enter a replacement before testing.",
   LOCATION_CREDENTIAL_PENDING_REQUIRED: "Enter a replacement before testing.",
+  TLDRAW_CREDENTIAL_PENDING_REQUIRED: "Enter a tldraw license before testing.",
+  WRONG_DOMAIN: "This tldraw license does not cover Setpoint's canonical domain.",
+  EXPIRED: "This tldraw license has expired.",
+  CANONICAL_DOMAIN_REQUIRED: "Set Setpoint's canonical URL before validating the tldraw license.",
 };
 
 export function credentialErrorMessage(code: unknown): string {

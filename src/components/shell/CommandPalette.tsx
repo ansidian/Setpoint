@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { motionDuration, motionTransition } from "../../lib/motion";
 import useMotionPresence from "../../hooks/useMotionPresence";
+import { isDemoMode } from "../../demo/config";
 
 export interface CommandPaletteItem {
   id: string;
@@ -73,7 +74,7 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
     { id: "new-deadline", icon: ListPlus,   label: "New deadline",     hint: "G T", kind: "deadline-create" },
     { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
     { id: "calendar",     icon: CalendarDays, label: "Go to Calendar",  hint: "3", kind: "tab", payload: "calendar" },
-    { id: "go-notes",     icon: Notebook,   label: "Go to Notes",      hint: "4", kind: "tab", payload: "notes" },
+    ...(!isDemoMode() ? [{ id: "go-notes", icon: Notebook, label: "Go to Notes", hint: "4", kind: "tab", payload: "notes" }] : []),
     { id: "go-news",      icon: Newspaper,  label: "Go to News",       hint: "5", kind: "tab", payload: "news" },
     { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },
     { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },

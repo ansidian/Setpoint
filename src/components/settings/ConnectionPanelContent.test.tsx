@@ -208,6 +208,7 @@ describe("ConnectionPanelContent user-visible ownership", () => {
     ["openai", "ai.openai_api_key", "OpenAI API key"],
     ["anthropic", "ai.anthropic_api_key", "Anthropic API key"],
     ["google-places", "calendar.google_places_api_key", "Google Maps Platform API key"],
+    ["tldraw", "notes.tldraw_license_key", "tldraw license key"],
   ] as const)("shows the %s credential editor in its connection", (id, key, label) => {
     renderConnection(id, null, [credential(key)]);
     expect(screen.getByLabelText(label)).toBeTruthy();

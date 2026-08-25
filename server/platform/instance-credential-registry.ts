@@ -15,6 +15,7 @@ const DEFINITIONS = [
   { key: "gmail.pubsub_topic", handling: "non_secret", envAliases: ["GMAIL_PUBSUB_TOPIC"], validatorOwner: "email", capabilities: ["email"] },
   { key: "google.oauth_client_id", handling: "non_secret", envAliases: ["GOOGLE_CLIENT_ID"], validatorOwner: "google", capabilities: ["email", "calendar"] },
   { key: "google.oauth_client_secret", handling: "secret", envAliases: ["GOOGLE_CLIENT_SECRET"], validatorOwner: "google", capabilities: ["email", "calendar"] },
+  { key: "notes.tldraw_license_key", handling: "secret", envAliases: [], validatorOwner: "notes", capabilities: ["notes"] },
   { key: "tasks.todoist_client_id", handling: "non_secret", envAliases: ["TODOIST_CLIENT_ID"], validatorOwner: "tasks", capabilities: ["tasks"] },
   { key: "tasks.todoist_client_secret", handling: "secret", envAliases: ["TODOIST_CLIENT_SECRET"], validatorOwner: "tasks", capabilities: ["tasks"] },
   { key: "weather.pirate_weather_api_key", handling: "secret", envAliases: ["PIRATE_WEATHER_API_KEY"], validatorOwner: "weather", capabilities: ["weather"] },

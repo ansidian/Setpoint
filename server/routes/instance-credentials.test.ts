@@ -9,6 +9,7 @@ import type { LocationCredentialManager } from "../location-credentials.ts";
 import type { GoogleOAuthCredentialManager } from "../google-oauth-credentials.ts";
 import type { GmailPubSubService } from "../email/gmail-pubsub.ts";
 import type { TodoistOAuthCredentialManager } from "../tasks/todoist-oauth-credentials.ts";
+import type { TldrawCredentialManager } from "../tldraw/tldraw-license.ts";
 import { createAuthTestDb, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import {
   createRequireCookieSession,
@@ -26,6 +27,7 @@ function createApp(
   googleOAuthManagerOverrides: Partial<GoogleOAuthCredentialManager> = {},
   gmailPubSubManagerOverrides: Partial<GmailPubSubService> = {},
   todoistOAuthManagerOverrides: Partial<TodoistOAuthCredentialManager> = {},
+  tldrawManagerOverrides: Partial<TldrawCredentialManager> = {},
 ) {
   const metadata = {
     key: "ai.openai_api_key",
@@ -115,6 +117,10 @@ function createApp(
     ]),
     ...todoistOAuthManagerOverrides,
   } as unknown as TodoistOAuthCredentialManager;
+  const tldrawManager = {
+    testPending: vi.fn(async () => ({ ok: true, code: "VALID", metadata })),
+    ...tldrawManagerOverrides,
+  } as unknown as TldrawCredentialManager;
   app.use(express.json());
   app.use(cookieParser());
   app.use(
@@ -130,6 +136,7 @@ function createApp(
         cookie: createRequireCookieSession(authDb),
         recent: createRequireRecentPasswordAuth(authDb),
       },
+      tldrawManager,
     ),
   );
   app.use(errorHandler);
@@ -141,6 +148,7 @@ function createApp(
     googleOAuthManager,
     gmailPubSubManager,
     todoistOAuthManager,
+    tldrawManager,
   };
 }
 
@@ -384,6 +392,19 @@ describe("instance credential routes", () => {
       .set("Cookie", "ea_session=valid");
 
     expect(response.status).toBe(200);
+  });
+
+  it("routes tldraw license validation through the Notes-owned workflow", async () => {
+    const testPending = vi.fn(async () => ({ ok: true, code: "VALID" as const, metadata: {} as never }));
+    const { app } = createApp({}, {}, {}, {}, {}, {}, { testPending });
+
+    const response = await request(app)
+      .post("/api/instance-credentials/notes.tldraw_license_key/test")
+      .set("Cookie", "ea_session=valid");
+
+    expect(response.status).toBe(200);
+    // test-architecture: allow-boundary-interaction -- validation dispatch is the provider-manager boundary for the exact allowlisted credential key.
+    expect(testPending).toHaveBeenCalledOnce();
   });
 
   it("reveals a generated Gmail callback only from the generation action", async () => {

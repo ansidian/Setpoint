@@ -7,7 +7,8 @@ export type ConnectionId =
   | "anthropic"
   | "discord-reminders"
   | "pirate-weather"
-  | "google-places";
+  | "google-places"
+  | "tldraw";
 
 export type ConnectionGroupId = "data_sources" | "ai_providers" | "supporting_services";
 
@@ -134,6 +135,14 @@ export const CONNECTIONS = [
     description: "Place selection and traffic-aware departure estimates.",
     minimumViable: "An active Maps key with Places and Routes enabled",
     hash: "google-places",
+  },
+  {
+    id: "tldraw",
+    group: "supporting_services",
+    label: "tldraw",
+    description: "Licensed infinite canvas for desktop Notes.",
+    minimumViable: "An active tldraw hobby license for this deployment domain",
+    hash: "tldraw",
   },
 ] as const satisfies readonly ConnectionDefinition[];
 
@@ -357,6 +366,14 @@ export function projectConnectionRows(input: ConnectionProjectionInput): Connect
     placesRow.source = null;
   } else {
     applyCredentialRow(placesRow, credentials.get("calendar.google_places_api_key"), "api_key");
+  }
+
+  const tldrawRow = rowById.get("tldraw")!;
+  if (credentials === null) {
+    tldrawRow.state = null;
+    tldrawRow.source = null;
+  } else {
+    applyCredentialRow(tldrawRow, credentials.get("notes.tldraw_license_key"), "license_key");
   }
 
   return rows.map((row) => ({ ...row, statusLabel: connectionStateLabel(row.state) }));

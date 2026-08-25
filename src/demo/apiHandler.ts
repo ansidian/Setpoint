@@ -43,7 +43,6 @@ export interface DemoRequestBody extends Record<string, unknown> {
   payloadSnapshot?: Record<string, unknown> | null;
   minPoints?: number;
   name?: string;
-  noteIds?: Array<string | number>;
   q?: string;
   senders?: DemoSeed["importantSenders"];
   sender_address?: string;

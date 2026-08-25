@@ -31,7 +31,7 @@ process.env.EA_ENCRYPTION_KEY = "11".repeat(32);
 const briefingRoutes = (await import("./briefing/index.ts")).default;
 const dashboardRoutes = (await import("./dashboard.ts")).default;
 const settingsRoutes = (await import("./settings.ts")).default;
-const notesRoutes = (await import("./notes.ts")).default;
+const tldrawRoutes = (await import("./tldraw.ts")).default;
 const { requireCookieSession } = await import("../middleware/auth.ts");
 
 function makeApp() {
@@ -41,7 +41,7 @@ function makeApp() {
   app.use("/api/briefing", briefingRoutes);
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/ea", requireCookieSession, settingsRoutes);
-  app.use("/api/notes", notesRoutes);
+  app.use("/api/tldraw", tldrawRoutes);
   return app;
 }
 
@@ -86,7 +86,7 @@ describe("auth boundaries", () => {
       ["get", "/api/briefing/email-index/health"],
       ["get", "/api/dashboard/current"],
       ["get", "/api/ea/settings"],
-      ["get", "/api/notes"],
+      ["get", "/api/tldraw/bootstrap"],
       ["get", "/api/briefing/actual/metadata"],
     ] as const;
 
@@ -98,7 +98,7 @@ describe("auth boundaries", () => {
   });
 
   it("rejects missing and expired cookie sessions before route handlers run", async () => {
-    const missing = await request(makeApp()).get("/api/notes");
+    const missing = await request(makeApp()).get("/api/tldraw/bootstrap");
     expect(missing.status).toBe(401);
 
     await currentDb().execute({
@@ -106,17 +106,17 @@ describe("auth boundaries", () => {
       args: [Date.now() - 1],
     });
     const expired = await request(makeApp())
-      .get("/api/notes")
+      .get("/api/tldraw/bootstrap")
       .set("Cookie", cookie());
     expect(expired.status).toBe(401);
   });
 
-  it("allows cookie sessions to reach real settings and notes routes", async () => {
+  it("allows cookie sessions to reach real settings and tldraw routes", async () => {
     const settings = await request(makeApp())
       .get("/api/ea/settings")
       .set("Cookie", cookie());
     const notes = await request(makeApp())
-      .get("/api/notes")
+      .get("/api/tldraw/bootstrap")
       .set("Cookie", cookie());
 
     expect(settings.status).toBe(200);
@@ -124,7 +124,11 @@ describe("auth boundaries", () => {
     expect(settings.body).not.toHaveProperty("openai_available");
     expect(settings.body).not.toHaveProperty("embedding_count");
     expect(notes.status).toBe(200);
-    expect(notes.body).toEqual([]);
+    expect(notes.body).toEqual({
+      licenseKey: null,
+      licenseRequired: false,
+      document: { document: null, revision: 0, updatedAt: null },
+    });
   });
 
   it("does not expose briefing lifecycle, history, or pin routes to cookie sessions", async () => {

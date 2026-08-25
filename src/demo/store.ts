@@ -356,12 +356,6 @@ function makeDemoSeed(now = new Date()) {
         { group_name: "Demo Debt", categories: [{ id: "demo-loans", name: "Loan Payments" }, { id: "demo-credit-card", name: "Credit Card" }] },
       ],
     },
-    notes: [
-      { id: "demo-note-1", user_id: "demo-user", content: "Demo walkthrough: dashboard, inbox, calendar, bills, then settings.", sort_order: 1, created_at: fetchedAt, updated_at: fetchedAt, archived_at: null as string | null },
-      { id: "demo-note-2", user_id: "demo-user", content: "All names, accounts, and providers are fictional.", sort_order: 2, created_at: fetchedAt, updated_at: fetchedAt, archived_at: null as string | null },
-      { id: "demo-note-3", user_id: "demo-user", content: "Talk track: single-user system, rolling data boundary, inbox triage, calendar overlays, Actual Budget mapping.", sort_order: 3, created_at: fetchedAt, updated_at: fetchedAt, archived_at: null as string | null },
-      { id: "demo-note-4", user_id: "demo-user", content: "Capture screenshots on a weekday: inbox pressure, month calendar density, selected deadline rail, bills ledger.", sort_order: 4, created_at: fetchedAt, updated_at: fetchedAt, archived_at: null as string | null },
-    ],
     news: buildDemoNews(),
     importantSenders: inboxSeed.importantSenders,
     emailBodies: inboxSeed.emailBodies,

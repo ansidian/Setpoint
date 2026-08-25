@@ -5,8 +5,10 @@ import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav";
 import { useDashboard } from "../../context/DashboardContext";
 import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage";
+import { isDemoMode } from "../../demo/config";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
+import { MOBILE_MEDIA_QUERY } from "../../lib/breakpoints";
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays";
 import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendarModalMount";
@@ -45,8 +47,6 @@ export type DashboardShellLiveData = Omit<Partial<CurrentDashboardHookResult["li
   snoozedEntries?: Array<Record<string, unknown>>;
   resurfacedEntries?: Array<Record<string, unknown>>;
 };
-// Single import factory so the inbox chunk can be both lazy-mounted and warmed
-// in the background after the dashboard paints; the bundler dedupes to one fetch.
 const importInboxView = () => import("../inbox/InboxView");
 const InboxView = lazy(importInboxView) as ComponentType<InboxViewProps>;
 const importNotesTab = () => import("../notes/NotesTab");
@@ -106,6 +106,7 @@ export function DashboardShell({
   const liveData = liveDataInput as CurrentDashboardLiveData;
   const calendarRange = calendarRangeInput as ReturnType<typeof useCalendarRange>;
   const isMobile = useIsMobile();
+  const demoMode = isDemoMode();
   const {
     handleAddTask,
     handleCompleteTask,
@@ -116,7 +117,7 @@ export function DashboardShell({
     try {
       const saved = readDemoSafeLocalStorage("ea:tab");
       if (saved === "inbox") return "inbox";
-      if (saved === "notes") return "notes";
+      if (saved === "notes" && !isMobile && !demoMode) return "notes";
       return "dashboard";
     } catch {
       return "dashboard";
@@ -125,21 +126,22 @@ export function DashboardShell({
   useEffect(() => {
     writeDemoSafeLocalStorage("ea:tab", tab);
   }, [tab]);
-  // Reflect the active tab as a root attribute so global CSS can hide
-  // calendar-owned document.body portals (the floating detail panel) when the
-  // calendar isn't the active tab. The calendar mounts as a KeepAlive
-  // (Activity-frozen) tab, so on leave it can't re-render to retract its own
-  // body portal — this lets the (non-frozen) shell drive the hide. Layout
-  // effect runs before paint so the panel never flashes over the new tab.
+  useEffect(() => {
+    if (demoMode) return undefined;
+    const mobileQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const leaveDesktopNotes = (event: MediaQueryListEvent) => {
+      if (event.matches) setTab((current) => current === "notes" ? "dashboard" : current);
+    };
+    mobileQuery.addEventListener("change", leaveDesktopNotes);
+    return () => mobileQuery.removeEventListener("change", leaveDesktopNotes);
+  }, [demoMode]);
+  // Let the shell hide calendar-owned body portals before paint when inactive.
   useLayoutEffect(() => {
     document.documentElement.dataset.activeTab = tab;
   }, [tab]);
-  // Warm the lazy inbox chunk after first paint so the first dashboard->inbox
-  // switch is instant instead of staring at a blank fetch.
   useWarmImport(importInboxView);
   // Warm heavier secondary tabs on desktop only; mobile loads them on first use.
   useWarmImport(importCalendar, { enabled: !isMobile });
-  useWarmImport(importNotesTab, { enabled: !isMobile });
   useWarmImport(importNewsTab, { enabled: !isMobile });
   // Mobile shell history is owned here (the parent) so the tab entry and the
   // reader entry are pushed in a deterministic order (tab, then reader) for both
@@ -162,10 +164,13 @@ export function DashboardShell({
   // Same mount-on-first-visit treatment for news: it fetches on mount, so avoid
   // eagerly hitting the news API before the owner ever opens the tab.
   const [newsMounted, setNewsMounted] = useState(false);
+  const [notesMounted, setNotesMounted] = useState(tab === "notes");
   const setShellTab = useCallback((nextTab: DashboardTab) => {
     if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes" && nextTab !== "news") return;
+    if (nextTab === "notes" && (isMobile || demoMode)) return;
     if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
     if (nextTab === "news") setNewsMounted(true); // mount-on-first-visit
+    if (nextTab === "notes") setNotesMounted(true); // mount-on-first-visit
     if (!isMobile || nextTab === tab) {
       // Non-urgent so the show/hide + re-mounted effects yield to user input.
       startTransition(() => setTab(nextTab));
@@ -180,7 +185,7 @@ export function DashboardShell({
       return;
     }
     startTransition(() => setTab(nextTab));
-  }, [isMobile, tab]);
+  }, [demoMode, isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState<SnapshotView | null>(null);
@@ -271,6 +276,7 @@ export function DashboardShell({
   const anyBlockingOverlayOpen = analyticsOpen || historyOpen;
 
   useDashboardShellHotkeys({
+    activeTab: tab,
     isMobile,
     analyticsOpen,
     historyOpen,
@@ -521,9 +527,11 @@ export function DashboardShell({
           ) : null}
         </DashboardTabPanel>
         <DashboardTabPanel tab="notes" active={tab === "notes"} isMobile={isMobile}>
-          <Suspense fallback={null}>
-            <NotesTab accent={accent} isMobile={isMobile} />
-          </Suspense>
+          {notesMounted && !isMobile && !demoMode ? (
+            <Suspense fallback={<div className="notes-canvas-loading" aria-label="Loading notes canvas" />}>
+              <NotesTab />
+            </Suspense>
+          ) : null}
         </DashboardTabPanel>
         <DashboardTabPanel tab="news" active={tab === "news"} isMobile={isMobile}>
           {newsMounted ? (

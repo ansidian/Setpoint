@@ -12,6 +12,7 @@ dist
 dist-demo
 .env
 server/db/*.db
+server/db/tldraw-assets/
 morning-briefing.jsx
 .claude/
 .codex/

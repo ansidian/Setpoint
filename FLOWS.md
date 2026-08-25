@@ -327,3 +327,18 @@ Selection path:
 11. `src/api.ts` → `src/demo/apiAdapter.ts` — demo builds keep Home, writable calendar events, full dynamic reminder rows, filtering, and deletion in refresh-reset in-memory state; provider/network boundaries remain unreachable.
 
 **Failure boundary:** transient Routes failure retains the last grounded leave time with a redacted error code and bounded retry. Missing/ambiguous occurrence or Home state blocks the row, and CAS rejection discards stale provider results rather than reviving changed/deleted/sent state.
+
+## 16. Desktop Notes edit → quiet revisioned tldraw save
+
+**Trigger:** the owner opens desktop Notes, edits the tldraw document, or adds supported image/video media.
+
+1. `DashboardShell` lazy-mounts `NotesTab` only after an eligible desktop visit; mobile and demo builds omit the tab, warm import, mount, and API traffic.
+2. `GET /api/tldraw/bootstrap` returns whether the current server requires a production license, the active tldraw key when required, and the owner's single compressed document and revision. Local development returns no key and mounts tldraw in its license-exempt development mode. Camera and active-page session state remain device-local.
+3. `useTldrawAutosave` observes only user-authored document changes. It waits for a five-second quiet window, caps sustained activity at thirty seconds, allows one request in flight, coalesces newer changes, and skips a client-identical snapshot.
+4. `PUT /api/tldraw/document` compares the base revision, hashes the serialized document, skips hash-identical writes, and stores changed JSON as one gzip BLOB in `ea_tldraw_documents`.
+5. A stale revision returns `409`; autosave stops and requires reload or an explicit local recovery download. No stale device silently overwrites a newer document.
+6. `tldrawAssetStore` hashes supported image/video bytes in the browser and uploads a content hash once per mounted session. `tldraw-asset-service` verifies the hash, deduplicates on disk, and serves private immutable authenticated URLs from the persistent asset directory.
+
+**Network boundary:** no polling, SSE, WebSocket, realtime presence, or per-keystroke writes. A second device sees the latest canvas after refresh. tldraw's hobby-license telemetry is governed by tldraw and is the only expected vendor traffic from the canvas itself.
+
+**Persistence:** document BLOB/revision in Turso; content-addressed media on the private persistent disk; session/camera in localStorage. Legacy note rows, APIs, demo data, and UI do not exist.

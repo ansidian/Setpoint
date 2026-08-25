@@ -13,10 +13,21 @@ describe("instance credential registry", () => {
       "gmail.pubsub_topic",
       "google.oauth_client_id",
       "google.oauth_client_secret",
+      "notes.tldraw_license_key",
       "tasks.todoist_client_id",
       "tasks.todoist_client_secret",
       "weather.pirate_weather_api_key",
     ]);
+  });
+
+  it("keeps the tldraw license write-only and owned by Notes", () => {
+    expect(getInstanceCredentialDefinition("notes.tldraw_license_key")).toEqual({
+      key: "notes.tldraw_license_key",
+      handling: "secret",
+      envAliases: [],
+      validatorOwner: "notes",
+      capabilities: ["notes"],
+    });
   });
 
   it("declares handling, env aliases, validator ownership, and affected capabilities", () => {

@@ -171,6 +171,7 @@ export function resolveDashboardShellHotkey({
   analyticsOpen = false,
   historyOpen = false,
   isMobile = false,
+  activeTab,
 }: {
   key?: string;
   code?: string;
@@ -185,6 +186,7 @@ export function resolveDashboardShellHotkey({
   analyticsOpen?: boolean;
   historyOpen?: boolean;
   isMobile?: boolean;
+  activeTab?: DashboardTab;
 } = {}) {
   // Alfred is desktop-only. On desktop its hotkeys fire everywhere, including
   // editable targets and blocking overlays, so the panel can be toggled from
@@ -200,6 +202,7 @@ export function resolveDashboardShellHotkey({
   // entry point and overlays close themselves on Escape (their own handlers).
   if ((metaKey || ctrlKey) && normalized === "k") return { action: "open-palette" };
   if (repeat || metaKey || ctrlKey || altKey) return { action: "ignore" };
+  if (activeTab === "notes") return { action: "clear-chord" };
 
   // P3-26: when a non-input blocking overlay (Analytics / Customize / History)
   // is open, suppress single-key commands that would open calendar/analytics/
@@ -241,6 +244,8 @@ export function resolveShellTabHotkey({
   altKey = false,
   editableTarget = false,
   anyBlockingOverlayOpen = false,
+  activeTab,
+  notesEnabled = true,
 }: {
   key?: string;
   metaKey?: boolean;
@@ -248,14 +253,17 @@ export function resolveShellTabHotkey({
   altKey?: boolean;
   editableTarget?: boolean;
   anyBlockingOverlayOpen?: boolean;
+  activeTab?: DashboardTab;
+  notesEnabled?: boolean;
 } = {}): DashboardTab | null {
   if (editableTarget) return null;
   if (metaKey || ctrlKey || altKey) return null;
   if (anyBlockingOverlayOpen) return null;
+  if (activeTab === "notes") return null;
   if (key === "1") return "dashboard";
   if (key === "2") return "inbox";
   if (key === "3") return "calendar";
-  if (key === "4") return "notes";
+  if (key === "4" && notesEnabled) return "notes";
   if (key === "5") return "news";
   return null;
 }

@@ -9,6 +9,10 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     maxShutdownDelaySeconds: 120
+    disk:
+      name: tldraw-assets
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
@@ -22,3 +26,5 @@ services:
         generateValue: true
       - key: EA_SETUP_TOKEN
         generateValue: true
+      - key: EA_TLDRAW_ASSET_DIR
+        value: /var/data/tldraw-assets

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { CloudSun, KeyRound, MapPin } from "lucide-react";
+import { CloudSun, KeyRound, MapPin, Shapes } from "lucide-react";
 import ActualBudgetConnectionCard from "@/components/settings/cards/ActualBudgetConnectionCard";
 import CoreProviderCredentialsCard from "@/components/settings/cards/CoreProviderCredentialsCard";
 import DiscordRemindersCard from "@/components/settings/cards/DiscordRemindersCard";
@@ -172,6 +172,24 @@ export default function ConnectionPanelContent({
           />
           <HomeLocationCard settings={settings} onRefreshConnections={onRefreshConnections} />
         </>
+      );
+      break;
+    case "tldraw":
+      controls = (
+        <CoreProviderCredentialsCard
+          id="tldraw-license"
+          title="tldraw license"
+          icon={<Shapes size={14} />}
+          description="Write-only hobby license used by the desktop Notes canvas. The key is validated against this deployment's canonical domain before activation."
+          credentials={[{
+            key: "notes.tldraw_license_key",
+            label: "tldraw",
+            inputLabel: "tldraw license key",
+            placeholder: "Enter a new hobby license key",
+            help: "Required to open Notes. tldraw validates the license in the browser and may send license telemetry under its hobby terms.",
+          }]}
+          {...credentialProps}
+        />
       );
       break;
   }

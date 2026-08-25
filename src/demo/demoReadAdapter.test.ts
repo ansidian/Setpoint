@@ -32,7 +32,6 @@ describe("demo mode read adapter", () => {
     const settings = await api.getSettings();
     const accounts = await api.getAccounts();
     const actual = await api.getActualMetadata();
-    const notes = await api.getNotes();
     const importantSenders = await api.getImportantSenders();
     const models = await api.getModels();
     const billModels = await api.getBillExtractModels();
@@ -80,7 +79,6 @@ describe("demo mode read adapter", () => {
     const accountList = Array.isArray(accounts) ? accounts : accounts.accounts;
     expect(accountList).toHaveLength(2);
     expect(actual.accounts?.[0]).toMatchObject({ name: "Demo Checking" });
-    expect(notes[0]?.content).toContain("Demo walkthrough");
     expect(importantSenders).toEqual(expect.arrayContaining([
       { address: "morgan@northstar.example", name: "Morgan Lee", source: "auto" },
     ]));

@@ -1,6 +1,6 @@
 ---
 name: "Setpoint"
-description: "A private executive-assistant workspace for current snapshots, inbox triage, schedule awareness, deadlines, and finances."
+description: "A private executive-assistant workspace for current snapshots, inbox triage, schedule awareness, an infinite ideas canvas, deadlines, and finances."
 colors:
   page: "#1e1e2e"
   page-deep: "#0b0b13"
@@ -8,6 +8,7 @@ colors:
   surface-elevated: "#313244"
   card: "#24243a66"
   floating-panel: "#16161e"
+  notes-canvas: "#11111b"
   text-primary: "#cdd6f4"
   text-muted: "#a6adc8"
   text-subtle: "#6c7086"
@@ -105,6 +106,26 @@ components:
     textColor: "{colors.text-primary}"
     rounded: "{rounded.xl}"
     padding: "16px"
+  notes-save-indicator:
+    backgroundColor: "{colors.floating-panel}"
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.full}"
+    padding: "4px 8px"
+  notes-recovery-button:
+    backgroundColor: "{colors.floating-panel}"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.md}"
+    padding: "0 12px"
+  notes-checklist-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.lg}"
+    padding: "14px"
+  notes-checklist-checkbox-checked:
+    backgroundColor: "{colors.accent-primary}"
+    textColor: "{colors.notes-canvas}"
+    rounded: "{rounded.sm}"
+    size: "18px"
   v3-primary-button:
     backgroundColor: "{colors.v3-accent}"
     textColor: "{colors.v3-app}"
@@ -114,13 +135,13 @@ components:
 
 # Design System: Setpoint
 
-## 1. Overview
+## Overview
 
 **Creative North Star: "The Private Ops Desk"**
 
 Setpoint is a private product surface, not a brand page. The physical scene is a single user checking the day from a laptop in a quiet room before moving into meetings, schoolwork, errands, or finance admin. The interface chooses a restrained dark theme because it is used repeatedly, often around calendar transitions or early in the day, when low glare and stable hierarchy matter more than spectacle.
 
-The visual system is compact, border-led, and data-first. Purple is the default primary accent, but it should appear as a control signal, not a wash over the product. The shell can support a scoped V3 light mode, but new work must respect the token system in this file and `DESIGN.json`, which remain the implementation source of truth.
+The visual system is compact, border-led, and data-first. Purple is the default primary accent, but it should appear as a control signal, not a wash over the product. The shell can support a scoped V3 light mode, but new work must respect this file's normative frontmatter and its `.impeccable/design.json` extension sidecar.
 
 **Key Characteristics:**
 - Dense operational surfaces with stable scan paths.
@@ -129,7 +150,7 @@ The visual system is compact, border-led, and data-first. Purple is the default 
 - Serif display moments reserved for assistant voice, not routine UI chrome.
 - Subtle motion for orientation only.
 
-## 2. Colors
+## Colors
 
 The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, lavender as the primary accent, orange reserved for notification and warning roles, and named status colors tied to real data states.
 
@@ -145,6 +166,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 - **Panel Surface** (`#24243a`): Elevated panels and settings surfaces.
 - **Input Surface** (`#313244`): Inputs and higher-emphasis controls.
 - **Floating Panel Solid** (`#16161e`): Portaled dropdowns, popovers, history, search, and menus. This must remain opaque.
+- **Notes Canvas Black** (`#11111b`): Full-bleed background behind the native dark tldraw surface and its loading or setup states.
 - **Primary Text** (`#cdd6f4`): Main copy and titles.
 - **Muted Text** (`#a6adc8`): Metadata, carried-over text, and lower-priority labels.
 
@@ -165,7 +187,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 **The Finance Direction Rule.** Inflows use cyan, outflows use periwinkle, and transfers use info blue. Rose remains reserved for overdue, missed, or error states; direction must also be conveyed by sign and label.
 
-## 3. Typography
+## Typography
 
 **Display Font:** Instrument Serif, Fraunces, or IBM Plex Serif via `--serif-choice`, with Georgia as the backup face.
 **Body Font:** Montserrat, with the system sans-serif stack as backup.
@@ -185,7 +207,15 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 **The Voice Split Rule.** Use display serif only for high-level summaries with a deliberately editorial role. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, conversational panel responses such as Alfred answers, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).
 
-## 4. Elevation
+## Layout
+
+Setpoint uses a dense, viewport-bound shell with stable scan paths. Desktop workspaces may own the shell's remaining height and suppress shell-level scrolling when their interaction model requires it; Notes and Calendar are the established examples. Default spacing follows a 4px rhythm, with 2px and 6px reserved for compact optical adjustments. On narrow viewports, tappable controls meet the 44px minimum touch target, safe-area insets protect shell chrome, and text fields render at 16px or larger to prevent browser zoom.
+
+Notes is desktop-only. Its canvas fills the entire tab panel beneath the narrow Setpoint shell, with no inner card, max-width container, page padding, or independent page scroll. The canvas itself clips overflow and isolates its stacking context so native tldraw edge controls retain the full instrument surface. Mobile and demo omit Notes rather than presenting a reduced substitute.
+
+**The Instrument Owns the Work Area Rule.** When a native spatial tool is the product surface, let it occupy the full available workspace; keep Setpoint framing at the shell boundary.
+
+## Elevation & Depth
 
 Depth is border-first. Inline cards and list items should rely on 1px borders, tonal fills, and small accent glows, not elevation shadows. Shadows are reserved for portals, modals, dropdowns, and focus or accent effects that must sit above the app.
 
@@ -197,7 +227,13 @@ Depth is border-first. Inline cards and list items should rely on 1px borders, t
 
 **The Portal Shadow Rule.** Shadows belong to things that escape normal layout. Cards, rails, rows, and inline sections should not gain decorative drop shadows.
 
-## 5. Components
+## Shapes
+
+Setpoint uses gently rounded, border-led geometry. Dense controls use 6px to 8px corners, cards and recovery panels use 12px, large floating containers use 16px, and compact statuses use full pills. Borders are normally 1px and low contrast; strong silhouette changes are reserved for selected, focused, or urgent states. The Notes canvas is intentionally rectangular and flush to the tab boundary so it reads as an instrument surface rather than another card.
+
+**The Flush Canvas Rule.** Never round or inset the Notes work surface. Rounded shapes belong to Setpoint's compact overlays and recovery controls, not to the canvas boundary.
+
+## Components
 
 ### Buttons
 
@@ -235,6 +271,31 @@ Depth is border-first. Inline cards and list items should rely on 1px borders, t
 
 Floating panels must be portaled to `document.body`, fixed-positioned from the trigger rect, opaque `#16161e`, isolated with `isolation: isolate`, and scroll-contained. Outside click must check both trigger and portal refs.
 
+### Notes Canvas
+
+The Notes tab is the native dark tldraw infinite canvas, not a Setpoint note editor placed inside a dashboard container. Preserve tldraw's own tools, edge controls, page model, gestures, and interaction language without reskinning them. Setpoint adds only the loading and license states, ambient save status, and revision-conflict recovery required to operate the surface safely.
+
+- **Surface:** Full width and full height beneath the desktop shell, clipped and isolated against the near-black Notes canvas token. No card background, page padding, or max-width wrapper.
+- **Ambient Status:** A non-interactive 9px label in an opaque, bordered pill sits centered 10px from the canvas top. Muted text communicates normal saving; rose text plus explicit wording communicates failure or conflict.
+- **Recovery:** A centered opaque panel sits below the status pill, uses the standard portal shadow, and pairs rose urgency with primary and quiet recovery buttons. Keep the explanation visible and offer both reload-latest and download-local-copy actions.
+- **Setup And Loading:** License and load failures use a centered compact state with a 44px accent-tinted icon tile, 13px heading, short 12px message, and one direct action. Loading uses a restrained shimmer; suppress that motion when reduced motion is requested.
+
+**The Native Canvas Rule.** Do not add legacy note search, archive, list, dashboard-card, or mobile-substitute UI over or around tldraw. The infinite canvas is Notes.
+
+**The Ambient Until Actionable Rule.** Normal saving stays tiny and non-interactive. Only failure, missing setup, or a revision conflict earns a Setpoint panel and controls.
+
+### Canvas Checklist
+
+The canvas checklist is a compact, flat action card embedded as a native tldraw shape. It brings just enough Setpoint structure onto the spatial canvas to make a plan checkable without creating a detached task-management surface.
+
+- **Container:** Use the solid dark panel surface, a 1px low-opacity lavender border, 12px corners, and 14px internal padding. Keep it shadowless so it remains an object on the canvas rather than a floating panel.
+- **Hierarchy:** Pair a 13px semibold editable title with a quiet 9px completion count. Checklist items use 12px operational text in stable 32px rows with compact 4px vertical gaps.
+- **Completion:** Use an 18px square checkbox with 4px corners. Lavender fill plus a checkmark communicates completion; mute and strike the item label as a redundant non-color cue.
+- **Direct Manipulation:** Enter adds the next item, Backspace removes an empty row when another row remains, and row removal appears on hover or focus. Hover, focus, and active states follow the standard fast motion token and respect reduced motion.
+- **Portability:** Keep the title, item text, completion count, checkbox state, and subdued completed styling recognizable in exported SVG output.
+
+**The Embedded Instrument Rule.** Canvas-native structured tools should stay compact, movable, and editable in place. Extend the canvas with one focused action model; do not surround the shape with dashboard chrome or turn it into a second provider-backed task system.
+
 ### Timeline And Rails
 
 Timeline rows, rail cards, and dashboard sections should emphasize time, urgency, source, and action. Use stable row heights and compact metadata so live updates do not disrupt reading.
@@ -249,39 +310,18 @@ Adjacent-month dates in the mini calendar use a gray, more muted date number ins
 
 Keep the mini calendar on a stable six-row grid so month changes do not resize the agenda rail below it.
 
-## 6. CSS Custom Properties
-
-The following `--sp-*` tokens are defined in `src/index.css :root` and used throughout the app. Add new tokens here when they are minted.
-
-### Mobile / Touch
-
-- **`--sp-touch-min`** (`44px`): Minimum touch-target dimension for mobile hit targets. All tappable controls must meet or exceed this size on narrow viewports.
-- **`--sp-safe-top`** (`env(safe-area-inset-top, 0px)`): Notch / status-bar inset. Reserved by the sticky header so content is never obscured by the device frame.
-- **`--sp-safe-bottom`** (`env(safe-area-inset-bottom, 0px)`): Home-indicator inset. Reserved by sheets and the Phase-1 bottom navigation bar.
-
-### Editor
-
-- **`--sp-note-editor-font`** (`13px` base, flipped to `16px` at ≤639px): CodeMirror notes-editor font size. The 16px value at narrow viewports satisfies the iOS focus-zoom floor — inputs below 16px trigger an unwanted automatic zoom on iPhone Safari.
-
-### Motion
-
-- **`--sp-motion-fast`** (`150ms`): Hover, focus, press, and compact disclosure feedback.
-- **`--sp-motion-panel`** (`360ms`): Drawers, sheets, and other spatial panel state changes.
-- **`--sp-ease-out`** (`cubic-bezier(0.16, 1, 0.3, 1)`): The standard confident deceleration curve for product motion.
-
-Panel exits may use a shorter `260ms` duration. Retained closing shells must become inert and leave the accessibility tree immediately, even while their visual exit finishes.
-
-## 7. Do's and Don'ts
+## Do's and Don'ts
 
 ### Do:
 
-- **Do** use this file and `DESIGN.json` as the implementation source of truth for tokens.
+- **Do** treat this file's frontmatter as the normative token source and `.impeccable/design.json` as its extension sidecar.
 - **Do** give every enabled button a hover animation plus keyboard-visible focus treatment. Static buttons should be rare and intentional.
 - **Do** keep new spacing on the 4px grid: 2, 4, 6, 8, 12, 14, 16, 20, 24, 32.
 - **Do** use 1px borders and tonal fills for product depth.
 - **Do** reserve `#f97316` for warnings, snooze, notifications, and suspended-service states.
 - **Do** keep panel backgrounds opaque when they escape the document flow.
 - **Do** support reduced motion, keyboard navigation, and non-color status cues.
+- **Do** let the desktop Notes canvas fill the available tab workspace and keep normal save feedback compact.
 
 ### Don't:
 
@@ -291,3 +331,4 @@ Panel exits may use a shorter `260ms` duration. Retained closing shells must bec
 - **Don't** use side-stripe borders wider than 1px as accents on cards, list items, callouts, or alerts.
 - **Don't** add shadows to ordinary cards or rows. Reserve shadows for portaled overlays.
 - **Don't** make every feed equally loud. Urgency and next action need the strongest visual priority.
+- **Don't** wrap tldraw in a dashboard card, reskin its native chrome, or recreate the retired list-and-editor Notes UI.

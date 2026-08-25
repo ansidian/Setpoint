@@ -139,17 +139,6 @@ CREATE INDEX IF NOT EXISTS idx_snoozed_emails_user_until
 CREATE INDEX IF NOT EXISTS idx_snoozed_emails_user_status
   ON ea_snoozed_emails (user_id, status);
 
-CREATE TABLE IF NOT EXISTS ea_notes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  content TEXT NOT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_ea_notes_user
-  ON ea_notes(user_id, sort_order);
-
 CREATE TABLE IF NOT EXISTS ea_email_backfill_state (
   user_id TEXT NOT NULL,
   account_id TEXT NOT NULL,

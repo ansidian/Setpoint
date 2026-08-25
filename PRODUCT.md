@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Setpoint is built for a single owner who uses it as a private daily command center. The owner manages personal email across accounts, calendar events, Todoist-backed deadlines and tasks, weather, bills, notes, and Actual Budget activity. They use Setpoint at the start of the day and between commitments, often while deciding what deserves attention next.
+Setpoint is built for a single owner who uses it as a private daily command center. The owner manages personal email across accounts, calendar events, Todoist-backed deadlines and tasks, weather, bills, a desktop tldraw ideas canvas, and Actual Budget activity. They use Setpoint at the start of the day and between commitments, often while deciding what deserves attention next.
 
 The owner is not browsing a public product, comparing plans, or working inside a shared workspace. They are trying to reduce context switching, recover missed obligations, and turn noisy feeds into a concise operational picture.
 

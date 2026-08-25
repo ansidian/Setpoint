@@ -11,21 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // app entry) returns undefined and falls back to Rolldown's default chunking.
 // Matching is on node_modules path segments to avoid substring false positives
 // (e.g. "react" must not catch "@base-ui/react").
-const CODEMIRROR_PACKAGE_PATHS = [
-  "/node_modules/@codemirror/",
-  "/node_modules/@lezer/",
-  "/node_modules/@marijn/find-cluster-break/",
-  "/node_modules/crelt/",
-  "/node_modules/style-mod/",
-  "/node_modules/w3c-keyname/",
-];
-
 export function manualChunks(id: string): string | undefined {
   const normalized = id.split(path.sep).join("/");
   if (!normalized.includes("/node_modules/")) return undefined;
-  if (CODEMIRROR_PACKAGE_PATHS.some((packagePath) => normalized.includes(packagePath))) {
-    return "codemirror-vendor";
-  }
   if (normalized.includes("/node_modules/motion/")
     || normalized.includes("/node_modules/framer-motion/")) {
     return "motion";
@@ -53,7 +41,7 @@ export default defineConfig(({ mode }) => {
             groups: [{
               name: manualChunks,
               // Rolldown measures this before minification. This keeps the
-              // CodeMirror group below Vite's 500 kB emitted-chunk warning
+              // heavy lazy feature groups below Vite's emitted-chunk warning
               // without fragmenting the smaller React and Motion groups.
               maxSize: 1_300 * 1024,
             }],
@@ -62,6 +50,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
+      exclude: ["@tldraw/assets"],
       include: [
         "@base-ui/react/button",
         "@base-ui/react/dialog",
@@ -70,6 +59,10 @@ export default defineConfig(({ mode }) => {
         "@base-ui/react/select",
         "@base-ui/react/switch",
         "@base-ui/react/tooltip",
+        "lodash.isequalwith",
+        "lodash.isequal",
+        "lodash.throttle",
+        "lodash.uniq",
       ],
     },
     resolve: {

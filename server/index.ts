@@ -15,7 +15,7 @@ import dashboardRoutes from "./routes/dashboard.ts";
 import calendarRoutes from "./routes/calendar.ts";
 import alfredRoutes from "./routes/alfred.ts";
 import { startAlfredConversationSweeper, stopAlfredConversationSweeper } from "./alfred/alfred-conversations.ts";
-import notesRoutes from "./routes/notes.ts";
+import tldrawRoutes from "./routes/tldraw.ts";
 import newsRoutes from "./routes/news.ts";
 import gmailPushRoutes from "./routes/gmail-push.ts";
 import todoistWebhookRoutes from "./routes/todoist-webhook.ts";
@@ -88,7 +88,6 @@ app.get("/healthz", (_req, res) => {
 });
 app.use("/api", requireClaimedInstance);
 app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRoutes);
-app.use(express.json());
 app.use(cookieParser());
 
 // CSRF protection: require custom header on all state-changing API requests.
@@ -106,6 +105,13 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
+// Tldraw snapshots can exceed Express's 100 KB default. Keep the larger parser
+// scoped to this authenticated route so unrelated API surfaces retain their
+// tighter request bound. Binary asset bodies are ignored here and parsed by the
+// asset endpoint itself.
+app.use("/api/tldraw", express.json({ limit: "8mb" }), tldrawRoutes);
+app.use(express.json());
+
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/briefing", briefingRoutes);
@@ -114,7 +120,6 @@ app.use("/api/ea", todoistOAuthRoutes);
 app.use("/api/ea", accountsRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/alfred", alfredRoutes);
-app.use("/api/notes", notesRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/gmail", gmailPushRoutes);
 app.use("/api/instance-credentials", instanceCredentialRoutes);

@@ -9,7 +9,6 @@ import {
 import { demoDateRange } from "./dateRange.ts";
 import { buildDemoCalendarBillsRange } from "./financeData.ts";
 import { handleDemoNewsRequest } from "./newsAdapter.ts";
-import { handleDemoNotesRequest } from "./notesAdapter.ts";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.ts";
 import { handleDemoSnapshotRequest } from "./snapshotAdapter.ts";
 import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.ts";
@@ -328,8 +327,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   }
   const snapshotResponse = handleDemoSnapshotRequest(request);
   if (snapshotResponse !== NO_DEMO_API_RESPONSE) return snapshotResponse;
-  const notesResponse = handleDemoNotesRequest(request);
-  if (notesResponse !== NO_DEMO_API_RESPONSE) return notesResponse;
   const newsResponse = handleDemoNewsRequest(request);
   if (newsResponse !== NO_DEMO_API_RESPONSE) return newsResponse;
 
