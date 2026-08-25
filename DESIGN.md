@@ -273,7 +273,7 @@ Floating panels must be portaled to `document.body`, fixed-positioned from the t
 
 ### Notes Canvas
 
-The Notes tab is the native dark tldraw infinite canvas, not a Setpoint note editor placed inside a dashboard container. Preserve tldraw's own tools, edge controls, page model, gestures, and interaction language without reskinning them. Setpoint adds only the loading and license states, ambient save status, and revision-conflict recovery required to operate the surface safely.
+The Notes tab is the native dark tldraw infinite canvas, not a Setpoint note editor placed inside a dashboard container. Preserve tldraw's own tools, edge controls, page model, gestures, and interaction language without reskinning them. Setpoint adds only the loading and license states, ambient save status, device-local unsaved-work recovery, and revision-conflict recovery required to operate the surface safely. Local recovery stays invisible during normal operation; only a protection failure or divergent local/server versions earns persistent recovery UI.
 
 - **Surface:** Full width and full height beneath the desktop shell, clipped and isolated against the near-black Notes canvas token. No card background, page padding, or max-width wrapper.
 - **Ambient Status:** A non-interactive 9px label in an opaque, bordered pill sits centered 10px from the canvas top. Muted text communicates normal saving; rose text plus explicit wording communicates failure or conflict.

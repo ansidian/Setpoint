@@ -451,7 +451,7 @@ Generating or importing a token invalidates the previous Setpoint credential imm
 
 ## Current Dashboard Pipeline
 
-Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, and Actual are fetched through domain services and assembled into the `/api/dashboard/current` envelope. Desktop Notes loads its tldraw document independently from `/api/tldraw/bootstrap` only after the tab is opened.
+Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, and Actual are fetched through domain services and assembled into the `/api/dashboard/current` envelope. Desktop Notes loads a fresh tldraw document independently from `/api/tldraw/bootstrap` only after the tab is opened, reconciles it with a device-local IndexedDB recovery envelope, and clears that envelope only after the matching server revision is confirmed.
 
 ```mermaid
 flowchart TD

@@ -33,7 +33,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 - **Snapshot boundaries** — Cron-based schedule entries advance active email snapshot windows without running a batch generator.
 - **Snapshot history** — Browses prior inbox snapshot windows from the current snapshot store.
 - **Important senders and notifications** — Configures priority senders, browser notifications, triage notification sounds, and private Discord reminder delivery.
-- **Desktop Notes canvas** — Uses a licensed tldraw workspace as an infinite dumping ground for project plans, bugs, feature lists, and personal ideas. The document is revision-safe across devices and refresh-based rather than realtime.
+- **Desktop Notes canvas** — Uses a licensed tldraw workspace as an infinite dumping ground for project plans, bugs, feature lists, and personal ideas. Unsaved work recovers locally across refreshes, while confirmed documents remain revision-safe across devices and refresh-based rather than realtime.
 - **Multi-account support** — Supports multiple Gmail OAuth and iCloud IMAP accounts with custom labels, colors, and icons.
 - **Operational controls** — Includes settings for provider credentials, model selection, account order, schedules, Actual Budget, Todoist, reminders, passkeys, and scoped API tokens.
 

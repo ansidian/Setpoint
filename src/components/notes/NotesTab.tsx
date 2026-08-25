@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, Download, RefreshCw, Settings, Shapes } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, Settings, Shapes, ShieldAlert } from "lucide-react";
 import {
   Tldraw,
   createTLStore,
@@ -11,7 +11,6 @@ import {
 } from "tldraw";
 import { getAssetUrlsByImport } from "@tldraw/assets/imports.vite";
 import "tldraw/tldraw.css";
-import { getTldrawBootstrap } from "../../api";
 import type { TldrawBootstrapResponse } from "../../../shared/types/tldraw";
 import { ChecklistShapeUtil } from "./ChecklistShapeUtil";
 import {
@@ -21,24 +20,20 @@ import {
 } from "./checklistTldrawConfig";
 import { createSetpointTldrawAssetStore } from "./tldrawAssetStore";
 import { getStoredTldrawSession, useTldrawAutosave } from "./useTldrawAutosave";
+import {
+  type TldrawRecoveryDraft,
+} from "./tldrawRecoveryModel";
+import { tldrawRecoveryStore } from "./tldrawRecoveryStore";
+import { loadTldrawWorkspace, type LoadedTldrawWorkspace } from "./loadTldrawWorkspace";
 
 const assetUrls = getAssetUrlsByImport();
 const shapeUtils = [...defaultShapeUtils, ChecklistShapeUtil];
 const tools = [ChecklistShapeTool];
-let bootstrapPromise: Promise<TldrawBootstrapResponse> | null = null;
-
-function loadBootstrap(): Promise<TldrawBootstrapResponse> {
-  bootstrapPromise ??= getTldrawBootstrap().catch((error) => {
-    bootstrapPromise = null;
-    throw error;
-  });
-  return bootstrapPromise;
-}
 
 type BootstrapState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; value: TldrawBootstrapResponse };
+  | { kind: "ready"; value: LoadedTldrawWorkspace };
 
 function CanvasState({ icon, title, message, action }: {
   icon: ReactNode;
@@ -56,7 +51,78 @@ function CanvasState({ icon, title, message, action }: {
   );
 }
 
-function NotesCanvas({ bootstrap }: { bootstrap: TldrawBootstrapResponse }) {
+function downloadDocument(document: TldrawRecoveryDraft["document"]): void {
+  const blob = new Blob([JSON.stringify({ document }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = window.document.createElement("a");
+  anchor.href = url;
+  anchor.download = `setpoint-notes-recovery-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function RecoveryChoice({
+  draft,
+  onKeepServer,
+  onRestoreLocal,
+}: {
+  draft: TldrawRecoveryDraft;
+  onKeepServer: () => void;
+  onRestoreLocal: () => void;
+}) {
+  const [discarding, setDiscarding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const keepServer = async () => {
+    setDiscarding(true);
+    setError(null);
+    try {
+      const cleared = await tldrawRecoveryStore.clearIfCurrent(draft.id);
+      if (!cleared) {
+        setError("The local draft changed in another tab. Reload Notes before choosing a version.");
+        setDiscarding(false);
+        return;
+      }
+      onKeepServer();
+    } catch {
+      setError("The local draft could not be cleared. Try again before opening the server version.");
+      setDiscarding(false);
+    }
+  };
+
+  return (
+    <CanvasState
+      icon={<ShieldAlert size={22} />}
+      title="Choose which canvas to keep"
+      message="A recovery draft from this device and a newer server canvas were both found. Setpoint will not combine or overwrite them automatically."
+      action={(
+        <div className="notes-recovery-choice">
+          <div className="notes-recovery-actions">
+            <button type="button" className="notes-canvas-button" disabled={discarding} onClick={() => void keepServer()}>
+              {discarding ? "Opening server…" : "Keep server version"}
+            </button>
+            <button type="button" className="notes-canvas-button notes-canvas-button--warning" disabled={discarding} onClick={onRestoreLocal}>
+              Replace server with local draft
+            </button>
+            <button type="button" className="notes-canvas-button notes-canvas-button--quiet" disabled={discarding} onClick={() => downloadDocument(draft.document)}>
+              <Download size={14} /> Download local draft
+            </button>
+          </div>
+          {error ? <p className="notes-recovery-choice-error" role="alert">{error}</p> : null}
+        </div>
+      )}
+    />
+  );
+}
+
+function NotesCanvas({
+  bootstrap,
+  recoveryDraft,
+}: {
+  bootstrap: TldrawBootstrapResponse;
+  recoveryDraft: TldrawRecoveryDraft | null;
+}) {
+  const canvasDocument = recoveryDraft?.document ?? bootstrap.document.document;
   const store = useMemo<TLStore>(() => {
     const next = createTLStore({
       assets: createSetpointTldrawAssetStore(),
@@ -64,19 +130,20 @@ function NotesCanvas({ bootstrap }: { bootstrap: TldrawBootstrapResponse }) {
       bindingUtils: defaultBindingUtils,
       assetUtils: defaultAssetUtils,
     });
-    if (bootstrap.document.document) {
+    if (canvasDocument) {
       const session = getStoredTldrawSession();
       loadSnapshot(next, {
-        document: bootstrap.document.document as never,
+        document: canvasDocument as never,
         ...(session ? { session: session as never } : {}),
       });
     }
     return next;
-  }, [bootstrap]);
+  }, [canvasDocument]);
   const autosave = useTldrawAutosave({
     store,
     initialRevision: bootstrap.document.revision,
     initialDocument: bootstrap.document.document,
+    initialRecoveryDraft: recoveryDraft,
   });
 
   return (
@@ -111,6 +178,14 @@ function NotesCanvas({ bootstrap }: { bootstrap: TldrawBootstrapResponse }) {
             <Download size={14} /> Download local copy
           </button>
         </div>
+      ) : autosave.recoveryState === "error" ? (
+        <div className="notes-protection-error" role="alert">
+          <ShieldAlert size={15} aria-hidden="true" />
+          <span>{autosave.recoveryMessage}</span>
+          <button type="button" className="notes-canvas-button notes-canvas-button--quiet" onClick={autosave.retryRecovery}>
+            Retry protection
+          </button>
+        </div>
       ) : autosave.state === "error" ? (
         <div className="notes-save-error" role="alert">{autosave.message}</div>
       ) : null}
@@ -123,7 +198,7 @@ export default function NotesTab() {
 
   useEffect(() => {
     let active = true;
-    loadBootstrap()
+    loadTldrawWorkspace()
       .then((value) => { if (active) setBootstrap({ kind: "ready", value }); })
       .catch((error: unknown) => {
         if (!active) return;
@@ -146,7 +221,7 @@ export default function NotesTab() {
       />
     );
   }
-  if (bootstrap.value.licenseRequired && !bootstrap.value.licenseKey) {
+  if (bootstrap.value.response.licenseRequired && !bootstrap.value.response.licenseKey) {
     return (
       <CanvasState
         icon={<Shapes size={22} />}
@@ -156,5 +231,23 @@ export default function NotesTab() {
       />
     );
   }
-  return <NotesCanvas bootstrap={bootstrap.value} />;
+  if (bootstrap.value.recovery.kind === "conflict") {
+    return (
+      <RecoveryChoice
+        draft={bootstrap.value.recovery.draft}
+        onKeepServer={() => setBootstrap((current) => current.kind === "ready"
+          ? { ...current, value: { ...current.value, recovery: { kind: "server", staleDraftId: null } } }
+          : current)}
+        onRestoreLocal={() => setBootstrap((current) => current.kind === "ready" && current.value.recovery.kind === "conflict"
+          ? { ...current, value: { ...current.value, recovery: { kind: "recover", draft: current.value.recovery.draft } } }
+          : current)}
+      />
+    );
+  }
+  return (
+    <NotesCanvas
+      bootstrap={bootstrap.value.response}
+      recoveryDraft={bootstrap.value.recovery.kind === "recover" ? bootstrap.value.recovery.draft : null}
+    />
+  );
 }

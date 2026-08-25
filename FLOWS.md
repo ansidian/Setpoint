@@ -333,12 +333,14 @@ Selection path:
 **Trigger:** the owner opens desktop Notes, edits the tldraw document, or adds supported image/video media.
 
 1. `DashboardShell` lazy-mounts `NotesTab` only after an eligible desktop visit; mobile and demo builds omit the tab, warm import, mount, and API traffic.
-2. `GET /api/tldraw/bootstrap` returns whether the current server requires a production license, the active tldraw key when required, and the owner's single compressed document and revision. Local development returns no key and mounts tldraw in its license-exempt development mode. Camera and active-page session state remain device-local.
-3. `useTldrawAutosave` observes only user-authored document changes. It waits for a five-second quiet window, caps sustained activity at thirty seconds, allows one request in flight, coalesces newer changes, and skips a client-identical snapshot.
-4. `PUT /api/tldraw/document` compares the base revision, hashes the serialized document, skips hash-identical writes, and stores changed JSON as one gzip BLOB in `ea_tldraw_documents`.
-5. A stale revision returns `409`; autosave stops and requires reload or an explicit local recovery download. No stale device silently overwrites a newer document.
-6. `tldrawAssetStore` hashes supported image/video bytes in the browser and uploads a content hash once per mounted session. `tldraw-asset-service` verifies the hash, deduplicates on disk, and serves private immutable authenticated URLs from the persistent asset directory.
+2. `loadTldrawWorkspace` performs a fresh `GET /api/tldraw/bootstrap` on every Notes mount and reads the device-local IndexedDB recovery envelope. A compatible draft based on the returned revision is restored automatically; a document-identical envelope is cleared; divergent documents require an explicit server/local choice and retain a recovery download.
+3. The bootstrap response also returns whether production requires a license and the active tldraw key when required. Local development returns no key and mounts tldraw in its license-exempt development mode. Camera and active-page session state remain device-local in localStorage.
+4. `useTldrawAutosave` observes only user-authored document changes. It writes the latest full recovery envelope to IndexedDB on a 350 ms bounded throttle, forces that write at lifecycle leave seams, and registers `beforeunload` only while current unsaved work is not protected locally.
+5. Server autosave retains its five-second quiet window and thirty-second sustained-activity cap, allows one request in flight, coalesces newer changes, and skips a client-identical snapshot. A confirmed save clears only the exact recovery draft that matches it; a newer edit survives and is rebased to the new server revision.
+6. `PUT /api/tldraw/document` compares the base revision, hashes the serialized document, skips hash-identical writes, and stores changed JSON as one gzip BLOB in `ea_tldraw_documents`.
+7. A stale revision returns `409`; autosave stops and requires reload or an explicit local recovery download. No stale device silently overwrites a newer document.
+8. `tldrawAssetStore` hashes supported image/video bytes in the browser and uploads a content hash once per mounted session. `tldraw-asset-service` verifies the hash, deduplicates on disk, and serves private immutable authenticated URLs from the persistent asset directory.
 
 **Network boundary:** no polling, SSE, WebSocket, realtime presence, or per-keystroke writes. A second device sees the latest canvas after refresh. tldraw's hobby-license telemetry is governed by tldraw and is the only expected vendor traffic from the canvas itself.
 
-**Persistence:** document BLOB/revision in Turso; content-addressed media on the private persistent disk; session/camera in localStorage. Legacy note rows, APIs, demo data, and UI do not exist.
+**Persistence:** confirmed document BLOB/revision in Turso; current unsaved recovery envelope in device-local IndexedDB; content-addressed media on the private persistent disk; session/camera in localStorage. Legacy note rows, APIs, demo data, and UI do not exist.

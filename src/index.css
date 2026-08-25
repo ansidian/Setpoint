@@ -1005,6 +1005,52 @@ body {
 
 .notes-canvas-button:active { transform: translateY(0) scale(0.98); }
 .notes-canvas-button--quiet { background: var(--sp-panel); }
+.notes-canvas-button--warning {
+  border-color: color-mix(in srgb, var(--sp-cream) 28%, transparent);
+  background: color-mix(in srgb, var(--sp-cream) 8%, var(--sp-panel));
+}
+
+.notes-canvas-button--warning:hover,
+.notes-canvas-button--warning:focus-visible {
+  border-color: color-mix(in srgb, var(--sp-cream) 48%, transparent);
+  background: color-mix(in srgb, var(--sp-cream) 13%, var(--sp-panel));
+}
+
+.notes-canvas-button:disabled {
+  color: var(--color-text-faint);
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
+.notes-canvas-button:disabled:hover,
+.notes-canvas-button:disabled:focus-visible,
+.notes-canvas-button:disabled:active {
+  border-color: color-mix(in srgb, var(--sp-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--sp-accent) 12%, var(--sp-panel));
+  transform: none;
+}
+
+.notes-recovery-choice {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.notes-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.notes-canvas-state .notes-recovery-choice-error {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--sp-rose);
+  font-size: 10px;
+  line-height: 1.5;
+}
 
 .notes-save-indicator {
   position: absolute;
@@ -1069,6 +1115,31 @@ body {
   color: var(--sp-rose);
   background: #16161e;
   font-size: 10px;
+}
+
+.notes-protection-error {
+  position: absolute;
+  z-index: 410;
+  top: 42px;
+  left: 50%;
+  display: flex;
+  width: min(680px, calc(100% - 32px));
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--sp-rose) 28%, transparent);
+  border-radius: 12px;
+  color: var(--sp-rose);
+  background: #16161e;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.notes-protection-error > span {
+  min-width: 0;
+  flex: 1;
 }
 
 .setpoint-checklist {
@@ -1348,6 +1419,14 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .notes-save-indicator--saved { animation: none; }
+
+  .notes-canvas-button,
+  .notes-canvas-button:hover,
+  .notes-canvas-button:focus-visible,
+  .notes-canvas-button:active {
+    transition: none;
+    transform: none;
+  }
 
   .setpoint-checklist__row,
   .setpoint-checklist__drag,
