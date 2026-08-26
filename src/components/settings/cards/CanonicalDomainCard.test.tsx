@@ -71,4 +71,25 @@ describe("CanonicalDomainCard", () => {
 
     expect(await screen.findByRole("button", { name: "Preview change" })).toBeTruthy();
   });
+
+  it("explains a normalized same-origin preview without offering a destructive change", async () => {
+    api.previewCanonicalOriginChange.mockResolvedValue({
+      ...current,
+      callbacks: [{
+        provider: "Google OAuth",
+        previousUrl: "https://old.example.com/api/ea/accounts/gmail/callback",
+        nextUrl: "https://old.example.com/api/ea/accounts/gmail/callback",
+      }],
+    });
+    render(<CanonicalDomainCard />);
+
+    fireEvent.change(await screen.findByLabelText("Canonical Setpoint URL"), {
+      target: { value: "https://old.example.com/" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview change" }));
+
+    expect(await screen.findByText("This is already the canonical URL. No changes are needed.")).toBeTruthy();
+    expect(screen.queryByText(/registered passkeys may stop working/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change canonical URL" })).toBeNull();
+  });
 });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createClient, type Client } from "@libsql/client";
 import {
+  buildCanonicalOriginImpact,
   createCanonicalUrlService,
   deriveCanonicalUrls,
   normalizeCanonicalOrigin,
@@ -43,6 +44,17 @@ describe("canonical URL model", () => {
         todoistWebhook: "https://setpoint.example.com/api/todoist/webhook",
       },
     });
+  });
+
+  it("reports no passkey or callback changes for the current normalized origin", () => {
+    const impact = buildCanonicalOriginImpact(
+      "https://dashboard.example.com",
+      "https://dashboard.example.com/",
+      2,
+    );
+
+    expect(impact.affectedPasskeys).toBe(0);
+    expect(impact.callbacks.every((callback) => callback.previousUrl === callback.nextUrl)).toBe(true);
   });
 
   it("imports only compatible legacy origin and redirect configuration", () => {

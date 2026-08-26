@@ -64,7 +64,7 @@ export default function CanonicalDomainCard() {
   }
 
   async function applyChange() {
-    if (!impact || !acknowledged || busy) return;
+    if (!impact || impact.currentOrigin === impact.proposedOrigin || !acknowledged || busy) return;
     setBusy("change"); setError(null);
     try {
       const changed = await changeCanonicalOrigin(impact.proposedOrigin);
@@ -105,7 +105,11 @@ export default function CanonicalDomainCard() {
                 {busy === "preview" ? "Checking…" : "Preview change"}
               </Button>
             </div>
-            {impact ? (
+            {impact && impact.currentOrigin === impact.proposedOrigin ? (
+              <div role="status" className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[12px] leading-relaxed text-muted-foreground">
+                This is already the canonical URL. No changes are needed.
+              </div>
+            ) : impact ? (
               <div className="rounded-lg border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/5 p-3">
                 <div className="flex items-start gap-2 text-[12px] leading-relaxed text-foreground">
                   <TriangleAlert size={14} className="mt-0.5 shrink-0 text-[var(--sp-cream)]" />

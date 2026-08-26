@@ -53,6 +53,8 @@ router.post("/preview", requireCookieSession, async (req, res) => {
 router.patch("/", requireRecentPasswordAuth, async (req, res) => {
   const proposedOrigin = requestedOrigin(req.body?.canonicalOrigin);
   if (!proposedOrigin) return res.status(400).json({ message: "Canonical URL is invalid" });
+  const impact = await buildImpact(proposedOrigin);
+  if (impact.currentOrigin === impact.proposedOrigin) return res.json(impact);
   const owner = await getOwner();
   if (!owner) return res.status(409).json({ message: "Instance is not claimed" });
   const session = res.locals.authSession as SessionSecurityContext | undefined;
@@ -63,7 +65,6 @@ router.patch("/", requireRecentPasswordAuth, async (req, res) => {
       message: "Security state changed; sign in and try again",
     });
   }
-  const impact = await buildImpact(proposedOrigin);
   const nextGeneration = await ownerSecurityTransitionService.transition({
     userId: owner.userId,
     expectedGeneration: session.securityGeneration,

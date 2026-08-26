@@ -89,6 +89,7 @@ export function buildCanonicalOriginImpact(
 ): CanonicalOriginImpact {
   const next = deriveCanonicalUrls(proposedOrigin);
   const previous = currentOrigin ? deriveCanonicalUrls(currentOrigin) : null;
+  const originChanged = previous?.canonicalOrigin !== next.canonicalOrigin;
   const callbackLabels: Array<[keyof CanonicalUrlProjection["callbacks"], string]> = [
     ["googleOAuth", "Google OAuth"],
     ["todoistOAuth", "Todoist OAuth"],
@@ -98,7 +99,7 @@ export function buildCanonicalOriginImpact(
   return {
     currentOrigin,
     proposedOrigin: next.canonicalOrigin,
-    affectedPasskeys,
+    affectedPasskeys: originChanged ? affectedPasskeys : 0,
     callbacks: callbackLabels.map(([key, provider]) => ({
       provider,
       previousUrl: previous?.callbacks[key] ?? null,

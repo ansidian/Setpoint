@@ -473,6 +473,35 @@ describe("auth routes", () => {
       .toEqual([{ canonical_origin: "https://new.example.com" }]);
   });
 
+  it("keeps security state and sessions intact for a normalized canonical-domain no-op", async () => {
+    await currentDb().execute({
+      sql: `INSERT INTO ea_instance_metadata
+              (singleton_id, canonical_origin, source, confirmed_at, updated_at)
+            VALUES (1, ?, 'owner_confirmed', 100, 100)`,
+      args: ["https://dashboard.example.com"],
+    });
+    await seedSession(currentDb(), "current-session", Date.now() + 60_000, Date.now());
+    await seedSession(currentDb(), "other-session", Date.now() + 60_000, Date.now());
+    await seedPasskey();
+
+    const unchanged = await request(makeApp())
+      .patch("/api/auth/security/canonical-origin")
+      .set("Cookie", ["ea_session=current-session"])
+      .send({ canonicalOrigin: "https://dashboard.example.com/" });
+
+    expect(unchanged.status).toBe(200);
+    expect(unchanged.body).toMatchObject({
+      currentOrigin: "https://dashboard.example.com",
+      proposedOrigin: "https://dashboard.example.com",
+      affectedPasskeys: 0,
+    });
+    expect(setCookieHeader(unchanged)).toBe("");
+    expect((await currentDb().execute("SELECT security_generation FROM ea_owner")).rows)
+      .toEqual([{ security_generation: 1 }]);
+    expect((await currentDb().execute("SELECT COUNT(*) AS count FROM ea_sessions")).rows)
+      .toEqual([{ count: 2 }]);
+  });
+
   it("consumes a recovery code once, resets credentials, and revokes prior auth state", async () => {
     const recoveryCode = "SP-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-1111-2222";
     await createRecoveryCodeStore(currentDb()).replaceRecoveryCodes("user-1", [recoveryCode], 100);
