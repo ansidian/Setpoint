@@ -10,6 +10,8 @@ import {
   formatAttachmentSize,
 } from "./emailAttachmentModel";
 import { downloadEmailAttachment } from "./emailAttachmentDownload";
+import EmailCsvPreview, { EMAIL_CSV_PREVIEW_MAX_BYTES } from "./EmailCsvPreview";
+import EmailImagePreview from "./EmailImagePreview";
 import EmailPdfPreview from "./EmailPdfPreview";
 
 export default function EmailAttachmentPreview({
@@ -25,10 +27,16 @@ export default function EmailAttachmentPreview({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const previewKind = emailAttachmentPreviewKind(attachment.contentType);
   const filename = emailAttachmentName(attachment);
+  const previewLimitError = previewKind === "csv"
+    && attachment.size != null
+    && attachment.size > EMAIL_CSV_PREVIEW_MAX_BYTES
+    ? "This CSV is larger than 5 MB. Download it to view the full file."
+    : null;
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -38,6 +46,8 @@ export default function EmailAttachmentPreview({
     const controller = new AbortController();
     let createdUrl: string | null = null;
 
+    if (previewLimitError) return () => controller.abort();
+
     fetchEmailAttachmentBlob(emailUid, attachment.id, controller.signal)
       .then((blob) => {
         if (controller.signal.aborted) return;
@@ -45,8 +55,12 @@ export default function EmailAttachmentPreview({
         if (!previewKind || actualKind !== previewKind) {
           throw new Error("This file type cannot be previewed safely.");
         }
-        createdUrl = URL.createObjectURL(blob);
-        setObjectUrl(createdUrl);
+        if (actualKind === "csv") {
+          setPreviewBlob(blob);
+        } else {
+          createdUrl = URL.createObjectURL(blob);
+          setObjectUrl(createdUrl);
+        }
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
@@ -59,7 +73,7 @@ export default function EmailAttachmentPreview({
       controller.abort();
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [attachment.id, emailUid, previewKind, retryKey]);
+  }, [attachment.id, emailUid, previewKind, previewLimitError, retryKey]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -150,13 +164,20 @@ export default function EmailAttachmentPreview({
         {downloadError ? <div className="email-attachment-preview-alert" role="alert">{downloadError}</div> : null}
 
         <div className="email-attachment-preview-content">
-          {!objectUrl && !error ? (
+          {previewLimitError ? (
+            <div className="email-attachment-preview-state email-attachment-preview-error" role="alert">
+              <FileWarning size={26} aria-hidden="true" />
+              <strong>CSV preview unavailable</strong>
+              <span>{previewLimitError}</span>
+            </div>
+          ) : null}
+          {!objectUrl && !previewBlob && !error && !previewLimitError ? (
             <div className="email-attachment-preview-state" role="status">
               <span className="email-attachment-preview-spinner" aria-hidden="true" />
               <span>Preparing preview…</span>
             </div>
           ) : null}
-          {error ? (
+          {error && !previewLimitError ? (
             <div className="email-attachment-preview-state email-attachment-preview-error" role="alert">
               <FileWarning size={26} aria-hidden="true" />
               <strong>Preview unavailable</strong>
@@ -173,16 +194,18 @@ export default function EmailAttachmentPreview({
               </button>
             </div>
           ) : null}
-          {objectUrl && !error && previewKind === "image" ? (
-            <img
-              className="email-attachment-preview-image"
-              src={objectUrl}
-              alt={filename}
+          {objectUrl && !error && !previewLimitError && previewKind === "image" ? (
+            <EmailImagePreview
+              objectUrl={objectUrl}
+              filename={filename}
               onError={() => setError("This image could not be rendered. Download it to view the original file.")}
             />
           ) : null}
-          {objectUrl && !error && previewKind === "pdf" ? (
+          {objectUrl && !error && !previewLimitError && previewKind === "pdf" ? (
             <EmailPdfPreview objectUrl={objectUrl} filename={filename} />
+          ) : null}
+          {previewBlob && !error && !previewLimitError && previewKind === "csv" ? (
+            <EmailCsvPreview blob={previewBlob} filename={filename} />
           ) : null}
         </div>
       </Motion.section>

@@ -31,6 +31,20 @@ describe("email MIME attachment policy", () => {
     ]);
   });
 
+  it("keeps explicit attachments visible when Gmail also assigns a content id", () => {
+    expect(describeMimeAttachments([{
+      partId: "2",
+      filename: "report.pdf",
+      contentType: "application/pdf",
+      contentDisposition: "attachment",
+      cid: "f_attachment_content_id",
+      content: Buffer.from("pdf"),
+      size: 3,
+    }])).toEqual([
+      expect.objectContaining({ id: "2", inline: false }),
+    ]);
+  });
+
   it("rejects declared content beyond the decoded byte cap", () => {
     expect(() => readMimeAttachment([{
       partId: "2",

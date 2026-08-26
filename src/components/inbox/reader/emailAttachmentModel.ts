@@ -1,6 +1,6 @@
 import type { EmailBodyAttachment } from "../../../../shared/types/email";
 
-export type EmailAttachmentPreviewKind = "image" | "pdf";
+export type EmailAttachmentPreviewKind = "csv" | "image" | "pdf";
 
 const RASTER_IMAGE_TYPES = new Set([
   "image/avif",
@@ -24,6 +24,7 @@ export function emailAttachmentPreviewKind(
   contentType: string | null | undefined,
 ): EmailAttachmentPreviewKind | null {
   const normalized = String(contentType || "").split(";", 1)[0]!.trim().toLowerCase();
+  if (normalized === "text/csv") return "csv";
   if (normalized === "application/pdf") return "pdf";
   if (RASTER_IMAGE_TYPES.has(normalized)) return "image";
   return null;

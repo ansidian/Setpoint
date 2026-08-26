@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 describe("EmailAttachmentShelf", () => {
-  it("shows files, filters inline CID assets, and keeps active formats download-only", () => {
+  it("shows files, filters inline CID assets, and keeps unsafe formats download-only", () => {
     render(<EmailAttachmentShelf
       emailUid="gmail-message"
       attachments={[
@@ -42,8 +42,8 @@ describe("EmailAttachmentShelf", () => {
     expect(screen.getByText("report.pdf")).toBeTruthy();
     expect(screen.getByText("notes.html")).toBeTruthy();
     expect(screen.queryByText("signature.png")).toBeNull();
-    expect(screen.getByRole("button", { name: "View report.pdf" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "View notes.html" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview report.pdf" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Preview notes.html" })).toBeNull();
     expect(screen.getByRole("link", { name: "Download notes.html" }).getAttribute("href"))
       .toBe("/attachment/gmail-message/4");
   });
@@ -56,10 +56,17 @@ describe("EmailAttachmentShelf", () => {
       ]}
     />);
 
-    const trigger = screen.getByRole("button", { name: "View scan.png" });
+    const trigger = screen.getByRole("button", { name: "Preview scan.png" });
     fireEvent.click(trigger);
     expect(screen.getByRole("dialog", { name: "scan.png" })).toBeTruthy();
     const previewImage = await screen.findByAltText("scan.png");
+    const fitButton = screen.getByRole("button", { name: "Fit image to window" });
+    expect((fitButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByText("125%")).toBeTruthy();
+    expect((fitButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(fitButton);
+    expect((fitButton as HTMLButtonElement).disabled).toBe(true);
     // test-architecture: allow-boundary-interaction -- Preview bytes cross the authenticated browser HTTP boundary; the selected message/part and abort signal are the outbound contract.
     expect(testState.fetchEmailAttachmentBlob).toHaveBeenCalledWith("gmail-message", "2", expect.any(AbortSignal));
 
@@ -73,17 +80,53 @@ describe("EmailAttachmentShelf", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:attachment-preview");
   });
 
-  it("surfaces a failed download without leaving the reader", async () => {
+  it("opens a bounded CSV table preview from the attachment card", async () => {
+    testState.fetchEmailAttachmentBlob.mockResolvedValueOnce(new Blob([
+      "name,amount,status\nCoffee,4.50,cleared\nTrain,18.00,pending\n",
+    ], { type: "text/csv" }));
+    render(<EmailAttachmentShelf
+      emailUid="gmail-message"
+      attachments={[
+        { id: "5", filename: "activity.csv", contentType: "text/csv", size: 62, inline: false },
+      ]}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview activity.csv" }));
+
+    expect(await screen.findByRole("table", { name: "Preview of activity.csv" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "amount" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "18.00" })).toBeTruthy();
+    expect(screen.getByText("2 data rows · 3 columns")).toBeTruthy();
+  });
+
+  it("keeps oversized CSV files download-only inside the preview", async () => {
+    render(<EmailAttachmentShelf
+      emailUid="gmail-message"
+      attachments={[
+        { id: "5", filename: "large.csv", contentType: "text/csv", size: 5 * 1024 * 1024 + 1, inline: false },
+      ]}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview large.csv" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("larger than 5 MB");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    // test-architecture: allow-boundary-interaction -- The declared-size guard must prevent the authenticated attachment HTTP request for CSV files outside the preview bound.
+    expect(testState.fetchEmailAttachmentBlob).not.toHaveBeenCalled();
+  });
+
+  it("keeps download independent from the previewable card action", async () => {
     testState.fetchEmailAttachmentBlob.mockRejectedValueOnce(new Error("too large"));
     render(<EmailAttachmentShelf
       emailUid="gmail-message"
       attachments={[
-        { id: "4", filename: "archive.zip", contentType: "application/zip", size: 2048, inline: false },
+        { id: "4", filename: "report.pdf", contentType: "application/pdf", size: 2048, inline: false },
       ]}
     />);
 
-    fireEvent.click(screen.getByRole("link", { name: "Download archive.zip" }));
+    fireEvent.click(screen.getByRole("link", { name: "Download report.pdf" }));
 
-    expect((await screen.findByRole("alert")).textContent).toContain("Could not download archive.zip. Try again.");
+    expect(screen.queryByRole("dialog", { name: "report.pdf" })).toBeNull();
+    expect((await screen.findByRole("alert")).textContent).toContain("Could not download report.pdf. Try again.");
   });
 });

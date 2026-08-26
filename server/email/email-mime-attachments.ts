@@ -14,8 +14,10 @@ function attachmentSize(attachment: ParsedMailAttachment): number | null {
 }
 
 function isInlineAttachment(attachment: ParsedMailAttachment): boolean {
-  return attachment.related === true
-    || String(attachment.contentDisposition || "").toLowerCase() === "inline"
+  const contentDisposition = String(attachment.contentDisposition || "").trim().toLowerCase();
+  if (contentDisposition === "attachment") return false;
+  return contentDisposition === "inline"
+    || attachment.related === true
     || Boolean(attachment.cid);
 }
 

@@ -29,12 +29,12 @@
 }
 
 .email-attachment-shelf-scroll:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--sp-accent) 68%, white);
-  outline-offset: 3px;
-  border-radius: 8px;
+  outline: none;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--sp-accent) 68%, white);
 }
 
 .email-attachment-item {
+  position: relative;
   width: min(292px, calc(100vw - 56px));
   min-width: 220px;
   height: 48px;
@@ -45,6 +45,47 @@
   border: 1px solid rgba(255, 255, 255, 0.075);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.025);
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.email-attachment-item-previewable {
+  cursor: pointer;
+}
+
+.email-attachment-item-previewable:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.email-attachment-item-previewable:hover .email-attachment-item-icon {
+  background: color-mix(in srgb, var(--sp-accent) 15%, transparent);
+  transform: translateY(-1px);
+}
+
+.email-attachment-item-previewable:has(.email-attachment-item-preview-trigger:active) .email-attachment-item-icon {
+  transform: scale(0.96);
+}
+
+.email-attachment-item-preview-trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.email-attachment-item-preview-trigger:focus-visible {
+  outline: none;
+}
+
+.email-attachment-item:has(.email-attachment-item-preview-trigger:focus-visible) {
+  outline: none;
+  border-color: color-mix(in srgb, var(--sp-accent) 72%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-accent) 38%, transparent);
 }
 
 .email-attachment-item-icon {
@@ -57,11 +98,15 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--sp-accent) 11%, transparent);
   color: color-mix(in srgb, var(--sp-accent) 72%, white);
+  pointer-events: none;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .email-attachment-item-copy {
   min-width: 0;
   flex: 1;
+  pointer-events: none;
 }
 
 .email-attachment-item-name {
@@ -79,12 +124,13 @@
 }
 
 .email-attachment-item-actions {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 3px;
 }
 
-.email-attachment-item-actions button,
 .email-attachment-item-actions a,
 .email-attachment-preview-close,
 .email-attachment-preview-download,
@@ -105,13 +151,11 @@
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.email-attachment-item-actions button,
 .email-attachment-item-actions a {
   width: 30px;
   height: 30px;
 }
 
-.email-attachment-item-actions button:hover,
 .email-attachment-item-actions a:hover,
 .email-attachment-preview-close:hover,
 .email-attachment-preview-download:hover,
@@ -122,7 +166,6 @@
   transform: translateY(-1px);
 }
 
-.email-attachment-item-actions button:focus-visible,
 .email-attachment-item-actions a:focus-visible,
 .email-attachment-preview-close:focus-visible,
 .email-attachment-preview-download:focus-visible,
@@ -131,7 +174,6 @@
   outline-offset: 2px;
 }
 
-.email-attachment-item-actions button:active,
 .email-attachment-item-actions a:active,
 .email-attachment-preview-close:active,
 .email-attachment-preview-download:active,
@@ -175,7 +217,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   background: #16161e;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
 }
 
 .email-attachment-preview-header {
@@ -240,9 +282,200 @@
 
 .email-attachment-preview-image {
   display: block;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+
+.email-image-preview {
+  position: relative;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.email-image-preview-viewport {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+.email-image-preview-stage {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.email-image-preview-stage .email-attachment-preview-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.email-image-preview-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: #16161e;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.7);
+  transform: translateX(-50%);
+}
+
+.email-image-preview-controls button {
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(205, 214, 244, 0.72);
+  cursor: pointer;
+  font: 600 10px/1 Montserrat, sans-serif;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.email-image-preview-controls button:not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.email-image-preview-controls button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.email-image-preview-controls button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.email-image-preview-controls button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.email-image-preview-scale {
+  min-width: 42px;
+  color: rgba(205, 214, 244, 0.72);
+  font: 600 10px/1 "Fira Code", monospace;
+  text-align: center;
+}
+
+.email-csv-preview {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #16161e;
+}
+
+.email-csv-preview-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+.email-csv-preview-scroll:focus-visible {
+  outline: none;
+}
+
+.email-csv-preview table {
+  width: max-content;
+  min-width: 100%;
+  border-spacing: 0;
+  color: rgba(205, 214, 244, 0.86);
+  font: 500 11px/1.4 "Fira Code", monospace;
+}
+
+.email-csv-preview th,
+.email-csv-preview td {
+  min-width: 112px;
+  max-width: 320px;
+  height: 34px;
+  padding: 7px 10px;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email-csv-preview thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #242430;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+}
+
+.email-csv-preview tbody tr:nth-child(even) td,
+.email-csv-preview tbody tr:nth-child(even) th {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.email-csv-preview-row-number {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 48px !important;
+  width: 48px;
+  max-width: 48px !important;
+  background: #1c1c26;
+  color: rgba(205, 214, 244, 0.48);
+  font-weight: 500;
+  text-align: right !important;
+}
+
+.email-csv-preview thead .email-csv-preview-row-number {
+  z-index: 3;
+  background: #242430;
+}
+
+.email-csv-preview-status {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: #16161e;
+  color: rgba(205, 214, 244, 0.62);
+  font: 500 10px/1.35 Montserrat, sans-serif;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.email-csv-preview:has(.email-csv-preview-scroll:focus-visible) .email-csv-preview-status {
+  border-top-color: color-mix(in srgb, var(--sp-accent) 72%, white);
+  background: color-mix(in srgb, var(--sp-accent) 5%, #16161e);
+  color: rgba(205, 214, 244, 0.82);
 }
 
 .email-pdf-preview {
@@ -393,7 +626,6 @@
     min-width: min(270px, calc(100vw - 48px));
   }
 
-  .email-attachment-shelf-mobile .email-attachment-item-actions button,
   .email-attachment-shelf-mobile .email-attachment-item-actions a {
     width: 44px;
     height: 44px;
@@ -446,24 +678,44 @@
     width: 44px;
     height: 44px;
   }
+
+  .email-image-preview-controls button {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .email-image-preview-controls {
+    bottom: 8px;
+  }
+
+  .email-csv-preview th,
+  .email-csv-preview td {
+    height: 40px;
+    padding: 9px 10px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .email-attachment-item-actions button,
+  .email-attachment-item,
+  .email-attachment-item-icon,
   .email-attachment-item-actions a,
+  .email-image-preview-controls button,
   .email-attachment-preview-close,
   .email-attachment-preview-download,
-  .email-attachment-preview-error button {
+  .email-attachment-preview-error button,
+  .email-csv-preview-status {
     transition: none;
   }
 
-  .email-attachment-item-actions button:hover,
+  .email-attachment-item-previewable:hover .email-attachment-item-icon,
   .email-attachment-item-actions a:hover,
+  .email-image-preview-controls button:not(:disabled):hover,
   .email-attachment-preview-close:hover,
   .email-attachment-preview-download:hover,
   .email-attachment-preview-error button:hover,
-  .email-attachment-item-actions button:active,
+  .email-attachment-item-previewable:has(.email-attachment-item-preview-trigger:active) .email-attachment-item-icon,
   .email-attachment-item-actions a:active,
+  .email-image-preview-controls button:not(:disabled):active,
   .email-attachment-preview-close:active,
   .email-attachment-preview-download:active,
   .email-attachment-preview-error button:active {

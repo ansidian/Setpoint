@@ -17,6 +17,7 @@ describe("email attachment model", () => {
   it("previews only PDF and common raster-image MIME types", () => {
     expect(emailAttachmentPreviewKind("application/pdf")).toBe("pdf");
     expect(emailAttachmentPreviewKind("image/jpeg")).toBe("image");
+    expect(emailAttachmentPreviewKind("text/csv; charset=utf-8")).toBe("csv");
     expect(emailAttachmentPreviewKind("image/svg+xml")).toBeNull();
     expect(emailAttachmentPreviewKind("text/html")).toBeNull();
     expect(emailAttachmentPreviewKind("application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBeNull();

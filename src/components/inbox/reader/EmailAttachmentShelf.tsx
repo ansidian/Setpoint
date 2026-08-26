@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Download, Eye, File, FileImage, FileText, Paperclip } from "lucide-react";
+import { Download, File, FileImage, FileSpreadsheet, FileText, Paperclip } from "lucide-react";
 import { getEmailAttachmentUrl } from "../../../api";
 import type { EmailBodyAttachment } from "../../../../shared/types/email";
 import EmailAttachmentPreview from "./EmailAttachmentPreview";
@@ -47,10 +47,31 @@ export default function EmailAttachmentShelf({
         {visibleAttachments.map((attachment) => {
           const previewKind = emailAttachmentPreviewKind(attachment.contentType);
           const filename = emailAttachmentName(attachment);
-          const Icon = previewKind === "image" ? FileImage : previewKind === "pdf" ? FileText : File;
+          const Icon = previewKind === "image"
+            ? FileImage
+            : previewKind === "pdf"
+              ? FileText
+              : previewKind === "csv"
+                ? FileSpreadsheet
+                : File;
           const downloadHref = getEmailAttachmentUrl(emailUid, attachment.id);
           return (
-            <div className="email-attachment-item" key={attachment.id}>
+            <div
+              className={`email-attachment-item${previewKind ? " email-attachment-item-previewable" : ""}`}
+              key={attachment.id}
+            >
+              {previewKind ? (
+                <button
+                  type="button"
+                  className="email-attachment-item-preview-trigger"
+                  aria-label={`Preview ${filename}`}
+                  title={`Preview ${filename}`}
+                  onClick={(event) => {
+                    previewTriggerRef.current = event.currentTarget;
+                    setPreviewAttachment(attachment);
+                  }}
+                />
+              ) : null}
               <div className="email-attachment-item-icon" aria-hidden="true">
                 <Icon size={17} />
               </div>
@@ -61,19 +82,6 @@ export default function EmailAttachmentShelf({
                 </div>
               </div>
               <div className="email-attachment-item-actions">
-                {previewKind ? (
-                  <button
-                    type="button"
-                    aria-label={`View ${filename}`}
-                    title={`View ${filename}`}
-                    onClick={(event) => {
-                      previewTriggerRef.current = event.currentTarget;
-                      setPreviewAttachment(attachment);
-                    }}
-                  >
-                    <Eye size={14} aria-hidden="true" />
-                  </button>
-                ) : null}
                 <a
                   href={downloadHref}
                   download={filename}
