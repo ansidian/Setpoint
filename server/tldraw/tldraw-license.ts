@@ -42,9 +42,9 @@ function matchesHost(hosts: string[], currentHostname: string): boolean {
     const host = hostValue.trim().toLowerCase();
     if (host === "*") return true;
     if (host === current || `www.${host}` === current || host === `www.${current}`) return true;
-    if (!host.startsWith("*.")) return false;
-    const suffix = host.slice(1);
-    return current.endsWith(suffix) && current.length > suffix.length;
+    if (!host.includes("*")) return false;
+    const glob = new RegExp(`${host.replace(/\./g, "\\.").replace(/\*/g, ".*?")}$`);
+    return glob.test(current) || glob.test(`www.${current}`);
   });
 }
 
