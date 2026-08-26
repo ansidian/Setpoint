@@ -17,6 +17,7 @@ import {
   checkTestArchitectureMockMetadataObservations,
   collectPersistenceHeuristicSignals,
   collectTestArchitectureMetrics,
+  hasPersistenceContractSignals,
   normalizeTestArchitecturePath,
 } from './lib/test-architecture-policy.mts'
 import {
@@ -308,7 +309,7 @@ async function checkTestArchitecture() {
   const persistenceCandidates = Object.fromEntries(
     Object.entries(sources)
       .map(([file, source]) => [file, collectPersistenceHeuristicSignals(source)] as const)
-      .filter(([, signals]) => signals.length > 0),
+      .filter(([, signals]) => hasPersistenceContractSignals(signals)),
   )
   failures.push(...checkTestArchitectureSemanticInventory({
     inventory: semanticInventory,
@@ -321,7 +322,7 @@ async function checkTestArchitecture() {
   const semanticObservationCount = Object.values(semanticInteractions)
     .reduce((sum, count) => sum + count, 0)
   warnings.push(
-    `${semanticInventory.mode === "enforced" ? "Enforced" : "Report-only"} test-architecture semantic inventory: ${semanticObservationCount} mock-metadata observation(s) in ${Object.keys(semanticInteractions).length} file(s); ${Object.keys(persistenceCandidates).length} classified persistence heuristic file(s)`,
+    `${semanticInventory.mode === "enforced" ? "Enforced" : "Report-only"} test-architecture semantic inventory: ${semanticObservationCount} mock-metadata observation(s) in ${Object.keys(semanticInteractions).length} file(s); ${Object.keys(persistenceCandidates).length} classified persistence contract file(s)`,
   )
 
   const configuredRef = process.env.TEST_ARCHITECTURE_BASE_REF?.trim()

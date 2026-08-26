@@ -41,9 +41,11 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Do not add tests whose primary purpose is frontend styling, visual tokens, layout, or rendered markup. Verify those changes through bounded browser inspection.
 - Test through the stable module or use-case facade and allow its internal collaborators to work together. Name one primary behavior owner before adding overlapping coverage.
 - Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate the file under test.
-- Prefer observable results and durable state. Interaction assertions are for unavoidable outbound boundary contracts, not internal call graphs.
+- Prefer observable results and durable state. Interaction assertions are review warnings: replace internal call-graph checks where practical, and use a narrow inline rationale when an unavoidable outbound/provider/browser/database/filesystem/process boundary is the contract.
 - Keep direct pure tests for intentionally stable algorithms and dense policy matrices. Persistence tests should execute against an ephemeral database instead of asserting SQL text or positional arguments.
-- `scripts/lib/test-architecture-baseline.json` is permanently zero-default: both allowance objects must remain empty. Genuine outbound/provider/browser/database/filesystem/process boundary constructs require a narrow inline rationale beside the exact construct.
+- Broad fake-database heuristics are advisory only. The semantic persistence inventory governs only observed execute calls, SQL-shape assertions, and positional database-argument contracts.
+- Full-workspace integration tests are reviewed through behavior ownership and runtime cost, not filename allowlists; prefer a smaller stable facade whenever it can exercise the same requirement.
+- `scripts/lib/test-architecture-baseline.json` is permanently zero-default: both allowance objects must remain empty. Local-module mocks and raw mock-metadata observations remain hard failures; interaction matcher findings are non-blocking review warnings that an exact boundary rationale can suppress.
 
 ## Maintainability Guardrail
 

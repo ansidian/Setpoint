@@ -1,5 +1,5 @@
 {
-  "_comment": "Permanently empty. Aggregate test-architecture allowances cannot be approved; genuine boundary constructs require construct-local inline rationales.",
+  "_comment": "Permanently empty. Aggregate test-architecture allowances cannot be approved; use construct-local rationales to suppress reviewed boundary-interaction warnings or authorize genuine boundary mocks.",
   "localModuleMocks": {},
   "interactionAssertions": {}
 }

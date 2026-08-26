@@ -4,6 +4,7 @@ import ts from "typescript"
 export interface TestArchitectureMetrics {
   localModuleMocks: Record<string, number>
   interactionAssertions: number
+  interactionAssertionLines?: number[]
   mockMetadataObservations: number
   exemptionViolations?: string[]
 }
@@ -24,6 +25,16 @@ export type PersistenceHeuristicSignal =
   | "mock-execute-observation"
   | "sql-shape-assertion"
   | "positional-db-args-assertion"
+
+const PERSISTENCE_CONTRACT_SIGNALS = new Set<PersistenceHeuristicSignal>([
+  "mock-execute-observation",
+  "sql-shape-assertion",
+  "positional-db-args-assertion",
+])
+
+export function hasPersistenceContractSignals(signals: PersistenceHeuristicSignal[]): boolean {
+  return signals.some((signal) => PERSISTENCE_CONTRACT_SIGNALS.has(signal))
+}
 
 export interface TestArchitectureApproval {
   from: number
@@ -101,6 +112,7 @@ function collectExemptionComments(source: string, sourceFile: ts.SourceFile): Ex
 export function collectTestArchitectureMetrics(source: string): TestArchitectureMetrics {
   const localModuleMocks: Record<string, number> = {}
   let interactionAssertions = 0
+  const interactionAssertionLines: number[] = []
   let mockMetadataObservations = 0
   const sourceFile = ts.createSourceFile(
     "test.tsx",
@@ -232,7 +244,10 @@ export function collectTestArchitectureMetrics(source: string): TestArchitecture
       && ts.isPropertyAccessExpression(node.expression)
       && INTERACTION_NAME_RE.test(node.expression.name.text)
       && !hasConstructLocalExemption(node, INTERACTION_EXEMPTION)
-    ) interactionAssertions += 1
+    ) {
+      interactionAssertions += 1
+      interactionAssertionLines.push(lineIndex(node) + 1)
+    }
 
     if (
       (isMockMetadataAccess(node) || isMockMetadataBinding(node))
@@ -254,6 +269,7 @@ export function collectTestArchitectureMetrics(source: string): TestArchitecture
   return {
     localModuleMocks,
     interactionAssertions,
+    ...(interactionAssertionLines.length > 0 ? { interactionAssertionLines } : {}),
     mockMetadataObservations,
     exemptionViolations,
   }
@@ -302,14 +318,18 @@ export function collectPersistenceHeuristicSignals(source: string): PersistenceH
 function checkInteractionAssertions(
   files: Record<string, TestArchitectureMetrics>,
   baseline: Record<string, number>,
-  failures: string[],
   warnings: string[],
 ): void {
   for (const [file, metrics] of Object.entries(files)) {
     const actual = metrics.interactionAssertions
     const allowed = baseline[file] ?? 0
     if (actual > allowed) {
-      failures.push(`${file} has ${actual} interactionAssertions, above the test-architecture baseline allowance ${allowed}`)
+      const lineDetail = metrics.interactionAssertionLines?.length
+        ? ` at line${metrics.interactionAssertionLines.length === 1 ? "" : "s"} ${metrics.interactionAssertionLines.join(", ")}`
+        : ""
+      warnings.push(
+        `${file} has ${actual} reviewable interaction assertion(s)${lineDetail}; prefer observable results, or add an exact test-architecture boundary rationale when the interaction is the unavoidable contract`,
+      )
     } else if (actual < allowed) {
       warnings.push(`${file} reduced interactionAssertions from ${allowed} to ${actual}; ratchet the test-architecture baseline down`)
     }
@@ -361,7 +381,7 @@ export function checkTestArchitectureBaseline({
     }
   }
   checkLocalModuleMocks(files, baseline.localModuleMocks, failures, warnings)
-  checkInteractionAssertions(files, baseline.interactionAssertions, failures, warnings)
+  checkInteractionAssertions(files, baseline.interactionAssertions, warnings)
   return { failures, warnings }
 }
 

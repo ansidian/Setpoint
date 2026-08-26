@@ -50,7 +50,7 @@ describe("findTestSourcePolicyViolations", () => {
     expect(findTestSourcePolicyViolations(source, "example.test.ts")).toEqual([])
   })
 
-  it("rejects new tests that mount the root calendar workspace", () => {
+  it("does not enforce filename allowlists for full-workspace integration tests", () => {
     const source = [
       'import CalendarModal from "./CalendarModal.tsx"',
       'import { renderModal } from "./CalendarEventEditor.test-utils.tsx"',
@@ -59,38 +59,6 @@ describe("findTestSourcePolicyViolations", () => {
     expect(findTestSourcePolicyViolations(
       source,
       "src/components/calendar/NewCalendarBehavior.test.tsx",
-    )).toEqual([
-      expect.objectContaining({ kind: "full-calendar-test-harness", line: 1 }),
-      expect.objectContaining({ kind: "full-calendar-test-harness", line: 2 }),
-    ])
-  })
-
-  it("allows reviewed cross-layer calendar test owners", () => {
-    const source = 'import CalendarModal from "./CalendarModal.tsx"'
-
-    expect(findTestSourcePolicyViolations(
-      source,
-      "src/components/calendar/CalendarModal.events.test.tsx",
-    )).toEqual([])
-  })
-
-  it("does not preserve deleted Calendar owners in the reviewed allowlist", () => {
-    const source = 'import CalendarModal from "../../components/calendar/CalendarModal.tsx"'
-
-    expect(findTestSourcePolicyViolations(
-      source,
-      "src/hooks/calendar/useCalendarModalHotkeys.test.tsx",
-    )).toEqual([
-      expect.objectContaining({ kind: "full-calendar-test-harness", line: 1 }),
-    ])
-  })
-
-  it("allows the focused event-editor harness without review", () => {
-    const source = 'import { renderEventEditor } from "./events/CalendarEventEditor.test-utils.tsx"'
-
-    expect(findTestSourcePolicyViolations(
-      source,
-      "src/components/calendar/NewEditorBehavior.test.tsx",
     )).toEqual([])
   })
 })

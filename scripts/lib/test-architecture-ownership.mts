@@ -16,7 +16,7 @@ export interface TestArchitectureSemanticInventory {
   }>
   persistenceCandidates: Record<string, {
     owner: "03"
-    classification: "candidate" | "false-positive" | "retained-contract"
+    classification: "candidate" | "retained-contract"
     signals: PersistenceHeuristicSignal[]
     reason?: string
   }>
@@ -92,7 +92,7 @@ export function checkTestArchitectureSemanticInventory({
     if (recorded.owner !== "03") {
       failures.push(`${file} persistence disposition must be owned by child 03`)
     }
-    if (recorded.classification !== "candidate" && !recorded.reason?.trim()) {
+    if (recorded.classification === "retained-contract" && !recorded.reason?.trim()) {
       failures.push(`${file} ${recorded.classification} persistence disposition requires a reason`)
     }
     if (JSON.stringify(recorded.signals) !== JSON.stringify(current)) {

@@ -7,6 +7,7 @@ import {
   checkTestArchitectureMockMetadataObservations,
   collectPersistenceHeuristicSignals,
   collectTestArchitectureMetrics,
+  hasPersistenceContractSignals,
   normalizeTestArchitecturePath,
 } from "./test-architecture-policy.mts"
 
@@ -28,6 +29,7 @@ describe("collectTestArchitectureMetrics", () => {
         "../multiline.ts": 1,
       },
       interactionAssertions: 2,
+      interactionAssertionLines: [9, 10],
       mockMetadataObservations: 0,
       exemptionViolations: [],
     })
@@ -134,6 +136,25 @@ describe("collectTestArchitectureMetrics", () => {
 })
 
 describe("checkTestArchitectureBaseline", () => {
+  it("reports interaction assertions for review without blocking CI", () => {
+    const result = checkTestArchitectureBaseline({
+      files: {
+        "src/component.test.tsx": {
+          localModuleMocks: {},
+          interactionAssertions: 2,
+          interactionAssertionLines: [14, 27],
+          mockMetadataObservations: 0,
+        },
+      },
+      baseline: { localModuleMocks: {}, interactionAssertions: {} },
+    })
+
+    expect(result.failures).toEqual([])
+    expect(result.warnings).toEqual([
+      "src/component.test.tsx has 2 reviewable interaction assertion(s) at lines 14, 27; prefer observable results, or add an exact test-architecture boundary rationale when the interaction is the unavoidable contract",
+    ])
+  })
+
   it("rejects new debt and warns when existing debt falls", () => {
     const result = checkTestArchitectureBaseline({
       files: {
@@ -197,6 +218,15 @@ describe("checkTestArchitectureMockMetadataObservations", () => {
 })
 
 describe("collectPersistenceHeuristicSignals", () => {
+  it("separates broad fake-database hints from enforceable persistence contracts", () => {
+    expect(hasPersistenceContractSignals(["manual-execute-fake", "named-fake-database"]))
+      .toBe(false)
+    expect(hasPersistenceContractSignals(["manual-execute-fake", "sql-shape-assertion"]))
+      .toBe(true)
+    expect(hasPersistenceContractSignals(["mock-execute-observation"]))
+      .toBe(true)
+  })
+
   it("reports hand-written database substitutes and SQL-shape observations", () => {
     const source = [
       "const mockDb = { execute: async (query) => ({ rows: [] }) }",

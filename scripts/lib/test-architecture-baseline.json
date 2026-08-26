@@ -1,5 +1,5 @@
 {
-  "_comment": "Zero-default test-architecture policy. Aggregate allowances are forbidden; genuine boundary constructs require a narrow inline rationale beside the exact construct.",
+  "_comment": "Zero-default test-architecture policy. Aggregate allowances are forbidden. Local-module mocks remain blocking; interaction matcher findings are review warnings unless an exact boundary rationale suppresses them.",
   "localModuleMocks": {},
   "interactionAssertions": {}
 }
