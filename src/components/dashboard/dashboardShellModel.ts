@@ -164,6 +164,7 @@ export function resolveDashboardShellHotkey({
   ctrlKey = false,
   altKey = false,
   shiftKey = false,
+  defaultPrevented = false,
   repeat = false,
   editableTarget = false,
   actionChord = null,
@@ -179,6 +180,7 @@ export function resolveDashboardShellHotkey({
   ctrlKey?: boolean;
   altKey?: boolean;
   shiftKey?: boolean;
+  defaultPrevented?: boolean;
   repeat?: boolean;
   editableTarget?: boolean;
   actionChord?: string | null;
@@ -188,6 +190,7 @@ export function resolveDashboardShellHotkey({
   isMobile?: boolean;
   activeTab?: DashboardTab;
 } = {}) {
+  if (defaultPrevented) return { action: "ignore" };
   // Alfred is desktop-only. On desktop its hotkeys fire everywhere, including
   // editable targets and blocking overlays, so the panel can be toggled from
   // its own composer (CONTEXT.md: ⌘\ toggle, ⌘⇧\ new chat).

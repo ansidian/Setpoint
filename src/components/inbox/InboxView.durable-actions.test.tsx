@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView";
 import type { InboxActiveSnapshotController, InboxViewProps } from "./InboxView";
@@ -12,6 +13,7 @@ import {
   makeLiveInboxEmail,
 } from "./test-utils/inboxFixtures";
 import { resetInboxSession } from "./useInboxSessionState";
+import useDashboardShellHotkeys from "../dashboard/useDashboardShellHotkeys";
 
 // test-architecture: allow-boundary-mock -- these rendered Inbox workflows keep the real controller, rows, reader, optimistic state, and undo lifecycle together while replacing only the authenticated HTTP boundary.
 vi.mock("../../api", async () => {
@@ -191,6 +193,50 @@ describe("InboxView durable trash workflows", () => {
 });
 
 describe("InboxView snapshot mutation recovery", () => {
+  it("claims the A lane hotkey without also opening shell Analytics", async () => {
+    const initial = makeActiveSnapshot();
+    const actionRow = initial.lanes!.needs_attention![0]!;
+    const controller = makeSnapshotController(makeActiveSnapshot({
+      lanes: {
+        needs_attention: [],
+        fyi: [{ ...actionRow, lane: "fyi" }],
+        noise: [],
+      },
+    }));
+
+    function Harness() {
+      const [analyticsOpen, setAnalyticsOpen] = useState(false);
+      const [, setHistoryOpen] = useState(false);
+      useDashboardShellHotkeys({
+        isMobile: false,
+        analyticsOpen,
+        openPalette: () => {},
+        openAnalytics: () => setAnalyticsOpen(true),
+        closeAnalytics: () => setAnalyticsOpen(false),
+        openDeadlineCreate: () => {},
+        openCalendar: () => {},
+        setHistoryOpen,
+        toggleAlfred: () => {},
+        alfredNewChat: () => {},
+        activeTab: "inbox",
+      });
+      return (
+        <>
+          <output>{analyticsOpen ? "Analytics open" : "Analytics closed"}</output>
+          {inboxTree({ activeSnapshot: controller, isMobile: false })}
+        </>
+      );
+    }
+
+    render(<Harness />);
+    fireEvent.click(screen.getByText("Snapshot action"));
+    fireEvent.keyDown(window, { key: "a", cancelable: true });
+
+    // test-architecture: allow-boundary-interaction -- the hotkey's lane move is the owner-visible provider mutation contract.
+    await waitFor(() => expect(api.moveSnapshotItemLane).toHaveBeenCalledWith(11, "needs_attention"));
+    expect(screen.getByText("Analytics closed")).toBeTruthy();
+  });
+
   it("moves a snapshot row and restores its prior lane through Undo", async () => {
     const controller = makeSnapshotController();
     renderInbox({ activeSnapshot: controller });

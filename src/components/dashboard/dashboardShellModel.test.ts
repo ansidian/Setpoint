@@ -164,6 +164,11 @@ describe("dashboard shell model", () => {
     })).toEqual({ action: "clear-chord" });
   });
 
+  it("ignores single-key shell commands already claimed by a focused workspace", () => {
+    expect(resolveDashboardShellHotkey({ key: "a", defaultPrevented: true }))
+      .toEqual({ action: "ignore" });
+  });
+
   it("projects calendar range props into the modal events contract", () => {
     const ensureRange = () => {};
     const getEvents = () => [];

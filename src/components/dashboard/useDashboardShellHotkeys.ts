@@ -70,6 +70,7 @@ export default function useDashboardShellHotkeys({
         ctrlKey: e.ctrlKey,
         altKey: e.altKey,
         shiftKey: e.shiftKey,
+        defaultPrevented: e.defaultPrevented,
         repeat: e.repeat,
         editableTarget,
         actionChord: actionChordRef.current,
