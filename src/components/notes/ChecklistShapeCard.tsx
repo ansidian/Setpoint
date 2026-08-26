@@ -4,17 +4,26 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { HTMLContainer, type Editor } from "tldraw";
+import {
+  HTMLContainer,
+  getColorValue,
+  getFontFamily,
+  useValue,
+  type Editor,
+} from "tldraw";
 import {
   CHECKLIST_SHAPE_TYPE,
   addChecklistItem,
   createChecklistItem,
   getChecklistMinHeight,
   getChecklistMinHeightForItems,
+  getChecklistMinWidth,
+  getChecklistStyleMetrics,
   moveChecklistItem,
   removeChecklistItem,
   updateChecklistItem,
@@ -86,6 +95,46 @@ export function ChecklistShapeCard({ editor, shape }: { editor: Editor; shape: C
   const prefersReducedMotion = useReducedMotion();
   const renderedItems = dragPreviewItems ?? shape.props.items;
   const completedCount = shape.props.items.filter((item) => item.checked).length;
+  const styleValues = useValue(
+    "checklist theme styles",
+    () => {
+      const theme = editor.getCurrentTheme();
+      const colors = theme.colors[editor.getColorMode()];
+      const metrics = getChecklistStyleMetrics(shape.props.size);
+      return {
+        background: getColorValue(colors, shape.props.color, "noteFill"),
+        border: colors.noteBorder,
+        text: getColorValue(colors, shape.props.color, "noteText"),
+        accent: getColorValue(colors, shape.props.color, "solid"),
+        fontFamily: getFontFamily(theme, shape.props.font),
+        metrics,
+      };
+    },
+    [editor, shape.props.color, shape.props.font, shape.props.size],
+  );
+  const checklistStyle = {
+    width: shape.props.w,
+    height: shape.props.h,
+    pointerEvents: "all",
+    backgroundColor: styleValues.background,
+    borderColor: styleValues.border,
+    color: styleValues.text,
+    fontFamily: styleValues.fontFamily,
+    "--checklist-accent": styleValues.accent,
+    "--checklist-background": styleValues.background,
+    "--checklist-text": styleValues.text,
+    "--checklist-font-size": `${styleValues.metrics.fontSize}px`,
+    "--checklist-line-height": `${styleValues.metrics.lineHeight}px`,
+    "--checklist-padding": `${styleValues.metrics.padding}px`,
+    "--checklist-title-row-height": `${styleValues.metrics.titleRowHeight}px`,
+    "--checklist-row-height": `${styleValues.metrics.rowHeight}px`,
+    "--checklist-row-gap": `${styleValues.metrics.rowGap}px`,
+    "--checklist-section-gap": `${styleValues.metrics.sectionGap}px`,
+    "--checklist-checkbox-size": `${styleValues.metrics.checkboxSize}px`,
+    "--checklist-control-size": `${styleValues.metrics.controlSize}px`,
+    "--checklist-count-font-size": `${styleValues.metrics.countFontSize}px`,
+    "--checklist-add-font-size": `${styleValues.metrics.addFontSize}px`,
+  } as CSSProperties;
 
   const updateShape = useCallback((props: Partial<ChecklistShape["props"]>) => {
     editor.updateShape({ id: shape.id, type: CHECKLIST_SHAPE_TYPE, props });
@@ -104,13 +153,24 @@ export function ChecklistShapeCard({ editor, shape }: { editor: Editor; shape: C
       input.style.height = "0px";
       input.style.height = `${input.scrollHeight}px`;
     });
-    const measuredHeight = (contentRef.current?.scrollHeight ?? 0) + 28;
+    const requiredWidth = Math.max(shape.props.w, getChecklistMinWidth(shape.props.size));
+    const measuredHeight = (contentRef.current?.scrollHeight ?? 0) + styleValues.metrics.padding * 2;
     const requiredHeight = Math.max(
       measuredHeight,
-      getChecklistMinHeightForItems(shape.props.items, shape.props.w),
+      getChecklistMinHeightForItems(shape.props.items, requiredWidth, shape.props.size),
     );
-    if (requiredHeight > shape.props.h + 1) updateShape({ h: Math.ceil(requiredHeight) });
-  }, [shape.props.h, shape.props.items, shape.props.w, updateShape]);
+    const update: Partial<ChecklistShape["props"]> = {};
+    if (requiredWidth > shape.props.w) update.w = requiredWidth;
+    if (requiredHeight > shape.props.h + 1) update.h = Math.ceil(requiredHeight);
+    if (Object.keys(update).length > 0) updateShape(update);
+  }, [
+    shape.props.h,
+    shape.props.items,
+    shape.props.size,
+    shape.props.w,
+    styleValues.metrics.padding,
+    updateShape,
+  ]);
 
   useLayoutEffect(() => {
     const drag = pointerDragRef.current;
@@ -124,7 +184,10 @@ export function ChecklistShapeCard({ editor, shape }: { editor: Editor; shape: C
     const item = createChecklistItem();
     const items = addChecklistItem(shape.props.items, afterId, item);
     editor.markHistoryStoppingPoint("add checklist item");
-    updateShape({ items, h: Math.max(shape.props.h, getChecklistMinHeight(items.length)) });
+    updateShape({
+      items,
+      h: Math.max(shape.props.h, getChecklistMinHeight(items.length, shape.props.size)),
+    });
     focusItem(item.id);
   };
 
@@ -296,7 +359,7 @@ export function ChecklistShapeCard({ editor, shape }: { editor: Editor; shape: C
     <HTMLContainer
       id={shape.id}
       className="setpoint-checklist"
-      style={{ width: shape.props.w, height: shape.props.h, pointerEvents: "all" }}
+      style={checklistStyle}
     >
       <div ref={contentRef} className="setpoint-checklist__content">
         <div className="setpoint-checklist__title-row">

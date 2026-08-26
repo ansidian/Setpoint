@@ -1,18 +1,21 @@
 import {
   BaseBoxShapeUtil,
+  getColorValue,
+  getFontFamily,
   resizeBox,
   type SvgExportContext,
   type TLResizeInfo,
 } from "tldraw";
 import { ChecklistShapeCard } from "./ChecklistShapeCard";
 import {
-  CHECKLIST_MIN_WIDTH,
   CHECKLIST_SHAPE_TYPE,
   checklistShapeMigrations,
   checklistShapeProps,
   createChecklistItem,
   getChecklistMinHeight,
   getChecklistMinHeightForItems,
+  getChecklistMinWidth,
+  getChecklistStyleMetrics,
   type ChecklistShape,
 } from "./checklistShapeModel";
 
@@ -61,7 +64,10 @@ export class ChecklistShapeUtil extends BaseBoxShapeUtil<ChecklistShape> {
   override getDefaultProps(): ChecklistShape["props"] {
     return {
       w: 320,
-      h: getChecklistMinHeight(1),
+      h: getChecklistMinHeight(1, "m"),
+      color: "black",
+      font: "draw",
+      size: "m",
       title: "",
       items: [createChecklistItem()],
     };
@@ -73,15 +79,23 @@ export class ChecklistShapeUtil extends BaseBoxShapeUtil<ChecklistShape> {
 
   override getIndicatorPath(shape: ChecklistShape) {
     const path = new Path2D();
-    path.roundRect(0, 0, shape.props.w, shape.props.h, 12);
+    path.rect(0, 0, shape.props.w, shape.props.h);
     return path;
   }
 
   override onResize(shape: ChecklistShape, info: TLResizeInfo<ChecklistShape>) {
     return resizeBox(shape, info, {
-      minWidth: CHECKLIST_MIN_WIDTH,
-      minHeight: getChecklistMinHeightForItems(shape.props.items, shape.props.w),
+      minWidth: getChecklistMinWidth(shape.props.size),
+      minHeight: getChecklistMinHeightForItems(
+        shape.props.items,
+        shape.props.w,
+        shape.props.size,
+      ),
     });
+  }
+
+  override getFontFaces(shape: ChecklistShape) {
+    return this.editor.getCurrentTheme().fonts[shape.props.font]?.faces ?? [];
   }
 
   override getText(shape: ChecklistShape) {
@@ -94,31 +108,73 @@ export class ChecklistShapeUtil extends BaseBoxShapeUtil<ChecklistShape> {
   }
 
   override toSvg(shape: ChecklistShape, context: SvgExportContext) {
-    const background = context.isDarkMode ? "#24243a" : "#f4f1f8";
-    const border = context.isDarkMode ? "#58526b" : "#c9c1d6";
-    const text = context.isDarkMode ? "#cdd6f4" : "#171528";
-    const muted = context.isDarkMode ? "#a6adc8" : "#69647a";
-    const accent = context.isDarkMode ? "#cba6da" : "#7c3aed";
-    const maxCharacters = Math.max(12, Math.floor((shape.props.w - 72) / 7));
-    let nextItemY = 59;
+    const theme = this.editor.getCurrentTheme();
+    const colors = theme.colors[context.colorMode];
+    const metrics = getChecklistStyleMetrics(shape.props.size);
+    const background = getColorValue(colors, shape.props.color, "noteFill");
+    const border = colors.noteBorder;
+    const text = getColorValue(colors, shape.props.color, "noteText");
+    const accent = getColorValue(colors, shape.props.color, "solid");
+    const fontFamily = getFontFamily(theme, shape.props.font);
+    const checkboxTextGap = Math.max(8, metrics.rowGap);
+    const textX = metrics.padding + metrics.checkboxSize + checkboxTextGap;
+    const maxCharacters = Math.max(
+      8,
+      Math.floor((shape.props.w - textX - metrics.padding) / (metrics.fontSize * 0.55)),
+    );
+    const titleBaseline = metrics.padding + metrics.fontSize;
+    let nextItemY = metrics.padding + metrics.titleRowHeight + metrics.sectionGap;
     const itemElements = shape.props.items.map((item) => {
-      const y = nextItemY;
       const lines = wrapForSvg(item.text, maxCharacters);
-      nextItemY += 36 + (lines.length - 1) * 18;
+      const rowHeight = Math.max(
+        metrics.rowHeight,
+        lines.length * metrics.lineHeight + metrics.sectionGap,
+      );
+      const checkboxY = nextItemY + (rowHeight - metrics.checkboxSize) / 2;
+      const firstTextBaseline = (
+        nextItemY
+        + (rowHeight - lines.length * metrics.lineHeight) / 2
+        + metrics.fontSize
+      );
+      nextItemY += rowHeight + metrics.rowGap;
       return (
-        <g key={item.id} opacity={item.checked ? 0.62 : 1}>
-          <rect x="14" y={y - 12} width="16" height="16" rx="4" fill={item.checked ? accent : "none"} stroke={item.checked ? accent : muted} />
-          {item.checked ? <path d={`M18 ${y - 4}l3 3 5-6`} fill="none" stroke={background} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /> : null}
+        <g key={item.id} opacity={item.checked ? 0.56 : 1}>
+          <rect
+            x={metrics.padding}
+            y={checkboxY}
+            width={metrics.checkboxSize}
+            height={metrics.checkboxSize}
+            rx="3"
+            fill={item.checked ? accent : "none"}
+            stroke={item.checked ? accent : text}
+            strokeWidth="1.5"
+          />
+          {item.checked ? (
+            <path
+              d={`M${metrics.padding + metrics.checkboxSize * 0.22} ${checkboxY + metrics.checkboxSize * 0.52}l${metrics.checkboxSize * 0.22} ${metrics.checkboxSize * 0.22} ${metrics.checkboxSize * 0.4}-${metrics.checkboxSize * 0.48}`}
+              fill="none"
+              stroke={background}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ) : null}
           <text
-            x="40"
-            y={y}
-            fill={item.checked ? muted : text}
-            fontFamily="Montserrat, sans-serif"
-            fontSize="12"
+            x={textX}
+            y={firstTextBaseline}
+            fill={text}
+            fontFamily={fontFamily}
+            fontSize={metrics.fontSize}
             textDecoration={item.checked ? "line-through" : undefined}
           >
             {lines.map((line, index) => (
-              <tspan key={`${item.id}-${index}`} x="40" dy={index === 0 ? 0 : 18}>{line}</tspan>
+              <tspan
+                key={`${item.id}-${index}`}
+                x={textX}
+                dy={index === 0 ? 0 : metrics.lineHeight}
+              >
+                {line}
+              </tspan>
             ))}
           </text>
         </g>
@@ -127,11 +183,35 @@ export class ChecklistShapeUtil extends BaseBoxShapeUtil<ChecklistShape> {
 
     return (
       <g>
-        <rect width={shape.props.w} height={shape.props.h} rx="12" fill={background} stroke={border} />
-        <text x={shape.props.w - 14} y="29" textAnchor="end" fill={muted} fontFamily="Montserrat, sans-serif" fontSize="9" fontWeight="600">
+        <rect width={shape.props.w} height={shape.props.h} rx="1" fill={background} />
+        <line
+          x1="0"
+          y1={shape.props.h - 1}
+          x2={shape.props.w}
+          y2={shape.props.h - 1}
+          stroke={border}
+          strokeWidth="2"
+        />
+        <text
+          x={shape.props.w - metrics.padding}
+          y={titleBaseline}
+          textAnchor="end"
+          fill={text}
+          fillOpacity="0.58"
+          fontFamily={fontFamily}
+          fontSize={metrics.countFontSize}
+          fontWeight="bold"
+        >
           {shape.props.items.filter((item) => item.checked).length}/{shape.props.items.length}
         </text>
-        <text x="14" y="29" fill={text} fontFamily="Montserrat, sans-serif" fontSize="13" fontWeight="600">
+        <text
+          x={metrics.padding}
+          y={titleBaseline}
+          fill={text}
+          fontFamily={fontFamily}
+          fontSize={metrics.fontSize}
+          fontWeight="bold"
+        >
           {truncateForSvg(shape.props.title || "Untitled checklist", maxCharacters)}
         </text>
         {itemElements}

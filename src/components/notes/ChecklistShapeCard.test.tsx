@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { Editor } from "tldraw";
+import { DEFAULT_THEME, type Editor } from "tldraw";
 import { ChecklistShapeCard } from "./ChecklistShapeCard";
 import type { ChecklistShape } from "./checklistShapeModel";
 
@@ -36,6 +36,9 @@ function ChecklistHarness() {
     props: {
       w: 320,
       h: 220,
+      color: "black",
+      font: "draw",
+      size: "m",
       title: "Plan",
       items: [
         { id: "first", text: "First", checked: false },
@@ -52,6 +55,8 @@ function ChecklistHarness() {
       setCommitCount((count) => count + 1);
     },
     markHistoryStoppingPoint: () => undefined,
+    getCurrentTheme: () => DEFAULT_THEME,
+    getColorMode: () => "dark",
   } as unknown as Editor;
 
   return (

@@ -117,15 +117,15 @@ components:
     rounded: "{rounded.md}"
     padding: "0 12px"
   notes-checklist-card:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
-    padding: "14px"
+    backgroundColor: "tldraw theme noteFill for the selected DefaultColorStyle"
+    textColor: "tldraw theme noteText for the selected DefaultColorStyle"
+    rounded: "1px"
+    padding: "tldraw DefaultSizeStyle metrics"
   notes-checklist-checkbox-checked:
-    backgroundColor: "{colors.accent-primary}"
-    textColor: "{colors.notes-canvas}"
-    rounded: "{rounded.sm}"
-    size: "18px"
+    backgroundColor: "tldraw theme solid for the selected DefaultColorStyle"
+    textColor: "tldraw theme noteFill for the selected DefaultColorStyle"
+    rounded: "3px"
+    size: "tldraw DefaultSizeStyle metrics"
   v3-primary-button:
     backgroundColor: "{colors.v3-accent}"
     textColor: "{colors.v3-app}"
@@ -286,15 +286,16 @@ The Notes tab is the native dark tldraw infinite canvas, not a Setpoint note edi
 
 ### Canvas Checklist
 
-The canvas checklist is a compact, flat action card embedded as a native tldraw shape. It brings just enough Setpoint structure onto the spatial canvas to make a plan checkable without creating a detached task-management surface.
+The canvas checklist is a compact, flat action instrument embedded as a native tldraw shape. Its content model is custom, but its visual identity and customization belong to tldraw rather than Setpoint.
 
-- **Container:** Use the solid dark panel surface, a 1px low-opacity lavender border, 12px corners, and 14px internal padding. Keep it shadowless so it remains an object on the canvas rather than a floating panel.
-- **Hierarchy:** Pair a 13px semibold editable title with a quiet 9px completion count. Checklist items use 12px operational text in stable 32px rows with compact 4px vertical gaps.
-- **Completion:** Use an 18px square checkbox with 4px corners. Lavender fill plus a checkmark communicates completion; mute and strike the item label as a redundant non-color cue.
-- **Direct Manipulation:** Enter adds the next item, Backspace removes an empty row when another row remains, and row removal appears on hover or focus. Hover, focus, and active states follow the standard fast motion token and respect reduced motion.
-- **Portability:** Keep the title, item text, completion count, checkbox state, and subdued completed styling recognizable in exported SVG output.
+- **Native Styles:** Include tldraw's `DefaultColorStyle`, `DefaultFontStyle`, and `DefaultSizeStyle` in the shape props. The native style panel owns these choices and tldraw remembers them for subsequent shapes.
+- **Container:** Resolve the selected color through the active tldraw theme's `noteFill`, `noteText`, `solid`, and `noteBorder` values. Use tldraw's near-square note silhouette, spacing/radius variables, and subtle native shadow instead of Setpoint card tokens.
+- **Hierarchy:** Use the selected tldraw font and size throughout. Keep the editable title bold, the completion count quiet, and item text regular without introducing Montserrat or Setpoint typography inside the shape.
+- **Completion:** Fill the checkbox with the selected tldraw color's `solid` value and draw its checkmark in the card's `noteFill`. Mute and strike the item label as a redundant non-color cue.
+- **Direct Manipulation:** Enter adds the next item, Backspace removes an empty row when another row remains, and row removal appears on hover or focus. Hover, focus, active, selection, and reorder states use tldraw UI theme variables and respect reduced motion.
+- **Portability:** Resolve the same tldraw theme, color, font, and size values in exported SVG output so live and exported Checklists agree.
 
-**The Embedded Instrument Rule.** Canvas-native structured tools should stay compact, movable, and editable in place. Extend the canvas with one focused action model; do not surround the shape with dashboard chrome or turn it into a second provider-backed task system.
+**The Embedded Instrument Rule.** Canvas-native structured tools should stay compact, movable, editable in place, and visually owned by the canvas system. Extend tldraw with one focused action model; do not surround the shape with dashboard chrome, skin it as a Setpoint card, or turn it into a second provider-backed task system.
 
 ### Timeline And Rails
 
