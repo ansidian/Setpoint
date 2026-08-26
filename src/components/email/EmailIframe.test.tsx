@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EmailIframe from "./EmailIframe";
+import KeepAliveTab from "../dashboard/KeepAliveTab";
 import { withEmailContentSecurityPolicy, withMobileViewport } from "./withMobileViewport";
 
 const CSP_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'";
@@ -116,10 +117,46 @@ describe("EmailIframe reader-hotkey relay", () => {
   it("relays shell tab keys and inbox command keys from the email document", () => {
     withParentKeyListener((received) => {
       const doc = loadedIframe("<p>Loaded email body</p>").contentDocument!;
-      for (const key of ["1", "2", "f", "d", "j", "o"]) {
+      for (const key of ["1", "2", "3", "4", "5", "f", "d", "j", "o"]) {
         doc.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
       }
-      expect(received).toEqual(["1", "2", "f", "d", "j", "o"]);
+      expect(received).toEqual(["1", "2", "3", "4", "5", "f", "d", "j", "o"]);
+    });
+  });
+
+  it("keeps relaying shell tab keys after its keep-alive tab is hidden and restored", () => {
+    withParentKeyListener((received) => {
+      const { rerender } = render(
+        <KeepAliveTab active><EmailIframe html="<p>Email body</p>" /></KeepAliveTab>,
+      );
+      const iframe = screen.getByTitle("Email content") as HTMLIFrameElement;
+      fireEvent.load(iframe);
+      iframe.contentDocument!.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "1", bubbles: true, cancelable: true,
+      }));
+
+      rerender(<KeepAliveTab active={false}><EmailIframe html="<p>Email body</p>" /></KeepAliveTab>);
+      rerender(<KeepAliveTab active><EmailIframe html="<p>Email body</p>" /></KeepAliveTab>);
+      iframe.contentDocument!.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "1", bubbles: true, cancelable: true,
+      }));
+
+      expect(received).toEqual(["1", "1"]);
+    });
+  });
+
+  it("returns focus to the parent document after relaying shell tab navigation", () => {
+    withParentKeyListener((received) => {
+      const iframe = loadedIframe();
+      iframe.focus();
+      expect(document.activeElement).toBe(iframe);
+
+      iframe.contentDocument!.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "3", bubbles: true, cancelable: true,
+      }));
+
+      expect(received).toEqual(["3"]);
+      expect(document.activeElement).not.toBe(iframe);
     });
   });
 
@@ -162,7 +199,6 @@ describe("EmailIframe reader-hotkey relay", () => {
       const doc = loadedIframe().contentDocument!;
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "3", bubbles: true }));
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: "e", metaKey: true, bubbles: true }));
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: "1", altKey: true, bubbles: true }));

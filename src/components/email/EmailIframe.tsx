@@ -104,13 +104,13 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
     });
     const parentDocument = window.parent?.document;
     if (!parentDocument) return;
+    // A tab switch hides this iframe immediately. Release its browsing-context
+    // focus before dispatch so the next shell hotkey reaches the visible parent
+    // instead of the now-hidden email document after its effects disconnect.
+    if (/^[1-5]$/.test(event.key)) iframeRef.current?.blur();
     parentDocument.dispatchEvent(relayed);
     if (relayed.defaultPrevented) event.preventDefault();
   }, []);
-
-  useEffect(() => () => {
-    hotkeyDocumentRef.current?.removeEventListener("keydown", relayReaderHotkey);
-  }, [relayReaderHotkey]);
 
   const handleLoad = useCallback(() => {
     try {
@@ -130,6 +130,17 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
       // contentDocument may be inaccessible in edge cases; silently skip
     }
   }, [relayReaderHotkey]);
+
+  useEffect(() => {
+    // React Activity disconnects effects while a keep-alive tab is hidden and
+    // reconnects them when it becomes visible. Reinstall here as well as on
+    // iframe load so returning to Inbox restores reader hotkeys without
+    // requiring the unchanged email document to load again.
+    handleLoad();
+    return () => {
+      hotkeyDocumentRef.current?.removeEventListener("keydown", relayReaderHotkey);
+    };
+  }, [handleLoad, relayReaderHotkey]);
 
   return (
     <div className="w-full h-full flex flex-col min-h-0">

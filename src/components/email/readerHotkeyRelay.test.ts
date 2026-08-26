@@ -8,6 +8,12 @@ describe("shouldRelayReaderKey", () => {
     ).toBe(true);
   });
 
+  it("relays every shell tab key pressed in the email body", () => {
+    for (const key of ["1", "2", "3", "4", "5"]) {
+      expect(shouldRelayReaderKey({ key, targetTag: "BODY" })).toBe(true);
+    }
+  });
+
   it("relays Escape so the Alfred preview can close from inside its iframe", () => {
     expect(shouldRelayReaderKey({ key: "Escape", targetTag: "BODY" })).toBe(true);
   });
