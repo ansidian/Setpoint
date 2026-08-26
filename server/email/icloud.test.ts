@@ -6,6 +6,7 @@ interface TestImapClient {
   getMailboxLock: MockFunction;
   search: MockFunction;
   fetch: MockFunction;
+  fetchOne?: MockFunction;
   connectDeferred: { resolve: () => void };
 }
 
@@ -120,6 +121,46 @@ class FakeImapFlowMime {
   }
 }
 
+class FakeImapFlowAttachment {
+  usable: boolean;
+  connect: MockFunction;
+  on: MockFunction;
+  getMailboxLock: MockFunction;
+  search: MockFunction;
+  fetch: MockFunction;
+  fetchOne: MockFunction;
+  release: MockFunction;
+
+  constructor() {
+    this.usable = true;
+    this.connect = vi.fn(async () => {});
+    this.on = vi.fn();
+    this.release = vi.fn();
+    this.getMailboxLock = vi.fn(async () => ({ release: this.release }));
+    this.search = vi.fn(async () => []);
+    this.fetch = vi.fn(async function* () {});
+    this.fetchOne = vi.fn(async () => ({ source: Buffer.from([
+      "From: Sender <sender@example.com>",
+      "Subject: Attachment message",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="ICLOUD-ATTACHMENT"',
+      "",
+      "--ICLOUD-ATTACHMENT",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "See the file.",
+      "--ICLOUD-ATTACHMENT",
+      'Content-Type: text/csv; name="ledger.csv"',
+      'Content-Disposition: attachment; filename="ledger.csv"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      Buffer.from("date,amount\n2026-08-25,42").toString("base64"),
+      "--ICLOUD-ATTACHMENT--",
+    ].join("\r\n")) }));
+    activeClient = this as unknown as TestImapClient;
+  }
+}
+
 // Counts constructions and lets a test control exactly when `connect()`
 // settles (resolve, or never — for the timeout test) via `connectDeferred`.
 let constructCount = 0;
@@ -151,7 +192,7 @@ class ControllableImapFlow {
   }
 }
 
-type TestImapConstructor = typeof FakeImapFlow | typeof FakeImapFlowMime | typeof ControllableImapFlow;
+type TestImapConstructor = typeof FakeImapFlow | typeof FakeImapFlowMime | typeof FakeImapFlowAttachment | typeof ControllableImapFlow;
 const imapFlowHolder: { current: TestImapConstructor } = { current: FakeImapFlow };
 vi.mock("imapflow", () => ({
   ImapFlow: class {
@@ -161,7 +202,7 @@ vi.mock("imapflow", () => ({
   },
 }));
 
-const { fetchEmailsInRange, getPooledClient } = await import("./icloud.ts");
+const { fetchEmailsInRange, fetchEmailAttachment, getPooledClient } = await import("./icloud.ts");
 
 describe("iCloud fetchEmailsInRange", () => {
   const fakeAccount = {
@@ -267,6 +308,44 @@ describe("iCloud fetchEmailsInRange MIME parsing (D1)", () => {
     expect(email.body_text).not.toContain("XYZBOUNDARY");
     expect(email.body_text).not.toContain("Content-Transfer-Encoding");
     expect(email.body_preview.endsWith(" [amounts: $29.00]")).toBe(true);
+  });
+});
+
+describe("iCloud reader attachments", () => {
+  beforeEach(() => {
+    activeClient = null;
+    imapFlowHolder.current = FakeImapFlowAttachment;
+  });
+
+  it("retrieves the selected MIME part and always releases the mailbox lock", async () => {
+    const attachment = await fetchEmailAttachment(
+      "attachments@icloud.com",
+      "app-password",
+      "icloud-42",
+      "2",
+    );
+
+    expect(attachment.content.toString()).toContain("2026-08-25,42");
+    expect(attachment).toMatchObject({
+      filename: "ledger.csv",
+      contentType: "text/csv",
+    });
+    // test-architecture: allow-boundary-interaction -- IMAP source fetch is outbound; the exact UID and raw-source request are the provider attachment contract.
+    expect(activeClient!.fetchOne).toHaveBeenCalledWith("42", { source: true }, { uid: true });
+    // test-architecture: allow-boundary-interaction -- IMAP mailbox lock release is outbound protocol state and must occur after successful attachment extraction.
+    expect((activeClient as unknown as FakeImapFlowAttachment).release).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the mailbox lock when the requested part is missing", async () => {
+    await expect(fetchEmailAttachment(
+      "missing-attachment@icloud.com",
+      "app-password",
+      "icloud-42",
+      "9",
+    )).rejects.toMatchObject({ status: 404 });
+
+    // test-architecture: allow-boundary-interaction -- IMAP mailbox lock release is outbound protocol state and must occur even when attachment lookup fails.
+    expect((activeClient as unknown as FakeImapFlowAttachment).release).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -116,6 +116,7 @@ export { discardGoogleOAuthPending, discardInstanceCredentialPending } from "./l
 export * from "./lib/remoteContentTrustApi.ts";
 export * from "./lib/transactionImportApi.ts";
 export * from "./lib/alfredApi.ts";
+export * from "./lib/emailAttachmentApi.ts";
 
 type ApiId = string | number;
 export type AuthResponse = {

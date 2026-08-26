@@ -71,3 +71,29 @@ describe("email body TTL cache eviction", () => {
     expect(api.peekEmailBody("stale-uid")).toBe(null);
   });
 });
+
+describe("email attachment binary API", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("fetches encoded attachment paths as blobs without using the JSON API helper", async () => {
+    const blob = new Blob(["pdf"], { type: "application/pdf" });
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: vi.fn().mockResolvedValue(blob),
+    });
+    vi.stubGlobal("fetch", fetch);
+    const api = await importApi();
+
+    await expect(api.fetchEmailAttachmentBlob("gmail/a", "2.1")).resolves.toBe(blob);
+    // test-architecture: allow-boundary-interaction -- Fetch is the browser HTTP boundary; the encoded attachment identity and same-origin request marker are the wire contract.
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/briefing/email/gmail%2Fa/attachments/2.1",
+      expect.objectContaining({ headers: { "X-Requested-With": "Setpoint" } }),
+    );
+  });
+});

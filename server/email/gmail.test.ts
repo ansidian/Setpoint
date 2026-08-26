@@ -21,7 +21,39 @@ vi.mock("../google-oauth-credentials.ts", () => ({
 vi.stubGlobal("fetch", vi.fn());
 const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
 
-const { chunkArray, fetchMessages, fetchEmailsInRange } = await import("./gmail.ts");
+const {
+  chunkArray,
+  fetchMessages,
+  fetchEmailsInRange,
+  fetchEmailBody,
+  fetchEmailAttachment,
+} = await import("./gmail.ts");
+
+const ATTACHMENT_SOURCE = Buffer.from([
+  "From: Sender <sender@example.com>",
+  "Subject: Attachment message",
+  "MIME-Version: 1.0",
+  'Content-Type: multipart/mixed; boundary="ATTACHMENT-BOUNDARY"',
+  "",
+  "--ATTACHMENT-BOUNDARY",
+  "Content-Type: text/plain; charset=utf-8",
+  "",
+  "See the report.",
+  "--ATTACHMENT-BOUNDARY",
+  'Content-Type: application/pdf; name="quarterly-report.pdf"',
+  'Content-Disposition: attachment; filename="quarterly-report.pdf"',
+  "Content-Transfer-Encoding: base64",
+  "",
+  Buffer.from("%PDF-setpoint-test").toString("base64"),
+  "--ATTACHMENT-BOUNDARY",
+  'Content-Type: image/png; name="signature.png"',
+  'Content-Disposition: inline; filename="signature.png"',
+  "Content-ID: <signature-logo>",
+  "Content-Transfer-Encoding: base64",
+  "",
+  Buffer.from("png-test").toString("base64"),
+  "--ATTACHMENT-BOUNDARY--",
+].join("\r\n"));
 
 describe("gmail", () => {
   describe("chunkArray", () => {
@@ -113,6 +145,66 @@ describe("gmail", () => {
       expect(results[0]!.id).toBe("msg0");
       expect(results[11]!.id).toBe("msg11");
     });
+  });
+});
+
+describe("Gmail reader attachments", () => {
+  const fakeAccount = {
+    id: "gmail-work",
+    type: "gmail" as const,
+    label: "Work",
+    email: "work@example.com",
+    color: "#123456",
+    credentials_encrypted: "stub",
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ raw: ATTACHMENT_SOURCE.toString("base64url") }),
+    });
+  });
+
+  it("returns file descriptors while marking related CID parts inline", async () => {
+    const body = await fetchEmailBody(fakeAccount, "gmail-gmail-work-message-1");
+
+    expect(body.attachments).toEqual([
+      expect.objectContaining({
+        id: "2",
+        filename: "quarterly-report.pdf",
+        contentType: "application/pdf",
+        size: Buffer.byteLength("%PDF-setpoint-test"),
+        inline: false,
+      }),
+      expect.objectContaining({
+        id: "3",
+        filename: "signature.png",
+        cid: "signature-logo",
+        inline: true,
+      }),
+    ]);
+  });
+
+  it("retrieves the exact MIME part and rejects an unknown part", async () => {
+    const attachment = await fetchEmailAttachment(
+      fakeAccount,
+      "gmail-gmail-work-message-1",
+      "2",
+    );
+
+    expect(attachment).toMatchObject({
+      filename: "quarterly-report.pdf",
+      contentType: "application/pdf",
+      size: Buffer.byteLength("%PDF-setpoint-test"),
+    });
+    expect(attachment.content.toString()).toBe("%PDF-setpoint-test");
+
+    await expect(fetchEmailAttachment(
+      fakeAccount,
+      "gmail-gmail-work-message-1",
+      "99",
+    )).rejects.toMatchObject({ status: 404 });
   });
 });
 

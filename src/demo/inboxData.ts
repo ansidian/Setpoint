@@ -1,4 +1,5 @@
 import type { SnapshotVerificationCode } from "../../shared/types/snapshots.ts";
+import { getDemoEmailAttachmentDescriptors } from "./emailAttachments.ts";
 
 const WORK_COLOR = "#89b4fa";
 const PERSONAL_COLOR = "#cba6f7";
@@ -153,6 +154,7 @@ function makeEmailBodies(lanes: DemoLanes, carryover: DemoSnapshotEmail[]) {
     {
       uid: row.uid,
       body: `This is a fictional demo email body for "${row.subject}". ${row.summary} The content is representative sample data only.`,
+      attachments: getDemoEmailAttachmentDescriptors(row.uid),
     },
   ]));
 }

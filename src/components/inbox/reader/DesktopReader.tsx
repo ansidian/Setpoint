@@ -11,6 +11,7 @@ import { Avatar, QuickAction } from "../primitives";
 import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
+import EmailAttachmentShelf from "./EmailAttachmentShelf";
 import DraftReply from "./DraftReply";
 import ActualActionStatus from "./ActualActionStatus";
 import TransactionImportStatus from "./TransactionImportStatus";
@@ -349,6 +350,10 @@ export default function DesktopReader({
 
         <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <EmailAttachmentShelf
+              emailUid={String(email.uid || email.email_id || email.id || "")}
+              attachments={bodyState.attachments}
+            />
             <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} />
           </div>
           <BillDrawer

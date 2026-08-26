@@ -61,6 +61,20 @@ function renderMobileReader(overrides: MobileReaderOverrides = {}) {
 }
 
 describe("MobileReader controls", () => {
+  it("places loaded attachments above the mobile email body", () => {
+    renderMobileReader({
+      bodyState: {
+        loading: false,
+        error: null,
+        body: "Body",
+        source: "loaded",
+        attachments: [{ id: "2", filename: "report.pdf", contentType: "application/pdf", inline: false }],
+      },
+    });
+
+    expect(screen.getByLabelText("1 email attachment")).toBeTruthy();
+  });
+
   it("keeps a previously opened bill drawer mounted but inert while closed", () => {
     renderMobileReader({ billOpen: false, billMounted: true });
 

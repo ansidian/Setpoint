@@ -1,7 +1,8 @@
 import { simpleParser } from "mailparser";
 import { htmlToPlainText } from "./html-to-text.ts";
+import { describeMimeAttachments, readMimeAttachment } from "./email-mime-attachments.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
-import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
+import type { ConfiguredEmailAccount, EmailAttachmentContent } from "./email-provider-types.ts";
 import { getAccessToken } from "./gmail-credentials.ts";
 export { getAccessToken, handleCallback } from "./gmail-credentials.ts";
 export { getAuthUrl } from "./gmail-oauth-url.ts";
@@ -257,13 +258,25 @@ export async function fetchEmailBody(account: ConfiguredEmailAccount, uid: strin
     subject: parsed.subject || "",
     from: parsed.from?.text || "",
     date: parsed.date ? parsed.date.toISOString() : "",
-    attachments: (parsed.attachments || []).map((attachment) => ({
-      filename: attachment.filename || null,
-      contentType: attachment.contentType || null,
-      contentDisposition: attachment.contentDisposition || null,
-      cid: attachment.cid || null,
-    })),
+    attachments: describeMimeAttachments(parsed.attachments),
   };
+}
+
+export async function fetchEmailAttachment(
+  account: ConfiguredEmailAccount,
+  uid: string,
+  attachmentId: string,
+): Promise<EmailAttachmentContent> {
+  const messageId = extractMessageId(account, uid);
+  const token = await getAccessToken(account);
+  const res = await fetch(
+    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=raw`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`Gmail fetch attachment failed: ${res.status}`);
+  const msg = await res.json() as GmailMessage;
+  const parsed = await simpleParser(Buffer.from(msg.raw || "", "base64url"));
+  return readMimeAttachment(parsed.attachments, attachmentId);
 }
 
 // --- Email actions (requires gmail.modify scope) ---

@@ -25,6 +25,7 @@ describe("demo mode read adapter", () => {
     const current = await api.getCurrentDashboard();
     const snapshot = await api.getActiveSnapshot();
     const emailBody = await api.getEmailBody("demo-email-budget");
+    const emailAttachment = await api.fetchEmailAttachmentBlob("demo-email-budget", "2");
     const calendarRange = await api.getCalendarRange("2026-05-01", "2026-05-31");
     const calendarSearch = await api.getCalendarSearch({ scope: "events", q: "review" });
     const deadlines = await api.getCalendarDeadlinesRange("2026-05-01", "2026-05-31");
@@ -55,6 +56,11 @@ describe("demo mode read adapter", () => {
     expect(current.deadlines.upcoming.find((task) => task.id === "demo-task-design-audit")?.due_date).toBe("2026-05-12");
     expect(snapshot).toEqual(current.activeSnapshot);
     expect("body" in emailBody ? emailBody.body : "").toContain("fictional demo");
+    expect(emailBody.attachments).toEqual([
+      expect.objectContaining({ id: "2", filename: "demo-rollout-budget.pdf", inline: false }),
+    ]);
+    expect(emailAttachment.type).toBe("application/pdf");
+    expect(await emailAttachment.text()).toContain("Fictional Setpoint demo attachment");
     expect(calendarRange.events.some((event) => event.title === "Portfolio review prep")).toBe(true);
     expect(calendarSearch.results[0]).toMatchObject({
       type: "event",

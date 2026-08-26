@@ -6,6 +6,7 @@ type ApiExportName = keyof typeof ApiModule;
 const NON_REQUEST_NAMES = [
   "peekEmailBody",
   "prefetchCurrentDashboard",
+  "getEmailAttachmentUrl",
   "runAlfredStream",
   "settleArrivalGraceOnExit",
   "trashEmailOnExit",
@@ -67,6 +68,7 @@ const ARGS: Partial<Record<ApiExportName, unknown[]>> = {
   createCalendarEventsBatch: [[]],
   createReminder: [{}],
   extractBillFromEmail: [{ subject: "Demo", from: "demo@example.invalid", body: "Demo body" }],
+  fetchEmailAttachmentBlob: ["demo-email-budget", "2"],
   getCalendarBillsRange: ["2026-05-01", "2026-05-31"],
   getCalendarDeadlinesRange: ["2026-05-01", "2026-05-31"],
   getCalendarRange: ["2026-05-01", "2026-05-31"],

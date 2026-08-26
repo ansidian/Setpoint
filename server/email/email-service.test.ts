@@ -36,6 +36,7 @@ vi.mock("../platform/encryption.ts", async (importOriginal) => {
 // test-architecture: allow-boundary-mock -- Gmail mutations are outbound provider writes; service cases control success/failure while asserting returned and durable outcomes.
 vi.mock("./gmail.ts", () => ({
   fetchEmailBody: vi.fn(),
+  fetchEmailAttachment: vi.fn(),
   markAsRead: vi.fn(),
   markAsUnread: vi.fn(),
   trashMessage: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("./gmail.ts", () => ({
 // test-architecture: allow-boundary-mock -- iCloud IMAP mutations are outbound provider writes; service cases control per-account failure isolation.
 vi.mock("./icloud.ts", () => ({
   fetchEmailBody: vi.fn(),
+  fetchEmailAttachment: vi.fn(),
   markAsRead: vi.fn(),
   markAsUnread: vi.fn(),
   trashMessage: vi.fn(),
@@ -498,6 +500,7 @@ describe("trash post-provider cleanup (P3-74)", () => {
       },
       providerAccountId: "gmail-work",
       fetchBody: vi.fn(),
+      fetchAttachment: vi.fn(),
       markRead: vi.fn(),
       markUnread: vi.fn(),
       trash: vi.fn(),

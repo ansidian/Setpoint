@@ -8,6 +8,10 @@ declare module "mailparser" {
     contentType?: string;
     contentDisposition?: string;
     cid?: string;
+    partId?: string | null;
+    size?: number;
+    content?: Buffer;
+    related?: boolean;
   }
 
   export interface ParsedMail {

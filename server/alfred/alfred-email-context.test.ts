@@ -24,8 +24,8 @@ describe("Alfred email context preparation", () => {
       <span hidden>secret tracking copy</span>
       <script>stealTokens()</script>
     `, [
-      { filename: "chart.png", contentType: "image/png", cid: "chart-1" },
-      { filename: "terms.pdf", contentType: "application/pdf" },
+      { id: "1", filename: "chart.png", contentType: "image/png", cid: "chart-1", inline: true },
+      { id: "2", filename: "terms.pdf", contentType: "application/pdf", inline: false },
     ]);
 
     expect(body).toContain("Project update");

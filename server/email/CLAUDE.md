@@ -11,6 +11,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-fetch.ts` — cross-account email fetching for Gmail and iCloud
 - `email-provider-adapters.ts` — per-account adapters: fetch, mark-read, trash
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
+- `email-mime-attachments.ts` — shared MIME attachment descriptor and bounded byte-selection helpers
 - `email-index.ts` — parses headers, truncates bodies, writes `ea_email_index`
 - `verification-code-detector.ts` — pure conservative verification-code extraction from normalized subject/snippet/body context; returns one exact bounded token or null
 - `email-persistence-types.ts` — local index/pin database client and raw-row contracts

@@ -32,10 +32,13 @@ export interface NormalizedFetchedEmail extends Record<string, unknown> {
 }
 
 export interface EmailBodyAttachment {
+  id: string;
   filename?: string | null;
   contentType?: string | null;
   contentDisposition?: string | null;
   cid?: string | null;
+  size?: number | null;
+  inline: boolean;
 }
 
 export interface EmailHtmlBody {

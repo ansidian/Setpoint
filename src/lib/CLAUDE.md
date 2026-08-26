@@ -12,6 +12,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `calendar-links.ts` — URL/href/bare-URL detection and Zoom-link resolution for event descriptions
 - `dashboard-helpers.ts` — urgency style tokens, greeting pools, Pacific-time epoch helpers
 - `email-links.ts` — builds a Gmail web URL from an email's uid + account
+- `emailAttachmentApi.ts` — demo-safe authenticated URL/blob transport for lazy email attachment downloads and previews
 - `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `instanceCredentialPendingApi.ts` — version-bound pending-credential discard calls shared by Settings and the central API export surface
 - `motion.ts` — shared Motion React durations, ease-out curve, and reduced-motion-aware transition builder

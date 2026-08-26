@@ -1,5 +1,12 @@
 import type { EmailBody, EmailProvider } from "../../shared/types/email.ts";
 
+export interface EmailAttachmentContent {
+  content: Buffer;
+  filename: string;
+  contentType: string;
+  size: number;
+}
+
 export interface ConfiguredEmailAccount extends Record<string, unknown> {
   id: string;
   type: EmailProvider;
@@ -19,6 +26,7 @@ export interface EmailProviderAdapter {
   account: ConfiguredEmailAccount;
   providerAccountId: string;
   fetchBody: () => Promise<EmailBody>;
+  fetchAttachment: (attachmentId: string) => Promise<EmailAttachmentContent>;
   markRead: () => Promise<void>;
   markUnread: () => Promise<void>;
   trash: () => Promise<void>;

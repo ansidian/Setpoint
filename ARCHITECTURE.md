@@ -847,6 +847,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/email-index/health` | `server/routes/briefing/email-index.ts` |
 | GET | `/api/briefing/email-search` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/email/:uid` | `server/routes/briefing/email.ts` |
+| GET | `/api/briefing/email/:uid/attachments/:attachmentId` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email/:uid/mark-read` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email/:uid/mark-unread` | `server/routes/briefing/email.ts` |
 | DELETE | `/api/briefing/email/:uid/pin` | `server/routes/briefing/email.ts` |

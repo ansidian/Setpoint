@@ -53,6 +53,16 @@ export function makeEmailSearchLimiter() {
   });
 }
 
+export function makeEmailAttachmentLimiter() {
+  return rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 60,
+    message: { message: "Too many attachment requests, try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+}
+
 export function makePlacesLimiter() {
   return rateLimit({
     windowMs: 5 * 60 * 1000,
@@ -77,5 +87,6 @@ export const billExtractLimiter = makeBillExtractLimiter();
 export const alfredRunLimiter = makeAlfredRunLimiter();
 export const alfredEmailContextLimiter = makeAlfredEmailContextLimiter();
 export const emailSearchLimiter = makeEmailSearchLimiter();
+export const emailAttachmentLimiter = makeEmailAttachmentLimiter();
 export const placesLimiter = makePlacesLimiter();
 export const actualConnectionLimiter = makeActualConnectionLimiter();

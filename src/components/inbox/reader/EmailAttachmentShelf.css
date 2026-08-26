@@ -1,0 +1,476 @@
+.email-attachment-shelf {
+  flex-shrink: 0;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--sp-mantle) 58%, transparent);
+}
+
+.email-attachment-shelf-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+  color: rgba(205, 214, 244, 0.68);
+  font: 600 10px/1.2 Montserrat, sans-serif;
+}
+
+.email-attachment-shelf-summary svg {
+  color: color-mix(in srgb, var(--sp-accent) 76%, white);
+}
+
+.email-attachment-shelf-scroll {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scrollbar-width: thin;
+}
+
+.email-attachment-shelf-scroll:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sp-accent) 68%, white);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.email-attachment-item {
+  width: min(292px, calc(100vw - 56px));
+  min-width: 220px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 7px 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.email-attachment-item-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sp-accent) 11%, transparent);
+  color: color-mix(in srgb, var(--sp-accent) 72%, white);
+}
+
+.email-attachment-item-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.email-attachment-item-name {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
+  font: 600 11px/1.3 Montserrat, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email-attachment-item-meta {
+  margin-top: 2px;
+  color: rgba(205, 214, 244, 0.68);
+  font: 500 9px/1.2 Montserrat, sans-serif;
+}
+
+.email-attachment-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.email-attachment-item-actions button,
+.email-attachment-item-actions a,
+.email-attachment-preview-close,
+.email-attachment-preview-download,
+.email-attachment-preview-error button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(205, 214, 244, 0.62);
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.email-attachment-item-actions button,
+.email-attachment-item-actions a {
+  width: 30px;
+  height: 30px;
+}
+
+.email-attachment-item-actions button:hover,
+.email-attachment-item-actions a:hover,
+.email-attachment-preview-close:hover,
+.email-attachment-preview-download:hover,
+.email-attachment-preview-error button:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.065);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.email-attachment-item-actions button:focus-visible,
+.email-attachment-item-actions a:focus-visible,
+.email-attachment-preview-close:focus-visible,
+.email-attachment-preview-download:focus-visible,
+.email-attachment-preview-error button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.email-attachment-item-actions button:active,
+.email-attachment-item-actions a:active,
+.email-attachment-preview-close:active,
+.email-attachment-preview-download:active,
+.email-attachment-preview-error button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.email-attachment-shelf-error,
+.email-attachment-preview-alert {
+  margin-top: 7px;
+  color: var(--sp-rose);
+  font: 500 10px/1.35 Montserrat, sans-serif;
+}
+
+.email-attachment-preview-alert {
+  margin: 0;
+  padding: 7px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sp-rose) 16%, transparent);
+  background: color-mix(in srgb, var(--sp-rose) 6%, transparent);
+}
+
+.email-attachment-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 7, 12, 0.78);
+}
+
+.email-attachment-preview-dialog {
+  width: min(960px, calc(100vw - 40px));
+  height: min(780px, calc(100dvh - 40px));
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: #16161e;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+.email-attachment-preview-header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.email-attachment-preview-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.email-attachment-preview-heading h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--sp-text);
+  font: 600 13px/1.35 Montserrat, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email-attachment-preview-heading p {
+  margin: 2px 0 0;
+  color: rgba(205, 214, 244, 0.68);
+  font: 500 10px/1.3 Montserrat, sans-serif;
+}
+
+.email-attachment-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.email-attachment-preview-download {
+  position: relative;
+  min-height: 34px;
+  gap: 7px;
+  padding: 0 10px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  font: 600 11px/1 Montserrat, sans-serif;
+}
+
+.email-attachment-preview-close {
+  width: 34px;
+  height: 34px;
+}
+
+.email-attachment-preview-content {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #0b0b13;
+}
+
+.email-attachment-preview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.email-pdf-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  background: #25252f;
+}
+
+.email-pdf-preview-canvas {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #fff;
+}
+
+.email-pdf-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: rgba(22, 22, 30, 0.72);
+  color: rgba(205, 214, 244, 0.68);
+  font: 500 11px/1.4 Montserrat, sans-serif;
+}
+
+.email-pdf-preview-accessible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: normal;
+  border: 0;
+}
+
+.email-pdf-preview-pagination {
+  position: sticky;
+  bottom: 8px;
+  width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px auto 0;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: #16161e;
+  color: rgba(205, 214, 244, 0.72);
+  font: 600 10px/1 Montserrat, sans-serif;
+}
+
+.email-pdf-preview-pagination button {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.email-pdf-preview-pagination button:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.email-pdf-preview-pagination button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.email-pdf-preview-pagination button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.email-pdf-preview-pagination button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.email-attachment-preview-state {
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 24px;
+  color: rgba(205, 214, 244, 0.62);
+  font: 500 11px/1.5 Montserrat, sans-serif;
+  text-align: center;
+}
+
+.email-attachment-preview-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-top-color: color-mix(in srgb, var(--sp-accent) 74%, white);
+  border-radius: 50%;
+  animation: email-attachment-spin 0.8s linear infinite;
+}
+
+.email-attachment-preview-error svg {
+  color: var(--sp-rose);
+}
+
+.email-attachment-preview-error strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+}
+
+.email-attachment-preview-error button {
+  min-height: 34px;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 0 11px;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(205, 214, 244, 0.78);
+  font: 600 11px/1 Montserrat, sans-serif;
+}
+
+@keyframes email-attachment-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .email-attachment-shelf-mobile {
+    padding: 8px 16px 10px;
+  }
+
+  .email-attachment-shelf-mobile .email-attachment-item {
+    height: 56px;
+    min-width: min(270px, calc(100vw - 48px));
+  }
+
+  .email-attachment-shelf-mobile .email-attachment-item-actions button,
+  .email-attachment-shelf-mobile .email-attachment-item-actions a {
+    width: 44px;
+    height: 44px;
+  }
+
+  .email-attachment-preview-backdrop {
+    padding: 8px;
+  }
+
+  .email-attachment-preview-dialog {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+    border-radius: 16px;
+  }
+
+  .email-attachment-preview-header {
+    min-height: 60px;
+    padding-left: 14px;
+  }
+
+  .email-attachment-preview-download {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .email-attachment-preview-download span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .email-attachment-preview-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .email-pdf-preview {
+    padding: 10px;
+  }
+
+  .email-pdf-preview-pagination button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .email-attachment-item-actions button,
+  .email-attachment-item-actions a,
+  .email-attachment-preview-close,
+  .email-attachment-preview-download,
+  .email-attachment-preview-error button {
+    transition: none;
+  }
+
+  .email-attachment-item-actions button:hover,
+  .email-attachment-item-actions a:hover,
+  .email-attachment-preview-close:hover,
+  .email-attachment-preview-download:hover,
+  .email-attachment-preview-error button:hover,
+  .email-attachment-item-actions button:active,
+  .email-attachment-item-actions a:active,
+  .email-attachment-preview-close:active,
+  .email-attachment-preview-download:active,
+  .email-attachment-preview-error button:active {
+    transform: none;
+  }
+
+  .email-attachment-preview-spinner {
+    animation: none;
+  }
+}

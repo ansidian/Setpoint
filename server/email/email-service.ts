@@ -20,6 +20,7 @@ import { loadUserConfig } from "../platform/config-service.ts";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "../platform/account-canonical.ts";
 import {
   fetchEmailBodyForUid,
+  fetchEmailAttachmentForUid,
   markEmailReadWithProvider,
   markEmailUnreadWithProvider,
   trashEmailWithProvider,
@@ -84,6 +85,10 @@ function buildBatchReadFailure({ message, failed, total }: { message?: string; f
 
 export async function getEmailBody(userId: string, uid: string) {
   return fetchEmailBodyForUid(userId, uid);
+}
+
+export async function getEmailAttachment(userId: string, uid: string, attachmentId: string) {
+  return fetchEmailAttachmentForUid(userId, uid, attachmentId);
 }
 
 export { searchEmails } from "./email-index-search.ts";

@@ -3,12 +3,14 @@ import { decrypt } from "../platform/encryption.ts";
 import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
 import {
   fetchEmailBody as fetchGmailBody,
+  fetchEmailAttachment as fetchGmailAttachment,
   markAsRead as gmailMarkAsRead,
   markAsUnread as gmailMarkAsUnread,
   trashMessage as gmailTrash,
 } from "./gmail.ts";
 import {
   fetchEmailBody as fetchIcloudBody,
+  fetchEmailAttachment as fetchIcloudAttachment,
   markAsRead as icloudMarkAsRead,
   markAsUnread as icloudMarkAsUnread,
   trashMessage as icloudTrash,
@@ -142,6 +144,7 @@ async function resolveProviderAdapter(
       account: found.account,
       providerAccountId: found.account.id,
       fetchBody: () => fetchIcloudBody(found.account.email, password, uid),
+      fetchAttachment: (attachmentId) => fetchIcloudAttachment(found.account.email, password, uid, attachmentId),
       markRead: () => icloudMarkAsRead(found.account.email, password, uid),
       markUnread: () => icloudMarkAsUnread(found.account.email, password, uid),
       trash: () => icloudTrash(found.account.email, password, uid),
@@ -152,6 +155,7 @@ async function resolveProviderAdapter(
     account: found.account,
     providerAccountId: found.account.uid_account_id || found.account.id,
     fetchBody: () => fetchGmailBody(found.account, uid),
+    fetchAttachment: (attachmentId) => fetchGmailAttachment(found.account, uid, attachmentId),
     markRead: () => gmailMarkAsRead(found.account, uid),
     markUnread: () => gmailMarkAsUnread(found.account, uid),
     trash: () => gmailTrash(found.account, uid),
@@ -161,6 +165,11 @@ async function resolveProviderAdapter(
 export async function fetchEmailBodyForUid(userId: string, uid: string): Promise<EmailBody> {
   const adapter = await resolveProviderAdapter(userId, uid, { notFoundError: unknownUidError });
   return adapter.fetchBody();
+}
+
+export async function fetchEmailAttachmentForUid(userId: string, uid: string, attachmentId: string) {
+  const adapter = await resolveProviderAdapter(userId, uid, { notFoundError: unknownUidError });
+  return adapter.fetchAttachment(attachmentId);
 }
 
 export async function markEmailReadWithProvider(userId: string, uid: string): Promise<EmailProviderAdapter> {

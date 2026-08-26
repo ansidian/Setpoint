@@ -84,6 +84,7 @@ describe("auth boundaries", () => {
     await seedBearer();
     const routes = [
       ["get", "/api/briefing/email-index/health"],
+      ["get", "/api/briefing/email/gmail-work-message/attachments/2"],
       ["get", "/api/dashboard/current"],
       ["get", "/api/ea/settings"],
       ["get", "/api/tldraw/bootstrap"],
@@ -100,6 +101,9 @@ describe("auth boundaries", () => {
   it("rejects missing and expired cookie sessions before route handlers run", async () => {
     const missing = await request(makeApp()).get("/api/tldraw/bootstrap");
     expect(missing.status).toBe(401);
+    const missingAttachment = await request(makeApp())
+      .get("/api/briefing/email/gmail-work-message/attachments/2");
+    expect(missingAttachment.status).toBe(401);
 
     await currentDb().execute({
       sql: "UPDATE ea_sessions SET expires_at = ?",

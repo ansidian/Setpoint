@@ -2,12 +2,14 @@ import type { BillCandidate, BillPayMappingOutcome, StatementActualStatus } from
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
+import type { EmailBodyAttachment } from "../../../../shared/types/email";
 
-export type EmailBodyState =
+export type EmailBodyState = (
   | { loading: true; body: null; error: null; source: "loading" }
   | { loading: false; body: string; error: null; source: "loaded" | "fallback" }
   | { loading: false; body: null; error: string; source: "error" }
-  | { loading: false; body: null; error: null; source: null };
+  | { loading: false; body: null; error: null; source: null }
+) & { attachments?: EmailBodyAttachment[] };
 
 export interface EmailBodyStateInput {
   loading: boolean;

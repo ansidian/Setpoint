@@ -18,6 +18,7 @@ import { timeSince } from "../helpers";
 import SnoozePicker from "../SnoozePicker";
 import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
 import EmailBodyPane from "./EmailBodyPane";
+import EmailAttachmentShelf from "./EmailAttachmentShelf";
 import DraftReply from "./DraftReply";
 import MobileActionRow from "./MobileActionRow";
 import { resolveReaderActions } from "./readerActionsModel";
@@ -235,6 +236,11 @@ export default function MobileReader({
         )}
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <EmailAttachmentShelf
+            emailUid={String(email.uid || email.email_id || email.id || "")}
+            attachments={bodyState.attachments}
+            isMobile
+          />
           <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} isMobile />
         </div>
 

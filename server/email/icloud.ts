@@ -2,9 +2,10 @@ import { ImapFlow } from "imapflow";
 import type { FetchMessageObject } from "imapflow";
 import { simpleParser } from "mailparser";
 import { htmlToPlainText } from "./html-to-text.ts";
+import { describeMimeAttachments, readMimeAttachment } from "./email-mime-attachments.ts";
 import { withTimeout } from "../platform/fetch-with-timeout.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
-import type { ConfiguredEmailAccount, EmailHttpError } from "./email-provider-types.ts";
+import type { ConfiguredEmailAccount, EmailAttachmentContent, EmailHttpError } from "./email-provider-types.ts";
 import { emailErrorMessage } from "./email-provider-types.ts";
 
 const ICLOUD_HOST = "imap.mail.me.com";
@@ -268,13 +269,32 @@ export async function fetchEmailBody(email: string, password: string, uid: strin
       subject: parsed.subject || msg.envelope?.subject || "",
       from: parsed.from?.text || msg.envelope?.from?.[0]?.name || "",
       date: parsed.date ? parsed.date.toISOString() : "",
-      attachments: (parsed.attachments || []).map((attachment) => ({
-        filename: attachment.filename || null,
-        contentType: attachment.contentType || null,
-        contentDisposition: attachment.contentDisposition || null,
-        cid: attachment.cid || null,
-      })),
+      attachments: describeMimeAttachments(parsed.attachments),
     };
+  } finally {
+    lock.release();
+  }
+}
+
+export async function fetchEmailAttachment(
+  email: string,
+  password: string,
+  uid: string,
+  attachmentId: string,
+): Promise<EmailAttachmentContent> {
+  const imapUid = parseInt(uid.replace("icloud-", ""), 10);
+  const client = await getPooledClient(email, password);
+  const lock = await client.getMailboxLock("INBOX");
+
+  try {
+    const msg = await client.fetchOne(String(imapUid), { source: true }, { uid: true });
+    if (!msg || !msg.source) {
+      const err = new Error(`Message UID ${imapUid} not found`) as EmailHttpError;
+      err.status = 404;
+      throw err;
+    }
+    const parsed = await simpleParser(msg.source);
+    return readMimeAttachment(parsed.attachments, attachmentId);
   } finally {
     lock.release();
   }

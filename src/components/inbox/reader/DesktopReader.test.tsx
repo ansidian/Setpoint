@@ -85,6 +85,20 @@ function openTriageMenu() {
 }
 
 describe("DesktopReader snapshot actions", () => {
+  it("places loaded attachments above the desktop email body", () => {
+    renderReader({
+      bodyState: {
+        loading: false,
+        error: null,
+        body: "Body",
+        source: "loaded",
+        attachments: [{ id: "2", filename: "report.pdf", contentType: "application/pdf", inline: false }],
+      },
+    });
+
+    expect(screen.getByLabelText("1 email attachment")).toBeTruthy();
+  });
+
   it("closes grouped menus after dispatch and restores focus to the trigger", () => {
     renderReader();
     const { trigger, menu } = openMoveMenu();

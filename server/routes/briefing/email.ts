@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as emailService from "../../email/email-service.ts";
-import { emailSearchLimiter } from "../../middleware/rate-limits.ts";
+import { emailAttachmentLimiter, emailSearchLimiter } from "../../middleware/rate-limits.ts";
 import type { PinnedEmailSnapshot } from "../../../shared/types/email.ts";
 
 const router = Router();
@@ -14,6 +14,27 @@ function errorStatus(error: unknown, fallback = 500): number {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function safeAttachmentFilename(value: unknown): string {
+  const filename = String(value || "attachment")
+    .split(/[\\/]/)
+    .pop()!
+    .split("")
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code >= 32 && code !== 127;
+    })
+    .join("")
+    .trim();
+  return filename.slice(0, 240) || "attachment";
+}
+
+function safeAttachmentContentType(value: unknown): string {
+  const contentType = String(value || "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(contentType)
+    ? contentType
+    : "application/octet-stream";
 }
 
 router.get("/email/remote-content-trust", async (_req, res) => {
@@ -58,6 +79,36 @@ router.get("/email/:uid", async (req, res) => {
     const status = errorStatus(err);
     if (status >= 500) console.error("Error fetching email body:", err);
     res.status(status).json({ message: errorMessage(err) });
+  }
+});
+
+router.get("/email/:uid/attachments/:attachmentId", emailAttachmentLimiter, async (req, res) => {
+  const attachmentId = req.params.attachmentId!;
+  if (!/^(?:[1-9]\d*(?:\.[1-9]\d*)*|attachment-[1-9]\d*)$/.test(attachmentId)) {
+    return res.status(400).json({ message: "Invalid attachment id" });
+  }
+
+  try {
+    const attachment = await emailService.getEmailAttachment(
+      ownerUserId(),
+      req.params.uid!,
+      attachmentId,
+    );
+    const filename = safeAttachmentFilename(attachment.filename);
+    res.attachment(filename);
+    res.set({
+      "Cache-Control": "private, no-store, no-transform",
+      "Content-Type": safeAttachmentContentType(attachment.contentType),
+      "Content-Length": String(attachment.size),
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.send(attachment.content);
+  } catch (err) {
+    const status = errorStatus(err, 502);
+    if (status >= 500) console.error("Error fetching email attachment");
+    return res.status(status).json({
+      message: status >= 500 ? "Attachment download failed" : errorMessage(err),
+    });
   }
 });
 

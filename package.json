@@ -82,6 +82,7 @@
     "mailparser": "^3.9.6",
     "motion": "^12.38.0",
     "node-cron": "^4.2.1",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
