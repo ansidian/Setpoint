@@ -3,7 +3,6 @@ import {
   Filter,
   Pin,
   Search,
-  Sparkles,
 } from "lucide-react";
 import EmailRow from "../EmailRow";
 import Reader from "../reader/Reader";
@@ -12,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
 import { buildActiveSnapshotSummary } from "../snapshotSummary";
 import InboxUndoToast from "../InboxUndoToast";
+import MobileSnapshotHeader from "./MobileSnapshotHeader";
 import { selectVisibleMobileChips } from "../inboxCountsModel";
 import type { CSSProperties, MouseEventHandler, Ref } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -223,6 +223,7 @@ export default function MobileInboxView({
   liveEmailsLoading = false,
   activeSnapshotMode = false,
   readOnly = false,
+  snapshotNavigation = null,
   undo,
   onUndo,
   announcement,
@@ -282,49 +283,14 @@ export default function MobileInboxView({
           data-testid="inbox-mobile-list"
           style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}
         >
-          <div style={{ padding: "10px 16px 0" }}>
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                background: `linear-gradient(135deg, ${accent}12, color-mix(in srgb, var(--sp-cyan) 4%, transparent))`,
-                border: `1px solid ${accent}2c`,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Sparkles size={13} color={accent} />
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: 1.8,
-                    textTransform: "uppercase",
-                    color: accent,
-                  }}
-                >
-                  {activeSnapshotMode ? "Active snapshot" : "Inbox snapshot"}
-                </span>
-                <span style={{ flex: 1 }} />
-                {noiseUnreadCount > 0 && (
-                  <span style={{ fontSize: 10.5, color: "var(--color-text-faint)", whiteSpace: "nowrap" }}>
-                    <span style={{ color: "rgba(205,214,244,0.78)", fontWeight: 700 }}>{noiseUnreadCount}</span> noise unread
-                  </span>
-                )}
-              </div>
-              {snapshotSummary && (
-                <div
-                  style={{
-                    marginTop: 4,
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                    color: "rgba(205,214,244,0.82)",
-                  }}
-                >
-                  {snapshotSummary}
-                </div>
-              )}
-            </div>
-          </div>
+          <MobileSnapshotHeader
+            accent={accent}
+            activeSnapshotMode={activeSnapshotMode}
+            readOnly={readOnly}
+            summary={snapshotSummary}
+            noiseUnreadCount={noiseUnreadCount}
+            snapshotNavigation={snapshotNavigation}
+          />
 
           <div
             style={{

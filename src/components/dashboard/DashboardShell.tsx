@@ -23,6 +23,7 @@ import useAlfredPanelState from "./useAlfredPanelState";
 import useLiveReadOverrides from "./useLiveReadOverrides";
 import useDashboardItemSheet from "./useDashboardItemSheet";
 import useMobileDashboardScrollRestoration from "./useMobileDashboardScrollRestoration";
+import useSnapshotNavigation from "./useSnapshotNavigation";
 import { scrollToSection } from "./scrollToSection";
 import { getInboxSession, resetInboxSession, setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
 import type { CurrentDashboardHookResult } from "../../hooks/useCurrentDashboard";
@@ -336,7 +337,11 @@ export function DashboardShell({
     setShellTab("inbox");
     setHistoryOpen(false);
   }, [setHistoryOpen, setShellTab]);
-
+  const snapshotNavigation = useSnapshotNavigation({
+    enabled: tab === "inbox", activeSnapshotId: activeSnapshot?.snapshot?.snapshot?.id ?? null,
+    currentSnapshot: historicalSnapshotView?.snapshot || activeSnapshot?.snapshot?.snapshot || null,
+    onSelectSnapshot: handleSelectSnapshot,
+  });
   const {
     itemSheet,
     close: closeItemSheet,
@@ -505,6 +510,7 @@ export function DashboardShell({
               liveEmails={liveData.liveEmails}
               liveEmailsLoading={liveEmailsLoading}
               activeSnapshot={inboxActiveSnapshot}
+              snapshotNavigation={snapshotNavigation}
               liveReadOverrides={liveReadOverrides}
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
               snoozedEntries={liveData.snoozedEntries}

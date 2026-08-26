@@ -12,6 +12,7 @@ import type { InboxAccount, InboxEmailLike, InboxReadOverrides, InboxSelectionId
 import type { InboxActiveSnapshotLike, ResurfacedEntry } from "./inboxWorkItems";
 import type { SnoozedEntry } from "./useInboxController";
 import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
+import type { InboxSnapshotNavigation } from "./inboxViewTypes";
 
 export interface InboxActiveSnapshotController {
   snapshot: InboxActiveSnapshotLike | null;
@@ -29,6 +30,7 @@ export interface InboxViewProps {
   liveEmails?: InboxEmailLike[];
   liveEmailsLoading?: boolean;
   activeSnapshot?: InboxActiveSnapshotController | null;
+  snapshotNavigation?: InboxSnapshotNavigation | null;
   liveReadOverrides?: InboxReadOverrides;
   onLiveReadOverrideChange?: (uid: string, read: boolean) => void;
   snoozedEntries?: SnoozedEntry[];
@@ -62,6 +64,7 @@ export default function InboxView({
   liveEmails = [],
   liveEmailsLoading = false,
   activeSnapshot: controlledActiveSnapshot = null,
+  snapshotNavigation = null,
   liveReadOverrides = {},
   onLiveReadOverrideChange,
   snoozedEntries = [],
@@ -186,6 +189,7 @@ export default function InboxView({
     onOpenRecordedBill,
     onRefresh: handleRefresh,
     readOnly,
+    snapshotNavigation,
     onAttachEmailToAlfred,
     ...controller,
   };

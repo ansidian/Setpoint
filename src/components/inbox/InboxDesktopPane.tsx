@@ -54,6 +54,7 @@ function InboxDesktopPane({
   layout,
   grouping,
   activeSnapshotMode = false,
+  snapshotNavigation = null,
   snapshotCategories = [],
   categoryFilter = "__all",
   setCategoryFilter,
@@ -74,6 +75,14 @@ function InboxDesktopPane({
     setWorkspaceDirty(false);
     closeSelectedEmail();
   };
+  const guardedSnapshotNavigation = snapshotNavigation ? {
+    ...snapshotNavigation,
+    onNavigate: async (direction: "older" | "newer") => {
+      if (!allowWorkspaceExit()) return;
+      setWorkspaceDirty(false);
+      await snapshotNavigation.onNavigate(direction);
+    },
+  } : null;
   const selectedUid = selectedEmail?.uid || selectedEmail?.email_id || selectedEmail?.id;
   const attachSelectedEmail = !isDemoMode() && selectedEmail && selectedUid && onAttachEmailToAlfred
     ? () => onAttachEmailToAlfred({
@@ -112,6 +121,7 @@ function InboxDesktopPane({
         summary={briefingSummary}
         activeSnapshotMode={activeSnapshotMode}
         readOnly={readOnly}
+        snapshotNavigation={guardedSnapshotNavigation}
         accountCount={emailAccounts.length}
         onJumpLane={(key) => setLane(key)}
       />

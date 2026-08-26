@@ -24,6 +24,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
 - `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
 - `DigestStrip.tsx` — header strip: snapshot status, lane counts, processing activity
+- `SnapshotNavigationControls.tsx` — shared desktop/mobile adjacent-snapshot controls with boundary, loading, and error states
 - `Sidebar.tsx` — account and lane navigation
 - `sidebarCompactStore.ts` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
 - `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
@@ -32,7 +33,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `inboxCountsModel.ts` — scoped unread counts under account/category filters, plus lane/mobile-chip/unread count projections
 - `inboxNowTick.ts` — schedules the `nowTick` timeout to the soonest snooze or verification-code boundary
 - `inboxProcessingModel.ts` — triage activity counts from processing state
-- `snapshotSummary.ts` — lane breakdown text for the digest header
+- `snapshotSummary.ts` — lane breakdown and snapshot-window orientation text for Inbox headers
 - `activeSnapshotWorkflowModel.ts` — lane routing, mutable/dismissible rules, reopen logic
 - `inboxCommandModel.ts` — builds trash/lane-move commands per email scope
 - `inboxTypes.ts` — canonical Inbox account, identity, row/work-item, filter, overlay, and selection contracts
@@ -47,6 +48,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 ### Mobile
 - `mobile/MobileInboxView.tsx` — mobile layout: chip filter bar, compact rows, reader
+- `mobile/MobileSnapshotHeader.tsx` — mobile snapshot summary, historical orientation, and adjacent navigation
 - `mobile/MobileFilterSheet.tsx` — dismissible account/lane filter sheet
 
 ### Snooze, undo, hotkeys

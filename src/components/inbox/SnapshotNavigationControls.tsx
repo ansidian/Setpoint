@@ -1,0 +1,122 @@
+import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
+import type {
+  InboxSnapshotNavigation,
+  InboxSnapshotNavigationDirection,
+} from "./inboxViewTypes";
+
+interface SnapshotNavigationControlsProps {
+  navigation: InboxSnapshotNavigation;
+  historical: boolean;
+  mobile?: boolean;
+  onNavigate: (direction: InboxSnapshotNavigationDirection) => void;
+}
+
+function SnapshotNavigationButton({
+  direction,
+  label,
+  navigation,
+  mobile,
+  stretch,
+  onNavigate,
+}: {
+  direction: InboxSnapshotNavigationDirection;
+  label: string;
+  navigation: InboxSnapshotNavigation;
+  mobile: boolean;
+  stretch: boolean;
+  onNavigate: SnapshotNavigationControlsProps["onNavigate"];
+}) {
+  const available = direction === "older" ? navigation.canOlder : navigation.canNewer;
+  const disabled = !available || navigation.historyLoading || !!navigation.navigating;
+  const loading = navigation.navigating === direction
+    || (navigation.historyLoading && direction === "older");
+  const Icon = direction === "older" ? ChevronLeft : ChevronRight;
+
+  return (
+    <button
+      type="button"
+      aria-label={`Show ${direction} snapshot`}
+      disabled={disabled}
+      onClick={() => onNavigate(direction)}
+      className="transition-[transform,background-color,border-color,color] duration-150 enabled:hover:-translate-y-px enabled:hover:border-white/15 enabled:hover:bg-white/[0.055] enabled:hover:text-white enabled:focus-visible:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 disabled:cursor-not-allowed disabled:opacity-35 motion-reduce:transform-none motion-reduce:transition-none"
+      style={{
+        minHeight: mobile ? "var(--sp-touch-min)" : 30,
+        padding: mobile ? "0 12px" : "0 10px",
+        borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.08)",
+        background: "rgba(255,255,255,0.025)",
+        color: "rgba(205,214,244,0.76)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 5,
+        flex: stretch ? 1 : "0 1 auto",
+        fontFamily: "inherit",
+        fontSize: mobile ? 10.5 : 10,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {direction === "older" && (
+        loading
+          ? <LoaderCircle size={13} className="animate-spin motion-reduce:animate-none" />
+          : <Icon size={13} />
+      )}
+      <span>{label}</span>
+      {direction === "newer" && (
+        loading
+          ? <LoaderCircle size={13} className="animate-spin motion-reduce:animate-none" />
+          : <Icon size={13} />
+      )}
+    </button>
+  );
+}
+
+export default function SnapshotNavigationControls({
+  navigation,
+  historical,
+  mobile = false,
+  onNavigate,
+}: SnapshotNavigationControlsProps) {
+  return (
+    <div
+      aria-busy={navigation.historyLoading || !!navigation.navigating || undefined}
+      style={{ width: mobile ? "100%" : "auto" }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <SnapshotNavigationButton
+          direction="older"
+          label={historical ? "Older" : "Older snapshot"}
+          navigation={navigation}
+          mobile={mobile}
+          stretch={historical}
+          onNavigate={onNavigate}
+        />
+        {historical && (
+          <SnapshotNavigationButton
+            direction="newer"
+            label="Newer"
+            navigation={navigation}
+            mobile={mobile}
+            stretch
+            onNavigate={onNavigate}
+          />
+        )}
+      </div>
+      {navigation.error && (
+        <div
+          role="status"
+          style={{
+            marginTop: 5,
+            color: "var(--sp-rose)",
+            fontSize: 9.5,
+            lineHeight: 1.35,
+            textAlign: mobile ? "left" : "right",
+          }}
+        >
+          Couldn’t load snapshots. Try again or reopen Inbox.
+        </div>
+      )}
+    </div>
+  );
+}

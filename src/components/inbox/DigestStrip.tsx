@@ -1,7 +1,9 @@
 import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { LANE } from "../../lib/shell-helpers";
-import { buildActiveSnapshotSummary } from "./snapshotSummary";
+import { buildActiveSnapshotSummary, formatSnapshotContext } from "./snapshotSummary";
+import SnapshotNavigationControls from "./SnapshotNavigationControls";
+import type { InboxSnapshotNavigation } from "./inboxViewTypes";
 
 function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -15,6 +17,7 @@ export default function DigestStrip({
   summary,
   activeSnapshotMode = false,
   readOnly = false,
+  snapshotNavigation = null,
   accountCount = 0,
   onJumpLane,
 }: {
@@ -25,6 +28,7 @@ export default function DigestStrip({
   summary?: ReactNode;
   activeSnapshotMode?: boolean;
   readOnly?: boolean;
+  snapshotNavigation?: InboxSnapshotNavigation | null;
   accountCount?: number;
   onJumpLane: (lane: string) => void;
 }) {
@@ -45,7 +49,7 @@ export default function DigestStrip({
     : liveLoading ? "Inbox · syncing" : "Inbox · current";
   const statusDetail = activeSnapshotMode
     ? readOnly
-      ? "Historical email window"
+      ? formatSnapshotContext(snapshotNavigation?.snapshot || null) || "Historical email window"
       : activityActive
         ? processingCount > 0
           ? `${pluralize(processingCount, "message")} processing`
@@ -147,8 +151,10 @@ export default function DigestStrip({
         style={{
           minHeight: 48,
           display: "flex",
-          alignItems: "stretch",
+          flexDirection: "column",
+          alignItems: "flex-end",
           justifyContent: "flex-end",
+          gap: 7,
         }}
       >
         <div
@@ -197,6 +203,13 @@ export default function DigestStrip({
             </div>
           </div>
         </div>
+        {activeSnapshotMode && snapshotNavigation && (
+          <SnapshotNavigationControls
+            navigation={snapshotNavigation}
+            historical={readOnly}
+            onNavigate={(direction) => { void snapshotNavigation.onNavigate(direction); }}
+          />
+        )}
       </div>
     </div>
   );

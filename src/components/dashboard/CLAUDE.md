@@ -17,6 +17,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `useCalendarWorkspaceState.ts` — calendar workspace state slice: view/focus/overlay deep-link state, one-shot typed event-create request ownership/acknowledgement consumption, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
 - `useDashboardItemSheet.ts` — dashboard glance-sheet selection/toggle state, tab-leave cleanup, direct item routing, and kind-aware "Open in calendar" handoff
 - `useMobileDashboardScrollRestoration.ts` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
+- `useSnapshotNavigation.ts` — loads ordered snapshot history while Inbox is active and resolves adjacent frozen/current snapshot transitions
+- `snapshotNavigationModel.ts` — pure older/newer adjacency resolver over newest-first snapshot history
 - `useAlfredPanelState.ts` — Alfred panel mount/open/new-chat/handoff state and its stable actions
 - `useLiveReadOverrides.ts` — live read-override map + derived inbox unread-signal count; prunes overrides whose emails left the active snapshot
 - `scrollToSection.ts` — smooth-scroll to a dashboard `data-sect` target after a tab switch

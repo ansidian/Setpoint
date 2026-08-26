@@ -233,6 +233,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useDashboardShellHotkeys` | `src/components/dashboard/useDashboardShellHotkeys.ts` |
 | `useLiveReadOverrides` | `src/components/dashboard/useLiveReadOverrides.ts` |
 | `useMobileDashboardScrollRestoration` | `src/components/dashboard/useMobileDashboardScrollRestoration.ts` |
+| `useSnapshotNavigation` | `src/components/dashboard/useSnapshotNavigation.ts` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.ts` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.ts` |
 | `useTransactionImportStatus` | `src/components/inbox/reader/useTransactionImportStatus.ts` |
