@@ -27,7 +27,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `EmailAttachmentShelf.tsx` / `EmailAttachmentPreview.tsx` — compact file shelf plus safe PDF/raster preview overlay
 - `EmailCsvPreview.tsx` — bounded read-only CSV table preview with sticky headers and truncation limits
 - `EmailImagePreview.tsx` — raster-image preview viewport with zoom out, zoom in, and fit controls
-- `EmailPdfPreview.tsx` — lazy PDF.js canvas renderer and page navigation for browser-independent previews
+- `EmailPdfPreview.tsx` — lazy PDF.js canvas renderer with continuous inline page scrolling
 - `emailAttachmentDownload.ts` — checked browser object-URL download handoff with delayed byte cleanup
 - `emailAttachmentModel.ts` — attachment filtering, naming, size, and preview policy
 - `TriagePanel.tsx` — AI summary, bullets, urgency, and lane tag display

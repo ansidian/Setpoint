@@ -86,7 +86,9 @@ export default function EmailAttachmentPreview({
       if (event.key !== "Tab") return;
       const dialog = closeButtonRef.current?.closest<HTMLElement>("[role='dialog']");
       const controls = dialog
-        ? [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]")]
+        ? [...dialog.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), a[href], [tabindex]:not([tabindex='-1'])",
+        )]
         : [];
       if (controls.length < 2) return;
       const first = controls[0]!;
