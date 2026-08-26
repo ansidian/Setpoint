@@ -16,6 +16,7 @@ import {
   formatCalendarEditorError,
   saveCalendarEventAction,
 } from "./calendarEventEditorActions";
+import type { CalendarMutationPhase } from "./calendarMutationCoordinator";
 
 type EditorMode = "detail" | "editor";
 type StateSetter<T> = Dispatch<SetStateAction<T>>;
@@ -47,6 +48,7 @@ interface CalendarEventMutationSetters {
   setSaving: StateSetter<boolean>;
   setDeleting: StateSetter<boolean>;
   setConfirmDelete: StateSetter<boolean>;
+  setMutationPhase: StateSetter<CalendarMutationPhase | null>;
 }
 
 interface CalendarEventMutationEffects {
@@ -103,6 +105,7 @@ export default function useCalendarEventMutations({
     setSaving,
     setDeleting,
     setConfirmDelete,
+    setMutationPhase,
   } = setters;
   const {
     flushPendingTitle,
@@ -156,6 +159,7 @@ export default function useCalendarEventMutations({
           ? "recurring"
           : intentMode) as "single" | "batch" | "recurring",
         eventReminders: { items: eventReminders, removedIds: removedReminderIds },
+        onMutationPhase: setMutationPhase,
       });
 
       if (result.kind === "batch-create") {
@@ -193,13 +197,17 @@ export default function useCalendarEventMutations({
       setRemovedReminderIds([]);
       onSaved?.(result.savedEvent, { kind: result.kind });
     } catch (error) {
+      if (getCalendarEditorErrorDetails(error, "Failed to save event.").code === "calendar_outcome_unknown") {
+        await refreshRange?.(draft.startDate, draft.endDate);
+      }
       setError(formatCalendarEditorError(error, "Failed to save event."));
       setErrorCode(getCalendarEditorErrorDetails(error, "Failed to save event.").code);
     } finally {
       savingRef.current = false;
       setSaving(false);
+      setMutationPhase(null);
     }
-  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, flushPendingTitle, intentMode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, setBatchDrafts, setConfirmDelete, setEditingEvent, setError, setErrorCode, setEventReminders, setMode, setRemovedReminderIds, setSaveAttempted, setSaving, titleLocationQuery, upsertEvents, validationMessage]);
+  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, flushPendingTitle, intentMode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, setBatchDrafts, setConfirmDelete, setEditingEvent, setError, setErrorCode, setEventReminders, setMode, setMutationPhase, setRemovedReminderIds, setSaveAttempted, setSaving, titleLocationQuery, upsertEvents, validationMessage]);
 
   useEffect(() => {
     if (!pendingSaveRef.current) return;
@@ -240,6 +248,7 @@ export default function useCalendarEventMutations({
         editingEvent,
         isEditingRecurring,
         recurringEditScope,
+        onMutationPhase: setMutationPhase,
       });
       if (result.shouldRefresh && result.bounds) {
         await refreshRange?.(result.bounds.start, result.bounds.end);
@@ -250,13 +259,17 @@ export default function useCalendarEventMutations({
       closeEditor();
     } catch (error) {
       const details = getCalendarEditorErrorDetails(error, "Failed to delete event.");
+      if (details.code === "calendar_outcome_unknown") {
+        await refreshRange?.(draft.startDate, draft.endDate);
+      }
       setError(details.message);
       setErrorCode(details.code);
     } finally {
       deletingRef.current = false;
       setDeleting(false);
+      setMutationPhase(null);
     }
-  }, [closeEditor, editingEvent, isEditingRecurring, onDeleted, recurringEditScope, refreshRange, removeEvent, setDeleting, setError, setErrorCode]);
+  }, [closeEditor, draft.endDate, draft.startDate, editingEvent, isEditingRecurring, onDeleted, recurringEditScope, refreshRange, removeEvent, setDeleting, setError, setErrorCode, setMutationPhase]);
 
   return {
     save,

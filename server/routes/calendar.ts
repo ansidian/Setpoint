@@ -13,6 +13,7 @@ import {
   pacificDayBoundaries,
   getCalendarSourceGroups,
   createCalendarEvent,
+  getCalendarEventIfExists,
   updateCalendarEvent,
   deleteCalendarEvent,
   applyCalendarEventWriteEffects,
@@ -31,6 +32,7 @@ import {
 } from "../reminders/reminder-hydration.ts";
 import { readCalendarBillsRange } from "./calendar-bills-range.ts";
 import type { StoredCalendarAccount } from "../calendar/calendar-google-client.ts";
+import { getElapsedMs, logTiming } from "../timing.ts";
 
 type RouteError = Error & { status?: number; code?: string };
 
@@ -44,6 +46,38 @@ function routeError(error: unknown): RouteError {
 
 const router = Router();
 router.use(requireCookieSession);
+
+async function timeCalendarMutationPhase<T>(
+  operation: "create" | "batch-create" | "update" | "delete",
+  phase: "provider" | "effects",
+  clientMutationId: unknown,
+  fn: () => Promise<T>,
+) {
+  const startedAt = performance.now();
+  try {
+    const result = await fn();
+    logTiming({
+      event: "calendar_mutation",
+      operation,
+      phase,
+      clientMutationId,
+      ms: getElapsedMs(startedAt),
+      status: "ok",
+    });
+    return result;
+  } catch (error) {
+    logTiming({
+      event: "calendar_mutation",
+      operation,
+      phase,
+      clientMutationId,
+      ms: getElapsedMs(startedAt),
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
 
 function handleCalendarRouteError(res: Response, err: unknown, fallbackMessage: string) {
   const error = routeError(err);
@@ -301,10 +335,12 @@ router.post("/events", async (req, res) => {
     description,
     colorId,
     recurrence,
+    clientEventId,
+    clientMutationId,
   } = req.body || {};
   try {
     const account = await loadCalendarAccount(accountId);
-    const event = await createCalendarEvent(account, {
+    const event = await timeCalendarMutationPhase("create", "provider", clientMutationId, () => createCalendarEvent(account, {
       accountId,
       calendarId,
       title,
@@ -317,12 +353,14 @@ router.post("/events", async (req, res) => {
       description,
       colorId,
       recurrence,
-    });
-    await applyCalendarEventWriteEffects({
+      clientEventId,
+      clientMutationId,
+    }));
+    await timeCalendarMutationPhase("create", "effects", clientMutationId, () => applyCalendarEventWriteEffects({
       type: "created",
       userId: calendarUserId(),
       event,
-    });
+    }));
     res.status(201).json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to create calendar event");
@@ -343,27 +381,37 @@ router.post("/events/batch", async (req, res) => {
     const failed = [];
     const { accounts } = await loadUserConfig(calendarUserId());
 
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index] || {};
-      try {
-        const account = resolveCalendarAccount(accounts, item.accountId);
-        const event = await createCalendarEvent(account, item);
-        await applyCalendarEventWriteEffects({
-          type: "created",
-          userId: calendarUserId(),
-          event,
-        });
-        created.push({ index, event });
-      } catch (err) {
-        const error = routeError(err);
-        failed.push({
-          index,
-          input: item,
-          code: error?.code || "calendar_batch_item_failed",
-          message: error?.message || "Failed to create event.",
-        });
+    let nextIndex = 0;
+    const workerCount = Math.min(4, items.length);
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const item = items[index] || {};
+        try {
+          const account = resolveCalendarAccount(accounts, item.accountId);
+          const event = await timeCalendarMutationPhase("batch-create", "provider", item.clientMutationId, () => (
+            createCalendarEvent(account, item)
+          ));
+          await timeCalendarMutationPhase("batch-create", "effects", item.clientMutationId, () => applyCalendarEventWriteEffects({
+            type: "created",
+            userId: calendarUserId(),
+            event,
+          }));
+          created.push({ index, event });
+        } catch (err) {
+          const error = routeError(err);
+          failed.push({
+            index,
+            input: item,
+            code: error?.code || "calendar_batch_item_failed",
+            message: error?.message || "Failed to create event.",
+          });
+        }
       }
-    }
+    }));
+    created.sort((left, right) => left.index - right.index);
+    failed.sort((left, right) => left.index - right.index);
 
     res.status(created.length ? 201 : 207).json({
       created,
@@ -371,6 +419,19 @@ router.post("/events/batch", async (req, res) => {
     });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to create calendar events");
+  }
+});
+
+router.get("/events/:eventId", async (req, res) => {
+  const { eventId } = req.params;
+  const accountId = String(req.query.accountId || "");
+  const calendarId = String(req.query.calendarId || "");
+  try {
+    const account = await loadCalendarAccount(accountId);
+    const event = await getCalendarEventIfExists(account, calendarId, eventId);
+    res.json({ event });
+  } catch (err) {
+    handleCalendarRouteError(res, err, "Failed to verify calendar event");
   }
 });
 
@@ -395,6 +456,7 @@ router.patch("/events/:eventId", async (req, res) => {
     scope,
     recurringEventId,
     originalStartTime,
+    clientMutationId,
   } = req.body || {};
   try {
     if (sourceAccountId && sourceAccountId !== accountId) {
@@ -404,7 +466,7 @@ router.patch("/events/:eventId", async (req, res) => {
       });
     }
     const account = await loadCalendarAccount(accountId);
-    const event = await updateCalendarEvent(account, eventId, {
+    const event = await timeCalendarMutationPhase("update", "provider", clientMutationId, () => updateCalendarEvent(account, eventId, {
       calendarId,
       sourceCalendarId,
       etag,
@@ -421,8 +483,9 @@ router.patch("/events/:eventId", async (req, res) => {
       scope,
       recurringEventId,
       originalStartTime,
-    });
-    await applyCalendarEventWriteEffects({
+      clientMutationId,
+    }));
+    await timeCalendarMutationPhase("update", "effects", clientMutationId, () => applyCalendarEventWriteEffects({
       type: "updated",
       userId: calendarUserId(),
       eventId,
@@ -433,7 +496,7 @@ router.patch("/events/:eventId", async (req, res) => {
       scope,
       recurringEventId,
       originalStartTime,
-    });
+    }));
     res.json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to update calendar event");
@@ -442,17 +505,18 @@ router.patch("/events/:eventId", async (req, res) => {
 
 router.delete("/events/:eventId", async (req, res) => {
   const { eventId } = req.params;
-  const { accountId, calendarId, etag, scope, recurringEventId, originalStartTime } = req.body || {};
+  const { accountId, calendarId, etag, scope, recurringEventId, originalStartTime, clientMutationId } = req.body || {};
   try {
     const account = await loadCalendarAccount(accountId);
-    await deleteCalendarEvent(account, eventId, {
+    await timeCalendarMutationPhase("delete", "provider", clientMutationId, () => deleteCalendarEvent(account, eventId, {
       calendarId,
       etag,
       scope,
       recurringEventId,
       originalStartTime,
-    });
-    await applyCalendarEventWriteEffects({
+      clientMutationId,
+    }));
+    await timeCalendarMutationPhase("delete", "effects", clientMutationId, () => applyCalendarEventWriteEffects({
       type: "deleted",
       userId: calendarUserId(),
       accountId,
@@ -461,7 +525,7 @@ router.delete("/events/:eventId", async (req, res) => {
       scope,
       recurringEventId,
       originalStartTime,
-    });
+    }));
     res.json({ ok: true });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to delete calendar event");

@@ -7,6 +7,7 @@ vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
   createCalendarEventsBatch: vi.fn(),
   deleteCalendarEvent: vi.fn(),
+  getCalendarEvent: vi.fn(),
   updateCalendarEvent: vi.fn(),
 }));
 
@@ -117,7 +118,7 @@ describe("useCalendarQuickActions clone races", () => {
     // test-architecture: allow-boundary-interaction -- Multi-item paste must issue exactly one outbound batch create; cache state cannot reveal duplicate provider writes or endpoint selection.
     expect(createCalendarEventsBatch).toHaveBeenCalledTimes(1);
     const optimisticEvents = observed.state.upserts
-      .filter((event) => String(event.id).startsWith("optimistic-calendar-copy-"));
+      .filter((event) => event._optimisticCalendarClone === true);
     expect(optimisticEvents).toHaveLength(2);
     expect(observed.state.removals).toEqual(expect.arrayContaining([optimisticEvents[0]!.id, optimisticEvents[1]!.id]));
     expect(observed.state.upserts.map((event) => event.id)).toContain("google-created-first");
@@ -154,7 +155,10 @@ describe("useCalendarQuickActions clone races", () => {
     });
 
     const optimisticEvent = observed.state.upserts[0]!;
-    expect(optimisticEvent.id).toMatch(/^optimistic-calendar-copy-event-copy-race-/);
+    expect(optimisticEvent).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f]{28,32}$/),
+      _optimisticCalendarClone: true,
+    });
 
     await act(async () => {
       result.current.openContextMenu({ event: optimisticEvent, x: 80, y: 80 });

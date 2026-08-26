@@ -172,6 +172,7 @@ export default function useCalendarModalController({
 
   const eventsEnsureRange = eventsData?.ensureRange || null;
   const eventsRefreshRange = eventsData?.refreshRange || null;
+  const eventsMutationRefreshRange = eventsData?.refreshRangeInPlace || eventsRefreshRange;
   const eventsUpsertEvents = eventsData?.upsertEvents || null;
   const eventsRemoveEvent = eventsData?.removeEvent || null;
   const eventsMarkStale = eventsData?.markStale || null;
@@ -202,7 +203,7 @@ export default function useCalendarModalController({
     event: {
       open, view, editable: eventsEditable, selectedDay: activeSelectedDay,
       selectedDate: view === "events" ? activeSelectedDateKey : null, viewYear, viewMonth,
-      refreshRange: eventsRefreshRange as never, upsertEvents: eventsUpsertEvents as never,
+      refreshRange: eventsMutationRefreshRange as never, upsertEvents: eventsUpsertEvents as never,
       removeEvent: eventsRemoveEvent as never, onFocusDate: focusDateKey,
     },
     floatingDetailRef,
@@ -309,7 +310,8 @@ export default function useCalendarModalController({
   } = useCalendarControllerActions({
     eventSelection: {
       view, activeView, activeLayout, visibleCalendarEvents, activeSelectedItemId,
-      activeSelectedDateKey, selectedItemId, eventsEditable, eventsRefreshRange,
+      activeSelectedDateKey, selectedItemId, eventsEditable,
+      eventsRefreshRange: eventsMutationRefreshRange,
       eventsUpsertEvents, eventsRemoveEvent, eventsMarkStale, floatingDetailRef,
       setFloatingDetail, setSelectedItemId, setSelectedDay, setSelectedDateKey,
       closeEventEditor, shakeFloatingEditor, agendaRailRef,

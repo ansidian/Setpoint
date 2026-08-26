@@ -20,6 +20,7 @@ export default function CalendarEventEditorActionBar({
     batchDrafts,
     saving,
     deleting,
+    mutationPhase,
     confirmDelete,
     isEditing,
     isEditingRecurring,
@@ -52,7 +53,7 @@ export default function CalendarEventEditorActionBar({
             onClick={remove}
             disabled={disabled}
           >
-            {deleting ? "Deleting..." : "Confirm delete"}
+            {deleting ? (mutationPhase === "verifying" ? "Checking Google..." : "Deleting...") : "Confirm delete"}
           </ActionButton>
           <ActionButton subtle onClick={cancelDelete} disabled={disabled}>
             Keep event
@@ -66,7 +67,7 @@ export default function CalendarEventEditorActionBar({
               onClick={save}
               disabled={saveDisabled}
             >
-              {saving ? "Saving..." : isEditing ? "Save changes" : isBatchMode ? (batchDrafts.some((d) => d.error) ? `Retry ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}` : `Create ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}`) : isRecurringMode ? "Create recurring event" : "Create event"}
+              {saving ? (mutationPhase === "verifying" ? "Checking Google..." : "Saving...") : isEditing ? "Save changes" : isBatchMode ? (batchDrafts.some((d) => d.error) ? `Retry ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}` : `Create ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}`) : isRecurringMode ? "Create recurring event" : "Create event"}
             </ActionButton>
             <ActionButton subtle onClick={closeEditor} disabled={disabled}>
               Cancel

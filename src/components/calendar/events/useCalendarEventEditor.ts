@@ -22,17 +22,14 @@ import {
   normalizeRecurrenceDraft,
   ymdFromView,
 } from "./calendarEventEditorModel";
-import type {
-  CalendarRecurrenceScope,
-  CalendarView,
-  NormalizedCalendarEvent,
-} from "../../../../shared/types/calendar";
+import type { CalendarRecurrenceScope, CalendarView, NormalizedCalendarEvent } from "../../../../shared/types/calendar";
 import {
   applyCalendarTitleAssistToDraft,
   projectCalendarEventEditorValidation,
   removeCalendarEventBatchDraft,
   updateCalendarEventBatchDraft,
 } from "./calendarEventEditorSessionModel";
+import type { CalendarMutationPhase } from "./calendarMutationCoordinator";
 
 type CalendarEditorMode = "detail" | "editor";
 type TouchedCalendarFields = Partial<Record<keyof CalendarEventDraft, boolean>>;
@@ -98,6 +95,7 @@ export default function useCalendarEventEditor({
   const [editingEvent, setEditingEvent] = useState<NormalizedCalendarEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [mutationPhase, setMutationPhase] = useState<CalendarMutationPhase | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -516,6 +514,7 @@ export default function useCalendarEventEditor({
       setSaving,
       setDeleting,
       setConfirmDelete,
+      setMutationPhase,
     },
     effects: {
       flushPendingTitle,
@@ -558,6 +557,7 @@ export default function useCalendarEventEditor({
     canSave,
     saving,
     deleting,
+    mutationPhase,
     confirmDelete,
     eventReminders,
     eventReminderPresetStates,

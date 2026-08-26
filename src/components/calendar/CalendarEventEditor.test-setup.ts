@@ -6,6 +6,7 @@ export const mockCreateCalendarEvent = vi.fn();
 export const mockCreateCalendarEventsBatch = vi.fn();
 export const mockUpdateCalendarEvent = vi.fn();
 export const mockDeleteCalendarEvent = vi.fn();
+export const mockGetCalendarEvent = vi.fn();
 export const mockGetGmailAuthUrl = vi.fn();
 export const mockGetCalendarPlaceSuggestions = vi.fn();
 export const mockGetCalendarPlaceDetails = vi.fn();
@@ -21,6 +22,7 @@ vi.mock("@/api", () => ({
   createCalendarEventsBatch: (...args: unknown[]) => mockCreateCalendarEventsBatch(...args),
   updateCalendarEvent: (...args: unknown[]) => mockUpdateCalendarEvent(...args),
   deleteCalendarEvent: (...args: unknown[]) => mockDeleteCalendarEvent(...args),
+  getCalendarEvent: (...args: unknown[]) => mockGetCalendarEvent(...args),
   getGmailAuthUrl: (...args: unknown[]) => mockGetGmailAuthUrl(...args),
   getCalendarPlaceSuggestions: (...args: unknown[]) => mockGetCalendarPlaceSuggestions(...args),
   getCalendarPlaceDetails: (...args: unknown[]) => mockGetCalendarPlaceDetails(...args),
@@ -70,4 +72,5 @@ beforeEach(() => {
   mockListReminders.mockResolvedValue({ reminders: [] });
   mockCreateReminder.mockResolvedValue({ reminder: { id: "reminder-1" } });
   mockDeleteReminder.mockResolvedValue({ success: true });
+  mockGetCalendarEvent.mockResolvedValue({ event: null });
 });

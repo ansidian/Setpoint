@@ -1,11 +1,9 @@
 import {
-  createCalendarEvent,
-  createCalendarEventsBatch,
-  deleteCalendarEvent,
-  updateCalendarEvent,
   createReminder,
   deleteReminder,
 } from "@/api";
+import { calendarMutationCoordinator } from "./calendarMutationCoordinator";
+import type { CalendarMutationOptions, CalendarMutationPhase } from "./calendarMutationCoordinator";
 import {
   type CalendarBatchMutationResponse,
   type CalendarEventMutationInput,
@@ -46,10 +44,10 @@ export interface CalendarEditorActionEvent extends CalendarEditorEvent {
 }
 
 export interface CalendarEditorActionClient {
-  create?: (payload: CalendarEventMutationInput) => Promise<CalendarEventMutationResponse>;
-  createBatch?: (items: CalendarEventMutationInput[]) => Promise<CalendarBatchMutationResponse>;
-  update?: (eventId: string, payload: CalendarEventMutationInput) => Promise<CalendarEventMutationResponse>;
-  remove?: (eventId: string, payload: CalendarEventMutationInput) => Promise<unknown>;
+  create?: (payload: CalendarEventMutationInput, options?: CalendarMutationOptions) => Promise<CalendarEventMutationResponse>;
+  createBatch?: (items: CalendarEventMutationInput[], options?: CalendarMutationOptions) => Promise<CalendarBatchMutationResponse>;
+  update?: (eventId: string, payload: CalendarEventMutationInput, options?: CalendarMutationOptions) => Promise<CalendarEventMutationResponse>;
+  remove?: (eventId: string, payload: CalendarEventMutationInput, options?: CalendarMutationOptions) => Promise<unknown>;
   createReminder?: (payload: Parameters<typeof createReminder>[0]) => Promise<unknown>;
   deleteReminder?: (id: string | number) => Promise<unknown>;
 }
@@ -72,6 +70,7 @@ export interface SaveCalendarEventActionOptions {
   intentMode?: "single" | "batch" | "recurring";
   batchDrafts?: CalendarBatchDraft[];
   eventReminders?: CalendarEventRemindersDraft;
+  onMutationPhase?: (phase: CalendarMutationPhase) => void;
 }
 
 const projectReminderState = projectUpcomingReminderState as (
@@ -80,10 +79,10 @@ const projectReminderState = projectUpcomingReminderState as (
 ) => UpcomingReminderState;
 
 const defaultClient: CalendarEditorActionClient = {
-  create: createCalendarEvent,
-  createBatch: createCalendarEventsBatch,
-  update: updateCalendarEvent,
-  remove: deleteCalendarEvent,
+  create: calendarMutationCoordinator.create,
+  createBatch: calendarMutationCoordinator.createBatch,
+  update: calendarMutationCoordinator.update,
+  remove: calendarMutationCoordinator.remove,
   createReminder,
   deleteReminder,
 };
@@ -252,16 +251,21 @@ async function saveBatchEvents({
   draft,
   batchDrafts,
   effectiveTitle,
+  onMutationPhase,
 }: {
   draft: CalendarEventDraft;
   batchDrafts: CalendarBatchDraft[];
   effectiveTitle: string;
+  onMutationPhase?: (phase: CalendarMutationPhase) => void;
 }, client: CalendarEditorActionClient) {
-  const result = await client.createBatch!(buildBatchCreateItems({
+  const items = buildBatchCreateItems({
     draft,
     batchDrafts,
     effectiveTitle,
-  }));
+  });
+  const result = onMutationPhase
+    ? await client.createBatch!(items, { onPhase: onMutationPhase })
+    : await client.createBatch!(items);
   const createdEvents = (result?.created || [])
     .map((entry) => entry?.event)
     .filter(Boolean);
@@ -322,10 +326,11 @@ export async function saveCalendarEventAction(
     intentMode = "single",
     batchDrafts = [],
     eventReminders = { items: [], removedIds: [] },
+    onMutationPhase,
   } = options;
 
   if (!editingEvent && intentMode === "batch") {
-    return saveBatchEvents({ draft, batchDrafts, effectiveTitle }, client);
+    return saveBatchEvents({ draft, batchDrafts, effectiveTitle, onMutationPhase }, client);
   }
 
   const basePayload = buildCalendarEventPayload({ draft, effectiveTitle });
@@ -339,13 +344,16 @@ export async function saveCalendarEventAction(
 
   let savedEvent: NormalizedCalendarEvent;
   if (!editingEvent && intentMode === "recurring") {
-    const result = await client.create!({
+    const payload = {
       ...basePayload,
       recurrence: buildRecurrencePayload(recurrenceDraft, draft),
-    });
+    };
+    const result = onMutationPhase
+      ? await client.create!(payload, { onPhase: onMutationPhase })
+      : await client.create!(payload);
     savedEvent = result.event;
   } else if (editingEvent) {
-    const result = await client.update!(editingEvent.id, buildUpdateEventPayload({
+    const payload = buildUpdateEventPayload({
       draft,
       effectiveTitle,
       editingEvent,
@@ -353,10 +361,15 @@ export async function saveCalendarEventAction(
       recurringEditScope,
       recurrenceDraft,
       shouldSendRecurrence,
-    }));
+    });
+    const result = onMutationPhase
+      ? await client.update!(editingEvent.id, payload, { onPhase: onMutationPhase })
+      : await client.update!(editingEvent.id, payload);
     savedEvent = result.event;
   } else {
-    const result = await client.create!(basePayload);
+    const result = onMutationPhase
+      ? await client.create!(basePayload, { onPhase: onMutationPhase })
+      : await client.create!(basePayload);
     savedEvent = result.event;
   }
 
@@ -422,6 +435,7 @@ export async function deleteCalendarEventAction(
     editingEvent: CalendarEditorActionEvent;
     isEditingRecurring?: boolean;
     recurringEditScope?: CalendarEditorRecurrenceScope | null;
+    onMutationPhase?: (phase: CalendarMutationPhase) => void;
   },
   client: CalendarEditorActionClient = defaultClient,
 ) {
@@ -429,13 +443,19 @@ export async function deleteCalendarEventAction(
     editingEvent,
     isEditingRecurring = false,
     recurringEditScope = null,
+    onMutationPhase,
   } = options;
 
-  await client.remove!(editingEvent.id, buildDeleteEventPayload({
+  const payload = buildDeleteEventPayload({
     editingEvent,
     isEditingRecurring,
     recurringEditScope,
-  }));
+  });
+  if (onMutationPhase) {
+    await client.remove!(editingEvent.id, payload, { onPhase: onMutationPhase });
+  } else {
+    await client.remove!(editingEvent.id, payload);
+  }
 
   const bounds = eventBounds(editingEvent);
   return {

@@ -41,6 +41,7 @@ export {
 } from "./calendar-event-normalize.ts";
 export {
   createCalendarEvent,
+  getCalendarEventIfExists,
   updateCalendarEvent,
   deleteCalendarEvent,
 } from "./calendar-mutations.ts";

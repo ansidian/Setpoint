@@ -14,6 +14,7 @@ import {
 import { epochFromLa } from "../../inbox/helpers";
 import type { CalendarEventMutationInput, CalendarRecurrenceScope } from "../../../../shared/types/calendar";
 import type { CalendarEventPasteItem } from "./calendarEventSelectionModel";
+import { createCalendarProviderEventId } from "./calendarMutationIds";
 
 export interface CalendarQuickActionEvent {
   id: string | number;
@@ -40,7 +41,6 @@ export interface CalendarQuickActionEvent {
 export interface CalendarQuickActionBounds { start: string; end: string }
 
 const DAY_MS = 86400000;
-let optimisticCloneCounter = 0;
 
 export function eventSelectionId(event: CalendarQuickActionEvent | null | undefined) {
   if (!event) return null;
@@ -76,11 +76,6 @@ export function shiftEventByDays<T extends CalendarQuickActionEvent>(event: T, d
     startMs: Number.isFinite(event.startMs) ? event.startMs + deltaDays * DAY_MS : event.startMs,
     endMs: Number.isFinite(event.endMs) ? event.endMs + deltaDays * DAY_MS : event.endMs,
   } as T;
-}
-
-function optimisticCloneId(event: Pick<CalendarQuickActionEvent, "id"> | null | undefined) {
-  optimisticCloneCounter += 1;
-  return `optimistic-calendar-copy-${event?.id || "event"}-${Date.now()}-${optimisticCloneCounter}`;
 }
 
 export function isOptimisticCloneEvent(event: CalendarQuickActionEvent | null | undefined) {
@@ -123,6 +118,7 @@ export function buildReschedulePayload(
 export function buildCloneEventPayload(
   event: CalendarQuickActionEvent,
   targetDate: string | null = null,
+  clientEventId?: string,
 ): CalendarEventMutationInput {
   const sourceDate = pacificYMD(event.startMs);
   const startDate = targetDate || sourceDate;
@@ -131,6 +127,7 @@ export function buildCloneEventPayload(
     : pacificYMD(event.endMs || event.startMs);
   const endDate = addDaysYmd(startDate, daysBetweenYmd(sourceDate, sourceEndDate));
   return {
+    clientEventId,
     accountId: event.accountId,
     calendarId: event.calendarId,
     title: event.title || "",
@@ -145,14 +142,18 @@ export function buildCloneEventPayload(
   };
 }
 
-export function buildOptimisticCloneEvent(event: CalendarQuickActionEvent, targetDate: string | null = null) {
+export function buildOptimisticCloneEvent(
+  event: CalendarQuickActionEvent,
+  targetDate: string | null = null,
+  clientEventId = createCalendarProviderEventId(),
+) {
   const sourceDate = pacificYMD(event.startMs);
   const deltaDays = targetDate ? daysBetweenYmd(sourceDate, targetDate) : 0;
   const shiftedEvent = shiftEventByDays(event, deltaDays);
   const colorId = event.colorId || event.sourceColorId || null;
   return {
     ...shiftedEvent,
-    id: optimisticCloneId(event),
+    id: clientEventId,
     etag: null,
     htmlLink: null,
     openUrl: null,
@@ -188,10 +189,14 @@ function payloadDateTimeMs(
   return epochFromLa(parsedDate.year, parsedDate.month, parsedDate.day, hour, minute);
 }
 
-export function buildOptimisticClipboardPasteEvent(item: CalendarEventPasteItem, index = 0) {
+export function buildOptimisticClipboardPasteEvent(
+  item: CalendarEventPasteItem,
+  _index = 0,
+  clientEventId = createCalendarProviderEventId(),
+) {
   const colorId = item.colorId || null;
   return {
-    id: optimisticCloneId({ id: `clipboard-${index}` }),
+    id: clientEventId,
     title: item.title || "",
     accountId: item.accountId,
     calendarId: item.calendarId,

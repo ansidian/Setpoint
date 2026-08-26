@@ -92,6 +92,7 @@ import type {
   CalendarDeleteResponse,
   CalendarEventMutationInput,
   CalendarEventMutationResponse,
+  CalendarEventVerificationResponse,
   CalendarPlaceDetailsResponse,
   CalendarPlaceSuggestionsResponse,
   CalendarRangeResponse,
@@ -424,6 +425,7 @@ export const getCalendarPlaceDetails = (placeId: string, sessionToken?: string):
 // recurring "following" flows — so a slow-but-succeeding server write is not
 // aborted into an inverse ghost. Reads/SSE intentionally opt out.
 const CALENDAR_MUTATION_TIMEOUT_MS = 60_000;
+const CALENDAR_VERIFICATION_TIMEOUT_MS = 10_000;
 export const createCalendarEvent = (data: CalendarEventMutationInput): Promise<CalendarEventMutationResponse> =>
   apiFetch("/api/calendar/events", { method: "POST", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 export const createCalendarEventsBatch = (items: CalendarEventMutationInput[]): Promise<CalendarBatchMutationResponse> =>
@@ -432,6 +434,15 @@ export const updateCalendarEvent = (eventId: ApiId, data: CalendarEventMutationI
   apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
 export const deleteCalendarEvent = (eventId: ApiId, data: CalendarEventMutationInput): Promise<CalendarDeleteResponse> =>
   apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "DELETE", body: JSON.stringify(data), timeoutMs: CALENDAR_MUTATION_TIMEOUT_MS });
+export const getCalendarEvent = (
+  eventId: ApiId,
+  { accountId, calendarId }: Pick<CalendarEventMutationInput, "accountId" | "calendarId">,
+): Promise<CalendarEventVerificationResponse> => {
+  const params = new URLSearchParams({ accountId: accountId || "", calendarId: calendarId || "" });
+  return apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}?${params.toString()}`, {
+    timeoutMs: CALENDAR_VERIFICATION_TIMEOUT_MS,
+  });
+};
 
 // Todoist
 export const getTodoistProjects = (): Promise<TodoistProject[]> => apiFetch("/api/briefing/todoist/projects");

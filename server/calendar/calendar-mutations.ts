@@ -7,7 +7,6 @@ import {
   getRawEvent,
   googleCalendarFetch,
   ifMatchHeaders,
-  invalidateCalendarListCache,
   isGoogleEventAlreadyExistsError,
   isGoogleEventNotFoundError,
   listCalendarsForAccount,
@@ -36,6 +35,7 @@ import type {
 import type { StoredCalendarAccount } from "./calendar-google-client.ts";
 
 interface GoogleCalendarMutationPayload {
+  id?: string;
   summary: string;
   location: string;
   description: string;
@@ -139,6 +139,15 @@ function toCalendarMutationPayload(input: CalendarEventMutationInput): GoogleCal
   return payload;
 }
 
+function validatedClientEventId(value: unknown) {
+  if (value == null || value === "") return null;
+  const eventId = String(value).trim();
+  if (!/^[0-9a-v]{5,1024}$/.test(eventId)) {
+    throwCalendarError(400, "calendar_validation_error", "Client event id is invalid.");
+  }
+  return eventId;
+}
+
 async function getMutableEventContext(
   account: StoredCalendarAccount,
   calendarId: string,
@@ -233,11 +242,21 @@ async function createCalendarEventImpl(
 ): Promise<NormalizedCalendarEvent> {
   const { auth, calendar } = await getWritableCalendarContext(account, input.calendarId);
   const payload = toCalendarMutationPayload(input);
-  const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
-    method: "POST",
-    body: payload,
-  });
-  const event = await res.json() as GoogleEventResource;
+  const clientEventId = validatedClientEventId(input.clientEventId);
+  if (clientEventId) payload.id = clientEventId;
+  let event: GoogleEventResource;
+  try {
+    const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
+      method: "POST",
+      body: payload,
+    });
+    event = await res.json() as GoogleEventResource;
+  } catch (err) {
+    if (!clientEventId || !isGoogleEventAlreadyExistsError(err)) throw err;
+    const existing = await getMutableEventContextIfExists(account, calendar.id, clientEventId);
+    if (!existing) throw err;
+    event = existing.event;
+  }
   return normalizeGoogleEvent({ account, calendar, event });
 }
 
@@ -489,18 +508,11 @@ async function deleteCalendarEventImpl(
   });
 }
 
-// Public mutation entry points invalidate the cached calendar list for the
-// account on completion, so the next /range or /calendars read re-fetches a
-// fresh list rather than serving a pre-write snapshot for up to the cache TTL.
 export async function createCalendarEvent(
   account: StoredCalendarAccount,
   input: CalendarMutationDraft,
 ): Promise<NormalizedCalendarEvent> {
-  try {
-    return await createCalendarEventImpl(account, input);
-  } finally {
-    invalidateCalendarListCache(account?.id);
-  }
+  return createCalendarEventImpl(account, input);
 }
 
 export async function updateCalendarEvent(
@@ -508,11 +520,7 @@ export async function updateCalendarEvent(
   eventId: string,
   input: CalendarMutationDraft,
 ): Promise<NormalizedCalendarEvent> {
-  try {
-    return await updateCalendarEventImpl(account, eventId, input);
-  } finally {
-    invalidateCalendarListCache(account?.id);
-  }
+  return updateCalendarEventImpl(account, eventId, input);
 }
 
 export async function deleteCalendarEvent(
@@ -520,9 +528,24 @@ export async function deleteCalendarEvent(
   eventId: string,
   input: CalendarMutationDraft,
 ): Promise<void> {
+  return deleteCalendarEventImpl(account, eventId, input);
+}
+
+export async function getCalendarEventIfExists(
+  account: StoredCalendarAccount,
+  calendarId: string,
+  eventId: string,
+): Promise<NormalizedCalendarEvent | null> {
+  const { auth, calendar } = await getWritableCalendarContext(account, calendarId);
   try {
-    return await deleteCalendarEventImpl(account, eventId, input);
-  } finally {
-    invalidateCalendarListCache(account?.id);
+    const response = await googleCalendarFetch(
+      auth,
+      `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    );
+    const event = await response.json() as GoogleEventResource;
+    return normalizeGoogleEvent({ account, calendar, event });
+  } catch (err) {
+    if (isGoogleEventNotFoundError(err)) return null;
+    throw err;
   }
 }

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent, updateCalendarEvent } from "@/api";
 import { googleEventColorForId } from "../../../../shared/calendar-event-colors";
 import type { CalendarRecurrenceScope, NormalizedCalendarEvent } from "../../../../shared/types/calendar";
 import { daysBetweenYmd, pacificYMD } from "../calendarDateUtils.ts";
@@ -18,6 +17,10 @@ import {
   mergeBounds,
   shiftEventByDays,
 } from "./calendarQuickActionModel";
+import {
+  calendarMutationCoordinator,
+  createCalendarProviderEventId,
+} from "./calendarMutationCoordinator";
 import type {
   CalendarQuickActionBounds,
   CalendarQuickActionEvent,
@@ -56,6 +59,12 @@ function quickActionErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function quickActionErrorCode(error: unknown) {
+  return error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+}
+
 export default function useCalendarEventQuickActionMutations({
   editable,
   handlers,
@@ -65,6 +74,7 @@ export default function useCalendarEventQuickActionMutations({
 }) {
   const [status, setStatus] = useState<QuickActionStatus | null>(null);
   const optimisticCloneRequestsRef = useRef(new Map<string, OptimisticCloneRequest>());
+  const mutationVersionsRef = useRef(new Map<string, number>());
   const externalHandlersRef = useRef<QuickActionExternalHandlers>({});
 
   useEffect(() => {
@@ -72,6 +82,31 @@ export default function useCalendarEventQuickActionMutations({
   });
 
   const clearStatus = useCallback(() => setStatus(null), []);
+  const clearSuccessStatusLater = useCallback((message: string) => {
+    window.setTimeout(() => {
+      setStatus((current) => (
+        current?.tone === "success" && current.message === message ? null : current
+      ));
+    }, 1800);
+  }, []);
+  const mutationOptions = useCallback((pendingMessage: string) => ({
+    onPhase: (phase: "mutating" | "verifying") => {
+      if (phase === "verifying") {
+        setStatus({ tone: "pending", message: `Checking Google after ${pendingMessage.toLowerCase()}...` });
+      } else {
+        setStatus({ tone: "pending", message: `${pendingMessage}...` });
+      }
+    },
+  }), []);
+  const beginEventMutation = useCallback((eventId: string | number) => {
+    const key = String(eventId);
+    const version = (mutationVersionsRef.current.get(key) || 0) + 1;
+    mutationVersionsRef.current.set(key, version);
+    return { key, version };
+  }, []);
+  const isLatestEventMutation = useCallback(({ key, version }: { key: string; version: number }) => (
+    mutationVersionsRef.current.get(key) === version
+  ), []);
 
   // Self-heal after a settled mutation FAILURE: once we have reverted the
   // optimistic state, mark the touched months stale so the next range pass
@@ -95,6 +130,7 @@ export default function useCalendarEventQuickActionMutations({
     if (!deltaDays) return;
 
     const shiftedEvent = shiftEventByDays(event, deltaDays);
+    const mutation = beginEventMutation(event.id);
     const originalBounds = eventBounds(event);
     const shiftedBounds = eventBounds(shiftedEvent);
     const changedBounds = mergeBounds(originalBounds, shiftedBounds);
@@ -103,26 +139,33 @@ export default function useCalendarEventQuickActionMutations({
     onSelectEvent?.(eventSelectionId(shiftedEvent), pacificYMD(shiftedEvent.startMs));
 
     try {
-      const result = await updateCalendarEvent(event.id, buildReschedulePayload(event, deltaDays, scope));
-      if (result?.event) upsertEvents?.(result.event);
+      const result = await calendarMutationCoordinator.update(
+        String(event.id),
+        buildReschedulePayload(event, deltaDays, scope),
+        mutationOptions("Moving event"),
+      );
+      if (result?.event && isLatestEventMutation(mutation)) upsertEvents?.(result.event);
       if (event.isRecurring && scope !== "one" && changedBounds) {
         await refreshRange?.(changedBounds.start, changedBounds.end);
       }
       setStatus({ tone: "success", message: "Event moved." });
-      window.setTimeout(() => setStatus(null), 1800);
+      clearSuccessStatusLater("Event moved.");
     } catch (err) {
-      upsertEvents?.(event);
+      const outcomeUnknown = quickActionErrorCode(err) === "calendar_outcome_unknown";
+      if (!outcomeUnknown && isLatestEventMutation(mutation)) upsertEvents?.(event);
       markMonthsStale(changedBounds || originalBounds);
+      if (outcomeUnknown && changedBounds) await refreshRange?.(changedBounds.start, changedBounds.end);
       setStatus({ tone: "error", message: quickActionErrorMessage(err, "Failed to move event.") });
       throw err;
     }
-  }, [markMonthsStale]);
+  }, [beginEventMutation, clearSuccessStatusLater, isLatestEventMutation, markMonthsStale, mutationOptions]);
 
   const runDelete = useCallback(async ({ event, scope }: {
     event: CalendarQuickActionEvent;
     scope?: CalendarRecurrenceScope;
   }) => {
     const { upsertEvents, removeEvent, refreshRange, onEventDeleted } = externalHandlersRef.current;
+    const mutation = beginEventMutation(event.id);
     if (isOptimisticCloneEvent(event)) {
       const optimisticId = String(event.id);
       const cloneRequest = optimisticCloneRequestsRef.current.get(optimisticId);
@@ -136,13 +179,20 @@ export default function useCalendarEventQuickActionMutations({
 
       if (createdEvent?.id) {
         try {
-          await deleteCalendarEvent(createdEvent.id, buildDeletePayload(createdEvent));
+          await calendarMutationCoordinator.remove(
+            createdEvent.id,
+            buildDeletePayload(createdEvent),
+            mutationOptions("Deleting event"),
+          );
           optimisticCloneRequestsRef.current.delete(optimisticId);
           setStatus({ tone: "success", message: "Event deleted." });
-          window.setTimeout(() => setStatus(null), 1800);
+          clearSuccessStatusLater("Event deleted.");
         } catch (err) {
-          upsertEvents?.(createdEvent);
+          const outcomeUnknown = quickActionErrorCode(err) === "calendar_outcome_unknown";
+          if (!outcomeUnknown && isLatestEventMutation(mutation)) upsertEvents?.(createdEvent);
           markMonthsStale(eventBounds(createdEvent));
+          const bounds = eventBounds(createdEvent);
+          if (outcomeUnknown && bounds) await refreshRange?.(bounds.start, bounds.end);
           setStatus({ tone: "error", message: quickActionErrorMessage(err, "Failed to delete event.") });
           throw err;
         }
@@ -151,7 +201,7 @@ export default function useCalendarEventQuickActionMutations({
 
       if (!cloneRequest) {
         setStatus({ tone: "success", message: "Event deleted." });
-        window.setTimeout(() => setStatus(null), 1800);
+        clearSuccessStatusLater("Event deleted.");
       }
       return;
     }
@@ -160,20 +210,26 @@ export default function useCalendarEventQuickActionMutations({
     setStatus({ tone: "pending", message: "Deleting event..." });
     removeEvent?.(event.id);
     try {
-      await deleteCalendarEvent(event.id, buildDeletePayload(event, scope));
+      await calendarMutationCoordinator.remove(
+        String(event.id),
+        buildDeletePayload(event, scope),
+        mutationOptions("Deleting event"),
+      );
       if (event.isRecurring && bounds) {
         await refreshRange?.(bounds.start, bounds.end);
       }
       onEventDeleted?.(eventSelectionId(event), event);
       setStatus({ tone: "success", message: "Event deleted." });
-      window.setTimeout(() => setStatus(null), 1800);
+      clearSuccessStatusLater("Event deleted.");
     } catch (err) {
-      upsertEvents?.(event);
+      const outcomeUnknown = quickActionErrorCode(err) === "calendar_outcome_unknown";
+      if (!outcomeUnknown && isLatestEventMutation(mutation)) upsertEvents?.(event);
       markMonthsStale(bounds);
+      if (outcomeUnknown && bounds) await refreshRange?.(bounds.start, bounds.end);
       setStatus({ tone: "error", message: quickActionErrorMessage(err, "Failed to delete event.") });
       throw err;
     }
-  }, [markMonthsStale]);
+  }, [beginEventMutation, clearSuccessStatusLater, isLatestEventMutation, markMonthsStale, mutationOptions]);
 
   const runBatchDelete = useCallback(async ({ events }: { events: CalendarQuickActionEvent[] }) => {
     const scopedEvents = Array.isArray(events) ? events : [];
@@ -219,7 +275,7 @@ export default function useCalendarEventQuickActionMutations({
       optimisticCloneRequestsRef.current.delete(optimisticId);
       if (cloneRequest?.deleted) {
         setStatus({ tone: "success", message: "Event deleted." });
-        window.setTimeout(() => setStatus(null), 1800);
+        clearSuccessStatusLater("Event deleted.");
       }
       return null;
     }
@@ -229,10 +285,14 @@ export default function useCalendarEventQuickActionMutations({
       // rather than leaving a ghost the user already dismissed in the grid.
       removeEvent?.(optimisticId);
       try {
-        await deleteCalendarEvent(createdEvent.id, buildDeletePayload(createdEvent));
+        await calendarMutationCoordinator.remove(
+          createdEvent.id,
+          buildDeletePayload(createdEvent),
+          mutationOptions("Deleting event"),
+        );
         optimisticCloneRequestsRef.current.delete(optimisticId);
         setStatus({ tone: "success", message: "Event deleted." });
-        window.setTimeout(() => setStatus(null), 1800);
+        clearSuccessStatusLater("Event deleted.");
       } catch (err) {
         upsertEvents?.(createdEvent);
         markMonthsStale(eventBounds(createdEvent));
@@ -253,7 +313,7 @@ export default function useCalendarEventQuickActionMutations({
       }, 30000);
     }
     return createdEvent;
-  }, [markMonthsStale]);
+  }, [clearSuccessStatusLater, markMonthsStale, mutationOptions]);
 
   const runClone = useCallback(async ({ event, targetDate = null }: {
     event: CalendarQuickActionEvent;
@@ -261,13 +321,17 @@ export default function useCalendarEventQuickActionMutations({
   }) => {
     const { upsertEvents, onSelectEvent, onReconcileSelection } = externalHandlersRef.current;
     if (!editable || !event?.writable) return;
-    const optimisticEvent = buildOptimisticCloneEvent(event, targetDate);
+    const clientEventId = createCalendarProviderEventId();
+    const optimisticEvent = buildOptimisticCloneEvent(event, targetDate, clientEventId);
     const optimisticId = String(optimisticEvent.id);
     optimisticCloneRequestsRef.current.set(optimisticId, { createdEvent: null, deleted: false });
     upsertEvents?.(optimisticEvent);
     onSelectEvent?.(eventSelectionId(optimisticEvent), pacificYMD(optimisticEvent.startMs));
     try {
-      const result = await createCalendarEvent(buildCloneEventPayload(event, targetDate));
+      const result = await calendarMutationCoordinator.create(
+        buildCloneEventPayload(event, targetDate, clientEventId),
+        mutationOptions("Duplicating event"),
+      );
       const created = await settleOptimisticCreate(optimisticId, result?.event || null);
       // Reconcile the selected id without re-asserting the day: a delayed
       // day-move would yank the user's selection back here if they have since
@@ -275,11 +339,15 @@ export default function useCalendarEventQuickActionMutations({
       if (created) {
         onReconcileSelection?.(eventSelectionId(optimisticEvent), eventSelectionId(created));
       }
-    } catch {
-      await settleOptimisticCreate(optimisticId, null);
-      // Silent by design for this hidden power flow.
+    } catch (error) {
+      const outcomeUnknown = quickActionErrorCode(error) === "calendar_outcome_unknown";
+      if (!outcomeUnknown) await settleOptimisticCreate(optimisticId, null);
+      const bounds = eventBounds(optimisticEvent);
+      markMonthsStale(bounds);
+      if (outcomeUnknown && bounds) await externalHandlersRef.current.refreshRange?.(bounds.start, bounds.end);
+      setStatus({ tone: "error", message: quickActionErrorMessage(error, "Failed to duplicate event.") });
     }
-  }, [editable, settleOptimisticCreate]);
+  }, [editable, markMonthsStale, mutationOptions, settleOptimisticCreate]);
 
   const runClipboardPaste = useCallback(async ({ clipboard, targetDate = null }: {
     clipboard: CalendarEventClipboard;
@@ -290,7 +358,14 @@ export default function useCalendarEventQuickActionMutations({
     const plan = planCalendarEventClipboardPaste(clipboard, targetDate);
     if (!plan?.items?.length) return false;
 
-    const optimisticEvents = plan.items.map((item, index) => buildOptimisticClipboardPasteEvent(item, index));
+    const clientEventIds = plan.items.map(() => createCalendarProviderEventId());
+    const createItems = plan.items.map((item, index) => ({
+      ...item,
+      clientEventId: clientEventIds[index],
+    }));
+    const optimisticEvents = plan.items.map((item, index) => (
+      buildOptimisticClipboardPasteEvent(item, index, clientEventIds[index])
+    ));
     for (const event of optimisticEvents) {
       // Track every paste row so deleting it mid-create reaches the server rather
       // than silently no-op'ing and resurrecting the event when the create lands.
@@ -306,31 +381,46 @@ export default function useCalendarEventQuickActionMutations({
       const optimisticEvent = optimisticEvents[0]!;
       const optimisticId = String(optimisticEvent.id);
       try {
-        const result = await createCalendarEvent(plan.items[0]!);
+        const result = await calendarMutationCoordinator.create(
+          createItems[0]!,
+          mutationOptions("Pasting event"),
+        );
         const created = await settleOptimisticCreate(optimisticId, result?.event || null);
         if (created) {
           onReconcileSelection?.(eventSelectionId(optimisticEvent), eventSelectionId(created));
         }
-      } catch {
+      } catch (error) {
+        const outcomeUnknown = quickActionErrorCode(error) === "calendar_outcome_unknown";
         // Surface paste failure instead of silently rolling back the optimistic
         // row, matching the reschedule/delete error UX.
-        removeEvent?.(optimisticId);
-        optimisticCloneRequestsRef.current.delete(optimisticId);
+        if (!outcomeUnknown) {
+          removeEvent?.(optimisticId);
+          optimisticCloneRequestsRef.current.delete(optimisticId);
+        }
         markMonthsStale(eventBounds(optimisticEvent));
-        setStatus({ tone: "error", message: "Failed to paste event." });
+        const bounds = eventBounds(optimisticEvent);
+        if (outcomeUnknown && bounds) await externalHandlersRef.current.refreshRange?.(bounds.start, bounds.end);
+        setStatus({ tone: "error", message: quickActionErrorMessage(error, "Failed to paste event.") });
       }
       return true;
     }
 
     try {
-      const result = await createCalendarEventsBatch(plan.items);
+      const result = await calendarMutationCoordinator.createBatch(
+        createItems,
+        mutationOptions("Pasting events"),
+      );
       const createdByIndex = new Map((result?.created || [])
         .filter((entry) => Number.isInteger(entry?.index) && entry?.event)
         .map((entry) => [entry.index, entry.event]));
+      const unknownIndexes = new Set((result?.failed || [])
+        .filter((entry) => entry.code === "calendar_outcome_unknown")
+        .map((entry) => entry.index));
 
       let firstLiveCreated: NormalizedCalendarEvent | null = null;
       for (let index = 0; index < optimisticEvents.length; index += 1) {
         const optimisticId = String(optimisticEvents[index]!.id);
+        if (unknownIndexes.has(index)) continue;
         const createdEvent = createdByIndex.get(index) || null;
         const settled = await settleOptimisticCreate(optimisticId, createdEvent);
         if (settled && !firstLiveCreated) firstLiveCreated = settled;
@@ -351,6 +441,11 @@ export default function useCalendarEventQuickActionMutations({
             : "Failed to paste event.",
         });
       }
+      if (unknownIndexes.size) {
+        const bounds = mergeBounds(...optimisticEvents.map((event) => eventBounds(event)));
+        markMonthsStale(bounds);
+        if (bounds) await externalHandlersRef.current.refreshRange?.(bounds.start, bounds.end);
+      }
     } catch {
       // Whole batch rejected → nothing was created on Google. Drop the optimistic
       // rows and their tracking entries and surface the failure.
@@ -362,7 +457,7 @@ export default function useCalendarEventQuickActionMutations({
       setStatus({ tone: "error", message: "Failed to paste event." });
     }
     return true;
-  }, [editable, settleOptimisticCreate, markMonthsStale]);
+  }, [editable, settleOptimisticCreate, markMonthsStale, mutationOptions]);
 
   const runColorUpdate = useCallback(async ({ event, colorId, scope }: {
     event: CalendarQuickActionEvent;
@@ -371,21 +466,30 @@ export default function useCalendarEventQuickActionMutations({
   }) => {
     const { upsertEvents, refreshRange } = externalHandlersRef.current;
     if (!editable || !event?.writable || !colorId) return;
+    const mutation = beginEventMutation(event.id);
     const color = googleEventColorForId(colorId)?.hex || event.color;
     const optimisticEvent = { ...event, colorId, color };
     upsertEvents?.(optimisticEvent);
     try {
-      const result = await updateCalendarEvent(event.id, buildColorUpdatePayload(event, colorId, scope));
-      if (result?.event) upsertEvents?.(result.event);
+      const result = await calendarMutationCoordinator.update(
+        String(event.id),
+        buildColorUpdatePayload(event, colorId, scope),
+        mutationOptions("Updating color"),
+      );
+      if (result?.event && isLatestEventMutation(mutation)) upsertEvents?.(result.event);
       if (event.isRecurring && scope !== "one") {
         const bounds = eventBounds(event);
         if (bounds) await refreshRange?.(bounds.start, bounds.end);
       }
-    } catch {
-      upsertEvents?.(event);
+    } catch (error) {
+      const outcomeUnknown = quickActionErrorCode(error) === "calendar_outcome_unknown";
+      if (!outcomeUnknown && isLatestEventMutation(mutation)) upsertEvents?.(event);
       markMonthsStale(eventBounds(event));
+      const bounds = eventBounds(event);
+      if (outcomeUnknown && bounds) await refreshRange?.(bounds.start, bounds.end);
+      setStatus({ tone: "error", message: quickActionErrorMessage(error, "Failed to update event color.") });
     }
-  }, [editable, markMonthsStale]);
+  }, [beginEventMutation, editable, isLatestEventMutation, markMonthsStale, mutationOptions]);
 
   const runScopedColorUpdate = useCallback(async ({ events, colorId }: {
     events: CalendarQuickActionEvent[];

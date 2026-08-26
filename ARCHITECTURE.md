@@ -890,6 +890,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/calendar/deadlines/range` | `server/routes/calendar.ts` |
 | POST | `/api/calendar/events` | `server/routes/calendar.ts` |
 | DELETE | `/api/calendar/events/:eventId` | `server/routes/calendar.ts` |
+| GET | `/api/calendar/events/:eventId` | `server/routes/calendar.ts` |
 | PATCH | `/api/calendar/events/:eventId` | `server/routes/calendar.ts` |
 | POST | `/api/calendar/events/batch` | `server/routes/calendar.ts` |
 | GET | `/api/calendar/places/:placeId` | `server/routes/calendar.ts` |

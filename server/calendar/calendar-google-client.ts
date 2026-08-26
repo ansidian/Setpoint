@@ -375,10 +375,9 @@ function normalizeCalendarEntry(
 // because the per-calendar `writable` flag is derived from the credential's
 // scopes — a re-auth that adds calendar write scope changes credentials_encrypted
 // and must NOT serve a stale writable=false list. credentials_encrypted is stable
-// between (hourly) token refreshes, so the hot-path benefit holds. Invalidated on
-// event mutations (see invalidateCalendarListCache callers in
-// calendar-mutations). Single-user (EA_USER_ID) app, so a process-global Map
-// is sufficient.
+// between (hourly) token refreshes, so the hot-path benefit holds. Event writes
+// do not invalidate this list because they cannot change calendar membership or
+// access roles. Single-user (EA_USER_ID) app, so a process-global Map is sufficient.
 const CALENDAR_LIST_CACHE_TTL_MS = 120_000;
 const calendarListCache = new Map<string, {
   value: GoogleCalendarSource[];

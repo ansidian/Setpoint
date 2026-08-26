@@ -50,6 +50,7 @@ export default function CalendarEventEditorRail({
     canSave,
     saving,
     deleting,
+    mutationPhase,
     isEditing,
     isEditingRecurring,
     updateField,
@@ -207,6 +208,7 @@ export default function CalendarEventEditorRail({
                 validationMessage={validationMessage}
                 reconnect={reconnect}
                 showValidation={!(isEditingRecurring && !recurringEditScope)}
+                mutationPhase={mutationPhase}
               />
 
               <CalendarDraftPreviewPanel

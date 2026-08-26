@@ -374,23 +374,26 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   }
 
   if (pathname === "/api/calendar/events" && method === "POST") {
-    const created = makeCalendarEvent(body);
+    const created = makeCalendarEvent(body, String(body.clientEventId || `demo-event-${Date.now()}`));
     seed.calendarEvents.push(created);
     return { event: clone(created) };
   }
 
   if (pathname === "/api/calendar/events/batch" && method === "POST") {
-    // Multi-event clipboard paste / clone posts items[] here. Without a demo
-    // handler the request fell through to DEMO_API_UNHANDLED and every pasted
-    // event was silently dropped. Mirror the server contract: { created, failed }
-    // where each created entry carries its source index and the new event. See P3-17.
+    // Mirror the server batch contract so demo paste/clone returns indexed
+    // created events instead of falling through to DEMO_API_UNHANDLED.
     const items = Array.isArray(body.items) ? body.items : [];
     const created = items.map((item, index) => {
-      const event = makeCalendarEvent(item || {}, `demo-event-${Date.now()}-${index}`);
+      const event = makeCalendarEvent(item || {}, String(item?.clientEventId || `demo-event-${Date.now()}-${index}`));
       seed.calendarEvents.push(event);
       return { index, event: clone(event) };
     });
     return { created, failed: [] };
+  }
+  if (pathname.match(/^\/api\/calendar\/events\/[^/]+$/) && method === "GET") {
+    const eventId = decodeURIComponent(pathSegment(pathname, 1));
+    const event = seed.calendarEvents.find((candidate) => String(candidate.id) === eventId);
+    return { event: event ? clone(event) : null };
   }
 
   if (pathname.match(/^\/api\/calendar\/events\/[^/]+$/) && method === "PATCH") {

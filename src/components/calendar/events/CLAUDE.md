@@ -15,6 +15,8 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `calendarEventEditorModel.ts` — draft normalization, validation, recurrence serialization, batch ops
 - `calendarEventEditorSessionModel.ts` — pure editor-session projections and transitions (create-seed normalization, source-intent resolution, validation visibility, title-assist draft sync, batch edits)
 - `calendarEventEditorActions.ts` — CRUD/reminder API calls and error formatting
+- `calendarMutationCoordinator.ts` — per-event write serialization, timeout verification, and bounded batch coordination shared by quick actions and the editor
+- `calendarMutationIds.ts` — Google-compatible caller event ids and mutation correlation ids
 - `calendarEditorUtils.ts` — date/time formatting, style constants, field helpers
 
 ### Editor UI

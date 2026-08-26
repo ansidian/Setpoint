@@ -100,6 +100,10 @@ export interface StructuredCalendarRecurrence extends CalendarRecurrenceInput {
 }
 
 export interface CalendarEventMutationInput {
+  /** Caller-selected Google event id used to make creates idempotent and immediately addressable. */
+  clientEventId?: CalendarEventId;
+  /** Correlates one client mutation through the route/provider timing logs. */
+  clientMutationId?: string;
   accountId?: string;
   calendarId?: CalendarId;
   sourceAccountId?: string;
@@ -340,6 +344,10 @@ export interface CalendarSearchResponse {
 export interface CalendarEventMutationResponse {
   event: NormalizedCalendarEvent;
   reminderErrors?: Array<{ message: string }>;
+}
+
+export interface CalendarEventVerificationResponse {
+  event: NormalizedCalendarEvent | null;
 }
 
 export interface CalendarBatchMutationResponse {

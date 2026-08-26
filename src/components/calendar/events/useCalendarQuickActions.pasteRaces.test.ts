@@ -7,6 +7,7 @@ vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
   createCalendarEventsBatch: vi.fn(),
   deleteCalendarEvent: vi.fn(),
+  getCalendarEvent: vi.fn(),
   updateCalendarEvent: vi.fn(),
 }));
 
@@ -88,7 +89,10 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
       result.current.pasteEvent(clipboard, "2026-04-22");
     });
     const optimisticEvent = observed.state.upserts[0]!;
-    expect(optimisticEvent.id).toMatch(/^optimistic-calendar-copy-/);
+    expect(optimisticEvent).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f]{28,32}$/),
+      _optimisticCalendarClone: true,
+    });
 
     // Delete the optimistic paste row while its create is still in flight.
     await act(async () => {
@@ -160,7 +164,7 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
 
     expect(observed.state.selections).toHaveLength(1);
     const [optimisticId, optimisticDay] = observed.state.selections[0]!;
-    expect(optimisticId).toMatch(/^optimistic-calendar-copy-/);
+    expect(optimisticId).toMatch(/^[0-9a-f]{28,32}$/);
     expect(optimisticDay).toBe("2026-04-22");
     expect(observed.state.reconciliations).toEqual([[optimisticId, "google-created-paste-late"]]);
 
@@ -222,7 +226,7 @@ describe("useCalendarQuickActions clipboard paste delete-during-create race", ()
       result.current.pasteEvent(clipboard, "2026-04-22");
     });
     const optimisticEvents = observed.state.upserts
-      .filter((event) => String(event.id).startsWith("optimistic-calendar-copy-"));
+      .filter((event) => event._optimisticCalendarClone === true);
     expect(optimisticEvents).toHaveLength(2);
     const secondOptimistic = optimisticEvents[1];
 

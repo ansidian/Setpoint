@@ -245,6 +245,59 @@ describe("calendar event routes", () => {
     ]);
   });
 
+  it("creates batch items with a bounded four-request provider fan-out", async () => {
+    let activeCreates = 0;
+    let maxActiveCreates = 0;
+    calendarProvider.googleCalendarFetch.mockImplementation(async (
+      _auth,
+      _path: string,
+      options: { method?: string; body?: Record<string, unknown> } = {},
+    ) => {
+      activeCreates += 1;
+      maxActiveCreates = Math.max(maxActiveCreates, activeCreates);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      activeCreates -= 1;
+      return responseJson(rawEvent({
+        id: String(options.body?.id || `event-${maxActiveCreates}`),
+        summary: String(options.body?.summary || "Planning"),
+      }));
+    });
+    const items = Array.from({ length: 8 }, (_, index) => ({
+      accountId: "gmail-main",
+      calendarId: "primary",
+      clientEventId: `0000000000000000000000000000000${index}`,
+      title: `Batch ${index}`,
+      allDay: false,
+      startDate: "2026-04-21",
+      endDate: "2026-04-21",
+      startTime: "09:00",
+      endTime: "09:30",
+    }));
+
+    const res = await request(makeApp())
+      .post("/api/calendar/events/batch")
+      .set("Cookie", authCookie())
+      .send({ items });
+
+    expect(res.status).toBe(201);
+    expect(res.body.created).toHaveLength(8);
+    expect(maxActiveCreates).toBe(4);
+  });
+
+  it("returns the current provider event for timeout verification", async () => {
+    const res = await request(makeApp())
+      .get("/api/calendar/events/event-1?accountId=gmail-main&calendarId=primary")
+      .set("Cookie", authCookie());
+
+    expect(res.status).toBe(200);
+    expect(res.body.event).toMatchObject({
+      id: "event-1",
+      title: "Planning",
+      accountId: "gmail-main",
+      calendarId: "primary",
+    });
+  });
+
   it("rejects moving an event across connected accounts at the HTTP boundary", async () => {
     const res = await request(makeApp())
       .patch("/api/calendar/events/event-1")

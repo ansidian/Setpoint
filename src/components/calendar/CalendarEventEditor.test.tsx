@@ -104,11 +104,11 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     fireEvent.click(confirmDelete);
     await waitFor(() => {
       // test-architecture: allow-boundary-interaction -- Single-event deletion must send account, calendar, and etag to the outbound Calendar API; closed UI state cannot reveal concurrency metadata.
-      expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-1", {
+      expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-1", expect.objectContaining({
         accountId: "gmail-main",
         calendarId: "primary",
         etag: '"etag-1"',
-      });
+      }));
     });
     // test-architecture: allow-boundary-interaction -- Double confirmation must still produce exactly one outbound delete; disappearance alone cannot detect duplicate provider writes.
     expect(mockDeleteCalendarEvent).toHaveBeenCalledTimes(1);

@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalendarQuickActionEvent } from "./calendarQuickActionModel";
 
 // test-architecture: allow-boundary-mock -- The quick-action state machine runs against a fake Calendar HTTP adapter so race/error tests cannot mutate the real provider.
@@ -7,16 +7,20 @@ vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
   createCalendarEventsBatch: vi.fn(),
   deleteCalendarEvent: vi.fn(),
+  getCalendarEvent: vi.fn(),
   updateCalendarEvent: vi.fn(),
 }));
 
 const api = await import("@/api");
 const createCalendarEvent = api.createCalendarEvent as ReturnType<typeof vi.fn>;
 const deleteCalendarEvent = api.deleteCalendarEvent as ReturnType<typeof vi.fn>;
+const getCalendarEvent = api.getCalendarEvent as ReturnType<typeof vi.fn>;
+const updateCalendarEvent = api.updateCalendarEvent as ReturnType<typeof vi.fn>;
 // Pure payload/date-math builders now live in calendarQuickActionModel and are
 // covered by calendarQuickActionModel.test.js; this file tests the hook's
 // optimistic-mutation / state behavior only.
 const { default: useCalendarQuickActions } = await import("./useCalendarQuickActions");
+const { default: useCalendarEventQuickActionMutations } = await import("./useCalendarEventQuickActionMutations");
 const {
   createCalendarEventClipboard,
   createCalendarEventSelectionSet,
@@ -24,6 +28,10 @@ const {
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+beforeEach(() => {
+  getCalendarEvent.mockResolvedValue({ event: null });
 });
 
 function createObservedHandlers() {
@@ -132,8 +140,8 @@ describe("useCalendarQuickActions batch delete partial failure", () => {
   });
 });
 
-describe("useCalendarQuickActions delete timeout settles by reverting", () => {
-  it("restores the event and surfaces an error status when a delete times out", async () => {
+describe("useCalendarQuickActions delete timeout verification", () => {
+  it("keeps the event deleted when Google confirms a timed-out delete landed", async () => {
     const timeoutErr = Object.assign(
       new Error("Request timed out — check the calendar before retrying; the change may not have saved."),
       { code: "request_timeout" },
@@ -167,12 +175,81 @@ describe("useCalendarQuickActions delete timeout settles by reverting", () => {
       await result.current.confirmContextDelete();
     });
 
-    // The optimistic removal is reverted (event re-upserted) and the timeout is
-    // surfaced — the mutation SETTLED rather than leaving the grid diverged.
+    // A transport timeout is ambiguous. The coordinator verifies the provider
+    // result before settling, so a delete that landed is not visually rolled back.
     expect(observed.state.removals).toContain("event-timeout");
-    expect(observed.state.upserts).toContainEqual(event);
-    expect(result.current.status).toMatchObject({ tone: "error" });
-    expect(result.current.status?.message).toContain("timed out");
+    expect(observed.state.upserts).not.toContainEqual(event);
+    expect(result.current.status).toEqual({ tone: "success", message: "Event deleted." });
+    // test-architecture: allow-boundary-interaction -- Timeout recovery must query the exact provider event identity before treating the optimistic delete as confirmed.
+    expect(getCalendarEvent).toHaveBeenCalledWith("event-timeout", expect.objectContaining({
+      accountId: "gmail-main",
+      calendarId: "primary",
+    }));
+  });
+});
+
+describe("useCalendarQuickActions same-event mutation ordering", () => {
+  it("starts the second reschedule only after the first one settles", async () => {
+    const first = Promise.withResolvers<{ event: CalendarQuickActionEvent }>();
+    const second = Promise.withResolvers<{ event: CalendarQuickActionEvent }>();
+    updateCalendarEvent
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const event = {
+      id: "event-rapid-move",
+      title: "Rapid move",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      allDay: false,
+      isRecurring: false,
+      writable: true,
+      etag: '"etag-rapid-move"',
+    };
+    const observed = createObservedHandlers();
+    const { result } = renderHook(() => useCalendarEventQuickActionMutations({
+      editable: true,
+      handlers: observed.handlers,
+    }));
+
+    let firstMutation!: Promise<void>;
+    let secondMutation!: Promise<void>;
+    act(() => {
+      firstMutation = result.current.runReschedule({ event, targetDate: "2026-04-21" });
+      secondMutation = result.current.runReschedule({ event, targetDate: "2026-04-22" });
+    });
+
+    // test-architecture: allow-boundary-interaction -- Same-event writes must be serialized at the outbound Calendar boundary; rendered optimistic state cannot prove the second provider request remained queued.
+    expect(updateCalendarEvent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      first.resolve({
+        event: {
+          ...event,
+          startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
+        },
+      });
+      await firstMutation;
+    });
+    expect(observed.state.upserts.at(-1)?.startMs).toBe(
+      new Date("2026-04-22T16:00:00.000Z").getTime(),
+    );
+
+    await act(async () => {
+      second.resolve({
+        event: {
+          ...event,
+          startMs: new Date("2026-04-22T16:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+        },
+      });
+      await secondMutation;
+    });
+    expect(observed.state.upserts.at(-1)?.startMs).toBe(
+      new Date("2026-04-22T16:00:00.000Z").getTime(),
+    );
   });
 });
 
@@ -242,6 +319,6 @@ describe("useCalendarQuickActions clipboard paste failure", () => {
 
     const optimisticEvent = observed.state.upserts[0]!;
     expect(observed.state.removals).toContain(optimisticEvent.id);
-    expect(result.current.status).toEqual({ tone: "error", message: "Failed to paste event." });
+    expect(result.current.status).toEqual({ tone: "error", message: "Provider down." });
   });
 });

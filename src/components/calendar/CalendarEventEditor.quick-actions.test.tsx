@@ -5,6 +5,7 @@ import {
   mockCreateCalendarEventsBatch,
   mockUpdateCalendarEvent,
   mockDeleteCalendarEvent,
+  mockGetCalendarEvent,
 } from "./CalendarEventEditor.test-setup.ts";
 import { renderModal, createDataTransfer, createDeferred } from "./CalendarEventEditor.test-utils.tsx";
 
@@ -70,11 +71,11 @@ describe("CalendarEventEditor quick action behavior", () => {
 
     await waitFor(() => {
       // test-architecture: allow-boundary-interaction -- Context deletion must send the event identity and etag across the outbound Calendar API boundary.
-      expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-context-delete", {
+      expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-context-delete", expect.objectContaining({
         accountId: "gmail-main",
         calendarId: "primary",
         etag: '"etag-context-delete"',
-      });
+      }));
     });
     await waitFor(() => expect(screen.queryByTestId("calendar-cell-item-chip")).toBeNull());
   });
@@ -156,6 +157,106 @@ describe("CalendarEventEditor quick action behavior", () => {
       );
     });
     expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(2);
+  });
+
+  it("queues an immediate edit behind the duplicate create using one stable event id", async () => {
+    const event = {
+      id: "event-immediate-edit-source",
+      etag: '"etag-immediate-edit-source"',
+      title: "Duplicate then edit",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+    };
+    const createDeferredResult = createDeferred<{ event: typeof event }>();
+    mockCreateCalendarEvent.mockReturnValue(createDeferredResult.promise);
+    mockUpdateCalendarEvent.mockImplementation(async (id, input) => ({
+      event: { ...event, id, title: input.title, etag: '"etag-immediate-edit-copy"' },
+    }));
+    renderModal({ events: [event] });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-context-duplicate"));
+
+    const optimisticChip = screen.getAllByTestId("calendar-cell-item-chip")
+      .find((chip) => chip.getAttribute("data-source-item-id") !== event.id)!;
+    const optimisticId = optimisticChip.getAttribute("data-source-item-id")!;
+    fireEvent.click(optimisticChip);
+    const detailPanel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(detailPanel).getByRole("button", { name: /edit details/i }));
+    fireEvent.change(await screen.findByTestId("calendar-event-title"), {
+      target: { value: "Edited immediately" },
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-save"));
+
+    // test-architecture: allow-boundary-interaction -- The edit must remain queued until the duplicate's outbound create establishes the provider event identity.
+    expect(mockUpdateCalendarEvent).not.toHaveBeenCalled();
+
+    createDeferredResult.resolve({
+      event: {
+        ...event,
+        id: optimisticId,
+        etag: '"etag-created-copy"',
+      },
+    });
+
+    await waitFor(() => {
+      // test-architecture: allow-boundary-interaction -- After create settles, the outbound update must use the same caller-selected provider id and the immediate title edit.
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith(
+        optimisticId,
+        expect.objectContaining({ title: "Edited immediately" }),
+      );
+    });
+    expect(optimisticId).not.toMatch(/^optimistic-calendar-copy-/);
+  });
+
+  it("shows that it is checking Google when an edit times out before confirming the save", async () => {
+    const event = {
+      id: "event-timeout-verification",
+      etag: '"etag-timeout-verification"',
+      title: "Verify my edit",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+      location: "",
+      description: "",
+    };
+    const timeoutError = Object.assign(new Error("Request timed out."), { code: "request_timeout" });
+    const verification = createDeferred<{ event: typeof event }>();
+    mockUpdateCalendarEvent.mockRejectedValue(timeoutError);
+    mockGetCalendarEvent.mockReturnValue(verification.promise);
+    renderModal({ events: [event] });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
+    const detailPanel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(detailPanel).getByRole("button", { name: /edit details/i }));
+    fireEvent.change(await screen.findByTestId("calendar-event-title"), {
+      target: { value: "Verified edit" },
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-save"));
+
+    expect((await screen.findByTestId("calendar-event-verifying")).textContent).toMatch(/checking google calendar/i);
+    expect(screen.getByTestId("calendar-event-save").textContent).toBe("Checking Google...");
+
+    verification.resolve({
+      event: {
+        ...event,
+        title: "Verified edit",
+        etag: '"etag-verified"',
+      },
+    });
+    await waitFor(() => expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull());
   });
 
   it("updates event color from the quick-action context menu", async () => {

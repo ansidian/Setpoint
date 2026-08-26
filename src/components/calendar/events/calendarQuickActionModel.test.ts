@@ -176,7 +176,7 @@ describe("calendarQuickActionModel builders", () => {
     };
 
     expect(buildOptimisticCloneEvent(event, "2026-04-22")).toMatchObject({
-      id: expect.stringMatching(/^optimistic-calendar-copy-event-copy-optimistic-/),
+      id: expect.stringMatching(/^[0-9a-f]{28,32}$/),
       title: "Copy optimistic",
       startMs: new Date("2026-04-22T16:00:00.000Z").getTime(),
       endMs: new Date("2026-04-22T17:30:00.000Z").getTime(),
