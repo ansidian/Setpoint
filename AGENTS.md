@@ -38,6 +38,7 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 ## Test Architecture
 
 - A product requirement or regression triggers a test; creating or extracting a file, hook, helper, class, or component does not.
+- Do not add tests whose primary purpose is frontend styling, visual tokens, layout, or rendered markup. Verify those changes through bounded browser inspection.
 - Test through the stable module or use-case facade and allow its internal collaborators to work together. Name one primary behavior owner before adding overlapping coverage.
 - Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate the file under test.
 - Prefer observable results and durable state. Interaction assertions are for unavoidable outbound boundary contracts, not internal call graphs.
