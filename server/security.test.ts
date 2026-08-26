@@ -30,4 +30,11 @@ describe("security config", () => {
     expect(res.headers["content-security-policy"]).toBe(buildContentSecurityPolicy());
     expect(res.headers["strict-transport-security"]).toBe("max-age=31536000; includeSubDomains");
   });
+
+  it("allows blob-backed email attachment previews in production", () => {
+    const policy = buildContentSecurityPolicy();
+
+    expect(policy).toContain("img-src 'self' data: blob: https:");
+    expect(policy).toContain("connect-src 'self' blob: https: ws: wss:");
+  });
 });

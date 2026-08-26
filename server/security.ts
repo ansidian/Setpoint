@@ -25,9 +25,9 @@ export function buildContentSecurityPolicy() {
     "object-src 'none'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https:",
-    "img-src 'self' data: https:",
+    "img-src 'self' data: blob: https:",
     "font-src 'self' data: https:",
-    "connect-src 'self' https: ws: wss:",
+    "connect-src 'self' blob: https: ws: wss:",
   ].join("; ");
 }
 
