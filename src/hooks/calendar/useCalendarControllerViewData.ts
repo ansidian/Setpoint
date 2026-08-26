@@ -15,6 +15,7 @@ import {
 export interface ControllerEventsData {
   ensureRange?: (start: string, end: string, options?: { signal?: AbortSignal; prefetchKeys?: string[] }) => Promise<unknown>;
   refreshRange?: (...args: never[]) => unknown;
+  refreshRangeInPlace?: (...args: never[]) => unknown;
   upsertEvents?: (...args: never[]) => unknown;
   removeEvent?: (...args: never[]) => unknown;
   markStale?: (...args: never[]) => unknown;

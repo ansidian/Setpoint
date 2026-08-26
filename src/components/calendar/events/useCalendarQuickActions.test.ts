@@ -26,6 +26,16 @@ const {
   createCalendarEventSelectionSet,
 } = await import("./calendarEventSelectionModel");
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -190,8 +200,8 @@ describe("useCalendarQuickActions delete timeout verification", () => {
 
 describe("useCalendarQuickActions same-event mutation ordering", () => {
   it("starts the second reschedule only after the first one settles", async () => {
-    const first = Promise.withResolvers<{ event: CalendarQuickActionEvent }>();
-    const second = Promise.withResolvers<{ event: CalendarQuickActionEvent }>();
+    const first = createDeferred<{ event: CalendarQuickActionEvent }>();
+    const second = createDeferred<{ event: CalendarQuickActionEvent }>();
     updateCalendarEvent
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
@@ -233,7 +243,7 @@ describe("useCalendarQuickActions same-event mutation ordering", () => {
       });
       await firstMutation;
     });
-    expect(observed.state.upserts.at(-1)?.startMs).toBe(
+    expect(observed.state.upserts[observed.state.upserts.length - 1]?.startMs).toBe(
       new Date("2026-04-22T16:00:00.000Z").getTime(),
     );
 
@@ -247,7 +257,7 @@ describe("useCalendarQuickActions same-event mutation ordering", () => {
       });
       await secondMutation;
     });
-    expect(observed.state.upserts.at(-1)?.startMs).toBe(
+    expect(observed.state.upserts[observed.state.upserts.length - 1]?.startMs).toBe(
       new Date("2026-04-22T16:00:00.000Z").getTime(),
     );
   });

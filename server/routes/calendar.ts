@@ -33,6 +33,7 @@ import {
 import { readCalendarBillsRange } from "./calendar-bills-range.ts";
 import type { StoredCalendarAccount } from "../calendar/calendar-google-client.ts";
 import { getElapsedMs, logTiming } from "../timing.ts";
+import type { CalendarBatchMutationResponse } from "../../shared/types/calendar.ts";
 
 type RouteError = Error & { status?: number; code?: string };
 
@@ -377,8 +378,8 @@ router.post("/events/batch", async (req, res) => {
   }
 
   try {
-    const created = [];
-    const failed = [];
+    const created: CalendarBatchMutationResponse["created"] = [];
+    const failed: CalendarBatchMutationResponse["failed"] = [];
     const { accounts } = await loadUserConfig(calendarUserId());
 
     let nextIndex = 0;

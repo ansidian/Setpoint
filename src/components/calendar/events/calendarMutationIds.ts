@@ -2,7 +2,7 @@ let fallbackIdCounter = 0;
 
 function lowercaseHexId() {
   const randomUuid = globalThis.crypto?.randomUUID?.();
-  if (randomUuid) return randomUuid.replaceAll("-", "").toLowerCase();
+  if (randomUuid) return randomUuid.replace(/-/g, "").toLowerCase();
   fallbackIdCounter += 1;
   const time = Date.now().toString(16).padStart(12, "0");
   const counter = fallbackIdCounter.toString(16).padStart(8, "0");
