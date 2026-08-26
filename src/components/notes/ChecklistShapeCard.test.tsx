@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_THEME, type Editor } from "tldraw";
 import { ChecklistShapeCard } from "./ChecklistShapeCard";
 import type { ChecklistShape } from "./checklistShapeModel";
@@ -13,6 +13,8 @@ vi.mock("tldraw", async (importOriginal) => {
     HTMLContainer: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   };
 });
+
+afterEach(cleanup);
 
 function rect(top: number, height = 32): DOMRect {
   return {
@@ -67,7 +69,58 @@ function ChecklistHarness() {
   );
 }
 
+function CompletedChecklistHarness() {
+  const [historyLabel, setHistoryLabel] = useState("");
+  const [shape, setShape] = useState({
+    id: "shape:checklist-completed",
+    type: "setpoint-checklist",
+    props: {
+      w: 320,
+      h: 260,
+      color: "black",
+      font: "draw",
+      size: "m",
+      title: "Plan",
+      items: [
+        { id: "first", text: "Done", checked: true },
+        { id: "second", text: "Next", checked: false },
+        { id: "third", text: "Also done", checked: true },
+      ],
+    },
+  } as ChecklistShape);
+  const editor = {
+    updateShape: (update: { props?: Partial<ChecklistShape["props"]> }) => {
+      setShape((current) => ({
+        ...current,
+        props: { ...current.props, ...update.props },
+      }));
+    },
+    markHistoryStoppingPoint: (label: string) => setHistoryLabel(label),
+    getCurrentTheme: () => DEFAULT_THEME,
+    getColorMode: () => "dark",
+  } as unknown as Editor;
+
+  return (
+    <>
+      <output data-testid="history-label">{historyLabel}</output>
+      <ChecklistShapeCard editor={editor} shape={shape} />
+    </>
+  );
+}
+
 describe("ChecklistShapeCard", () => {
+  it("clears all completed items in one undoable action", () => {
+    render(<CompletedChecklistHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear 2 completed items" }));
+
+    expect(screen.getAllByRole("textbox", { name: "Checklist item" }).map((element) => (
+      element as HTMLTextAreaElement
+    ).value)).toEqual(["Next"]);
+    expect(screen.queryByRole("button", { name: /Clear \d+ completed/ })).toBeNull();
+    expect(screen.getByTestId("history-label").textContent).toBe("remove completed checklist items");
+  });
+
   it("finishes reordering when the pointer is released outside the moving grip", () => {
     render(<ChecklistHarness />);
     const firstGrip = screen.getByRole("button", { name: /Reorder First/i });

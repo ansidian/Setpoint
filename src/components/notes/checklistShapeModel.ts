@@ -245,6 +245,14 @@ export function removeChecklistItem(items: readonly ChecklistItem[], itemId: str
   return items.filter((item) => item.id !== itemId);
 }
 
+export function removeCompletedChecklistItems(
+  items: readonly ChecklistItem[],
+  fallbackItem = createChecklistItem(),
+): ChecklistItem[] {
+  const remainingItems = items.filter((item) => !item.checked);
+  return remainingItems.length > 0 ? remainingItems : [fallbackItem];
+}
+
 export function moveChecklistItem(
   items: readonly ChecklistItem[],
   itemId: string,

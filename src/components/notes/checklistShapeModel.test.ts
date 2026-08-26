@@ -5,6 +5,7 @@ import {
   getChecklistItemLineCount,
   getChecklistMinHeightForItems,
   moveChecklistItem,
+  removeCompletedChecklistItems,
   removeChecklistItem,
 } from "./checklistShapeModel";
 
@@ -24,6 +25,18 @@ describe("checklistShapeModel", () => {
 
     expect(removeChecklistItem([first], first.id)).toEqual([first]);
     expect(removeChecklistItem([first, second], second.id)).toEqual([first]);
+  });
+
+  it("removes completed rows while preserving one editable row", () => {
+    const first = { ...createChecklistItem("first"), text: "First", checked: true };
+    const second = { ...createChecklistItem("second"), text: "Second" };
+    const third = { ...createChecklistItem("third"), text: "Third", checked: true };
+    const fallback = createChecklistItem("fallback");
+    const items = [first, second, third];
+
+    expect(removeCompletedChecklistItems(items, fallback)).toEqual([second]);
+    expect(removeCompletedChecklistItems([first, third], fallback)).toEqual([fallback]);
+    expect(items).toEqual([first, second, third]);
   });
 
   it("accounts for wrapped and explicit item lines when sizing the card", () => {

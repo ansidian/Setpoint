@@ -25,6 +25,7 @@ import {
   getChecklistMinWidth,
   getChecklistStyleMetrics,
   moveChecklistItem,
+  removeCompletedChecklistItems,
   removeChecklistItem,
   updateChecklistItem,
   type ChecklistItem,
@@ -59,6 +60,14 @@ function RemoveIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path d="m4.5 4.5 7 7m0-7-7 7" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3.5 4.5h9m-6.5 0V3.25h4V4.5m-5.5 0 .6 8.25h5.8l.6-8.25M6.75 7v3.5M9.25 7v3.5" />
     </svg>
   );
 }
@@ -204,6 +213,15 @@ export function ChecklistShapeCard({ editor, shape }: { editor: Editor; shape: C
   const toggleItem = (item: ChecklistItem) => {
     editor.markHistoryStoppingPoint("toggle checklist item");
     updateShape({ items: updateChecklistItem(shape.props.items, item.id, { checked: !item.checked }) });
+  };
+
+  const removeCompletedItems = () => {
+    if (completedCount === 0) return;
+    const items = removeCompletedChecklistItems(shape.props.items);
+    editor.markHistoryStoppingPoint("remove completed checklist items");
+    updateShape({ items });
+    const focusTarget = items[0];
+    if (focusTarget) focusItem(focusTarget.id);
   };
 
   const announceReorder = (items: ChecklistItem[], itemId: string) => {
@@ -498,18 +516,35 @@ export function ChecklistShapeCard({ editor, shape }: { editor: Editor; shape: C
           })}
         </div>
         <span className="sr-only" role="status" aria-live="polite">{reorderAnnouncement}</span>
-        <button
-          type="button"
-          className="setpoint-checklist__add"
-          onPointerDown={stopCanvasPointer}
-          onKeyDown={stopCanvasKeyboard}
-          onClick={(event) => {
-            event.stopPropagation();
-            addItem(shape.props.items[shape.props.items.length - 1]?.id ?? null);
-          }}
-        >
-          <PlusIcon /> Add item
-        </button>
+        <div className="setpoint-checklist__actions">
+          <button
+            type="button"
+            className="setpoint-checklist__add"
+            onPointerDown={stopCanvasPointer}
+            onKeyDown={stopCanvasKeyboard}
+            onClick={(event) => {
+              event.stopPropagation();
+              addItem(shape.props.items[shape.props.items.length - 1]?.id ?? null);
+            }}
+          >
+            <PlusIcon /> Add item
+          </button>
+          {completedCount > 0 ? (
+            <button
+              type="button"
+              className="setpoint-checklist__clear"
+              aria-label={`Clear ${completedCount} completed ${completedCount === 1 ? "item" : "items"}`}
+              onPointerDown={stopCanvasPointer}
+              onKeyDown={stopCanvasKeyboard}
+              onClick={(event) => {
+                event.stopPropagation();
+                removeCompletedItems();
+              }}
+            >
+              <TrashIcon /> Clear completed
+            </button>
+          ) : null}
+        </div>
       </div>
     </HTMLContainer>
   );

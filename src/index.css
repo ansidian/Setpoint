@@ -1274,7 +1274,8 @@ body {
 .setpoint-checklist__drag,
 .setpoint-checklist__check,
 .setpoint-checklist__remove,
-.setpoint-checklist__add {
+.setpoint-checklist__add,
+.setpoint-checklist__clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1326,7 +1327,8 @@ body {
 .setpoint-checklist__drag svg,
 .setpoint-checklist__check svg,
 .setpoint-checklist__remove svg,
-.setpoint-checklist__add svg {
+.setpoint-checklist__add svg,
+.setpoint-checklist__clear svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -1380,15 +1382,27 @@ body {
   opacity: 1;
 }
 
-.setpoint-checklist__add {
-  align-self: flex-start;
+.setpoint-checklist__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--checklist-section-gap);
+  margin-top: var(--checklist-section-gap);
+}
+
+.setpoint-checklist__add,
+.setpoint-checklist__clear {
   min-height: var(--checklist-control-size);
   gap: 6px;
-  margin-top: var(--checklist-section-gap);
   padding: 0 8px 0 4px;
   border-radius: var(--tl-radius-1);
   font-size: var(--checklist-add-font-size);
   font-weight: bold;
+}
+
+.setpoint-checklist__clear {
+  color: var(--tl-color-danger);
+  opacity: 0.76;
 }
 
 .setpoint-checklist__drag:hover,
@@ -1398,17 +1412,25 @@ body {
 .setpoint-checklist__remove:hover,
 .setpoint-checklist__remove:focus-visible,
 .setpoint-checklist__add:hover,
-.setpoint-checklist__add:focus-visible {
+.setpoint-checklist__add:focus-visible,
+.setpoint-checklist__clear:hover,
+.setpoint-checklist__clear:focus-visible {
   color: inherit;
   background-color: var(--tl-color-muted-1);
   opacity: 1;
   transform: scale(1.04);
 }
 
+.setpoint-checklist__clear:hover,
+.setpoint-checklist__clear:focus-visible {
+  color: var(--tl-color-danger);
+}
+
 .setpoint-checklist__drag:focus-visible,
 .setpoint-checklist__check:focus-visible,
 .setpoint-checklist__remove:focus-visible,
-.setpoint-checklist__add:focus-visible {
+.setpoint-checklist__add:focus-visible,
+.setpoint-checklist__clear:focus-visible {
   outline: 2px solid var(--tl-color-focus);
   outline-offset: 2px;
 }
@@ -1416,7 +1438,8 @@ body {
 .setpoint-checklist__drag:active,
 .setpoint-checklist__check:active,
 .setpoint-checklist__remove:active,
-.setpoint-checklist__add:active {
+.setpoint-checklist__add:active,
+.setpoint-checklist__clear:active {
   transform: scale(0.94);
 }
 
@@ -1435,7 +1458,8 @@ body {
   .setpoint-checklist__drag,
   .setpoint-checklist__check,
   .setpoint-checklist__remove,
-  .setpoint-checklist__add {
+  .setpoint-checklist__add,
+  .setpoint-checklist__clear {
     transition: none;
   }
 
@@ -1447,10 +1471,13 @@ body {
   .setpoint-checklist__remove:focus-visible,
   .setpoint-checklist__add:hover,
   .setpoint-checklist__add:focus-visible,
+  .setpoint-checklist__clear:hover,
+  .setpoint-checklist__clear:focus-visible,
   .setpoint-checklist__drag:active,
   .setpoint-checklist__check:active,
   .setpoint-checklist__remove:active,
-  .setpoint-checklist__add:active {
+  .setpoint-checklist__add:active,
+  .setpoint-checklist__clear:active {
     transform: none;
   }
 }
