@@ -120,7 +120,7 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount, notesEnabled = t
               </span>
             )}
             <span>{TAB_LABELS[tabKey]}</span>
-            <Kbd>{TAB_KEYS[tabKey]}</Kbd>
+            <Kbd>{tab === "notes" ? `\`${TAB_KEYS[tabKey]}` : TAB_KEYS[tabKey]}</Kbd>
           </button>
         );
       })}

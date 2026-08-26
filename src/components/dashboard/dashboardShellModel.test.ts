@@ -8,6 +8,7 @@ import {
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
   resolveShellTabHotkey,
+  resolveNotesNavigationChord,
   shouldClearCalendarFocusOnLeave,
 } from "./dashboardShellModel";
 import type { DashboardGlanceSheet } from "./dashboardShellModel";
@@ -250,6 +251,37 @@ describe("dashboard shell model", () => {
       }
       expect(resolveShellTabHotkey({ key: "1", editableTarget: true })).toBeNull();
       expect(resolveShellTabHotkey({ key: "1", metaKey: true })).toBeNull();
+    });
+
+    it("uses a backtick leader to route number keys away from Notes", () => {
+      expect(resolveNotesNavigationChord({
+        key: "`", code: "Backquote", activeTab: "notes",
+      })).toEqual({ action: "start" });
+      expect(["1", "2", "3", "4", "5"].map((key) => resolveNotesNavigationChord({
+        key,
+        code: `Digit${key}`,
+        leaderActive: true,
+        activeTab: "notes",
+      }))).toEqual([
+        { action: "navigate", tab: "dashboard" },
+        { action: "navigate", tab: "inbox" },
+        { action: "navigate", tab: "calendar" },
+        { action: "navigate", tab: "notes" },
+        { action: "navigate", tab: "news" },
+      ]);
+    });
+
+    it("keeps the Notes leader scoped and cancellable", () => {
+      expect(resolveNotesNavigationChord({ key: "1", code: "Digit1", activeTab: "notes" }))
+        .toEqual({ action: "ignore" });
+      expect(resolveNotesNavigationChord({ key: "Escape", leaderActive: true, activeTab: "notes" }))
+        .toEqual({ action: "cancel" });
+      expect(resolveNotesNavigationChord({
+        key: "`", code: "Backquote", activeTab: "dashboard",
+      })).toEqual({ action: "ignore" });
+      expect(resolveNotesNavigationChord({
+        key: "`", code: "Backquote", activeTab: "notes", anyBlockingOverlayOpen: true,
+      })).toEqual({ action: "ignore" });
     });
   });
 

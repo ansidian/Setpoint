@@ -9,7 +9,10 @@ import {
 } from "./ShellHeaderChrome";
 import { SystemStatusButton } from "./SystemStatusButton";
 import { isDemoMode } from "../../demo/config";
-import { resolveShellTabHotkey } from "../dashboard/dashboardShellModel";
+import {
+  resolveNotesNavigationChord,
+  resolveShellTabHotkey,
+} from "../dashboard/dashboardShellModel";
 import type { DashboardTab } from "../dashboard/dashboardShellModel";
 import type { SystemStatusView } from "./SystemStatusButton";
 
@@ -54,6 +57,8 @@ function ShellHeader({
 }: ShellHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const notesNavigationChordRef = useRef(false);
+  const notesNavigationChordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const demoMode = isDemoMode();
 
   useEffect(() => {
@@ -63,6 +68,57 @@ function ShellHeader({
     document.addEventListener("pointerdown", onDoc);
     return () => document.removeEventListener("pointerdown", onDoc);
   }, []);
+
+  useEffect(() => {
+    const clearNotesNavigationChord = () => {
+      notesNavigationChordRef.current = false;
+      if (notesNavigationChordTimerRef.current) {
+        clearTimeout(notesNavigationChordTimerRef.current);
+        notesNavigationChordTimerRef.current = null;
+      }
+    };
+
+    function onNotesNavigationKey(event: KeyboardEvent) {
+      const command = resolveNotesNavigationChord({
+        key: event.key,
+        code: event.code,
+        leaderActive: notesNavigationChordRef.current,
+        activeTab: tab,
+        anyBlockingOverlayOpen,
+        defaultPrevented: event.defaultPrevented,
+        repeat: event.repeat,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+      });
+
+      if (command.action === "ignore") return;
+      if (command.action === "cancel") {
+        clearNotesNavigationChord();
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (command.action === "start") {
+        clearNotesNavigationChord();
+        notesNavigationChordRef.current = true;
+        notesNavigationChordTimerRef.current = setTimeout(clearNotesNavigationChord, 900);
+        return;
+      }
+
+      clearNotesNavigationChord();
+      onTab(command.tab);
+    }
+
+    // Capture before tldraw so the destination digit cannot also select a tool.
+    window.addEventListener("keydown", onNotesNavigationKey, true);
+    return () => {
+      window.removeEventListener("keydown", onNotesNavigationKey, true);
+      clearNotesNavigationChord();
+    };
+  }, [anyBlockingOverlayOpen, onTab, tab]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {

@@ -67,6 +67,7 @@ describe("ShellHeader system status", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllEnvs();
+    vi.useRealTimers();
   });
 
   it("shows a compact current status button and opens provider rows", () => {
@@ -224,5 +225,38 @@ describe("ShellHeader system status", () => {
     renderHeader({ isMobile: true });
     expect(screen.queryByText("Notes")).toBeNull(); // mobile strip gone
     expect(screen.queryByText("Calendar")).toBeNull();
+  });
+
+  it("routes a backtick-number chord from Notes before the canvas receives the digit", () => {
+    const onTab = vi.fn();
+    const canvasKeydown = vi.fn();
+    document.addEventListener("keydown", canvasKeydown);
+    renderHeader({ tab: "notes", onTab });
+
+    fireEvent.keyDown(document.body, { key: "`", code: "Backquote" });
+    fireEvent.keyDown(document.body, { key: "1", code: "Digit1" });
+
+    expect(onTab).toHaveBeenCalledWith("dashboard");
+    expect(canvasKeydown).not.toHaveBeenCalled();
+    document.removeEventListener("keydown", canvasKeydown);
+  });
+
+  it("expires the Notes navigation chord after 900ms", () => {
+    vi.useFakeTimers();
+    const onTab = vi.fn();
+    renderHeader({ tab: "notes", onTab });
+
+    fireEvent.keyDown(document.body, { key: "`", code: "Backquote" });
+    vi.advanceTimersByTime(901);
+    fireEvent.keyDown(document.body, { key: "1", code: "Digit1" });
+
+    expect(onTab).not.toHaveBeenCalled();
+  });
+
+  it("shows the Notes leader chord in the visible tab hints", () => {
+    renderHeader({ tab: "notes" });
+
+    expect(within(screen.getByRole("tab", { name: /dashboard/i })).getByText("`1")).toBeTruthy();
+    expect(within(screen.getByRole("tab", { name: /news/i })).getByText("`5")).toBeTruthy();
   });
 });

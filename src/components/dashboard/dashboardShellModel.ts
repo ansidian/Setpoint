@@ -271,6 +271,60 @@ export function resolveShellTabHotkey({
   return null;
 }
 
+export type NotesNavigationChordCommand =
+  | { action: "ignore" }
+  | { action: "start" }
+  | { action: "cancel" }
+  | { action: "navigate"; tab: DashboardTab };
+
+// Notes gives the number row to tldraw's tool shortcuts. A backtick leader
+// creates a short shell-owned window where 1-5 once again mean app tabs.
+export function resolveNotesNavigationChord({
+  key,
+  code = "",
+  leaderActive = false,
+  activeTab,
+  anyBlockingOverlayOpen = false,
+  defaultPrevented = false,
+  repeat = false,
+  metaKey = false,
+  ctrlKey = false,
+  altKey = false,
+  shiftKey = false,
+}: {
+  key?: string;
+  code?: string;
+  leaderActive?: boolean;
+  activeTab?: DashboardTab;
+  anyBlockingOverlayOpen?: boolean;
+  defaultPrevented?: boolean;
+  repeat?: boolean;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+} = {}): NotesNavigationChordCommand {
+  if (activeTab !== "notes" || anyBlockingOverlayOpen || defaultPrevented || repeat) {
+    return leaderActive ? { action: "cancel" } : { action: "ignore" };
+  }
+  if (metaKey || ctrlKey || altKey || shiftKey) {
+    return leaderActive ? { action: "cancel" } : { action: "ignore" };
+  }
+
+  const isLeader = code === "Backquote" || key === "`";
+  if (isLeader) return { action: "start" };
+  if (!leaderActive) return { action: "ignore" };
+  if (key === "Escape") return { action: "cancel" };
+
+  const digit = code.startsWith("Digit") ? code.slice(5) : key;
+  if (digit === "1") return { action: "navigate", tab: "dashboard" };
+  if (digit === "2") return { action: "navigate", tab: "inbox" };
+  if (digit === "3") return { action: "navigate", tab: "calendar" };
+  if (digit === "4") return { action: "navigate", tab: "notes" };
+  if (digit === "5") return { action: "navigate", tab: "news" };
+  return { action: "cancel" };
+}
+
 export interface DashboardCalendarRangeAdapter {
   ensureRange?: unknown;
   refreshRange?: unknown;
