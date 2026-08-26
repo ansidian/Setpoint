@@ -17,6 +17,7 @@ export interface ParseCalendarTitleOptions {
   baseDate?: string | null;
   defaultStartTime?: string | null;
   defaultEndTime?: string | null;
+  defaultDurationMinutes?: number | null;
 }
 
 export interface CalendarTitleParseResult {
@@ -384,6 +385,7 @@ function parseTemporalTitle(
     baseDate,
     defaultStartTime,
     defaultEndTime,
+    defaultDurationMinutes,
   } = options;
   const trimmedTitle = cleanWhitespace(inputTitle);
   if (!trimmedTitle) {
@@ -424,7 +426,10 @@ function parseTemporalTitle(
       let derivedEndDate = endDate;
       let derivedEndTime = endTime;
       if (startTime && !derivedEndTime) {
-        const next = plusMinutes(startDate, startTime, DEFAULT_DURATION_MINUTES);
+        const durationMinutes = Number.isFinite(defaultDurationMinutes) && Number(defaultDurationMinutes) >= 0
+          ? Number(defaultDurationMinutes)
+          : DEFAULT_DURATION_MINUTES;
+        const next = plusMinutes(startDate, startTime, durationMinutes);
         derivedEndDate = next.date;
         derivedEndTime = next.time;
       }
@@ -464,6 +469,7 @@ export function parseCalendarTitle(
   const baseDate = options.baseDate || null;
   const defaultStartTime = options.defaultStartTime || "09:00";
   const defaultEndTime = options.defaultEndTime || "09:30";
+  const defaultDurationMinutes = options.defaultDurationMinutes;
   const now = Number.isFinite(options.now) ? (options.now ?? Date.now()) : Date.now();
 
   if (!trimmed) {
@@ -530,6 +536,7 @@ export function parseCalendarTitle(
     baseDate,
     defaultStartTime,
     defaultEndTime,
+    defaultDurationMinutes,
     parseTemporalTitle,
     cleanTitle: (value: string) => cleanWhitespace(String(value || "").replace(TRAILING_CONNECTOR_RE, "")),
   });

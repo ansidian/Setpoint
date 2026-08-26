@@ -30,6 +30,7 @@ import {
   updateCalendarEventBatchDraft,
 } from "./calendarEventEditorSessionModel";
 import type { CalendarMutationPhase } from "./calendarMutationCoordinator";
+import { calendarDraftDurationMinutes } from "./calendarEditorUtils";
 
 type CalendarEditorMode = "detail" | "editor";
 type TouchedCalendarFields = Partial<Record<keyof CalendarEventDraft, boolean>>;
@@ -198,6 +199,7 @@ export default function useCalendarEventEditor({
     recurringEditScope,
     touchedTitle: !!touchedFields.title,
     suppressAssist: structuredCreateSeed && !touchedFields.title,
+    defaultDurationMinutes: isEditing ? calendarDraftDurationMinutes(draft) : null,
     onInputStart: clearFieldError,
     onCommitTitle: commitTitleInput,
   });

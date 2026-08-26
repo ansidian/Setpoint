@@ -22,6 +22,7 @@ export default function CalendarEventEditorPanels({ editor, pickers }: CalendarE
     locationSuggestionsLoading,
     locationSuggestionsError,
     activeLocationSuggestion,
+    isEditing,
     updateField,
     updateRecurrenceDraft,
     selectRecurrencePreset,
@@ -52,6 +53,7 @@ export default function CalendarEventEditorPanels({ editor, pickers }: CalendarE
               else updateField(field, value as string);
             }}
             initialField={schedulePickerField}
+            preserveDurationOnStartChange={isEditing}
             onClose={() => pickers.setOpenPicker(null)}
           />
         </AnchoredFloatingPanel>

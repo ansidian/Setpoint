@@ -1,5 +1,5 @@
 import { addDaysYmd, parseYmd, ymdFromParts } from "../calendarDateUtils.ts";
-import { addMinutesToDraftDateTime } from "./calendarEditorUtils";
+import { addMinutesToDraftDateTime, calendarDraftDurationMinutes } from "./calendarEditorUtils";
 
 export interface CompactScheduleDraft {
   startDate?: string;
@@ -67,11 +67,19 @@ export function applyCompactScheduleTime<T extends CompactScheduleDraft>(
   draft: T,
   field: CompactScheduleTimeField,
   value: string,
+  options: { preserveDurationOnStartChange?: boolean } = {},
 ): T {
   const next = { ...draft, [field]: value } as T;
   if (field === "startTime") {
-    const seededEnd = addMinutesToDraftDateTime(next.startDate, value, 30);
-    if (!next.endDate || next.endDate < seededEnd.date || next.endDate === draft.startDate) {
+    const preserveDuration = !!options.preserveDurationOnStartChange;
+    const durationMinutes = preserveDuration ? calendarDraftDurationMinutes(draft) ?? 30 : 30;
+    const seededEnd = addMinutesToDraftDateTime(next.startDate, value, durationMinutes);
+    if (
+      preserveDuration
+      || !next.endDate
+      || next.endDate < seededEnd.date
+      || next.endDate === draft.startDate
+    ) {
       next.endDate = seededEnd.date;
     }
     next.endTime = seededEnd.time;

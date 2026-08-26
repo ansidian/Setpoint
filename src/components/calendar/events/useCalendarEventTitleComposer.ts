@@ -23,6 +23,7 @@ export interface CalendarEventTitleComposerOptions {
   recurringEditScope?: CalendarRecurrenceScope | null;
   touchedTitle: boolean;
   suppressAssist?: boolean;
+  defaultDurationMinutes?: number | null;
   onInputStart: () => void;
   onCommitTitle: (value: string) => void;
 }
@@ -35,6 +36,7 @@ export default function useCalendarEventTitleComposer({
   recurringEditScope,
   touchedTitle,
   suppressAssist = false,
+  defaultDurationMinutes,
   onInputStart,
   onCommitTitle,
 }: CalendarEventTitleComposerOptions) {
@@ -58,8 +60,9 @@ export default function useCalendarEventTitleComposer({
     baseDate: createSeedDraft.startDate,
     defaultStartTime: createSeedDraft.startTime,
     defaultEndTime: createSeedDraft.endTime,
+    defaultDurationMinutes,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-parse once chrono lands
-  }), [createSeedDraft.endTime, createSeedDraft.startDate, createSeedDraft.startTime, titleInput, titleParseNow, chronoReadyTick]);
+  }), [createSeedDraft.endTime, createSeedDraft.startDate, createSeedDraft.startTime, defaultDurationMinutes, titleInput, titleParseNow, chronoReadyTick]);
 
   const titleAssist = useMemo<CalendarTitleAssist>(() => (
     isEditing || suppressAssist

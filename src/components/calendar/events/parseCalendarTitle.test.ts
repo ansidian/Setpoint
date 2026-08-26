@@ -63,6 +63,25 @@ describe("parseCalendarTitle", () => {
     });
   });
 
+  it("preserves the caller's duration for a start-only time while honoring an explicit end", () => {
+    const options = {
+      now: new Date("2026-04-20T19:00:00.000Z").getTime(),
+      baseDate: "2026-04-20",
+      defaultStartTime: "03:30",
+      defaultEndTime: "08:00",
+      defaultDurationMinutes: 270,
+    };
+
+    expect(parseCalendarTitle("Deep work at 3am", options).parsedDateTime).toMatchObject({
+      startTime: "03:00",
+      endTime: "07:30",
+    });
+    expect(parseCalendarTitle("Deep work at 3am to 8am", options).parsedDateTime).toMatchObject({
+      startTime: "03:00",
+      endTime: "08:00",
+    });
+  });
+
   it("extracts a trailing location query after removing time tokens", () => {
     const parsed = parseCalendarTitle("Dinner @McDonald's tomorrow 5pm", {
       now: new Date("2026-04-20T19:00:00.000Z").getTime(),

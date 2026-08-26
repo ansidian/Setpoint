@@ -32,6 +32,7 @@ interface CalendarEventCompactSchedulePickerProps {
   initialField?: CalendarScheduleField;
   onClose: () => void;
   showAllDayToggle?: boolean;
+  preserveDurationOnStartChange?: boolean;
 }
 
 const ACCENT = "var(--ea-accent)";
@@ -90,6 +91,7 @@ export default function CalendarEventCompactSchedulePicker({
   initialField = "startDate",
   onClose,
   showAllDayToggle = true,
+  preserveDurationOnStartChange = false,
 }: CalendarEventCompactSchedulePickerProps) {
   const initialMonth = monthFromDateKey(
     initialField === "endDate" ? draft.endDate : draft.startDate,
@@ -127,7 +129,7 @@ export default function CalendarEventCompactSchedulePicker({
   };
 
   const updateTime = (field: CompactScheduleTimeField, value: string) => {
-    applyDraftPatch(applyCompactScheduleTime(draft, field, value));
+    applyDraftPatch(applyCompactScheduleTime(draft, field, value, { preserveDurationOnStartChange }));
   };
 
   const selectTime = (value: string) => {

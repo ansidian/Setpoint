@@ -37,6 +37,7 @@ export interface CalendarIntentContext {
   baseDate?: string | null;
   defaultStartTime?: string | null;
   defaultEndTime?: string | null;
+  defaultDurationMinutes?: number | null;
   parseTemporalTitle: (title: string, context: CalendarIntentContext) => CalendarTemporalParseResult;
   cleanTitle: (title: string) => string;
 }

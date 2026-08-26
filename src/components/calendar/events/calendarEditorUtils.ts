@@ -52,13 +52,38 @@ export function addMinutesToDraftDateTime(
 ) {
   const baseDate = dateValue || "2026-01-01";
   const baseTime = timeValue || "09:00";
+  const [year, month, day] = baseDate.split("-").map(Number);
   const [hour, minute] = baseTime.split(":").map(Number);
-  const base = new Date(`${baseDate}T00:00:00`);
-  base.setHours(Number.isFinite(hour) ? (hour ?? 9) : 9, Number.isFinite(minute) ? (minute ?? 0) : 0, 0, 0);
-  base.setMinutes(base.getMinutes() + minutesToAdd);
-  const nextDate = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
-  const nextTime = `${String(base.getHours()).padStart(2, "0")}:${String(base.getMinutes()).padStart(2, "0")}`;
+  const base = new Date(Date.UTC(
+    Number.isFinite(year) ? (year ?? 2026) : 2026,
+    Number.isFinite(month) ? (month ?? 1) - 1 : 0,
+    Number.isFinite(day) ? (day ?? 1) : 1,
+    Number.isFinite(hour) ? (hour ?? 9) : 9,
+    Number.isFinite(minute) ? (minute ?? 0) : 0,
+  ));
+  base.setUTCMinutes(base.getUTCMinutes() + minutesToAdd);
+  const nextDate = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+  const nextTime = `${String(base.getUTCHours()).padStart(2, "0")}:${String(base.getUTCMinutes()).padStart(2, "0")}`;
   return { date: nextDate, time: nextTime };
+}
+
+function draftDateTimeMinuteStamp(
+  dateValue: string | null | undefined,
+  timeValue: string | null | undefined,
+) {
+  const dateMatch = String(dateValue || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const timeMatch = String(timeValue || "").match(/^(\d{2}):(\d{2})$/);
+  if (!dateMatch || !timeMatch) return null;
+  const [, year, month, day] = dateMatch;
+  const [, hour, minute] = timeMatch;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)) / 60_000;
+}
+
+export function calendarDraftDurationMinutes(draft: CalendarScheduleDraft | null | undefined) {
+  const start = draftDateTimeMinuteStamp(draft?.startDate, draft?.startTime);
+  const end = draftDateTimeMinuteStamp(draft?.endDate, draft?.endTime);
+  if (start == null || end == null || end < start) return null;
+  return end - start;
 }
 
 export function sourceDotStyle(color?: string | null): CSSProperties {
