@@ -12,6 +12,14 @@ export default defineConfig({
     },
   },
   test: {
+    server: {
+      deps: {
+        // node-cron 4.2.1 publishes an ESM sourcemap that references an omitted
+        // source file. Native Node loading avoids feeding that broken map into
+        // Vitest's transform pipeline while preserving app-source sourcemaps.
+        external: ["node-cron"],
+      },
+    },
     // Running all four projects at the host's full 16-worker parallelism starves
     // happy-dom timers and animation frames under the complete suite. A bounded
     // shared pool keeps DOM polling deterministic without serializing test files.

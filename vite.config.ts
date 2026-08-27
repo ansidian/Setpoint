@@ -14,6 +14,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export function manualChunks(id: string): string | undefined {
   const normalized = id.split(path.sep).join("/");
   if (!normalized.includes("/node_modules/")) return undefined;
+  if (normalized.includes("/node_modules/tldraw/")
+    || normalized.includes("/node_modules/@tldraw/")) {
+    return "tldraw";
+  }
   if (normalized.includes("/node_modules/motion/")
     || normalized.includes("/node_modules/framer-motion/")) {
     return "motion";
