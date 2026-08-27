@@ -1,5 +1,6 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { CircleHelp } from "lucide-react";
+import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { LANE } from "../../lib/shell-helpers";
 import Tooltip from "../shared/Tooltip";
 import { PRIMARY_INBOX_LANES } from "./inboxCountsModel";
@@ -99,8 +100,34 @@ function LaneFilterChip({
 }
 
 function LaneGlossaryTooltip() {
+  const [open, setOpen] = useState(false);
+  const [disabled, setDisabled] = useState(false);
+  const tooltipActionsRef = useRef<TooltipPrimitive.Root.Actions | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setDisabled(document.documentElement.dataset.activeTab !== "inbox");
+    });
+    const dismiss = (event: Event) => {
+      const nextTab = (event as CustomEvent<{ tab?: string }>).detail?.tab;
+      setDisabled(nextTab !== "inbox");
+      tooltipActionsRef.current?.unmount();
+      setOpen(false);
+    };
+    window.addEventListener("ea-dashboard-tab-change", dismiss);
+    return () => {
+      active = false;
+      window.removeEventListener("ea-dashboard-tab-change", dismiss);
+    };
+  }, []);
+
   return (
     <Tooltip
+      actionsRef={tooltipActionsRef}
+      disabled={disabled}
+      open={open}
+      onOpenChange={setOpen}
       style={{ flexShrink: 0 }}
       side="bottom"
       sideOffset={8}

@@ -14,6 +14,9 @@ export type TooltipProps = {
   disableHoverablePopup?: boolean;
   contentStyle?: CSSProperties;
   actionsRef?: TooltipPrimitive.Root.Props["actionsRef"];
+  disabled?: TooltipPrimitive.Root.Props["disabled"];
+  open?: TooltipPrimitive.Root.Props["open"];
+  onOpenChange?: TooltipPrimitive.Root.Props["onOpenChange"];
 };
 
 export default function Tooltip({
@@ -28,11 +31,21 @@ export default function Tooltip({
   disableHoverablePopup,
   contentStyle,
   actionsRef,
+  disabled,
+  open,
+  onOpenChange,
 }: TooltipProps) {
   if (!text) return children;
 
   return (
-    <ShadTooltip actionsRef={actionsRef} delay={delay} disableHoverablePopup={disableHoverablePopup}>
+    <ShadTooltip
+      actionsRef={actionsRef}
+      delay={delay}
+      disabled={disabled}
+      disableHoverablePopup={disableHoverablePopup}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <TooltipPrimitive.Trigger
         data-slot="tooltip-trigger"
         closeDelay={closeDelay}

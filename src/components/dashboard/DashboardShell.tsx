@@ -168,6 +168,7 @@ export function DashboardShell({
   const setShellTab = useCallback((nextTab: DashboardTab) => {
     if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes" && nextTab !== "news") return;
     if (nextTab === "notes" && (isMobile || demoMode)) return;
+    if (nextTab !== tab) window.dispatchEvent(new CustomEvent("ea-dashboard-tab-change", { detail: { tab: nextTab } }));
     if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
     if (nextTab === "news") setNewsMounted(true); // mount-on-first-visit
     if (nextTab === "notes") setNotesMounted(true); // mount-on-first-visit
