@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import { LANE } from "../../lib/shell-helpers";
+import { PRIMARY_INBOX_LANES } from "./inboxCountsModel";
 
 type LaneCounts = Record<string, number | undefined>;
 
-const LANE_FILTERS = [
+const ALL_LANES = [
   "queued",
   "carryover",
   "needs_attention",
@@ -15,7 +16,7 @@ const LANE_FILTERS = [
 ] as const;
 
 function totalLaneCount(counts: LaneCounts): number {
-  return LANE_FILTERS.reduce((total, key) => total + (counts[key] || 0), 0);
+  return ALL_LANES.reduce((total, key) => total + (counts[key] || 0), 0);
 }
 
 function LaneFilterChip({
@@ -26,7 +27,7 @@ function LaneFilterChip({
   onClick,
 }: {
   label: string;
-  count: number;
+  count?: number;
   color: string;
   active: boolean;
   onClick: () => void;
@@ -40,10 +41,11 @@ function LaneFilterChip({
       style={{
         display: "inline-flex",
         alignItems: "center",
+        justifyContent: "center",
         gap: 5,
         flexShrink: 0,
         minHeight: 26,
-        padding: "3px 7px 3px 9px",
+        padding: typeof count === "number" ? "3px 7px 3px 9px" : "3px 9px",
         borderRadius: 999,
         border: `1px solid ${active ? `color-mix(in srgb, ${color} 38%, transparent)` : `color-mix(in srgb, ${color} 20%, transparent)`}`,
         background: active
@@ -58,25 +60,27 @@ function LaneFilterChip({
       }}
     >
       <span>{label}</span>
-      <span
-        aria-hidden="true"
-        style={{
-          minWidth: 16,
-          height: 16,
-          padding: "0 4px",
-          borderRadius: 999,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: `color-mix(in srgb, ${color} ${active ? 24 : 13}%, transparent)`,
-          color,
-          fontSize: 8.5,
-          fontWeight: 750,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {count}
-      </span>
+      {typeof count === "number" && (
+        <span
+          aria-hidden="true"
+          style={{
+            minWidth: 16,
+            height: 16,
+            padding: "0 4px",
+            borderRadius: 999,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `color-mix(in srgb, ${color} ${active ? 24 : 13}%, transparent)`,
+            color,
+            fontSize: 8.5,
+            fontWeight: 750,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
@@ -113,12 +117,11 @@ export default function InboxLaneFilterBar({
     >
       <LaneFilterChip
         label="All"
-        count={allCount}
         color={accent}
         active={activeLane === "__all"}
         onClick={() => onChange("__all")}
       />
-      {LANE_FILTERS.map((key) => {
+      {PRIMARY_INBOX_LANES.map((key) => {
         const count = counts[key] || 0;
         if (count < 1) return null;
         const metadata = LANE[key] ?? LANE.fyi!;

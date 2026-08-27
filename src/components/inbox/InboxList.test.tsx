@@ -134,29 +134,46 @@ describe("InboxList", () => {
     expect(screen.queryByText("Unread sale")).toBeNull();
   });
 
-  it("replaces the aggregate count line with non-empty lane filters", () => {
+  it("shows counts only for the three core lane filters", () => {
     renderInboxList({
       laneCounts: {
-        queued: 0,
-        carryover: 0,
+        queued: 2,
+        carryover: 2,
         needs_attention: 2,
-        catch_up: 0,
+        catch_up: 2,
         fyi: 4,
-        handled: 0,
-        untriaged_read: 0,
+        handled: 2,
+        untriaged_read: 2,
         noise: 3,
       },
-      totalCount: 9,
+      totalCount: 19,
       unreadCount: 0,
     });
 
     expect(screen.getByRole("toolbar", { name: "Triage lanes" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "All" }).textContent).toBe("All9");
+    expect(screen.getByRole("button", { name: "All" }).textContent).toBe("All");
     expect(screen.getByRole("button", { name: "Needs Attention" }).textContent).toBe("Needs Attention2");
     expect(screen.getByRole("button", { name: "FYI" }).textContent).toBe("FYI4");
     expect(screen.getByRole("button", { name: "Noise" }).textContent).toBe("Noise3");
     expect(screen.queryByRole("button", { name: "Queued" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Carryover" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Catch-up" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Handled" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Untriaged Read" })).toBeNull();
     expect(screen.queryByText(/unread ·/)).toBeNull();
+  });
+
+  it("hides natural lane filters whose scoped count is zero", () => {
+    renderInboxList({
+      laneCounts: { needs_attention: 1, fyi: 0, noise: 0 },
+      totalCount: 1,
+      unreadCount: 0,
+    });
+
+    expect(screen.getByRole("button", { name: "All" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Needs Attention" }).textContent).toBe("Needs Attention1");
+    expect(screen.queryByRole("button", { name: "FYI" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Noise" })).toBeNull();
   });
 
   it("wires compact lane filters to the desktop lane scope", () => {

@@ -490,9 +490,43 @@ describe("InboxView mobile", () => {
     expect(screen.getByText("Select an email")).toBeTruthy();
   });
 
-  it("uses lane-chip counts instead of repeating snapshot and default-account summaries on mobile", () => {
+  it("counts only the core lane chips instead of repeating snapshot and default-account summaries on mobile", () => {
+    const snapshot = makeActiveSnapshot();
+    const lanes = snapshot.lanes;
+    const needsItem = lanes?.needs_attention?.[0];
+    if (!lanes || !needsItem) throw new Error("Expected the active snapshot fixture to include a Needs item");
+    const laneItem = (id: number, lane: string) => ({
+      ...needsItem,
+      id,
+      snapshot_item_id: id,
+      uid: `snapshot-msg-${id}`,
+      email_id: `snapshot-msg-${id}`,
+      lane,
+    });
+    lanes.queued = [laneItem(14, "queued")];
+    snapshot.carryover = [laneItem(15, "needs_attention")];
+    lanes.catch_up = [laneItem(16, "catch_up")];
+    lanes.handled = [laneItem(17, "handled")];
+    lanes.untriaged_read = [{ ...laneItem(18, "untriaged_read"), read: true }];
+    lanes.fyi = [{
+      ...needsItem,
+      id: 12,
+      snapshot_item_id: 12,
+      uid: "snapshot-msg-2",
+      email_id: "snapshot-msg-2",
+      lane: "fyi",
+    }];
+    lanes.noise = [{
+      ...needsItem,
+      id: 13,
+      snapshot_item_id: 13,
+      uid: "snapshot-msg-3",
+      email_id: "snapshot-msg-3",
+      lane: "noise",
+    }];
+
     activeSnapshotMock.state = {
-      snapshot: makeActiveSnapshot(),
+      snapshot,
       loading: false,
       error: null,
       refresh: vi.fn(),
@@ -501,7 +535,15 @@ describe("InboxView mobile", () => {
     renderInbox({ isMobile: true, liveEmails: [] });
 
     expect(screen.getByText("Current snapshot")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "All, 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Needs, 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "FYI, 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Noise, 1" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Queue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Carry" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Catch" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Handled" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read" })).toBeNull();
     expect(screen.queryByText(/1 email across 1 account/i)).toBeNull();
     expect(screen.queryByText("All accounts")).toBeNull();
     expect(screen.queryByText("1 shown")).toBeNull();

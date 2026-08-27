@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   computeScopedNoiseUnreadCount,
   computeLaneCounts,
-  computeMobileChipCounts,
+  computeInboxChipCounts,
   computeUnreadCount,
-  selectVisibleMobileChips,
+  selectVisibleInboxLaneChips,
 } from "./inboxCountsModel";
 import type { InboxEmailLike } from "./inboxTypes";
 
@@ -79,7 +79,7 @@ describe("computeLaneCounts", () => {
     expect(counts.action).toBe(1);
   });
 
-  it("ignores snooze state (unlike the mobile chip counts)", () => {
+  it("ignores snooze state (unlike the primary chip counts)", () => {
     // A snoozedMap that would hide this row everywhere snooze is honored; lane
     // counts must still include it. Guards against snooze filtering creeping in.
     const counts = computeLaneCounts([
@@ -89,10 +89,10 @@ describe("computeLaneCounts", () => {
   });
 });
 
-describe("computeMobileChipCounts", () => {
+describe("computeInboxChipCounts", () => {
   it("honors snooze and tracks lane and __all counts", () => {
     const nowTick = 1_000;
-    const counts = computeMobileChipCounts([
+    const counts = computeInboxChipCounts([
       email({ uid: "live1", _untriaged: true, _lane: "queued" }),
       email({ uid: "na1", _lane: "needs_attention" }),
       email({ uid: "snoozed", _lane: "fyi" }),
@@ -121,42 +121,43 @@ describe("computeUnreadCount", () => {
   });
 });
 
-describe("selectVisibleMobileChips", () => {
+describe("selectVisibleInboxLaneChips", () => {
   const chips = [
     { key: "__all", label: "All" },
+    { key: "queued", label: "Queue" },
+    { key: "carryover", label: "Carry" },
     { key: "needs_attention", label: "Needs" },
+    { key: "catch_up", label: "Catch" },
     { key: "fyi", label: "FYI" },
+    { key: "handled", label: "Handled" },
     { key: "noise", label: "Noise" },
   ];
 
-  it("hides zero-count lane chips but always keeps __all", () => {
-    const visible = selectVisibleMobileChips(chips, {
-      __all: 3, needs_attention: 2, fyi: 0, noise: 1,
-    }, { activeLane: "__all" });
-    expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
-  });
-
-  it("keeps the active lane even when its count is zero", () => {
-    const visible = selectVisibleMobileChips(chips, {
-      __all: 3, needs_attention: 0, fyi: 0, noise: 1,
-    }, { activeLane: "needs_attention" });
+  it("keeps All and positive natural triage lanes only", () => {
+    const visible = selectVisibleInboxLaneChips(chips, {
+      __all: 10,
+      queued: 2,
+      carryover: 1,
+      needs_attention: 2,
+      catch_up: 1,
+      fyi: 0,
+      handled: 1,
+      noise: 1,
+    });
     expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
   });
 
   it("preserves the source order of the surviving chips", () => {
-    const visible = selectVisibleMobileChips(chips, {
+    const visible = selectVisibleInboxLaneChips(chips, {
       __all: 1, needs_attention: 1, fyi: 1, noise: 1,
     });
     expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "fyi", "noise"]);
   });
 
-  it("hides a chip whose key is absent from counts, unless it is active", () => {
+  it("hides a natural lane whose key is absent from counts", () => {
     const sparse = { __all: 2, needs_attention: 2 };
     expect(
-      selectVisibleMobileChips(chips, sparse, { activeLane: "__all" }).map((c) => c.key),
+      selectVisibleInboxLaneChips(chips, sparse).map((c) => c.key),
     ).toEqual(["__all", "needs_attention"]);
-    expect(
-      selectVisibleMobileChips(chips, sparse, { activeLane: "fyi" }).map((c) => c.key),
-    ).toEqual(["__all", "needs_attention", "fyi"]);
   });
 });

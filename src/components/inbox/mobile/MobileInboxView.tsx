@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
 import InboxUndoToast from "../InboxUndoToast";
 import MobileSnapshotHeader from "./MobileSnapshotHeader";
-import { selectVisibleMobileChips } from "../inboxCountsModel";
+import { selectVisibleInboxLaneChips } from "../inboxCountsModel";
 import type { CSSProperties, MouseEventHandler, Ref } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { InboxPaneProps } from "../inboxViewTypes";
@@ -19,13 +19,8 @@ import { useState } from "react";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
-  { key: "queued", label: "Queue" },
-  { key: "carryover", label: "Carry" },
   { key: "needs_attention", label: "Needs" },
-  { key: "catch_up", label: "Catch" },
   { key: "fyi", label: "FYI" },
-  { key: "handled", label: "Handled" },
-  { key: "untriaged_read", label: "Read" },
   { key: "noise", label: "Noise" },
 ];
 
@@ -226,7 +221,7 @@ export default function MobileInboxView({
   indexedSearchHasMore,
   loadMoreIndexedSearch,
   visibleEmails,
-  mobileChipCounts,
+  chipCounts,
   totalUnread,
   noiseUnreadCount = 0,
   unreadInView,
@@ -395,13 +390,13 @@ export default function MobileInboxView({
               />
               {(indexedSearchActive
                 ? [{ key: "__all", label: "All" }]
-                : selectVisibleMobileChips(MOBILE_FILTER_CHIPS, mobileChipCounts, { activeLane: lane })
+                : selectVisibleInboxLaneChips(MOBILE_FILTER_CHIPS, chipCounts)
               ).map((chip) => (
                 <MobileChip
                   key={chip.key}
                   active={indexedSearchActive ? true : lane === chip.key}
                   label={chip.label}
-                  count={indexedSearchActive ? visibleEmails.length : mobileChipCounts[chip.key]}
+                  count={chip.key === "__all" ? undefined : chipCounts[chip.key]}
                   onClick={() => setLane(chip.key)}
                   accent={accent}
                 />

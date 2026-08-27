@@ -19,7 +19,7 @@ import type { InboxActiveSnapshotLike, ResurfacedEntry } from "./inboxWorkItems"
 import {
   computeScopedNoiseUnreadCount,
   computeLaneCounts,
-  computeMobileChipCounts,
+  computeInboxChipCounts,
   computeUnreadCount,
 } from "./inboxCountsModel";
 import { computeNextTickDelay } from "./inboxNowTick";
@@ -297,8 +297,8 @@ export default function useInboxController({
     [flatEmails, accountId],
   );
 
-  const mobileChipCounts = useMemo(
-    () => computeMobileChipCounts(flatEmails, { accountId, snoozedMap, nowTick }),
+  const chipCounts = useMemo(
+    () => computeInboxChipCounts(flatEmails, { accountId, snoozedMap, nowTick }),
     [flatEmails, snoozedMap, nowTick, accountId],
   );
 
@@ -455,7 +455,7 @@ export default function useInboxController({
     onAskAlfred: askAlfred,
     visibleEmails,
     laneCounts,
-    mobileChipCounts,
+    chipCounts,
     totalUnread,
     noiseUnreadCount,
     unreadInView,

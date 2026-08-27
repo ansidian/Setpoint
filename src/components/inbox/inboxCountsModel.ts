@@ -2,6 +2,13 @@ import type { InboxChip, InboxEmailLike } from "./inboxTypes";
 
 type LaneCounts = Record<string, number>;
 
+export const PRIMARY_INBOX_LANES = ["needs_attention", "fyi", "noise"] as const;
+const PRIMARY_INBOX_LANE_SET = new Set<string>(PRIMARY_INBOX_LANES);
+
+export function isPrimaryInboxLane(lane: string): boolean {
+  return PRIMARY_INBOX_LANE_SET.has(lane);
+}
+
 export function computeScopedNoiseUnreadCount(emails: InboxEmailLike[] = [], {
   accountId = "__all",
   indexedSearchActive = false,
@@ -33,9 +40,9 @@ export function computeLaneCounts(emails: InboxEmailLike[] = [], { accountId = "
   return counts;
 }
 
-// Mobile chip-bar counts: unlike computeLaneCounts these honor snooze and include
-// a running `__all` total.
-export function computeMobileChipCounts(emails: InboxEmailLike[] = [], {
+// Primary chip-bar counts: unlike computeLaneCounts these honor snooze and
+// include a running `__all` total. Shared by desktop and mobile.
+export function computeInboxChipCounts(emails: InboxEmailLike[] = [], {
   accountId = "__all",
   snoozedMap = new Map(),
   nowTick = Date.now(),
@@ -70,16 +77,15 @@ export function computeUnreadCount(emails: InboxEmailLike[] = []): number {
   return emails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
 }
 
-// Mobile chip-bar visibility: hide lane chips with a zero count so the real
-// lanes fit without horizontal scrolling. Always keep `__all`, the currently
-// active lane (so filtering into a now-empty lane doesn't yank the chip out
-// from under the user), and any lane whose count is > 0. Source order preserved.
-export function selectVisibleMobileChips(
+// Primary chip-bar visibility: always keep `__all`; show only natural triage
+// destinations with a positive scoped count. Lifecycle lanes never enter the
+// primary bar. Source order is preserved.
+export function selectVisibleInboxLaneChips(
   chips: InboxChip[] = [],
   counts: Readonly<Record<string, number>> = {},
-  { activeLane = "__all" }: { activeLane?: string } = {},
 ): InboxChip[] {
   return chips.filter(
-    (chip) => chip.key === "__all" || chip.key === activeLane || (counts[chip.key] ?? 0) > 0,
+    (chip) => chip.key === "__all"
+      || (isPrimaryInboxLane(chip.key) && (counts[chip.key] ?? 0) >= 1),
   );
 }

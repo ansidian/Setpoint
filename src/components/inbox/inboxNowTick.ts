@@ -4,7 +4,7 @@
 // moments — so instead of a blanket 30s interval we schedule a single timeout
 // to the soonest one and idle otherwise:
 //   1. the snooze sweep (`snoozeUntil > nowTick`) in visibleEmails /
-//      mobileChipCounts / noiseUnreadCount — flips when a snooze boundary passes.
+//      chipCounts / noiseUnreadCount — flips when a snooze boundary passes.
 //   2. verification-code row markers, which disappear at `active_until`.
 //
 // Returns the ms delay until the soonest still-future boundary across all

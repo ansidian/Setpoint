@@ -41,6 +41,7 @@ function InboxDesktopPane({
   onAttachEmailToAlfred,
   visibleEmails,
   laneCounts,
+  chipCounts,
   totalUnread,
   noiseUnreadCount,
   unreadInView,
@@ -187,7 +188,7 @@ function InboxDesktopPane({
               searchRef={searchRef}
               activeSnapshotMode={activeSnapshotMode}
               lane={lane}
-              laneCounts={laneCounts}
+              laneCounts={chipCounts}
               onLaneChange={setLane}
               snapshotNavigation={guardedSnapshotNavigation}
             />
