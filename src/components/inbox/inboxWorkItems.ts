@@ -3,7 +3,6 @@ import { buildInboxRow } from "./inboxRow";
 import type { PinnedEmailEntry } from "../../../shared/types/email";
 import type {
   InboxAccount,
-  InboxCategoryFilter,
   InboxEmailLike,
   InboxId,
   InboxReadOverrides,
@@ -25,7 +24,7 @@ export interface InboxActiveSnapshotLike {
       icon?: string;
       count?: number;
     }>;
-    categories?: Array<Partial<InboxCategoryFilter>>;
+    categories?: Array<{ category?: string; count?: number }>;
   };
   lanes?: Partial<Record<"queued" | "needs_attention" | "catch_up" | "fyi" | "handled" | "untriaged_read" | "noise", InboxEmailLike[]>>;
   carryover?: InboxEmailLike[];

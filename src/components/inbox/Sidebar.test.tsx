@@ -8,25 +8,11 @@ const baseProps = {
   accounts: [],
   accountId: "__all",
   setAccountId: () => {},
-  lane: "__all",
-  setLane: () => {},
-  laneCounts: {
-    queued: 0,
-    carryover: 0,
-    needs_attention: 1,
-    catch_up: 0,
-    fyi: 0,
-    handled: 0,
-    untriaged_read: 0,
-    noise: 0,
-  },
   totalUnread: 1,
-  onOpenDashboard: () => {},
 };
 
-// These tests assert on lane rows and shortcut hints, which only render in the
-// expanded sidebar. The sidebar now owns its compact state (default compact-on),
-// so seed the persisted flag to "0" (expanded) before each render.
+// Shortcut hints only render in the expanded sidebar. The sidebar owns its
+// compact state (default compact-on), so seed "0" before each render.
 beforeEach(() => {
   window.localStorage.setItem(SIDEBAR_COMPACT_KEY, "0");
 });
@@ -37,6 +23,29 @@ afterEach(() => {
 });
 
 describe("Sidebar shortcuts", () => {
+  it("labels the expanded collapse control and omits the redundant dashboard shortcut", () => {
+    render(<Sidebar {...baseProps} />);
+
+    expect(screen.getByRole("button", { name: "Collapse sidebar" }).textContent).toContain("Collapse sidebar");
+    expect(screen.queryByRole("button", { name: /dashboard/i })).toBeNull();
+    expect(screen.queryByText("Triage lanes")).toBeNull();
+  });
+
+  it("keeps compact account counts visible and wraps account controls in custom tooltips", () => {
+    window.localStorage.setItem(SIDEBAR_COMPACT_KEY, "1");
+    render(
+      <Sidebar
+        {...baseProps}
+        accounts={[{ id: "work", name: "Work", email: "work@example.com", unread: 4, color: "#89b4fa" }]}
+      />,
+    );
+
+    const accountButton = screen.getByRole("button", { name: "Work, 4" });
+    expect(accountButton.closest("[data-slot='tooltip-trigger']")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-account-count-work").textContent).toBe("4");
+    expect(screen.queryByRole("button", { name: /dashboard/i })).toBeNull();
+  });
+
   it("shows accurate desktop inbox shortcuts without stale hold, reply, or pin hints", () => {
     render(
       <Sidebar
@@ -105,24 +114,10 @@ describe("Sidebar shortcuts", () => {
     expect(screen.queryByText("Move to FYI")).toBeNull();
   });
 
-  it("shows a muted unread hint on the Noise lane row", () => {
+  it("keeps selected Catch-up shortcuts review-only", () => {
     render(
       <Sidebar
         {...baseProps}
-        laneCounts={{ ...baseProps.laneCounts, noise: 8 }}
-        noiseUnreadCount={3}
-      />,
-    );
-
-    expect(screen.getByText("Noise")).toBeTruthy();
-    expect(screen.getByText("3 unread")).toBeTruthy();
-  });
-
-  it("includes Catch-up in lane navigation but keeps selected Catch-up shortcuts review-only", () => {
-    render(
-      <Sidebar
-        {...baseProps}
-        laneCounts={{ ...baseProps.laneCounts, catch_up: 2 }}
         selectedEmail={{
           id: "msg-1",
           uid: "msg-1",
@@ -133,7 +128,6 @@ describe("Sidebar shortcuts", () => {
       />,
     );
 
-    expect(screen.getByText("Catch-up")).toBeTruthy();
     expect(screen.getByText("Open")).toBeTruthy();
     expect(screen.queryByText("Mark handled")).toBeNull();
     expect(screen.queryByText("Dismiss")).toBeNull();
@@ -144,11 +138,10 @@ describe("Sidebar shortcuts", () => {
     expect(screen.queryByText("Trash")).toBeNull();
   });
 
-  it("shows queued and untriaged-read lanes while keeping their shortcuts constrained", () => {
+  it("keeps queued and untriaged-read shortcuts constrained", () => {
     const { rerender } = render(
       <Sidebar
         {...baseProps}
-        laneCounts={{ ...baseProps.laneCounts, queued: 2, untriaged_read: 1 }}
         selectedEmail={{
           id: "msg-1",
           uid: "msg-1",
@@ -159,8 +152,6 @@ describe("Sidebar shortcuts", () => {
       />,
     );
 
-    expect(screen.getByText("Queued")).toBeTruthy();
-    expect(screen.getByText("Untriaged Read")).toBeTruthy();
     expect(screen.getByText("Dismiss")).toBeTruthy();
     expect(screen.queryByText("Mark handled")).toBeNull();
     expect(screen.queryByText("Move to FYI")).toBeNull();
@@ -170,7 +161,6 @@ describe("Sidebar shortcuts", () => {
     rerender(
       <Sidebar
         {...baseProps}
-        laneCounts={{ ...baseProps.laneCounts, queued: 2, untriaged_read: 1 }}
         selectedEmail={{
           id: "msg-2",
           uid: "msg-2",

@@ -35,7 +35,6 @@ export interface InboxViewProps {
   onLiveReadOverrideChange?: (uid: string, read: boolean) => void;
   snoozedEntries?: SnoozedEntry[];
   resurfacedEntries?: Array<ResurfacedEntry & { uid: string }>;
-  onOpenDashboard?: () => void;
   onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
   onRefresh?: () => unknown | Promise<unknown>;
   seedSelectedId?: InboxSelectionId;
@@ -69,7 +68,6 @@ export default function InboxView({
   onLiveReadOverrideChange,
   snoozedEntries = [],
   resurfacedEntries = [],
-  onOpenDashboard = () => {},
   onOpenRecordedBill,
   onRefresh = () => {},
   seedSelectedId,
@@ -185,7 +183,6 @@ export default function InboxView({
       : liveEmailsLoading || triageActivity.syncing,
     processingCount,
     activeSnapshotError: activeSnapshot.error,
-    onOpenDashboard,
     onOpenRecordedBill,
     onRefresh: handleRefresh,
     readOnly,

@@ -22,7 +22,7 @@ function email(overrides: Partial<InboxEmailLike> = {}): InboxEmailLike {
 }
 
 describe("computeScopedNoiseUnreadCount", () => {
-  it("counts unread noise in the current account and category scope", () => {
+  it("counts unread noise in the current account scope", () => {
     const count = computeScopedNoiseUnreadCount([
       email({ uid: "noise-1" }),
       email({ uid: "noise-read", read: true }),
@@ -31,10 +31,9 @@ describe("computeScopedNoiseUnreadCount", () => {
       email({ uid: "finance-noise", category: "finance" }),
     ], {
       accountId: "work",
-      categoryFilter: "marketing",
     });
 
-    expect(count).toBe(1);
+    expect(count).toBe(2);
   });
 
   it("hides the noise unread count during indexed search and ignores snoozed rows", () => {

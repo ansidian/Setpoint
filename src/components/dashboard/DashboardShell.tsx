@@ -515,7 +515,6 @@ export function DashboardShell({
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
               snoozedEntries={liveData.snoozedEntries}
               resurfacedEntries={liveData.resurfacedEntries}
-              onOpenDashboard={() => setShellTab("dashboard")}
               onOpenRecordedBill={handleInboxOpenRecordedBill}
               onRefresh={onQuickRefresh}
               commitPendingUndoSignal={calendarOpenRequestId}

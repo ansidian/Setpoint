@@ -121,7 +121,6 @@ function renderInbox(options: RenderInboxOptions = {}) {
         activeSnapshot={activeSnapshot}
         sessionState={sessionState}
         onSessionStateChange={onSessionStateChange}
-        onOpenDashboard={() => {}}
         onRefresh={() => {}}
         isMobile={isMobile}
         {...rest}
@@ -283,7 +282,6 @@ describe("InboxView action workflows", () => {
           onLiveReadOverrideChange={onReadOverrideChange}
           snoozedEntries={EMPTY_SNOOZED_ENTRIES}
           resurfacedEntries={EMPTY_RESURFACED_ENTRIES}
-          onOpenDashboard={() => {}}
           onRefresh={() => {}}
           isMobile
         />
@@ -454,7 +452,6 @@ describe("InboxView session and projection workflows", () => {
             onLiveReadOverrideChange={NOOP_READ_OVERRIDE}
             snoozedEntries={EMPTY_SNOOZED_ENTRIES}
             resurfacedEntries={EMPTY_RESURFACED_ENTRIES}
-            onOpenDashboard={() => {}}
             onRefresh={() => {}}
             isMobile
           />}

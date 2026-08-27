@@ -15,7 +15,6 @@ function InboxDesktopPane({
   processingCount = 0,
   activeSnapshotError = null,
   emailAccounts,
-  onOpenDashboard,
   onRefresh,
   accountId,
   setAccountId,
@@ -55,9 +54,6 @@ function InboxDesktopPane({
   grouping,
   activeSnapshotMode = false,
   snapshotNavigation = null,
-  snapshotCategories = [],
-  categoryFilter = "__all",
-  setCategoryFilter,
   readOnly = false,
   undo,
   onUndo,
@@ -113,18 +109,16 @@ function InboxDesktopPane({
         color: "var(--sp-text)",
       }}
     >
-      <DigestStrip
-        accent={accent}
-        counts={laneCounts}
-        liveLoading={liveEmailsLoading}
-        processingCount={processingCount}
-        summary={briefingSummary}
-        activeSnapshotMode={activeSnapshotMode}
-        readOnly={readOnly}
-        snapshotNavigation={guardedSnapshotNavigation}
-        accountCount={emailAccounts.length}
-        onJumpLane={(key) => setLane(key)}
-      />
+      {!activeSnapshotMode && (
+        <DigestStrip
+          accent={accent}
+          counts={laneCounts}
+          liveLoading={liveEmailsLoading}
+          processingCount={processingCount}
+          summary={briefingSummary}
+          onJumpLane={(key) => setLane(key)}
+        />
+      )}
 
       <div style={{ flex: 1, display: "flex", minHeight: 0, padding: "14px 18px 18px", gap: 14 }}>
         <Sidebar
@@ -132,12 +126,7 @@ function InboxDesktopPane({
           accounts={emailAccounts}
           accountId={accountId}
           setAccountId={setAccountId}
-          lane={lane}
-          setLane={setLane}
-          laneCounts={laneCounts}
           totalUnread={totalUnread}
-          noiseUnreadCount={noiseUnreadCount}
-          onOpenDashboard={onOpenDashboard}
           selectedEmail={selectedEmail}
           readOnly={readOnly}
         />
@@ -197,9 +186,10 @@ function InboxDesktopPane({
               noiseUnreadCount={noiseUnreadCount}
               searchRef={searchRef}
               activeSnapshotMode={activeSnapshotMode}
-              snapshotCategories={snapshotCategories}
-              categoryFilter={categoryFilter}
-              onCategoryFilterChange={setCategoryFilter}
+              lane={lane}
+              laneCounts={laneCounts}
+              onLaneChange={setLane}
+              snapshotNavigation={guardedSnapshotNavigation}
             />
           </div>
           {layout !== "list-only" && (

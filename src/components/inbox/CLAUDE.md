@@ -20,17 +20,19 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `useInboxUndoSlot.ts` — undo slot lifecycle: timer, pending, commit/settle
 
 ### List + rows
-- `InboxList.tsx` — desktop list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
+- `InboxList.tsx` — desktop list container: skeletons, search, lane filters, Alfred handoff (⌘Enter)
+- `InboxLaneFilterBar.tsx` — compact desktop lane scope with non-empty, lane-tinted count chips
 - `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
 - `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
 - `DigestStrip.tsx` — header strip: snapshot status, lane counts, processing activity
+- `DesktopSnapshotNavigator.tsx` — desktop list-local snapshot context, adjacent navigation, and active update status
 - `SnapshotNavigationControls.tsx` — shared desktop/mobile adjacent-snapshot controls with boundary, loading, and error states
-- `Sidebar.tsx` — account and lane navigation
+- `Sidebar.tsx` — collapsible desktop account navigation and shortcut reference
 - `sidebarCompactStore.ts` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
 - `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
 - `inboxWorkItems.ts` — work item pipelines: active-snapshot, initial-load live fallback, and resurfaced-snooze
-- `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/category/lane filter + lane/recency sort)
-- `inboxCountsModel.ts` — scoped unread counts under account/category filters, plus lane/mobile-chip/unread count projections
+- `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/lane filter + lane/recency sort)
+- `inboxCountsModel.ts` — scoped unread counts under account filters, plus lane/mobile-chip/unread count projections
 - `inboxNowTick.ts` — schedules the `nowTick` timeout to the soonest snooze or verification-code boundary
 - `inboxProcessingModel.ts` — triage activity counts from processing state
 - `snapshotSummary.ts` — lane breakdown and snapshot-window orientation text for Inbox headers
@@ -39,8 +41,6 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `inboxTypes.ts` — canonical Inbox account, identity, row/work-item, filter, overlay, and selection contracts
 
 ### Filters + search
-- `InboxCategoryFilterChips.tsx` — category chip menu with overflow dropdown
-- `InboxCategoryFilterChipsModel.ts` — category ordering: critical > commitment > passive
 - `InboxSearchFlagChips.tsx` — is:unread toggle chip
 - `InboxSearchFlagChipsModel.ts` — parses/toggles is:read|is:unread flags in queries
 - `indexedSearchModel.ts` — normalizes indexed search results, merges read state

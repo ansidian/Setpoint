@@ -4,11 +4,10 @@ type LaneCounts = Record<string, number>;
 
 export function computeScopedNoiseUnreadCount(emails: InboxEmailLike[] = [], {
   accountId = "__all",
-  categoryFilter = "__all",
   indexedSearchActive = false,
   snoozedMap = new Map(),
   nowTick = Date.now(),
-}: { accountId?: string; categoryFilter?: string; indexedSearchActive?: boolean; snoozedMap?: ReadonlyMap<string | number, number>; nowTick?: number } = {}): number {
+}: { accountId?: string; indexedSearchActive?: boolean; snoozedMap?: ReadonlyMap<string | number, number>; nowTick?: number } = {}): number {
   if (indexedSearchActive) return 0;
 
   let count = 0;
@@ -17,7 +16,6 @@ export function computeScopedNoiseUnreadCount(emails: InboxEmailLike[] = [], {
     const snoozeUntil = uid ? snoozedMap.get(uid) : null;
     if (snoozeUntil && snoozeUntil > nowTick) continue;
     if (accountId !== "__all" && email?._accountKey !== accountId) continue;
-    if (categoryFilter !== "__all" && email?.category !== categoryFilter) continue;
     if (email?._lane === "noise" && !email.read) count += 1;
   }
   return count;

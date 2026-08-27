@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
 import type { MouseEventHandler } from "react";
-import { Inbox, Mail, Briefcase, GraduationCap, DollarSign, Layers, Send, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Inbox, Mail, Briefcase, GraduationCap, DollarSign, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { LANE } from "../../lib/shell-helpers";
 import { Kbd, Eyebrow } from "./primitives";
+import Tooltip from "../shared/Tooltip";
 import { readSidebarCompact, writeSidebarCompact } from "./sidebarCompactStore";
 import type { InboxAccount, InboxEmailLike } from "./inboxTypes";
 
 const ACCOUNT_ICON: Record<string, LucideIcon> = { Mail, Briefcase, GraduationCap, DollarSign, Inbox };
-type LaneCounts = Record<string, number | undefined>;
 type SetString = (value: string) => void;
 
 
@@ -28,21 +27,26 @@ export function AccountRow({ acc, all = false, accent, accountId, setAccountId, 
   const count = all ? totalUnread : (acc?.unread ?? 0);
   const iconKey = acc?.icon;
   const Icon = (iconKey ? ACCOUNT_ICON[iconKey] : undefined) || (all ? Inbox : Mail);
+  const label = all ? "All accounts" : (acc?.name || acc?.email || "Account");
 
-  return (
+  const control = (
     <button
       type="button"
       onClick={() => setAccountId(all ? "__all" : accKey)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      aria-label={compact ? `${label}${count > 0 ? `, ${count}` : ""}` : undefined}
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
       style={{
-        display: "flex", alignItems: "center", gap: 10,
-        width: "100%", padding: "8px 10px",
+        position: "relative",
+        display: "flex", alignItems: "center", justifyContent: compact ? "center" : "flex-start", gap: 10,
+        width: "100%", minHeight: 40, padding: compact ? "8px 6px" : "8px 10px",
         background: isActive ? `${color}12` : (hover ? "rgba(255,255,255,0.03)" : "transparent"),
         border: `1px solid ${isActive ? `${color}28` : "transparent"}`,
         borderRadius: 8, cursor: "pointer",
         fontFamily: "inherit", textAlign: "left",
-        transition: "all 120ms",
+        transform: hover ? "translateY(-1px)" : "translateY(0)",
+        transition: "background 120ms, border-color 120ms, transform 120ms",
       }}
     >
       <span
@@ -54,6 +58,33 @@ export function AccountRow({ acc, all = false, accent, accountId, setAccountId, 
       >
         <Icon size={12} />
       </span>
+      {compact && count > 0 && (
+        <span
+          aria-hidden="true"
+          data-testid={`sidebar-account-count-${all ? "all" : accKey}`}
+          style={{
+            position: "absolute",
+            top: 2,
+            right: 1,
+            minWidth: 15,
+            height: 15,
+            padding: "0 3px",
+            borderRadius: 999,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--sp-mantle)",
+            border: `1px solid color-mix(in srgb, ${color} 45%, var(--sp-mantle))`,
+            color,
+            fontSize: 8,
+            lineHeight: 1,
+            fontWeight: 750,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
       {!compact && (
         <>
           <span
@@ -67,7 +98,7 @@ export function AccountRow({ acc, all = false, accent, accountId, setAccountId, 
               color: isActive ? "#fff" : "rgba(205,214,244,0.8)",
             }}
           >
-            {all ? "All accounts" : (acc?.name || acc?.email)}
+            {label}
           </span>
           {count > 0 && (
             <span
@@ -85,135 +116,12 @@ export function AccountRow({ acc, all = false, accent, accountId, setAccountId, 
       )}
     </button>
   );
-}
 
-export function NoiseUnreadBadge({ count }: { count: number }) {
-  if (!count) return null;
+  if (!compact) return control;
   return (
-    <span
-      style={{
-        flexShrink: 0,
-        fontSize: 9,
-        fontWeight: 650,
-        padding: "1px 5px",
-        borderRadius: 999,
-        background: "rgba(205,214,244,0.07)",
-        border: "1px solid rgba(205,214,244,0.12)",
-        color: "rgba(205,214,244,0.58)",
-        fontVariantNumeric: "tabular-nums",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {count} unread
-    </span>
-  );
-}
-
-export function LaneRow({ laneKey, lane, setLane, laneCounts, noiseUnreadCount = 0 }: {
-  laneKey: string;
-  lane: string;
-  setLane: SetString;
-  laneCounts: LaneCounts;
-  noiseUnreadCount?: number;
-}) {
-  const [hover, setHover] = useState(false);
-  const L = LANE[laneKey] ?? LANE.fyi!;
-  const isActive = lane === laneKey;
-  const count = laneCounts[laneKey] || 0;
-
-  return (
-    <button
-      type="button"
-      onClick={() => setLane(laneKey)}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 10,
-        width: "100%", padding: "7px 10px",
-        background: isActive ? L.soft : (hover ? "rgba(255,255,255,0.03)" : "transparent"),
-        border: `1px solid ${isActive ? L.border : "transparent"}`,
-        borderRadius: 8, cursor: "pointer",
-        fontFamily: "inherit", textAlign: "left",
-        transition: "all 120ms",
-      }}
-    >
-      <span
-        style={{
-          width: 3, height: 16, flexShrink: 0, borderRadius: 2,
-          background: L.color, opacity: isActive ? 1 : 0.6,
-          boxShadow: isActive ? `0 0 8px ${L.color}60` : "none",
-        }}
-      />
-      <span
-        style={{
-          flex: 1, fontSize: 12, fontWeight: 500,
-          color: isActive ? "#fff" : "rgba(205,214,244,0.75)",
-        }}
-      >
-        {L.label}
-      </span>
-      <span
-        style={{
-          fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
-          background: "rgba(255,255,255,0.04)", color: "var(--color-text-faint)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {count}
-      </span>
-      {laneKey === "noise" && <NoiseUnreadBadge count={noiseUnreadCount} />}
-    </button>
-  );
-}
-
-export function LaneAll({ accent, lane, setLane, laneCounts }: {
-  accent: string;
-  lane: string;
-  setLane: SetString;
-  laneCounts: LaneCounts;
-}) {
-  const [hover, setHover] = useState(false);
-  const isActive = lane === "__all";
-  const count = (laneCounts.needs_attention || laneCounts.action || 0)
-    + (laneCounts.queued || 0)
-    + (laneCounts.carryover || 0)
-    + (laneCounts.catch_up || 0)
-    + (laneCounts.fyi || 0)
-    + (laneCounts.noise || 0);
-  return (
-    <button
-      type="button"
-      onClick={() => setLane("__all")}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 10,
-        width: "100%", padding: "7px 10px",
-        background: isActive ? `${accent}1a` : (hover ? "rgba(255,255,255,0.03)" : "transparent"),
-        border: `1px solid ${isActive ? `${accent}40` : "transparent"}`,
-        borderRadius: 8, cursor: "pointer",
-        fontFamily: "inherit", textAlign: "left",
-        transition: "all 120ms",
-      }}
-    >
-      <Layers size={13} color={isActive ? accent : "rgba(205,214,244,0.6)"} />
-      <span
-        style={{
-          flex: 1, fontSize: 12, fontWeight: 500,
-          color: isActive ? "#fff" : "rgba(205,214,244,0.75)",
-        }}
-      >
-        Everything
-      </span>
-      <span
-        style={{
-          fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
-          background: "rgba(255,255,255,0.04)", color: "var(--color-text-faint)",
-        }}
-      >
-        {count}
-      </span>
-    </button>
+    <Tooltip text={label} side="right" sideOffset={10} delay={220} style={{ width: "100%" }}>
+      {control}
+    </Tooltip>
   );
 }
 
@@ -226,33 +134,35 @@ function CollapseButton({ accent, compact, onToggle }: {
   const [focus, setFocus] = useState(false);
   const Icon = compact ? PanelLeftOpen : PanelLeftClose;
   const lift = hover || focus;
-  return (
+  const control = (
     <button type="button" onClick={onToggle}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
       aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}
-      title={compact ? "Expand sidebar" : "Collapse sidebar"}
-      style={{ display: "flex", alignItems: "center", justifyContent: compact ? "center" : "flex-end", width: "100%", padding: "4px 6px", background: lift ? "rgba(255,255,255,0.05)" : "transparent", border: "1px solid transparent", borderRadius: 8, cursor: "pointer", color: lift ? accent : "rgba(205,214,244,0.6)", transform: lift ? "translateY(-1px)" : "translateY(0)", transition: "background 120ms, color 120ms, transform 120ms", fontFamily: "inherit" }}>
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
+      style={{ display: "flex", alignItems: "center", justifyContent: compact ? "center" : "flex-start", gap: 8, width: "100%", minHeight: 34, padding: compact ? "4px 6px" : "6px 10px", background: lift ? "rgba(255,255,255,0.05)" : "transparent", border: "1px solid transparent", borderRadius: 8, cursor: "pointer", color: lift ? accent : "rgba(205,214,244,0.6)", transform: lift ? "translateY(-1px)" : "translateY(0)", transition: "background 120ms, color 120ms, transform 120ms", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>
       <Icon size={15} />
+      {!compact && <span>Collapse sidebar</span>}
     </button>
+  );
+
+  if (!compact) return control;
+  return (
+    <Tooltip text="Expand sidebar" side="right" sideOffset={10} delay={220} style={{ width: "100%" }}>
+      {control}
+    </Tooltip>
   );
 }
 
 export default function Sidebar({
   accent, accounts, accountId, setAccountId,
-  lane, setLane, laneCounts, totalUnread, noiseUnreadCount = 0,
-  onOpenDashboard, selectedEmail = null, readOnly = false,
+  totalUnread, selectedEmail = null, readOnly = false,
 }: {
   accent: string;
   accounts: InboxAccount[];
   accountId: string;
   setAccountId: SetString;
-  lane: string;
-  setLane: SetString;
-  laneCounts: LaneCounts;
   totalUnread: number;
-  noiseUnreadCount?: number;
-  onOpenDashboard: MouseEventHandler<HTMLButtonElement>;
   selectedEmail?: InboxEmailLike | null;
   readOnly?: boolean;
 }) {
@@ -273,24 +183,6 @@ export default function Sidebar({
       }}
     >
       <CollapseButton accent={accent} compact={compact} onToggle={() => setCompact((v) => !v)} />
-      <button
-        type="button"
-        onClick={onOpenDashboard}
-        title="Back to dashboard"
-        style={{
-          display: "flex", alignItems: "center", justifyContent: compact ? "center" : "flex-start",
-          gap: 8, padding: compact ? "10px" : "10px 12px",
-          background: `linear-gradient(135deg, ${accent}30, ${accent}15)`,
-          border: `1px solid ${accent}55`,
-          borderRadius: 10, color: accent, cursor: "pointer",
-          fontFamily: "inherit", fontSize: 12, fontWeight: 600,
-          boxShadow: `0 4px 12px ${accent}10, inset 0 1px 0 rgba(255,255,255,0.08)`,
-        }}
-      >
-        <Send size={13} />
-        {!compact && <span>Open dashboard</span>}
-        {!compact && <span style={{ marginLeft: "auto" }}><Kbd>1</Kbd></span>}
-      </button>
 
       <div>
         {!compact && <Eyebrow style={{ padding: "0 10px 8px" }}>Accounts</Eyebrow>}
@@ -316,23 +208,6 @@ export default function Sidebar({
           ))}
         </div>
       </div>
-
-      {!compact && (
-        <div>
-          <Eyebrow style={{ padding: "0 10px 8px" }}>Triage lanes</Eyebrow>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <LaneAll accent={accent} lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="queued" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="carryover" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="needs_attention" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="catch_up" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="fyi" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="handled" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="untriaged_read" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} noiseUnreadCount={noiseUnreadCount} />
-          </div>
-        </div>
-      )}
 
       {!compact && (
         <div style={{ marginTop: "auto", padding: 10 }}>

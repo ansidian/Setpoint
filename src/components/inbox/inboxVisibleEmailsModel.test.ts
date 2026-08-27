@@ -59,7 +59,7 @@ describe("selectVisibleEmails", () => {
     expect(result.map((e) => e.uid)).toEqual(["a"]);
   });
 
-  it("applies account, category, and lane scope", () => {
+  it("applies account and lane scope", () => {
     const flatEmails = [
       email({ uid: "work-mkt", _accountKey: "work", category: "marketing", _lane: "fyi" }),
       email({ uid: "personal", _accountKey: "personal", _lane: "fyi" }),
@@ -69,10 +69,9 @@ describe("selectVisibleEmails", () => {
     const result = selectVisibleEmails({
       flatEmails,
       accountId: "work",
-      categoryFilter: "marketing",
       lane: "fyi",
     });
-    expect(result.map((e) => e.uid)).toEqual(["work-mkt"]);
+    expect(result.map((e) => e.uid)).toEqual(["work-mkt", "work-fin"]);
   });
 
   it("sorts by lane order, then newest-first", () => {
@@ -124,7 +123,7 @@ describe("selectVisibleEmails", () => {
     expect(result.map((e) => e.uid)).toEqual(["pinned-snoozed"]);
   });
 
-  it("pinned rows bypass the lane filter and the category filter", () => {
+  it("pinned rows bypass the lane filter", () => {
     const flatEmails = [
       email({
         uid: "pinned-other-lane",
@@ -138,7 +137,6 @@ describe("selectVisibleEmails", () => {
     const result = selectVisibleEmails({
       flatEmails,
       lane: "fyi",
-      categoryFilter: "marketing",
     });
     expect(result.map((e) => e.uid)).toEqual(["pinned-other-lane", "plain-fyi"]);
   });

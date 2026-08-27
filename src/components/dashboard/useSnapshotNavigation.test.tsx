@@ -68,11 +68,24 @@ describe("useSnapshotNavigation", () => {
     }));
 
     await waitFor(() => expect(result.current.canNewer).toBe(true));
+    expect(result.current.newerIsCurrent).toBe(true);
     await act(async () => result.current.onNavigate("newer"));
 
     // test-architecture: allow-boundary-interaction -- returning to active must avoid the authenticated detail HTTP boundary because the live controller already owns that view.
     expect(getSnapshotById).not.toHaveBeenCalled();
     // test-architecture: allow-boundary-interaction -- selection is the hook's outward owner-state boundary; only the dashboard shell can render the restored active controller.
     expect(onSelectSnapshot).toHaveBeenCalledWith(null, { readOnly: false });
+  });
+
+  it("distinguishes an intermediate newer snapshot from the active snapshot", async () => {
+    const { result } = renderHook(() => useSnapshotNavigation({
+      enabled: true,
+      activeSnapshotId: 30,
+      currentSnapshot: record(10, "frozen"),
+      onSelectSnapshot: vi.fn(),
+    }));
+
+    await waitFor(() => expect(result.current.canNewer).toBe(true));
+    expect(result.current.newerIsCurrent).toBe(false);
   });
 });

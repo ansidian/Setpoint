@@ -125,7 +125,6 @@ function renderInbox({
         liveEmails={liveEmails}
         snoozedEntries={snoozedEntries}
         resurfacedEntries={resurfacedEntries}
-        onOpenDashboard={() => {}}
         onRefresh={() => {}}
         seedSelectedId={seedSelectedId}
         isMobile={isMobile}
@@ -397,7 +396,6 @@ describe("InboxView mobile", () => {
           }}
           snoozedEntries={[]}
           resurfacedEntries={[]}
-          onOpenDashboard={() => {}}
           onRefresh={() => {}}
           seedSelectedId="snapshot-msg-1"
           isMobile

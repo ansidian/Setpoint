@@ -213,7 +213,7 @@ function EmailRow({
               {L.label}
             </span>
           )}
-          {!freshVerificationCode && !showLaneTag && !arrivalGraceQueued && !untriagedRead && email.category && (
+          {!freshVerificationCode && !showLaneTag && !arrivalGraceQueued && !untriagedRead && email.category && email.category !== "uncategorized" && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center",

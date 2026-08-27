@@ -6,7 +6,6 @@ export interface SelectVisibleEmailsOptions {
   indexedSearchActive?: boolean;
   indexedSearchEmails?: InboxEmailLike[];
   accountId?: string;
-  categoryFilter?: string;
   lane?: string;
   snoozedMap?: ReadonlyMap<string | number, number>;
   nowTick?: number;
@@ -24,7 +23,6 @@ export function selectVisibleEmails({
   indexedSearchActive = false,
   indexedSearchEmails = [],
   accountId = "__all",
-  categoryFilter = "__all",
   lane = "__all",
   snoozedMap = new Map(),
   nowTick = Date.now(),
@@ -36,7 +34,6 @@ export function selectVisibleEmails({
     const uid = email.uid || email.id;
     const snoozeUntil = uid == null ? null : snoozedMap.get(uid);
     if (snoozeUntil && snoozeUntil > nowTick) return false;
-    if (categoryFilter !== "__all" && email.category !== categoryFilter) return false;
     if (lane !== "__all" && email._lane !== lane) return false;
     return true;
   }).sort((a, b) => {

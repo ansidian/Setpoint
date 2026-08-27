@@ -9,9 +9,11 @@ import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
-import InboxCategoryFilterChips from "./InboxCategoryFilterChips";
+import InboxLaneFilterBar from "./InboxLaneFilterBar";
 import LaneSection from "./LaneSection";
-import type { InboxAccount, InboxCategoryFilter, InboxEmailLike, InboxId } from "./inboxTypes";
+import DesktopSnapshotNavigator from "./DesktopSnapshotNavigator";
+import type { InboxAccount, InboxEmailLike, InboxId } from "./inboxTypes";
+import type { InboxSnapshotNavigation } from "./inboxViewTypes";
 
 type CollapsedLanes = Record<string, boolean | undefined>;
 type GroupedEmails = Record<string, InboxEmailLike[]> & {
@@ -109,9 +111,10 @@ export default function InboxList({
   activeSnapshotMode = false,
   processingCount = 0,
   activeSnapshotError = null,
-  snapshotCategories = [],
-  categoryFilter = "__all",
-  onCategoryFilterChange,
+  lane = "__all",
+  laneCounts = {},
+  onLaneChange = () => {},
+  snapshotNavigation = null,
   readOnly = false,
 }: {
   accent: string;
@@ -142,9 +145,10 @@ export default function InboxList({
   activeSnapshotMode?: boolean;
   processingCount?: number;
   activeSnapshotError?: string | null;
-  snapshotCategories?: InboxCategoryFilter[];
-  categoryFilter?: string;
-  onCategoryFilterChange?: (category: string) => void;
+  lane?: string;
+  laneCounts?: Record<string, number | undefined>;
+  onLaneChange?: (lane: string) => void;
+  snapshotNavigation?: InboxSnapshotNavigation | null;
   readOnly?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<CollapsedLanes>(() => (activeSnapshotMode ? { handled: true, untriaged_read: true, noise: true } : {}));
@@ -203,6 +207,14 @@ export default function InboxList({
         minHeight: 0,
       }}
     >
+      {activeSnapshotMode && (
+        <DesktopSnapshotNavigator
+          navigation={snapshotNavigation}
+          liveLoading={liveEmailsLoading}
+          processingCount={processingCount}
+          readOnly={readOnly}
+        />
+      )}
       <div
         style={{
           padding: "12px 14px", display: "flex", alignItems: "center", gap: 10,
@@ -293,43 +305,33 @@ export default function InboxList({
       </div>
 
 
-      <div
-        style={{
-          padding: "8px 16px", display: "flex", alignItems: "center", gap: 10,
-          borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: 11, color: "rgba(205,214,244,0.6)" }}>
-          <span
-            style={{
-              color: "#fff", fontWeight: 600,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {unreadCount}
+      {indexedSearchActive ? (
+        <div
+          style={{
+            padding: "8px 16px",
+            borderBottom: "1px solid rgba(255,255,255,0.05)",
+            flexShrink: 0,
+            fontSize: 11,
+            color: "rgba(205,214,244,0.6)",
+          }}
+        >
+          <span style={{ color: "#fff", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+            {totalCount}
           </span>{" "}
-          <span style={{ color: "var(--color-text-faint)" }}>unread · </span>
-          <span style={{ fontVariantNumeric: "tabular-nums" }}>{totalCount}</span>
-          {indexedSearchActive ? (
-            <span style={{ color: "var(--color-text-faint)" }}>
-              {` of ${indexedSearchTotal ?? totalCount} indexed results`}
-            </span>
-          ) : (
-            <span style={{ color: "var(--color-text-faint)" }}> total</span>
-          )}
-        </span>
-        <span style={{ flex: 1 }} />
-      </div>
+          <span style={{ color: "var(--color-text-faint)" }}>
+            {`of ${indexedSearchTotal ?? totalCount} indexed results`}
+          </span>
+        </div>
+      ) : (
+        <InboxLaneFilterBar
+          accent={accent}
+          activeLane={lane}
+          counts={laneCounts}
+          onChange={onLaneChange}
+        />
+      )}
 
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-        {activeSnapshotMode && snapshotCategories.length > 0 && !indexedSearchActive && (
-          <InboxCategoryFilterChips
-            accent={accent}
-            categories={snapshotCategories}
-            activeCategory={categoryFilter}
-            onChange={onCategoryFilterChange}
-          />
-        )}
         {indexedSearchError && (
           <div
             style={{
@@ -354,33 +356,6 @@ export default function InboxList({
             }}
           >
             {activeSnapshotError}
-          </div>
-        )}
-        {activeSnapshotMode && processingCount > 0 && !indexedSearchActive && (
-          <div
-            style={{
-              margin: "10px 12px 6px",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid color-mix(in srgb, var(--sp-blue) 18%, transparent)",
-              background: "color-mix(in srgb, var(--sp-blue) 6%, transparent)",
-              color: "rgba(205,214,244,0.72)",
-              fontSize: 11,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: "var(--sp-blue)",
-                boxShadow: "0 0 8px color-mix(in srgb, var(--sp-blue) 65%, transparent)",
-              }}
-            />
-            Processing {processingCount} email{processingCount === 1 ? "" : "s"}
           </div>
         )}
         {!activeSnapshotMode && liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact />}

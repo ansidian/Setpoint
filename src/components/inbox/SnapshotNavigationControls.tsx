@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
+import type { ReactNode } from "react";
 import type {
   InboxSnapshotNavigation,
   InboxSnapshotNavigationDirection,
@@ -8,6 +9,7 @@ interface SnapshotNavigationControlsProps {
   navigation: InboxSnapshotNavigation;
   historical: boolean;
   mobile?: boolean;
+  context?: ReactNode;
   onNavigate: (direction: InboxSnapshotNavigationDirection) => void;
 }
 
@@ -35,7 +37,9 @@ function SnapshotNavigationButton({
   return (
     <button
       type="button"
-      aria-label={`Show ${direction} snapshot`}
+      aria-label={direction === "newer" && label === "Current"
+        ? "Show current snapshot"
+        : `Show ${direction} snapshot`}
       disabled={disabled}
       onClick={() => onNavigate(direction)}
       className="transition-[transform,background-color,border-color,color] duration-150 enabled:hover:-translate-y-px enabled:hover:border-white/15 enabled:hover:bg-white/[0.055] enabled:hover:text-white enabled:focus-visible:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 disabled:cursor-not-allowed disabled:opacity-35 motion-reduce:transform-none motion-reduce:transition-none"
@@ -76,33 +80,56 @@ export default function SnapshotNavigationControls({
   navigation,
   historical,
   mobile = false,
+  context,
   onNavigate,
 }: SnapshotNavigationControlsProps) {
+  const olderButton = (
+    <SnapshotNavigationButton
+      direction="older"
+      label={historical || context ? "Older" : "Older snapshot"}
+      navigation={navigation}
+      mobile={mobile}
+      stretch={historical && !context}
+      onNavigate={onNavigate}
+    />
+  );
+  const newerButton = historical ? (
+    <SnapshotNavigationButton
+      direction="newer"
+      label={navigation.newerIsCurrent ? "Current" : "Newer"}
+      navigation={navigation}
+      mobile={mobile}
+      stretch={!context}
+      onNavigate={onNavigate}
+    />
+  ) : null;
+
   return (
     <div
       aria-busy={navigation.historyLoading || !!navigation.navigating || undefined}
-      style={{ width: mobile ? "100%" : "auto" }}
+      style={{ width: mobile || context ? "100%" : "auto", minWidth: 0 }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <SnapshotNavigationButton
-          direction="older"
-          label={historical ? "Older" : "Older snapshot"}
-          navigation={navigation}
-          mobile={mobile}
-          stretch={historical}
-          onNavigate={onNavigate}
-        />
-        {historical && (
-          <SnapshotNavigationButton
-            direction="newer"
-            label="Newer"
-            navigation={navigation}
-            mobile={mobile}
-            stretch
-            onNavigate={onNavigate}
-          />
-        )}
-      </div>
+      {context ? (
+        <div
+          data-testid="snapshot-navigation-row"
+          style={{
+            width: "100%",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <div style={{ justifySelf: "start" }}>{olderButton}</div>
+          <div style={{ minWidth: 0, justifySelf: "center" }}>{context}</div>
+          <div style={{ justifySelf: "end" }}>{newerButton}</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {olderButton}
+          {newerButton}
+        </div>
+      )}
       {navigation.error && (
         <div
           role="status"

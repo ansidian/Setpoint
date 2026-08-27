@@ -80,6 +80,7 @@ export default function useSnapshotNavigation({
     snapshot: currentSnapshot,
     canOlder: !!older,
     canNewer: !!newer,
+    newerIsCurrent: !!newer && !newer.readOnly,
     historyLoading,
     navigating,
     error,

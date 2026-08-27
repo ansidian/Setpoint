@@ -160,7 +160,6 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
           liveEmails={[]}
           snoozedEntries={[]}
           resurfacedEntries={[]}
-          onOpenDashboard={() => {}}
           onRefresh={() => {}}
           seedSelectedId={seedSelectedId}
           sessionState={sessionState}
@@ -269,7 +268,6 @@ describe("InboxView session state", () => {
           liveEmails={[]}
           snoozedEntries={[]}
           resurfacedEntries={[]}
-          onOpenDashboard={() => {}}
           onRefresh={() => {}}
           sessionState={{
             accountId: "__all",
@@ -327,7 +325,6 @@ describe("InboxView session state", () => {
           liveEmails={[]}
           snoozedEntries={[]}
           resurfacedEntries={[]}
-          onOpenDashboard={() => {}}
           onRefresh={() => {}}
           sessionState={{
             accountId: "__all",
@@ -411,7 +408,6 @@ describe("InboxView session state", () => {
           liveEmails={[]}
           snoozedEntries={[]}
           resurfacedEntries={[]}
-          onOpenDashboard={() => {}}
           onRefresh={() => {}}
           sessionState={{
             accountId: "__all",

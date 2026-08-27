@@ -10,6 +10,7 @@ export interface InboxSnapshotNavigation {
   snapshot: SnapshotRecord | null;
   canOlder: boolean;
   canNewer: boolean;
+  newerIsCurrent?: boolean;
   historyLoading: boolean;
   navigating: InboxSnapshotNavigationDirection | null;
   error: string | null;
@@ -23,7 +24,6 @@ export type InboxPaneProps = InboxControllerState & {
   liveEmailsLoading?: boolean;
   processingCount?: number;
   activeSnapshotError?: string | null;
-  onOpenDashboard: () => void;
   onOpenRecordedBill?: (target: { date: string; itemId: string }) => void;
   onRefresh: () => void | Promise<void>;
   readOnly?: boolean;

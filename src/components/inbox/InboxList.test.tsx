@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { useState, type ComponentProps } from "react";
 import InboxList from "./InboxList";
@@ -83,10 +83,9 @@ describe("InboxList", () => {
 	        makeInboxEmail({ id: "read-1", subject: "Already read arrival", date: "2026-05-03T13:45:00.000Z", _lane: "untriaged_read", _untriagedRead: true, read: true }),
 	        makeInboxEmail({ id: "noise-1", subject: "Noise promo", date: "2026-05-03T14:00:00.000Z", _lane: "noise" }),
 	      ],
-	      totalCount: 8,
-	      unreadCount: 6,
+      totalCount: 8,
+      unreadCount: 6,
       activeSnapshotMode: true,
-      snapshotCategories: [{ category: "finance", count: 1 }],
     });
 
     expect(screen.getAllByText("Queued").length).toBeGreaterThan(0);
@@ -97,7 +96,6 @@ describe("InboxList", () => {
 	    expect(screen.getByText("Handled")).toBeTruthy();
 	    expect(screen.getByText("Untriaged Read")).toBeTruthy();
 	    expect(screen.getByText("Noise")).toBeTruthy();
-    expect(screen.getByText("Finance")).toBeTruthy();
     expect(screen.getByText("Queued fresh arrival")).toBeTruthy();
     expect(screen.getByText("Carryover contract")).toBeTruthy();
 	    expect(screen.getByText("Needs attention deck")).toBeTruthy();
@@ -136,75 +134,65 @@ describe("InboxList", () => {
     expect(screen.queryByText("Unread sale")).toBeNull();
   });
 
-  it("collapses low-priority active snapshot categories into a More menu", () => {
-    function CategoryHarness() {
-      const [categoryFilter, setCategoryFilter] = useState("__all");
-      return <><output aria-label="Selected category">{categoryFilter}</output><InboxList
-        accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
-        density="default" layout="swimlanes" showPreview searchQuery="" onSearchChange={() => {}}
-        onMarkAllRead={() => {}} onRefresh={() => {}} totalCount={0} unreadCount={0}
-        searchRef={null}
-        activeSnapshotMode categoryFilter={categoryFilter} onCategoryFilterChange={setCategoryFilter}
-        snapshotCategories={[
-          { category: "marketing", count: 20 }, { category: "finance", count: 1 },
-          { category: "security", count: 2 }, { category: "legal", count: 3 },
-          { category: "school", count: 8 }, { category: "work", count: 9 },
-        ]}
-      /></>;
-    }
-    render(<CategoryHarness />);
+  it("replaces the aggregate count line with non-empty lane filters", () => {
+    renderInboxList({
+      laneCounts: {
+        queued: 0,
+        carryover: 0,
+        needs_attention: 2,
+        catch_up: 0,
+        fyi: 4,
+        handled: 0,
+        untriaged_read: 0,
+        noise: 3,
+      },
+      totalCount: 9,
+      unreadCount: 0,
+    });
 
-    const strip = screen.getByTestId("inbox-category-filter-strip");
-    expect(within(strip).getByRole("button", { name: /^All$/i })).toBeTruthy();
-    expect(within(strip).getByRole("button", { name: /Security 2/i })).toBeTruthy();
-    expect(within(strip).getByRole("button", { name: /Legal 3/i })).toBeTruthy();
-    expect(within(strip).getByRole("button", { name: /Finance 1/i })).toBeTruthy();
-    expect(within(strip).getByRole("button", { name: /Work 9/i })).toBeTruthy();
-    expect(within(strip).queryByRole("button", { name: /Marketing 20/i })).toBeNull();
-
-    fireEvent.click(within(strip).getByRole("button", { name: /More 2/i }));
-
-    const menu = screen.getByRole("menu", { name: /more inbox categories/i });
-    expect(within(menu).getByRole("menuitemradio", { name: /School 8/i })).toBeTruthy();
-    expect(within(menu).getByRole("menuitemradio", { name: /Marketing 20/i })).toBeTruthy();
-    expect(within(menu).queryByRole("menuitemradio", { name: /Security 2/i })).toBeNull();
-
-    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Marketing 20/i }));
-    expect(screen.getByLabelText("Selected category").textContent).toBe("marketing");
-    expect(screen.queryByRole("menu", { name: /more inbox categories/i })).toBeNull();
+    expect(screen.getByRole("toolbar", { name: "Triage lanes" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All" }).textContent).toBe("All9");
+    expect(screen.getByRole("button", { name: "Needs Attention" }).textContent).toBe("Needs Attention2");
+    expect(screen.getByRole("button", { name: "FYI" }).textContent).toBe("FYI4");
+    expect(screen.getByRole("button", { name: "Noise" }).textContent).toBe("Noise3");
+    expect(screen.queryByRole("button", { name: "Queued" })).toBeNull();
+    expect(screen.queryByText(/unread ·/)).toBeNull();
   });
 
-  it("marks a hidden active category through the More trigger and only All clears it", () => {
-    function CategoryHarness() {
-      const [categoryFilter, setCategoryFilter] = useState("marketing");
-      return <><output aria-label="Selected category">{categoryFilter}</output><InboxList
-        accent="#cba6da" emails={[]} accountsById={{}} selectedId={null} onOpen={() => {}}
-        density="default" layout="swimlanes" showPreview searchQuery="" onSearchChange={() => {}}
-        onMarkAllRead={() => {}} onRefresh={() => {}} totalCount={0} unreadCount={0}
-        searchRef={null}
-        activeSnapshotMode categoryFilter={categoryFilter} onCategoryFilterChange={setCategoryFilter}
-        snapshotCategories={[
-          { category: "finance", count: 1 }, { category: "security", count: 2 },
-          { category: "legal", count: 3 }, { category: "school", count: 8 },
-          { category: "marketing", count: 20 },
-        ]}
-      /></>;
+  it("wires compact lane filters to the desktop lane scope", () => {
+    function LaneHarness() {
+      const [activeLane, setActiveLane] = useState("__all");
+      return (
+        <>
+          <output aria-label="Active lane">{activeLane}</output>
+          <InboxList
+            accent="#cba6da"
+            emails={[]}
+            accountsById={{}}
+            selectedId={null}
+            onOpen={() => {}}
+            density="default"
+            layout="swimlanes"
+            showPreview
+            searchQuery=""
+            onSearchChange={() => {}}
+            onMarkAllRead={() => {}}
+            onRefresh={() => {}}
+            totalCount={3}
+            unreadCount={0}
+            searchRef={null}
+            lane={activeLane}
+            laneCounts={{ needs_attention: 2, fyi: 1 }}
+            onLaneChange={setActiveLane}
+          />
+        </>
+      );
     }
-    render(<CategoryHarness />);
+    render(<LaneHarness />);
 
-    const strip = screen.getByTestId("inbox-category-filter-strip");
-    expect(within(strip).getByRole("button", { name: /Marketing · More/i }).getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(within(strip).getByRole("button", { name: /Marketing · More/i }));
-    const menu = screen.getByRole("menu", { name: /more inbox categories/i });
-    const activeMenuItem = within(menu).getByRole("menuitemradio", { name: /Marketing 20/i });
-    expect(activeMenuItem.getAttribute("aria-checked")).toBe("true");
-
-    fireEvent.click(activeMenuItem);
-    expect(screen.getByLabelText("Selected category").textContent).toBe("marketing");
-
-    fireEvent.click(within(strip).getByRole("button", { name: /^All$/i }));
-    expect(screen.getByLabelText("Selected category").textContent).toBe("__all");
+    fireEvent.click(screen.getByRole("button", { name: "Needs Attention" }));
+    expect(screen.getByLabelText("Active lane").textContent).toBe("needs_attention");
+    expect(screen.getByRole("button", { name: "Needs Attention" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("shows indexed-search skeleton rows while a desktop search is unresolved", () => {
@@ -216,6 +204,7 @@ describe("InboxList", () => {
     });
 
     expect(screen.getByTestId("inbox-search-skeleton")).toBeTruthy();
+    expect(screen.queryByRole("toolbar", { name: "Triage lanes" })).toBeNull();
     expect(screen.queryByText("Searching persisted mail index...")).toBeNull();
     expect(screen.queryByTestId("inbox-list-empty-state-card")).toBeNull();
   });

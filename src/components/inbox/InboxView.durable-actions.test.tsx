@@ -76,7 +76,6 @@ function inboxTree(options: RenderInboxOptions) {
         snoozedEntries={[]}
         resurfacedEntries={[]}
         activeSnapshot={activeSnapshot}
-        onOpenDashboard={() => {}}
         onRefresh={() => {}}
         isMobile={isMobile}
         {...rest}

@@ -109,7 +109,6 @@ export default function useInboxController({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [liveTrashedUids, setLiveTrashedUids] = useState<Set<string>>(() => new Set());
   const [billOpen, setBillOpen] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("__all");
   const {
     indexedSearch,
     indexedSearchActive,
@@ -162,17 +161,6 @@ export default function useInboxController({
   }, [emailAccounts]);
 
   const activeSnapshotMode = !!activeSnapshot?.snapshot;
-  const snapshotCategories = (activeSnapshot?.filters?.categories || []).flatMap((entry) => (
-    typeof entry.category === "string"
-      ? [{ category: entry.category, count: entry.count || 0 }]
-      : []
-  ));
-
-  useEffect(() => {
-    if (activeSnapshotMode) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset filter when leaving snapshot mode
-    setCategoryFilter("__all");
-  }, [activeSnapshotMode]);
 
   const rawActiveSnapshotEmails = useMemo(() => (
     activeSnapshotMode ? collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides) : []
@@ -291,14 +279,12 @@ export default function useInboxController({
     indexedSearchActive,
     indexedSearchEmails: indexedSearch.emails,
     accountId,
-    categoryFilter,
     lane,
     snoozedMap,
     nowTick,
   }), [
     flatEmails,
     accountId,
-    categoryFilter,
     lane,
     snoozedMap,
     nowTick,
@@ -320,11 +306,10 @@ export default function useInboxController({
 
   const noiseUnreadCount = useMemo(() => computeScopedNoiseUnreadCount(flatEmails, {
     accountId,
-    categoryFilter,
     indexedSearchActive,
     snoozedMap,
     nowTick,
-  }), [accountId, categoryFilter, flatEmails, indexedSearchActive, nowTick, snoozedMap]);
+  }), [accountId, flatEmails, indexedSearchActive, nowTick, snoozedMap]);
 
   const unreadInView = useMemo(() => computeUnreadCount(visibleEmails), [visibleEmails]);
 
@@ -486,9 +471,6 @@ export default function useInboxController({
     layout: "two-pane",
     grouping: isMobile ? "flat" : "swimlanes",
     activeSnapshotMode,
-    snapshotCategories,
-    categoryFilter,
-    setCategoryFilter,
     scopedAccount: indexedSearchActive ? null : scopedAccount,
   };
 }

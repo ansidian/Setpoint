@@ -55,6 +55,11 @@ describe("EmailRow lane tag (mobile)", () => {
     renderRow({ email: { category: "finance" } });
     expect(screen.getByText("finance")).toBeTruthy();
   });
+
+  it("does not render the default uncategorized pill", () => {
+    renderRow({ email: { category: "uncategorized" } });
+    expect(screen.queryByText("uncategorized")).toBeNull();
+  });
 });
 
 describe("EmailRow pinned", () => {

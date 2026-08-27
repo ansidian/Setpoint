@@ -126,11 +126,6 @@ export interface NormalizedInboxRow extends InboxEmailLike {
   _resurfacedAt: number | null;
 }
 
-export interface InboxCategoryFilter {
-  category: string;
-  count: number;
-}
-
 export interface InboxChip {
   key: string;
   label?: string;
