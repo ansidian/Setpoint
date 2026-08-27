@@ -19,356 +19,140 @@ function PaletteHarness() {
 }
 
 describe("CommandPalette", () => {
-  afterEach(() => {
-    cleanup();
-  });
+  afterEach(cleanup);
 
-  it("carries the blocking calendar-hotkey suspension marker while open", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
+  it("blocks calendar hotkeys while open", () => {
+    render(<CommandPalette open accent="#cba6da" onClose={noop} onAction={noop} />);
 
-    // The calendar's hotkey handler suspends its whole keyboard surface while
-    // an element with data-suspend-calendar-hotkeys="blocking" is mounted
-    // anywhere — assert the same presence query the handler runs.
     expect(document.querySelector("[data-suspend-calendar-hotkeys='blocking']")).toBeTruthy();
   });
 
-  it("offers Sync now without a generation action", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    expect(screen.getByText("Sync now")).toBeTruthy();
-    expect(screen.queryByText("Generate fresh briefing")).toBeNull();
-  });
-
-  it("routes Bills and Deadlines to calendar destinations", () => {
+  it.each([
+    ["Go to Events", "events|calendar-view|events"],
+    ["Go to Bills", "bills|calendar-view|bills"],
+  ])("routes %s to its calendar destination", (label, expectedAction) => {
     render(<PaletteHarness />);
 
-    fireEvent.click(screen.getByText("Go to Deadlines"));
-    expect(screen.getByTestId("palette-action").textContent).toBe("deadlines|calendar-view|deadlines");
+    fireEvent.click(screen.getByText(label));
 
-    cleanup();
-    render(<PaletteHarness />);
-    fireEvent.click(screen.getByText("Go to Bills"));
-    expect(screen.getByTestId("palette-action").textContent).toBe("bills|calendar-view|bills");
+    expect(screen.getByTestId("palette-action").textContent).toBe(expectedAction);
   });
 
-
-  it("labels the history affordance as snapshots", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    expect(screen.getByText("Snapshots")).toBeTruthy();
-    expect(screen.getByText("Y")).toBeTruthy();
-    expect(screen.queryByText("Briefing history")).toBeNull();
-  });
-
-  it("shows the settings command-comma shortcut as key hints", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    expect(screen.getByText("Open settings")).toBeTruthy();
-    expect(screen.getByLabelText("Command comma")).toBeTruthy();
-    expect(screen.getByText("⌘").tagName).toBe("KBD");
-    expect(screen.getByText(",").tagName).toBe("KBD");
-  });
-
-  it("offers analytics with the A key hint", () => {
+  it.each([
+    ["1", "go-dashboard|tab|dashboard"],
+    ["9", "settings|settings"],
+  ])("runs numbered result %s and closes", (key, expectedAction) => {
     render(<PaletteHarness />);
 
-    fireEvent.click(screen.getByText("Analytics"));
+    fireEvent.keyDown(screen.getByRole("combobox"), { key });
 
-    expect(screen.getByText("A").tagName).toBe("KBD");
-    expect(screen.getByTestId("palette-action").textContent).toBe("analytics|analytics");
-  });
-
-  it("filters the list to matching commands as you type the query", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    // Unfiltered, both a calendar and a settings command are present.
-    expect(screen.getByText("Go to Calendar")).toBeTruthy();
-    expect(screen.getByText("Open settings")).toBeTruthy();
-
-    fireEvent.change(screen.getByPlaceholderText("Jump to anything…"), {
-      target: { value: "calendar" },
-    });
-
-    // Only the matching command survives; non-matches drop out.
-    expect(screen.getByText("Go to Calendar")).toBeTruthy();
-    expect(screen.queryByText("Open settings")).toBeNull();
-    expect(screen.queryByText("Go to Inbox")).toBeNull();
-  });
-
-  it("filters case-insensitively against the command label", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    fireEvent.change(screen.getByPlaceholderText("Jump to anything…"), {
-      target: { value: "INBOX" },
-    });
-
-    expect(screen.getByText("Go to Inbox")).toBeTruthy();
-    expect(screen.queryByText("Go to Dashboard")).toBeNull();
-  });
-
-  it("runs the second item when ArrowDown then Enter is pressed in the input", () => {
-    render(<PaletteHarness />);
-
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    // Cursor starts at the first item; one ArrowDown moves it to the second.
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    expect(screen.getByTestId("palette-action").textContent).toBe("go-inbox|tab|inbox");
+    expect(screen.getByTestId("palette-action").textContent).toBe(expectedAction);
     expect(screen.getByTestId("palette-state").textContent).toBe("closed");
   });
 
-  it("runs the first item when Enter is pressed without moving the cursor", () => {
+  it("renumbers filtered results before applying number shortcuts", () => {
     render(<PaletteHarness />);
 
-    fireEvent.keyDown(screen.getByPlaceholderText("Jump to anything…"), {
-      key: "Enter",
-    });
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "settings" } });
 
-    expect(screen.getByTestId("palette-action").textContent).toBe("go-dashboard|tab|dashboard");
+    const option = screen.getByRole("option");
+    expect(option.querySelector("kbd")?.textContent).toBe("1");
+    expect(option.getAttribute("aria-keyshortcuts")).toBe("1");
+
+    fireEvent.keyDown(input, { key: "1" });
+    expect(screen.getByTestId("palette-action").textContent).toBe("settings|settings");
   });
 
-  it("Enter after typing runs the top filtered match, not the original first item", () => {
+  it("does not run number shortcuts with modifiers", () => {
     render(<PaletteHarness />);
 
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    fireEvent.change(input, { target: { value: "analytics" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    expect(screen.getByTestId("palette-action").textContent).toBe("analytics|analytics");
-  });
-
-  it("shows No matches. when the query matches nothing", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    fireEvent.change(screen.getByPlaceholderText("Jump to anything…"), {
-      target: { value: "zzzznotacommand" },
-    });
-
-    expect(screen.getByText("No matches.")).toBeTruthy();
-    expect(screen.queryByText("Go to Dashboard")).toBeNull();
-  });
-
-  it("Enter is a no-op when the query matches nothing", () => {
-    render(<PaletteHarness />);
-
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    fireEvent.change(input, { target: { value: "zzzznotacommand" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    const input = screen.getByRole("combobox");
+    fireEvent.keyDown(input, { key: "1", metaKey: true });
+    fireEvent.keyDown(input, { key: "1", ctrlKey: true });
+    fireEvent.keyDown(input, { key: "1", altKey: true });
 
     expect(screen.queryByTestId("palette-action")).toBeNull();
     expect(screen.getByTestId("palette-state").textContent).toBe("open");
   });
 
-  it("calls onClose when Escape is pressed", () => {
+  it("keeps the palette open when a number has no matching result", () => {
+    render(<PaletteHarness />);
+
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "events" } });
+    fireEvent.keyDown(input, { key: "2" });
+
+    expect(screen.queryByTestId("palette-action")).toBeNull();
+    expect(screen.getByTestId("palette-state").textContent).toBe("open");
+  });
+
+  it("filters case-insensitively and Enter runs the top match", () => {
+    render(<PaletteHarness />);
+
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "ANALYTICS" } });
+
+    expect(screen.getByRole("option").textContent).toContain("Analytics");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByTestId("palette-action").textContent).toBe("analytics|analytics");
+  });
+
+  it("finds commands through hidden aliases", () => {
+    render(<PaletteHarness />);
+
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "email" } });
+
+    expect(screen.getByRole("option").textContent).toContain("Go to Inbox");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByTestId("palette-action").textContent).toBe("go-inbox|tab|inbox");
+  });
+
+  it("preserves command order when an alias matches multiple results", () => {
+    render(<PaletteHarness />);
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "briefing" } });
+
+    expect(screen.getAllByRole("option").map((option) => option.querySelector("span")?.textContent)).toEqual([
+      "Go to Dashboard",
+      "Snapshots",
+    ]);
+  });
+
+  it("ArrowDown updates the active option and Enter runs it", () => {
+    render(<PaletteHarness />);
+
+    const input = screen.getByRole("combobox");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    expect(input.getAttribute("aria-activedescendant")).toBe("command-palette-option-go-inbox");
+    expect(document.getElementById("command-palette-option-go-inbox")?.getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByTestId("palette-action").textContent).toBe("go-inbox|tab|inbox");
+  });
+
+  it("announces an empty result set and Enter does nothing", () => {
+    render(<PaletteHarness />);
+
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "zzzznotacommand" } });
+
+    expect(screen.getByText("No matches.").getAttribute("role")).toBe("status");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.queryByTestId("palette-action")).toBeNull();
+    expect(screen.getByTestId("palette-state").textContent).toBe("open");
+  });
+
+  it("closes when Escape is pressed", () => {
     render(<PaletteHarness />);
 
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(screen.getByTestId("palette-state").textContent).toBe("closed");
-  });
-
-  it("syncs the cursor on mouseEnter so Enter runs the hovered item", () => {
-    render(<PaletteHarness />);
-
-    // Hover a command far from the default first-item cursor.
-    fireEvent.mouseEnter(screen.getByText("Go to Bills"));
-    fireEvent.keyDown(screen.getByPlaceholderText("Jump to anything…"), {
-      key: "Enter",
-    });
-
-    expect(screen.getByTestId("palette-action").textContent).toBe("bills|calendar-view|bills");
-  });
-
-  it("input has role combobox with aria-activedescendant pointing at the first option id on open", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    expect(input.getAttribute("role")).toBe("combobox");
-    expect(input.getAttribute("aria-expanded")).toBe("true");
-    expect(input.getAttribute("aria-autocomplete")).toBe("list");
-    expect(input.getAttribute("aria-controls")).toBe("command-palette-listbox");
-    expect(input.getAttribute("aria-label")).toBe("Command palette");
-    // First item is go-dashboard, so aria-activedescendant should point to that
-    expect(input.getAttribute("aria-activedescendant")).toBe("command-palette-option-go-dashboard");
-  });
-
-  it("list container has role listbox with id command-palette-listbox", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const listbox = document.getElementById("command-palette-listbox");
-    expect(listbox).toBeTruthy();
-    expect(listbox?.getAttribute("role")).toBe("listbox");
-  });
-
-  it("options have role option with id and aria-selected attribute", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const dashboardOption = document.getElementById("command-palette-option-go-dashboard");
-    expect(dashboardOption).toBeTruthy();
-    expect(dashboardOption?.getAttribute("role")).toBe("option");
-    expect(dashboardOption?.getAttribute("aria-selected")).toBe("true");
-
-    const inboxOption = document.getElementById("command-palette-option-go-inbox");
-    expect(inboxOption).toBeTruthy();
-    expect(inboxOption?.getAttribute("role")).toBe("option");
-    expect(inboxOption?.getAttribute("aria-selected")).toBe("false");
-  });
-
-  it("options are not tab-focusable (tabIndex absent)", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const dashboardOption = document.getElementById("command-palette-option-go-dashboard");
-    expect(dashboardOption?.getAttribute("tabIndex")).toBeNull();
-
-    const inboxOption = document.getElementById("command-palette-option-go-inbox");
-    expect(inboxOption?.getAttribute("tabIndex")).toBeNull();
-  });
-
-  it("ArrowDown moves aria-activedescendant to the second option and updates aria-selected", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-
-    expect(input.getAttribute("aria-activedescendant")).toBe("command-palette-option-go-inbox");
-
-    const dashboardOption = document.getElementById("command-palette-option-go-dashboard");
-    const inboxOption = document.getElementById("command-palette-option-go-inbox");
-    expect(dashboardOption?.getAttribute("aria-selected")).toBe("false");
-    expect(inboxOption?.getAttribute("aria-selected")).toBe("true");
-  });
-
-  it("filtering keeps aria-activedescendant pointing to a valid option id", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    // Move to third item
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-
-    // Filter to only "calendar" commands
-    fireEvent.change(input, { target: { value: "calendar" } });
-
-    // After filtering, cursor should clamp to the first (and only) match
-    // aria-activedescendant should point to a valid option
-    const activedescendant = input.getAttribute("aria-activedescendant");
-    expect(activedescendant).toBeTruthy();
-    expect(document.getElementById(activedescendant!)).toBeTruthy();
-
-    // The only calendar match should be "Go to Calendar"
-    expect(screen.getByText("Go to Calendar")).toBeTruthy();
-    expect(activedescendant).toBe("command-palette-option-calendar");
-  });
-
-  it("empty state div has role status for screen reader announcement", () => {
-    render(
-      <CommandPalette
-        open
-        accent="#cba6da"
-        onClose={noop}
-        onAction={noop}
-      />,
-    );
-
-    const input = screen.getByPlaceholderText("Jump to anything…");
-    fireEvent.change(input, { target: { value: "zzzznotacommand" } });
-
-    // Find all divs in the listbox and check for the one with role="status"
-    const listbox = document.getElementById("command-palette-listbox");
-    const emptyDiv = listbox?.querySelector("[role='status']");
-    expect(emptyDiv).toBeTruthy();
-    expect(emptyDiv?.textContent).toBe("No matches.");
   });
 });

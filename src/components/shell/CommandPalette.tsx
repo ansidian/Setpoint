@@ -4,9 +4,9 @@ import { createPortal } from "react-dom";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import {
   BarChart3,
-  LayoutList, Inbox, Clock, AlertCircle, CreditCard,
-  RefreshCw, Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon,
-  CalendarPlus, ListPlus, Notebook, Newspaper,
+  LayoutList, Inbox, CreditCard,
+  Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon,
+  Notebook, Newspaper,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motionDuration, motionTransition } from "../../lib/motion";
@@ -17,8 +17,7 @@ export interface CommandPaletteItem {
   id: string;
   icon: LucideIcon;
   label: string;
-  hint?: string | string[];
-  shortcutLabel?: string;
+  aliases: string[];
   kind: string;
   payload?: string;
 }
@@ -66,26 +65,26 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
   }, [onClose, open]);
 
   const items = useMemo<CommandPaletteItem[]>(() => [
-    { id: "go-dashboard", icon: LayoutList, label: "Go to Dashboard", hint: "1", kind: "tab", payload: "dashboard" },
-    { id: "go-inbox",     icon: Inbox,      label: "Go to Inbox",     hint: "2", kind: "tab", payload: "inbox" },
-    { id: "timeline",     icon: Clock,      label: "Today timeline",  kind: "scroll", payload: "timeline" },
-    { id: "deadlines",    icon: AlertCircle, label: "Go to Deadlines", kind: "calendar-view", payload: "deadlines" },
-    { id: "bills",        icon: CreditCard, label: "Go to Bills",      kind: "calendar-view", payload: "bills" },
-    { id: "new-deadline", icon: ListPlus,   label: "New deadline",     hint: "G T", kind: "deadline-create" },
-    { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
-    { id: "calendar",     icon: CalendarDays, label: "Go to Calendar",  hint: "3", kind: "tab", payload: "calendar" },
-    ...(!isDemoMode() ? [{ id: "go-notes", icon: Notebook, label: "Go to Notes", hint: "4", kind: "tab", payload: "notes" }] : []),
-    { id: "go-news",      icon: Newspaper,  label: "Go to News",       hint: "5", kind: "tab", payload: "news" },
-    { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },
-    { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
-{ id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },
-    { id: "settings",     icon: SettingsIcon, label: "Open settings", hint: ["⌘", ","], shortcutLabel: "Command comma", kind: "settings" },
+    { id: "go-dashboard", icon: LayoutList, label: "Go to Dashboard", aliases: ["home", "today", "overview", "briefing"], kind: "tab", payload: "dashboard" },
+    { id: "go-inbox",     icon: Inbox,      label: "Go to Inbox",     aliases: ["email", "mail", "messages"], kind: "tab", payload: "inbox" },
+    { id: "bills",        icon: CreditCard, label: "Go to Bills",     aliases: ["payments", "payables"], kind: "calendar-view", payload: "bills" },
+    { id: "events",       icon: CalendarDays, label: "Go to Events",  aliases: ["calendar", "schedule", "meetings"], kind: "calendar-view", payload: "events" },
+    ...(!isDemoMode() ? [{ id: "go-notes", icon: Notebook, label: "Go to Notes", aliases: ["ideas", "canvas", "tldraw"], kind: "tab", payload: "notes" }] : []),
+    { id: "go-news",      icon: Newspaper,  label: "Go to News",      aliases: ["articles", "headlines", "feed"], kind: "tab", payload: "news" },
+    { id: "analytics",    icon: BarChart3,  label: "Analytics",       aliases: ["stats", "metrics", "insights"], kind: "analytics" },
+    { id: "history",      icon: History,    label: "Snapshots",       aliases: ["history", "past briefings"], kind: "history" },
+    { id: "settings",     icon: SettingsIcon, label: "Go to Settings", aliases: ["preferences", "configuration", "config", "setup"], kind: "settings" },
   ], []);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
-    const q = query.toLowerCase();
-    return items.filter((i) => i.label.toLowerCase().includes(q));
+    const q = query.trim().toLowerCase();
+    const labelMatches = items.filter((item) => item.label.toLowerCase().includes(q));
+    const aliasMatches = items.filter((item) => (
+      !item.label.toLowerCase().includes(q)
+      && item.aliases.some((alias) => alias.includes(q))
+    ));
+    return [...labelMatches, ...aliasMatches];
   }, [items, query]);
 
   // Clamp during render so out-of-range cursors never reach a child — safer
@@ -99,7 +98,20 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
   }
 
   function onInputKey(e: ReactKeyboardEvent<HTMLInputElement>): void {
-    if (e.key === "ArrowDown") {
+    const numberIndex = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey
+      ? e.key === "0"
+        ? 9
+        : /^[1-9]$/.test(e.key)
+          ? Number(e.key) - 1
+          : -1
+      : -1;
+
+    if (numberIndex >= 0) {
+      e.preventDefault();
+      const item = filtered[numberIndex];
+      if (!item) return;
+      run(item);
+    } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setCursor(Math.min(filtered.length - 1, safeCursor + 1));
     } else if (e.key === "ArrowUp") {
@@ -193,12 +205,14 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
           {filtered.map((item, i) => {
             const Icon = item.icon;
             const active = i === safeCursor;
+            const numberHint = i < 10 ? String((i + 1) % 10) : null;
             return (
               <div
                 key={item.id}
                 id={`command-palette-option-${item.id}`}
                 role="option"
                 aria-selected={i === safeCursor}
+                aria-keyshortcuts={numberHint ?? undefined}
                 onMouseEnter={() => setCursor(i)}
                 onClick={() => run(item)}
                 style={{
@@ -212,30 +226,18 @@ function CommandPaletteInner({ open, reduceMotion, accent, onClose, onAction }: 
               >
                 <Icon size={13} color={active ? accent : "rgba(205,214,244,0.55)"} />
                 <span style={{ flex: 1 }}>{item.label}</span>
-                {item.hint && (
-                  <span
-                    aria-label={item.shortcutLabel}
+                {numberHint && (
+                  <kbd
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 3,
+                      fontSize: 10, fontFamily: "Fira Code, monospace",
+                      padding: "1px 5px", borderRadius: 3,
+                      background: "rgba(255,255,255,0.04)",
+                      color: "var(--color-text-faint)",
+                      border: "1px solid rgba(255,255,255,0.08)",
                     }}
                   >
-                    {(Array.isArray(item.hint) ? item.hint : [item.hint]).map((key) => (
-                      <kbd
-                        key={key}
-                        style={{
-                          fontSize: 10, fontFamily: "Fira Code, monospace",
-                          padding: "1px 5px", borderRadius: 3,
-                          background: "rgba(255,255,255,0.04)",
-                          color: "var(--color-text-faint)",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                        }}
-                      >
-                        {key}
-                      </kbd>
-                    ))}
-                  </span>
+                    {numberHint}
+                  </kbd>
                 )}
                 <ArrowRight size={11} color="rgba(205,214,244,0.3)" />
               </div>

@@ -24,7 +24,6 @@ import useLiveReadOverrides from "./useLiveReadOverrides";
 import useDashboardItemSheet from "./useDashboardItemSheet";
 import useMobileDashboardScrollRestoration from "./useMobileDashboardScrollRestoration";
 import useSnapshotNavigation from "./useSnapshotNavigation";
-import { scrollToSection } from "./scrollToSection";
 import { getInboxSession, resetInboxSession, setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
 import type { CurrentDashboardHookResult } from "../../hooks/useCurrentDashboard";
 import type useCalendarRange from "../../hooks/calendar/useCalendarRange";
@@ -296,12 +295,6 @@ export function DashboardShell({
   const briefing = bd.briefing;
   const dashboardCalendarDeadlines = calendarDeadlines;
 
-  // Scroll/jump to data-sect targets within the dashboard tab
-  const jumpToSection = useCallback((slug: string) => {
-    setShellTab("dashboard");
-    scrollToSection(slug);
-  }, [setShellTab]);
-
   // Email click anywhere → switch to inbox and let its state handle selection.
   const openEmailInInbox = useCallback((id: string | number | null) => {
     setHistoricalSnapshotView(null);
@@ -363,13 +356,8 @@ export function DashboardShell({
   const navigate = useNavigate();
   const handlePaletteAction = useCallback((item: { kind: string; payload?: string }) => {
     if (item.kind === "tab" && item.payload) setShellTab(item.payload as DashboardTab);
-    else if (item.kind === "scroll" && item.payload) jumpToSection(item.payload);
-    else if (item.kind === "calendar-view" && item.payload === "deadlines") {
-      openCalendar("events", null, null, { forceDeadlineOverlay: true });
-    }
     else if (item.kind === "calendar-view" && item.payload === "bills") openCalendar("bills");
-    else if (item.kind === "deadline-create") openDeadlineCreate();
-    else if (item.kind === "event") openCalendar("events", null, "new");
+    else if (item.kind === "calendar-view" && item.payload === "events") openCalendar("events");
     else if (item.kind === "analytics") {
       closePalette();
       window.requestAnimationFrame(() => {
@@ -377,11 +365,10 @@ export function DashboardShell({
       });
     }
     else if (item.kind === "history") setHistoryOpen(true);
-    else if (item.kind === "refresh") onQuickRefresh?.();
     // SPA navigation (honors the router basename, keeps SSE/caches alive) — the
     // old window.location.href forced a full reload and ignored a sub-path base.
     else if (item.kind === "settings") navigate("/settings");
-  }, [closePalette, jumpToSection, navigate, onQuickRefresh, openAnalytics, openCalendar, openDeadlineCreate, setHistoryOpen, setShellTab]);
+  }, [closePalette, navigate, openAnalytics, openCalendar, setHistoryOpen, setShellTab]);
 
   const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
 
