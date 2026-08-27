@@ -21,7 +21,6 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `snapshotNavigationModel.ts` — pure older/newer adjacency resolver over newest-first snapshot history
 - `useAlfredPanelState.ts` — Alfred panel mount/open/new-chat/handoff state and its stable actions
 - `useLiveReadOverrides.ts` — live read-override map + derived inbox unread-signal count; prunes overrides whose emails left the active snapshot
-- `scrollToSection.ts` — smooth-scroll to a dashboard `data-sect` target after a tab switch
 - `layout/DashboardScenePrimitives.tsx` — motion-wrapped frame, scene regions, and the `ThreeTierLayout` band/timeline/context wiring
 - `layout/dashboard-scene-tokens.ts` — transition timings and stagger delays
 

@@ -121,7 +121,6 @@ function TodayTimeline({
 
   return (
     <div
-      data-sect="timeline"
       data-testid={isMobile ? "today-timeline-mobile" : "today-timeline"}
       style={{
         padding: isMobile ? "18px 16px 20px" : density === "compact" ? "22px 24px 24px" : "26px 28px 28px",

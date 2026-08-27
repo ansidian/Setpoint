@@ -48,7 +48,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
   const needsYou = flat.filter((e) => e._lane === "needs_attention" && !e.read).length;
 
   return (
-    <div data-sect="inbox-peek">
+    <div>
       <SectionHeader
         title="Inbox peek"
         isMobile={isMobile}
