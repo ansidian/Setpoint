@@ -508,22 +508,8 @@ describe("InboxView mobile", () => {
     lanes.catch_up = [laneItem(16, "catch_up")];
     lanes.handled = [laneItem(17, "handled")];
     lanes.untriaged_read = [{ ...laneItem(18, "untriaged_read"), read: true }];
-    lanes.fyi = [{
-      ...needsItem,
-      id: 12,
-      snapshot_item_id: 12,
-      uid: "snapshot-msg-2",
-      email_id: "snapshot-msg-2",
-      lane: "fyi",
-    }];
-    lanes.noise = [{
-      ...needsItem,
-      id: 13,
-      snapshot_item_id: 13,
-      uid: "snapshot-msg-3",
-      email_id: "snapshot-msg-3",
-      lane: "noise",
-    }];
+    lanes.fyi = [laneItem(12, "fyi")];
+    lanes.noise = [laneItem(13, "noise")];
 
     activeSnapshotMock.state = {
       snapshot,

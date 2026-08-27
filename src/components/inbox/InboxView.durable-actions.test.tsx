@@ -293,7 +293,6 @@ describe("InboxView snapshot mutation recovery", () => {
       lanes: { needs_attention: [], fyi: [], noise: [], handled: [handled] },
     });
     renderInbox({ activeSnapshot: makeSnapshotController(snapshot) });
-    fireEvent.click(screen.getByRole("button", { name: /^Handled/ }));
 
     const actions = await openActions("Handled snapshot action");
     fireEvent.click(within(actions).getByRole("button", { name: "Reopen" }));
