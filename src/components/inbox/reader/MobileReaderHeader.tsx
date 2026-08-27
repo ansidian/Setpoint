@@ -142,10 +142,10 @@ export default function MobileReaderHeader({
             Briefing triage
           </div>
           <div
-            className="ea-display"
             style={{
               marginTop: 4,
               fontSize: 11.5,
+              fontWeight: 500,
               lineHeight: 1.45,
               color: "rgba(255,255,255,0.9)",
             }}

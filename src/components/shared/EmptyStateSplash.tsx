@@ -154,12 +154,13 @@ export default function EmptyStateSplash({
             {eyebrow}
           </div>
           <div
-            className="ea-display"
             style={{
               fontSize: compact ? 24 : 30,
               lineHeight: 1.1,
+              fontFamily: "var(--font-sans)",
+              fontWeight: 600,
               color: "var(--sp-text)",
-              letterSpacing: -0.5,
+              letterSpacing: -0.25,
             }}
           >
             {title}

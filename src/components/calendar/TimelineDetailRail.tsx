@@ -400,10 +400,10 @@ export default function TimelineDetailRail({
                 {eyebrow}
               </div>
               <div
-                className="ea-display"
                 style={{
                   marginTop: compactMasthead ? 2 : 6,
                   fontSize: compactMasthead ? 17 : 22,
+                  fontWeight: 600,
                   lineHeight: 1.04,
                   letterSpacing: -0.42,
                   color: "#f6f7fb",

@@ -282,7 +282,6 @@ export default function CalendarModalHeader({
               ref={titleRef}
               type="button"
               id="calendar-modal-title"
-              className="ea-display"
               data-testid="calendar-month-title"
               onClick={handleTitleClick}
               aria-expanded={pickerOpen}
@@ -301,7 +300,7 @@ export default function CalendarModalHeader({
               }}
               style={{
                 fontSize: titleSize,
-                fontWeight: 500,
+                fontWeight: 600,
                 color: TITLE_MONTH_WHITE,
                 letterSpacing: -0.7,
                 lineHeight: 0.96,

@@ -31,11 +31,11 @@ colors:
   v3-accent: "#7c3aed"
 typography:
   display:
-    fontFamily: "\"Instrument Serif\", Georgia, serif"
+    fontFamily: "Montserrat, sans-serif"
     fontSize: "48px"
-    fontWeight: 400
-    lineHeight: 1
-    letterSpacing: "0"
+    fontWeight: 600
+    lineHeight: 1.05
+    letterSpacing: "-0.5px"
   headline:
     fontFamily: "Montserrat, sans-serif"
     fontSize: "28px"
@@ -147,7 +147,7 @@ The visual system is compact, border-led, and data-first. Purple is the default 
 - Dense operational surfaces with stable scan paths.
 - Muted tinted neutrals with one primary accent and domain status colors.
 - Portaled panels that feel solid, opaque, and separate from page scroll.
-- Serif display moments reserved for assistant voice, not routine UI chrome.
+- A single sans-serif family with hierarchy carried by size, weight, and spacing.
 - Subtle motion for orientation only.
 
 ## Colors
@@ -189,14 +189,13 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 ## Typography
 
-**Display Font:** Instrument Serif, Fraunces, or IBM Plex Serif via `--serif-choice`, with Georgia as the backup face.
-**Body Font:** Montserrat, with the system sans-serif stack as backup.
+**Primary Font:** Montserrat, with the system sans-serif stack as backup.
 **Label/Mono Font:** Fira Code for keyboard hints and tabular technical labels.
 
-**Character:** The type pairing gives high-level assistant summaries a human voice while leaving operational UI exact and compact. Serif type should feel editorial; sans-serif type should feel like the workspace operating.
+**Character:** One sans-serif family keeps assistant summaries, headings, and operational UI in the same exacting voice. Establish hierarchy through size, weight, line height, and spacing rather than decorative font changes.
 
 ### Hierarchy
-- **Display** (400, 48px, 1 line-height): Hero greeting, snapshot summary, and triage summary.
+- **Display** (600, 48px, 1.05 line-height): Hero greeting, snapshot summary, and other rare top-level statements.
 - **Headline** (600, 28px, 1.12 line-height): Page-level headings such as settings and major empty states.
 - **Title** (500, 13px, 1.35 line-height): Card titles, row titles, input text, and dense primary labels.
 - **Body** (400, 12px, 1.5 line-height): Summaries, descriptions, previews, and readable supporting copy. Cap long body text at 65 to 75 characters.
@@ -205,7 +204,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 ### Named Rules
 
-**The Voice Split Rule.** Use display serif only for high-level summaries with a deliberately editorial role. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, conversational panel responses such as Alfred answers, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).
+**The Single-Family Rule.** Use Montserrat for all Setpoint-authored interface and assistant text. Distinguish hierarchy and voice through size, weight, line height, and spacing rather than switching typefaces. Native tools and user-authored content may retain their own type systems where Setpoint does not own the rendering surface.
 
 ## Layout
 

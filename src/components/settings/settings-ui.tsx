@@ -213,7 +213,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
               <div className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 Workspace Preferences
               </div>
-              <h1 className="ea-display mt-1 text-[32px] leading-none font-normal text-foreground">
+              <h1 className="mt-1 text-[32px] font-semibold leading-none text-foreground">
                 Settings
               </h1>
               <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground/75">

@@ -43,8 +43,8 @@
     },
     "typographyMeta": {
       "display": {
-        "displayName": "Assistant Voice",
-        "purpose": "Hero greeting, snapshot summary, email triage summary, and other deliberately editorial summaries."
+        "displayName": "Display Headline",
+        "purpose": "Rare top-level statements distinguished within the Montserrat hierarchy by size and weight."
       },
       "body": {
         "displayName": "Operational Body",

@@ -56,9 +56,9 @@ const importNewsTab = () => import("../news/NewsTab");
 const NewsTab = lazy(importNewsTab);
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
-// Former Customize defaults, now hardcoded. The accent + serif are also baked
-// into src/index.css static fallbacks (--ea-accent / --serif-choice), so the
-// runtime CSS-var injection the old customize hook did is no longer needed.
+// Former Customize defaults, now hardcoded. The accent is also baked into the
+// src/index.css static fallback (--ea-accent), so the runtime CSS-var injection
+// the old customize hook did is no longer needed.
 const SHELL_PREFS = Object.freeze({
   dashboardLayout: "focus",
   inboxLayout: "two-pane",
@@ -67,7 +67,6 @@ const SHELL_PREFS = Object.freeze({
   inboxDensity: "comfortable",
   aiVerbosity: "standard",
   accent: "#cba6da",
-  serifChoice: "Instrument Serif",
   showInsights: true,
   showInboxPeek: true,
   showPreview: true,

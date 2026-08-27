@@ -36,7 +36,7 @@ export function CalendarOverviewRail(props: OverviewOptions) {
             >
               Month navigator
             </div>
-            <div className="ea-display" style={{ fontSize: 22, lineHeight: 1.02, letterSpacing: -0.36, color: "#f5f7ff" }}>
+            <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.02, letterSpacing: -0.36, color: "#f5f7ff" }}>
               {model.title}
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.5, color: "rgba(205,214,244,0.58)" }}>

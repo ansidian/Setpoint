@@ -68,7 +68,6 @@ export default function TriagePanel({ email, accent }: { email: InboxEmailLike; 
       <div style={{ padding: "4px 14px 14px" }}>
         {summary && (
           <p
-            className="ea-display"
             style={{
               margin: "4px 0 10px",
               fontSize: 13, lineHeight: 1.55, color: "rgba(255,255,255,0.92)",

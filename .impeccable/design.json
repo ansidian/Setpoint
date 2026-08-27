@@ -169,8 +169,8 @@
     },
     "typographyMeta": {
       "display": {
-        "displayName": "Assistant Voice",
-        "purpose": "Hero greetings and deliberately editorial summaries only."
+        "displayName": "Display Headline",
+        "purpose": "Rare top-level statements distinguished within the Montserrat hierarchy by size and weight."
       },
       "headline": {
         "displayName": "Page Headline",
@@ -299,14 +299,14 @@
         "Dense operational surfaces with stable scan paths.",
         "Muted tinted neutrals with one primary accent and domain status colors.",
         "Portaled panels that feel solid, opaque, and separate from page scroll.",
-        "Serif display moments reserved for assistant voice, not routine UI chrome.",
+        "A single sans-serif family with hierarchy carried by size, weight, and spacing.",
         "Subtle motion for orientation only."
       ],
       "rules": [
         { "name": "The Accent Rarity Rule", "body": "Lavender should guide attention, not coat the interface. On dense product screens, keep it to active controls, focus rings, selected states, and small emphasis.", "section": "colors" },
         { "name": "The Source Color Rule", "body": "Domain colors map to data meaning. Do not repurpose task, transaction, urgency, or source colors as decorative theme colors.", "section": "colors" },
         { "name": "The Finance Direction Rule", "body": "Inflows use cyan, outflows use periwinkle, and transfers use info blue. Rose remains reserved for overdue, missed, or error states; direction must also be conveyed by sign and label.", "section": "colors" },
-        { "name": "The Voice Split Rule", "body": "Use display serif only for high-level summaries with a deliberately editorial role. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, conversational panel responses such as Alfred answers, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).", "section": "typography" },
+        { "name": "The Single-Family Rule", "body": "Use Montserrat for all Setpoint-authored interface and assistant text. Distinguish hierarchy and voice through size, weight, line height, and spacing rather than switching typefaces. Native tools and user-authored content may retain their own type systems where Setpoint does not own the rendering surface.", "section": "typography" },
         { "name": "The Instrument Owns the Work Area Rule", "body": "When a native spatial tool is the product surface, let it occupy the full available workspace; keep Setpoint framing at the shell boundary.", "section": "layout" },
         { "name": "The Portal Shadow Rule", "body": "Shadows belong to things that escape normal layout. Cards, rails, rows, and inline sections should not gain decorative drop shadows.", "section": "elevation" },
         { "name": "The Flush Canvas Rule", "body": "Never round or inset the Notes work surface. Rounded shapes belong to Setpoint's compact overlays and recovery controls, not to the canvas boundary.", "section": "shapes" },

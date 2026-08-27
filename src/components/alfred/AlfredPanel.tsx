@@ -410,7 +410,7 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
         {empty ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 26 }}>
             <div>
-              <div className="ea-display" style={{ fontSize: 24, color: text, fontFamily: "var(--serif-choice, 'Instrument Serif', serif)" }}>
+              <div style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.1, letterSpacing: -0.25, color: text }}>
                 What do you need?
               </div>
               <div style={{ fontSize: 11.5, color: "var(--color-text-faint)", marginTop: 6, lineHeight: 1.55 }}>

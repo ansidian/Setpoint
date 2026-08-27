@@ -254,7 +254,7 @@ export default function CalendarCellOverflowPopover({
             >
               {popover.viewLabel} overflow
             </div>
-            <div className="ea-display" style={{ fontSize: 18, lineHeight: 1.04, letterSpacing: -0.28, color: "#f6f7fb" }}>
+            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.04, letterSpacing: -0.28, color: "#f6f7fb" }}>
               {popover.label}
             </div>
           </div>

@@ -10,7 +10,7 @@ export default function ErrorState({ message, onRetry }: ErrorStateProps) {
     <div className="min-h-screen text-foreground font-sans flex items-center justify-center">
       <div className="text-center max-w-[400px] p-6">
         <div className="mb-4 flex justify-center text-[#f9e2af]"><AlertTriangle size={40} /></div>
-        <h2 className="font-serif text-[24px] font-normal mb-2 text-foreground">
+        <h2 className="mb-2 text-[24px] font-semibold text-foreground">
           Something went wrong
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed mb-5">

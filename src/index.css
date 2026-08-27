@@ -6,8 +6,6 @@
 @import "@fontsource/fira-code/latin-400.css";
 @import "@fontsource/fira-code/latin-500.css";
 @import "@fontsource/fira-code/latin-600.css";
-@import "@fontsource/instrument-serif/latin-400.css";
-@import "@fontsource/instrument-serif/latin-400-italic.css";
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -678,8 +676,6 @@
   --sidebar-border: oklch(0.4037 0.0320 280.1520);
   --sidebar-ring: oklch(0.7871 0.1187 304.7693);
   --font-sans: Montserrat, sans-serif;
-  --font-serif: "Instrument Serif", Georgia, serif;
-  --font-display: var(--serif-choice, "Instrument Serif"), Georgia, serif;
   --font-mono: Fira Code, monospace;
   --ea-accent: #cba6da;
   /* ── Catppuccin Mocha canonical palette (Color Scope A) ──
@@ -785,7 +781,6 @@
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --font-serif: var(--font-serif);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -903,11 +898,6 @@ body {
     transform: none;
     transition: none;
   }
-}
-
-/* Display serif (hero greeting) — overridable via --serif-choice */
-.ea-display {
-  font-family: var(--serif-choice, "Instrument Serif"), Georgia, serif;
 }
 
 /* Desktop Notes is a precise full-bleed tldraw surface inside Setpoint's shell. */

@@ -125,10 +125,9 @@ function closeOpenSay(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {
 // A say closed by a tool_start is a between-tool preamble — Alfred narrating what
 // it's about to do, not the final answer. Keep it (so the narration persists in
 // the thread like any agentic tool), but tag it `preamble` and mark it done so the
-// renderer holds it as quiet prose instead of promoting it to the serif answer
-// line. That keeps the narration visible without resurrecting the old "stack of
-// ~10 serif pseudo-headers" — only the final answer (a say still open at run_end)
-// resolves into the serif title.
+// renderer holds it as quiet prose instead of promoting it to the final answer
+// treatment. That keeps the narration visible without resurrecting the old stack
+// of pseudo-headings; only the answer still open at run_end is promoted.
 function closePreambleSay(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {
   const last = messages[messages.length - 1];
   if (last?.type === "say" && !last.done) {

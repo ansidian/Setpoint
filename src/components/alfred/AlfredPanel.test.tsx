@@ -296,7 +296,7 @@ describe("AlfredPanel", () => {
     // The reported regression: narration Alfred says between tool calls vanished.
     // A real multi-step run must read like an agentic trail — each narration line
     // persists as quiet prose above the tools it introduced; only the final answer
-    // resolves into the serif line.
+    // receives the promoted answer treatment.
     const narration = 'Let me read a few more confirmation emails to better understand what constitutes "nothing after applied," and check for more rejections.';
     scriptedRun([
       { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },

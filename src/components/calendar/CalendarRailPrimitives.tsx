@@ -198,7 +198,7 @@ export function EmptyDayCard({ model, viewYear, viewMonth, selectedDay, compact 
           </div>
         </div>
 
-        <div className="ea-display" style={{ fontSize: compact ? 18 : 21, lineHeight: 1.04, letterSpacing: compact ? -0.28 : -0.34, color: "#fff" }}>
+        <div style={{ fontSize: compact ? 18 : 21, fontWeight: 600, lineHeight: 1.04, letterSpacing: compact ? -0.28 : -0.34, color: "#fff" }}>
           {formatFullDate(viewYear, viewMonth, selectedDay)}
         </div>
 

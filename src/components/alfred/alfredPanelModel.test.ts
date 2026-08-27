@@ -91,7 +91,7 @@ describe("applyAlfredEvent", () => {
       { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 6 upcoming" },
       { type: "tool_start", tool_id: "t2", name: "show_items" },
     ]);
-    // The "Checking." preamble survives as a tagged say (quiet prose, not serif),
+    // The "Checking." preamble survives as a tagged say (quiet prose, not promoted),
     // and tools with no narration between them still coalesce into one block.
     expect(ms.map((m) => m.type)).toEqual(["say", "tools"]);
     expect(ms[0]).toMatchObject({ type: "say", text: "Checking.", done: true, preamble: true });
@@ -149,7 +149,7 @@ describe("applyAlfredEvent", () => {
     // …each introducing its own settled tool block (no lingering spinner)…
     expect(ms[1]).toMatchObject({ type: "tools", done: true });
     expect(ms[3]).toMatchObject({ type: "tools", done: true });
-    // …and only the final answer resolves into the serif (non-preamble) line.
+    // …and only the final answer resolves into the promoted non-preamble treatment.
     expect(ms[4]).toMatchObject({ text: "Here's what I found.", done: true });
     expect(messageAt(ms, 4, "say").preamble).toBeFalsy();
   });
@@ -190,7 +190,7 @@ describe("applyAlfredEvent", () => {
     expect(tools.every((t) => t.done)).toBe(true); // both blocks settled — no lingering spinner
     // The two narration lines stay quiet preambles…
     expect(ms.filter((m) => m.type === "say" && m.preamble)).toHaveLength(2);
-    // …and the headline written after the citation is the serif (non-preamble) answer.
+    // …and the headline written after the citation is the promoted non-preamble answer.
     const answer = messageAt(ms, ms.length - 1, "say");
     expect(answer).toMatchObject({ type: "say", text: "Rent is due and you have 2 deadlines.", done: true });
     expect(answer.preamble).toBeFalsy();

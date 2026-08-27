@@ -24,9 +24,9 @@ describe("alfred message primitives", () => {
     expect(screen.queryByText("Retry")).toBeNull(); // no client-side retry by design
   });
 
-  it("SayBlock renders streaming text quietly in one block (no serif pseudo-header)", () => {
-    // While streaming (not done), don't promote the first sentence to a serif
-    // lead — that's what made every dropped preamble flash as a header.
+  it("SayBlock renders streaming text quietly in one block (no promoted pseudo-heading)", () => {
+    // While streaming (not done), don't promote the first sentence to a strong
+    // lead — that's what made every dropped preamble flash as a heading.
     render(<SayBlock text="Two things need you. The rest can wait." />);
     expect(screen.getByText("Two things need you. The rest can wait.")).toBeTruthy();
     expect(screen.queryByText("The rest can wait.")).toBeNull(); // not split out yet
