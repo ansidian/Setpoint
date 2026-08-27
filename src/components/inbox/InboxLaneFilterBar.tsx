@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
+import { CircleHelp } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
+import Tooltip from "../shared/Tooltip";
 import { PRIMARY_INBOX_LANES } from "./inboxCountsModel";
 
 type LaneCounts = Record<string, number | undefined>;
@@ -14,6 +16,17 @@ const ALL_LANES = [
   "untriaged_read",
   "noise",
 ] as const;
+
+const SPECIAL_LANES = [
+  { label: "Queued", description: "New mail waiting briefly for automatic triage." },
+  { label: "Carryover", description: "Unfinished Needs Attention mail from the previous snapshot." },
+  { label: "Catch-up", description: "Unread FYI mail from the previous snapshot, shown here read-only." },
+  { label: "Handled", description: "Mail you marked done; reopen it to restore its prior lane." },
+  { label: "Untriaged Read", description: "Mail read before triage, so automatic classification was skipped." },
+] as const;
+const SPECIAL_LANE_DESCRIPTION = SPECIAL_LANES
+  .map((lane) => `${lane.label}: ${lane.description}`)
+  .join(" ");
 
 function totalLaneCount(counts: LaneCounts): number {
   return ALL_LANES.reduce((total, key) => total + (counts[key] || 0), 0);
@@ -85,6 +98,72 @@ function LaneFilterChip({
   );
 }
 
+function LaneGlossaryTooltip() {
+  return (
+    <Tooltip
+      style={{ flexShrink: 0 }}
+      side="bottom"
+      sideOffset={8}
+      delay={250}
+      closeDelay={120}
+      disableHoverablePopup={false}
+      contentStyle={{
+        "--foreground": "#16161e",
+        "--background": "#cdd6f4",
+        width: 320,
+        maxWidth: "min(320px, calc(100vw - 24px))",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: 10,
+        padding: 12,
+        border: "1px solid rgba(205,214,244,0.12)",
+        borderRadius: 12,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+        color: "#cdd6f4",
+      } as CSSProperties}
+      text={(
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.2 }}>Special lanes</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {SPECIAL_LANES.map((lane) => (
+              <div key={lane.label} style={{ display: "grid", gridTemplateColumns: "92px minmax(0, 1fr)", gap: 10 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#fff" }}>{lane.label}</span>
+                <span style={{ fontSize: 10.5, lineHeight: 1.45, color: "rgba(205,214,244,0.72)" }}>
+                  {lane.description}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    >
+      <button
+        type="button"
+        aria-label="About inbox lanes"
+        aria-description={SPECIAL_LANE_DESCRIPTION}
+        className="sp-focus-ring transition-[transform,background-color,border-color,color] duration-150 hover:-translate-y-px hover:border-white/15 hover:bg-white/[0.07] hover:text-[rgba(205,214,244,0.88)] active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          width: 26,
+          height: 26,
+          padding: 0,
+          borderRadius: 999,
+          border: "1px solid rgba(205,214,244,0.10)",
+          background: "rgba(205,214,244,0.04)",
+          color: "rgba(205,214,244,0.56)",
+          cursor: "help",
+        }}
+      >
+        <CircleHelp size={13} aria-hidden="true" />
+      </button>
+    </Tooltip>
+  );
+}
+
 export default function InboxLaneFilterBar({
   accent,
   activeLane,
@@ -107,35 +186,46 @@ export default function InboxLaneFilterBar({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
+        gap: 8,
         padding: "7px 12px",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
-        overflowX: "auto",
-        scrollbarWidth: "none",
         flexShrink: 0,
       } as CSSProperties}
     >
-      <LaneFilterChip
-        label="All"
-        color={accent}
-        active={activeLane === "__all"}
-        onClick={() => onChange("__all")}
-      />
-      {PRIMARY_INBOX_LANES.map((key) => {
-        const count = counts[key] || 0;
-        if (count < 1) return null;
-        const metadata = LANE[key] ?? LANE.fyi!;
-        return (
-          <LaneFilterChip
-            key={key}
-            label={metadata.label}
-            count={count}
-            color={metadata.color}
-            active={activeLane === key}
-            onClick={() => onChange(key)}
-          />
-        );
-      })}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          minWidth: 0,
+          overflowX: "auto",
+          scrollbarWidth: "none",
+        } as CSSProperties}
+      >
+        <LaneFilterChip
+          label="All"
+          color={accent}
+          active={activeLane === "__all"}
+          onClick={() => onChange("__all")}
+        />
+        {PRIMARY_INBOX_LANES.map((key) => {
+          const count = counts[key] || 0;
+          if (count < 1) return null;
+          const metadata = LANE[key] ?? LANE.fyi!;
+          return (
+            <LaneFilterChip
+              key={key}
+              label={metadata.label}
+              count={count}
+              color={metadata.color}
+              active={activeLane === key}
+              onClick={() => onChange(key)}
+            />
+          );
+        })}
+      </div>
+      <span style={{ flex: 1 }} />
+      <LaneGlossaryTooltip />
     </div>
   );
 }

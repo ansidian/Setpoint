@@ -151,8 +151,8 @@ export default function InboxList({
   snapshotNavigation?: InboxSnapshotNavigation | null;
   readOnly?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState<CollapsedLanes>(() => (activeSnapshotMode ? { handled: true, untriaged_read: true, noise: true } : {}));
-  const effectiveCollapsed = activeSnapshotMode ? { handled: true, untriaged_read: true, noise: true, ...collapsed } : collapsed;
+  const [collapsed, setCollapsed] = useState<CollapsedLanes>(() => (activeSnapshotMode ? { handled: true, untriaged_read: true } : {}));
+  const effectiveCollapsed = activeSnapshotMode ? { handled: true, untriaged_read: true, ...collapsed } : collapsed;
   const toggleLane = (k: string) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;

@@ -117,7 +117,7 @@ describe("InboxList", () => {
 	    expect(screen.queryByText("Not yet triaged")).toBeNull();
 	  });
 
-  it("shows unread noise in the collapsed Noise lane header", () => {
+  it("expands the Noise lane by default while keeping its unread count visible", () => {
     renderInboxList({
       emails: [
         makeInboxEmail({ id: "noise-unread-1", subject: "Unread sale", _lane: "noise", read: false }),
@@ -129,9 +129,10 @@ describe("InboxList", () => {
       activeSnapshotMode: true,
     });
 
-    expect(screen.getByText("Noise")).toBeTruthy();
+    expect(screen.getByText("Noise").closest("button")?.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("1 unread")).toBeTruthy();
-    expect(screen.queryByText("Unread sale")).toBeNull();
+    expect(screen.getByText("Unread sale")).toBeTruthy();
+    expect(screen.getByText("Read promo")).toBeTruthy();
   });
 
   it("shows counts only for the three core lane filters", () => {
@@ -161,6 +162,24 @@ describe("InboxList", () => {
     expect(screen.queryByRole("button", { name: "Handled" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Untriaged Read" })).toBeNull();
     expect(screen.queryByText(/unread ·/)).toBeNull();
+  });
+
+  it("offers an informational hover for the uncommon inbox lanes", () => {
+    renderInboxList({
+      laneCounts: { needs_attention: 1 },
+      totalCount: 1,
+      unreadCount: 0,
+    });
+
+    const glossaryButton = screen.getByRole("button", { name: "About inbox lanes" });
+    const glossaryTrigger = glossaryButton.closest("[data-slot='tooltip-trigger']");
+    expect(glossaryTrigger).toBeTruthy();
+    expect(glossaryButton.getAttribute("aria-description")).toContain(
+      "Catch-up: Unread FYI mail from the previous snapshot",
+    );
+    expect(glossaryButton.getAttribute("aria-description")).toContain(
+      "Untriaged Read: Mail read before triage",
+    );
   });
 
   it("hides natural lane filters whose scoped count is zero", () => {
