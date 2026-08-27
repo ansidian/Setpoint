@@ -9,7 +9,6 @@ import Reader from "../reader/Reader";
 import MobileFilterSheet from "./MobileFilterSheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
-import { buildActiveSnapshotSummary } from "../snapshotSummary";
 import InboxUndoToast from "../InboxUndoToast";
 import MobileSnapshotHeader from "./MobileSnapshotHeader";
 import { selectVisibleMobileChips } from "../inboxCountsModel";
@@ -40,21 +39,22 @@ function MobileChip({ active, label, count, onClick, accent }: {
   return (
     <button
       type="button"
+      aria-label={typeof count === "number" ? `${label}, ${count}` : label}
+      aria-pressed={active}
       onClick={onClick}
       className="transition-transform duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
       style={{
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: 6,
         flexShrink: 0,
         minWidth: 0,
         minHeight: "var(--sp-touch-min)",
-        padding: "8px 6px",
-        borderRadius: 999,
-        border: `1px solid ${active ? `${accent}48` : "rgba(255,255,255,0.08)"}`,
-        background: active ? `${accent}16` : "rgba(255,255,255,0.03)",
-        color: active ? "#fff" : "rgba(205,214,244,0.72)",
+        padding: 0,
+        borderRadius: 8,
+        border: "none",
+        background: "transparent",
+        color: "inherit",
         cursor: "pointer",
         fontFamily: "inherit",
         fontSize: 10.5,
@@ -62,25 +62,42 @@ function MobileChip({ active, label, count, onClick, accent }: {
         whiteSpace: "nowrap",
       }}
     >
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
       <span
+        aria-hidden="true"
         style={{
-          minWidth: 16,
-          height: 16,
-          padding: "0 4px",
-          borderRadius: 999,
+          height: 30,
+          padding: "0 9px",
+          borderRadius: 8,
+          border: `1px solid ${active ? `${accent}48` : "rgba(255,255,255,0.08)"}`,
+          background: active ? `${accent}16` : "rgba(255,255,255,0.03)",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          background: active ? `${accent}28` : "rgba(255,255,255,0.06)",
-          color: active ? accent : "var(--color-text-faint)",
-          fontSize: 8.5,
-          fontWeight: 700,
-          fontVariantNumeric: "tabular-nums",
-          flexShrink: 0,
+          gap: 6,
         }}
       >
-        {count}
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            color: active ? "#fff" : "rgba(205,214,244,0.72)",
+          }}
+        >
+          {label}
+        </span>
+        {typeof count === "number" && (
+          <span
+            style={{
+              color: active ? accent : "rgba(205,214,244,0.46)",
+              fontSize: 9,
+              fontWeight: 750,
+              fontVariantNumeric: "tabular-nums",
+              flexShrink: 0,
+            }}
+          >
+            {count}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -240,9 +257,6 @@ export default function MobileInboxView({
     setWorkspaceDirty(false);
     closeSelectedEmail();
   };
-  const snapshotSummary = activeSnapshotMode
-    ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
-    : briefingSummary;
   // visibleEmails arrives pinned-first (selectVisibleEmails sorts pinned rows
   // ahead of everything else, newest pin first), so splitting off the pinned
   // block for the compact group header is a findIndex split, not a re-sort.
@@ -287,7 +301,7 @@ export default function MobileInboxView({
             accent={accent}
             activeSnapshotMode={activeSnapshotMode}
             readOnly={readOnly}
-            summary={snapshotSummary}
+            summary={activeSnapshotMode ? null : briefingSummary}
             noiseUnreadCount={noiseUnreadCount}
             snapshotNavigation={snapshotNavigation}
           />
@@ -297,8 +311,8 @@ export default function MobileInboxView({
               position: "sticky",
               top: 0,
               zIndex: 4,
-              padding: "12px 16px 10px",
-              marginTop: 14,
+              padding: "20px 16px 10px",
+              marginTop: 0,
               // Opaque sticky header (mirrors the desktop StickyHeader pattern). A
               // backdrop-filter blur here forced a full-viewport GPU re-rasterization
               // on every scroll frame — one of the most expensive mobile scroll costs.
@@ -313,6 +327,7 @@ export default function MobileInboxView({
               <div
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
@@ -332,6 +347,7 @@ export default function MobileInboxView({
                   placeholder="Search indexed mail"
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     background: "transparent",
                     border: "none",
                     outline: "none",
@@ -364,7 +380,7 @@ export default function MobileInboxView({
                 display: "flex",
                 flexWrap: "nowrap",
                 alignItems: "center",
-                gap: 6,
+                gap: 4,
                 paddingTop: 10,
                 overflowX: "auto",
                 scrollbarWidth: "none",
@@ -392,24 +408,23 @@ export default function MobileInboxView({
               ))}
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                paddingTop: 10,
-                fontSize: 11,
-                color: "var(--color-text-faint)",
-              }}
-            >
-              <span>{scopedAccount ? scopedAccount.name || scopedAccount.email : "All accounts"}</span>
-              <span style={{ opacity: 0.35 }}>·</span>
-              <span>
-                {indexedSearchActive
-                  ? `${visibleEmails.length} of ${indexedSearchTotal ?? visibleEmails.length} indexed`
-                  : `${visibleEmails.length} shown`}
-              </span>
-            </div>
+            {(scopedAccount || indexedSearchActive) && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingTop: 7,
+                  fontSize: 10.5,
+                  color: "var(--color-text-faint)",
+                }}
+              >
+                {scopedAccount && <span>{scopedAccount.name || scopedAccount.email}</span>}
+                {indexedSearchActive && (
+                  <span>{`${visibleEmails.length} of ${indexedSearchTotal ?? visibleEmails.length} indexed`}</span>
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ padding: "6px 0 20px" }}>

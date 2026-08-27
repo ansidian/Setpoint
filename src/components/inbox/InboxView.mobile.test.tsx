@@ -490,7 +490,7 @@ describe("InboxView mobile", () => {
     expect(screen.getByText("Select an email")).toBeTruthy();
   });
 
-  it("uses active snapshot counts instead of stale briefing summary copy on mobile", () => {
+  it("uses lane-chip counts instead of repeating snapshot and default-account summaries on mobile", () => {
     activeSnapshotMock.state = {
       snapshot: makeActiveSnapshot(),
       loading: false,
@@ -500,8 +500,11 @@ describe("InboxView mobile", () => {
 
     renderInbox({ isMobile: true, liveEmails: [] });
 
-    expect(screen.getByText("Active snapshot")).toBeTruthy();
-    expect(screen.getByText(/1 email across 1 account/i)).toBeTruthy();
+    expect(screen.getByText("Current snapshot")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All, 1" })).toBeTruthy();
+    expect(screen.queryByText(/1 email across 1 account/i)).toBeNull();
+    expect(screen.queryByText("All accounts")).toBeNull();
+    expect(screen.queryByText("1 shown")).toBeNull();
     expect(screen.queryByText("Handle the approval first, then everything else can wait.")).toBeNull();
     expect(screen.queryByText(/Snapshot updated/i)).toBeNull();
   });

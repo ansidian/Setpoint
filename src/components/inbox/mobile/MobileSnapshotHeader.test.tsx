@@ -34,8 +34,10 @@ describe("MobileSnapshotHeader", () => {
       />,
     );
 
-    expect(screen.getByText("Snapshot")).toBeTruthy();
+    expect(screen.getByTestId("mobile-snapshot-pager")).toBeTruthy();
     expect(screen.getByText(/Morning/)).toBeTruthy();
+    expect(screen.getByText("Read only")).toBeTruthy();
+    expect(screen.queryByText("1 email across 1 account.")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show newer snapshot" }));
     // test-architecture: allow-boundary-interaction -- the navigation callback is the component's outward state-transition boundary; no rendered state changes until its owner supplies the next snapshot.
     expect(onNavigate).toHaveBeenCalledWith("newer");

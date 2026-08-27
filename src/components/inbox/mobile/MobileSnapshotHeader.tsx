@@ -19,6 +19,88 @@ export default function MobileSnapshotHeader({
   noiseUnreadCount: number;
   snapshotNavigation: InboxSnapshotNavigation | null;
 }) {
+  const rawContext = formatSnapshotContext(snapshotNavigation?.snapshot || null);
+  const snapshotContext = snapshotNavigation?.snapshot && !snapshotNavigation.snapshot.schedule_label
+    ? rawContext
+      ?.replace(" · Current · ", " · ")
+      .replace(" · Snapshot · ", " · ") || null
+    : rawContext;
+
+  if (activeSnapshotMode) {
+    return (
+      <div
+        data-testid="mobile-snapshot-pager"
+        style={{
+          padding: "6px 16px 0",
+          background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-deep) 99%, transparent), color-mix(in srgb, var(--sp-deep) 97%, transparent))",
+        }}
+      >
+        {snapshotNavigation ? (
+          <SnapshotNavigationControls
+            navigation={snapshotNavigation}
+            historical={readOnly}
+            mobile
+            context={(
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 1,
+                  lineHeight: 1.25,
+                  textAlign: "center",
+                }}
+              >
+                <span
+                  style={{
+                    width: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    color: "rgba(205,214,244,0.82)",
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                  }}
+                >
+                  {snapshotContext || (readOnly ? "Historical snapshot" : "Current snapshot")}
+                </span>
+                {(readOnly || snapshotContext) && (
+                  <span
+                    style={{
+                      color: readOnly ? "var(--color-text-faint)" : accent,
+                      fontSize: 9,
+                      fontWeight: 650,
+                    }}
+                  >
+                    {readOnly ? "Read only" : "Current"}
+                  </span>
+                )}
+              </div>
+            )}
+            onNavigate={(direction) => { void snapshotNavigation.onNavigate(direction); }}
+          />
+        ) : (
+          <div
+            style={{
+              minHeight: "var(--sp-touch-min)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: accent,
+              fontSize: 10.5,
+              fontWeight: 650,
+            }}
+          >
+            Current snapshot
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: "10px 16px 0" }}>
       <div
@@ -40,7 +122,7 @@ export default function MobileSnapshotHeader({
               color: accent,
             }}
           >
-            {activeSnapshotMode ? readOnly ? "Snapshot" : "Active snapshot" : "Inbox snapshot"}
+            Inbox snapshot
           </span>
           <span style={{ flex: 1 }} />
           {noiseUnreadCount > 0 && (
@@ -59,34 +141,6 @@ export default function MobileSnapshotHeader({
             }}
           >
             {summary}
-          </div>
-        )}
-        {activeSnapshotMode && readOnly && (
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 10.5,
-              lineHeight: 1.4,
-              color: "var(--color-text-faint)",
-            }}
-          >
-            {formatSnapshotContext(snapshotNavigation?.snapshot || null) || "Historical email window"}
-          </div>
-        )}
-        {activeSnapshotMode && snapshotNavigation && (
-          <div
-            style={{
-              marginTop: 9,
-              paddingTop: 9,
-              borderTop: "1px solid rgba(255,255,255,0.055)",
-            }}
-          >
-            <SnapshotNavigationControls
-              navigation={snapshotNavigation}
-              historical={readOnly}
-              mobile
-              onNavigate={(direction) => { void snapshotNavigation.onNavigate(direction); }}
-            />
           </div>
         )}
       </div>

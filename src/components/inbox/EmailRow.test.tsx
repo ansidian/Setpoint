@@ -60,6 +60,17 @@ describe("EmailRow lane tag (mobile)", () => {
     renderRow({ email: { category: "uncategorized" } });
     expect(screen.queryByText("uncategorized")).toBeNull();
   });
+
+  it("does not repeat the queued lane when the arrival-state badge already communicates it", () => {
+    renderRow({ email: { _lane: "queued", _arrivalGraceQueued: true }, showLaneTag: true });
+    expect(screen.getAllByText("Queued")).toHaveLength(1);
+  });
+
+  it("does not repeat the untriaged-read lane when the read-state badge already communicates it", () => {
+    renderRow({ email: { _lane: "untriaged_read", _untriagedRead: true }, showLaneTag: true });
+    expect(screen.getAllByText("Read")).toHaveLength(1);
+    expect(screen.queryByText("Untriaged Read")).toBeNull();
+  });
 });
 
 describe("EmailRow pinned", () => {

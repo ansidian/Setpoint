@@ -44,6 +44,8 @@ function EmailRow({
   const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
   const hPad = 14;
   const freshVerificationCode = isVerificationCodeFresh(email, nowTick);
+  const laneAlreadyCommunicated = (arrivalGraceQueued && laneKey === "queued")
+    || (untriagedRead && laneKey === "untriaged_read");
 
   return (
     <div
@@ -199,7 +201,7 @@ function EmailRow({
               {email.urgentFlag.label || email.urgency}
             </span>
           )}
-          {!freshVerificationCode && showLaneTag && L && (
+          {!freshVerificationCode && showLaneTag && L && !laneAlreadyCommunicated && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,

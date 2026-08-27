@@ -18,6 +18,7 @@ function SnapshotNavigationButton({
   label,
   navigation,
   mobile,
+  iconOnly,
   stretch,
   onNavigate,
 }: {
@@ -25,6 +26,7 @@ function SnapshotNavigationButton({
   label: string;
   navigation: InboxSnapshotNavigation;
   mobile: boolean;
+  iconOnly: boolean;
   stretch: boolean;
   onNavigate: SnapshotNavigationControlsProps["onNavigate"];
 }) {
@@ -45,8 +47,9 @@ function SnapshotNavigationButton({
       className="transition-[transform,background-color,border-color,color] duration-150 enabled:hover:-translate-y-px enabled:hover:border-white/15 enabled:hover:bg-white/[0.055] enabled:hover:text-white enabled:focus-visible:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 disabled:cursor-not-allowed disabled:opacity-35 motion-reduce:transform-none motion-reduce:transition-none"
       style={{
         minHeight: mobile ? "var(--sp-touch-min)" : 30,
-        padding: mobile ? "0 12px" : "0 10px",
-        borderRadius: 8,
+        width: iconOnly ? "var(--sp-touch-min)" : undefined,
+        padding: iconOnly ? 0 : mobile ? "0 12px" : "0 10px",
+        borderRadius: iconOnly ? 10 : 8,
         border: "1px solid rgba(255,255,255,0.08)",
         background: "rgba(255,255,255,0.025)",
         color: "rgba(205,214,244,0.76)",
@@ -63,14 +66,14 @@ function SnapshotNavigationButton({
     >
       {direction === "older" && (
         loading
-          ? <LoaderCircle size={13} className="animate-spin motion-reduce:animate-none" />
-          : <Icon size={13} />
+          ? <LoaderCircle size={iconOnly ? 16 : 13} className="animate-spin motion-reduce:animate-none" />
+          : <Icon size={iconOnly ? 16 : 13} />
       )}
-      <span>{label}</span>
+      <span className={iconOnly ? "sr-only" : undefined}>{label}</span>
       {direction === "newer" && (
         loading
-          ? <LoaderCircle size={13} className="animate-spin motion-reduce:animate-none" />
-          : <Icon size={13} />
+          ? <LoaderCircle size={iconOnly ? 16 : 13} className="animate-spin motion-reduce:animate-none" />
+          : <Icon size={iconOnly ? 16 : 13} />
       )}
     </button>
   );
@@ -83,12 +86,14 @@ export default function SnapshotNavigationControls({
   context,
   onNavigate,
 }: SnapshotNavigationControlsProps) {
+  const iconOnly = mobile && !!context;
   const olderButton = (
     <SnapshotNavigationButton
       direction="older"
       label={historical || context ? "Older" : "Older snapshot"}
       navigation={navigation}
       mobile={mobile}
+      iconOnly={iconOnly}
       stretch={historical && !context}
       onNavigate={onNavigate}
     />
@@ -99,6 +104,7 @@ export default function SnapshotNavigationControls({
       label={navigation.newerIsCurrent ? "Current" : "Newer"}
       navigation={navigation}
       mobile={mobile}
+      iconOnly={iconOnly}
       stretch={!context}
       onNavigate={onNavigate}
     />
@@ -115,13 +121,15 @@ export default function SnapshotNavigationControls({
           style={{
             width: "100%",
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+            gridTemplateColumns: iconOnly
+              ? "var(--sp-touch-min) minmax(0, 1fr) var(--sp-touch-min)"
+              : "minmax(0, 1fr) auto minmax(0, 1fr)",
             alignItems: "center",
             gap: 8,
           }}
         >
           <div style={{ justifySelf: "start" }}>{olderButton}</div>
-          <div style={{ minWidth: 0, justifySelf: "center" }}>{context}</div>
+          <div style={{ width: "100%", minWidth: 0, justifySelf: "center" }}>{context}</div>
           <div style={{ justifySelf: "end" }}>{newerButton}</div>
         </div>
       ) : (
