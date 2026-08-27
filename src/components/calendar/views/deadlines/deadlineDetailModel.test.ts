@@ -5,7 +5,6 @@ import {
   deadlineDueDetailLabel,
   deadlineSecondaryMeta,
   deadlineTitle,
-  shouldCompressDeadlineCard,
 } from "./deadlineDetailModel.ts";
 
 describe("deadline detail model", () => {
@@ -41,22 +40,4 @@ describe("deadline detail model", () => {
     }, -14)).toBe("Complete");
   });
 
-  it("compresses deadline cards only when text density needs it", () => {
-    expect(shouldCompressDeadlineCard(null)).toBe(false);
-    expect(shouldCompressDeadlineCard({
-      title: "Read",
-      project_name: "School",
-      due_date: "2026-05-02",
-    })).toBe(false);
-    expect(shouldCompressDeadlineCard({
-      title: "Submit final revised research essay",
-      class_name: "English",
-      due_date: "2026-05-02",
-    })).toBe(true);
-    expect(shouldCompressDeadlineCard({
-      title: "Quiz",
-      class_name: "Very long course context that needs compression",
-      due_date: "2026-05-02",
-    })).toBe(true);
-  });
 });

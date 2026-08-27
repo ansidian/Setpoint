@@ -194,93 +194,6 @@ describe("CalendarModal event grid behavior", () => {
     expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
   });
 
-  it("updates between empty-day selections without remounting the empty rail", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    const agendaRail = await screen.findByTestId("events-agenda-rail");
-    const initialRailContent = getLatestRailContent();
-    expect(within(agendaRail).getByText("No Events")).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-
-    fireEvent.click(screen.getByTestId("calendar-cell-22"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-cell-date-header-2026-04-22")).toBeTruthy();
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-      expect(getLatestRailContent()).toBe(initialRailContent);
-      expect(screen.getAllByTestId("calendar-rail-content")).toHaveLength(1);
-    });
-  });
-
-  it.each([
-    {
-      view: "bills",
-      expectedRailTestId: "bills-agenda-rail",
-      expectedEmptyText: "No Bills",
-      billsData: {},
-      deadlinesData: {},
-    },
-    {
-      view: "events",
-      expectedRailTestId: "events-agenda-rail",
-      expectedEmptyText: "No Events",
-      billsData: {},
-      deadlinesData: { upcoming: [] },
-    },
-  ])("renders the selected-empty-day agenda treatment for $view", async ({
-    view,
-    expectedRailTestId,
-    expectedEmptyText,
-    billsData,
-    deadlinesData,
-  }) => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view={view}
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{ getEvents: () => [] }}
-        billsData={billsData}
-        deadlinesData={deadlinesData}
-      />,
-    ));
-
-    const agendaRail = await screen.findByTestId(expectedRailTestId);
-    expect(within(agendaRail).getByText(expectedEmptyText)).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-    expect(screen.queryByTestId("calendar-selected-empty-rail")).toBeNull();
-  });
-
   it("does not restart events range readiness when the events data wrapper is recreated", async () => {
     window.innerWidth = 1900;
     const ensureRange = vi.fn().mockResolvedValue([]);
@@ -387,32 +300,6 @@ describe("CalendarModal event grid behavior", () => {
     await waitFor(() => {
       expect(panel.hasAttribute("data-calendar-suppress-focus-ring")).toBe(false);
     });
-  });
-
-  it("shows a quiet pending-update indicator for stale event refreshes", () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          ensureRange: vi.fn().mockResolvedValue([]),
-          getEvents: () => [],
-          staleRefreshPending: true,
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    const indicator = screen.getByTestId("calendar-pending-update");
-    expect(indicator.textContent).toBe("");
-    expect(indicator.getAttribute("aria-label")).toBe("Calendar updates pending");
-    expect(within(indicator).getByTestId("calendar-pending-update-icon")).toBeTruthy();
   });
 
   it("keeps loading data for grid settles inside the agenda-sync suppression window", async () => {

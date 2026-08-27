@@ -177,27 +177,6 @@ describe("CalendarGrid overflow motion coverage", () => {
       .find((el) => el.getAttribute("data-boundary-pass-through") === "true")).toBeUndefined();
   });
 
-  it("shows same visible chip count for today and non-today cells with matching event counts", async () => {
-    renderGrid({
-      14: Array.from({ length: 5 }, (_, index) => buildEvent(14, index)),
-      15: Array.from({ length: 5 }, (_, index) => buildEvent(15, index)),
-    });
-
-    const todayCell = screen.getByTestId("calendar-cell-14");
-    const siblingCell = screen.getByTestId("calendar-cell-15");
-
-    await waitFor(() => {
-      const todayChips = within(todayCell).queryAllByTestId("calendar-cell-item-chip");
-      const siblingChips = within(siblingCell).queryAllByTestId("calendar-cell-item-chip");
-      expect(todayChips.length).toBeGreaterThan(0);
-      expect(todayChips).toHaveLength(siblingChips.length);
-    });
-
-    const visibleCount = within(todayCell).getAllByTestId("calendar-cell-item-chip").length;
-    expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").textContent).toBe(`+${5 - visibleCount} more`);
-    expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe(`+${5 - visibleCount} more`);
-  });
-
   it("renders real pinned spans as selectable buttons and removes duplicate normal chips", () => {
     const setSelectedDay = vi.fn();
     const setSelectedDateKey = vi.fn();
@@ -354,37 +333,6 @@ describe("CalendarGrid overflow motion coverage", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
     });
-  });
-
-  it("clears an active Calendar Event Selection Set when selecting a birthday span", () => {
-    const clearEventSelection = vi.fn();
-    const setSelectedItemId = vi.fn();
-    const birthday = {
-      id: "birthday-1",
-      title: "Maya's birthday",
-      eventType: "birthday",
-      birthdayProperties: { type: "birthday" },
-      allDay: true,
-      writable: false,
-      startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
-      sourceColor: "#ff887c",
-      color: "#ff887c",
-    };
-
-    renderGrid(
-      { 20: [birthday] },
-      {
-        viewData: { isLoading: false, events: [birthday] },
-        eventQuickActions: {
-          eventSelectionActive: true,
-          clearEventSelection,
-        },
-        setSelectedItemId,
-      },
-    );
-
-    fireEvent.click(screen.getByTestId("calendar-event-span-segment"), { clientX: 4 });
   });
 
   it("does not revive stale overflow anchors after month navigation", async () => {

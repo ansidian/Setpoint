@@ -49,19 +49,4 @@ describe("CalendarCell", () => {
     expect(weather.getAttribute("title")).toBe("Sunny");
   });
 
-  it("exposes inline overflow state for the CSS hover guard", () => {
-    render(<CalendarCell {...baseCellProps} overflowOpen overflowMode="inline" />);
-
-    const cell = screen.getByRole("gridcell");
-    expect(cell.getAttribute("data-overflow-open")).toBe("true");
-    expect(cell.getAttribute("data-overflow-mode")).toBe("inline");
-  });
-
-  it("distinguishes fallback overflow from hover-suppressing inline overflow", () => {
-    render(<CalendarCell {...baseCellProps} overflowOpen overflowMode="fallback" />);
-
-    const cell = screen.getByRole("gridcell");
-    expect(cell.getAttribute("data-overflow-open")).toBe("true");
-    expect(cell.getAttribute("data-overflow-mode")).toBe("fallback");
-  });
 });

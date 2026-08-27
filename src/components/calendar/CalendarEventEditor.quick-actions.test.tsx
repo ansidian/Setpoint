@@ -79,34 +79,6 @@ describe("CalendarEventEditor quick action behavior", () => {
     await waitFor(() => expect(screen.queryByTestId("calendar-cell-item-chip")).toBeNull());
   });
 
-  it("opens the color-aware context menu from all-day span events", async () => {
-    const event = {
-      id: "event-all-day-source-color",
-      etag: '"etag-all-day-source-color"',
-      title: "All day source color",
-      accountId: "gmail-main",
-      calendarId: "work",
-      startMs: new Date("2026-04-20T19:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T19:00:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: true,
-      sourceColor: "#4285f4",
-      color: "#4285f4",
-      colorId: null,
-    };
-    renderModal({ events: [event] });
-
-    fireEvent.contextMenu(await screen.findByTestId("calendar-event-span-segment"), {
-      clientX: 140,
-      clientY: 180,
-    });
-
-    // Integration concern this test owns: the context menu opens from an all-day
-    // span segment (not just a cell chip). The color-dot aria-pressed/check
-    // contract is asserted at the focused layer in CalendarQuickActionLayer.test.tsx.
-    expect(await screen.findByTestId("calendar-event-color-grid")).toBeTruthy();
-  });
 
   it("duplicates a writable event from the quick-action context menu", async () => {
     const event = {

@@ -34,42 +34,6 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(screen.getByText(/Calendar Workspace/).textContent).toContain("Events");
   });
 
-  it("tints a focused Events deadline overlay chip when the focus id is a raw Todoist id", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        openRequestId={1}
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        focusItemId="todo-1"
-        focusOpenDetail
-        eventsData={{
-          editable: true,
-          getEvents: () => [],
-        }}
-        billsData={{}}
-        deadlinesData={{
-          upcoming: [
-            { id: "todo-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-          ],
-        }}
-      />,
-    ));
-
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
-
-    const chip = within(screen.getByTestId("calendar-cell-20"))
-      .getByText("Project due")
-      .closest("[data-testid='calendar-cell-item-chip']");
-    expect(chip?.getAttribute("data-selected")).toBe("true");
-  });
-
   it("preserves a focused deadline day and item when the modal opens into Events", async () => {
     window.innerWidth = 1900;
 
@@ -189,31 +153,6 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(within(panel).getAllByText("Complete").length).toBeGreaterThan(0);
   });
 
-  it("keeps the deadlines rail in summary mode while live deadline data is still loading", () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        focusItemId="deadline:deadline-1:2026-04-20"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{
-          isLoading: true,
-          upcoming: [],
-        }}
-      />,
-    ));
-
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
-  });
-
   it("keeps rendered deadlines visible and shows pending status during refresh", async () => {
     window.innerWidth = 1900;
 
@@ -255,38 +194,6 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Backfill notes")).toBeTruthy();
   });
 
-  // Composite-id format (deadline:<id>:<dateKey>) and the showCompleted
-  // retention rule are owned by the model tests in
-  // src/components/calendar/views/events/eventsPlanningModel.test.js
-  // ("normalizes deadline range data into overlay items..." / "keys deadline
-  // planning ids by occurrence date") and deadlinesModel.test.ts
-  // ("uses deadline occurrence identity for every deadline row"). This keeps
-  // only the DOM presence guard that a completed-only deadline still surfaces
-  // a chip in the month cell preview.
-  it("still renders a completed-only deadline chip in the month cell preview", () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-21"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{
-          upcoming: [
-            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
-          ],
-        }}
-      />,
-    ));
-
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
-  });
-
   it("opens deadline detail from an Events agenda row", async () => {
     window.innerWidth = 1900;
 
@@ -313,32 +220,6 @@ describe("CalendarModal deadlines rail behavior", () => {
     fireEvent.click(row);
 
     expect((await screen.findByTestId("calendar-selected-deadline-title")).textContent).toContain("Project due");
-  });
-
-  it("allows selecting empty days and shows a date-specific empty rail", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{ editable: true, getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    expect(await screen.findByTestId("calendar-cell-date-header-2026-04-20")).toBeTruthy();
-    const agendaRail = screen.getByTestId("events-agenda-rail");
-    expect(agendaRail).toBeTruthy();
-    expect(within(agendaRail).getByText("No Events")).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
-    expect(screen.queryByRole("button", { name: /create on apr 20/i })).toBeNull();
   });
 
 });

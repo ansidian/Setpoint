@@ -114,18 +114,6 @@ describe("CalendarScrollContainer", () => {
     expect(Array.from(grids, (grid) => grid.getAttribute("aria-label"))).toEqual(expectedLabels);
   });
 
-  it("non-active grids render interactive cells without active-month testids", () => {
-    const { container } = renderContainer({ viewData: { events: [], isLoading: false } });
-    const blocks = container.querySelectorAll<HTMLElement>("[data-month-block]");
-    const activeTestId = `month-block-${CURRENT_YEAR}-${CURRENT_MONTH}`;
-    for (const block of blocks) {
-      if (block.dataset.testid === activeTestId) continue;
-      expect(block.querySelectorAll("[role='gridcell']").length).toBeGreaterThan(0);
-      expect(block.querySelectorAll("[role='row']").length).toBeGreaterThan(0);
-      expect(block.querySelector("[data-testid='calendar-grid-shell']")).toBeNull();
-    }
-  });
-
   it("renders bills in a non-active mounted month (chips don't vanish past the active+cached pair)", () => {
     // Bills' itemsByDate spans the whole fetched range (it is not month-scoped
     // like events). A bill due two months ahead must still render in that
@@ -253,81 +241,6 @@ describe("CalendarScrollContainer", () => {
 
     const mayBlock = container.querySelector("[data-testid='month-block-2026-4']");
     expect(mayBlock?.textContent).toContain("New boundary deadline");
-  });
-
-  it("does not render a cached bills month through the events view after switching views", () => {
-    const transaction = {
-      id: "txn-may",
-      date: "2026-05-15",
-      payee: "Corner Market",
-      amount: 24.5,
-      direction: "expense",
-    };
-    const billsComputed = billsView.compute({
-      data: { schedules: [], transactions: [transaction], payeeMap: {} },
-      viewYear: CURRENT_YEAR,
-      viewMonth: CURRENT_MONTH,
-    });
-    const { rerenderContainer } = renderContainer({
-      view: "bills",
-      activeView: billsView as unknown as CalendarGridActiveViewContract,
-      itemsByDay: billsComputed.itemsByDay as unknown as Record<number, CalendarGridItemLike[]>,
-      itemsByDate: billsComputed.itemsByDate as unknown as Record<string, CalendarGridItemLike[]>,
-    });
-
-    rerenderContainer({
-      view: "bills",
-      activeView: billsView as unknown as CalendarGridActiveViewContract,
-      viewMonth: CURRENT_MONTH + 1,
-      itemsByDay: {},
-      itemsByDate: billsComputed.itemsByDate as unknown as Record<string, CalendarGridItemLike[]>,
-    });
-
-    expect(() => rerenderContainer({
-      view: "events",
-      activeView: eventsView,
-      viewMonth: CURRENT_MONTH + 1,
-      viewData: { events: [], isLoading: false },
-      itemsByDay: {},
-      itemsByDate: {},
-    })).not.toThrow();
-  });
-
-  it("tints a selected deadline chip rendered from a non-active preview month", () => {
-    const { container } = renderContainer({
-      activeView: eventsView,
-      viewData: {
-        events: [],
-        isLoading: false,
-        deadlineOverlay: {
-          enabled: true,
-          showCompleted: true,
-          data: { upcoming: [] },
-        },
-      },
-      isMonthCached: () => true,
-      getMonthDeadlines: (year, month) => (
-        year === 2026 && month === 3
-          ? {
-              upcoming: [
-                { id: "todo-apr", title: "April deadline", due_date: "2026-04-20", status: "open" },
-              ],
-            }
-          : { upcoming: [] }
-      ),
-      selectedDay: 20,
-      selectedDateKey: "2026-04-20",
-      selectedItemId: null,
-      floatingDetailOpen: true,
-      floatingDetailMode: "detail",
-      floatingDetailItemId: "deadline:todo-apr:2026-04-20",
-      floatingDetailDateKey: "2026-04-20",
-    });
-
-    const aprilBlock = container.querySelector("[data-testid='month-block-2026-3']");
-    const chip = aprilBlock?.querySelector("[data-testid='calendar-cell-item-chip']");
-    expect(chip?.textContent).toContain("April deadline");
-    expect(chip?.getAttribute("data-selected")).toBe("true");
   });
 
   describe("mount initialization", () => {

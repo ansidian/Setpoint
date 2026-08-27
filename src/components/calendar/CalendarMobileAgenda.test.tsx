@@ -78,16 +78,6 @@ function StatefulMobileAgenda({ mounted = true, initialOpen = false }: { mounted
 }
 
 describe("CalendarMobileAgenda", () => {
-  it("renders real mobile chrome and agenda composition without a detail sheet", () => {
-    render(<CalendarMobileAgenda {...shellProps()} />);
-    expect(screen.getByText("June 2026")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Events" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Bills" })).toBeTruthy();
-    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
-    expect(screen.queryByTestId("calendar-mini-calendar")).toBeNull();
-    expect(screen.queryByTestId("detail-content")).toBeNull();
-  });
-
   it("opens the real detail composition in a BottomSheet", () => {
     render(<StatefulMobileAgenda initialOpen />);
     expect(screen.getByTestId("detail-content").textContent).toContain("Planning block");

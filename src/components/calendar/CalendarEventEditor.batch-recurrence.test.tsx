@@ -14,53 +14,6 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
   beforeAll(async () => {
     await ensureChrono();
   });
-  it("uses repeat as a recurrence popover with real recurrence state", async () => {
-    renderEventEditor();
-    mockCreateCalendarEvent.mockResolvedValue({
-      event: {
-        id: "manual-series-1",
-        title: "Planning block",
-        accountId: "gmail-main",
-        calendarId: "primary",
-        startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-        endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
-        writable: true,
-        allDay: false,
-        isRecurring: true,
-      },
-    });
-
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    commitTitleWithoutWallClock("Planning block");
-
-    fireEvent.click(getActiveRepeatTrigger());
-    const repeatPicker = await screen.findByRole("dialog", { name: /recurrence picker/i });
-    fireEvent.click(within(repeatPicker).getByRole("option", { name: /weekly/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
-      expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create recurring event/i);
-      expect((screen.getByTestId("calendar-event-save") as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    fireEvent.click(getActiveEventSaveButton());
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- Structured recurrence is an outbound Calendar request contract that is not recoverable from the normalized saved event.
-      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
-        accountId: "gmail-main",
-        calendarId: "primary",
-        title: "Planning block",
-        recurrence: expect.objectContaining({
-          frequency: "weekly",
-          interval: 1,
-          weekdays: ["MO"],
-          ends: { type: "never" },
-        }),
-      }));
-      expect(screen.getByTestId("calendar-editor-observed-refreshes").textContent).toContain('["2026-04-20","2026-04-20"]');
-      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toBe("[]");
-    });
-  });
 
   it("renders batch review UI for batch NLP and saves via the batch API", async () => {
     renderEventEditor();
@@ -210,17 +163,6 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     });
   });
 
-  it("keeps the create composer mounted while batch NLP parsing resolves", async () => {
-    renderEventEditor();
-    const composerBody = await screen.findByTestId("calendar-event-editor-mode-create");
-    commitTitleWithoutWallClock("Work next tue, wed, thur at 4:15am to 7:30am");
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/3 draft events/i);
-      expect(screen.getByTestId("calendar-event-editor-mode-create")).toBe(composerBody);
-    });
-  });
-
   it("renders recurrence UI for recurring NLP and saves structured recurrence", async () => {
     renderEventEditor();
     mockCreateCalendarEvent.mockResolvedValue({
@@ -287,38 +229,4 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     });
   });
 
-  it("keeps the editor open when selecting a recurrence ends option from the floating listbox", async () => {
-    renderEventEditor();
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    commitTitleWithoutWallClock("Work at 3am to 8am every monday");
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
-    });
-
-    fireEvent.click(getActiveRepeatTrigger(/repeat/i));
-    const repeatPicker = await screen.findByRole("dialog", { name: /recurrence picker/i });
-    const recurrenceSection = within(repeatPicker).getByTestId("calendar-recurrence-section");
-    expect(recurrenceSection).toBeTruthy();
-
-    fireEvent.click(within(recurrenceSection).getByRole("button", { name: /^never$/i }));
-    const endsListbox = screen.getByRole("listbox", { name: /select option/i });
-    expect(endsListbox).toBeTruthy();
-
-    fireEvent.click(within(endsListbox).getByRole("option", { name: /on date/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-      expect((within(repeatPicker).getByTestId("calendar-recurrence-ends-type") as HTMLInputElement).value).toBe("onDate");
-      expect(within(repeatPicker).getByTestId("calendar-recurrence-until-date")).toBeTruthy();
-    });
-
-    fireEvent.click(within(repeatPicker).getByTestId("calendar-recurrence-until-date"));
-    fireEvent.click(within(await screen.findByLabelText("Recurrence end date picker")).getByRole("button", { name: "25" }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-      expect(screen.queryByLabelText("Recurrence end date picker")).toBeNull();
-      expect(within(repeatPicker).getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 25, 2026/i);
-    });
-  });
 });

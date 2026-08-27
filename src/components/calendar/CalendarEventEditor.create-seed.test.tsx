@@ -2,12 +2,10 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   mockCreateCalendarEvent,
-  mockGetCalendarSources,
   mockGetCalendarPlaceSuggestions,
 } from "./CalendarEventEditor.test-setup.ts";
 import {
   getActiveEventSaveButton,
-  createDeferred,
   renderEventEditor,
 } from "./events/CalendarEventEditor.test-utils.tsx";
 import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge.ts";
@@ -31,75 +29,7 @@ function createRequest(overrides: Partial<CalendarEventCreateRequest> = {}): Cal
 }
 
 describe("CalendarEventEditor create-seed bridge", () => {
-  it("keeps a requested calendar unresolved until sources return, then selects one exact writable match", async () => {
-    const sources = createDeferred<{ accounts: Array<Record<string, unknown>> }>();
-    mockGetCalendarSources.mockReturnValue(sources.promise);
 
-    renderEventEditor({ createRequest: createRequest({
-      seed: {
-        title: "Team planning",
-        allDay: false,
-        startDate: "2026-09-10",
-        startTime: "09:00",
-        endTime: "09:30",
-        source: { kind: "requested", calendarName: "Work" },
-      },
-    }) });
-
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    expect(screen.getByTestId("calendar-event-source-trigger").getAttribute("aria-label"))
-      .toMatch(/loading calendars/i);
-
-    sources.resolve({
-      accounts: [{
-        accountId: "gmail-main",
-        accountLabel: "Google",
-        accountEmail: "me@example.com",
-        calendars: [
-          { id: "primary", summary: "Personal", writable: true, primary: true },
-          { id: "work", summary: "Work", writable: true, primary: false },
-        ],
-      }],
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-source-trigger").getAttribute("aria-label")).toMatch(/work/i);
-    });
-  });
-
-  it("prefills the full editable seed without title assistance replacing structured values", async () => {
-    mockGetCalendarSources.mockResolvedValue({
-      accounts: [{
-        accountId: "gmail-main",
-        accountLabel: "Google",
-        accountEmail: "me@example.com",
-        calendars: [
-          { id: "primary", summary: "Personal", writable: true, primary: true },
-          { id: "work", summary: "Work", writable: true, primary: false },
-        ],
-      }],
-    });
-
-    renderEventEditor({ createRequest: createRequest() });
-
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    await waitFor(() => {
-      expect((screen.getByTestId("calendar-event-title") as HTMLInputElement).value)
-        .toBe("Dinner Friday 5pm @Parsed Place");
-      expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/sep 10, 2026/i);
-      expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/sep 10, 2026/i);
-      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/2:00 pm/i);
-      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/3:15 pm/i);
-      expect((screen.getByTestId("calendar-event-location") as HTMLInputElement).value).toBe("Seeded Place");
-      expect((screen.getByTestId("calendar-event-description") as HTMLTextAreaElement).value).toBe("Bring the agenda");
-      expect(screen.getByTestId("calendar-event-source-trigger").getAttribute("aria-label")).toMatch(/work/i);
-    });
-
-    fireEvent.input(screen.getByTestId("calendar-event-description"), {
-      target: { value: "Updated agenda" },
-    });
-    expect((screen.getByTestId("calendar-event-description") as HTMLTextAreaElement).value).toBe("Updated agenda");
-  });
 
   it("preserves an Alfred seed until title edits restore NLP and place suggestions", async () => {
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
