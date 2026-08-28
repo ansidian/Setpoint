@@ -14,10 +14,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export function manualChunks(id: string): string | undefined {
   const normalized = id.split(path.sep).join("/");
   if (!normalized.includes("/node_modules/")) return undefined;
-  if (normalized.includes("/node_modules/tldraw/")
-    || normalized.includes("/node_modules/@tldraw/")) {
-    return "tldraw";
-  }
   if (normalized.includes("/node_modules/motion/")
     || normalized.includes("/node_modules/framer-motion/")) {
     return "motion";
@@ -39,14 +35,17 @@ export default defineConfig(({ mode }) => {
     base: demoBase || "/",
     plugins: [tailwindcss(), react()],
     build: {
+      // Notes is lazy-loaded and intentionally carries tldraw as one large
+      // feature chunk. Keep a warning guard without forcing tldraw's circular
+      // module graph into manually fragmented vendor chunks.
+      chunkSizeWarningLimit: 2_000,
       rolldownOptions: {
         output: {
           codeSplitting: {
             groups: [{
               name: manualChunks,
-              // Rolldown measures this before minification. This keeps the
-              // heavy lazy feature groups below Vite's emitted-chunk warning
-              // without fragmenting the smaller React and Motion groups.
+              // Rolldown measures this before minification. This bounds the
+              // explicitly named React and Motion vendor groups.
               maxSize: 1_300 * 1024,
             }],
           },
