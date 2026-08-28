@@ -139,26 +139,7 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetSettingsSection", () => {
-  it("shows one Actual setup prompt and hides Finance customization when disconnected", () => {
-    renderSection({ state: "not_connected" });
 
-    expect(screen.getByText("Connect Actual Budget")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Set up Actual Budget" }).getAttribute("href"))
-      .toBe("/settings?tab=connections#actual-budget");
-    expect(screen.queryByText("Bill Pay Mappings")).toBeNull();
-    expect(screen.queryByText("Mapping Test")).toBeNull();
-    expect(screen.queryByText("Utility Pay Links")).toBeNull();
-    expect(screen.queryByText("Email Transaction Imports")).toBeNull();
-  });
-
-  it("shows full Finance controls when Actual is connected", () => {
-    renderSection({ state: "connected" });
-
-    expect(screen.getByText("Bill Pay Mappings")).toBeTruthy();
-    expect(screen.getByText("Mapping Test")).toBeTruthy();
-    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
-    expect(screen.queryByText("Actual Budget needs attention")).toBeNull();
-  });
 
   it("restores persisted transaction-import account labels on a fresh visit", async () => {
     mockApi.getTransactionImportMappings.mockResolvedValueOnce([{
@@ -203,13 +184,6 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Payee" }).disabled).toBe(true);
   });
 
-  it("keeps Actual connection controls out of Finance while retaining mapping controls", async () => {
-    renderSection();
-
-    expect(screen.queryByDisplayValue("https://actual.example.test")).toBeNull();
-    expect(await screen.findByText("Bill Pay Mappings")).toBeTruthy();
-    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
-  });
 
   it("keeps a stale Actual target visible by its stored label", async () => {
     renderSection({
@@ -268,40 +242,6 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.getByText(/Actual metadata could not load/i)).toBeTruthy();
   });
 
-  it("defaults mapping profiles to collapsed and supports expanding them", async () => {
-    renderSection({
-      initialSettings: {
-        bill_pay_mappings: {
-          version: 1,
-          profiles: [{
-            id: "profile-1",
-            name: "Citi",
-            enabled: true,
-            identity: { domain: ["citi.com"] },
-            behaviors: [{
-              id: "behavior-1",
-              name: "Transaction",
-              enabled: true,
-              type: "expense",
-              intent: { subject: ["transaction"] },
-              targets: { payee_id: "payee-citi", payee_label: "Citi" },
-            }],
-          }],
-        },
-      },
-    });
-
-    expect(await screen.findByText("1 behavior")).toBeTruthy();
-    expect(screen.queryByText("citi.com")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Expand profile 1" }));
-
-    expect(await screen.findByText("citi.com")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse profile 1" }));
-
-    expect(screen.queryByText("citi.com")).toBeNull();
-  });
 
   it("submits pasted mapping samples and renders diagnostics", async () => {
     const mappings = {

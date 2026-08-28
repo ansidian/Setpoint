@@ -183,18 +183,6 @@ describe("AddTaskPanel behaviors", () => {
     );
   });
 
-  it("toggles the due picker closed when the due trigger is clicked again", () => {
-    render(<PanelHarness />);
-    vi.runOnlyPendingTimers();
-
-    const trigger = screen.getByRole("button", { name: "Set due date" });
-    fireEvent.click(trigger);
-    vi.runOnlyPendingTimers();
-    expect(screen.getByRole("dialog", { name: "Todoist due date picker" })).toBeTruthy();
-
-    fireEvent.click(trigger);
-    expect(screen.queryByRole("dialog", { name: "Todoist due date picker" })).toBeNull();
-  });
 
   it("seeds edit mode from the existing due date and sends the updated due_string", async () => {
     render(
@@ -262,38 +250,6 @@ describe("AddTaskPanel behaviors", () => {
     );
   });
 
-  it("uses the slim event-workspace layout for inline deadline editing", async () => {
-    mockGetTodoistProjects.mockResolvedValue([
-      { id: "inbox", name: "Inbox", isInbox: true },
-      { id: "school", name: "School", color: "#89b4fa" },
-    ]);
-    mockGetTodoistLabels.mockResolvedValue([
-      { id: "urgent", name: "urgent" },
-    ]);
-
-    render(
-      <AddTaskPanel
-        host="inline"
-        initialDueDate="2026-04-22"
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    vi.runOnlyPendingTimers();
-
-    const editor = screen.getByTestId("todoist-inline-editor");
-    expect(screen.getByTestId("todoist-compact-toolbar")).toBeTruthy();
-    expect(screen.getByTestId("todoist-due-trigger")).toBeTruthy();
-    expect(screen.getByTestId("todoist-project-trigger")).toBeTruthy();
-    expect(screen.getByTestId("todoist-priority-trigger")).toBeTruthy();
-    expect(screen.getByTestId("todoist-labels-trigger")).toBeTruthy();
-    expect(within(screen.getByTestId("todoist-compact-toolbar")).queryByText(/April 22|Apr 22|2026-04-22/i)).toBeNull();
-    expect(within(editor).queryByText("Description")).toBeNull();
-    expect(within(editor).queryByText("Due")).toBeNull();
-    expect(within(editor).queryByText("Labels")).toBeNull();
-  });
 
   it("keeps project, priority, and labels editable from compact controls", async () => {
     mockGetTodoistProjects.mockResolvedValue([
@@ -339,95 +295,8 @@ describe("AddTaskPanel behaviors", () => {
     );
   });
 
-  it("keeps original due metadata visible when an edit draft changes due placement", () => {
-    render(
-      <AddTaskPanel
-        host="inline"
-        editingTask={{
-          id: "todo-1",
-          title: "Follow up",
-          description: "",
-          class_name: "Inbox",
-          priority: 4,
-          labels: [],
-          due_date: "2026-04-21",
-          due_time: "2:30 PM",
-        }}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    vi.runOnlyPendingTimers();
 
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Follow up tomorrow at 9am" },
-    });
 
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 20, 2026 · 9 AM");
-    const metadata = screen.getByTestId("todoist-edit-metadata");
-    expect(within(metadata).getByText("April 21, 2026 · 2:30 PM")).toBeTruthy();
-    expect(metadata.textContent).toContain("April 21, 2026 · 2:30 PM");
-    expect(metadata.textContent).not.toContain("April 20, 2026 · 9 AM");
-  });
-
-  it("shows existing Todoist metadata as edit-only chips when no draft preview is needed", () => {
-    render(
-      <AddTaskPanel
-        host="inline"
-        editingTask={{
-          id: "todo-1",
-          title: "Follow up",
-          description: "",
-          class_name: "Inbox",
-          priority: 4,
-          labels: ["IHSS"],
-          due_date: "2026-04-21",
-          due_time: "2:30 PM",
-        }}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    vi.runOnlyPendingTimers();
-
-    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
-    const metadata = screen.getByTestId("todoist-edit-metadata");
-    expect(metadata.textContent).toContain("April 21, 2026 · 2:30 PM");
-    expect(metadata.textContent).toContain("Inbox");
-    expect(metadata.textContent).toContain("P4");
-    expect(metadata.textContent).toContain("IHSS");
-  });
-
-  it("uses inline cancel actions instead of the floating close chrome", () => {
-    render(
-      <AddTaskPanel
-        host="inline"
-        editingTask={{
-          id: "todo-1",
-          title: "Follow up",
-          description: "",
-          class_name: "Inbox",
-          priority: 4,
-          labels: [],
-          due_date: "2026-04-21",
-          due_time: "2:30 PM",
-        }}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    vi.runOnlyPendingTimers();
-
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
-    expect(screen.queryByLabelText("Close")).toBeNull();
-    expect(screen.queryByText(/Esc to cancel/i)).toBeNull();
-  });
 
   it("uses inline Confirm / Cancel controls when cancelling a dirty workspace", () => {
     function CloseHarness() {

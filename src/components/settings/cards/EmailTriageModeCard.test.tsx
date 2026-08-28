@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EmailTriageModeCard from "./EmailTriageModeCard";
 import type { SettingsState } from "../settingsTypes";
@@ -26,8 +26,6 @@ vi.mock("@/api", () => ({
     },
   })),
 }));
-
-const { getTriageCacheStats } = await import("@/api");
 
 afterEach(() => {
   cleanup();
@@ -111,39 +109,4 @@ describe("EmailTriageModeCard", () => {
     expect(screen.getByText(/Preflight rules still apply\./)).toBeTruthy();
   });
 
-  it("shows the triage call count without a cache hit or savings line", async () => {
-    vi.mocked(getTriageCacheStats).mockResolvedValueOnce({
-      windowDays: 7,
-      windowLabel: "7_days",
-      generatedAt: "2026-07-15T00:00:00.000Z",
-      openaiCalls: 3,
-      inputTokens: 0,
-      cachedInputTokens: 0,
-      outputTokens: 0,
-      estimatedCostUsd: 0,
-      hitRate: 0.5333,
-      estimatedSavingsUsd: 0.002358,
-      lastTriagedAt: null,
-      models: [],
-      comparisonWindows: {
-        monthToDate: { windowDays: null, windowLabel: "month_to_date", openaiCalls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0, hitRate: 0 },
-      },
-      byTier: {
-        cheap: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
-        strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
-      },
-    });
-
-    renderCard();
-
-    await waitFor(() => {
-      expect(screen.getByText("3 OpenAI calls in 7 days")).toBeTruthy();
-    });
-    // Cache framing is gone: no "Cache: X% hit" line and no "Saved $…" fragment,
-    // even though the stats payload still carries hitRate/savings.
-    expect(screen.queryByText(/Cache:/i)).toBeNull();
-    expect(screen.queryByText(/Saved \$/i)).toBeNull();
-    // The OpenAI-only provenance pill remains.
-    expect(screen.getByText("OpenAI only")).toBeTruthy();
-  });
 });

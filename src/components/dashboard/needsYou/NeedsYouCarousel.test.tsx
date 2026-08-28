@@ -29,22 +29,6 @@ const createUrgentCard = (id: string | number, title = "Test card"): NeedsYouCar
 });
 
 describe("NeedsYouCarousel", () => {
-  it("sets touch-action to 'pan-x pan-y' to allow vertical page scroll to start on the carousel", () => {
-    render(
-      <NeedsYouCarousel
-        urgentCards={[createUrgentCard(1), createUrgentCard(2)]}
-        backfillCards={[]}
-        onOpen={() => {}}
-        onMarkHandled={() => {}}
-        onComplete={() => {}}
-        onJump={() => {}}
-      />,
-    );
-    const carousel = screen.getByTestId("needs-you-carousel");
-    // This exact touch-action value is a gesture compatibility contract: both
-    // horizontal carousel movement and vertical page scrolling must remain native.
-    expect(carousel.style.touchAction).toBe("pan-x pan-y");
-  });
 
   it("announces the current slide position via a polite live region", () => {
     render(

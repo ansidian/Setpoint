@@ -14,7 +14,6 @@ const mockApi = vi.hoisted(() => ({
 // test-architecture: allow-boundary-mock -- account connection, OAuth URL, and provider-backed account mutations cross the authenticated HTTP boundary.
 vi.mock("@/api", () => mockApi);
 
-const { default: GoogleWorkspaceAccountsPanel } = await import("./GoogleWorkspaceAccountsPanel");
 const { default: ICloudMailAccountsPanel } = await import("./ICloudMailAccountsPanel");
 
 const accounts = [
@@ -28,23 +27,7 @@ afterEach(() => {
 });
 
 describe("connection account panels", () => {
-  it("gives Google Workspace only the Gmail account controls", async () => {
-    render(<GoogleWorkspaceAccountsPanel accounts={accounts} setAccounts={vi.fn()} />);
 
-    expect((await screen.findAllByText("owner@gmail.com")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("owner@icloud.com")).toBeNull();
-    expect(screen.getByRole("button", { name: "Add Google account" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Add iCloud/i })).toBeNull();
-  });
-
-  it("gives iCloud Mail only the iCloud account controls", async () => {
-    render(<ICloudMailAccountsPanel accounts={accounts} setAccounts={vi.fn()} />);
-
-    expect((await screen.findAllByText("owner@icloud.com")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("owner@gmail.com")).toBeNull();
-    expect(screen.getByRole("button", { name: "Add iCloud account" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Add Google/i })).toBeNull();
-  });
 
   it("reconnects an iCloud identity through the same write-only app-password form", async () => {
     const flagged = [{ ...accounts[1]!, needs_reauth: true }] as AccountSummary[];

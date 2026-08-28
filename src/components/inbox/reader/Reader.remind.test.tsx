@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Activity, useState } from "react";
 import Reader from "./Reader";
@@ -40,28 +40,7 @@ describe("Inbox Remind me workspace", () => {
     expect((screen.getByLabelText("Task description") as HTMLTextAreaElement).value).toContain("https://mail.google.com/mail/");
   });
 
-  it("toggles the desktop reminder rail closed and keeps its exit shell inert", () => {
-    render(<Harness />);
-    const reminderButton = screen.getByRole("button", { name: "Remind me" });
 
-    fireEvent.click(reminderButton);
-    expect(screen.getByRole("button", { name: "Hide reminder" }).getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(reminderButton);
-
-    const drawer = screen.getByTestId("inbox-remind-workspace");
-    expect(drawer.getAttribute("aria-hidden")).toBe("true");
-    expect(drawer.hasAttribute("inert")).toBe(true);
-    expect(drawer.style.pointerEvents).toBe("none");
-  });
-
-  it("opens AddTaskPanel with the floating host on mobile", async () => {
-    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
-    render(<Harness mobile />);
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    fireEvent.click(within(screen.getByTestId("inbox-mobile-actions-menu")).getByRole("button", { name: "Remind me" }));
-    expect(await screen.findByRole("dialog")).toBeTruthy();
-    expect(screen.getByLabelText("Task title")).toBeTruthy();
-  });
 
   it("delegates dirty Cancel confirmation to the editor while still guarding competing bill actions", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);

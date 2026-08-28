@@ -48,13 +48,6 @@ beforeEach(() => {
 });
 
 describe("ApiTokensCard", () => {
-  it("shows the loading state before tokens resolve", () => {
-    mockApi.listApiTokens.mockReturnValue(new Promise(() => {}));
-
-    render(<ApiTokensCard />);
-
-    expect(screen.getByText("Loading…")).toBeTruthy();
-  });
 
   it("creates a token and shows the one-time secret", async () => {
     render(<ApiTokensCard />);

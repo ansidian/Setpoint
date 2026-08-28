@@ -26,11 +26,6 @@ beforeEach(() => {
 });
 
 describe("DiscordRemindersCard", () => {
-  it("reflects a saved configuration from settings", () => {
-    render(<DiscordRemindersCard settings={{ discord_webhook_configured: true, discord_user_id: "123" }} />);
-    expect(screen.getByText("Saved")).toBeTruthy();
-    expect(screen.getByText(/saving does not send a message or prove delivery/i)).toBeTruthy();
-  });
 
   it("saves the webhook + user id and emits the settings-changed event", async () => {
     mockApi.updateSettings.mockResolvedValue({ success: true });

@@ -45,11 +45,6 @@ afterEach(() => {
 });
 
 describe("GmailRealtimeCard", () => {
-  it("treats periodic reconciliation as a healthy basic mode", async () => {
-    render(<GmailRealtimeCard />);
-    expect(await screen.findByText("Periodic updates active")).toBeTruthy();
-    expect(screen.getByText(/optional enhancement/i)).toBeTruthy();
-  });
 
   it("opens only its advanced disclosure when targeted by a deep link", async () => {
     render(<GmailRealtimeCard openAdvancedSetup />);

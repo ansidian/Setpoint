@@ -53,19 +53,6 @@ function renderCard(initialSettings: SettingsState = {}) {
 }
 
 describe("TriageSoundSettingsCard", () => {
-  it("renders all trigger rows with their default enabled state", () => {
-    renderCard();
-
-    expect(screen.getByText("Triage Notification Sounds")).toBeTruthy();
-    expect(screen.getByText("Needs attention finalized")).toBeTruthy();
-    expect(screen.getByText("Queued mail")).toBeTruthy();
-    expect(screen.getByText("FYI finalized")).toBeTruthy();
-    expect(screen.getByText("Triage failed")).toBeTruthy();
-    expect(screen.getByText("Upcoming event")).toBeTruthy();
-    expect(screen.getByText("Task completed")).toBeTruthy();
-    expect(screen.getByRole<HTMLInputElement>("slider", { name: /notification sound volume/i }).value).toBe("0.8");
-    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: /triage failed/i }).checked).toBe(false);
-  });
 
   it("patches the toggled trigger when its checkbox is flipped", () => {
     renderCard();

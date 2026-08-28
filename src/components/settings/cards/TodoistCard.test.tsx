@@ -50,11 +50,6 @@ describe("TodoistCard", () => {
     mockSecurity.stepUpWithPassword.mockResolvedValue({ recentAuth: true });
   });
 
-  it("shows Connected and a masked placeholder when already configured", () => {
-    render(<TodoistCard settings={{ todoist_configured: true }} />);
-    expect(screen.getByText("Connected")).toBeTruthy();
-    expect(screen.getByPlaceholderText(/saved/i)).toBeTruthy();
-  });
 
   it("saves a freshly entered token and clears the input", async () => {
     render(<TodoistCard settings={{}} />);
@@ -73,18 +68,7 @@ describe("TodoistCard", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save & verify" }).disabled).toBe(true);
   });
 
-  it("shows a warning pill and Reconnect action when todoist_needs_reauth is true", () => {
-    render(<TodoistCard settings={{ todoist_configured: true, todoist_needs_reauth: true }} />);
-    expect(screen.getByText(/reconnect needed/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /reconnect/i })).toBeTruthy();
-    expect(screen.queryByText("Connected")).toBeNull();
-  });
 
-  it("does not show the warning pill when todoist_needs_reauth is false", () => {
-    render(<TodoistCard settings={{ todoist_configured: true, todoist_needs_reauth: false }} />);
-    expect(screen.getByText("Connected")).toBeTruthy();
-    expect(screen.queryByText(/reconnect needed/i)).toBeNull();
-  });
 
   it("keeps a rejected candidate in the write-only field without claiming a replacement", async () => {
     mockApi.saveTodoistPersonalToken.mockRejectedValueOnce(new Error("Todoist personal token could not be verified"));

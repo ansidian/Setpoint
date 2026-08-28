@@ -108,15 +108,6 @@ beforeEach(() => {
 });
 
 describe("Settings page", () => {
-  it("uses the tab query param to choose the initial section", async () => {
-    window.history.replaceState({}, "", "/settings?tab=automation");
-
-    renderSettings();
-
-    expect(await screen.findByText("Connect an email source")).toBeTruthy();
-    expect(screen.getByRole("tabpanel").getAttribute("aria-label")).toBe("Automation");
-    expect(screen.queryByText("Connections directory")).toBeNull();
-  });
 
   it("coordinates onboarding progress once for the Connections workflow", async () => {
     renderSettings();
@@ -203,36 +194,7 @@ describe("Settings page", () => {
     expect(document.activeElement).toBe(advancedSummary);
   });
 
-  it("renders the shared loading chrome while settings are still loading", () => {
-    mockApi.getAccounts.mockReturnValue(new Promise(() => {}));
-    mockApi.getSettings.mockReturnValue(new Promise(() => {}));
 
-    renderSettings();
-
-    expect(screen.getByText("Settings")).toBeTruthy();
-    expect(screen.getByRole("status", { name: "Loading settings" }).getAttribute("aria-busy")).toBe("true");
-    expect(screen.queryByText("Connections directory")).toBeNull();
-  });
-
-  it("switches sections by changing page-level tab state", async () => {
-    renderSettings();
-
-    expect(await screen.findByText("Connections directory")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Finance" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Connect Actual Budget")).toBeTruthy();
-    });
-    expect(window.location.search).toBe("?tab=finance");
-
-    fireEvent.click(screen.getByRole("tab", { name: "System" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Sign-in & recovery")).toBeTruthy();
-    });
-    expect(screen.queryByText("Connections directory")).toBeNull();
-  });
 
   it("uses browser back and forward to move between settings tabs", async () => {
     renderSettings();

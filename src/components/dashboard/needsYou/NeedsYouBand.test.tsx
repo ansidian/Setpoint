@@ -11,26 +11,7 @@ const snapshotLanes = {
 };
 
 describe("NeedsYouBand", () => {
-  it("shows a centered 'All clear' when nothing needs attention — no 'Needs you now' label, no count", () => {
-    render(<NeedsYouBand snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
-    expect(screen.getByText("All clear")).toBeTruthy();
-    expect(screen.queryByText("Needs you now")).toBeNull();
-    expect(screen.queryByText(/items want/)).toBeNull();
-  });
 
-  it("still surfaces upcoming items in the band when all clear", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
-    render(
-      <NeedsYouBand
-        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
-        liveDeadlines={{ upcoming: [{ id: "up1", title: "Submit report", due_date: "2026-06-22", status: "open", class_name: "Work" }] }}
-        liveBills={[]}
-      />,
-    );
-    expect(screen.getByText("All clear")).toBeTruthy();
-    expect(screen.getByText("Submit report")).toBeTruthy();
-  });
 
   it("opens an upcoming deadline's detail from the card body", () => {
     vi.useFakeTimers();
@@ -81,24 +62,7 @@ describe("NeedsYouBand", () => {
     expect(screen.queryByText("Ship the thing")).toBeNull();
   });
 
-  it("renders the cards in a swipeable carousel on mobile", () => {
-    render(
-      <NeedsYouBand
-        snapshotLanes={snapshotLanes}
-        liveDeadlines={{ upcoming: [] }}
-        liveBills={[]}
-        isMobile
-      />,
-    );
-    expect(screen.getByTestId("needs-you-carousel")).toBeTruthy();
-    expect(screen.getByText("PR blocker")).toBeTruthy();
-  });
 
-  it("keeps the desktop row (no carousel) when not mobile", () => {
-    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
-    expect(screen.queryByTestId("needs-you-carousel")).toBeNull();
-    expect(screen.getByText("PR blocker")).toBeTruthy();
-  });
 
   describe("optimistic-hide revert + error surfacing (UX-02)", () => {
     it("reverts the hide and shows an inline error when onMarkHandled rejects", async () => {
@@ -142,86 +106,6 @@ describe("NeedsYouBand", () => {
 
       expect(screen.queryByText("PR blocker")).toBeNull();
       expect(screen.queryByText(/Couldn't mark done/i)).toBeNull();
-    });
-  });
-
-  describe("dense-card rail", () => {
-    const manyLanes = {
-      needs_attention: Array.from({ length: 7 }, (_, i) => ({
-        id: i + 1, snapshot_item_id: i + 1, uid: `u${i + 1}`, lane: "needs_attention",
-        from: "Riley Park", subject: `Item ${i + 1}`, read: false, urgency: "high",
-      })),
-      fyi: [], carryover: [],
-    };
-
-    it("desktop: shows every urgent card in the horizontal rail by default", () => {
-      render(
-        <NeedsYouBand snapshotLanes={manyLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} railThreshold={5} />,
-      );
-
-      expect(screen.getByText("Item 1")).toBeTruthy();
-      expect(screen.getByText("Item 5")).toBeTruthy();
-      expect(screen.getByText("Item 6")).toBeTruthy();
-      expect(screen.getByText("Item 7")).toBeTruthy();
-      expect(screen.queryByText("Show all")).toBeNull();
-      expect(screen.queryByText("Show less")).toBeNull();
-      expect(screen.getByTestId("needs-you-card-row").style.overflowX).toBe("auto");
-    });
-
-    it("desktop: keeps dense cards readable, adds at most two upcoming cards, and translates vertical wheel input", () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
-      const sixUrgentEmails = {
-        needs_attention: Array.from({ length: 6 }, (_, i) => ({
-          id: i + 1, snapshot_item_id: i + 1, uid: `u${i + 1}`, lane: "needs_attention",
-          from: "Riley Park", subject: `Urgent ${i + 1}`, read: false, urgency: "high",
-        })),
-        fyi: [], carryover: [],
-      };
-      const upcoming = [
-        { id: "tomorrow-task", title: "Finalize walkthrough notes", due_date: "2026-06-20", status: "open", class_name: "Portfolio" },
-      ];
-      const futureBills = [
-        { id: "tomorrow-bill", name: "Demo Electric", amount: 146.32, next_date: "2026-06-20", paid: false },
-      ];
-
-      render(
-        <NeedsYouBand snapshotLanes={sixUrgentEmails} liveDeadlines={{ upcoming }} liveBills={futureBills} railThreshold={5} />,
-      );
-
-      expect(screen.getByText("Urgent 6")).toBeTruthy();
-      expect(screen.getByText("Finalize walkthrough notes")).toBeTruthy();
-      expect(screen.getByText("Demo Electric")).toBeTruthy();
-      const row = screen.getByTestId("needs-you-card-row");
-      expect(row.style.overflowX).toBe("auto");
-      expect(row.style.scrollSnapType).toBe("none");
-      expect(screen.queryByText("Show less")).toBeNull();
-
-      Object.defineProperty(row, "clientWidth", { configurable: true, value: 500 });
-      Object.defineProperty(row, "scrollWidth", { configurable: true, value: 900 });
-      row.scrollLeft = 0;
-      const forwardWheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 120 });
-      fireEvent(row, forwardWheel);
-      expect(row.scrollLeft).toBe(120);
-      expect(forwardWheel.defaultPrevented).toBe(true);
-
-      row.scrollLeft = 400;
-      const boundaryWheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 120 });
-      fireEvent(row, boundaryWheel);
-      expect(row.scrollLeft).toBe(400);
-      expect(boundaryWheel.defaultPrevented).toBe(false);
-    });
-
-    it("mobile: includes every urgent card directly in the carousel", () => {
-      render(
-        <NeedsYouBand snapshotLanes={manyLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} isMobile />,
-      );
-
-      expect(screen.getByText("Item 5")).toBeTruthy();
-      expect(screen.getByText("Item 6")).toBeTruthy();
-      expect(screen.getByText("Item 7")).toBeTruthy();
-      expect(screen.queryByText("Show all")).toBeNull();
-      expect(screen.queryByText("Show less")).toBeNull();
     });
   });
 

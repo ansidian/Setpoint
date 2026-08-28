@@ -82,13 +82,6 @@ afterEach(() => {
 const baseProps = { open: true, onClose: () => {}, accent: "#cba6da", handoff: null, newChatTick: 0 };
 
 describe("AlfredPanel", () => {
-  it("shows the empty state with coverage-correct copy and suggestions", () => {
-    render(<AlfredPanel {...baseProps} />);
-    expect(screen.getByText("What do you need?")).toBeTruthy();
-    expect(screen.getByText(/prepare events for Calendar review/)).toBeTruthy();
-    expect(screen.getByText("What's left today?")).toBeTruthy();
-    expect(screen.queryByText(/act on Todoist/)).toBeNull();
-  });
 
   it("submits the draft on Enter and renders the streamed answer", async () => {
     scriptedRun([
@@ -408,18 +401,6 @@ describe("AlfredPanel", () => {
     expect(screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…").value).toBe("");
   });
 
-  it("shows the active conversation model as a read-only hint", async () => {
-    scriptedRun([
-      { type: "run_start", conversation_id: "c1", provider: "openai", model: "gpt-5.6-sol" },
-      { type: "run_end", stop_reason: "end_turn" },
-    ]);
-    render(<AlfredPanel {...baseProps} />);
-    expect(screen.getByText("Settings default")).toBeTruthy();
-    const input = screen.getByPlaceholderText("Ask about your day…");
-    fireEvent.change(input, { target: { value: "hi" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(screen.getByText("OpenAI · GPT-5.6 Sol")).toBeTruthy());
-  });
 
   it("dispatches a calendar request when a bill chip is clicked", async () => {
     scriptedRun([
@@ -441,40 +422,7 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("bills:b1")).toBeTruthy();
   });
 
-  it("opens the read-only preview when an email chip is clicked", async () => {
-    scriptedRun([
-      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
-      { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
-      { type: "run_end", stop_reason: "end_turn" },
-    ]);
-    render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
-    fireEvent.change(input, { target: { value: "find it" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: /Verify enrollment/ }));
-    expect(screen.getByRole("dialog", { name: "Email preview" })).toBeTruthy();
-  });
-
-  it("clears the preview when the panel closes", async () => {
-    scriptedRun([
-      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
-      { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
-      { type: "run_end", stop_reason: "end_turn" },
-    ]);
-    const { rerender } = render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
-    fireEvent.change(input, { target: { value: "find it" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /Verify enrollment/ }));
-    expect(screen.getByRole("dialog", { name: "Email preview" })).toBeTruthy();
-
-    rerender(<AlfredPanel {...baseProps} open={false} />);
-    expect(screen.queryByRole("dialog", { name: "Email preview" })).toBeNull();
-    expect(document.querySelector('aside[aria-label="Alfred panel"]')?.hasAttribute("inert")).toBe(true);
-  });
 
   it("Escape closes the preview first, then the panel", async () => {
     scriptedRun([

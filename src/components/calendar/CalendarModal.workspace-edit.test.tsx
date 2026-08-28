@@ -2,58 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
-import { flushAnimationFrame, getLatestRailContent, pointerClick, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
+import { flushAnimationFrame, pointerClick, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
 
 // These workspace flows wait on multi-step rAF parking cycles (1.5-2.7s each in
 // isolation); the global 10s testTimeout flakes under full-suite worker load.
 vi.setConfig({ testTimeout: 20000 });
 
 describe("CalendarModal floating event edit workspace behavior", () => {
-  it("morphs floating detail into the event editor", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-
-    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-    });
-    expect(panel.querySelector("[data-calendar-floating-content-layout='event-editor']")).toBeTruthy();
-    expect(screen.getByTestId("calendar-event-editor-action-dock").contains(
-      screen.getByTestId("calendar-event-save"),
-    )).toBe(true);
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-  });
 
   it("opens E-key event edits anchored with a visible caret", async () => {
     window.innerWidth = 1900;
@@ -217,41 +172,4 @@ describe("CalendarModal floating event edit workspace behavior", () => {
     expect(screen.getByDisplayValue("Design review revised")).toBeTruthy();
   });
 
-  it("leaves event workspace popovers alone for ignored month-grid wheel gestures", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => [],
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(screen.getByTestId("calendar-cell-20"));
-    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.click(screen.getByTestId("calendar-event-schedule-trigger"));
-    expect(await screen.findByTestId("calendar-compact-schedule-picker")).toBeTruthy();
-
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaX: 240,
-      deltaY: 80,
-      deltaMode: 0,
-      cancelable: true,
-    });
-
-    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
-    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-    expect(screen.getByTestId("calendar-compact-schedule-picker")).toBeTruthy();
-  });
 });

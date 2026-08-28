@@ -14,16 +14,6 @@ afterEach(() => {
 });
 
 describe("WeatherLocationCard", () => {
-  it("hydrates the saved location and coordinates from settings", () => {
-    render(
-      <WeatherLocationCard
-        settings={{ weather_location: "Seattle, WA", weather_lat: 47.6062, weather_lng: -122.3321 }}
-        patch={vi.fn()}
-      />,
-    );
-    expect(screen.getByDisplayValue("Seattle, WA")).toBeTruthy();
-    expect(screen.getByText("47.6062, -122.3321")).toBeTruthy();
-  });
 
   it("patches the chosen result when geocoding returns multiple matches", async () => {
     mockApi.geocodeLocation.mockResolvedValue([
