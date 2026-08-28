@@ -171,4 +171,10 @@ describe("resolveMountedMonthData", () => {
     expect(out.itemsByDate).toBe(active.itemsByDate);
     expect(out.viewData).toBe(cached.viewData);
   });
+
+  it("shares live absolute-date cell metadata across non-active months", () => {
+    const out = resolveMountedMonthData({ isActive: false, isCached: true, cached, active, empty: EMPTY });
+    expect(out.cellMetaByDate).toBe(active.cellMetaByDate);
+    expect(out.viewData).toBe(cached.viewData);
+  });
 });

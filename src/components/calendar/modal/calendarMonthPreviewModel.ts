@@ -201,11 +201,11 @@ function sameInputs<TEvent extends CalendarPreviewEvent, TDeadline>(prior: Calen
 
 // Resolves the four data props one mounted month block hands to its CalendarGrid.
 // The active month gets the live computed data; the one-deep cached month reuses
-// its last snapshot; every other mounted month renders empty — EXCEPT when the
-// active view's itemsByDate is month-agnostic. Bills expand their whole fetched
-// range into a single date-keyed map (unlike events, which are windowed per
-// month), so every mounted month shares that map; without it, chips vanish once
-// the viewport scrolls past the active + cached pair.
+// its last snapshot; every other mounted month renders empty — EXCEPT for data
+// that is already keyed by absolute date. Cell metadata contains the shared
+// forecast window, so every mounted month must receive the live map or weather
+// disappears whenever its date is outside the active month. Bills opt into the
+// same treatment for their range-wide itemsByDate map.
 export interface MountedMonthData {
   viewData: unknown;
   itemsByDay: unknown;
@@ -238,6 +238,7 @@ export function resolveMountedMonthData({
       }
     : { viewData: null, itemsByDay: empty, itemsByDate: empty, cellMetaByDate: empty };
   if (shareItemsByDate) base.itemsByDate = active.itemsByDate;
+  base.cellMetaByDate = active.cellMetaByDate;
   return base;
 }
 
