@@ -38,8 +38,10 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 ## Test Architecture
 
 - A product requirement or regression triggers a test only when it owns durable behavior at a stable seam; a frontend or UI change does not automatically qualify.
+- Treat reproduction tests as temporary diagnostic artifacts until they pass a post-fix retention review. Before handing off, ask whether each new test protects consequential durable behavior at the stable behavior-owning seam, stays cheap and reliable, and adds coverage not already owned elsewhere. If not, delete it. A test's usefulness while reproducing a bug is not by itself a reason to keep it.
 - Default to no new automated test for frontend presentation work. Do not test responsive composition, styling, visual tokens, typography, motion, ordinary disclosure/visibility state, rendered markup, or component wiring. Verify those changes through bounded browser inspection.
 - Add a frontend test only when it protects consequential domain behavior or a durable accessibility/interaction contract that browser inspection cannot cover reliably. Before writing it, name the exact regression it prevents and why a bounded browser check is insufficient; if that case is weak, do not add the test.
+- When a temporary rendered-component repro and a smaller pure/model test exercise the same invariant, retain at most the stable behavior-owner test. Do not keep the rendered test as duplicate confidence.
 - Do not expand or duplicate frontend coverage merely because a tested component was touched. Prefer existing coverage plus browser verification unless the requested behavior changes the stable contract that the existing suite owns.
 - Test through the stable module or use-case facade and allow its internal collaborators to work together. Name one primary behavior owner before adding overlapping coverage.
 - Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate the file under test.
