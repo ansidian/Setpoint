@@ -37,10 +37,10 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `useCalendarEventTitleComposer.ts` — title input debounce/flush, Chrono readiness, parse projection, structured-seed initial parser suppression, and uncontrolled-input synchronization
 
 ### Schedule + recurrence
-- `CalendarEventCompactSchedulePicker.tsx` — compact month + time picker
+- `CalendarEventCompactSchedulePicker.tsx` / `calendarCompactSchedulePicker.css` — stable split-pane month + time picker with responsive single-column fallback
 - `calendarCompactSchedulePickerModel.ts` — month grid generation and range logic
 - `CalendarRecurrenceSection.tsx` — full recurrence rule builder
-- `CalendarEventRecurrencePicker.tsx` — recurrence presets plus advanced options
+- `CalendarEventRecurrencePicker.tsx` / `calendarEventRecurrencePicker.css` — stable split-pane recurrence presets and frequency-specific controls
 - `CalendarRecurringScopePrompt.tsx` — scope chooser (this/following/all) for recurring edits
 - `useEventRecurrenceDraft.ts` — recurrence-draft sub-machine (draft + manual-override state, per-field/preset/weekday updates) lifted from useCalendarEventEditor; wraps normalize/validateRecurrenceDraft in calendarEventEditorModel
 

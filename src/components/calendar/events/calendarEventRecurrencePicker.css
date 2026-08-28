@@ -1,0 +1,273 @@
+.calendar-event-recurrence-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.calendar-event-recurrence-picker__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.calendar-event-recurrence-picker[data-expanded="true"] .calendar-event-recurrence-picker__workspace {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+.calendar-event-recurrence-picker__presets,
+.calendar-event-recurrence-picker__details {
+  min-width: 0;
+}
+
+.calendar-event-recurrence-picker__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.calendar-event-recurrence-picker__details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.calendar-event-recurrence-picker__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px;
+  color: rgba(205, 214, 244, 0.72);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+}
+
+.calendar-event-recurrence-picker__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--ea-accent) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ea-accent) 14%, transparent);
+  color: var(--ea-accent);
+}
+
+.calendar-event-recurrence-picker__preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calendar-event-recurrence-picker__preset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms, color 140ms, transform 140ms;
+}
+
+.calendar-event-recurrence-picker__preset:disabled {
+  opacity: 0.66;
+  cursor: not-allowed;
+}
+
+.calendar-event-recurrence-picker__summary {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(205, 214, 244, 0.86);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.calendar-event-recurrence-picker__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.calendar-event-recurrence-picker__done {
+  padding: 7px 13px;
+  border: 1px solid var(--ea-accent);
+  border-radius: 8px;
+  background: var(--ea-accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 140ms, box-shadow 140ms, transform 140ms;
+}
+
+.calendar-recurrence-section[data-compact="true"] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.calendar-recurrence-section__interval-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-recurrence-section__interval-control input {
+  width: 76px !important;
+}
+
+.calendar-recurrence-section__interval-control span {
+  color: rgba(205, 214, 244, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calendar-recurrence-section__weekday-list {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar-recurrence-section__weekday {
+  min-width: 0;
+  padding: 7px 4px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms, transform 120ms;
+}
+
+.calendar-recurrence-section__weekday:disabled {
+  cursor: not-allowed;
+}
+
+.calendar-recurrence-section__derived {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(205, 214, 244, 0.68);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.calendar-recurrence-section__ends {
+  display: grid;
+  gap: 10px;
+}
+
+.calendar-recurrence-section__select-trigger {
+  transition: background 140ms, border-color 140ms, transform 140ms !important;
+}
+
+.calendar-recurrence-section__select-option {
+  transition: background 120ms, color 120ms, transform 120ms !important;
+}
+
+@media (hover: hover) {
+  .calendar-event-recurrence-picker__preset:not(:disabled):hover,
+  .calendar-recurrence-section__select-trigger:not(:disabled):hover {
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    background: rgba(255, 255, 255, 0.075) !important;
+    transform: translateY(-1px);
+  }
+
+  .calendar-event-recurrence-picker__preset[data-selected="true"]:hover {
+    border-color: color-mix(in srgb, var(--sp-accent) 48%, transparent) !important;
+    background: color-mix(in srgb, var(--sp-accent) 20%, transparent) !important;
+  }
+
+  .calendar-recurrence-section__weekday:not(:disabled):hover {
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    background: rgba(255, 255, 255, 0.075) !important;
+    transform: translateY(-1px);
+  }
+
+  .calendar-recurrence-section__weekday[data-selected="true"]:hover {
+    border-color: color-mix(in srgb, var(--sp-accent) 48%, transparent) !important;
+    background: color-mix(in srgb, var(--sp-accent) 20%, transparent) !important;
+  }
+
+  .calendar-recurrence-section__select-option:hover {
+    transform: translateX(2px);
+  }
+
+  .calendar-event-recurrence-picker__done:hover {
+    background: color-mix(in srgb, var(--ea-accent) 84%, white);
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--ea-accent) 20%, transparent);
+    transform: translateY(-1px);
+  }
+}
+
+.calendar-event-recurrence-picker button:focus-visible,
+.calendar-recurrence-section button:focus-visible,
+.calendar-recurrence-section input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ea-accent) 75%, white) !important;
+  outline-offset: 2px;
+}
+
+.calendar-event-recurrence-picker button:active:not(:disabled),
+.calendar-recurrence-section button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-event-recurrence-picker button,
+  .calendar-recurrence-section button {
+    transition-duration: 0ms !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .calendar-event-recurrence-picker {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .calendar-event-recurrence-picker__workspace {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .calendar-event-recurrence-picker__preset-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .calendar-event-recurrence-picker__details {
+    padding: 12px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-left: 0;
+  }
+
+  .calendar-event-recurrence-picker__footer {
+    position: sticky;
+    bottom: 0;
+    margin: auto -10px -10px;
+    padding: 10px;
+    background: var(--sp-panel);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+}

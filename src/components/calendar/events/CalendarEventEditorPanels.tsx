@@ -185,6 +185,7 @@ export default function CalendarEventEditorPanels({ editor, pickers }: CalendarE
             onSelectPreset={selectRecurrencePreset}
             onUpdateRecurrence={updateRecurrenceDraft}
             onToggleWeekday={toggleRecurrenceWeekday}
+            onClose={() => pickers.setOpenPicker(null)}
           />
         </AnchoredFloatingPanel>
       ) : null}

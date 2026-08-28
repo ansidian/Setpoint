@@ -194,9 +194,7 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     fireEvent.click(getActiveRepeatTrigger(/repeat/i));
     const repeatPicker = await screen.findByRole("dialog", { name: /recurrence picker/i });
     expect(repeatPicker).toBeTruthy();
-    fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-frequency"), {
-      target: { value: "monthly" },
-    });
+    fireEvent.click(within(repeatPicker).getByRole("option", { name: "Monthly" }));
     fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-interval"), {
       target: { value: "2" },
     });

@@ -27,6 +27,7 @@ export type AnchoredFloatingPanelProps = {
   mobileHeight?: string | null;
   hideTitle?: boolean;
   animatePosition?: boolean;
+  animateSize?: boolean;
   draggable?: boolean;
   dragHandleLabel?: string;
   placementKey?: string;
@@ -109,6 +110,7 @@ function AnchoredPanelDesktop({
   style,
   dismissActive = true,
   animatePosition = false,
+  animateSize = false,
   draggable = false,
   dragHandleLabel,
   placementKey = "panel",
@@ -382,7 +384,7 @@ function AnchoredPanelDesktop({
   ) : null;
 
   return createPortal(
-    animatePosition || draggable ? (
+    animatePosition || animateSize || draggable ? (
       <Motion.div
         ref={resolvedPanelRef}
         role={role}
@@ -393,12 +395,19 @@ function AnchoredPanelDesktop({
         data-floating-top={displayPos.top}
         data-floating-dragging={dragging ? "true" : undefined}
         initial={reducedMotion ? false : { opacity: 0, scale: 0.985, x: displayPos.left, y: displayPos.top + 6 }}
-        animate={{ opacity: 1, scale: dragging ? 1.01 : 1, x: displayPos.left, y: displayPos.top }}
+        animate={{
+          opacity: 1,
+          scale: dragging ? 1.01 : 1,
+          x: displayPos.left,
+          y: displayPos.top,
+          ...(animateSize ? { width: displayPos.width } : {}),
+        }}
         transition={dragging || reducedMotion ? { duration: 0 } : {
           x: { type: "spring", stiffness: 420, damping: 42, mass: 0.8 },
           y: { type: "spring", stiffness: 420, damping: 42, mass: 0.8 },
           opacity: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
           scale: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+          width: { duration: 0.24, ease: [0.16, 1, 0.3, 1] },
         }}
         style={floatingPanelStyle}
       >

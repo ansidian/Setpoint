@@ -7,16 +7,17 @@ export type CalendarEditorPicker = "source" | "location" | "startDate" | "endDat
 
 const DATE_PICKER_WIDTH = 300;
 const DATE_PICKER_HEIGHT = 386;
-const SCHEDULE_PICKER_WIDTH = 318;
-const SCHEDULE_PICKER_HEIGHT = 430;
+const SCHEDULE_PICKER_WIDTH = 620;
+const SCHEDULE_PICKER_HEIGHT = 380;
 const TIME_PICKER_WIDTH = 280;
 const TIME_PICKER_HEIGHT = 238;
 const SOURCE_PICKER_WIDTH = 320;
 const SOURCE_PICKER_HEIGHT = 280;
 const LOCATION_PICKER_WIDTH = 360;
 const LOCATION_PICKER_HEIGHT = 240;
-const RECURRENCE_PICKER_WIDTH = 340;
-const RECURRENCE_PICKER_HEIGHT = 520;
+const RECURRENCE_PICKER_COMPACT_WIDTH = 232;
+const RECURRENCE_PICKER_WIDTH = 620;
+const RECURRENCE_PICKER_HEIGHT = 380;
 
 export default function useCalendarEditorPickers(editor: ReturnType<typeof useCalendarEventEditor>) {
   const {
@@ -35,6 +36,7 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
     moveActiveLocationSuggestion,
     acceptActiveLocationSuggestion,
     clearLocationSuggestions,
+    recurrenceDraft,
     save,
   } = editor;
 
@@ -143,8 +145,14 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
     onClose: () => setOpenPicker(null),
     width: SCHEDULE_PICKER_WIDTH,
     height: SCHEDULE_PICKER_HEIGHT,
+    mobileHeight: "min(620px, calc(100dvh - 20px))",
     role: "dialog",
-    style: { overflow: "hidden", padding: 10, zIndex: 10001 },
+    style: {
+      height: `min(${SCHEDULE_PICKER_HEIGHT}px, calc(100vh - 20px))`,
+      overflow: "hidden",
+      padding: 10,
+      zIndex: 10001,
+    },
   };
 
   const sharedSourcePickerProps = {
@@ -174,10 +182,18 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   const sharedRecurrencePickerProps = {
     panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
-    width: RECURRENCE_PICKER_WIDTH,
+    width: recurrenceDraft ? RECURRENCE_PICKER_WIDTH : RECURRENCE_PICKER_COMPACT_WIDTH,
     height: RECURRENCE_PICKER_HEIGHT,
+    mobileHeight: "min(620px, calc(100dvh - 20px))",
+    animatePosition: true,
+    animateSize: true,
     role: "dialog",
-    style: { overflow: "hidden", padding: 10, zIndex: 10001 },
+    style: {
+      height: `min(${RECURRENCE_PICKER_HEIGHT}px, calc(100vh - 20px))`,
+      overflow: "hidden",
+      padding: 10,
+      zIndex: 10001,
+    },
   };
 
   const missingCalendar = !draft.accountId || !draft.calendarId;

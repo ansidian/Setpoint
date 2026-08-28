@@ -116,6 +116,20 @@ function StyledSelect({ options, value, onChange, disabled, testId }: StyledSele
     setOpen(false);
   }, [onChange]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (anchorRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [open]);
+
   return (
     <div>
       <select
@@ -141,6 +155,7 @@ function StyledSelect({ options, value, onChange, disabled, testId }: StyledSele
       <button
         ref={anchorRef}
         type="button"
+        className="calendar-recurrence-section__select-trigger"
         onClick={() => !disabled && setOpen((prev) => !prev)}
         disabled={disabled}
         style={{
@@ -194,6 +209,7 @@ function StyledSelect({ options, value, onChange, disabled, testId }: StyledSele
                 <button
                   key={o.value}
                   type="button"
+                  className="calendar-recurrence-section__select-option"
                   role="option"
                   aria-selected={isSelected}
                   onClick={() => handleSelect(o.value)}
@@ -329,71 +345,102 @@ export default function CalendarRecurrenceSection({
   disabled,
   onUpdateRecurrence,
   onToggleWeekday,
+  compact = false,
 }: CalendarRecurrenceSectionProps) {
   if (!recurrenceDraft) return null;
 
-  return (
-    <div data-testid="calendar-recurrence-section" style={sectionCardStyle()}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
-          Recurrence
-        </div>
-        <div style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.5 }}>
-          {formatRecurrenceSummary(recurrenceDraft, startDate) || "This event will repeat as a series."}
-        </div>
-      </div>
+  const intervalUnit = {
+    daily: "day",
+    weekly: "week",
+    monthly: "month",
+    yearly: "year",
+  }[recurrenceDraft.frequency] || "interval";
+  const intervalValue = Number(recurrenceDraft.interval) || 1;
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div>
-          <div style={fieldLabelStyle()}>Frequency</div>
-          <StyledSelect
-            options={FREQUENCY_OPTIONS}
-            value={recurrenceDraft.frequency}
-            onChange={(value) => onUpdateRecurrence("frequency", value)}
-            disabled={disabled}
-            testId="calendar-recurrence-frequency"
-          />
+  return (
+    <div
+      data-testid="calendar-recurrence-section"
+      data-compact={compact ? "true" : undefined}
+      className="calendar-recurrence-section"
+      style={compact ? undefined : sectionCardStyle()}
+    >
+      {!compact ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
+            Recurrence
+          </div>
+          <div style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.5 }}>
+            {formatRecurrenceSummary(recurrenceDraft, startDate) || "This event will repeat as a series."}
+          </div>
         </div>
-        <div>
-          <div style={fieldLabelStyle()}>Every</div>
-          <InlineInput
-            type="number"
-            min="1"
-            step="1"
-            value={recurrenceDraft.interval}
-            testId="calendar-recurrence-interval"
-            disabled={disabled}
-            onChange={(value) => onUpdateRecurrence("interval", value)}
-          />
+      ) : null}
+
+      {compact ? (
+        <div className="calendar-recurrence-section__interval-row">
+          <div>
+            <div style={fieldLabelStyle()}>Repeat every</div>
+            <div className="calendar-recurrence-section__interval-control">
+              <InlineInput
+                type="number"
+                min="1"
+                step="1"
+                value={recurrenceDraft.interval}
+                testId="calendar-recurrence-interval"
+                disabled={disabled}
+                onChange={(value) => onUpdateRecurrence("interval", value)}
+              />
+              <span>{intervalUnit}{intervalValue === 1 ? "" : "s"}</span>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <div style={fieldLabelStyle()}>Frequency</div>
+            <StyledSelect
+              options={FREQUENCY_OPTIONS}
+              value={recurrenceDraft.frequency}
+              onChange={(value) => onUpdateRecurrence("frequency", value)}
+              disabled={disabled}
+              testId="calendar-recurrence-frequency"
+            />
+          </div>
+          <div>
+            <div style={fieldLabelStyle()}>Every</div>
+            <InlineInput
+              type="number"
+              min="1"
+              step="1"
+              value={recurrenceDraft.interval}
+              testId="calendar-recurrence-interval"
+              disabled={disabled}
+              onChange={(value) => onUpdateRecurrence("interval", value)}
+            />
+          </div>
+        </div>
+      )}
 
       {recurrenceDraft.frequency === "weekly" ? (
-        <div>
+        <div className="calendar-recurrence-section__weekdays">
           <div style={fieldLabelStyle()}>Weekdays</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div className="calendar-recurrence-section__weekday-list">
             {WEEKDAY_OPTIONS.map((option) => {
               const selected = recurrenceDraft.weekdays?.includes(option.code);
               return (
                 <button
                   key={option.code}
                   type="button"
+                  className="calendar-recurrence-section__weekday"
+                  data-selected={selected}
                   data-testid={`calendar-recurrence-weekday-${option.code}`}
                   disabled={disabled}
                   onClick={() => onToggleWeekday(option.code)}
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: 999,
                     border: selected
                       ? "1px solid color-mix(in srgb, var(--sp-accent) 34%, transparent)"
                       : "1px solid rgba(255,255,255,0.08)",
                     background: selected ? "color-mix(in srgb, var(--sp-accent) 14%, transparent)" : "rgba(255,255,255,0.03)",
                     color: selected ? "var(--sp-accent)" : "rgba(205,214,244,0.7)",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: disabled ? "not-allowed" : "pointer",
-                    fontFamily: "inherit",
-                    transition: "background 100ms, border-color 100ms",
                   }}
                 >
                   {option.label}
@@ -407,7 +454,7 @@ export default function CalendarRecurrenceSection({
       {recurrenceDraft.frequency === "monthly" ? (
         <div
           data-testid="calendar-recurrence-derived-monthly"
-          style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.5 }}
+          className="calendar-recurrence-section__derived"
         >
           Repeats monthly on {formatMonthDay(startDate)}.
         </div>
@@ -416,13 +463,16 @@ export default function CalendarRecurrenceSection({
       {recurrenceDraft.frequency === "yearly" ? (
         <div
           data-testid="calendar-recurrence-derived-yearly"
-          style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.5 }}
+          className="calendar-recurrence-section__derived"
         >
           Repeats yearly on {formatMonthDay(startDate)}.
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: recurrenceDraft.ends?.type === "never" ? "1fr" : "1fr 1fr", gap: 10 }}>
+      <div
+        className="calendar-recurrence-section__ends"
+        style={{ gridTemplateColumns: recurrenceDraft.ends?.type === "never" ? "1fr" : "1fr 1fr" }}
+      >
         <div>
           <div style={fieldLabelStyle()}>Ends</div>
           <StyledSelect
