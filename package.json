@@ -60,7 +60,7 @@
     "@fontsource/fira-code": "^5.2.7",
     "@fontsource/montserrat": "^5.2.8",
     "@icons-pack/react-simple-icons": "^13.13.0",
-    "@libsql/client": "^0.17.0",
+    "@libsql/client": "^0.17.4",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.0",
     "@tailwindcss/vite": "^4.2.2",
@@ -128,5 +128,12 @@
   },
   "simple-git-hooks": {
     "pre-commit": "node scripts/regen-architecture.mts && git add ARCHITECTURE.md"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "better-sqlite3@12.11.1": true,
+    "simple-git-hooks@2.13.1": true,
+    "fsevents@2.3.3": true,
+    "fsevents@2.3.2": true
   }
 }
