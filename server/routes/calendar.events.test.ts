@@ -466,6 +466,42 @@ describe("calendar event routes", () => {
       message: "q parameter required",
     });
   });
+
+  it("anchors place suggestions to Home and falls back to Weather", async () => {
+    placesProvider.suggestGooglePlaces.mockResolvedValue([]);
+    await currentDb().execute({
+      sql: "UPDATE ea_settings SET home_location_lat = ?, home_location_lng = ? WHERE user_id = ?",
+      args: [34.0953, -118.1270, "user-1"],
+    });
+
+    const homeResponse = await request(makeApp())
+      .get("/api/calendar/places/suggest")
+      .set("Cookie", authCookie())
+      .query({ q: "c&c collision" });
+
+    expect(homeResponse.status).toBe(200);
+    expect(placesProvider.suggestGooglePlaces).toHaveBeenNthCalledWith(1, "c&c collision", {
+      sessionToken: undefined,
+      lat: 34.0953,
+      lng: -118.127,
+    });
+
+    await currentDb().execute({
+      sql: "UPDATE ea_settings SET home_location_lat = NULL, home_location_lng = NULL WHERE user_id = ?",
+      args: ["user-1"],
+    });
+    const weatherResponse = await request(makeApp())
+      .get("/api/calendar/places/suggest")
+      .set("Cookie", authCookie())
+      .query({ q: "c&c collision" });
+
+    expect(weatherResponse.status).toBe(200);
+    expect(placesProvider.suggestGooglePlaces).toHaveBeenNthCalledWith(2, "c&c collision", {
+      sessionToken: undefined,
+      lat: 34.0522,
+      lng: -118.2437,
+    });
+  });
 });
 
 const providerState: { recurring: boolean } = { recurring: false };

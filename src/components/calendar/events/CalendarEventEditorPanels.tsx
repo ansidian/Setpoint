@@ -1,3 +1,4 @@
+import { useCallback, useLayoutEffect, useRef } from "react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarEventCompactSchedulePicker from "./CalendarEventCompactSchedulePicker";
 import CalendarEventRecurrencePicker from "./CalendarEventRecurrencePicker";
@@ -37,6 +38,27 @@ export default function CalendarEventEditorPanels({ editor, pickers }: CalendarE
     : pickers.sourceRef.current?.isConnected
       ? pickers.sourceRef
       : pickers.startDateRef;
+  const locationInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const resizeLocationInput = useCallback((input: HTMLTextAreaElement | null) => {
+    if (!input) return;
+    input.style.height = "auto";
+    const borderHeight = input.offsetHeight - input.clientHeight;
+    const contentHeight = input.scrollHeight;
+    const nextHeight = Math.min(Math.max(contentHeight + borderHeight, 38), 96);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = contentHeight + borderHeight > 96 ? "auto" : "hidden";
+  }, []);
+
+  const setLocationInputRef = useCallback((input: HTMLTextAreaElement | null) => {
+    locationInputRef.current = input;
+    resizeLocationInput(input);
+  }, [resizeLocationInput]);
+
+  useLayoutEffect(() => {
+    if (pickers.openPicker !== "location") return;
+    resizeLocationInput(locationInputRef.current);
+  }, [draft.location, pickers.openPicker, resizeLocationInput]);
 
   return (
     <>
@@ -86,14 +108,33 @@ export default function CalendarEventEditorPanels({ editor, pickers }: CalendarE
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
             {pickers.openPicker === "location" ? (
-              <input
+              <textarea
+                ref={setLocationInputRef}
+                autoFocus
                 data-testid="calendar-event-location"
                 aria-label="Event location"
                 value={draft.location}
                 onChange={(event) => updateField("location", event.target.value)}
-                onKeyDown={pickers.handleLocationSuggestionKey}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }
+                  void pickers.handleLocationSuggestionKey(event);
+                }}
                 placeholder="Search places or type location"
-                style={textFieldStyle()}
+                rows={1}
+                style={{
+                  ...textFieldStyle(),
+                  display: "block",
+                  minHeight: 38,
+                  maxHeight: 96,
+                  resize: "none",
+                  overflowX: "hidden",
+                  overflowY: "hidden",
+                  lineHeight: 1.45,
+                  transition: "background 140ms, border-color 140ms",
+                }}
               />
             ) : null}
             {pickers.openPicker === "location" && draft.location?.trim() ? (

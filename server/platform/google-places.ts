@@ -6,9 +6,9 @@ const GOOGLE_PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 const GOOGLE_PLACES_TIMEOUT_MS = 10_000;
 const RESTRICTED_RADIUS_METERS = 12_000;
-const BIASED_RADIUS_METERS = 24_000;
+const EXPANDED_RADIUS_METERS = 24_000;
 // Target number of suggestions before widening the search radius from
-// locationRestriction to locationBias (see suggestGooglePlaces).
+// the immediate area to the wider nearby area (see suggestGooglePlaces).
 const MIN_SUGGESTION_COUNT = 5;
 
 type PlacesError = Error & { status: number; code: string };
@@ -53,6 +53,13 @@ function requirePlacesConfig(apiKey: string | null): asserts apiKey is string {
   }
 }
 
+function normalizeAutocompleteInput(query: unknown) {
+  return String(query || "")
+    .trim()
+    .replace(/\s*&\s*/g, " & ")
+    .replace(/\s+/g, " ");
+}
+
 function buildLocationCircle(lat: number | undefined, lng: number | undefined, radius: number) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   return {
@@ -85,6 +92,16 @@ function rankPredictions(predictions: readonly PlacePrediction[]) {
     if (aDistance !== bDistance) return aDistance - bDistance;
     return 0;
   });
+}
+
+function mergePredictions(...groups: readonly PlacePrediction[][]) {
+  const byPlaceId = new Map<string, PlacePrediction>();
+  for (const predictions of groups) {
+    for (const prediction of predictions) {
+      if (!byPlaceId.has(prediction.placeId)) byPlaceId.set(prediction.placeId, prediction);
+    }
+  }
+  return [...byPlaceId.values()];
 }
 
 function normalizePrediction(entry: unknown): PlacePrediction | null {
@@ -155,7 +172,7 @@ export async function suggestGooglePlaces(
   const apiKey = await resolveGooglePlacesApiKey(credentials);
   requirePlacesConfig(apiKey);
 
-  const input = String(query || "").trim();
+  const input = normalizeAutocompleteInput(query);
   if (!input) return [];
 
   const body: Record<string, unknown> = {
@@ -169,21 +186,23 @@ export async function suggestGooglePlaces(
   const origin = buildOrigin(options.lat, options.lng);
   if (origin) body.origin = origin;
 
-  let predictions: PlacePrediction[] = [];
+  let predictions: PlacePrediction[];
   const locationRestriction = buildLocationCircle(options.lat, options.lng, RESTRICTED_RADIUS_METERS);
   if (locationRestriction) {
     predictions = await autocompleteRequest(apiKey, {
       ...body,
       locationRestriction,
     });
-  }
-
-  if (predictions.length < MIN_SUGGESTION_COUNT) {
-    const locationBias = buildLocationCircle(options.lat, options.lng, BIASED_RADIUS_METERS);
-    predictions = await autocompleteRequest(apiKey, {
-      ...body,
-      ...(locationBias ? { locationBias } : null),
-    });
+    if (predictions.length < MIN_SUGGESTION_COUNT) {
+      const expandedRestriction = buildLocationCircle(options.lat, options.lng, EXPANDED_RADIUS_METERS);
+      const expandedPredictions = await autocompleteRequest(apiKey, {
+        ...body,
+        locationRestriction: expandedRestriction,
+      });
+      predictions = mergePredictions(predictions, expandedPredictions);
+    }
+  } else {
+    predictions = await autocompleteRequest(apiKey, body);
   }
 
   // P2-26: return autocomplete predictions directly. The dropdown renders from

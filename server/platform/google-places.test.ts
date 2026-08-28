@@ -46,6 +46,80 @@ describe("google-places fetch deadlines", () => {
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("preserves nearby matches when widening a sparse local search", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({
+        suggestions: [{
+          placePrediction: {
+            placeId: "c-and-c-alhambra",
+            text: { text: "C&C Collision, 518 S Palm Ave, Alhambra, CA 91803" },
+            structuredFormat: {
+              mainText: { text: "C&C Collision" },
+              secondaryText: { text: "518 S Palm Ave, Alhambra, CA 91803" },
+            },
+            distanceMeters: 8_000,
+          },
+        }],
+      }))
+      .mockResolvedValueOnce(jsonResponse({ suggestions: [] }));
+
+    const predictions = await suggestGooglePlaces(
+      "c&c collision",
+      { lat: 34.0686, lng: -118.0276 },
+      credentials("test-places-key") as never,
+    );
+
+    expect(predictions).toEqual([
+      expect.objectContaining({
+        placeId: "c-and-c-alhambra",
+        secondaryText: "518 S Palm Ave, Alhambra, CA 91803",
+      }),
+    ]);
+    // test-architecture: allow-boundary-interaction -- Google Places request shape is the outbound provider contract that keeps sparse local matches from being replaced by global soft-biased results.
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    // test-architecture: allow-boundary-interaction -- The expanded Google Places request must remain a hard geographic restriction and omit locationBias; a soft bias can return out-of-state matches.
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]![1]?.body));
+    expect(firstBody.locationRestriction.circle.radius).toBe(12_000);
+    expect(secondBody.locationRestriction.circle.radius).toBe(24_000);
+    expect(secondBody).not.toHaveProperty("locationBias");
+  });
+
+  it("normalizes an ampersand joined to words before autocomplete", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.input !== "c & c collision") return jsonResponse({ suggestions: [] });
+      return jsonResponse({
+        suggestions: [{
+          placePrediction: {
+            placeId: "c-and-c-alhambra",
+            text: { text: "C & C Collision, 518 S Palm Ave, Alhambra, CA 91803" },
+            structuredFormat: {
+              mainText: { text: "C & C Collision" },
+              secondaryText: { text: "518 S Palm Ave, Alhambra, CA 91803" },
+            },
+            distanceMeters: 13_700,
+          },
+        }],
+      });
+    });
+
+    const predictions = await suggestGooglePlaces(
+      "c&c collision",
+      { lat: 34.0686, lng: -118.0276 },
+      credentials("test-places-key") as never,
+    );
+
+    expect(predictions).toEqual([
+      expect.objectContaining({
+        placeId: "c-and-c-alhambra",
+        primaryText: "C & C Collision",
+      }),
+    ]);
+    // test-architecture: allow-boundary-interaction -- Google Places tokenization is an outbound provider contract; joined ampersands must be normalized before the request so exact local businesses remain discoverable.
+    const requestBodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(requestBodies.every((body) => body.input === "c & c collision")).toBe(true);
+  });
+
   it("sends the details request with an AbortSignal", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
         id: "place-1",

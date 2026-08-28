@@ -297,10 +297,24 @@ router.get("/places/suggest", placesLimiter, async (req, res) => {
   try {
     const userId = calendarUserId();
     const { settings } = await loadUserConfig(userId);
+    const homeLat = settings?.home_location_lat;
+    const homeLng = settings?.home_location_lng;
+    const hasHomeCoordinates = typeof homeLat === "number"
+      && Number.isFinite(homeLat)
+      && typeof homeLng === "number"
+      && Number.isFinite(homeLng);
     const places = await suggestGooglePlaces(query, {
       sessionToken: sessionToken || undefined,
-      lat: typeof settings?.weather_lat === "number" ? settings.weather_lat : undefined,
-      lng: typeof settings?.weather_lng === "number" ? settings.weather_lng : undefined,
+      lat: hasHomeCoordinates
+        ? homeLat
+        : typeof settings?.weather_lat === "number" && Number.isFinite(settings.weather_lat)
+          ? settings.weather_lat
+          : undefined,
+      lng: hasHomeCoordinates
+        ? homeLng
+        : typeof settings?.weather_lng === "number" && Number.isFinite(settings.weather_lng)
+          ? settings.weather_lng
+          : undefined,
     });
     res.json({ places });
   } catch (err) {
