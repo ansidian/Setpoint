@@ -82,7 +82,7 @@ export default function SourcePickerPanel({
         Calendar source
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 8px 8px", overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "2px 8px 8px", overflowY: "auto" }}>
         {!filteredCalendars.length ? (
           <div
             style={{
@@ -141,6 +141,8 @@ export default function SourcePickerPanel({
                         if (index >= 0) itemRefs.current[index] = element;
                       }}
                       type="button"
+                      aria-pressed={selected}
+                      data-calendar-focus-ring="true"
                       onClick={() => onSelect(item)}
                       style={{
                         display: "grid",

@@ -34,4 +34,27 @@ describe("CalendarEventEditor compact schedule behavior", () => {
     });
   });
 
+  it("dismisses each event fact picker when its trigger is clicked again", async () => {
+    renderEventEditor();
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    const cases = [
+      ["calendar-event-schedule-trigger", /compact schedule picker/i],
+      ["calendar-event-source-trigger", /calendar source picker/i],
+      ["calendar-event-location-trigger", /location suggestions/i],
+      ["calendar-event-repeat-trigger", /recurrence picker/i],
+    ] as const;
+
+    for (const [triggerTestId, dialogName] of cases) {
+      const trigger = screen.getByTestId(triggerTestId);
+      fireEvent.click(trigger);
+      expect(await screen.findByRole("dialog", { name: dialogName })).toBeTruthy();
+
+      fireEvent.click(trigger);
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: dialogName })).toBeNull();
+      });
+    }
+  });
+
 });

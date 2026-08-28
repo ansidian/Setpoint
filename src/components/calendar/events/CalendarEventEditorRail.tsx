@@ -1,6 +1,7 @@
 import { AnimatePresence, motion as Motion } from "motion/react";
 import CalendarBatchReviewSection from "./CalendarBatchReviewSection";
 import CalendarEventCompactCorrectionToolbar from "./CalendarEventCompactCorrectionToolbar";
+import CalendarEventFactSheet from "./CalendarEventFactSheet";
 import CalendarRecurringScopePrompt from "./CalendarRecurringScopePrompt";
 import CalendarEventEditorActionBar from "./CalendarEventEditorActionBar";
 import CalendarEventEditorHeader from "./CalendarEventEditorHeader";
@@ -163,6 +164,33 @@ export default function CalendarEventEditorRail({
             isEditing={isEditing}
             validationMessage={validationMessage}
           />
+          {!isBatchMode ? (
+            <CalendarEventFactSheet
+              draft={draft}
+              disabled={disabled}
+              selectedSource={selectedSource}
+              sourcesLoading={sourcesLoading}
+              writableCalendars={writableCalendars}
+              missingCalendar={missingCalendar}
+              invalidDateRange={invalidDateRange}
+              invalidTimeRange={invalidTimeRange}
+              recurrenceDraft={recurrenceDraft}
+              isRecurringEvent={isEditingRecurring}
+              conflictCount={ghostPreview?.totalConflictCount || 0}
+              openPicker={pickers.openPicker}
+              setOpenPicker={setOpenPicker}
+              toggleOpenPicker={pickers.toggleOpenPicker}
+              updateField={updateField}
+              startDateRef={startDateRef}
+              endDateRef={endDateRef}
+              startTimeRef={startTimeRef}
+              endTimeRef={endTimeRef}
+              sourceRef={sourceRef}
+              locationRef={locationRef}
+              repeatRef={repeatRef}
+              handleLocationSuggestionKey={handleLocationSuggestionKey}
+            />
+          ) : null}
           <CalendarEventNotesField
             draft={draft}
             disabled={disabled}
@@ -211,45 +239,49 @@ export default function CalendarEventEditorRail({
                 mutationPhase={mutationPhase}
               />
 
-              <CalendarDraftPreviewPanel
-                ghostPreview={ghostPreview}
-                draft={draft}
-                selectedSource={selectedSource}
-                recurrenceDraft={recurrenceDraft}
-                isRecurringEvent={isEditingRecurring}
-                showDraftFallback={isEditing}
-              />
+              {isBatchMode ? (
+                <CalendarDraftPreviewPanel
+                  ghostPreview={ghostPreview}
+                  draft={draft}
+                  selectedSource={selectedSource}
+                  recurrenceDraft={recurrenceDraft}
+                  isRecurringEvent={isEditingRecurring}
+                  showDraftFallback={isEditing}
+                />
+              ) : null}
 
               <CalendarEventTitleAssistPanel
                 show={showTitleAssist}
                 titleAssist={titleAssist}
               />
 
-              <CalendarEventCompactCorrectionToolbar
-                draft={draft}
-                disabled={disabled}
-                selectedSource={selectedSource}
-                sourcesLoading={sourcesLoading}
-                writableCalendars={writableCalendars}
-                missingCalendar={missingCalendar}
-                invalidDateRange={invalidDateRange}
-                invalidTimeRange={invalidTimeRange}
-                isBatchMode={isBatchMode}
-                batchDrafts={batchDrafts}
-                recurrenceDraft={recurrenceDraft}
-                onExitBatchMode={exitBatchMode}
-                openPicker={pickers.openPicker}
-                setOpenPicker={setOpenPicker}
-                updateField={updateField}
-                startDateRef={startDateRef}
-                endDateRef={endDateRef}
-                startTimeRef={startTimeRef}
-                endTimeRef={endTimeRef}
-                sourceRef={sourceRef}
-                locationRef={locationRef}
-                repeatRef={repeatRef}
-                handleLocationSuggestionKey={handleLocationSuggestionKey}
-              />
+              {isBatchMode ? (
+                <CalendarEventCompactCorrectionToolbar
+                  draft={draft}
+                  disabled={disabled}
+                  selectedSource={selectedSource}
+                  sourcesLoading={sourcesLoading}
+                  writableCalendars={writableCalendars}
+                  missingCalendar={missingCalendar}
+                  invalidDateRange={invalidDateRange}
+                  invalidTimeRange={invalidTimeRange}
+                  isBatchMode
+                  batchDrafts={batchDrafts}
+                  recurrenceDraft={recurrenceDraft}
+                  onExitBatchMode={exitBatchMode}
+                  openPicker={pickers.openPicker}
+                  setOpenPicker={setOpenPicker}
+                  updateField={updateField}
+                  startDateRef={startDateRef}
+                  endDateRef={endDateRef}
+                  startTimeRef={startTimeRef}
+                  endTimeRef={endTimeRef}
+                  sourceRef={sourceRef}
+                  locationRef={locationRef}
+                  repeatRef={repeatRef}
+                  handleLocationSuggestionKey={handleLocationSuggestionKey}
+                />
+              ) : null}
 
               {!isBatchMode ? (
                 <CalendarEventReminderChips

@@ -171,12 +171,6 @@ export interface PanelPosition {
   mobile?: boolean;
 }
 
-export interface EditMetadataItem {
-  id: string;
-  text: string;
-  color: string;
-}
-
 export interface SubmitAddTaskFlowOptions {
   parsed: ParsedTodoistTokensInput;
   resolvedDue: string | null;

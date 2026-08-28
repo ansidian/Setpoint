@@ -58,6 +58,21 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
       typeof nextValue === "function" ? nextValue(prev) : nextValue
     ));
   }, []);
+  const toggleOpenPicker = useCallback((nextPicker: CalendarEditorPicker) => {
+    if (nextPicker === "source") {
+      const selectedValue = draft.accountId && draft.calendarId
+        ? `${draft.accountId}::${draft.calendarId}`
+        : "";
+      const selectedIndex = Math.max(0, writableCalendars.findIndex((item) => item.value === selectedValue));
+      activeSourceSuggestionRef.current = selectedIndex;
+      setActiveSourceSuggestion(selectedIndex);
+    }
+    setOpenPickerRaw((current) => {
+      const currentGroup = current?.startsWith("schedule:") ? "schedule" : current;
+      const nextGroup = nextPicker.startsWith("schedule:") ? "schedule" : nextPicker;
+      return currentGroup === nextGroup ? null : nextPicker;
+    });
+  }, [draft.accountId, draft.calendarId, writableCalendars]);
 
   useEffect(() => {
     if (!openPicker) return undefined;
@@ -362,6 +377,7 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   return {
     openPicker,
     setOpenPicker,
+    toggleOpenPicker,
     nowTick,
     titleRef,
     sourceRef,

@@ -68,7 +68,7 @@ describe("resolveFloatingDetailPlacement", () => {
     expect(placement.left + placement.width).toBeLessThanOrEqual(railRect.left);
   });
 
-  it("uses a compact editor width so the month grid remains visible", () => {
+  it("uses the expanded editor width needed for structured facts while preserving the month grid", () => {
     const placement = resolveFloatingDetailPlacement({
       anchorRect: rect(640, 200, 32, 28),
       sourceRect: rect(620, 180, 60, 80),
@@ -78,7 +78,7 @@ describe("resolveFloatingDetailPlacement", () => {
       mode: "create",
     });
 
-    expect(placement.width).toBe(420);
+    expect(placement.width).toBe(520);
   });
 
   it("clamps compact editor width between mobile-safe and desktop maximum bounds", () => {
@@ -94,7 +94,7 @@ describe("resolveFloatingDetailPlacement", () => {
     });
 
     expect(narrowPlacement.width).toBe(348);
-    expect(widePlacement.width).toBe(420);
+    expect(widePlacement.width).toBe(520);
   });
 });
 

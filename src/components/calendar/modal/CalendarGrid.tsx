@@ -374,7 +374,11 @@ export default memo(function CalendarGrid({
       onShakeFloatingEditor?.();
       return;
     }
-    closeEventEditor();
+    if (interaction.floatingEditorOpen && onCancelFloatingEditor) {
+      onCancelFloatingEditor();
+    } else {
+      closeEventEditor();
+    }
     if (eventDateCells && !anchorMeta?.preserveEventSelection) eventQuickActions?.clearEventSelection?.();
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);

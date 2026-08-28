@@ -1,130 +1,20 @@
-import { createElement, useState } from "react";
-import type { ComponentProps, CSSProperties, Dispatch, MouseEventHandler, ReactNode, RefObject, SetStateAction } from "react";
-import { CalendarClock, Flag, Folder, Tags } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { useState } from "react";
+import type { ComponentProps, CSSProperties, Dispatch, MouseEventHandler, ReactNode, SetStateAction } from "react";
 import { PriorityIndicator } from "./controls";
 import { buildInlineContainerStyle } from "./styles";
 import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
 import {
   TodoistActionFooter,
-  TodoistDraftPreview,
   TodoistDescriptionLinks,
   TodoistDuePickerLayer,
   TodoistErrorNotice,
-  TodoistSelectedLabelChips,
   TodoistTaskTextSection,
 } from "./AddTaskPanelShared";
 import TodoistReminderChips from "./TodoistReminderChips";
+import TodoistDeadlineFactSheet from "./TodoistDeadlineFactSheet";
 import type { TodoistLabel, TodoistPriority, TodoistProject } from "../../../../shared/types/tasks";
-import type { AddTaskOverrides, CompactPanel, EditMetadataItem } from "./types";
+import type { AddTaskOverrides, CompactPanel } from "./types";
 import type useAddTaskPanelController from "./useAddTaskPanelController";
-
-function CompactIconButton({
-  anchorRef,
-  icon: Icon,
-  label,
-  active = false,
-  danger = false,
-  disabled = false,
-  dataTestId,
-  onClick,
-  children = null,
-  width = 34,
-}: {
-  anchorRef?: RefObject<HTMLButtonElement | null>;
-  icon: LucideIcon;
-  label: string;
-  active?: boolean;
-  danger?: boolean;
-  disabled?: boolean;
-  dataTestId: string;
-  onClick: MouseEventHandler<HTMLButtonElement>;
-  children?: ReactNode;
-  width?: number;
-}) {
-  const [hover, setHover] = useState(false);
-  const fallbackIcon = Icon ? createElement(Icon, { size: 15, "aria-hidden": true }) : null;
-  const activeColor = danger ? "var(--sp-rose)" : "var(--sp-accent)";
-  const border = active
-    ? `color-mix(in srgb, ${activeColor} 42%, transparent)`
-    : hover && !disabled
-      ? "rgba(255,255,255,0.16)"
-      : "rgba(255,255,255,0.08)";
-  const background = active
-    ? `color-mix(in srgb, ${activeColor} 15%, transparent)`
-    : hover && !disabled
-      ? "rgba(255,255,255,0.06)"
-      : "rgba(255,255,255,0.035)";
-  const foreground = active ? activeColor : "rgba(205,214,244,0.58)";
-
-  return (
-    <button
-      ref={anchorRef}
-      type="button"
-      data-testid={dataTestId}
-      data-calendar-popover-trigger="true"
-      data-calendar-focus-ring="true"
-      aria-label={label}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        width,
-        height: 34,
-        borderRadius: 8,
-        border: `1px solid ${border}`,
-        background,
-        color: disabled ? "rgba(205,214,244,0.34)" : foreground,
-        display: "inline-grid",
-        placeItems: "center",
-        padding: 0,
-        flex: "0 0 auto",
-        fontFamily: "inherit",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.66 : 1,
-        transform: hover && !disabled ? "translateY(-1px)" : "translateY(0)",
-        transition: "transform 140ms, background 140ms, border-color 140ms, color 140ms, opacity 140ms",
-      }}
-    >
-      {children || fallbackIcon}
-    </button>
-  );
-}
-
-function CompactPriorityBadge({ level }: { level: Exclude<TodoistPriority, null> }) {
-  const colors = {
-    1: "var(--sp-rose)",
-    2: "var(--sp-cream)",
-    3: "var(--sp-blue)",
-    4: "var(--sp-subtext)",
-  };
-  const color = colors[level];
-  const litCount = 5 - level;
-
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, width: "100%", minWidth: 0, color }}>
-      <span aria-hidden style={{ display: "inline-flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
-        {[1, 2, 3, 4].map((index) => (
-          <span
-            key={index}
-            style={{
-              width: 3,
-              height: 10,
-              borderRadius: 2,
-              background: color,
-              opacity: index <= litCount ? 1 : 0.22,
-            }}
-          />
-        ))}
-      </span>
-      <span style={{ fontSize: 10.5, fontWeight: 750, lineHeight: 1, whiteSpace: "nowrap" }}>
-        P{level}
-      </span>
-    </span>
-  );
-}
 
 function CompactOptionPanel({ children }: { children: ReactNode }) {
   return (
@@ -159,6 +49,8 @@ function CompactOption({
     <button
       type="button"
       role="option"
+      className="calendar-editor-inline-option"
+      data-calendar-focus-ring="true"
       aria-selected={active}
       onClick={onClick}
       style={{
@@ -166,6 +58,7 @@ function CompactOption({
         alignItems: "center",
         gap: 8,
         width: "100%",
+        minWidth: 0,
         minHeight: 30,
         borderRadius: 8,
         border: active
@@ -181,6 +74,7 @@ function CompactOption({
         textAlign: "left",
         fontFamily: "inherit",
         cursor: "pointer",
+        overflowWrap: "anywhere",
       }}
     >
       {children}
@@ -225,33 +119,6 @@ function CompactDescriptionField({
       />
       <TodoistDescriptionLinks description={description} />
     </div>
-  );
-}
-
-function CompactMetadataChip({ children, color = "rgba(205,214,244,0.62)" }: { children: ReactNode; color?: string }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        flex: "0 0 auto",
-        maxWidth: "100%",
-        minWidth: 0,
-        borderRadius: 999,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.025)",
-        color,
-        padding: "3px 7px",
-        fontSize: 10.5,
-        fontWeight: 600,
-        lineHeight: 1.2,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-      }}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -383,13 +250,11 @@ function CompactActions(props: Omit<ComponentProps<typeof TodoistActionFooter>, 
 
 export default function AddTaskPanelInlineEditor({
   active,
-  editMetadataItems,
   openCompactPanel,
   setOpenCompactPanel,
   state,
 }: {
   active: boolean;
-  editMetadataItems: EditMetadataItem[];
   openCompactPanel: CompactPanel;
   setOpenCompactPanel: Dispatch<SetStateAction<CompactPanel>>;
   state: ReturnType<typeof useAddTaskPanelController>;
@@ -412,8 +277,6 @@ export default function AddTaskPanelInlineEditor({
     deleteTask,
     description,
     descriptionVariant,
-    draftPreview,
-    dueDisplay,
     duePickerNow,
     duePickerOpen,
     duePickerRef,
@@ -434,7 +297,6 @@ export default function AddTaskPanelInlineEditor({
     pickerDueEpoch,
     priorityOptions,
     projects,
-    recurrenceSummary,
     reminderError,
     removeTodoistReminder,
     requestClose,
@@ -451,7 +313,6 @@ export default function AddTaskPanelInlineEditor({
     todoistReminders,
     todoistReminderPresetStates,
     updateCustomReminder,
-    openDuePicker,
   } = state;
 
   return (
@@ -480,7 +341,6 @@ export default function AddTaskPanelInlineEditor({
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16, flex: 1, minHeight: 0 }}>
           <TodoistErrorNotice error={error} compact />
-          <TodoistDraftPreview draftPreview={draftPreview} compact />
           <TodoistTaskTextSection
             autocompleteType={autocompleteType}
             cursorPos={cursorPos}
@@ -491,45 +351,32 @@ export default function AddTaskPanelInlineEditor({
             inputRef={inputRef}
             labels={labels}
             projects={projects}
-            recurrenceSummary={recurrenceSummary}
+            recurrenceSummary={null}
           />
+          <TodoistDeadlineFactSheet
+            openCompactPanel={openCompactPanel}
+            setOpenCompactPanel={setOpenCompactPanel}
+            state={state}
+          />
+
+          <CompactDetailPanel
+            labels={labels}
+            openCompactPanel={openCompactPanel}
+            priorityOptions={priorityOptions}
+            projects={projects}
+            resolvedLabels={resolvedLabels}
+            resolvedPriority={resolvedPriority}
+            resolvedProject={resolvedProject}
+            setManualLabels={setManualLabels}
+            setManualPriority={setManualPriority}
+            setManualProject={setManualProject}
+            setOpenCompactPanel={setOpenCompactPanel}
+            setOverrides={setOverrides}
+          />
+
           <CompactDescriptionField description={description} setDescription={setDescription} isMobile={isMobile} emailContext={descriptionVariant === "email-context"} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div data-testid="todoist-compact-toolbar" style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
-              <CompactIconButton anchorRef={dueTriggerRef} icon={CalendarClock} label={dueDisplay ? `Due: ${dueDisplay}` : "Due date"} active={!!dueDisplay || duePickerOpen} dataTestId="todoist-due-trigger" onClick={openDuePicker} />
-              <CompactIconButton icon={Folder} label={`Project: ${resolvedProject?.name || "Inbox"}`} active={!!resolvedProject || openCompactPanel === "project"} dataTestId="todoist-project-trigger" onClick={() => setOpenCompactPanel((panel) => (panel === "project" ? null : "project"))} />
-              <CompactIconButton icon={Flag} label={`Priority: ${resolvedPriority ? `P${resolvedPriority}` : "None"}`} active={!!resolvedPriority || openCompactPanel === "priority"} danger={!!resolvedPriority && resolvedPriority <= 2} dataTestId="todoist-priority-trigger" width={resolvedPriority ? 48 : 34} onClick={() => setOpenCompactPanel((panel) => (panel === "priority" ? null : "priority"))}>
-                {resolvedPriority ? <CompactPriorityBadge level={resolvedPriority} /> : <Flag size={15} aria-hidden />}
-              </CompactIconButton>
-              <CompactIconButton icon={Tags} label={resolvedLabels.length ? `${resolvedLabels.length} Todoist label${resolvedLabels.length === 1 ? "" : "s"}` : "Todoist labels"} active={resolvedLabels.length > 0 || openCompactPanel === "labels"} dataTestId="todoist-labels-trigger" onClick={() => setOpenCompactPanel((panel) => (panel === "labels" ? null : "labels"))} />
-            </div>
-            {editMetadataItems.length ? (
-              <div data-testid="todoist-edit-metadata" aria-label="Todoist task metadata" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5, minWidth: 0 }}>
-                {editMetadataItems.map((item) => (
-                  <CompactMetadataChip key={item.id} color={item.color}>{item.text}</CompactMetadataChip>
-                ))}
-              </div>
-            ) : null}
-            <TodoistSelectedLabelChips
-              resolvedLabels={resolvedLabels}
-              setManualLabels={setManualLabels}
-              setOverrides={setOverrides}
-            />
-            <CompactDetailPanel
-              labels={labels}
-              openCompactPanel={openCompactPanel}
-              priorityOptions={priorityOptions}
-              projects={projects}
-              resolvedLabels={resolvedLabels}
-              resolvedPriority={resolvedPriority}
-              resolvedProject={resolvedProject}
-              setManualLabels={setManualLabels}
-              setManualPriority={setManualPriority}
-              setManualProject={setManualProject}
-              setOpenCompactPanel={setOpenCompactPanel}
-              setOverrides={setOverrides}
-            />
             <TodoistReminderChips
               compact
               reminders={todoistReminders}

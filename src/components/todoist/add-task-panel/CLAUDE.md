@@ -10,6 +10,7 @@ This directory owns the Todoist create/edit panel used by Notes promotion, Dashb
 - `useTodoistReminderDrafts.ts` — reminder loading, task-anchor projection, draft validation, removal, and reconciliation-error state.
 - `AddTaskPanelView.tsx` — chooses the inline editor or the portaled floating editor.
 - `AddTaskPanelFloatingEditor.tsx` / `AddTaskPanelInlineEditor.tsx` — host-specific render trees; both consume the same controller.
+- `TodoistDeadlineFactSheet.tsx` — Calendar inline editor's editable due/project/priority/label hierarchy.
 - `AddTaskPanelShared.tsx`, `controls.tsx`, `styles.ts` — shared editor fields, action controls, floating menus, and style projections.
 - `parsing.ts`, `due.ts`, `addTaskViewModel.ts`, `submitPayload.ts`, `formatDraftPreview.ts`, `descriptionLinksModel.ts` — pure parsing, recurrence/due, preview, dirty-state, description-link, and mutation-payload models.
 - `todoistReminderModel.ts`, `applyTodoistReminderMutations.ts`, `TodoistReminderChips.tsx` — Todoist reminder anchoring, drafts, reconciliation, and controls.
