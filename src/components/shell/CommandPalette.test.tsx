@@ -21,6 +21,12 @@ function PaletteHarness() {
 describe("CommandPalette", () => {
   afterEach(cleanup);
 
+  it("focuses the query before the palette is ready for interaction", () => {
+    render(<CommandPalette open accent="#cba6da" onClose={noop} onAction={noop} />);
+
+    expect(document.activeElement).toBe(screen.getByRole("combobox"));
+  });
+
   it("blocks calendar hotkeys while open", () => {
     render(<CommandPalette open accent="#cba6da" onClose={noop} onAction={noop} />);
 

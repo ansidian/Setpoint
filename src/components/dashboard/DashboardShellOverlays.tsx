@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { AnalyticsModalMount } from "../shell/AnalyticsModalMount";
+import CommandPalette from "../shell/CommandPalette";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { DashboardDeadline } from "../../context/dashboardTaskProjection";
 import type { SnapshotView } from "../../../shared/types/snapshots";
@@ -34,7 +35,6 @@ interface DashboardShellOverlaysProps {
 
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
-const CommandPalette = lazy(() => import("../shell/CommandPalette"));
 const DashboardItemDetailSheet = lazy(() => import("./DashboardItemDetailSheet"));
 
 export default function DashboardShellOverlays({
@@ -91,14 +91,12 @@ export default function DashboardShellOverlays({
       )}
 
       {paletteOpen && (
-        <Suspense fallback={null}>
-          <CommandPalette
-            open={paletteOpen}
-            accent={accent}
-            onClose={closePalette}
-            onAction={handlePaletteAction}
-          />
-        </Suspense>
+        <CommandPalette
+          open={paletteOpen}
+          accent={accent}
+          onClose={closePalette}
+          onAction={handlePaletteAction}
+        />
       )}
 
       <AnalyticsModalMount open={analyticsOpen} onClose={closeAnalytics} />
