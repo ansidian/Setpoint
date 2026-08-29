@@ -46,6 +46,18 @@ describe("layoutConflictTimelineItems", () => {
     expect(layout.every((item) => item.laneCount === 4)).toBe(true);
   });
 
+  it("keeps an earlier-starting proposal in the rightmost overlap lane", () => {
+    const layout = layoutConflictTimelineItems([
+      { id: "existing", top: 60, height: 225 },
+      { id: "proposal", top: 0, height: 75, draft: true },
+    ]);
+
+    expect(layout.map(({ id, lane, laneCount }) => ({ id, lane, laneCount }))).toEqual([
+      { id: "existing", lane: 0, laneCount: 2 },
+      { id: "proposal", lane: 1, laneCount: 2 },
+    ]);
+  });
+
   it("reuses lanes outside each visual overlap group", () => {
     const layout = layoutConflictTimelineItems([
       { id: "before", top: 0, height: 42 },

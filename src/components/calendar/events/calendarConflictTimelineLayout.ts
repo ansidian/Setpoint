@@ -48,6 +48,14 @@ export function layoutConflictTimelineItems(
       return { ...item, lane };
     });
     const laneCount = laneBottoms.length;
+    const draftLane = groupItems.find((item) => item.draft)?.lane;
+    const rightmostLane = laneCount - 1;
+    if (draftLane != null && draftLane !== rightmostLane) {
+      for (const item of groupItems) {
+        if (item.lane === draftLane) item.lane = rightmostLane;
+        else if (item.lane === rightmostLane) item.lane = draftLane;
+      }
+    }
     positioned.push(...groupItems.map(({ bottom: _bottom, ...item }) => ({ ...item, laneCount })));
     group = [];
     groupBottom = Number.NEGATIVE_INFINITY;

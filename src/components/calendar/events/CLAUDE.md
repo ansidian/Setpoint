@@ -24,7 +24,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarEventEditorPanels.tsx` — floating date/time/location/source/recurrence pickers
 - `CalendarEventEditorHeader.tsx` — mode label and contextual copy (editing/batch/new)
 - `CalendarEventFactSheet.tsx` / `editorFactSheet.css` — editable schedule/calendar/location/repeat hierarchy shared visually with Calendar's deadline editor
-- `CalendarConflictPanel.tsx` — informational, time-scaled context timeline for a draft's nearest before/after events and actual overlaps
+- `CalendarConflictPanel.tsx` — informational schedule preview: a one-day time-scaled timeline with all-day context, stacked per-day agenda timelines for timed multi-day drafts, or a date-oriented list for all-day drafts
 - `CalendarEventEditorActionBar.tsx` — save/delete/cancel with confirmation states
 - `CalendarEventEditorStatusMessages.tsx` — error and validation messaging
 - `CalendarEditorControls.tsx` — shared editor control primitives
@@ -41,6 +41,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarEventCompactSchedulePicker.tsx` / `calendarCompactSchedulePicker.css` — stable split-pane month + time picker with responsive single-column fallback
 - `calendarCompactSchedulePickerModel.ts` — month grid generation and range logic
 - `CalendarConflictPanel.tsx` / `calendarConflictTimelineLayout.ts` — nearby-schedule timeline and rendered-card lane assignment for concurrent events
+- `calendarConflictAgendaModel.ts` — Pacific-midnight segmentation, per-day schedule context, and condensed-day selection for timed multi-day proposal agendas
 - `CalendarRecurrenceSection.tsx` — full recurrence rule builder
 - `CalendarEventRecurrencePicker.tsx` / `calendarEventRecurrencePicker.css` — stable split-pane recurrence presets and frequency-specific controls
 - `CalendarRecurringScopePrompt.tsx` — scope chooser (this/following/all) for recurring edits

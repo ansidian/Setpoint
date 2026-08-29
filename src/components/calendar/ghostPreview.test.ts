@@ -217,6 +217,7 @@ describe("calendar ghost previews", () => {
         title: event.title,
         conflicting: event.conflicting,
       }))).toEqual([
+        { title: "All day", conflicting: false },
         { title: "Before", conflicting: false },
         { title: "Conflict", conflicting: true },
         { title: "After", conflicting: false },
@@ -249,12 +250,42 @@ describe("calendar ghost previews", () => {
       expect(preview!.ghosts[0]!.scheduleContext).toEqual([]);
     });
 
-    it("does not flag a timed draft against an all-day event", () => {
+    it("keeps an all-day event as context without flagging a timed conflict", () => {
       const preview = buildEventGhostPreview({
         editor: timedEditor,
         events: [allDayEvent({ title: "All-day holiday" })],
       });
       expect(preview!.ghosts[0]!.conflictCount).toBe(0);
+      expect(preview!.ghosts[0]!.scheduleContext).toEqual([
+        expect.objectContaining({
+          title: "All-day holiday",
+          allDay: true,
+          startDate: "2026-04-20",
+          endDate: "2026-04-20",
+          conflicting: false,
+        }),
+      ]);
+    });
+
+    it("includes timed conflicts from later dates in a multi-day proposal", () => {
+      const preview = buildEventGhostPreview({
+        editor: {
+          ...timedEditor,
+          draft: {
+            ...timedEditor.draft,
+            endDate: "2026-04-21",
+            endTime: "10:00",
+          },
+        },
+        events: [
+          timedEvent({ title: "Second-day conflict", date: [2026, 3, 21], start: [9, 15], end: [9, 45] }),
+        ],
+      });
+
+      expect(preview!.ghosts[0]!.conflictCount).toBe(1);
+      expect(preview!.ghosts[0]!.scheduleContext).toEqual([
+        expect.objectContaining({ title: "Second-day conflict", conflicting: true }),
+      ]);
     });
 
     it("caps conflict titles at three while counting every overlap", () => {
@@ -275,20 +306,57 @@ describe("calendar ghost previews", () => {
     });
   });
 
-  describe("all-day conflict detection", () => {
-    it("flags an all-day draft overlapping an all-day event on the same day", () => {
+  describe("all-day schedule context", () => {
+    it("shows all-day and timed commitments without treating them as hard conflicts", () => {
       const preview = buildEventGhostPreview({
         editor: {
           ...timedEditor,
           draft: { ...timedEditor.draft, allDay: true },
         },
-        events: [allDayEvent({ title: "Conference" })],
+        events: [
+          allDayEvent({ title: "Conference" }),
+          timedEvent({ title: "Standup", start: [9, 0], end: [9, 30] }),
+        ],
       });
       expect(preview!.ghosts[0]!.allDay).toBe(true);
       expect(preview!.ghosts[0]!.startTime).toBeNull();
       expect(preview!.ghosts[0]!.endTime).toBeNull();
-      expect(preview!.ghosts[0]!.conflictCount).toBe(1);
-      expect(preview!.ghosts[0]!.conflictTitles).toEqual(["Conference"]);
+      expect(preview!.ghosts[0]!.conflictCount).toBe(0);
+      expect(preview!.ghosts[0]!.conflictTitles).toEqual([]);
+      expect(preview!.ghosts[0]!.scheduleContext).toEqual([
+        expect.objectContaining({
+          title: "Conference",
+          allDay: true,
+          startDate: "2026-04-20",
+          endDate: "2026-04-20",
+          conflicting: false,
+        }),
+        expect.objectContaining({ title: "Standup", allDay: false, conflicting: false }),
+      ]);
+    });
+
+    it("preserves the inclusive range of a multi-day all-day context item", () => {
+      const preview = buildEventGhostPreview({
+        editor: {
+          ...timedEditor,
+          draft: { ...timedEditor.draft, allDay: true, endDate: "2026-04-22" },
+        },
+        events: [
+          allDayEvent({
+            title: "Retreat",
+            startDate: [2026, 3, 20],
+            endDateExclusive: [2026, 3, 23],
+          }),
+        ],
+      });
+
+      expect(preview!.ghosts[0]!.scheduleContext).toEqual([
+        expect.objectContaining({
+          title: "Retreat",
+          startDate: "2026-04-20",
+          endDate: "2026-04-22",
+        }),
+      ]);
     });
   });
 

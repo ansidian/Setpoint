@@ -6,7 +6,7 @@ const TIME_12_RE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
 const SCHEDULE_CONTEXT_NEIGHBOR_GAP_MS = 90 * 60 * 1000;
 interface Placement { accountId?: string; calendarId?: string; allDay?: boolean; startDate?: string; endDate?: string; startTime?: string | null; endTime?: string | null; title?: string }
 export interface CalendarEventLike extends Placement { id?: unknown; originalStartTime?: string; startMs?: number; endMs?: number; isRecurring?: boolean; color?: string }
-export interface CalendarConflictDetail { id: string; title: string; startMs: number; endMs: number; allDay: boolean; color?: string }
+export interface CalendarConflictDetail { id: string; title: string; startMs: number; endMs: number; startDate: string; endDate: string; allDay: boolean; color?: string }
 export interface CalendarScheduleContextItem extends CalendarConflictDetail { conflicting: boolean }
 export interface Ghost extends Placement { id: string; kind: "event" | "deadline"; title: string; startDate: string; endDate: string; startMs?: number | null; endMs?: number | null; color?: string; dueDate?: string; dueTime?: string | null; dueMinutes?: number | null; lane: number; conflictCount: number; conflictTitles?: string[]; conflicts?: CalendarConflictDetail[]; scheduleContext?: CalendarScheduleContextItem[]; crowdedCount?: number; batch?: boolean; recurring?: boolean; recurrenceCue?: string }
 export interface GhostPreview { kind: string; targetDate: string | null; ghosts: Ghost[]; totalConflictCount?: number }
@@ -186,44 +186,55 @@ function sameEventIdentity(a?: CalendarEventLike | null, b?: CalendarEventLike |
   return aOriginal === bOriginal;
 }
 
+const pacificYmd = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function eventDateRange(event: CalendarEventLike) {
+  const startDate = pacificYmd.format(new Date(event.startMs!));
+  if (event.allDay) {
+    return {
+      startDate,
+      endDate: addDaysYmd(pacificYmd.format(new Date(event.endMs!)), -1),
+    };
+  }
+  const inclusiveEndMs = event.endMs! > event.startMs! ? event.endMs! - 1 : event.endMs!;
+  return {
+    startDate,
+    endDate: pacificYmd.format(new Date(inclusiveEndMs)),
+  };
+}
+
+function eventTouchesGhostDates(event: CalendarEventLike, ghost: Ghost) {
+  const range = eventDateRange(event);
+  return range.startDate <= ghost.endDate && range.endDate >= ghost.startDate;
+}
+
 function eventDetail(event: CalendarEventLike): CalendarConflictDetail {
+  const range = eventDateRange(event);
   return {
     id: String(event.id || `${event.startMs}-${event.endMs}-${event.title || ""}`),
     title: event.title || "(No title)",
     startMs: event.startMs!,
     endMs: event.endMs!,
+    ...range,
     allDay: !!event.allDay,
     color: event.color,
   };
 }
 
 function eventConflictCount(ghost: Ghost, events: CalendarEventLike[], editingEvent?: CalendarEventLike | null) {
+  if (ghost.allDay || ghost.startMs == null || ghost.endMs == null) {
+    return { count: 0, titles: [], details: [] };
+  }
   const conflicts: CalendarEventLike[] = [];
   for (const event of events || []) {
     if (!event?.startMs || !event?.endMs) continue;
     if (sameEventIdentity(event, editingEvent)) continue;
-
-    if (ghost.allDay) {
-      if (!event.allDay) continue;
-      const eventStart = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/Los_Angeles",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date(event.startMs));
-      const eventEndExclusive = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/Los_Angeles",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date(event.endMs));
-      const eventEnd = addDaysYmd(eventEndExclusive, -1);
-      if (ghost.startDate <= eventEnd && ghost.endDate >= eventStart) conflicts.push(event);
-      continue;
-    }
-
     if (event.allDay) continue;
-    if (ghost.startMs == null || ghost.endMs == null) continue;
     if (ghost.startMs < event.endMs && ghost.endMs > event.startMs) conflicts.push(event);
   }
   return {
@@ -238,34 +249,40 @@ function eventScheduleContext(
   events: CalendarEventLike[],
   editingEvent?: CalendarEventLike | null,
 ): CalendarScheduleContextItem[] {
-  if (ghost.allDay || ghost.startMs == null || ghost.endMs == null) return [];
   const dayStart = ymdToEpoch(ghost.startDate, "00:00");
-  const dayEnd = ymdToEpoch(addDaysYmd(ghost.startDate, 1), "00:00");
+  const dayEnd = ymdToEpoch(addDaysYmd(ghost.endDate, 1), "00:00");
   if (dayStart == null || dayEnd == null) return [];
 
-  const dayEvents = (events || []).filter((event) => (
-    !event.allDay
-    && !!event.startMs
+  const dateEvents = (events || []).filter((event) => (
+    !!event.startMs
     && !!event.endMs
     && !sameEventIdentity(event, editingEvent)
-    && event.startMs < dayEnd
-    && event.endMs > dayStart
+    && eventTouchesGhostDates(event, ghost)
   ));
-  const conflicts = dayEvents.filter((event) => ghost.startMs! < event.endMs! && ghost.endMs! > event.startMs!);
-  const before = dayEvents
+
+  if (ghost.allDay || ghost.startMs == null || ghost.endMs == null) {
+    return dateEvents
+      .map((event) => ({ ...eventDetail(event), conflicting: false }))
+      .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.startMs - b.startMs || a.endMs - b.endMs);
+  }
+
+  const timedEvents = dateEvents.filter((event) => !event.allDay && event.startMs! < dayEnd && event.endMs! > dayStart);
+  const allDayEvents = dateEvents.filter((event) => event.allDay);
+  const conflicts = timedEvents.filter((event) => ghost.startMs! < event.endMs! && ghost.endMs! > event.startMs!);
+  const before = timedEvents
     .filter((event) => (
       event.endMs! <= ghost.startMs!
       && ghost.startMs! - event.endMs! <= SCHEDULE_CONTEXT_NEIGHBOR_GAP_MS
     ))
     .sort((a, b) => b.endMs! - a.endMs!)[0];
-  const after = dayEvents
+  const after = timedEvents
     .filter((event) => (
       event.startMs! >= ghost.endMs!
       && event.startMs! - ghost.endMs! <= SCHEDULE_CONTEXT_NEIGHBOR_GAP_MS
     ))
     .sort((a, b) => a.startMs! - b.startMs!)[0];
   const conflictKeys = new Set(conflicts.map((event) => `${event.id || ""}-${event.startMs}`));
-  const context = [before, ...conflicts, after].filter((event): event is CalendarEventLike => !!event);
+  const context = [...allDayEvents, before, ...conflicts, after].filter((event): event is CalendarEventLike => !!event);
   const seen = new Set<string>();
 
   return context
@@ -279,7 +296,7 @@ function eventScheduleContext(
       ...eventDetail(event),
       conflicting: conflictKeys.has(`${event.id || ""}-${event.startMs}`),
     }))
-    .sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+    .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.startMs - b.startMs || a.endMs - b.endMs);
 }
 
 export function buildEventGhostPreview({ editor, events }: { editor?: EventEditorLike | null; events?: CalendarEventLike[] | null }): GhostPreview | null {

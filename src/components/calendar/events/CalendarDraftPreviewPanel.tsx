@@ -15,6 +15,8 @@ export interface CalendarDraftGhost {
   conflicts?: CalendarConflictDetail[];
   scheduleContext?: CalendarScheduleContextItem[];
   title?: string;
+  startDate?: string;
+  endDate?: string;
   startMs?: number | null;
   endMs?: number | null;
   allDay?: boolean;
