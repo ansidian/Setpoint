@@ -351,11 +351,14 @@
   bottom: 0;
 }
 
+.calendar-conflict-timeline__lanes {
+  position: absolute;
+  inset: 0 8px 0 48px;
+}
+
 .calendar-conflict-timeline__block {
   position: absolute;
-  left: 48px;
-  right: 8px;
-  min-height: 42px;
+  min-height: 54px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -381,15 +384,17 @@
   transform: translateY(-50%);
 }
 
+.calendar-conflict-timeline__block:not([data-lane="0"])::before {
+  display: none;
+}
+
 .calendar-conflict-timeline__block--conflict {
-  right: calc(50% + 4px);
   border-color: color-mix(in srgb, var(--sp-rose) 22%, transparent);
   background: color-mix(in srgb, var(--sp-rose) 7%, #20202d);
 }
 
 .calendar-conflict-timeline__block--draft {
-  right: 8px;
-  left: calc(50% + 4px);
+  min-height: 66px;
   z-index: 2;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -400,8 +405,20 @@
   box-shadow: inset 2px 0 var(--ea-accent);
 }
 
-.calendar-conflict-timeline__block--draft-clear {
-  left: 48px;
+.calendar-conflict-timeline__block--draft[data-compact="true"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.calendar-conflict-timeline__block--draft[data-compact="true"] .calendar-conflict-timeline__time,
+.calendar-conflict-timeline__block--draft[data-compact="true"] .calendar-conflict-timeline__name {
+  width: 100%;
+  margin-top: 0;
+}
+
+.calendar-conflict-timeline__block:not(.calendar-conflict-timeline__block--draft)[data-compact="true"] .calendar-conflict-timeline__name {
+  -webkit-line-clamp: 1;
 }
 
 .calendar-conflict-timeline__block--draft::before {
@@ -423,11 +440,17 @@
 }
 
 .calendar-conflict-timeline__time {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
   color: rgba(166, 173, 200, 0.74);
   font-size: 9px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   line-height: 1.25;
+}
+
+.calendar-conflict-timeline__time-part {
   white-space: nowrap;
 }
 
