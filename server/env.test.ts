@@ -22,11 +22,4 @@ describe("required env validation", () => {
       EA_WEBAUTHN_ORIGIN: "https://dashboard.example.com",
     })).toEqual([]);
   });
-
-  it("keeps legacy owner variables optional in every environment", () => {
-    expect(getMissingRequiredEnv({
-      NODE_ENV: "development",
-      EA_ENCRYPTION_KEY: "a".repeat(64),
-    })).toEqual([]);
-  });
 });

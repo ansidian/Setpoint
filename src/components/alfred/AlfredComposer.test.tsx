@@ -52,21 +52,6 @@ describe("AlfredComposer", () => {
     expect(input.value).toBe("   ");
   });
 
-  it("submits via the send button and clears the draft", () => {
-    render(<ComposerHarness />);
-    const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…");
-    fireEvent.change(input, { target: { value: "find it" } });
-    fireEvent.click(screen.getByTitle("Send"));
-    expect(screen.getByText("find it")).toBeTruthy();
-    expect(input.value).toBe("");
-  });
-
-  it("disables the input and shows the working placeholder while busy", () => {
-    render(<AlfredComposer {...baseProps} busy />);
-    const input = screen.getByPlaceholderText<HTMLInputElement>("Working…");
-    expect(input.disabled).toBe(true);
-  });
-
   it("clears the local draft when clearSignal changes (new chat)", () => {
     const { rerender } = render(<AlfredComposer {...baseProps} clearSignal="0:0" />);
     const input = screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…");

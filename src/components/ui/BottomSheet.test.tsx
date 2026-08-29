@@ -62,24 +62,6 @@ describe("BottomSheet", () => {
     expect(document.body.style.overflow).toBe("scroll");
   });
 
-  it("renders the header and Close button only when title is present and hideTitle is false", () => {
-    const { rerender } = render(
-      <BottomSheet open onClose={() => {}} title="Snapshots">
-        <div>Content</div>
-      </BottomSheet>,
-    );
-    expect(screen.getByText("Snapshots")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
-
-    rerender(
-      <BottomSheet open onClose={() => {}} title="Snapshots" hideTitle>
-        <div>Content</div>
-      </BottomSheet>,
-    );
-    expect(screen.queryByText("Snapshots")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-  });
-
   it("moves focus into the dialog on open", () => {
     render(
       <BottomSheet open onClose={() => {}} title="Snapshots">

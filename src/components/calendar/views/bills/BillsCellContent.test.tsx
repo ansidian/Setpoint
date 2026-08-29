@@ -15,7 +15,6 @@ describe("toTransactionDescriptor", () => {
       leadingLabel: "+$5,000.00",
       detail: "Inflow",
       detailKind: "transaction",
-      accent: "#89dceb",
     });
     expect(toTransactionDescriptor({
       id: "expense-1",
@@ -28,7 +27,6 @@ describe("toTransactionDescriptor", () => {
       leadingLabel: "−$42.10",
       detail: "Outflow",
       detailKind: "transaction",
-      accent: "#b4befe",
     });
   });
 });

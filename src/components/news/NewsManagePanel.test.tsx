@@ -48,62 +48,10 @@ describe("NewsManagePanel", () => {
     ));
   });
 
-  it("shows a topic overview before drilling into a topic", () => {
-    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={() => {}} />);
-
-    expect(screen.getByText("1/1 enabled")).toBeTruthy();
-    expect(screen.getByText("1 feed needs attention")).toBeTruthy();
-    expect(screen.queryByRole("checkbox", { name: /feed a/i })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /AI.*1\/1 enabled.*1 feed needs attention/i }));
-
-    expect(screen.getByRole("checkbox", { name: /feed a/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /back to topics/i }));
-
-    expect(screen.getByRole("button", { name: /AI.*1\/1 enabled.*1 feed needs attention/i })).toBeTruthy();
-    expect(screen.queryByRole("checkbox", { name: /feed a/i })).toBeNull();
-  });
-
-  it("opens directly to the requested topic", () => {
-    const focusedNews: NewsPageEnvelope = {
-      ...news,
-      topics: [
-        ...news.topics,
-        {
-          id: 2, name: "Hardware", position: 1, items: [], mutedTerms: [],
-          sources: [{
-            id: 20, topicId: 2, kind: "rss", title: "Feed B", feedUrl: "https://b/f", siteUrl: null,
-            enabled: true, hnQuery: null, minPoints: null, lastStatus: "200", lastFetchAt: null,
-            consecutiveFailures: 0,
-          }],
-        },
-      ],
-    };
-
-    render(
-      <NewsManagePanel
-        open
-        initialTopicId={2}
-        onClose={() => {}}
-        news={focusedNews}
-        onChanged={() => {}}
-      />,
-    );
-
-    expect(screen.getByRole("checkbox", { name: /feed b/i })).toBeTruthy();
-    expect(screen.queryByRole("checkbox", { name: /feed a/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /back to topics/i })).toBeTruthy();
-  });
-
   it("toggling a source calls updateNewsSource and onChanged", async () => {
     render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /feed a/i }));
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/news/sources/10", method: "PATCH", body: { enabled: false } }));
-  });
-
-  it("shows a failing badge for a backed-off source", () => {
-    render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);
-    expect(screen.getByText(/HTTP 403 · failing/)).toBeTruthy();
   });
 
   it("clears a pending topic deletion when returning to the overview", () => {

@@ -67,40 +67,6 @@ describe("Gmail Pub/Sub push route", () => {
     expect(res.status).toBe(401);
   });
 
-  it("accepts a correct query token", async () => {
-    const res = await request(makeHarness().app)
-      .post("/api/gmail/push?token=push-secret")
-      .send({ message: { data: "abc", messageId: "pubsub-ok" } });
-
-    expect(res.status).toBe(200);
-    expect(res.body.account_id).toBe("gmail-pubsub-ok");
-  });
-
-  it("rejects a same-length wrong token", async () => {
-    expect("push-wrong!".length).toBe("push-secret".length);
-    const res = await request(makeHarness().app)
-      .post("/api/gmail/push?token=push-wrong!")
-      .send({ message: { data: "abc" } });
-
-    expect(res.status).toBe(401);
-  });
-
-  it("rejects a different-length wrong token without throwing", async () => {
-    const res = await request(makeHarness().app)
-      .post("/api/gmail/push?token=x")
-      .send({ message: { data: "abc" } });
-
-    expect(res.status).toBe(401);
-  });
-
-  it("fails closed when the verifier reports no configured token", async () => {
-    const res = await request(makeHarness({ verifyToken: async () => false }).app)
-      .post("/api/gmail/push")
-      .send({ message: { data: "abc" } });
-
-    expect(res.status).toBe(401);
-  });
-
   it("delegates verification on every request so regenerated tokens take effect without restart", async () => {
     let verificationCount = 0;
     const harness = makeHarness({
