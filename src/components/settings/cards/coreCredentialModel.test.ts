@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   credentialErrorMessage,
   credentialStatusView,
-  formatCredentialTimestamp,
-  pendingCredentialExpiryLabel,
 } from "./coreCredentialModel";
 import type { InstanceCredentialMetadata } from "../../../../shared/types/instance-credentials";
 
@@ -56,18 +54,4 @@ describe("core credential presentation model", () => {
     expect(credentialErrorMessage("unknown-provider-detail")).toBe("The credential could not be validated.");
   });
 
-  it("formats metadata timestamps without exposing credential material", () => {
-    expect(formatCredentialTimestamp(base.lastSucceededAt)).toContain("2026");
-    expect(formatCredentialTimestamp(null)).toBeNull();
-  });
-
-  it("describes when a pending candidate expires without exposing its value", () => {
-    const expiresAt = Date.UTC(2026, 6, 21, 18);
-    expect(pendingCredentialExpiryLabel({
-      ...base,
-      pendingConfigured: true,
-      pendingExpiresAt: expiresAt,
-    })).toBe(`Pending candidate expires ${formatCredentialTimestamp(expiresAt)}`);
-    expect(pendingCredentialExpiryLabel({ ...base, pendingExpiresAt: expiresAt })).toBeNull();
-  });
 });

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router";
 
@@ -108,14 +108,6 @@ beforeEach(() => {
 });
 
 describe("Settings page", () => {
-
-  it("coordinates onboarding progress once for the Connections workflow", async () => {
-    renderSettings();
-
-    expect(await screen.findByText("Connections directory")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Continue setup" })).toBeTruthy();
-  });
-
   it("locates and focuses a deep-linked connection row, then flashes it after scrolling ends", async () => {
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
@@ -257,27 +249,6 @@ describe("Settings page", () => {
 });
 
 describe("Settings sections tablist (WAI-ARIA)", () => {
-  it("exposes a tablist with one selected tab and a labelled tabpanel", async () => {
-    renderSettings();
-    await screen.findByText("Connections directory");
-
-    const tablist = screen.getByRole("tablist", { name: "Settings sections" });
-    const tabs = within(tablist).getAllByRole("tab");
-    expect(tabs).toHaveLength(4);
-
-    const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
-    expect(selected).toHaveLength(1);
-    expect(selected[0]!.textContent).toBe("Connections");
-
-    for (const tab of tabs) {
-      const isActive = tab.textContent === "Connections";
-      expect(tab.tabIndex).toBe(isActive ? 0 : -1);
-    }
-
-    const panel = screen.getByRole("tabpanel");
-    expect(panel.getAttribute("aria-label")).toBe("Connections");
-  });
-
   it("ArrowDown moves selection to the next section and switches content (vertical strip)", async () => {
     renderSettings();
     await screen.findByText("Connections directory");

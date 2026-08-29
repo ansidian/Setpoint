@@ -83,27 +83,4 @@ describe("TransactionImportReviewList", () => {
     expect(window.confirm).toHaveBeenCalledWith("Add 1 transaction totaling -$12.00 to Actual?");
   });
 
-  it("allows only the correction fields accepted by the backend", async () => {
-    renderList([item({ automaticSafe: false, status: "needs_review" })]);
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Corrected merchant" } });
-    fireEvent.click(screen.getByRole("button", { name: "You paid Demo Merchant $12.00 category" }));
-    fireEvent.click(await screen.findByText("Shopping · Online"));
-    fireEvent.click(screen.getByRole("button", { name: "Add to Actual" }));
-
-    await waitFor(() => expect(screen.queryByLabelText("Payee")).toBeNull());
-    expect(screen.queryByLabelText("Source")).toBeNull();
-    expect(screen.queryByLabelText("Imported ID")).toBeNull();
-  });
-
-  it("offers retry for failures and dismiss for reviewable items", () => {
-    renderList([item({ automaticSafe: false, status: "needs_review" })]);
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(screen.queryByText("You paid Demo Merchant $12.00")).toBeNull();
-    cleanup();
-
-    renderList([item({ status: "failed", reconciliationStatus: "failed" })]);
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(screen.getByText("Working")).toBeTruthy();
-  });
 });

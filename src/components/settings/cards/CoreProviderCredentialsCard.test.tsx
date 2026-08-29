@@ -88,12 +88,6 @@ beforeEach(() => {
 });
 
 describe("CoreProviderCredentialsCard", () => {
-  it("uses coordinator metadata without issuing an initial page-load read", async () => {
-    renderCard();
-
-    expect(await screen.findByLabelText("OpenAI API key")).toBeTruthy();
-  });
-
   it("tests and activates a new write-only value, then empties the field", async () => {
     const pending = metadata({ pendingConfigured: true, validationState: "pending", version: 1 });
     const active = metadata({

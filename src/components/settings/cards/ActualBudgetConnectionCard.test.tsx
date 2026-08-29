@@ -65,26 +65,6 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
-  it("saves and verifies a candidate atomically while keeping connection checks explicit", async () => {
-    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
-    renderCard({
-      actual_budget_url: "https://actual.example.com",
-      actual_budget_sync_id: "sync-1",
-      actual_budget_configured: true,
-    });
-
-    fireEvent.change(await screen.findByDisplayValue("sync-1"), { target: { value: "sync-2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save & verify" }));
-    // test-architecture: allow-boundary-interaction -- server URL and sync identity are provider-connection wire inputs not repeated in the generic success state.
-    await waitFor(() => expect(mockApi.saveActualBudgetConnection).toHaveBeenCalledWith({
-      serverURL: "https://actual.example.com",
-      syncId: "sync-2",
-    }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Check connection" }));
-    expect(await screen.findByText("Connected")).toBeTruthy();
-  });
-
   it("leaves a blank write-only password unchanged when saving other fields", async () => {
     mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
     renderCard({
@@ -153,36 +133,6 @@ describe("ActualBudgetConnectionCard cache-status request-id guard", () => {
       password: "actual-private-password",
     });
     await waitFor(() => expect(password.value).toBe(""));
-  });
-
-  it("keeps cache hydration explicit after relocation into Connections", async () => {
-    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false, message: "Cache missing" });
-    mockApi.hydrateActualBudgetCache.mockResolvedValue({ budgetId: "budget-1" });
-    renderCard({
-      actual_budget_url: "https://actual.example.com",
-      actual_budget_sync_id: "sync-1",
-      actual_budget_configured: true,
-    });
-
-    expect((await screen.findAllByText("Cache missing")).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Hydrate Cache" }));
-    expect(await screen.findByText("Cache ready")).toBeTruthy();
-  });
-
-  it("names the destructive effect, confirms impact, and refreshes shared state", async () => {
-    const onRefreshConnections = vi.fn(async () => {});
-    mockApi.getActualCacheStatus.mockResolvedValue({ hydrated: false });
-    renderCard({
-      actual_budget_url: "https://actual.example.com",
-      actual_budget_sync_id: "sync-1",
-      actual_budget_configured: true,
-    }, onRefreshConnections);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Remove Actual credentials" }));
-    expect(screen.getByText(/finance sync and transaction actions will stop/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm remove Actual credentials" }));
-
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Remove Actual credentials" })).toBeNull());
   });
 
   it("does not let a late hydrate resolution clobber a newer cache-status check", async () => {

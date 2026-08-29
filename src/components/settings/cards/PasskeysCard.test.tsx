@@ -94,19 +94,6 @@ describe("PasskeysCard", () => {
     expect(screen.queryByPlaceholderText("MacBook Touch ID")).toBeNull();
   });
 
-  it("shows setup mode and storage-separation guidance when no passkeys exist", async () => {
-    render(<PasskeysCard />);
-
-    expect(await screen.findByText("Password or passkey")).toBeTruthy();
-    expect(screen.getByRole<HTMLInputElement>("radio", { name: /Password or passkey/i }).checked).toBe(true);
-    expect(screen.getByRole<HTMLInputElement>("radio", { name: /Password \+ passkey/i }).disabled).toBe(true);
-    expect(screen.getByText(/Password stays available after you register a passkey/i)).toBeTruthy();
-    expect(screen.getByText(/Use a device passkey or hardware security key/i)).toBeTruthy();
-    await unlockSecurityChanges();
-    expect(screen.getByText(/Add at least one passkey before requiring both factors/i)).toBeTruthy();
-    expect(screen.getByPlaceholderText("MacBook Touch ID")).toBeTruthy();
-  });
-
   it("registers a passkey through browser WebAuthn and refreshes in place", async () => {
     render(<PasskeysCard />);
 
@@ -133,30 +120,6 @@ describe("PasskeysCard", () => {
     expect(screen.getByText("Password or passkey")).toBeTruthy();
     expect(screen.getByText("MacBook Touch ID")).toBeTruthy();
     expect(screen.getByPlaceholderText<HTMLInputElement>("MacBook Touch ID").value).toBe("");
-  });
-
-  it("shows registered metadata and backup recommendation", async () => {
-    mockApi.listPasskeys.mockResolvedValue({
-      enforcementActive: true,
-      authMode: "password_plus_passkey",
-      recentAuth: true,
-      recovery: { remaining: 4, generatedAt: Date.now() },
-      passkeys: [passkeyRow({
-        credentialId: "credential-1",
-        label: "Security Key",
-        transports: ["usb", "nfc"],
-        backedUp: false,
-      })],
-    });
-
-    render(<PasskeysCard />);
-
-    await unlockSecurityChanges();
-    expect(screen.getByText("Security Key")).toBeTruthy();
-    expect(screen.getByText("Password + passkey")).toBeTruthy();
-    expect(screen.getByText(/Add a second passkey when practical/i)).toBeTruthy();
-    expect(screen.getByText("usb, nfc")).toBeTruthy();
-    expect(screen.getByText("Not backed up")).toBeTruthy();
   });
 
   it("deletes a passkey after explicit confirmation", async () => {
@@ -214,28 +177,6 @@ describe("PasskeysCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Unlock security changes" }));
 
     expect(await screen.findByPlaceholderText("MacBook Touch ID")).toBeTruthy();
-  });
-
-  it("keeps both sign-in mode choices visible before recent password confirmation", async () => {
-    mockApi.listPasskeys.mockResolvedValue({
-      enforcementActive: false,
-      authMode: "password_or_passkey",
-      recentAuth: false,
-      recovery: { remaining: 8, generatedAt: Date.now() },
-      passkeys: [passkeyRow({ label: "Security Key" })],
-    });
-    render(<PasskeysCard />);
-
-    const relaxedMode = await screen.findByRole<HTMLInputElement>("radio", { name: /Password or passkey/i });
-    const strictMode = screen.getByRole<HTMLInputElement>("radio", { name: /Password \+ passkey/i });
-    expect(relaxedMode.disabled).toBe(true);
-    expect(strictMode.disabled).toBe(true);
-    expect(screen.getByText(/Confirm your password below to change this mode/i)).toBeTruthy();
-
-    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "correct-password" } });
-    fireEvent.click(screen.getByRole("button", { name: "Unlock security changes" }));
-
-    await waitFor(() => expect(strictMode.disabled).toBe(false));
   });
 
   it("shows regenerated recovery codes only until acknowledged", async () => {

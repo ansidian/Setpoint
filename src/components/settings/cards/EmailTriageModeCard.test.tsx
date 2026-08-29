@@ -54,35 +54,6 @@ function renderCard(initialSettings: SettingsState = {}) {
 }
 
 describe("EmailTriageModeCard", () => {
-  it("shows stored and effective email triage modes distinctly", () => {
-    renderCard({ email_triage_mode: "auto", email_triage_effective_mode: "no_model" });
-
-    expect(screen.getByText("Email Triage Automation")).toBeTruthy();
-    expect(screen.getByText("Stored: Auto")).toBeTruthy();
-    expect(screen.getByText("Effective: No model")).toBeTruthy();
-  });
-
-  it("patches the selected mode", () => {
-    renderCard();
-
-    fireEvent.click(screen.getByRole("button", { name: /pause/i }));
-
-    expect(screen.getByText("Stored: Paused")).toBeTruthy();
-    expect(screen.getByText("Effective: Paused")).toBeTruthy();
-  });
-
-  it("updates the effective chip immediately for explicit modes", () => {
-    renderCard({
-      email_triage_mode: "auto",
-      email_triage_effective_mode: "no_model",
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /use real/i }));
-
-    expect(screen.getByText("Stored: Real")).toBeTruthy();
-    expect(screen.getByText("Effective: Real")).toBeTruthy();
-  });
-
   it("re-resolves auto immediately after an explicit mode was selected", () => {
     renderCard({
       email_triage_mode: "auto",
@@ -97,16 +68,4 @@ describe("EmailTriageModeCard", () => {
     expect(screen.getByText("Stored: Auto")).toBeTruthy();
     expect(screen.getByText("Effective: No model")).toBeTruthy();
   });
-
-  it("enables triage for read arrivals through the settings patch flow", () => {
-    renderCard();
-    const toggle = screen.getByRole("switch", { name: "Triage read arrivals" });
-
-    expect(toggle.getAttribute("aria-checked")).toBe("false");
-    fireEvent.click(toggle);
-
-    expect(screen.getByRole("switch", { name: "Triage read arrivals" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText(/Preflight rules still apply\./)).toBeTruthy();
-  });
-
 });

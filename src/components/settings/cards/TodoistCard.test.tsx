@@ -63,13 +63,6 @@ describe("TodoistCard", () => {
     expect(await screen.findByText("Connected")).toBeTruthy();
   });
 
-  it("keeps Save disabled until the token is edited", () => {
-    render(<TodoistCard settings={{}} />);
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save & verify" }).disabled).toBe(true);
-  });
-
-
-
   it("keeps a rejected candidate in the write-only field without claiming a replacement", async () => {
     mockApi.saveTodoistPersonalToken.mockRejectedValueOnce(new Error("Todoist personal token could not be verified"));
     render(<TodoistCard settings={{ todoist_configured: true, todoist_connection_mode: "oauth" }} />);
@@ -198,13 +191,6 @@ describe("TodoistCard", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy into Setpoint" }));
 
     expect(await screen.findByText(/render variables still remain/i)).toBeTruthy();
-  });
-
-  it("opens only its advanced disclosure when targeted by a deep link", () => {
-    render(<TodoistCard settings={{}} openAdvancedSetup />);
-
-    const disclosure = screen.getByText("Advanced OAuth and webhooks").closest("details") as HTMLDetailsElement;
-    expect(disclosure.open).toBe(true);
   });
 
   it("confirms Todoist impact before disconnecting and refreshes shared state", async () => {

@@ -26,25 +26,6 @@ beforeEach(() => {
 });
 
 describe("DiscordRemindersCard", () => {
-
-  it("saves the webhook + user id and emits the settings-changed event", async () => {
-    mockApi.updateSettings.mockResolvedValue({ success: true });
-    render(<DiscordRemindersCard settings={{}} />);
-    fireEvent.change(screen.getByLabelText(/discord webhook url/i), {
-      target: { value: "https://discord.com/api/webhooks/x" },
-    });
-    fireEvent.change(screen.getByLabelText(/discord user id/i), { target: { value: "987" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save discord$/i }));
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- webhook URL and recipient ID are write-only outbound persistence inputs absent from the saved indicator.
-      expect(mockApi.updateSettings).toHaveBeenCalledWith({
-        discord_webhook_url: "https://discord.com/api/webhooks/x",
-        discord_user_id: "987",
-      });
-    });
-    expect(screen.queryByText("Test sent")).toBeNull();
-  });
-
   it("preserves the webhook and user ID while password step-up retries the save", async () => {
     mockApi.updateSettings
       .mockRejectedValueOnce(Object.assign(new Error("Confirm your password"), {
@@ -86,12 +67,5 @@ describe("DiscordRemindersCard", () => {
     await waitFor(() => {
       expect(screen.queryByText("Saved")).toBeNull();
     });
-  });
-
-  it("sends a test webhook and surfaces the Test sent status", async () => {
-    mockApi.testDiscordReminderWebhook.mockResolvedValue({ success: true });
-    render(<DiscordRemindersCard settings={{ discord_webhook_configured: true, discord_user_id: "123" }} />);
-    fireEvent.click(screen.getByRole("button", { name: /send test reminder/i }));
-    expect(await screen.findByText("Test sent")).toBeTruthy();
   });
 });

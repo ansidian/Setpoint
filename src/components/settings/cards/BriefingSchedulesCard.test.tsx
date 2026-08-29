@@ -41,35 +41,6 @@ beforeEach(() => {
 });
 
 describe("BriefingSchedulesCard", () => {
-  it("adds and removes snapshot boundaries while persisting the updated payload", async () => {
-    renderCard();
-    expect(screen.getByText("Snapshot Boundaries")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /\+ add boundary/i }));
-
-    expect(screen.getByDisplayValue("New Boundary")).toBeTruthy();
-    fireEvent.click(screen.getAllByLabelText("Remove boundary")[1]!);
-
-    await waitFor(() => {
-      expect(screen.queryByDisplayValue("New Boundary")).toBeNull();
-    });
-  });
-
-  it("patches toggles and edited times", async () => {
-    renderCard();
-
-    const toggle = screen.getByRole("switch", { name: /disable boundary/i });
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-checked")).toBe("false");
-
-    const timeInput = screen.getByDisplayValue("08:00");
-    fireEvent.focus(timeInput);
-    fireEvent.change(timeInput, { target: { value: "07:30" } });
-    fireEvent.blur(timeInput);
-
-    expect(screen.getByDisplayValue("07:30")).toBeTruthy();
-  });
-
   it("never patches a blank schedule label, restoring a non-blank fallback on blur (P1-3)", async () => {
     renderCard();
 

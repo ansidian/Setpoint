@@ -480,6 +480,7 @@ describe("calendar event routes", () => {
       .query({ q: "c&c collision" });
 
     expect(homeResponse.status).toBe(200);
+    // test-architecture: allow-boundary-interaction -- the selected Home bias is an outbound Google Places request option; the route response contains only provider results, so no returned or durable state can prove which coordinates were forwarded.
     expect(placesProvider.suggestGooglePlaces).toHaveBeenNthCalledWith(1, "c&c collision", {
       sessionToken: undefined,
       lat: 34.0953,
@@ -496,6 +497,7 @@ describe("calendar event routes", () => {
       .query({ q: "c&c collision" });
 
     expect(weatherResponse.status).toBe(200);
+    // test-architecture: allow-boundary-interaction -- the Weather fallback bias is an outbound Google Places request option; the route response contains only provider results, so no returned or durable state can prove the fallback coordinates were forwarded.
     expect(placesProvider.suggestGooglePlaces).toHaveBeenNthCalledWith(2, "c&c collision", {
       sessionToken: undefined,
       lat: 34.0522,

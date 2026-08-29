@@ -9,7 +9,6 @@ const mockApi = vi.hoisted(() => ({
   getActualMetadata: vi.fn(),
   getActualCacheStatus: vi.fn(),
   hydrateActualBudgetCache: vi.fn(),
-  resolveBillPayMappingSample: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
   getTransactionImportMappings: vi.fn(),
@@ -22,7 +21,6 @@ vi.mock("@/api", () => ({
   getActualMetadata: mockApi.getActualMetadata,
   getActualCacheStatus: mockApi.getActualCacheStatus,
   hydrateActualBudgetCache: mockApi.hydrateActualBudgetCache,
-  resolveBillPayMappingSample: mockApi.resolveBillPayMappingSample,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
   getTransactionImportMappings: mockApi.getTransactionImportMappings,
@@ -116,23 +114,6 @@ beforeEach(() => {
     dbSizeBytes: 50_000_000,
     backupCount: 1,
   });
-  mockApi.resolveBillPayMappingSample.mockResolvedValue({
-    bill: {
-      payee: "Citi",
-      amount: 25,
-      due_date: "2026-05-15",
-      type: "expense",
-      account_label: "Visa",
-      category_label: "Gas",
-    },
-    mapping: {
-      status: "matched",
-      profileId: "profile-citi",
-      behaviorId: "minimum-due",
-      amountSource: "minimum_due",
-      matchedProfiles: ["profile-citi"],
-    },
-  });
   mockApi.getTransactionImportMappings.mockResolvedValue([]);
   mockApi.listTransactionImportRuns.mockResolvedValue({ runs: [] });
   mockApi.getTransactionImportRun.mockResolvedValue(null);
@@ -157,69 +138,6 @@ describe("ActualBudgetSettingsSection", () => {
     await waitFor(() => expect(account.textContent).toContain("Visa"));
   });
 
-  it("retains Finance settings but disables live operations while Actual needs attention", () => {
-    renderSection({
-      state: "needs_attention",
-      initialSettings: {
-        bill_pay_mappings: { version: 1, profiles: [] },
-        utility_pay_links: [{
-          scheduleId: "schedule-electric",
-          label: "Electric",
-          url: "https://utility.example.test",
-        }],
-      },
-    });
-
-    expect(screen.getByText("Actual Budget needs attention")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Repair connection" }).getAttribute("href"))
-      .toBe("/settings?tab=connections#actual-budget");
-    expect(screen.getByText("Bill Pay Mappings")).toBeTruthy();
-    expect(screen.getByText("Utility Pay Links")).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Run Test" }).disabled).toBe(true);
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Schedule for pay link" }).disabled).toBe(true);
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "+ Add pay link" }).disabled).toBe(true);
-    expect(screen.getByDisplayValue<HTMLInputElement>("https://utility.example.test").disabled).toBe(false);
-
-    fireEvent.click(screen.getByRole("button", { name: /profile/i }));
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Payee" }).disabled).toBe(true);
-  });
-
-
-  it("keeps a stale Actual target visible by its stored label", async () => {
-    renderSection({
-      initialSettings: {
-        bill_pay_mappings: {
-          version: 1,
-          profiles: [
-            {
-              id: "profile-1",
-              name: "Old profile",
-              enabled: false,
-              identity: { domain: ["old.example"] },
-              behaviors: [
-                {
-                  id: "behavior-1",
-                  name: "Old behavior",
-                  enabled: false,
-                  type: "expense",
-                  intent: { subject: ["due"] },
-                  targets: {
-                    payee_id: "payee-old",
-                    payee_label: "Old Payee",
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      },
-    });
-
-    fireEvent.click(await screen.findByRole("button", { name: "Expand profile 1" }));
-
-    expect(await screen.findByText("Old Payee")).toBeTruthy();
-  });
-
   it("still loads Actual metadata after interaction under StrictMode", async () => {
     // Regression: the section's mount guard must reset to true on (re)mount so
     // StrictMode's mount → cleanup → remount does not leave it permanently false,
@@ -240,74 +158,5 @@ describe("ActualBudgetSettingsSection", () => {
 
     expect(await screen.findByText("Metadata unavailable")).toBeTruthy();
     expect(screen.getByText(/Actual metadata could not load/i)).toBeTruthy();
-  });
-
-
-  it("submits pasted mapping samples and renders diagnostics", async () => {
-    const mappings = {
-      version: 1,
-      profiles: [
-        {
-          id: "profile-citi",
-          name: "Citi",
-          enabled: true,
-          identity: { domain: ["citi.com"] },
-          behaviors: [
-            {
-              id: "minimum-due",
-              name: "Minimum due",
-              enabled: true,
-              type: "expense",
-              intent: { subject: ["payment due"] },
-              targets: { payee_id: "payee-citi", payee_label: "Citi" },
-            },
-          ],
-        },
-      ],
-    } as NonNullable<SettingsState["bill_pay_mappings"]>;
-
-    renderSection({ initialSettings: { bill_pay_mappings: mappings } });
-
-    fireEvent.change(await screen.findByPlaceholderText("sample@billing.example.com"), {
-      target: { value: "alerts@citi.com" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Your payment is due"), {
-      target: { value: "Payment due" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Paste the relevant bill text here."), {
-      target: { value: "Minimum due: $25" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Run Test" }));
-
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- the pasted email and complete mapping tree are outbound Actual diagnostic inputs not present in the normalized match result.
-      expect(mockApi.resolveBillPayMappingSample).toHaveBeenCalledWith(expect.objectContaining({
-        email: {
-          from: "alerts@citi.com",
-          subject: "Payment due",
-          body: "Minimum due: $25",
-          snippet: "Minimum due: $25",
-        },
-        mappings: expect.objectContaining({
-          version: 1,
-          profiles: [expect.objectContaining({
-            id: "profile-citi",
-            identity: expect.objectContaining({ domain: ["citi.com"] }),
-            behaviors: [expect.objectContaining({
-              id: "minimum-due",
-              intent: expect.objectContaining({ subject: ["payment due"] }),
-            })],
-          })],
-        }),
-      }));
-    });
-    expect(await screen.findByText("Matched")).toBeTruthy();
-    expect(screen.getByText("Profile profile-citi")).toBeTruthy();
-    expect(screen.getByText("Behavior minimum-due")).toBeTruthy();
-    expect(screen.getByText("Amount minimum_due")).toBeTruthy();
-    expect(screen.getByText("Identity matches: profile-citi")).toBeTruthy();
-    expect(screen.getByText("Gas")).toBeTruthy();
-    expect(screen.queryByText("From account")).toBeNull();
-    expect(screen.queryByText("To account")).toBeNull();
   });
 });

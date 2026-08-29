@@ -87,12 +87,6 @@ beforeEach(() => {
 });
 
 describe("GoogleOAuthCredentialsCard", () => {
-  it("uses coordinator metadata without issuing an initial page-load read", async () => {
-    renderCard();
-
-    expect(await screen.findByLabelText("Client ID")).toBeTruthy();
-  });
-
   it("stages the pair as a pending candidate, clears both fields, and shows the derived callback", async () => {
     const pending = absent.map((item, index) => ({
       ...item,

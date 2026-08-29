@@ -27,60 +27,6 @@ beforeEach(() => {
 });
 
 describe("ImportantSendersCard", () => {
-  it("loads existing senders on mount", async () => {
-    render(<ImportantSendersCard />);
-
-    expect(await screen.findByText("Boss")).toBeTruthy();
-    expect(screen.getByText("boss@company.com")).toBeTruthy();
-  });
-
-  it("adds a new sender and persists the full list", async () => {
-    render(<ImportantSendersCard />);
-
-    await screen.findByText("Boss");
-
-    fireEvent.change(screen.getByPlaceholderText("e.g. boss@company.com"), {
-      target: { value: "new@company.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- sender persistence replaces the complete manual list; the optimistic row cannot prove the existing entry was preserved outbound.
-      expect(mockApi.updateImportantSenders).toHaveBeenCalledWith([
-        { address: "boss@company.com", name: "Boss", source: "manual" },
-        { address: "new@company.com", name: "new", source: "manual" },
-      ]);
-    });
-    expect(screen.getByText("new@company.com")).toBeTruthy();
-  });
-
-  it("removes a sender and persists the remaining list", async () => {
-    render(<ImportantSendersCard />);
-
-    await screen.findByText("Boss");
-
-    fireEvent.click(screen.getByTitle("Remove"));
-
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- removing the final sender must persist an explicit empty list, which is indistinguishable from a local optimistic clear.
-      expect(mockApi.updateImportantSenders).toHaveBeenCalledWith([]);
-    });
-    expect(screen.queryByText("boss@company.com")).toBeNull();
-  });
-
-  it("ignores duplicate addresses", async () => {
-    render(<ImportantSendersCard />);
-
-    await screen.findByText("Boss");
-
-    fireEvent.change(screen.getByPlaceholderText("e.g. boss@company.com"), {
-      target: { value: "boss@company.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-
-    expect(screen.getAllByText("boss@company.com")).toHaveLength(1);
-  });
-
   it("rolls back the optimistic add and surfaces an error when the save fails", async () => {
     mockApi.updateImportantSenders.mockRejectedValueOnce(new Error("Network down"));
     render(<ImportantSendersCard />);

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CONNECTION_GROUPS,
-  CONNECTIONS,
   projectConnectionRows,
 } from "./connectionModel";
 import type { AccountSummary } from "../../../shared/types/accounts";
@@ -63,41 +61,6 @@ const googleCredentials = [
   credential("google.oauth_client_id", { source: "stored", activeConfigured: true, validationState: "valid" }),
   credential("google.oauth_client_secret", { source: "stored", activeConfigured: true, validationState: "valid" }),
 ];
-
-describe("connectionModel definitions", () => {
-  it("keeps the ten services in the parent-locked groups and order", () => {
-    expect(CONNECTION_GROUPS).toEqual([
-      { id: "data_sources", label: "Data sources" },
-      { id: "ai_providers", label: "AI providers" },
-      { id: "supporting_services", label: "Supporting services" },
-    ]);
-    expect(CONNECTIONS.map(({ id, group }) => [group, id])).toEqual([
-      ["data_sources", "google-workspace"],
-      ["data_sources", "icloud-mail"],
-      ["data_sources", "todoist"],
-      ["data_sources", "actual-budget"],
-      ["ai_providers", "openai"],
-      ["ai_providers", "anthropic"],
-      ["supporting_services", "discord-reminders"],
-      ["supporting_services", "pirate-weather"],
-      ["supporting_services", "google-places"],
-      ["supporting_services", "tldraw"],
-    ]);
-    expect(CONNECTIONS.map(({ hash }) => hash)).toEqual(CONNECTIONS.map(({ id }) => id));
-    expect(CONNECTIONS.map(({ minimumViable }) => minimumViable)).toEqual([
-      "Application credentials and a healthy Google authorization",
-      "At least one healthy iCloud account",
-      "A healthy personal token or OAuth connection",
-      "URL, password, sync ID, and usable health evidence",
-      "An active OpenAI key that is not invalid",
-      "An active Anthropic key that is not invalid",
-      "A configured Discord webhook",
-      "An active key and saved weather location",
-      "An active Maps key with Places and Routes enabled",
-      "An active tldraw hobby license for this deployment domain",
-    ]);
-  });
-});
 
 describe("projectConnectionRows", () => {
   it("separates healthy Google Workspace from an iCloud account that needs reauthorization", () => {

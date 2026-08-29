@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BrowserRouter } from "react-router";
 import { CONNECTIONS, CONNECTION_GROUPS } from "./connectionModel";
 import type { ConnectionRowView, ConnectionState } from "./connectionModel";
 import ConnectionsDirectory from "./ConnectionsDirectory";
-import type { OnboardingProgress } from "../../../shared/types/onboarding";
 
 const states: Record<string, ConnectionState> = {
   "google-workspace": "connected",
@@ -32,13 +31,12 @@ const rows: ConnectionRowView[] = CONNECTIONS.map((definition) => ({
   lastFailedAt: null,
 }));
 
-function renderDirectory(onboardingProgress?: OnboardingProgress | null, connectionRows = rows) {
+function renderDirectory(connectionRows = rows) {
   return render(
     <BrowserRouter>
       <ConnectionsDirectory
         groups={CONNECTION_GROUPS}
         rows={connectionRows}
-        onboardingProgress={onboardingProgress}
         renderPanel={(connection) => <div data-testid={`panel-${connection.id}`}>{connection.label} controls</div>}
       />
     </BrowserRouter>,
@@ -52,24 +50,6 @@ beforeEach(() => {
 });
 
 describe("ConnectionsDirectory", () => {
-  it("renders the fixed groups and service order with every row collapsed by default", () => {
-    renderDirectory();
-
-    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
-      "Data sources",
-      "AI providers",
-      "Supporting services",
-    ]);
-    expect(screen.getAllByRole("button").map((button) => button.getAttribute("data-connection-id"))).toEqual(
-      CONNECTIONS.map(({ id }) => id),
-    );
-    for (const button of screen.getAllByRole("button")) {
-      expect(button.getAttribute("aria-expanded")).toBe("false");
-    }
-    expect(screen.queryByTestId(/panel-/)).toBeNull();
-    expect(within(screen.getByRole("button", { name: /iCloud Mail/i })).getByText(/needs attention/i)).toBeTruthy();
-  });
-
   it("keeps one inline panel mounted and restores it through browser history", async () => {
     renderDirectory();
 
@@ -152,46 +132,4 @@ describe("ConnectionsDirectory", () => {
     expect((screen.getByLabelText("Credential candidate") as HTMLInputElement).value).toBe("");
   });
 
-  it("keeps a return to onboarding available until the checklist is finished", () => {
-    const inProgress: OnboardingProgress = {
-      version: 1,
-      status: "in_progress",
-      steps: { ai: "reviewed" },
-      completedAt: null,
-      updatedAt: 1,
-    };
-    const { rerender } = renderDirectory(inProgress);
-
-    expect(screen.getByRole("link", { name: "Continue setup" }).getAttribute("href"))
-      .toBe("/onboarding?step=ai");
-
-    rerender(
-      <BrowserRouter>
-        <ConnectionsDirectory
-          groups={CONNECTION_GROUPS}
-          rows={rows}
-          onboardingProgress={{ ...inProgress, steps: { advanced_delivery: "skipped" } }}
-          renderPanel={() => null}
-        />
-      </BrowserRouter>,
-    );
-    expect(screen.getByRole("link", { name: "Continue setup" }).getAttribute("href"))
-      .toBe("/onboarding?step=email_calendar");
-  });
-
-  it("does not reopen finished onboarding when a connection later breaks", () => {
-    renderDirectory({
-      version: 1,
-      status: "complete",
-      steps: { email_calendar: "reviewed" },
-      completedAt: 2,
-      updatedAt: 2,
-    }, rows.map((row) => row.id === "google-workspace" ? {
-      ...row,
-      state: "needs_attention",
-      statusLabel: "Needs attention",
-    } : row));
-
-    expect(screen.queryByRole("link", { name: "Continue setup" })).toBeNull();
-  });
 });

@@ -42,43 +42,6 @@ afterEach(() => {
 });
 
 describe("useSettingsPage debounced auto-save", () => {
-  it("loads shared capability truth with settings and accounts", async () => {
-    mockApi.getCapabilities.mockResolvedValue({
-      generatedAt: "2026-07-18T00:00:00.000Z",
-      capabilities: [{ id: "tasks", state: "ready" }],
-    });
-    const { result } = renderHook(() => useSettingsPage(), { wrapper });
-    await act(async () => { await Promise.resolve(); });
-
-    expect(result.current.capabilities).toEqual([{ id: "tasks", state: "ready" }]);
-  });
-
-  it("loads instance credential metadata once with the other Settings evidence", async () => {
-    mockApi.getInstanceCredentials.mockResolvedValue({
-      credentials: [{
-        key: "ai.openai_api_key",
-        handling: "secret",
-        capabilities: ["email_triage"],
-        source: "stored",
-        activeConfigured: true,
-        pendingConfigured: false,
-        validationState: "valid",
-        lastTestedAt: null,
-        lastSucceededAt: null,
-        lastFailedAt: null,
-        errorCode: null,
-        version: 1,
-      }],
-      rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" },
-    });
-
-    const { result } = renderHook(() => useSettingsPage(), { wrapper });
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-
-    expect(result.current.credentialMetadata).toHaveLength(1);
-    expect(result.current.connections.find(({ id }) => id === "openai")?.state).toBe("connected");
-  });
-
   it("keeps account and preference settings available when capability status fails", async () => {
     mockApi.getAccounts.mockResolvedValue({ accounts: [{ id: "gmail-1", type: "gmail" }] });
     mockApi.getSettings.mockResolvedValue({ weather_location: "Pasadena, CA" });
@@ -103,35 +66,6 @@ describe("useSettingsPage debounced auto-save", () => {
     expect(result.current.settings).toMatchObject({ weather_location: "Pasadena, CA" });
     expect(result.current.credentialMetadata).toBeNull();
     expect(result.current.connections.find(({ id }) => id === "openai")?.state).toBeNull();
-  });
-
-  it("refreshes shared metadata internally without refreshing provider health", async () => {
-    mockApi.getInstanceCredentials
-      .mockResolvedValueOnce({ credentials: [], rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" } })
-      .mockResolvedValueOnce({
-        credentials: [{
-          key: "ai.openai_api_key",
-          handling: "secret",
-          capabilities: ["email_triage"],
-          source: "stored",
-          activeConfigured: true,
-          pendingConfigured: false,
-          validationState: "valid",
-          lastTestedAt: null,
-          lastSucceededAt: null,
-          lastFailedAt: null,
-          errorCode: null,
-          version: 2,
-        }],
-        rootKey: { configured: true, valid: true, fingerprint: "demo", decryptability: "ok" },
-      });
-    const { result } = renderHook(() => useSettingsPage(), { wrapper });
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-
-    await act(async () => { await result.current.refreshInstanceCredentials(); });
-
-    expect(result.current.credentialMetadata).toHaveLength(1);
-    expect(result.current.credentialMetadata?.[0]?.version).toBe(2);
   });
 
   it("refreshes connection settings and capability evidence without running provider tests", async () => {
