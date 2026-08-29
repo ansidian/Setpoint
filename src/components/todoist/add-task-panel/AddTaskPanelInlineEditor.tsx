@@ -114,7 +114,6 @@ function CompactDescriptionField({
           maxHeight: emailContext ? 240 : undefined,
           overflowY: emailContext ? "auto" : undefined,
           padding: "8px 10px",
-          transition: "min-height 160ms, background 140ms, border-color 140ms",
         }}
       />
       <TodoistDescriptionLinks description={description} />

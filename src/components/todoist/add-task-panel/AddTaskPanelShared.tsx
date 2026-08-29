@@ -47,7 +47,7 @@ export function TodoistErrorNotice({ error, compact = false }: { error: string |
         borderRadius: 8,
         border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
         background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
-        color: "#f5c2e7",
+        color: "var(--sp-rose)",
         fontSize: 11.5,
         lineHeight: 1.5,
       }}
