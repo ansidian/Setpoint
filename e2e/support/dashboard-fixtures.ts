@@ -899,6 +899,10 @@ export async function installDashboardInboxFixtures(page: Page) {
     });
   });
 
+  await page.route("**/api/briefing/email/remote-content-trust", async (route) =>
+    json(route, []),
+  );
+
   await page.route("**/api/briefing/email-search**", async (route) => {
     const query = new URL(route.request().url()).searchParams.get("q") || "";
     const matches = query.toLowerCase().includes("project")

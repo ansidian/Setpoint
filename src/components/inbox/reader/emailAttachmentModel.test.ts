@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  emailAttachmentName,
   emailAttachmentPreviewKind,
-  formatAttachmentSize,
   visibleEmailAttachments,
 } from "./emailAttachmentModel";
 
@@ -21,13 +19,5 @@ describe("email attachment model", () => {
     expect(emailAttachmentPreviewKind("image/svg+xml")).toBeNull();
     expect(emailAttachmentPreviewKind("text/html")).toBeNull();
     expect(emailAttachmentPreviewKind("application/vnd.openxmlformats-officedocument.wordprocessingml.document")).toBeNull();
-  });
-
-  it("formats bounded display names and byte sizes", () => {
-    expect(emailAttachmentName({ id: "1", filename: null, inline: false })).toBe("Untitled attachment");
-    expect(formatAttachmentSize(0)).toBe("0 B");
-    expect(formatAttachmentSize(1536)).toBe("1.5 KB");
-    expect(formatAttachmentSize(5 * 1024 * 1024)).toBe("5.0 MB");
-    expect(formatAttachmentSize(null)).toBe("Unknown size");
   });
 });

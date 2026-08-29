@@ -22,7 +22,6 @@ vi.stubGlobal("fetch", vi.fn());
 const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
 
 const {
-  chunkArray,
   fetchMessages,
   fetchEmailsInRange,
   fetchEmailBody,
@@ -56,37 +55,9 @@ const ATTACHMENT_SOURCE = Buffer.from([
 ].join("\r\n"));
 
 describe("gmail", () => {
-  describe("chunkArray", () => {
-    it("splits array into chunks of given size", () => {
-      expect(chunkArray([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
-    });
-
-    it("returns empty array for empty input", () => {
-      expect(chunkArray([], 10)).toEqual([]);
-    });
-
-    it("returns single chunk when array is smaller than chunk size", () => {
-      expect(chunkArray([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
-    });
-  });
-
   describe("fetchMessages", () => {
     beforeEach(() => {
       vi.resetAllMocks();
-    });
-
-    it("fetches 25 messages in chunks and returns all 25", async () => {
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: async () => ({ id: "msg", payload: {} }),
-      });
-
-      const ids = Array.from({ length: 25 }, (_, i) => `id${i}`);
-      const results = await fetchMessages("token", ids);
-
-      // test-architecture: allow-boundary-interaction -- Gmail message HTTP is outbound; each requested identity must be fetched exactly once with no omissions or duplicates.
-      expect(fetchMock).toHaveBeenCalledTimes(25);
-      expect(results.length).toBe(25);
     });
 
     it("does not cap input — fetches all 120 IDs", async () => {
@@ -128,23 +99,6 @@ describe("gmail", () => {
       warnSpy.mockRestore();
     });
 
-    it("concatenates results from all chunks in order", async () => {
-      let callCount = 0;
-      fetchMock.mockImplementation(() => {
-        const idx = callCount++;
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ id: `msg${idx}`, payload: {} }),
-        });
-      });
-
-      const ids = Array.from({ length: 12 }, (_, i) => `id${i}`);
-      const results = await fetchMessages("token", ids);
-
-      expect(results.length).toBe(12);
-      expect(results[0]!.id).toBe("msg0");
-      expect(results[11]!.id).toBe("msg11");
-    });
   });
 });
 

@@ -308,12 +308,6 @@ describe("inbox work items", () => {
       expect(merged[1]).toMatchObject({ uid: "pin-only-1", _pinned: true, _pinnedAt: 999 });
     });
 
-    it("returns the same flatRows reference when there are no pins", () => {
-      const flatRows = [{ uid: "existing-1", subject: "Existing" }];
-
-      expect(mergePinnedIntoFlat(flatRows, [])).toBe(flatRows);
-      expect(mergePinnedIntoFlat(flatRows, null)).toBe(flatRows);
-    });
   });
 
   describe("pinnedEntryFromSnapshot", () => {

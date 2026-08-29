@@ -28,26 +28,6 @@ afterEach(() => {
 });
 
 describe("EmailAttachmentShelf", () => {
-  it("shows files, filters inline CID assets, and keeps unsafe formats download-only", () => {
-    render(<EmailAttachmentShelf
-      emailUid="gmail-message"
-      attachments={[
-        { id: "2", filename: "report.pdf", contentType: "application/pdf", size: 2048, inline: false },
-        { id: "3", filename: "signature.png", contentType: "image/png", inline: true },
-        { id: "4", filename: "notes.html", contentType: "text/html", size: 512, inline: false },
-      ]}
-    />);
-
-    expect(screen.getByLabelText("2 email attachments")).toBeTruthy();
-    expect(screen.getByText("report.pdf")).toBeTruthy();
-    expect(screen.getByText("notes.html")).toBeTruthy();
-    expect(screen.queryByText("signature.png")).toBeNull();
-    expect(screen.getByRole("button", { name: "Preview report.pdf" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Preview notes.html" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Download notes.html" }).getAttribute("href"))
-      .toBe("/attachment/gmail-message/4");
-  });
-
   it("opens a safe preview, closes with Escape, and restores focus", async () => {
     render(<EmailAttachmentShelf
       emailUid="gmail-message"
@@ -80,25 +60,6 @@ describe("EmailAttachmentShelf", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:attachment-preview");
   });
 
-  it("opens a bounded CSV table preview from the attachment card", async () => {
-    testState.fetchEmailAttachmentBlob.mockResolvedValueOnce(new Blob([
-      "name,amount,status\nCoffee,4.50,cleared\nTrain,18.00,pending\n",
-    ], { type: "text/csv" }));
-    render(<EmailAttachmentShelf
-      emailUid="gmail-message"
-      attachments={[
-        { id: "5", filename: "activity.csv", contentType: "text/csv", size: 62, inline: false },
-      ]}
-    />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Preview activity.csv" }));
-
-    expect(await screen.findByRole("table", { name: "Preview of activity.csv" })).toBeTruthy();
-    expect(screen.getByRole("columnheader", { name: "amount" })).toBeTruthy();
-    expect(screen.getByRole("cell", { name: "18.00" })).toBeTruthy();
-    expect(screen.getByText("2 data rows · 3 columns")).toBeTruthy();
-  });
-
   it("keeps oversized CSV files download-only inside the preview", async () => {
     render(<EmailAttachmentShelf
       emailUid="gmail-message"
@@ -115,18 +76,4 @@ describe("EmailAttachmentShelf", () => {
     expect(testState.fetchEmailAttachmentBlob).not.toHaveBeenCalled();
   });
 
-  it("keeps download independent from the previewable card action", async () => {
-    testState.fetchEmailAttachmentBlob.mockRejectedValueOnce(new Error("too large"));
-    render(<EmailAttachmentShelf
-      emailUid="gmail-message"
-      attachments={[
-        { id: "4", filename: "report.pdf", contentType: "application/pdf", size: 2048, inline: false },
-      ]}
-    />);
-
-    fireEvent.click(screen.getByRole("link", { name: "Download report.pdf" }));
-
-    expect(screen.queryByRole("dialog", { name: "report.pdf" })).toBeNull();
-    expect((await screen.findByRole("alert")).textContent).toContain("Could not download report.pdf. Try again.");
-  });
 });

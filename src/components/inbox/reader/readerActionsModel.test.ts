@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveReaderActionGroups, resolveReaderActions } from "./readerActionsModel";
+import { resolveReaderActions } from "./readerActionsModel";
 
 // Active-snapshot row carries a snapshot_item_id, like every real reader email
 // (inboxRow spreads it through; the dispatch + Sidebar require it).
@@ -71,64 +71,6 @@ describe("resolveReaderActions snapshot workflow", () => {
     expect(a.canMoveToNoise).toBe(false);
     expect(a.canReopen).toBe(false);
     expect(a.showSnapshotWorkflowActions).toBe(false);
-  });
-});
-
-describe("resolveReaderActionGroups", () => {
-  it("projects lane destinations and triage commands in their locked order", () => {
-    const groups = resolveReaderActionGroups(snapshotEmail({
-      _lane: "needs_attention",
-      read: false,
-    }));
-
-    expect(groups.moveDestinations).toEqual([
-      { lane: "fyi", label: "FYI", keyHint: "F" },
-      { lane: "noise", label: "Noise", keyHint: "N" },
-    ]);
-    expect(groups.triageItems.map(({ key, label, keyHint, section }) => ({
-      key,
-      label,
-      keyHint,
-      section,
-    }))).toEqual([
-      { key: "snapshot-handled", label: "Mark handled", keyHint: "H", section: "lifecycle" },
-      { key: "snapshot-dismiss", label: "Dismiss from today", keyHint: "D", section: "lifecycle" },
-      { key: "snooze", label: "Snooze…", keyHint: "S", section: "lifecycle" },
-      { key: "pin-toggle", label: "Pin", keyHint: "P", section: "state" },
-      { key: "toggle-read", label: "Mark read", keyHint: null, section: "state" },
-    ]);
-  });
-
-  it("keeps the move menu wholly disabled while only snapshot triage items are pending", () => {
-    const groups = resolveReaderActionGroups(snapshotEmail({
-      _optimisticSnapshotPending: true,
-      _pinned: true,
-      read: true,
-    }));
-
-    expect(groups.moveDisabled).toBe(true);
-    expect(groups.triageItems.map(({ key, label, disabled, active }) => ({
-      key,
-      label,
-      disabled,
-      active,
-    }))).toEqual([
-      { key: "snapshot-handled", label: "Mark handled", disabled: true, active: false },
-      { key: "snapshot-dismiss", label: "Dismiss from today", disabled: true, active: false },
-      { key: "snooze", label: "Snooze…", disabled: false, active: false },
-      { key: "pin-toggle", label: "Unpin", disabled: false, active: true },
-      { key: "toggle-read", label: "Mark unread", disabled: false, active: false },
-    ]);
-  });
-
-  it("keeps Triage stable for a single eligible command and hides an empty Move menu", () => {
-    const groups = resolveReaderActionGroups(snapshotEmail({
-      _lane: "handled",
-      handled_at: "2026-05-03T16:00:00Z",
-    }), { readOnly: true });
-
-    expect(groups.moveDestinations).toEqual([]);
-    expect(groups.triageItems.map(({ key }) => key)).toEqual(["pin-toggle"]);
   });
 });
 

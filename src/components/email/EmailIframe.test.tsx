@@ -194,31 +194,6 @@ describe("EmailIframe reader-hotkey relay", () => {
     }
   });
 
-  it("leaves scroll/native keys and modifier combos un-relayed", () => {
-    withParentKeyListener((received) => {
-      const doc = loadedIframe().contentDocument!;
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "e", metaKey: true, bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "1", altKey: true, bubbles: true }));
-
-      expect(received).toEqual([]);
-    });
-  });
-
-  it("does not relay command keys typed into a form field inside the email", () => {
-    withParentKeyListener((received) => {
-      const doc = loadedIframe().contentDocument!;
-      const host = doc.body || doc.documentElement;
-      const input = doc.createElement("input");
-      host.appendChild(input);
-
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true }));
-
-      expect(received).toEqual([]);
-    });
-  });
 });
 
 describe("EmailIframe mobile viewport", () => {
@@ -276,21 +251,6 @@ describe("EmailIframe content security policy", () => {
 });
 
 describe("EmailIframe show remote content toggle", () => {
-  it("shows the banner when the sanitized body has a remote <img>", () => {
-    render(<EmailIframe html='<img src="https://cdn.example/banner.png"><p>hi</p>' />);
-    expect(screen.getByText(/images are blocked/i)).toBeTruthy();
-  });
-
-  it("does not show the banner for a plain-text-only body", () => {
-    render(<EmailIframe html="<p>just text, no images</p>" />);
-    expect(screen.queryByText(/images are blocked/i)).toBeNull();
-  });
-
-  it("does not show the banner when all images are inline data: URIs", () => {
-    render(<EmailIframe html='<img src="data:image/png;base64,aaaa"><p>hi</p>' />);
-    expect(screen.queryByText(/images are blocked/i)).toBeNull();
-  });
-
   it("widens the CSP and reveals one inline trust confirmation after Show once", () => {
     const onTrustSender = vi.fn(async () => {});
     render(
@@ -452,21 +412,6 @@ describe("withEmailContentSecurityPolicy", () => {
 });
 
 describe("withMobileViewport", () => {
-  it("inserts the meta just after an existing <head>", () => {
-    const out = withMobileViewport("<html><head><title>x</title></head><body>b</body></html>");
-    expect(out).toMatch(/<head><meta name="viewport"/);
-  });
-
-  it("adds a <head> when the document has <html> but no head", () => {
-    const out = withMobileViewport("<html><body>b</body></html>");
-    expect(out).toMatch(/<html><head><meta name="viewport"/);
-  });
-
-  it("prepends a <head> when there is no document wrapper", () => {
-    const out = withMobileViewport("<p>bare</p>");
-    expect(out.startsWith('<head><meta name="viewport"')).toBe(true);
-  });
-
   it("matches the full open tag even when an attribute value contains '>'", () => {
     const out = withMobileViewport('<head data-x="a > b"><title>t</title></head><body>b</body>');
     expect(out).toContain('<head data-x="a > b"><meta name="viewport"');

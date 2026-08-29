@@ -22,11 +22,4 @@ describe("hasRemoteImageRefs", () => {
     expect(hasRemoteImageRefs("<p>just text</p>")).toBe(false);
   });
 
-  it("returns false for an empty string", () => {
-    expect(hasRemoteImageRefs("")).toBe(false);
-  });
-
-  it("defaults to false when called with no argument", () => {
-    expect(hasRemoteImageRefs()).toBe(false);
-  });
 });

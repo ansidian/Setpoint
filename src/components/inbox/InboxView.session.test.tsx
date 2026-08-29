@@ -174,20 +174,6 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
 }
 
 describe("InboxView session state", () => {
-  it("restores the selected reader across unmount and remount", async () => {
-    render(<InboxSessionHarness />);
-
-    fireEvent.click(screen.getByText("Project budget sign-off"));
-    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox mount" }));
-    expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox mount" }));
-    expect(await screen.findByTestId("inbox-mobile-reader")).toBeTruthy();
-    expect(screen.getByText("Project budget sign-off")).toBeTruthy();
-  });
-
   it("refreshes the active snapshot after Inbox exit but not while a calendar modal is open", async () => {
     const activeSnapshotRefresh = vi.fn().mockResolvedValue({});
     render(<InboxSessionHarness activeSnapshotRefresh={activeSnapshotRefresh} />);

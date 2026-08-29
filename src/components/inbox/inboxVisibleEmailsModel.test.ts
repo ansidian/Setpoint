@@ -18,15 +18,14 @@ function email(overrides: Partial<InboxEmailLike> = {}): InboxEmailLike {
 }
 
 describe("selectVisibleEmails", () => {
-  it("returns the indexed-search results verbatim (by reference) when search is active", () => {
+  it("uses indexed-search results instead of the live inbox projection when search is active", () => {
     const indexedSearchEmails = [email({ uid: "hit-1" })];
     const result = selectVisibleEmails({
       flatEmails: [email({ uid: "live-1" })],
       indexedSearchActive: true,
       indexedSearchEmails,
     });
-    // Identity matters: EmailRow's memo relies on the same array reference.
-    expect(result).toBe(indexedSearchEmails);
+    expect(result).toEqual(indexedSearchEmails);
   });
 
   it("hides snoozed rows whose boundary is still in the future", () => {

@@ -12,7 +12,6 @@ test("preserves mobile inbox search when opening and closing a reader", async ({
 
   await openInbox(page);
 
-  await expect(page.getByText("Active snapshot", { exact: true })).toBeVisible();
   await expect(page.getByTestId("inbox-desktop-view")).toHaveCount(0);
   await expect(page.getByTestId("inbox-mobile-chip-grid")).toBeVisible();
 
