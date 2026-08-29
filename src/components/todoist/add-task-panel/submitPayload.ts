@@ -15,6 +15,11 @@ export function canSubmitTask({ parsed, input = "" }: { parsed?: ParsedTodoistTo
   return effectiveTaskTitle({ parsed, input }).length > 0;
 }
 
+export function withRequiredDescriptionSuffix(description: string, requiredSuffix?: string | null) {
+  if (!requiredSuffix || description.includes(requiredSuffix)) return description;
+  return [description.trim(), requiredSuffix].filter(Boolean).join("\n\n");
+}
+
 export function buildDeadlineMutationPayload({
   parsed,
   input = "",

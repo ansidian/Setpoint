@@ -101,8 +101,6 @@ function computeEventChipMetrics(layout?: EventCellLayout | null): CalendarCellS
 // descriptor-array and downstream chip memoization share the same boundary.
 export const resolveEventChipMetrics = createCalendarCellMetricsResolver(computeEventChipMetrics);
 
-const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
-
 function pacificTime(ms: number | null | undefined): string {
   if (typeof ms !== "number") return "";
   return new Date(ms).toLocaleTimeString("en-US", {
@@ -111,13 +109,6 @@ function pacificTime(ms: number | null | undefined): string {
     minute: "2-digit",
     hour12: true,
   });
-}
-
-function sanitizeEventDisplayTitle(value: unknown): string {
-  const title = String(value || "").trim();
-  if (!title) return "(No title)";
-  const cleaned = title.replace(MEETING_PROVIDER_PREFIX, "").trim();
-  return cleaned || title;
 }
 
 function condenseLocationLabel(text: string, maxLength = 44): string {
@@ -147,7 +138,7 @@ function toEventDescriptor(ev: CalendarItemLike): EventChipDescriptor {
     sourceEvent: ev as CalendarChipItem["sourceEvent"],
     writable: !!ev?.writable,
     recurring: specialDate ? false : !!ev?.isRecurring,
-    title: sanitizeEventDisplayTitle(ev?.title),
+    title: String(ev?.title || "").trim() || "(No title)",
     detail: eventDetail(ev) || undefined,
     leadingLabel: specialDate ? "" : ev?.allDay ? "All day" : pacificTime(ev?.startMs),
     accent,
@@ -171,7 +162,7 @@ function toEventGhostDescriptor(ghost: EventGhost): EventChipDescriptor {
     ghostKind: "event",
     ghostStart: ghost.startDate,
     ghostEnd: ghost.endDate,
-    title: sanitizeEventDisplayTitle(ghost.title),
+    title: String(ghost.title || "").trim() || "(No title)",
     leadingLabel: ghost.allDay ? "All day" : formatTime12FromTime24(ghost.startTime),
     recurring: !!ghost.recurring,
     accent,

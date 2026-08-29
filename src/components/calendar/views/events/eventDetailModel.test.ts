@@ -8,7 +8,6 @@ import {
   getDefaultSelectedItemId,
   isEditableEvent,
   orderDetailEvents,
-  sanitizeEventDisplayTitle,
   specialEventLabel,
 } from "./eventDetailModel.ts";
 import type { CalendarItemLike } from "../calendarViewTypes";
@@ -62,7 +61,6 @@ describe("event detail model", () => {
       writable: true,
     });
 
-    expect(sanitizeEventDisplayTitle(ev.title)).toBe("Design review");
     expect(compactEventTimeRange(ev)).toBe("10:50 AM-12:05 PM");
     expect(eventSubtitle(ev)).toBe("with Ava, Ben, Cam +1");
     expect(isEditableEvent(ev)).toBe(true);

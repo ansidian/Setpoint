@@ -13,7 +13,6 @@ import { isDeadlinePlanningItem, orderPlanningItems } from "./eventsPlanningMode
 // rail, and the dashboard glance sheet. No React here — leaf model so nothing
 // imports back into a cycle and tests can hit it directly.
 
-const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles",
   hour: "numeric",
@@ -49,13 +48,6 @@ function eventTimeRange(ev: CalendarItemLike): string {
   const end = ev?.endMs ? pacificTime(ev.endMs) : null;
   if (start && end && start !== end) return `${start} - ${end}`;
   return start || end || eventMeta(ev) || "";
-}
-
-export function sanitizeEventDisplayTitle(value: unknown): string {
-  const title = String(value || "").trim();
-  if (!title) return "(No title)";
-  const cleaned = title.replace(MEETING_PROVIDER_PREFIX, "").trim();
-  return cleaned || title;
 }
 
 function condenseLocationLabel(text: string, maxLength = 56): string {

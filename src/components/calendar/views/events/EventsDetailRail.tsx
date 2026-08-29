@@ -29,7 +29,6 @@ import {
   isEditableEvent,
   orderDetailEvents,
   pacificTime,
-  sanitizeEventDisplayTitle,
   specialEventLabel,
 } from "./eventDetailModel.ts";
 import type { CalendarItemLike } from "../calendarViewTypes";
@@ -201,7 +200,7 @@ function toRailItem(ev: CalendarItemLike, onSelectItem?: (itemId: string | null)
   return {
     id: selectionId,
     timeLabel: specialDate ? "" : ev.allDay ? "All day" : (typeof ev.startMs === "number" ? pacificTime(ev.startMs) : ""),
-    title: sanitizeEventDisplayTitle(ev.title),
+    title: String(ev.title || "").trim() || "(No title)",
     subtitle: eventSubtitle(ev),
     meta,
     selected: isSelected,

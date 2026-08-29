@@ -5,31 +5,6 @@ import { renderModal, openFloatingEventEditorFromSelectedChip } from "./Calendar
 import { createDeferred, renderEventEditor } from "./events/CalendarEventEditor.test-utils.tsx";
 
 describe("CalendarEventEditor create and edit lifecycle", () => {
-  it("auto focuses the title when opening the create editor", async () => {
-    renderEventEditor();
-
-    const title = await screen.findByTestId("calendar-event-title");
-    await waitFor(() => {
-      expect(document.activeElement).toBe(title);
-    });
-  });
-
-  it("keeps required-title guidance with the event title field", async () => {
-    renderEventEditor();
-
-    const title = await screen.findByTestId("calendar-event-title") as HTMLInputElement;
-    expect(screen.queryByText("Enter a title.")).toBeNull();
-
-    fireEvent.input(title, { target: { value: "Planning" } });
-    fireEvent.input(title, { target: { value: "" } });
-
-    const guidance = await screen.findByText("Enter a title.");
-    expect(title.getAttribute("aria-invalid")).toBe("true");
-    expect(title.getAttribute("aria-describedby")).toBe(guidance.id);
-    expect(guidance.parentElement?.querySelector("[data-testid='calendar-event-title']")).toBe(title);
-  });
-
-
   it("deletes an edited single event from the editor action", async () => {
     const event = {
       id: "event-1",

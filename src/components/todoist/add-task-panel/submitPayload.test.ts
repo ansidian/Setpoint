@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDeadlineMutationPayload, canSubmitTask } from "./submitPayload";
+import { buildDeadlineMutationPayload, canSubmitTask, withRequiredDescriptionSuffix } from "./submitPayload";
 
 describe("canSubmitTask", () => {
   it("disables submit for tokens-only input that strips to an empty title", () => {
@@ -19,6 +19,12 @@ describe("canSubmitTask", () => {
 });
 
 describe("deadline add-task submit payload", () => {
+  it("retains a required provenance suffix without duplicating it", () => {
+    const suffix = "Source: https://mail.google.com/mail/message";
+    expect(withRequiredDescriptionSuffix("Edited notes", suffix)).toBe(`Edited notes\n\n${suffix}`);
+    expect(withRequiredDescriptionSuffix(`Edited notes\n\n${suffix}`, suffix)).toBe(`Edited notes\n\n${suffix}`);
+  });
+
   it("builds the create payload from parsed task metadata", () => {
     expect(buildDeadlineMutationPayload({
       parsed: { stripped: "Submit lab notes" },

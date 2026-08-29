@@ -16,7 +16,6 @@ import {
   compactEventTimeRange,
   eventMeta,
   isEditableEvent,
-  sanitizeEventDisplayTitle,
   specialEventLabel,
 } from "./eventDetailModel.ts";
 import type { CalendarItemLike } from "../calendarViewTypes";
@@ -30,7 +29,7 @@ export default function EventSelectedCard({ ev, actions, accent = "#89b4fa" }: {
   const layoutTransition = motion.layout as Transition;
   const specialDate = isGoogleSpecialDateEvent(ev);
   const editable = isEditableEvent(ev);
-  const displayTitle = sanitizeEventDisplayTitle(ev.title);
+  const displayTitle = String(ev.title || "").trim() || "(No title)";
   const location = ev.location ? getLocationDisplayLabel(ev.location) : null;
   const attendeeSummary = ev.attendees?.length
     ? `${ev.attendees.length} attendee${ev.attendees.length === 1 ? "" : "s"}`

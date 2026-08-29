@@ -24,7 +24,7 @@ import {
   buildAddTaskDirtySnapshot,
   buildAddTaskDirtyBaseline,
 } from "./addTaskViewModel";
-import { canSubmitTask } from "./submitPayload";
+import { canSubmitTask, withRequiredDescriptionSuffix } from "./submitPayload";
 import { submitAddTaskFlow } from "./submitAddTaskFlow";
 import useAddTaskPanelPlacement from "./useAddTaskPanelPlacement";
 import useDirtyCloseConfirmation from "./useDirtyCloseConfirmation";
@@ -375,7 +375,7 @@ export default function useAddTaskPanelController({
         labels,
         seededNlpDueDate,
         seededCreateDue,
-        description: requiredDescriptionSuffix && !description.includes(requiredDescriptionSuffix) ? [description.trim(), requiredDescriptionSuffix].filter(Boolean).join("\n\n") : description,
+        description: withRequiredDescriptionSuffix(description, requiredDescriptionSuffix),
         resolvedProject,
         resolvedPriority,
         resolvedLabels,
@@ -416,7 +416,7 @@ export default function useAddTaskPanelController({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (autocompleteType) return;
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
       if (!hasTitle) setTitleTouched(true);
       if (confirmDelete) deleteTask();

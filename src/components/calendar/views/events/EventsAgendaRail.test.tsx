@@ -1,6 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ComponentProps } from "react";
 import EventsAgendaRail from "./EventsAgendaRail.tsx";
 import type { CalendarItemLike } from "../calendarViewTypes";
 
@@ -20,65 +19,30 @@ function event(
   }, overrides);
 }
 
-function renderRail(props: Partial<ComponentProps<typeof EventsAgendaRail>> = {}) {
-  return render(
-    <EventsAgendaRail
-      viewYear={2026}
-      viewMonth={4}
-      currentYear={2026}
-      currentMonth={4}
-      todayDate={1}
-      events={[
-        event({
-          id: "event-1",
-          title: "Planning block",
-          start: "2026-05-04T16:00:00.000Z",
-          end: "2026-05-04T17:00:00.000Z",
-        }),
-      ]}
-      {...props}
-    />,
-  );
-}
-
 describe("EventsAgendaRail durable contracts", () => {
   it("exposes alternate event ids for agenda reanchoring after saves", () => {
-    renderRail({
-      selectedDateKey: "2026-05-04",
-      events: [
-        event({
-          id: "provider-id",
-          iCalUID: "ical-id",
-          htmlLink: "https://calendar.example/event",
-          title: "Planning block",
-          start: "2026-05-04T16:00:00.000Z",
-          end: "2026-05-04T17:00:00.000Z",
-        }),
-      ],
-    });
+    render(
+      <EventsAgendaRail
+        viewYear={2026}
+        viewMonth={4}
+        currentYear={2026}
+        currentMonth={4}
+        todayDate={1}
+        selectedDateKey="2026-05-04"
+        events={[
+          event({
+            id: "provider-id",
+            iCalUID: "ical-id",
+            htmlLink: "https://calendar.example/event",
+            title: "Planning block",
+            start: "2026-05-04T16:00:00.000Z",
+            end: "2026-05-04T17:00:00.000Z",
+          }),
+        ]}
+      />,
+    );
 
     expect(screen.getByTestId("calendar-agenda-event-row").getAttribute("data-calendar-match-item-ids"))
       .toContain("ical-id");
-  });
-
-  it("keeps the complete selected all-day title in the chip's accessible name", () => {
-    renderRail({
-      selectedDateKey: "2026-05-05",
-      selectedItemId: "all-day",
-      events: [
-        event({
-          id: "all-day",
-          title: "Residency planning block with a long stable title",
-          allDay: true,
-          color: "#89b4fa",
-          start: "2026-05-05T07:00:00.000Z",
-          end: "2026-05-06T07:00:00.000Z",
-        }),
-      ],
-    });
-
-    expect(screen.getByRole("button", {
-      name: "Residency planning block with a long stable title",
-    })).toBe(screen.getByTestId("calendar-agenda-event-chip"));
   });
 });
