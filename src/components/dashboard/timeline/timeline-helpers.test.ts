@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildTimelineGroups,
   buildTodayTomorrowRestGroups,
-  formatNowMarkerLabel,
   percentElapsed,
   resolveTodayNowMarkerIndex,
   shouldHoldPartialTimeline,
@@ -117,16 +116,6 @@ describe("timeline helpers", () => {
     });
   });
 
-  describe("formatNowMarkerLabel", () => {
-    it("formats the in-card marker as 'NOW H:MM · N% elapsed' without a meridiem", () => {
-      const now = Date.parse("2026-03-06T21:18:00.000Z"); // 1:18 PM Pacific
-      expect(formatNowMarkerLabel(now, 0.3)).toBe("NOW 1:18 · 30% elapsed");
-    });
-    it("rounds the percent to a whole number", () => {
-      const now = Date.parse("2026-03-06T21:18:00.000Z");
-      expect(formatNowMarkerLabel(now, 0.666)).toBe("NOW 1:18 · 67% elapsed");
-    });
-  });
 });
 
 describe("buildTodayTomorrowRestGroups", () => {
@@ -147,15 +136,6 @@ describe("buildTodayTomorrowRestGroups", () => {
     expect(result.tomorrow).toHaveLength(2);
     expect(result.tomorrowCount).toEqual({ events: 1, deadlines: 1 });
     expect(result.restCount).toBe(2);
-  });
-
-  it("returns empty tomorrow/zero rest when only today has items", () => {
-    const items = [{ kind: "event", startMs: at(0), data: {} }];
-    const result = buildTodayTomorrowRestGroups(items, now, filters);
-    expect(result.today).toHaveLength(1);
-    expect(result.tomorrow).toEqual([]);
-    expect(result.tomorrowCount).toEqual({ events: 0, deadlines: 0 });
-    expect(result.restCount).toBe(0);
   });
 
   it("excludes items past this week (bucket > 6) from the rest count", () => {

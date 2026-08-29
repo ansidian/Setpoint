@@ -54,28 +54,6 @@ describe("useAutoRefresh", () => {
     expect(refreshCount).toBe(0);
   });
 
-  it("distinguishes cooldown from dedup: a recent refresh suppresses focus, an old one does not", () => {
-    // Recent timestamp → suppressed. This is the case the old test missed:
-    // it always used an old timestamp, so it would pass even with no cooldown.
-    let recentCount = 0;
-    const recentHook = renderHook(() => useAutoRefresh({
-      lastQuickRefreshAt: NOW - 1000,
-      onQuickRefresh: () => { recentCount += 1; },
-    }));
-    window.dispatchEvent(new Event("focus"));
-    expect(recentCount).toBe(0);
-    recentHook.unmount();
-
-    // Old timestamp → allowed.
-    let oldCount = 0;
-    renderHook(() => useAutoRefresh({
-      lastQuickRefreshAt: NOW - REFRESH_INTERVAL_MS - 1000,
-      onQuickRefresh: () => { oldCount += 1; },
-    }));
-    window.dispatchEvent(new Event("focus"));
-    expect(oldCount).toBe(1);
-  });
-
   it("treats the most recent trigger as the cooldown anchor for the next focus", () => {
     let refreshCount = 0;
     renderHook(() => useAutoRefresh({

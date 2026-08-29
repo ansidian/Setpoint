@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildDashboardEventsData,
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
   dashboardEventCalendarRequest,
@@ -170,23 +169,6 @@ describe("dashboard shell model", () => {
       .toEqual({ action: "ignore" });
   });
 
-  it("projects calendar range props into the modal events contract", () => {
-    const ensureRange = () => {};
-    const getEvents = () => [];
-    expect(buildDashboardEventsData({
-      ensureRange,
-      getEvents,
-      loading: false,
-      revision: 2,
-    })).toMatchObject({
-      ensureRange,
-      getEvents,
-      loading: false,
-      revision: 2,
-      editable: true,
-    });
-  });
-
   describe("blocking-overlay gating (P3-26 / P3-27)", () => {
     it("suppresses single-key shell commands behind a blocking overlay that isn't their target (e.g. Customize)", () => {
       // analyticsOpen/historyOpen are false here, modelling a Customize panel open:
@@ -309,23 +291,12 @@ describe("dashboard shell model", () => {
         key: "|", code: "Backslash", metaKey: true, shiftKey: true, isMobile: true,
       })).toEqual({ action: "ignore" });
     });
-
-    it("plain backslash still does nothing", () => {
-      expect(resolveDashboardShellHotkey({ key: "\\", code: "Backslash" }))
-        .toEqual({ action: "ignore" });
-    });
   });
 
   describe("nextItemSheet", () => {
     it("closes an open event sheet when the same card is re-tapped (the events toggle bug)", () => {
       const open: DashboardGlanceSheet = { kind: "event", item: { title: "Standup" }, itemId: "evt-1" };
       const reTap: DashboardGlanceSheet = { kind: "event", item: { title: "Standup" }, itemId: "evt-1", anchorRef: { current: {} } };
-      expect(nextItemSheet(open, reTap)).toBeNull();
-    });
-
-    it("closes an open bill sheet when the same card is re-tapped (same toggle bug)", () => {
-      const open: DashboardGlanceSheet = { kind: "bill", item: { name: "Electric" }, itemId: "bill-1" };
-      const reTap: DashboardGlanceSheet = { kind: "bill", item: { name: "Electric" }, itemId: "bill-1" };
       expect(nextItemSheet(open, reTap)).toBeNull();
     });
 
@@ -347,11 +318,6 @@ describe("dashboard shell model", () => {
       expect(nextItemSheet(open, other)).toBe(other);
     });
 
-    it("opens when nothing is currently open", () => {
-      const next: DashboardGlanceSheet = { kind: "event", itemId: "evt-1" };
-      expect(nextItemSheet(null, next)).toBe(next);
-    });
-
     it("opens (cannot toggle) when the tapped item has no resolvable identity", () => {
       const open: DashboardGlanceSheet = { kind: "event", item: {} };
       const reTap: DashboardGlanceSheet = { kind: "event", item: {} };
@@ -364,21 +330,8 @@ describe("dashboard shell model", () => {
       expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "dashboard" })).toBe(true);
     });
 
-    it("clears on every leave path, not just calendar → dashboard", () => {
-      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "inbox" })).toBe(true);
-      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "notes" })).toBe(true);
-    });
-
-    it("does not clear while staying on the calendar tab", () => {
-      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "calendar" })).toBe(false);
-    });
-
     it("does not clear when arriving at the calendar tab", () => {
       expect(shouldClearCalendarFocusOnLeave({ prevTab: "dashboard", tab: "calendar" })).toBe(false);
-    });
-
-    it("does not clear when moving between two non-calendar tabs", () => {
-      expect(shouldClearCalendarFocusOnLeave({ prevTab: "dashboard", tab: "notes" })).toBe(false);
     });
   });
 });

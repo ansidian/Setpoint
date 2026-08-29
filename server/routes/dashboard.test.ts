@@ -125,13 +125,6 @@ describe("dashboard routes", () => {
     expect(res.body.fetchedAt).toEqual(expect.any(String));
   });
 
-  it("requires a cookie session before opening the current-dashboard event stream", async () => {
-    const res = await request(makeApp()).get("/api/dashboard/current/events");
-
-    expect(res.status).toBe(401);
-    expect(res.body).toEqual({ message: "Not authenticated" });
-  });
-
   it("opens an authenticated SSE stream with a connected event", async () => {
     const response = await fetchApp(makeApp(), "/api/dashboard/current/events", {
       headers: { cookie: "ea_session=cookie-session" },

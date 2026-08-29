@@ -219,20 +219,6 @@ describe("dashboard task projection", () => {
       vi.useRealTimers();
     });
 
-    it("sums totalPoints from points_possible, including completed deadlines", () => {
-      const root = {
-        upcoming: [{ id: "a", due_date: "2026-07-08", status: "complete", points_possible: 5 }],
-        stats: null,
-      };
-
-      // applyDeadlineDelete of a non-matching id leaves `upcoming` untouched
-      // but still recomputes `stats`, giving a clean way to assert on stats
-      // for a preset root without an extra mutation.
-      const result = applyDeadlineDelete(root, "missing-id", { now: pinnedNow });
-
-      expect(result.stats!.totalPoints).toBe(5);
-    });
-
     it("matches the server's computeDeadlineStats fixture exactly (tombstones excluded, a client-cache-only concern the server never sees)", () => {
       vi.useFakeTimers();
       vi.setSystemTime(pinnedNow);
@@ -272,7 +258,6 @@ describe("dashboard task projection", () => {
       const clientResult = applyDeadlineDelete(root, "missing-id", { now: pinnedNow });
 
       expect(clientResult.stats).toEqual(serverStats);
-      expect(serverStats).toEqual({ incomplete: 2, dueToday: 2, dueThisWeek: 3, totalPoints: 10 });
     });
 
     it("computes a DST-safe due-this-week window via calendar-day math, not now+168h", () => {

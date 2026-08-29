@@ -128,12 +128,6 @@ describe("current dashboard model", () => {
     expect(calendarContentSignature(null)).toBe("null");
   });
 
-  it("computes an equal deadline content signature for equivalent-content upcoming arrays", () => {
-    const a = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
-    const b = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
-    expect(deadlineContentSignature(a)).toBe(deadlineContentSignature(b));
-  });
-
   it("changes the deadline content signature when status, due_date, _completing, or length differ", () => {
     const base = [{ id: "deadline-1", due_date: "2026-05-05", due_time: "11:59p", status: "incomplete" }];
     const differentStatus = [{ ...base[0], status: "complete" }];

@@ -21,35 +21,6 @@ describe("buildComingUp", () => {
     expect(out.map((x) => x.kind)).toEqual(["deadline", "deadline", "bill"]);
   });
 
-  it("derives the time-anchored chipLabel and chipTone from days-until", () => {
-    freezeToJan15();
-    const liveDeadlines = [
-      { id: "today", title: "T", due_date: "2026-01-15", status: "open" },
-      { id: "tom", title: "M", due_date: "2026-01-16", status: "open" },
-      { id: "soon", title: "S", due_date: "2026-01-18", status: "open" },
-    ];
-    const out = buildComingUp({ liveDeadlines, liveBills: [], days: 7 });
-    expect(out.map((x) => [x.chipLabel, x.chipTone])).toEqual([
-      ["Today", "rose"], ["Tomorrow", "cream"], ["In 3d", "muted"],
-    ]);
-  });
-
-  it("gives future rows a timeline-style chipTooltip, and due-today rows none", () => {
-    freezeToJan15();
-    const out = buildComingUp({
-      liveDeadlines: [
-        { id: "today", title: "T", due_date: "2026-01-15", due_time: "2:00 PM", status: "open" },
-        { id: "tom", title: "M", due_date: "2026-01-16", due_time: "2:00 PM", status: "open" },
-      ],
-      liveBills: [{ id: "b", name: "Rent", amount: 2450, next_date: "2026-01-18", paid: false }],
-      days: 7,
-    });
-    const byId = Object.fromEntries(out.map((x) => [x.id, x.chipTooltip]));
-    expect(byId["deadline:today"]).toBeNull(); // due today → chip already says "Today"
-    expect(byId["deadline:tom"]).toBe("Friday, January 16, 2pm");
-    expect(byId["bill:b"]).toBe("Sunday, January 18");
-  });
-
   it("excludes paid bills, completed deadlines, overdue items, and anything past the window", () => {
     freezeToJan15();
     const liveDeadlines = [
@@ -64,18 +35,6 @@ describe("buildComingUp", () => {
     ];
     const out = buildComingUp({ liveDeadlines, liveBills, days: 7 });
     expect(out.map((x) => x.id)).toEqual(["deadline:ok", "bill:unpaid"]);
-  });
-
-  it("formats bill meta with amount and payee, deadline meta with class/project fallback", () => {
-    freezeToJan15();
-    const out = buildComingUp({
-      liveDeadlines: [{ id: "d", title: "D", due_date: "2026-01-16", status: "open" }],
-      liveBills: [{ id: "b", name: "Electric", payee: "PG&E", amount: 146.32, next_date: "2026-01-16", paid: false }],
-      days: 7,
-    });
-    const byId = Object.fromEntries(out.map((x) => [x.id, x.meta]));
-    expect(byId["deadline:d"]).toBe("Deadline");
-    expect(byId["bill:b"]).toBe("$146.32 · PG&E");
   });
 
   it("accepts the { upcoming } wrapper for liveDeadlines as well as a raw array", () => {

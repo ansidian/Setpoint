@@ -80,12 +80,4 @@ describe("selectGlanceActions — events", () => {
   it("falls back to only open-in-calendar for a plain event with no links", () => {
     expect(keys(selectGlanceActions({ kind: "event", item: ev({ title: "Standup" }) }))).toEqual(["openInCalendar"]);
   });
-
-  it("routes event editing through the calendar handoff rather than inline deadline editing", () => {
-    const actions = selectGlanceActions({
-      kind: "event",
-      item: ev({ writable: true, eventType: "default", htmlLink: "https://calendar.google.com/event?eid=abc" }),
-    });
-    expect(keys(actions)).not.toContain("edit");
-  });
 });

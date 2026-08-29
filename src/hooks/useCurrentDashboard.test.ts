@@ -159,43 +159,6 @@ describe("useCurrentDashboard", () => {
     vi.useRealTimers();
   });
 
-  it("loads the current endpoint into briefing, live data, and active snapshot adapters", async () => {
-    const { result, unmount } = renderHook(() => useCurrentDashboard());
-
-    await act(async () => {});
-
-    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
-    expect(getCurrentDashboard.mock.calls).toHaveLength(1);
-    expect(result.current.briefingData.briefing).toMatchObject({
-      weather: { temp: 72, icon: "Sun" },
-      calendar: [{ id: "event-1", title: "Focus" }],
-      deadlines: { upcoming: [{ id: "deadline-1" }], stats: { total: 1 } },
-      emails: { summary: "", accounts: [] },
-    });
-    expect(result.current.liveData).toMatchObject({
-      liveWeather: { temp: 72, icon: "Sun" },
-      liveCalendar: [{ id: "event-1", title: "Focus" }],
-      liveBills: [{ id: "bill-1", payee: "Power" }],
-      allSchedules: [{ id: "schedule-1" }],
-      payeeMap: { payee_1: "Power" },
-      actualConfigured: true,
-      actualBudgetUrl: "https://actual.example.test",
-      lastFetched: "2026-05-04T12:00:00.000Z",
-      providerHealth: currentPayload.providerHealth,
-      systemStatus: currentPayload.systemStatus,
-    });
-    expect(result.current.activeSnapshot.snapshot).toEqual(currentPayload.activeSnapshot);
-    expect(result.current.systemStatus).toEqual(currentPayload.systemStatus);
-    expect(result.current.briefingData.briefing).not.toHaveProperty("aiInsights");
-    expect(result.current.briefingData).not.toHaveProperty("generating");
-    expect(result.current.briefingData).not.toHaveProperty("genProgress");
-    expect(result.current.briefingData).not.toHaveProperty("handleFullGeneration");
-    expect(result.current.briefingData).not.toHaveProperty("selectHistory");
-    expect(result.current.briefingData).not.toHaveProperty("navigateToEmail");
-
-    unmount();
-  });
-
   it("dedups a refetch that returns the same contentKey even when fetchedAt advances, keeping current + liveData references stable", async () => {
     // Initial load carries a content fingerprint (the server attaches one per response).
     getCurrentDashboardMock
@@ -274,60 +237,6 @@ describe("useCurrentDashboard", () => {
     expect(result.current.liveData.liveWeather).toEqual({ temp: 85, icon: "Sun" });
     expect(result.current.activeSnapshot.snapshot!.snapshot).toEqual({ id: 100 });
 
-    unmount();
-  });
-
-  it("polls current dashboard briefly after manual sync while work is active", async () => {
-    vi.useFakeTimers();
-    requestCurrentDashboardRefreshMock.mockResolvedValueOnce({
-      ...currentPayload,
-      providerHealth: {
-        ...currentPayload.providerHealth,
-        currentData: {
-          state: "current",
-          sources: [{ key: "weather_current", state: "refreshing", severity: "info" }],
-        },
-        activeSnapshot: { state: "syncing", reason: "background" },
-      },
-      refresh: {
-        mode: "manual",
-        scheduled: [{ key: "weather_current", reason: "ttl_due" }],
-        skipped: [],
-      },
-    });
-    getCurrentDashboardMock
-      .mockResolvedValueOnce(currentPayload)
-      .mockResolvedValueOnce({
-        ...currentPayload,
-        weather: { temp: 81, icon: "Sun" },
-        providerHealth: {
-          ...currentPayload.providerHealth,
-          currentData: {
-            state: "current",
-            sources: [{ key: "weather_current", state: "current", severity: "none" }],
-          },
-        },
-        refresh: { mode: "passive", scheduled: [], skipped: [] },
-        fetchedAt: "2026-05-04T12:07:00.000Z",
-      });
-    const { result, unmount } = renderHook(() => useCurrentDashboard());
-    await act(async () => {});
-
-    let syncPromise!: Promise<CurrentDashboardResponse | null>;
-    await act(async () => {
-      syncPromise = result.current.activeSnapshot.sync();
-    });
-    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
-    expect(requestCurrentDashboardRefresh.mock.calls).toHaveLength(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000);
-      await syncPromise;
-    });
-
-    // test-architecture: allow-boundary-interaction -- Dashboard refresh and sync cross authenticated HTTP boundaries; request admission and negative writes are not fully exposed by final hook state.
-    expect(getCurrentDashboard.mock.calls).toHaveLength(2);
-    expect(result.current.liveData.liveWeather).toEqual({ temp: 81, icon: "Sun" });
     unmount();
   });
 

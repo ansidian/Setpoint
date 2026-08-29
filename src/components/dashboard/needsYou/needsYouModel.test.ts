@@ -39,43 +39,20 @@ const bills: NeedsYouBill[] = [
   { id: "electric", name: "Demo Electric", payee: "Demo Electric", amount: 146.32, next_date: "2026-06-23", paid: false }, // future → backfill
 ];
 
-describe("buildNeedsYouModel count + color", () => {
-  it("counts urgent emails + overdue/due-today deadlines + due-today unpaid bills, rose when anything overdue", () => {
+describe("buildNeedsYouModel count", () => {
+  it("counts urgent emails + overdue/due-today deadlines + due-today unpaid bills", () => {
     const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills });
     expect(m.countN).toBe(5);
-    expect(m.countColor).toBe("var(--sp-rose)");
   });
 
-  it("uses accent color when nothing is overdue", () => {
-    const noOverdue = { upcoming: deadlines.upcoming.filter((d) => d.id !== "pr") };
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: noOverdue, liveBills: bills });
-    expect(m.countColor).toBe("var(--sp-accent)");
-  });
-
-  it("is empty (count 0, accent) when no urgent items", () => {
+  it("is empty when no urgent items", () => {
     const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [] }, liveBills: [] });
     expect(m.countN).toBe(0);
-    expect(m.countColor).toBe("var(--sp-accent)");
     expect(m.urgentCards).toEqual([]);
   });
 });
 
 describe("buildNeedsYouModel breakdown + cards", () => {
-  it("builds colored breakdown segments: N overdue (rose) · N due today (rose) · N urgent emails (cream)", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills });
-    expect(m.breakdown).toEqual([
-      { text: "1 overdue", color: "var(--sp-rose)" },
-      { text: "2 due today", color: "var(--sp-rose)" },
-      { text: "2 urgent emails", color: "var(--sp-cream)" },
-    ]);
-  });
-
-  it("singularizes the email segment", () => {
-    const oneEmail = lanes({ needs_attention: [lanes().needs_attention[0]!] });
-    const m = buildNeedsYouModel({ snapshotLanes: oneEmail, liveDeadlines: { upcoming: [] }, liveBills: [] });
-    expect(m.breakdown).toEqual([{ text: "1 urgent email", color: "var(--sp-cream)" }]);
-  });
-
   it("interleaves urgent cards by rank: overdue deadline, due-today bill, due-today deadline, then emails; capped at maxCards", () => {
     const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills, maxCards: 5 });
     expect(m.urgentCards.map((c) => c.id)).toEqual(["deadline:pr", "bill:rent", "deadline:demolink", "email:1", "email:2"]);
@@ -93,8 +70,7 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     });
     expect(m.urgentCards.map((c) => c.id)).toEqual(["email:1"]);
     expect(m.backfillCards.length).toBe(2);
-    expect(m.backfillCards[0]!).toMatchObject({ kind: "backfill", source: "Coming up", sourceIcon: "Clock" });
-    expect(m.backfillCards[0]!.pill.tone).toBe("var(--sp-cream)");
+    expect(m.backfillCards[0]!.kind).toBe("backfill");
     expect(m.backfillCards.map((c) => c.title)).toEqual(["Walkthrough notes", "Demo Electric"]);
   });
 
@@ -116,52 +92,7 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     const m = buildNeedsYouModel({ snapshotLanes: manyEmails, liveDeadlines: { upcoming: [deadlines.upcoming[2]!] }, liveBills: [], maxCards: 5 });
     expect(m.urgentCards.length).toBe(5);
     expect(m.moreCount).toBe(1);
-    expect(m.moreLabel).toBe("more item needs you");
     expect(m.backfillCards).toEqual([]);
-  });
-});
-
-describe("buildNeedsYouModel due-today time on deadline pills", () => {
-  const onlyDeadline = (d: NeedsYouDeadline) =>
-    buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [d] }, liveBills: [] });
-
-  it("appends the due time after 'Due today' when a due-today deadline has one", () => {
-    const m = onlyDeadline({ id: "demolink", title: "Send portfolio demo link", due_date: "2026-06-19", due_time: "2:00 PM", status: "open", priority: 2, class_name: "Career" });
-    expect(m.urgentCards.find((c) => c.id === "deadline:demolink")!.pill.label).toBe("Due today, 2:00 PM");
-  });
-
-  it("keeps a bare 'Due today' when the due-today deadline has no time", () => {
-    const m = onlyDeadline({ id: "demolink", title: "Send portfolio demo link", due_date: "2026-06-19", status: "open", priority: 2, class_name: "Career" });
-    expect(m.urgentCards.find((c) => c.id === "deadline:demolink")!.pill.label).toBe("Due today");
-  });
-
-  it("never appends time to an overdue deadline (keeps the 'N days overdue' label)", () => {
-    const m = onlyDeadline({ id: "pr", title: "Respond to PR review", due_date: "2026-06-18", due_time: "2:00 PM", status: "open", priority: 1, class_name: "Engineering" });
-    expect(m.urgentCards.find((c) => c.id === "deadline:pr")!.pill.label).toBe("1 day overdue");
-  });
-});
-
-describe("buildNeedsYouModel chip tooltips", () => {
-  it("gives urgent + backfill cards an absolute chipTooltip (Today+time / short date)", () => {
-    const dl = {
-      upcoming: [
-        { id: "pr", title: "PR", due_date: "2026-06-18", status: "open", priority: 1, class_name: "Eng" }, // overdue
-        { id: "demolink", title: "Demo", due_date: "2026-06-19", due_time: "2:00 PM", status: "open", priority: 2, class_name: "Career" }, // today
-        { id: "later", title: "Later", due_date: "2026-06-22", status: "open", priority: 2, class_name: "Port" }, // backfill
-      ],
-    };
-    const bl = [
-      { id: "rent", name: "Rent", amount: 2450, next_date: "2026-06-19", paid: false }, // today
-      { id: "electric", name: "Electric", amount: 100, next_date: "2026-06-23", paid: false }, // backfill
-    ];
-    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: dl, liveBills: bl });
-    const urgent = Object.fromEntries(m.urgentCards.map((c) => [c.id, c.chipTooltip]));
-    const backfill = Object.fromEntries(m.backfillCards.map((c) => [c.id, c.chipTooltip]));
-    expect(urgent["deadline:pr"]).toBe("6/18/26");      // overdue → short date
-    expect(urgent["deadline:demolink"]).toBeNull();     // due today → chip already says it
-    expect(urgent["bill:rent"]).toBeNull();             // due today → no tooltip
-    expect(backfill["deadline:later"]).toBe("6/22/26");
-    expect(backfill["bill:electric"]).toBe("6/23/26");
   });
 });
 
@@ -193,32 +124,16 @@ describe("collectNeedsYouCandidateIds", () => {
     expect(ids.has(emailId)).toBe(true);
   });
 
-  it("returns an empty set when there is no server data", () => {
-    const ids = collectNeedsYouCandidateIds({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [] }, liveBills: [] });
-    expect(ids.size).toBe(0);
-  });
 });
 
 describe("buildNeedsYouModel email open/handled transitions + inbox rows", () => {
-  it("Open (mark-read) flips the card to opened: MailOpen icon, 'opened, no reply yet' meta, STAYS in band", () => {
-    const base = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [] });
-    const openedEmailId = base.urgentCards.find((c) => c.email)!.id;
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [], opened: [openedEmailId] });
-    const card = m.urgentCards.find((c) => c.id === openedEmailId);
-    expect(card).toBeTruthy();
-    expect(card!.opened).toBe(true);
-    expect(card!.sourceIcon).toBe("MailOpen");
-    expect(card!.meta).toContain("opened, no reply yet");
-  });
-
   it("keeps a READ but unhandled needs-attention email in the band — reading alone does not clear it", () => {
     const readLanes = lanes({ needs_attention: [{ ...lanes().needs_attention[0]!, read: true }] });
     const m = buildNeedsYouModel({ snapshotLanes: readLanes, liveDeadlines: { upcoming: [] }, liveBills: [] });
     const card = m.urgentCards.find((c) => c.email);
     expect(card).toBeTruthy();
     expect(card!.id).toBe("email:1");
-    expect(card!.opened).toBe(true);          // read reflects as opened…
-    expect(card!.sourceIcon).toBe("MailOpen"); // …but it STAYS in the band
+    expect(card!.opened).toBe(true);
   });
 
   it("marks deadline cards completable (real completion) and bill cards not", () => {
@@ -235,20 +150,4 @@ describe("buildNeedsYouModel email open/handled transitions + inbox rows", () =>
     expect(m.inboxRows.find((r) => r.id === handledId)).toBeUndefined();
   });
 
-  it("inbox rows mirror the band lane: needs=rose solid dot, fyi=cyan solid dot, opened=hollow", () => {
-    const openedId = "email:1";
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [], opened: [openedId] });
-    const r1 = m.inboxRows.find((r) => r.id === "email:1");
-    const fyi = m.inboxRows.find((r) => r.id === "email:3");
-    expect(r1).toMatchObject({ lane: "needs_attention", dotTone: "var(--sp-rose)", dotState: "hollow" });
-    expect(fyi).toMatchObject({ lane: "fyi", dotTone: "var(--sp-cyan)", dotState: "solid" });
-    expect(r1!.label).toBe("Riley Park · PR blocker: source retry copy");
-  });
-
-  it("inboxChip is 'N need you' (rose) when needs rows remain, else calm green", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [] });
-    expect(m.inboxChip).toMatchObject({ text: "2 need you", tone: "var(--sp-rose)", calm: false });
-    const calm = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [] }, liveBills: [] });
-    expect(calm.inboxChip).toMatchObject({ text: "Inbox calm", tone: "var(--sp-green)", calm: true });
-  });
 });

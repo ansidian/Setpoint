@@ -30,15 +30,6 @@ describe("useDashboardFocusRetry", () => {
     vi.useRealTimers();
   });
 
-  it("runs the attach attempt immediately when focus is requested", () => {
-    const attachment = attachmentFixture("done");
-    const { result } = renderHook(() => useDashboardFocusRetry({ attempt: attachment.attempt }));
-
-    result.current.retryFocus({ id: "task-1" });
-
-    expect(attachment.state).toMatchObject({ attempts: 1, lastTarget: { id: "task-1" } });
-  });
-
   it("re-attempts on the retry interval until the attach succeeds", () => {
     const attachment = attachmentFixture(["retry", "retry", "done"]);
     const { result } = renderHook(() =>

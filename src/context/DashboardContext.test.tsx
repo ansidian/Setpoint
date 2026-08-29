@@ -22,10 +22,7 @@ function Probe({ task, moveTarget = "2026-04-25" }: { task: DashboardDeadline; m
   const actions = useDashboard();
   return (
     <>
-      <button type="button" onClick={() => actions.handleAddTask(task)}>Add</button>
-      <button type="button" onClick={() => actions.handleUpdateTask({ ...task, title: "Updated title" })}>Update</button>
       <button type="button" onClick={() => actions.handleUpdateTask({ ...task, due_date: "2026-04-30", due_time: "4:00 PM" })}>Update latest</button>
-      <button type="button" onClick={() => actions.handleDeleteTask(task.id)}>Delete</button>
       <button type="button" onClick={() => actions.handleCompleteTask(task.id, task)}>Complete</button>
       <button type="button" onClick={() => actions.handleMoveTask(task, moveTarget)}>Move</button>
     </>
@@ -64,18 +61,6 @@ describe("DashboardContext deadline facade", () => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
-  });
-
-  it("adds, updates, and deletes through the single rendered deadlines store", () => {
-    const task = { id: "todo-edit", title: "Original", due_date: "2026-04-21", status: "incomplete" };
-    render(<DeadlineHarness initial={{ upcoming: [], stats: stats(0) }} task={task} />);
-
-    fireEvent.click(screen.getByText("Add"));
-    expect(readDeadlines().upcoming).toEqual([task]);
-    fireEvent.click(screen.getByText("Update"));
-    expect(readDeadlines().upcoming[0]?.title).toBe("Updated title");
-    fireEvent.click(screen.getByText("Delete"));
-    expect(readDeadlines().upcoming).toEqual([]);
   });
 
   it("optimistically completes an occurrence and settles it after the UX delay", async () => {

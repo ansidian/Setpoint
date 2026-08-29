@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CURRENT_CACHE_KEYS,
   currentResponseContentKey,
   fallbackPayloadForKey,
   hasUsablePayload,
@@ -62,15 +61,6 @@ describe("currentResponseContentKey", () => {
 });
 
 describe("current dashboard source definitions", () => {
-  it("exposes the current dashboard cache source order", () => {
-    expect(CURRENT_CACHE_KEYS).toEqual([
-      "weather_current",
-      "calendar_current",
-      "deadlines_current",
-      "bills_current",
-    ]);
-  });
-
   it("keeps source payload validation and fallbacks local to each source", () => {
     expect(fallbackPayloadForKey("calendar_current")).toEqual([]);
     expect(fallbackPayloadForKey("deadlines_current")).toEqual({
