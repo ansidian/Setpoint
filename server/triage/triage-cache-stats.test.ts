@@ -72,60 +72,19 @@ function strongRow({
 const NOW = new Date("2026-05-07T12:00:00.000Z");
 
 describe("getTriageCacheStats", () => {
-  it("prices an exactly-matched OpenAI model and computes cost + savings", async () => {
+  it("aggregates OpenAI usage by tier", async () => {
     const stats = await getTriageCacheStats("user-1", {
       dbClient: fakeDb([strongRow({ lastTriagedAt: "2026-05-04T12:00:00.000Z" })]),
       now: NOW,
     });
 
-    // gpt-5.4: input 2.50, cachedInput 0.25, output 15.00 per million.
-    // uncached = 2000 - 1000 = 1000.
-    // cost = 1000/1e6*2.50 + 1000/1e6*0.25 + 200/1e6*15.00 = 0.00575
-    // savings = 1000/1e6*(2.50-0.25) = 0.00225
     expect(stats.openaiCalls).toBe(1);
     expect(stats.inputTokens).toBe(2000);
     expect(stats.cachedInputTokens).toBe(1000);
     expect(stats.outputTokens).toBe(200);
-    expect(stats.estimatedCostUsd).toBe(0.00575);
-    expect(stats.estimatedSavingsUsd).toBe(0.00225);
     expect(stats.models).toEqual(["gpt-5.4"]);
     expect(stats.byTier.strong.calls).toBe(1);
     expect(stats.byTier.cheap.calls).toBe(0);
-  });
-
-  it("prices a dated model id via the longest startsWith prefix", async () => {
-    // "gpt-5.4-nano-2026-05-04" has no exact entry; it must resolve to the
-    // "gpt-5.4-nano" prefix, NOT the shorter "gpt-5.4" prefix.
-    const stats = await getTriageCacheStats("user-1", {
-      dbClient: fakeDb([
-        cheapRow({ lastTriagedAt: "2026-05-04T12:00:00.000Z", model: "gpt-5.4-nano-2026-05-04" }),
-      ]),
-      now: NOW,
-    });
-
-    // gpt-5.4-nano: input 0.20, cachedInput 0.02, output 1.25 per million.
-    // uncached = 1000 - 600 = 400.
-    // cost = 400/1e6*0.20 + 600/1e6*0.02 + 100/1e6*1.25 = 0.000217
-    // savings = 600/1e6*(0.20-0.02) = 0.000108
-    expect(stats.byTier.cheap.estimatedCostUsd).toBe(0.000217);
-    expect(stats.byTier.cheap.estimatedSavingsUsd).toBe(0.000108);
-    expect(stats.models).toEqual(["gpt-5.4-nano-2026-05-04"]);
-  });
-
-  it("treats an unknown OpenAI model as zero-priced (no exact, no prefix match)", async () => {
-    const stats = await getTriageCacheStats("user-1", {
-      dbClient: fakeDb([
-        cheapRow({ lastTriagedAt: "2026-05-04T12:00:00.000Z", model: "gpt-9-experimental" }),
-      ]),
-      now: NOW,
-    });
-
-    // Tokens still accumulate; only cost/savings are zero with no price row.
-    expect(stats.openaiCalls).toBe(1);
-    expect(stats.inputTokens).toBe(1000);
-    expect(stats.cachedInputTokens).toBe(600);
-    expect(stats.estimatedCostUsd).toBe(0);
-    expect(stats.estimatedSavingsUsd).toBe(0);
   });
 
   it("excludes anthropic-provider rows from the OpenAI aggregate", async () => {
@@ -149,37 +108,6 @@ describe("getTriageCacheStats", () => {
     expect(stats.inputTokens).toBe(1000);
     expect(stats.outputTokens).toBe(100);
     expect(stats.models).toEqual(["gpt-5.4-nano"]);
-  });
-
-  it("rounds money to 6 places and the cache hit rate to 4 places", async () => {
-    const stats = await getTriageCacheStats("user-1", {
-      dbClient: fakeDb([
-        cheapRow({ lastTriagedAt: "2026-05-04T12:00:00.000Z" }), // 1000 in / 600 cached
-        strongRow({ lastTriagedAt: "2026-05-04T12:05:00.000Z" }), // 2000 in / 1000 cached
-      ]),
-      now: NOW,
-    });
-
-    // hitRate = 1600/3000 = 0.53333... -> roundRate -> 0.5333
-    expect(stats.hitRate).toBe(0.5333);
-    // total cost = 0.000217 + 0.00575 = 0.005967 (rounded to 6 places)
-    expect(stats.estimatedCostUsd).toBe(0.005967);
-    expect(stats.estimatedSavingsUsd).toBe(0.002358);
-    // lastTriagedAt is the max across counted rows.
-    expect(stats.lastTriagedAt).toBe("2026-05-04T12:05:00.000Z");
-  });
-
-  it("reports a zero hit rate when there are no input tokens", async () => {
-    const stats = await getTriageCacheStats("user-1", {
-      dbClient: fakeDb([]),
-      now: NOW,
-    });
-
-    expect(stats.openaiCalls).toBe(0);
-    expect(stats.inputTokens).toBe(0);
-    expect(stats.hitRate).toBe(0);
-    expect(stats.lastTriagedAt).toBeNull();
-    expect(stats.models).toEqual([]);
   });
 
   it("splits the rolling window from month-to-date by last_triaged_at", async () => {

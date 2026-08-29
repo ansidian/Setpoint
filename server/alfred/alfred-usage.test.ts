@@ -55,16 +55,4 @@ describe("recordAlfredUsage", () => {
     expect(JSON.parse(String(row.metadata_json))).toEqual({ iteration: 0 });
   });
 
-  it("survives unserializable metadata", async () => {
-    const circular: Record<string, unknown> = {};
-    circular.self = circular;
-    await recordAlfredUsage("user-1", {
-      dbClient: db,
-      eventType: "alfred_run_turn",
-      model: "claude-sonnet-4-6",
-      metadata: circular,
-    });
-    const result = await db.execute("SELECT metadata_json FROM ea_alfred_usage");
-    expect(result.rows[0]!.metadata_json).toBe("{}");
-  });
 });

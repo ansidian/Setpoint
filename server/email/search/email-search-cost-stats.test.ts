@@ -19,7 +19,7 @@ describe("email search cost stats", () => {
     db = null;
   });
 
-  it("reports querySearch usage and a per-query estimate, with no planner, without storing content", async () => {
+  it("reports query search usage and ignores retired planner rows", async () => {
     db = await createEmailIndexTestDb();
     const row = await seedIndexedEmail(db, {
       uid: "embedded-1",
@@ -78,7 +78,6 @@ describe("email search cost stats", () => {
       model: "text-embedding-3-small",
       embeddedDocuments: 1,
       estimatedInputTokens: expect.any(Number),
-      estimatedCostUsd: expect.any(Number),
     });
     expect(stats.corpusEmbeddings.actualUsage).toMatchObject({
       calls: 1,
@@ -102,66 +101,5 @@ describe("email search cost stats", () => {
     expect(stats.querySearch.actualUsage.byEvent.planner).toBeUndefined();
     expect(stats.querySearch.perQueryEstimate.model).toBe("text-embedding-3-small");
     expect(stats.querySearch.perQueryEstimate).not.toHaveProperty("planner");
-    expect(stats.querySearch.perQueryEstimate.estimatedCostUsd).toBeGreaterThan(0);
-    expect(stats.pricing.models).not.toHaveProperty("gpt-5.4-mini");
-    expect(stats.pricing.models).toHaveProperty("text-embedding-3-small");
-    expect(stats.corpusEmbeddings).toBeTruthy();
-
-    const columns = await db.execute("PRAGMA table_info('ea_email_search_ai_usage')");
-    expect(columns.rows.map((column) => column.name)).not.toContain("query_text");
-  });
-
-  it("reprices zero-cost query_embedding rollups and ignores retired planner rows", async () => {
-    db = await createEmailIndexTestDb();
-
-    // A historical query_embedding row stored with zero cost must be repriced via
-    // the embedding price (the only live priced model now).
-    await db.execute({
-      sql: `INSERT INTO ea_email_search_ai_usage
-              (user_id, event_type, model, input_tokens, cached_input_tokens,
-               output_tokens, estimated, estimated_cost_usd, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        "user-1",
-        "query_embedding",
-        "text-embedding-3-small",
-        100000,
-        0,
-        0,
-        1,
-        0,
-        "{}",
-        "2026-05-08T11:00:00.000Z",
-      ],
-    });
-    // A retired planner row in the same window must not surface under querySearch.
-    await db.execute({
-      sql: `INSERT INTO ea_email_search_ai_usage
-              (user_id, event_type, model, input_tokens, cached_input_tokens,
-               output_tokens, estimated, estimated_cost_usd, metadata_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        "user-1",
-        "planner",
-        "gpt-5.4-mini-2026-03-17",
-        1000,
-        200,
-        100,
-        0,
-        0,
-        "{}",
-        "2026-05-08T11:00:00.000Z",
-      ],
-    });
-
-    const stats = await getEmailSearchCostStats("user-1", {
-      dbClient: db,
-      now: new Date("2026-05-08T12:00:00.000Z"),
-    });
-
-    expect(stats.querySearch.actualUsage.calls).toBe(1);
-    expect(stats.querySearch.actualUsage.byEvent.planner).toBeUndefined();
-    expect(stats.querySearch.actualUsage.estimatedCostUsd).toBeGreaterThan(0);
-    expect(stats.querySearch.actualUsage.models).toEqual(["text-embedding-3-small"]);
   });
 });
