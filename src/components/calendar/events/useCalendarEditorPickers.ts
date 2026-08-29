@@ -16,6 +16,7 @@ const SOURCE_PICKER_HEIGHT = 280;
 const LOCATION_PICKER_WIDTH = 360;
 const LOCATION_PICKER_HEIGHT = 240;
 const RECURRENCE_PICKER_COMPACT_WIDTH = 232;
+const RECURRENCE_PICKER_COMPACT_HEIGHT = 320;
 const RECURRENCE_PICKER_WIDTH = 620;
 const RECURRENCE_PICKER_HEIGHT = 380;
 const CONFLICT_PICKER_WIDTH = 420;
@@ -186,13 +187,13 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
     panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: recurrenceDraft ? RECURRENCE_PICKER_WIDTH : RECURRENCE_PICKER_COMPACT_WIDTH,
-    height: RECURRENCE_PICKER_HEIGHT,
+    height: recurrenceDraft ? RECURRENCE_PICKER_HEIGHT : RECURRENCE_PICKER_COMPACT_HEIGHT,
     mobileHeight: "min(620px, calc(100dvh - 20px))",
     animatePosition: true,
     animateSize: true,
     role: "dialog",
     style: {
-      height: `min(${RECURRENCE_PICKER_HEIGHT}px, calc(100vh - 20px))`,
+      height: `min(${recurrenceDraft ? RECURRENCE_PICKER_HEIGHT : RECURRENCE_PICKER_COMPACT_HEIGHT}px, calc(100vh - 20px))`,
       overflow: "hidden",
       padding: 10,
       zIndex: 10001,
