@@ -3,9 +3,12 @@ import { addDaysYmd, parseYmd } from "./calendarDateUtils.ts";
 import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors";
 
 const TIME_12_RE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+const SCHEDULE_CONTEXT_NEIGHBOR_GAP_MS = 90 * 60 * 1000;
 interface Placement { accountId?: string; calendarId?: string; allDay?: boolean; startDate?: string; endDate?: string; startTime?: string | null; endTime?: string | null; title?: string }
 export interface CalendarEventLike extends Placement { id?: unknown; originalStartTime?: string; startMs?: number; endMs?: number; isRecurring?: boolean; color?: string }
-export interface Ghost extends Placement { id: string; kind: "event" | "deadline"; title: string; startDate: string; endDate: string; startMs?: number | null; endMs?: number | null; color?: string; dueDate?: string; dueTime?: string | null; dueMinutes?: number | null; lane: number; conflictCount: number; conflictTitles?: string[]; crowdedCount?: number; batch?: boolean; recurring?: boolean; recurrenceCue?: string }
+export interface CalendarConflictDetail { id: string; title: string; startMs: number; endMs: number; allDay: boolean; color?: string }
+export interface CalendarScheduleContextItem extends CalendarConflictDetail { conflicting: boolean }
+export interface Ghost extends Placement { id: string; kind: "event" | "deadline"; title: string; startDate: string; endDate: string; startMs?: number | null; endMs?: number | null; color?: string; dueDate?: string; dueTime?: string | null; dueMinutes?: number | null; lane: number; conflictCount: number; conflictTitles?: string[]; conflicts?: CalendarConflictDetail[]; scheduleContext?: CalendarScheduleContextItem[]; crowdedCount?: number; batch?: boolean; recurring?: boolean; recurrenceCue?: string }
 export interface GhostPreview { kind: string; targetDate: string | null; ghosts: Ghost[]; totalConflictCount?: number }
 export interface EventEditorLike {
   isEditorOpen?: boolean;
@@ -183,13 +186,22 @@ function sameEventIdentity(a?: CalendarEventLike | null, b?: CalendarEventLike |
   return aOriginal === bOriginal;
 }
 
+function eventDetail(event: CalendarEventLike): CalendarConflictDetail {
+  return {
+    id: String(event.id || `${event.startMs}-${event.endMs}-${event.title || ""}`),
+    title: event.title || "(No title)",
+    startMs: event.startMs!,
+    endMs: event.endMs!,
+    allDay: !!event.allDay,
+    color: event.color,
+  };
+}
+
 function eventConflictCount(ghost: Ghost, events: CalendarEventLike[], editingEvent?: CalendarEventLike | null) {
   const conflicts: CalendarEventLike[] = [];
   for (const event of events || []) {
     if (!event?.startMs || !event?.endMs) continue;
     if (sameEventIdentity(event, editingEvent)) continue;
-    if (ghost.accountId && event.accountId && ghost.accountId !== event.accountId) continue;
-    if (ghost.calendarId && event.calendarId && ghost.calendarId !== event.calendarId) continue;
 
     if (ghost.allDay) {
       if (!event.allDay) continue;
@@ -217,7 +229,57 @@ function eventConflictCount(ghost: Ghost, events: CalendarEventLike[], editingEv
   return {
     count: conflicts.length,
     titles: conflicts.slice(0, 3).map((event) => event.title || "(No title)"),
+    details: conflicts.map(eventDetail),
   };
+}
+
+function eventScheduleContext(
+  ghost: Ghost,
+  events: CalendarEventLike[],
+  editingEvent?: CalendarEventLike | null,
+): CalendarScheduleContextItem[] {
+  if (ghost.allDay || ghost.startMs == null || ghost.endMs == null) return [];
+  const dayStart = ymdToEpoch(ghost.startDate, "00:00");
+  const dayEnd = ymdToEpoch(addDaysYmd(ghost.startDate, 1), "00:00");
+  if (dayStart == null || dayEnd == null) return [];
+
+  const dayEvents = (events || []).filter((event) => (
+    !event.allDay
+    && !!event.startMs
+    && !!event.endMs
+    && !sameEventIdentity(event, editingEvent)
+    && event.startMs < dayEnd
+    && event.endMs > dayStart
+  ));
+  const conflicts = dayEvents.filter((event) => ghost.startMs! < event.endMs! && ghost.endMs! > event.startMs!);
+  const before = dayEvents
+    .filter((event) => (
+      event.endMs! <= ghost.startMs!
+      && ghost.startMs! - event.endMs! <= SCHEDULE_CONTEXT_NEIGHBOR_GAP_MS
+    ))
+    .sort((a, b) => b.endMs! - a.endMs!)[0];
+  const after = dayEvents
+    .filter((event) => (
+      event.startMs! >= ghost.endMs!
+      && event.startMs! - ghost.endMs! <= SCHEDULE_CONTEXT_NEIGHBOR_GAP_MS
+    ))
+    .sort((a, b) => a.startMs! - b.startMs!)[0];
+  const conflictKeys = new Set(conflicts.map((event) => `${event.id || ""}-${event.startMs}`));
+  const context = [before, ...conflicts, after].filter((event): event is CalendarEventLike => !!event);
+  const seen = new Set<string>();
+
+  return context
+    .filter((event) => {
+      const key = `${event.id || ""}-${event.startMs}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((event) => ({
+      ...eventDetail(event),
+      conflicting: conflictKeys.has(`${event.id || ""}-${event.startMs}`),
+    }))
+    .sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
 }
 
 export function buildEventGhostPreview({ editor, events }: { editor?: EventEditorLike | null; events?: CalendarEventLike[] | null }): GhostPreview | null {
@@ -254,6 +316,8 @@ export function buildEventGhostPreview({ editor, events }: { editor?: EventEdito
       ...ghost,
       conflictCount: conflict.count,
       conflictTitles: conflict.titles,
+      conflicts: conflict.details,
+      scheduleContext: eventScheduleContext(ghost, events || [], editingEvent),
     };
   });
 

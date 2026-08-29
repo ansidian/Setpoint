@@ -85,6 +85,7 @@ export default function CalendarEventEditorRail({
     startTimeRef,
     endTimeRef,
     repeatRef,
+    conflictRef,
     missingCalendar,
     selectedSource,
     invalidDateRange,
@@ -176,6 +177,7 @@ export default function CalendarEventEditorRail({
               invalidTimeRange={invalidTimeRange}
               recurrenceDraft={recurrenceDraft}
               isRecurringEvent={isEditingRecurring}
+              showScheduleContext={!!ghostPreview?.ghosts?.[0]}
               conflictCount={ghostPreview?.totalConflictCount || 0}
               openPicker={pickers.openPicker}
               setOpenPicker={setOpenPicker}
@@ -188,6 +190,7 @@ export default function CalendarEventEditorRail({
               sourceRef={sourceRef}
               locationRef={locationRef}
               repeatRef={repeatRef}
+              conflictRef={conflictRef}
               handleLocationSuggestionKey={handleLocationSuggestionKey}
             />
           ) : null}
@@ -336,7 +339,11 @@ export default function CalendarEventEditorRail({
         />
       </div>
 
-      <CalendarEventEditorPanels editor={editor} pickers={pickers} />
+      <CalendarEventEditorPanels
+        editor={editor}
+        pickers={pickers}
+        ghost={ghostPreview?.ghosts?.[0] || null}
+      />
     </div>
   );
 }

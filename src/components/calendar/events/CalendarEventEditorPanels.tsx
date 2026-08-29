@@ -2,9 +2,11 @@ import { useCallback, useLayoutEffect, useRef } from "react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarEventCompactSchedulePicker from "./CalendarEventCompactSchedulePicker";
 import CalendarEventRecurrencePicker from "./CalendarEventRecurrencePicker";
+import CalendarConflictPanel from "./CalendarConflictPanel";
 import CalendarLocationSuggestionsPanel from "./CalendarLocationSuggestionsPanel";
 import SourcePickerPanel from "./CalendarSourcePickerPanel";
 import { textFieldStyle } from "./calendarEditorUtils";
+import type { CalendarDraftGhost } from "./CalendarDraftPreviewPanel";
 import type useCalendarEditorPickers from "./useCalendarEditorPickers";
 import type { CalendarSchedulePickerField } from "./useCalendarEditorPickers";
 import type useCalendarEventEditor from "./useCalendarEventEditor";
@@ -12,9 +14,10 @@ import type useCalendarEventEditor from "./useCalendarEventEditor";
 interface CalendarEventEditorPanelsProps {
   editor: ReturnType<typeof useCalendarEventEditor>;
   pickers: ReturnType<typeof useCalendarEditorPickers>;
+  ghost?: CalendarDraftGhost | null;
 }
 
-export default function CalendarEventEditorPanels({ editor, pickers }: CalendarEventEditorPanelsProps) {
+export default function CalendarEventEditorPanels({ editor, pickers, ghost = null }: CalendarEventEditorPanelsProps) {
   const {
     draft,
     sourceGroups,
@@ -187,6 +190,16 @@ export default function CalendarEventEditorPanels({ editor, pickers }: CalendarE
             onToggleWeekday={toggleRecurrenceWeekday}
             onClose={() => pickers.setOpenPicker(null)}
           />
+        </AnchoredFloatingPanel>
+      ) : null}
+
+      {pickers.openPicker === "conflicts" && ghost ? (
+        <AnchoredFloatingPanel
+          anchorRef={pickers.conflictRef}
+          ariaLabel="Schedule conflicts"
+          {...pickers.sharedConflictPickerProps}
+        >
+          <CalendarConflictPanel ghost={ghost!} />
         </AnchoredFloatingPanel>
       ) : null}
 

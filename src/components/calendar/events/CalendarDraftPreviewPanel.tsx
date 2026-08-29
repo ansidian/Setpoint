@@ -1,4 +1,8 @@
-import { ghostDisplayRange } from "../ghostPreview.ts";
+import {
+  ghostDisplayRange,
+  type CalendarConflictDetail,
+  type CalendarScheduleContextItem,
+} from "../ghostPreview.ts";
 import { formatRecurrenceSummary, formatScheduleSummary, previewSegmentStyle } from "./calendarEditorUtils";
 import type {
   CalendarEventDraft,
@@ -8,6 +12,13 @@ import type {
 
 export interface CalendarDraftGhost {
   recurring?: boolean;
+  conflicts?: CalendarConflictDetail[];
+  scheduleContext?: CalendarScheduleContextItem[];
+  title?: string;
+  startMs?: number | null;
+  endMs?: number | null;
+  allDay?: boolean;
+  color?: string;
   [key: string]: unknown;
 }
 

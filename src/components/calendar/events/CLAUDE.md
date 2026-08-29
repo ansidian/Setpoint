@@ -24,6 +24,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarEventEditorPanels.tsx` — floating date/time/location/source/recurrence pickers
 - `CalendarEventEditorHeader.tsx` — mode label and contextual copy (editing/batch/new)
 - `CalendarEventFactSheet.tsx` / `editorFactSheet.css` — editable schedule/calendar/location/repeat hierarchy shared visually with Calendar's deadline editor
+- `CalendarConflictPanel.tsx` — informational, time-scaled context timeline for a draft's nearest before/after events and actual overlaps
 - `CalendarEventEditorActionBar.tsx` — save/delete/cancel with confirmation states
 - `CalendarEventEditorStatusMessages.tsx` — error and validation messaging
 - `CalendarEditorControls.tsx` — shared editor control primitives

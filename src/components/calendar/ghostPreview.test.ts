@@ -173,7 +173,7 @@ describe("calendar ghost previews", () => {
       expect(preview!.totalConflictCount).toBe(0);
     });
 
-    it("does not flag a same-account event on a different calendar", () => {
+    it("flags a visible overlap from a different calendar and preserves its details", () => {
       const preview = buildEventGhostPreview({
         editor: timedEditor,
         events: [
@@ -186,8 +186,67 @@ describe("calendar ghost previews", () => {
           }),
         ],
       });
-      expect(preview!.ghosts[0]!.conflictCount).toBe(0);
+      expect(preview!.ghosts[0]!.conflictCount).toBe(1);
+      expect(preview!.ghosts[0]!.conflicts).toEqual([
+        expect.objectContaining({
+          id: "evt-Other calendar",
+          title: "Other calendar",
+          allDay: false,
+        }),
+      ]);
+      expect(preview!.ghosts[0]!.scheduleContext).toEqual([
+        expect.objectContaining({ title: "Other calendar", conflicting: true }),
+      ]);
+      expect(preview!.totalConflictCount).toBe(1);
+    });
+
+    it("frames conflicts with the nearest timed event before and after", () => {
+      const preview = buildEventGhostPreview({
+        editor: timedEditor,
+        events: [
+          timedEvent({ title: "Too early", start: [7, 0], end: [7, 30] }),
+          timedEvent({ title: "Before", start: [8, 0], end: [8, 30] }),
+          timedEvent({ title: "Conflict", start: [9, 15], end: [10, 0] }),
+          timedEvent({ title: "After", start: [10, 15], end: [11, 0] }),
+          timedEvent({ title: "Too late", start: [12, 0], end: [13, 0] }),
+          allDayEvent({ title: "All day" }),
+        ],
+      });
+
+      expect(preview!.ghosts[0]!.scheduleContext?.map((event) => ({
+        title: event.title,
+        conflicting: event.conflicting,
+      }))).toEqual([
+        { title: "Before", conflicting: false },
+        { title: "Conflict", conflicting: true },
+        { title: "After", conflicting: false },
+      ]);
+    });
+
+    it("keeps surrounding schedule context when the draft does not overlap", () => {
+      const preview = buildEventGhostPreview({
+        editor: timedEditor,
+        events: [
+          timedEvent({ title: "Before", start: [8, 0], end: [8, 30] }),
+          timedEvent({ title: "After", start: [10, 15], end: [11, 0] }),
+        ],
+      });
+
       expect(preview!.totalConflictCount).toBe(0);
+      expect(preview!.ghosts[0]!.scheduleContext?.map((event) => event.title)).toEqual(["Before", "After"]);
+    });
+
+    it("omits non-overlapping neighbors more than 90 minutes from the draft", () => {
+      const preview = buildEventGhostPreview({
+        editor: timedEditor,
+        events: [
+          timedEvent({ title: "Far before", start: [6, 0], end: [7, 0] }),
+          timedEvent({ title: "Far after", start: [11, 1], end: [12, 0] }),
+        ],
+      });
+
+      expect(preview!.totalConflictCount).toBe(0);
+      expect(preview!.ghosts[0]!.scheduleContext).toEqual([]);
     });
 
     it("does not flag a timed draft against an all-day event", () => {
@@ -211,6 +270,7 @@ describe("calendar ghost previews", () => {
       });
       expect(preview!.ghosts[0]!.conflictCount).toBe(5);
       expect(preview!.ghosts[0]!.conflictTitles).toEqual(["A", "B", "C"]);
+      expect(preview!.ghosts[0]!.conflicts?.map((conflict) => conflict.title)).toEqual(["A", "B", "C", "D", "E"]);
       expect(preview!.totalConflictCount).toBe(5);
     });
   });

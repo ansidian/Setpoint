@@ -3,7 +3,7 @@ import type useCalendarEventEditor from "./useCalendarEventEditor";
 import type { WritableCalendarOption } from "./calendarEventEditorModel";
 
 export type CalendarSchedulePickerField = "startDate" | "endDate" | "startTime" | "endTime";
-export type CalendarEditorPicker = "source" | "location" | "startDate" | "endDate" | "startTime" | "endTime" | "schedule" | `schedule:${CalendarSchedulePickerField}` | "recurrence";
+export type CalendarEditorPicker = "source" | "location" | "startDate" | "endDate" | "startTime" | "endTime" | "schedule" | `schedule:${CalendarSchedulePickerField}` | "recurrence" | "conflicts";
 
 const DATE_PICKER_WIDTH = 300;
 const DATE_PICKER_HEIGHT = 386;
@@ -18,6 +18,8 @@ const LOCATION_PICKER_HEIGHT = 240;
 const RECURRENCE_PICKER_COMPACT_WIDTH = 232;
 const RECURRENCE_PICKER_WIDTH = 620;
 const RECURRENCE_PICKER_HEIGHT = 380;
+const CONFLICT_PICKER_WIDTH = 420;
+const CONFLICT_PICKER_HEIGHT = 480;
 
 export default function useCalendarEditorPickers(editor: ReturnType<typeof useCalendarEventEditor>) {
   const {
@@ -54,6 +56,7 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   const startTimeRef = useRef<HTMLButtonElement | null>(null);
   const endTimeRef = useRef<HTMLButtonElement | null>(null);
   const repeatRef = useRef<HTMLButtonElement | null>(null);
+  const conflictRef = useRef<HTMLButtonElement | null>(null);
   const activeSourceSuggestionRef = useRef(0);
   const setOpenPicker = useCallback((nextValue: SetStateAction<CalendarEditorPicker | null>) => {
     setOpenPickerRaw((prev) => (
@@ -192,6 +195,23 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
       height: `min(${RECURRENCE_PICKER_HEIGHT}px, calc(100vh - 20px))`,
       overflow: "hidden",
       padding: 10,
+      zIndex: 10001,
+    },
+  };
+
+  const sharedConflictPickerProps = {
+    panelRef: pickerPanelRef,
+    onClose: () => setOpenPicker(null),
+    width: CONFLICT_PICKER_WIDTH,
+    height: CONFLICT_PICKER_HEIGHT,
+    minWidth: 300,
+    maxWidth: CONFLICT_PICKER_WIDTH,
+    mobileHeight: null,
+    role: "dialog",
+    style: {
+      maxHeight: `min(${CONFLICT_PICKER_HEIGHT}px, calc(100vh - 20px))`,
+      overflow: "auto",
+      padding: 12,
       zIndex: 10001,
     },
   };
@@ -403,6 +423,7 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
     startTimeRef,
     endTimeRef,
     repeatRef,
+    conflictRef,
     missingCalendar,
     selectedSource,
     invalidDateRange,
@@ -428,5 +449,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
     sharedSourcePickerProps,
     sharedLocationPickerProps,
     sharedRecurrencePickerProps,
+    sharedConflictPickerProps,
   };
 }

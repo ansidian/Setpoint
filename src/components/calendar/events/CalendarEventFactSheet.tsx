@@ -1,5 +1,5 @@
 import type { CSSProperties, MutableRefObject } from "react";
-import { CalendarClock, ChevronRight, MapPin, Repeat } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronRight, MapPin, Repeat } from "lucide-react";
 import {
   calendarDraftDurationMinutes,
   formatRecurrenceSummary,
@@ -28,6 +28,7 @@ interface CalendarEventFactSheetProps {
   invalidTimeRange: boolean;
   recurrenceDraft: CalendarRecurrenceDraft | null;
   isRecurringEvent: boolean;
+  showScheduleContext: boolean;
   conflictCount: number;
   openPicker: CalendarEditorPickers["openPicker"];
   setOpenPicker: CalendarEditorPickers["setOpenPicker"];
@@ -40,6 +41,7 @@ interface CalendarEventFactSheetProps {
   sourceRef: MutableRefObject<HTMLButtonElement | null>;
   locationRef: MutableRefObject<HTMLButtonElement | null>;
   repeatRef: MutableRefObject<HTMLButtonElement | null>;
+  conflictRef: MutableRefObject<HTMLButtonElement | null>;
   handleLocationSuggestionKey: CalendarEditorPickers["handleLocationSuggestionKey"];
 }
 
@@ -101,6 +103,7 @@ export default function CalendarEventFactSheet({
   invalidTimeRange,
   recurrenceDraft,
   isRecurringEvent,
+  showScheduleContext,
   conflictCount,
   openPicker,
   setOpenPicker,
@@ -113,6 +116,7 @@ export default function CalendarEventFactSheet({
   sourceRef,
   locationRef,
   repeatRef,
+  conflictRef,
   handleLocationSuggestionKey,
 }: CalendarEventFactSheetProps) {
   const dateLabel = dateRangeLabel(draft);
@@ -228,15 +232,39 @@ export default function CalendarEventFactSheet({
               <span className="calendar-editor-fact-sheet__detail">
                 {timeLabel}
                 {duration ? <span className="calendar-editor-fact-sheet__detail-muted"> · {duration}</span> : null}
-                {conflictCount ? (
-                  <span className="calendar-editor-fact-sheet__warning">
-                    {" · "}Overlaps {conflictCount} event{conflictCount === 1 ? "" : "s"}
-                  </span>
-                ) : null}
               </span>
             </span>
             <ChevronRight className="calendar-editor-fact-sheet__disclosure" size={16} aria-hidden />
           </button>
+
+          {showScheduleContext ? (
+            <button
+              ref={conflictRef}
+              type="button"
+              className="calendar-editor-fact-sheet__conflict"
+              data-calendar-popover-trigger="true"
+              data-calendar-focus-ring="true"
+              data-active={openPicker === "conflicts"}
+              data-conflict={conflictCount > 0}
+              aria-label="Show schedule around this event"
+              aria-expanded={openPicker === "conflicts"}
+              disabled={disabled}
+              onClick={() => toggleOpenPicker("conflicts")}
+            >
+              {conflictCount ? <AlertTriangle size={14} aria-hidden /> : <CalendarClock size={14} aria-hidden />}
+              <span className="calendar-editor-fact-sheet__conflict-copy">
+                <span className="calendar-editor-fact-sheet__warning">
+                  {conflictCount
+                    ? `Overlaps ${conflictCount} event${conflictCount === 1 ? "" : "s"}`
+                    : "View surrounding schedule"}
+                </span>
+                <span className="calendar-editor-fact-sheet__conflict-hint">
+                  {conflictCount ? "See what and when" : "Before and after"}
+                </span>
+              </span>
+              <ChevronRight className="calendar-editor-fact-sheet__conflict-disclosure" size={15} aria-hidden />
+            </button>
+          ) : null}
 
           <div className="calendar-editor-fact-sheet__secondary">
             <button
