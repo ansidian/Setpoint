@@ -176,7 +176,6 @@ export default function useCalendarModalController({
   const eventsUpsertEvents = eventsData?.upsertEvents || null;
   const eventsRemoveEvent = eventsData?.removeEvent || null;
   const eventsMarkStale = eventsData?.markStale || null;
-  const eventsGetEvents = eventsData?.getEvents || null;
   const eventsHasMonth = eventsData?.hasMonth || null;
   const eventsEditable = !!eventsData?.editable;
   const eventsRevision = eventsData?.revision;
@@ -279,7 +278,7 @@ export default function useCalendarModalController({
     deadlinesData,
   });
 
-  const { visibleCalendarEvents, viewData } = useCalendarControllerViewData({
+  const { visibleCalendarEvents, visibleGetMonthEvents, viewData } = useCalendarControllerViewData({
     view,
     viewYear,
     viewMonth,
@@ -544,7 +543,7 @@ export default function useCalendarModalController({
     editorState: { deadlineEditor, setDeadlineEditor, setDeadlineDraftPreview },
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
     viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, suppressFocusRing },
-    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: eventsGetEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp + (deadlinesRangeData?.revision ?? 0), getMonthBills: billsRangeData?.getMonthData || null, billsRange: billsRangeData || null, billsDataRevision: billsRangeData?.revision ?? 0 },
+    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: visibleGetMonthEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp + (deadlinesRangeData?.revision ?? 0), getMonthBills: billsRangeData?.getMonthData || null, billsRange: billsRangeData || null, billsDataRevision: billsRangeData?.revision ?? 0 },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId, setViewDate },
     quickActions: { eventQuickActions, deadlineQuickActions },

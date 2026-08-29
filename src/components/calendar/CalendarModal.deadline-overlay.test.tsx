@@ -86,6 +86,60 @@ describe("CalendarModal deadline overlay behavior", () => {
     expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
   });
 
+  it("hides events from both the month grid and agenda without hiding deadlines", async () => {
+    window.innerWidth = 1900;
+    const event = {
+      id: "event-1",
+      title: "Design review",
+      startMs: new Date("2026-08-31T17:00:00.000Z").getTime(),
+      endMs: new Date("2026-08-31T18:00:00.000Z").getTime(),
+      allDay: false,
+      color: "#4285f4",
+    };
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-08-31"
+        eventsData={{
+          editable: true,
+          ensureRange: vi.fn().mockResolvedValue([]),
+          getEvents: (year: number, month: number) => (
+            year === 2026 && month === 7 ? [event] : []
+          ),
+          isMonthLoading: () => false,
+        }}
+        billsData={{}}
+        deadlinesData={{
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-08-31", source: "todoist", status: "open" },
+          ],
+        }}
+      />,
+    ));
+
+    const monthCell = screen.getByRole("gridcell", { name: /Monday, August 31/i });
+    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    await waitFor(() => {
+      expect(within(monthCell).getByText("Design review")).toBeTruthy();
+      expect(within(agendaRail).getByText("Design review")).toBeTruthy();
+      expect(within(monthCell).getByText("Project due")).toBeTruthy();
+      expect(within(agendaRail).getByText("Project due")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /hide events in events/i }));
+
+    await waitFor(() => {
+      expect(within(monthCell).queryByText("Design review")).toBeNull();
+      expect(within(agendaRail).queryByText("Design review")).toBeNull();
+    });
+    expect(within(monthCell).getByText("Project due")).toBeTruthy();
+    expect(within(agendaRail).getByText("Project due")).toBeTruthy();
+  });
+
   it("opens a dashboard-focused deadline in Events with the deadline overlay forced on", async () => {
     window.innerWidth = 1900;
     window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");

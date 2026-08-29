@@ -12,6 +12,8 @@ import {
   type CalendarEntryPlanningReadiness,
 } from "./calendarEntryReadinessModel";
 
+const getEmptyCalendarMonthEvents = () => EMPTY_CALENDAR_EVENTS;
+
 export interface ControllerEventsData {
   ensureRange?: (start: string, end: string, options?: { signal?: AbortSignal; prefetchKeys?: string[] }) => Promise<unknown>;
   refreshRange?: (...args: never[]) => unknown;
@@ -81,6 +83,11 @@ export default function useCalendarControllerViewData({
   const eventsRevision = eventsData?.revision;
   const eventsCacheStamp = eventsData?.cacheStamp ?? 0;
 
+  const visibleGetMonthEvents = useMemo(() => {
+    if (view !== "events" || !eventsGetEvents) return null;
+    return eventOverlayVisible ? eventsGetEvents : getEmptyCalendarMonthEvents;
+  }, [eventOverlayVisible, eventsGetEvents, view]);
+
   const visibleCalendarEvents = useMemo(() => {
     if (view !== "events" || !eventOverlayVisible || !eventsGetEvents) return EMPTY_CALENDAR_EVENTS;
     const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
@@ -145,5 +152,5 @@ export default function useCalendarControllerViewData({
     billsRangeData,
   ]);
 
-  return { visibleCalendarEvents, viewData };
+  return { visibleCalendarEvents, visibleGetMonthEvents, viewData };
 }
