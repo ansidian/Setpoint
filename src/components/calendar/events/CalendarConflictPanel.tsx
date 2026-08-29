@@ -497,7 +497,7 @@ export default function CalendarConflictPanel({ ghost }: CalendarConflictPanelPr
         : "Nothing else is scheduled nearby.";
 
   return (
-    <div className="calendar-conflict-panel">
+    <div className="calendar-conflict-panel" data-calendar-event-schedule-preview="true">
       <div className="calendar-conflict-panel__header">
         <span
           className="calendar-conflict-panel__icon"

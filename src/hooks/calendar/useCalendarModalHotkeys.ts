@@ -111,6 +111,11 @@ function blockingShellOverlayOpen() {
     && !!document.querySelector("[data-suspend-calendar-hotkeys='blocking']");
 }
 
+function eventSchedulePreviewOwnsEscape() {
+  return typeof document !== "undefined"
+    && !!document.querySelector("[data-calendar-event-schedule-preview='true']");
+}
+
 function visibleOverflowPopoverOwnsEscape() {
   return typeof document !== "undefined"
     && !!document.querySelector("[data-testid='calendar-cell-overflow-popover']")
@@ -221,6 +226,10 @@ export default function useCalendarModalHotkeys({
       }
 
       if (event.key === "Escape" && document.querySelector("[data-calendar-month-picker]")) {
+        return;
+      }
+
+      if (event.key === "Escape" && eventSchedulePreviewOwnsEscape()) {
         return;
       }
 

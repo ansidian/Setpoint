@@ -82,6 +82,21 @@ describe("parseCalendarTitle", () => {
     });
   });
 
+  it("parses a compact hyphenated time range without spaces", () => {
+    const parsed = parseCalendarTitle("Planning 3pm-4pm", {
+      now: new Date("2026-04-20T19:00:00.000Z").getTime(),
+      baseDate: "2026-04-20",
+    });
+
+    expect(parsed.cleanTitle).toBe("Planning");
+    expect(parsed.parsedDateTime).toMatchObject({
+      startDate: "2026-04-20",
+      endDate: "2026-04-20",
+      startTime: "15:00",
+      endTime: "16:00",
+    });
+  });
+
   it("extracts a trailing location query after removing time tokens", () => {
     const parsed = parseCalendarTitle("Dinner @McDonald's tomorrow 5pm", {
       now: new Date("2026-04-20T19:00:00.000Z").getTime(),

@@ -102,6 +102,7 @@ function chronoOrLoad() {
 const DEFAULT_DURATION_MINUTES = 30;
 const TRAILING_CONNECTOR_RE = /(?:\s+(?:on|at|from|to|for))+\s*$/i;
 const TIME_LIKE_TOKEN_RE = /^\d{1,2}(?::\d{0,2})?\s*(?:a|p|am|pm)?$/i;
+const COMPACT_TIME_RANGE_TOKEN_RE = /^\d{1,2}(?::\d{1,2})?(?:a|p|am|pm)-\d{1,2}(?::\d{1,2})?(?:a|p|am|pm)$/i;
 const DATE_LIKE_TOKEN_RE = /^(?:\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{1,2}-\d{1,2})$/i;
 const TEMPORAL_START_WORDS = new Set([
   "at",
@@ -279,7 +280,8 @@ function hasCalendarAssistSyntax(title: string) {
       || isSourceProducer(normalized)
       || TEMPORAL_START_WORDS.has(normalized)
       || DATE_LIKE_TOKEN_RE.test(normalized)
-      || TIME_LIKE_TOKEN_RE.test(normalized);
+      || TIME_LIKE_TOKEN_RE.test(normalized)
+      || COMPACT_TIME_RANGE_TOKEN_RE.test(normalized);
   });
 }
 
@@ -291,7 +293,9 @@ function isTemporalBoundary(tokens: CalendarAssistToken[], index: number, now: n
   const normalizedFirst = firstToken.toLowerCase();
   if (isLocationProducer(firstToken) || isSourceProducer(firstToken)) return true;
   if (TEMPORAL_START_WORDS.has(normalizedFirst)) return true;
-  if (DATE_LIKE_TOKEN_RE.test(firstToken) || TIME_LIKE_TOKEN_RE.test(firstToken)) return true;
+  if (DATE_LIKE_TOKEN_RE.test(firstToken)
+    || TIME_LIKE_TOKEN_RE.test(firstToken)
+    || COMPACT_TIME_RANGE_TOKEN_RE.test(firstToken)) return true;
   const chrono = chronoOrLoad();
   if (!chrono) return false;
   const parsed = chrono.parse(cleanWhitespace(remainingTokens.join(" ")), new Date(now))[0] || null;

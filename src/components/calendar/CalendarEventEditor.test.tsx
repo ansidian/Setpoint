@@ -97,6 +97,41 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     expect(screen.getByTestId("calendar-floating-detail-panel").textContent).toContain("Design review");
   });
 
+  it("closes the Event Schedule Preview on Escape before cancelling the editor workspace", async () => {
+    renderModal({
+      events: [{
+        id: "event-1",
+        title: "Existing meeting",
+        startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+        allDay: false,
+        color: "#4285f4",
+        writable: true,
+      }],
+      focusDate: "2026-04-20",
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
+    const title = await screen.findByTestId("calendar-event-title");
+    fireEvent.input(title, { target: { value: "Planning" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Show schedule around this event" }));
+    expect(await screen.findByText("Schedule around this event")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape", cancelable: true });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Schedule around this event")).toBeNull();
+      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+      expect((screen.getByTestId("calendar-event-title") as HTMLInputElement).value).toBe("Planning");
+    });
+
+    fireEvent.keyDown(document, { key: "Escape", cancelable: true });
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
+    });
+  });
+
   it("cancels the editor on browser back", async () => {
     renderEventEditor();
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
