@@ -24,6 +24,29 @@ export function FieldLabel({ children }: FieldLabelProps) {
   );
 }
 
+interface FieldValidationMessageProps {
+  id: string;
+  children: ReactNode;
+}
+
+export function FieldValidationMessage({ id, children }: FieldValidationMessageProps) {
+  return (
+    <div
+      id={id}
+      aria-live="polite"
+      style={{
+        marginTop: 6,
+        color: "var(--sp-orange)",
+        fontSize: 10.5,
+        fontWeight: 550,
+        lineHeight: 1.4,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   danger?: boolean;
   subtle?: boolean;

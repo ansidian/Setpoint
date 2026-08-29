@@ -2,7 +2,7 @@ import { CalendarClock, ExternalLink } from "lucide-react";
 import TodoistDuePicker from "./TodoistDuePicker";
 import { RemoveLabelButton, TokenAutocomplete } from "./controls";
 import { formatFriendlyDraftPreview } from "./formatDraftPreview";
-import { ActionButton, FieldLabel } from "../../calendar/events/CalendarEditorControls";
+import { ActionButton, FieldLabel, FieldValidationMessage } from "../../calendar/events/CalendarEditorControls";
 import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
 import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors";
 import type {
@@ -93,27 +93,33 @@ export function TodoistTaskTextSection({
   cursorPos,
   handleAutocompleteSelect,
   handleInputChange,
+  handleInputBlur,
   handleKeyDown,
   input,
   inputRef,
   labels,
   projects,
   recurrenceSummary,
+  titleError,
 }: {
   autocompleteType: AutocompleteType;
   cursorPos: number;
   handleAutocompleteSelect: (item: TodoistProject | TodoistLabel, triggerIdx: number, cursorPos: number) => void;
   handleInputChange: React.ChangeEventHandler<HTMLInputElement>;
+  handleInputBlur: React.FocusEventHandler<HTMLInputElement>;
   handleKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
   input: string;
   inputRef: RefObject<HTMLInputElement | null>;
   labels: TodoistLabel[];
   projects: TodoistProject[];
   recurrenceSummary: string | null;
+  titleError: string | null;
 }) {
+  const errorId = "todoist-task-title-error";
+
   return (
     <div style={{ position: "relative" }}>
-      <FieldLabel>Task</FieldLabel>
+      <FieldLabel>Title</FieldLabel>
       <input
         ref={inputRef}
         type="text"
@@ -121,15 +127,19 @@ export function TodoistTaskTextSection({
         inputMode="text"
         enterKeyHint="done"
         aria-label="Task title"
+        aria-invalid={!!titleError}
+        aria-describedby={titleError ? errorId : undefined}
         value={input}
         onChange={handleInputChange}
+        onBlur={handleInputBlur}
         onKeyDown={handleKeyDown}
         placeholder="e.g. Buy groceries tomorrow ! #Shopping @errand"
         style={{
-          ...(textFieldStyle({ invalid: false }) as CSSProperties),
-          boxShadow: input ? "0 0 0 1px color-mix(in srgb, var(--sp-accent) 15%, transparent)" : "none",
+          ...(textFieldStyle({ invalid: !!titleError }) as CSSProperties),
+          boxShadow: titleError ? "none" : input ? "0 0 0 1px color-mix(in srgb, var(--sp-accent) 15%, transparent)" : "none",
         }}
       />
+      {titleError ? <FieldValidationMessage id={errorId}>{titleError}</FieldValidationMessage> : null}
       {autocompleteType === "project" && (
         <TokenAutocomplete
           cursorPos={cursorPos}

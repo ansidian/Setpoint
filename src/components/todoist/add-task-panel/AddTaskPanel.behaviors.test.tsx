@@ -102,6 +102,22 @@ describe("AddTaskPanel rendered behaviors", () => {
     expect((screen.getByRole("button", { name: "Add task" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("explains a token-only deadline title beside the title field", () => {
+    render(<PanelHarness host="inline" />);
+    vi.runOnlyPendingTimers();
+
+    const title = screen.getByRole("textbox", { name: "Task title" }) as HTMLInputElement;
+    expect(screen.queryByText("Enter a title.")).toBeNull();
+
+    fireEvent.change(title, { target: { value: "!1" } });
+    vi.runOnlyPendingTimers();
+
+    const guidance = screen.getByText("Enter a title.");
+    expect(title.getAttribute("aria-invalid")).toBe("true");
+    expect(title.getAttribute("aria-describedby")).toBe(guidance.id);
+    expect((screen.getByRole("button", { name: "Add task" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("allows required-due create actions with a seeded due value", () => {
     render(
       <PanelHarness

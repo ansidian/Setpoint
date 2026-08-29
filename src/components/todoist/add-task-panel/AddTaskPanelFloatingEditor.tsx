@@ -52,6 +52,7 @@ export default function AddTaskPanelFloatingEditor({
     handleAutocompleteSelect,
     handleDueSelect,
     handleInputChange,
+    handleInputBlur,
     handleKeyDown,
     handleSubmit,
     hasReminderAnchor,
@@ -86,6 +87,7 @@ export default function AddTaskPanelFloatingEditor({
     updateCustomReminder,
     customReminder,
     supportingContext,
+    titleError,
   } = state;
 
   return (
@@ -157,12 +159,14 @@ export default function AddTaskPanelFloatingEditor({
             cursorPos={cursorPos}
             handleAutocompleteSelect={handleAutocompleteSelect}
             handleInputChange={handleInputChange}
+            handleInputBlur={handleInputBlur}
             handleKeyDown={handleKeyDown}
             input={input}
             inputRef={inputRef}
             labels={labels}
             projects={projects}
             recurrenceSummary={recurrenceSummary}
+            titleError={titleError}
           />
 
           <div>

@@ -106,6 +106,7 @@ export default function useAddTaskPanelController({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isMobile = useIsMobile();
@@ -305,6 +306,7 @@ export default function useAddTaskPanelController({
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
+    setTitleTouched(true);
     setInput(value);
     const cursor = event.target.selectionStart ?? value.length;
     setCursorPos(cursor);
@@ -354,7 +356,9 @@ export default function useAddTaskPanelController({
     }, 0);
   }, [input]);
 
-  const canSubmit = canSubmitTask({ parsed, input }) && (!requireDue || !!resolvedDue);
+  const hasTitle = canSubmitTask({ parsed, input });
+  const titleError = titleTouched && !hasTitle ? "Enter a title." : null;
+  const canSubmit = hasTitle && (!requireDue || !!resolvedDue);
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -414,9 +418,14 @@ export default function useAddTaskPanelController({
     if (autocompleteType) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
+      if (!hasTitle) setTitleTouched(true);
       if (confirmDelete) deleteTask();
       else handleSubmit();
     }
+  };
+
+  const handleInputBlur = () => {
+    setTitleTouched(true);
   };
 
   const priorityOptions: Array<{ value: TodoistPriority; label: string }> = [
@@ -484,8 +493,10 @@ export default function useAddTaskPanelController({
     closeDuePicker,
     handleDueSelect,
     handleInputChange,
+    handleInputBlur,
     handleAutocompleteSelect,
     canSubmit,
+    titleError,
     handleSubmit,
     confirmDeleteIntent, cancelDiscard: dirtyClose.cancel,
     confirmDiscardChanges: closeWithoutDirtyConfirmation,

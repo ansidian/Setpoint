@@ -100,6 +100,8 @@ export default function CalendarEventEditorRail({
   const saveDisabled = disabled || !canSave;
   const isBatchMode = intentState.mode === "batch";
   const isRecurringMode = intentState.mode === "recurring" || (!isBatchMode && !!recurrenceDraft);
+  const titleError = validationMessage === "Title is required." ? "Enter a title." : null;
+  const workspaceValidationMessage = titleError ? null : validationMessage;
   const showRecurringScopePrompt = isEditingRecurring;
   const floatingHost = host === "floating";
   const showBatchReview = isBatchMode && batchDrafts.length > 0;
@@ -163,7 +165,7 @@ export default function CalendarEventEditorRail({
             onTitleChange={onTitleChange}
             disabled={disabled}
             isEditing={isEditing}
-            validationMessage={validationMessage}
+            titleError={titleError}
           />
           {!isBatchMode ? (
             <CalendarEventFactSheet
@@ -236,7 +238,7 @@ export default function CalendarEventEditorRail({
               <CalendarEventEditorStatusMessages
                 error={error}
                 errorCode={errorCode}
-                validationMessage={validationMessage}
+                validationMessage={workspaceValidationMessage}
                 reconnect={reconnect}
                 showValidation={!(isEditingRecurring && !recurringEditScope)}
                 mutationPhase={mutationPhase}

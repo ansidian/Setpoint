@@ -285,6 +285,7 @@ export default function AddTaskPanelInlineEditor({
     handleAutocompleteSelect,
     handleDueSelect,
     handleInputChange,
+    handleInputBlur,
     handleKeyDown,
     handleSubmit,
     hasReminderAnchor,
@@ -312,6 +313,7 @@ export default function AddTaskPanelInlineEditor({
     supportingContext,
     todoistReminders,
     todoistReminderPresetStates,
+    titleError,
     updateCustomReminder,
   } = state;
 
@@ -346,12 +348,14 @@ export default function AddTaskPanelInlineEditor({
             cursorPos={cursorPos}
             handleAutocompleteSelect={handleAutocompleteSelect}
             handleInputChange={handleInputChange}
+            handleInputBlur={handleInputBlur}
             handleKeyDown={handleKeyDown}
             input={input}
             inputRef={inputRef}
             labels={labels}
             projects={projects}
             recurrenceSummary={null}
+            titleError={titleError}
           />
           <TodoistDeadlineFactSheet
             openCompactPanel={openCompactPanel}

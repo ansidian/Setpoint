@@ -1,5 +1,5 @@
 import { useEffect, type ChangeEventHandler, type KeyboardEventHandler, type RefObject } from "react";
-import { FieldLabel } from "./CalendarEditorControls";
+import { FieldLabel, FieldValidationMessage } from "./CalendarEditorControls";
 import { textFieldStyle } from "./calendarEditorUtils";
 
 interface CalendarEventTitleFieldProps {
@@ -10,7 +10,7 @@ interface CalendarEventTitleFieldProps {
   onTitleChange: ChangeEventHandler<HTMLInputElement>;
   disabled: boolean;
   isEditing: boolean;
-  validationMessage: string | null;
+  titleError: string | null;
 }
 
 export default function CalendarEventTitleField({
@@ -21,13 +21,15 @@ export default function CalendarEventTitleField({
   onTitleChange,
   disabled,
   isEditing,
-  validationMessage,
+  titleError,
 }: CalendarEventTitleFieldProps) {
   useEffect(() => {
     if (titleRef.current && titleInputRef?.current != null) {
       titleRef.current.value = titleInputRef.current;
     }
   }, [titleInputKey, titleInputRef, titleRef]);
+
+  const errorId = "calendar-event-title-error";
 
   return (
     <div>
@@ -38,13 +40,16 @@ export default function CalendarEventTitleField({
         data-calendar-editor-primary="true"
         type="text"
         aria-label="Event title"
+        aria-invalid={!!titleError}
+        aria-describedby={titleError ? errorId : undefined}
         defaultValue=""
         onKeyDown={onTitleKeyDown}
         onChange={onTitleChange}
         disabled={disabled}
         placeholder={isEditing ? "Event title" : "Dinner on Tue at 5pm"}
-        style={textFieldStyle({ invalid: validationMessage === "Title is required." })}
+        style={textFieldStyle({ invalid: !!titleError })}
       />
+      {titleError ? <FieldValidationMessage id={errorId}>{titleError}</FieldValidationMessage> : null}
     </div>
   );
 }
