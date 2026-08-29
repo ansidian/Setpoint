@@ -169,6 +169,16 @@ export default function CalendarEventReminderChips({
             </ActionButton>
           );
         })}
+        <ReminderDateTimePicker
+          accent="var(--sp-accent)"
+          ariaLabel="Custom event reminder picker"
+          customReminder={customReminder}
+          disabled={disabled}
+          onSelect={(selection) => {
+            onUpdateCustomReminder(selection);
+            onAddCustom(selection);
+          }}
+        />
       </div>
 
       {chips.length ? (
@@ -183,17 +193,6 @@ export default function CalendarEventReminderChips({
           ))}
         </div>
       ) : null}
-
-      <ReminderDateTimePicker
-        accent="var(--sp-accent)"
-        ariaLabel="Custom event reminder picker"
-        customReminder={customReminder}
-        disabled={disabled}
-        onSelect={(selection) => {
-          onUpdateCustomReminder(selection);
-          onAddCustom(selection);
-        }}
-      />
 
       {timeToLeaveEligible ? (
         <div

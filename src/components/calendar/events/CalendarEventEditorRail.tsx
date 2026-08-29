@@ -222,7 +222,7 @@ export default function CalendarEventEditorRail({
                   flexDirection: "column",
                   gap: 14,
                   minHeight: 0,
-                  paddingBottom: 16,
+                  paddingBottom: floatingHost ? 8 : 16,
                   transformOrigin: "top center",
                   willChange: "opacity, transform",
                 }}
