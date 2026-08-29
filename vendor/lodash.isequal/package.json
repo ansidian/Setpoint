@@ -1,0 +1,6 @@
+{
+  "name": "lodash.isequal",
+  "version": "4.5.0",
+  "private": true,
+  "main": "index.cjs"
+}

@@ -321,7 +321,7 @@ async function checkTestArchitecture() {
   }
   const semanticObservationCount = Object.values(semanticInteractions)
     .reduce((sum, count) => sum + count, 0)
-  warnings.push(
+  console.log(
     `${semanticInventory.mode === "enforced" ? "Enforced" : "Report-only"} test-architecture semantic inventory: ${semanticObservationCount} mock-metadata observation(s) in ${Object.keys(semanticInteractions).length} file(s); ${Object.keys(persistenceCandidates).length} classified persistence contract file(s)`,
   )
 
