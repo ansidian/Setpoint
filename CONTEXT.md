@@ -208,6 +208,22 @@ _Avoid_: Manual navigation, button navigation
 A temporary **Mini Calendar** date emphasis shown while hovering or focusing an agenda rail item. It wraps the previewed date number and its **Mini Calendar Activity Markers** as one visual target.
 _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 
+**Event Schedule Preview**:
+An informational Calendar editor view that places a **Proposed Event** within its **Schedule Context**, including any **Event Overlaps** and nearby events before and after it. It does not reserve time or create an event.
+_Avoid_: Conflict panel, availability check, proposal timeline, ghost preview
+
+**Proposed Event**:
+The unsaved event candidate shown inside an **Event Schedule Preview** while the owner reviews a new or changed placement.
+_Avoid_: Saved event, tentative event, ghost event
+
+**Schedule Context**:
+The existing events shown around a **Proposed Event** in an **Event Schedule Preview**, including exact overlaps and eligible nearby events before and after it.
+_Avoid_: Availability, free/busy result, conflict list
+
+**Event Overlap**:
+A strict time intersection between a timed **Proposed Event** and an existing timed event in its **Schedule Context**.
+_Avoid_: Nearby event, adjacent event, all surrounding schedule context
+
 ## Relationships
 
 - Setpoint has one owner; passkey authentication uses that owner identity and does not introduce usernames or multi-account login.
@@ -340,6 +356,9 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - Mini Calendar dates remain ordinary focusable controls for activation even without internal keyboard grid navigation.
 - The **Mini Calendar** date grid renders immediately for the visible month; activity markers populate from confirmed available data rather than replacing the whole Mini Calendar with a loading skeleton.
 - Owner-driven agenda rail scrolling may update **Mini Calendar** date selection, but it does not navigate the shared calendar workspace month.
+- “View surrounding schedule” and “Overlaps N events” are state-dependent entry labels for the same **Event Schedule Preview**.
+- An **Event Schedule Preview** is informational: the **Proposed Event** remains unsaved until the owner completes Calendar's existing save action.
+- **Schedule Context** may include nearby events that do not produce an **Event Overlap**.
 - **Display Month** and **Fetch Anchor** are separate concepts updated through separate paths; the header/mini-calendar always reflects the **Display Month**, while data loading keys off the **Fetch Anchor**.
 - During free scroll, **Display Month** updates on every animation frame using **Midpoint Crossing**; **Fetch Anchor** updates only after the scroll settles.
 - During **Programmatic Navigation**, both **Display Month** and **Fetch Anchor** update immediately to the target month; scroll-driven **Display Month** updates are suppressed until the scroll animation settles at the target.
@@ -459,6 +478,7 @@ _Avoid_: Knows everything Setpoint knows, silent best-effort
 - "Scroll closes every editor" was rejected; clean create/edit workspaces cancel on grid scroll, while dirty create/edit workspaces keep their fixed position.
 - "Tether to remounted anchors" was rejected; the **Floating Detail Anchor** only determines initial placement, not later scroll recovery.
 - "Date breadcrumb for parked panels" was rejected with parking itself; no parked panel state or parked visual treatment remains.
+- "Calendar Conflict Disclosure" was resolved as **Event Schedule Preview** because the same informational view is available when the **Proposed Event** has no **Event Overlap**.
 - "Assistant" / "chat layer" was resolved as **Alfred**, a proper name; "Ask AI" language retires with the inbox surface it labeled.
 - "Ask AI confirmation step" was rejected for the Alfred handoff; deliberately submitting a query is the confirmation, so the handoff runs immediately.
 - "Model emits row JSON" was rejected for Alfred answers; embedded rows are resolved by reference from real domain data so Alfred cannot mistype an amount, date, or sender into an authoritative-looking row.
