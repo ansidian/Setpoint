@@ -8,6 +8,9 @@ import type { TriageDb } from "./triage-types.ts";
 
 const DEFAULT_WINDOW_DAYS = 7;
 const OPENAI_PRICE_PER_MILLION: Record<string, { input: number; cachedInput: number; output: number }> = {
+  "gpt-5.6-sol": { input: 4.00, cachedInput: 0.40, output: 20.00 },
+  "gpt-5.6-terra": { input: 2.00, cachedInput: 0.20, output: 12.00 },
+  "gpt-5.6-luna": { input: 0.20, cachedInput: 0.02, output: 1.20 },
   "gpt-5.5": { input: 5.00, cachedInput: 0.50, output: 30.00 },
   "gpt-5.4": { input: 2.50, cachedInput: 0.25, output: 15.00 },
   "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.50 },
