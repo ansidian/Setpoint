@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SettingsCard } from "@/components/settings/settings-ui";
+import { SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
   SURFACE_ROW_CLASS,
@@ -33,6 +33,11 @@ export default function TrustedRemoteContentCard() {
       title="Remote Content"
       icon={<Image size={14} />}
       description="Remote images load automatically only for these exact sender and receiving-account pairs."
+      headerAction={!loading && !error && entries.length > 0 ? (
+        <StatusPill>
+          {entries.length} trusted {entries.length === 1 ? "sender" : "senders"}
+        </StatusPill>
+      ) : undefined}
     >
       <div className="flex flex-col gap-3">
         {loading ? (
@@ -65,7 +70,13 @@ export default function TrustedRemoteContentCard() {
         ) : null}
 
         {!loading && entries.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border border-white/[0.06]">
+          <div
+            role="region"
+            aria-label={`Trusted remote content senders, ${entries.length} total`}
+            tabIndex={0}
+            className="max-h-80 overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            style={{ scrollbarGutter: "stable" }}
+          >
             {entries.map((entry) => (
               <div
                 key={entry.id}
