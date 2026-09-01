@@ -1,11 +1,11 @@
 import useBillBadgeForm from "./useBillBadgeForm";
 import type { UseBillBadgeFormOptions } from "./useBillBadgeForm";
 import BillBadgeForm from "./bill-badge/BillBadgeForm";
-import type { BillPayMappingOutcome } from "../../../shared/types/bills";
+import type { FinancialEmailPlan } from "../../../shared/types/bills";
 
 interface BillBadgeProps extends UseBillBadgeFormOptions {
-  mapping?: BillPayMappingOutcome | null;
-  mappingLoading?: boolean;
+  plan?: FinancialEmailPlan | null;
+  planLoading?: boolean;
   layout?: "inline" | "drawer" | "mobile";
 }
 
@@ -18,8 +18,8 @@ export default function BillBadge({
   emailBodyLoading,
   emailBodySource,
   emailBodyError,
-  mapping,
-  mappingLoading = false,
+  plan,
+  planLoading = false,
   layout = "inline",
 }: BillBadgeProps) {
   const isDrawer = layout === "drawer";
@@ -35,6 +35,7 @@ export default function BillBadge({
     emailBodyLoading,
     emailBodySource,
     emailBodyError,
+    plan,
   });
 
   return (
@@ -51,8 +52,7 @@ export default function BillBadge({
     >
       <BillBadgeForm
         bill={bill}
-        mapping={mapping}
-        mappingLoading={mappingLoading}
+        planLoading={planLoading}
         isMobile={isMobile}
         usesStackedLayout={usesStackedLayout}
         {...form}

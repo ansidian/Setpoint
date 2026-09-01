@@ -108,6 +108,7 @@ src/
 │   └── ui/
 ├── context/
 ├── demo/
+├── dev/
 ├── hooks/
 │   ├── calendar/
 │   ├── email/
@@ -708,7 +709,7 @@ erDiagram
 | `ea_email_search_ai_usage` | `007_email_search_ai_usage.sql` |
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
-| `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
+| `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql` |
 | `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_instance_credentials` | `033_instance_credentials.sql`, `040_pending_credential_lifecycle.sql` |
@@ -733,7 +734,7 @@ erDiagram
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
-| `ea_transaction_import_items` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql` |
+| `ea_transaction_import_items` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql` |
 | `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
 | `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
@@ -841,7 +842,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/actual/test` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/bills/extract` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/bills/resolve` | `server/routes/briefing/bills.ts` |
-| POST | `/api/briefing/bills/resolve-sample` | `server/routes/briefing/bills.ts` |
 | POST | `/api/briefing/dev-reindex-emails` | `server/routes/briefing/dev.ts` |
 | POST | `/api/briefing/dismiss/:emailId` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email-index/backfill` | `server/routes/briefing/email-index.ts` |

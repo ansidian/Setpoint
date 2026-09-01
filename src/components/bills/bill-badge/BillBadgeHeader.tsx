@@ -1,9 +1,10 @@
 import { Sparkles } from "lucide-react";
 import type { MouseEventHandler } from "react";
 import { cn } from "@/lib/utils";
-import type { BillPayMappingOutcome, BillType } from "../../../../shared/types/bills";
+import type { BillType, FinancialEmailPlan } from "../../../../shared/types/bills";
 import type { BillExtractState } from "../useBillBadgeForm";
-import { mappingStatusLabel, typeHints, typeLabels } from "./helpers";
+import { typeHints, typeLabels } from "./helpers";
+import { presentFinancialPlan } from "./financialPlanPresentationModel";
 
 interface ExtractButtonProps {
   extractState: BillExtractState;
@@ -24,13 +25,15 @@ function ExtractButton({ extractState, onClick, disabled = false, className, var
 
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={isDisabled}
       className={cn(
         "group cursor-pointer inline-flex items-center justify-center gap-1.5",
         "font-bold tracking-wider uppercase rounded-md",
-        "transition-all duration-200 ease-out",
-        "hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
+        "transition-all duration-200 ease-out motion-reduce:transition-none motion-reduce:!animate-none",
+        "hover:-translate-y-px active:translate-y-0 active:scale-[0.98] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#16161e]",
         "disabled:cursor-wait disabled:hover:translate-y-0",
         disabled && "disabled:cursor-not-allowed opacity-55",
         isBlock ? "text-[11px] px-4 py-2 w-full" : "text-[10px] px-2.5 py-1 shrink-0",
@@ -71,8 +74,8 @@ function ExtractButton({ extractState, onClick, disabled = false, className, var
     >
       <span
         className={cn(
-          "inline-flex transition-transform duration-300",
-          extractState !== "extracting" && "group-hover:rotate-12 group-hover:scale-110",
+          "inline-flex transition-transform duration-300 motion-reduce:transition-none",
+          extractState !== "extracting" && "group-hover:rotate-12 group-hover:scale-110 motion-reduce:group-hover:rotate-0 motion-reduce:group-hover:scale-100",
         )}
       >
         <Sparkles size={isBlock ? 13 : 11} strokeWidth={2} />
@@ -85,8 +88,8 @@ function ExtractButton({ extractState, onClick, disabled = false, className, var
 interface BillBadgeHeaderProps {
   isMobile: boolean;
   usesStackedLayout: boolean;
-  mapping?: BillPayMappingOutcome | null;
-  mappingLoading: boolean;
+  plan?: FinancialEmailPlan | null;
+  planLoading: boolean;
   editType: BillType;
   effectiveModel: string | null;
   modelDisplayName: string;
@@ -100,8 +103,8 @@ interface BillBadgeHeaderProps {
 export default function BillBadgeHeader({
   isMobile,
   usesStackedLayout,
-  mapping,
-  mappingLoading,
+  plan,
+  planLoading,
   editType,
   effectiveModel,
   modelDisplayName,
@@ -111,7 +114,7 @@ export default function BillBadgeHeader({
   onExtract,
   onTypeChange,
 }: BillBadgeHeaderProps) {
-  const mappingLabel = mappingStatusLabel(mapping, mappingLoading);
+  const planPresentation = presentFinancialPlan(plan, planLoading);
   return (
     <>
       <div className={cn("flex items-center gap-1.5 flex-wrap", isMobile && "grid grid-cols-2 gap-2")}>
@@ -121,13 +124,16 @@ export default function BillBadgeHeader({
           const selected = editType === key;
           return (
             <button
+              type="button"
               key={key}
               onClick={(event) => {
                 event.stopPropagation();
                 onTypeChange(key);
               }}
               className={cn(
-                "inline-flex items-center gap-1 font-semibold tracking-wide rounded-md cursor-pointer transition-all duration-200",
+                "inline-flex items-center gap-1 font-semibold tracking-wide rounded-md cursor-pointer transition-all duration-200 motion-reduce:transition-none",
+                "hover:-translate-y-px active:translate-y-0 active:scale-[0.98] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#16161e]",
                 isMobile ? "w-full justify-center text-[10.5px] px-3 py-2" : "text-[10px] px-2 py-1",
               )}
               style={{
@@ -164,15 +170,21 @@ export default function BillBadgeHeader({
           {typeHints[editType]}
         </div>
       )}
-      {mappingLabel && (
-        <div className={cn(
-          "text-muted-foreground/75 truncate",
-          usesStackedLayout
-            ? (isMobile ? "text-[11px] mt-2" : "text-[10px] mt-1.5")
-            : "text-[10px] mt-1.5",
-        )}
+      {planPresentation && (
+        <div
+          role={planPresentation.tone === "review" ? "status" : undefined}
+          className={cn(
+            "mt-3 rounded-lg border px-3 py-2 min-w-0",
+            planPresentation.tone === "ready" && "border-[color-mix(in_srgb,var(--sp-green)_24%,transparent)] bg-[color-mix(in_srgb,var(--sp-green)_7%,transparent)]",
+            planPresentation.tone === "review" && "border-[color-mix(in_srgb,var(--sp-yellow)_24%,transparent)] bg-[color-mix(in_srgb,var(--sp-yellow)_7%,transparent)]",
+            planPresentation.tone === "no_write" && "border-white/[0.07] bg-white/[0.025]",
+            planPresentation.tone === "loading" && "border-[color-mix(in_srgb,var(--sp-blue)_20%,transparent)] bg-[color-mix(in_srgb,var(--sp-blue)_6%,transparent)]",
+          )}
         >
-          {mappingLabel}
+          <div className="text-[12px] font-semibold text-foreground break-words">{planPresentation.title}</div>
+          <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground break-words">
+            {planPresentation.detail}
+          </div>
         </div>
       )}
       {usesStackedLayout && (

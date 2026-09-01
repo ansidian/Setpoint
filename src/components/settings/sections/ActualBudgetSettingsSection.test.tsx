@@ -16,7 +16,7 @@ const mockApi = vi.hoisted(() => ({
   getTransactionImportRun: vi.fn(),
 }));
 
-// test-architecture: allow-boundary-mock -- Actual metadata, mapping diagnostics, and transaction-import reads cross authenticated provider/storage HTTP boundaries while the real Finance controls render.
+// test-architecture: allow-boundary-mock -- Actual metadata and transaction-import reads cross authenticated provider/storage HTTP boundaries while the real Finance controls render.
 vi.mock("@/api", () => ({
   getActualMetadata: mockApi.getActualMetadata,
   getActualCacheStatus: mockApi.getActualCacheStatus,
@@ -60,7 +60,6 @@ function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict
       actual_budget_url: "https://actual.example.test",
       actual_budget_sync_id: "sync-id",
       actual_budget_configured: true,
-      bill_pay_mappings: { version: 1, profiles: [] },
     });
 
     return (
@@ -98,6 +97,7 @@ beforeEach(() => {
         categories: [{ id: "cat-card", name: "Credit Card Payments" }],
       },
     ],
+    schedules: [{ id: "schedule-power", name: "Power bill", type: "bill" }],
   });
   mockApi.testActualBudget.mockResolvedValue({ success: true });
   mockApi.updateSettings.mockResolvedValue({ success: true });
@@ -144,19 +144,18 @@ describe("ActualBudgetSettingsSection", () => {
     // which would silently drop every metadata state update (stuck "Loading…").
     renderSection({ strict: true });
 
-    fireEvent.click(await screen.findByRole("button", { name: /profile/i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Payee" }));
+    fireEvent.click(await screen.findByRole("button", { name: "+ Add pay link" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Schedule for pay link" }));
 
-    expect(await screen.findByRole("option", { name: "Citi" })).toBeTruthy();
+    expect(await screen.findByText("Power bill")).toBeTruthy();
   });
 
-  it("surfaces metadata load failures instead of presenting an ordinary empty mapping list", async () => {
+  it("surfaces metadata load failures in active Finance controls", async () => {
     mockApi.getActualMetadata.mockRejectedValueOnce(new Error("Actual worker exited"));
     renderSection();
 
-    fireEvent.click(await screen.findByRole("button", { name: /profile/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "+ Add pay link" }));
 
-    expect(await screen.findByText("Metadata unavailable")).toBeTruthy();
-    expect(screen.getByText(/Actual metadata could not load/i)).toBeTruthy();
+    expect(await screen.findByText("Actual worker exited")).toBeTruthy();
   });
 });

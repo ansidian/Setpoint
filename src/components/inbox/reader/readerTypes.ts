@@ -1,4 +1,8 @@
-import type { BillCandidate, BillPayMappingOutcome, StatementActualStatus } from "../../../../shared/types/bills";
+import type {
+  BillCandidate,
+  FinancialEmailPlan,
+  FinancialEmailReconciliation,
+} from "../../../../shared/types/bills";
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import type { InboxAccount, InboxEmailLike } from "../inboxTypes";
 import type { InboxActionDispatcher } from "../useInboxActionDispatch";
@@ -26,9 +30,9 @@ export type BillExtractionBody = {
 };
 
 export type BillResolutionValue = {
+  plan: FinancialEmailPlan | null;
   resolvedBill: BillCandidate | null;
-  mapping: BillPayMappingOutcome | null;
-  actualStatus: StatementActualStatus | null;
+  actualStatus: FinancialEmailReconciliation | null;
 };
 
 export type BillResolutionState = BillResolutionValue & {
@@ -67,8 +71,8 @@ export interface ReaderSurfaceProps {
 export const IDLE_BILL_RESOLUTION: BillResolutionState = {
   key: null,
   status: "idle",
+  plan: null,
   resolvedBill: null,
-  mapping: null,
   actualStatus: null,
   error: null,
 };

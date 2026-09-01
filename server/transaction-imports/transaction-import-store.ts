@@ -1,20 +1,14 @@
 import type { Client, Row } from "@libsql/client";
 import db from "../db/connection.ts";
 import type {
-  TransactionImportItem,
-  TransactionImportItemStatus,
-  TransactionImportMapping,
-  TransactionImportMode,
-  TransactionImportReconciliationStatus,
-  TransactionImportRunDetail,
-  TransactionImportRunStatus,
-  TransactionImportRunSummary,
-  TransactionImportRunTrigger,
-  TransactionImportSource,
+  TransactionImportItem, TransactionImportItemStatus, TransactionImportMapping,
+  TransactionImportMode, TransactionImportPlanShadow, TransactionImportReconciliationStatus,
+  TransactionImportRunDetail, TransactionImportRunStatus, TransactionImportRunSummary,
+  TransactionImportRunTrigger, TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
+import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 
 type StoreDb = Pick<Client, "execute">;
-
 export interface CreateRunInput {
   id: string;
   userId: string;
@@ -51,6 +45,8 @@ export interface InsertItemInput {
   automaticSafe: boolean;
   blockingWarnings: unknown[];
   evidence: unknown[];
+  financialPlan?: FinancialEmailPlan | null;
+  planShadow?: TransactionImportPlanShadow | null;
   status: TransactionImportItemStatus;
 }
 
@@ -71,7 +67,6 @@ function numberValue(value: unknown): number {
 function nullableString(value: unknown): string | null {
   return value == null ? null : String(value);
 }
-
 function parseJson<T>(value: unknown, fallback: T): T {
   if (typeof value !== "string") return fallback;
   try {
@@ -143,6 +138,8 @@ function projectItem(row: Row): TransactionImportItem {
     automaticSafe: numberValue(row.automatic_safe) === 1,
     blockingWarnings: parseJson<unknown[]>(row.blocking_warnings_json, []),
     evidence: parseJson<unknown[]>(row.evidence_json, []),
+    financialPlan: parseJson<FinancialEmailPlan | null>(row.financial_email_plan_json, null),
+    planShadow: parseJson<TransactionImportPlanShadow | null>(row.financial_plan_shadow_json, null),
     status: String(row.status) as TransactionImportItemStatus,
     reconciliationStatus: nullableString(row.reconciliation_status) as TransactionImportReconciliationStatus | null,
     attempts: numberValue(row.attempts),
@@ -386,15 +383,18 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
                internet_message_id, candidate_key, source, parser_version, external_id,
                imported_id, transaction_date, amount_cents, currency, payee, notes,
                actual_account_id, actual_category_id, automation_mode, automatic_safe,
-               blocking_warnings_json, evidence_json, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               blocking_warnings_json, evidence_json, financial_email_plan_json,
+               financial_plan_shadow_json, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         input.id, input.runId, input.userId, input.gmailAccountId, input.gmailMessageId,
         input.emailUid, input.emailSubject ?? "", input.internetMessageId ?? null, input.candidateKey, input.source,
         input.parserVersion, input.externalId ?? null, input.importedId ?? null, input.date,
         input.amountCents, input.currency, input.payee, input.notes ?? "", input.actualAccountId ?? null,
         input.actualCategoryId ?? null, input.automationMode, input.automaticSafe ? 1 : 0,
-        JSON.stringify(input.blockingWarnings), JSON.stringify(input.evidence), input.status,
+        JSON.stringify(input.blockingWarnings), JSON.stringify(input.evidence),
+        input.financialPlan ? JSON.stringify(input.financialPlan) : null,
+        input.planShadow ? JSON.stringify(input.planShadow) : null, input.status,
         timestamp, timestamp,
       ],
     });

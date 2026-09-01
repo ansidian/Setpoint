@@ -36,6 +36,7 @@
     "test:watch": "node --no-experimental-webstorage node_modules/vitest/vitest.mjs",
     "triage:preflight": "node server/scripts/triage-preflight-dry-run.ts",
     "triage:eval": "node server/scripts/triage-eval.ts",
+    "financial-email:observe": "node server/scripts/financial-email-observe-report.ts",
     "email-search:eval": "node server/scripts/email-search-retrieval-eval.ts",
     "email-search:eval:seed": "node server/scripts/seed-email-search-retrieval-eval.ts",
     "email-search:date-backfill": "node server/scripts/backfill-email-date-utc.ts",

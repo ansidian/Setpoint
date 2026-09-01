@@ -1,3 +1,5 @@
+import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
+
 export const TRANSACTION_IMPORT_SOURCES = ["amazon", "paypal"] as const;
 export type TransactionImportSource = typeof TRANSACTION_IMPORT_SOURCES[number];
 
@@ -26,6 +28,23 @@ export type TransactionImportReconciliationStatus =
   | "added"
   | "updated"
   | "failed";
+
+export interface TransactionImportPlanTargetComparison {
+  liveId: string | null;
+  plannedId: string | null;
+  agreement: "match" | "mismatch" | "unresolved";
+}
+
+export interface TransactionImportPlanShadow {
+  status: "planned" | "not_plannable" | "failed";
+  operation: FinancialOperationKind | null;
+  reconciliationStatus: FinancialEmailPlan["reconciliation"]["status"] | null;
+  account: TransactionImportPlanTargetComparison;
+  category: TransactionImportPlanTargetComparison;
+  automationEligible: boolean;
+  automationReasons: FinancialPlanReasonCode[];
+  failureCode: string | null;
+}
 
 export interface TransactionImportMapping {
   source: TransactionImportSource;
@@ -84,6 +103,8 @@ export interface TransactionImportItem {
   automaticSafe: boolean;
   blockingWarnings: unknown[];
   evidence: unknown[];
+  financialPlan: FinancialEmailPlan | null;
+  planShadow: TransactionImportPlanShadow | null;
   status: TransactionImportItemStatus;
   reconciliationStatus: TransactionImportReconciliationStatus | null;
   attempts: number;

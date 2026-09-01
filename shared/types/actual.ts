@@ -28,6 +28,7 @@ export interface ActualSchedule {
   next_date?: string | null;
   completed?: boolean;
   type?: ActualScheduleType;
+  transferAccountId?: string | null;
   conditions?: ActualScheduleCondition[];
   [key: string]: unknown;
 }

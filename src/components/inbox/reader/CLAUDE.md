@@ -37,9 +37,11 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `useEmailBody.ts` — fetches and caches body HTML with preview fallback
 
 ### Actual, bills, and transaction imports
-- `useBillPayResolver.ts` — resolves bill extraction for the open email
+- `useBillPayResolver.ts` — resolves or reuses the persisted zero-configuration financial plan for the open email
 - `ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
 - `actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
+- `EmailActualStatus.tsx` — shared desktop/mobile owner that renders one import-or-reconciliation status
+- `emailActualStatusModel.ts` — pure precedence policy across transaction-import and statement reconciliation evidence
 - `TransactionImportStatus.tsx` — shared Amazon/PayPal import status with focused Finance review routing
 - `transactionImportStatusModel.ts` — pure durable item-to-reader status projection
 - `useTransactionImportStatus.ts` — owner-scoped status fetch with stale guards and active-only polling

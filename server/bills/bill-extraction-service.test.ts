@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { extractBill, loadBillExtractChoice } from "./bill-extraction-service.ts";
+import { extractBill, extractBillCandidate, loadBillExtractChoice } from "./bill-extraction-service.ts";
 import { createAnthropicProvider } from "./bill-extractors/anthropic.ts";
 import { createOpenAiProvider } from "./bill-extractors/openai.ts";
+import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
 interface TestStatement { sql: string; args?: unknown[] }
 
 interface MetadataFixture {
@@ -39,9 +40,6 @@ function mockSettings(provider: string, model: string, { metadata = null }: { me
       return Promise.resolve({
         rows: [{ bill_extract_provider: provider, bill_extract_model: model }],
       });
-    }
-    if (/bill_pay_mappings_json/i.test(sql)) {
-      return Promise.resolve({ rows: [{ bill_pay_mappings_json: null }] });
     }
     return Promise.resolve(rowResult());
   });
@@ -90,6 +88,59 @@ describe("loadBillExtractChoice", () => {
   });
 });
 
+describe("extractBillCandidate", () => {
+  it("performs one first-pass extraction and returns semantic candidate context without resolving mappings", async () => {
+    mockSettings("openai", "gpt-5.4-mini", { metadata: {
+      accounts: [{ id: "account-1", name: "Checking" }],
+      payees: [{ id: "payee-1", name: "Costco" }],
+      categories: [{ group: "Shopping", categories: [{ id: "category-1", name: "Household" }] }],
+    } });
+    const extract = vi.fn().mockResolvedValue({
+      fields: {
+        payee: "Costco",
+        amount: 84.12,
+        amount_kind: "order_total",
+        amount_candidates: [{ kind: "order_total", value: 84.12, evidence: "Order total $84.12", confidence: 0.99 }],
+        event_kind: "purchase",
+        event_confidence: 0.99,
+        event_evidence: "Thanks for your order",
+        due_date: "2026-08-31",
+        type: "expense",
+        category_code: "c1",
+        category_name: "Household",
+        to_account_code: null,
+      },
+      usage: { input_tokens: 50, output_tokens: 20 },
+    });
+
+    const result = await extractBillCandidate(
+      "u1",
+      { from: "orders@costco.com", subject: "Your order", body: "Order total $84.12" },
+      { ...dependencies(), providers: { ...providers, openai: { id: "openai", envVar: "OPENAI_API_KEY", extract } } as never },
+    );
+
+    expect(result).toMatchObject({
+      candidate: {
+        payee: "Costco",
+        amount: 84.12,
+        amount_kind: "order_total",
+        event_kind: "purchase",
+        category_id: "category-1",
+      },
+      provider: "openai",
+      model: "gpt-5.4-mini",
+      metadata: {
+        accounts: [{ id: "account-1", name: "Checking" }],
+        payees: [{ id: "payee-1", name: "Costco" }],
+      },
+    });
+    // test-architecture: allow-boundary-interaction -- The injected extraction provider is the outbound model boundary; exactly one first-pass request is the candidate-only API's spend contract.
+    expect(extract).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- The injected provider is the outbound model boundary; its prompt is the public extraction contract.
+    expect(extract.mock.calls[0]![0].systemPrompt).toContain(BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS);
+  });
+});
+
 describe("extractBill (Anthropic)", () => {
   it("translates category/account codes back to real ids and reports the model used", async () => {
     mockSettings("anthropic", "claude-haiku-4-5", { metadata: {
@@ -111,6 +162,16 @@ describe("extractBill (Anthropic)", () => {
             input: {
               payee: "PG&E",
               amount: 120,
+              amount_kind: "total_due",
+              amount_candidates: [{
+                kind: "total_due",
+                value: 120,
+                evidence: "Total due $120.00",
+                confidence: 0.99,
+              }],
+              event_kind: "bill_issued",
+              event_confidence: 0.98,
+              event_evidence: "Your bill is ready",
               due_date: "2026-05-01",
               type: "bill",
               category_code: "c1",
@@ -129,6 +190,16 @@ describe("extractBill (Anthropic)", () => {
     expect(out).toEqual({
       payee: "PG&E",
       amount: 120,
+      amount_kind: "total_due",
+      amount_candidates: [{
+        kind: "total_due",
+        value: 120,
+        evidence: "Total due $120.00",
+        confidence: 0.99,
+      }],
+      event_kind: "bill_issued",
+      event_confidence: 0.98,
+      event_evidence: "Your bill is ready",
       due_date: "2026-05-01",
       type: "bill",
       category_id: "CAT-REAL-1",
@@ -136,7 +207,6 @@ describe("extractBill (Anthropic)", () => {
       to_account_id: null,
       provider: "anthropic",
       model: "claude-haiku-4-5",
-      mapping: { status: "unmapped", reason: "no_profile_match", matchedProfiles: [] },
     });
     // test-architecture: allow-boundary-interaction -- Bill extraction fetch is an outbound document/provider boundary; source URL and model payload are the compatibility contract.
     const fetchUrl = fetchMock.mock.calls[0]![0];
@@ -158,6 +228,57 @@ describe("extractBill (Anthropic)", () => {
 });
 
 describe("extractBill (OpenAI)", () => {
+  it("returns verifier-corrected amount evidence for an incomplete multi-amount first pass", async () => {
+    mockSettings("openai", "gpt-5.4-mini");
+    const response = (fields: Record<string, unknown>) => ({
+      ok: true,
+      json: async () => ({
+        output_text: JSON.stringify({
+          payee: "Example Bank",
+          due_date: "2026-08-10",
+          type: "transfer",
+          category_code: null,
+          category_name: null,
+          to_account_code: null,
+          ...fields,
+        }),
+        usage: { input_tokens: 100, output_tokens: 30 },
+      }),
+    });
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(response({
+        amount: 40,
+        amount_kind: "minimum_due",
+        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+      }))
+      .mockResolvedValueOnce(response({
+        amount: 391.2,
+        amount_kind: "statement_balance",
+        amount_candidates: [
+          { kind: "minimum_due", value: 40 },
+          { kind: "other", value: 0 },
+          { kind: "statement_balance", value: 391.2 },
+        ],
+      })) as unknown as typeof fetch;
+
+    const out = await extractBill("u1", {
+      subject: "Payment due",
+      from: "billing@example.test",
+      body: "Minimum payment $40.00. Plan balance $0.00. Remaining statement balance $391.20.",
+    }, dependencies());
+
+    expect(out).toMatchObject({
+      amount: 391.2,
+      amount_kind: "statement_balance",
+      amount_verification: {
+        status: "corrected",
+        source_value_count: 3,
+        initial_covered_count: 1,
+        verified_covered_count: 3,
+      },
+    });
+  });
+
   it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"])(
     "uses Responses API structured output and returns the same normalized shape (%s)",
     async (model) => {
@@ -174,6 +295,16 @@ describe("extractBill (OpenAI)", () => {
           output_text: JSON.stringify({
             payee: "Xfinity",
             amount: 95.99,
+            amount_kind: "total_due",
+            amount_candidates: [{
+              kind: "total_due",
+              value: 95.99,
+              evidence: "Bill total $95.99",
+              confidence: 0.99,
+            }],
+            event_kind: "bill_issued",
+            event_confidence: 0.99,
+            event_evidence: "Your bill is ready",
             due_date: "2026-05-10",
             type: "bill",
             category_code: "c1",
@@ -190,6 +321,16 @@ describe("extractBill (OpenAI)", () => {
       expect(out).toEqual({
         payee: "Xfinity",
         amount: 95.99,
+        amount_kind: "total_due",
+        amount_candidates: [{
+          kind: "total_due",
+          value: 95.99,
+          evidence: "Bill total $95.99",
+          confidence: 0.99,
+        }],
+        event_kind: "bill_issued",
+        event_confidence: 0.99,
+        event_evidence: "Your bill is ready",
         due_date: "2026-05-10",
         type: "bill",
         category_id: "CAT-REAL-2",
@@ -197,7 +338,6 @@ describe("extractBill (OpenAI)", () => {
         to_account_id: null,
         provider: "openai",
         model,
-        mapping: { status: "unmapped", reason: "no_profile_match", matchedProfiles: [] },
       });
       // test-architecture: allow-boundary-interaction -- Bill extraction fetch is an outbound document/provider boundary; source URL and model payload are the compatibility contract.
       const fetchUrl = fetchMock.mock.calls[0]![0];

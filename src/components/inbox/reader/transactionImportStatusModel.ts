@@ -1,5 +1,7 @@
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 
+export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode">;
+
 export type TransactionImportStatusTone = "success" | "warning" | "danger" | "active";
 
 export interface TransactionImportStatusView {
@@ -12,11 +14,11 @@ export interface TransactionImportStatusView {
 
 const ACTIVE = new Set(["queued", "reconciling", "importing"]);
 
-export function hasActiveTransactionImport(items: TransactionImportItem[]): boolean {
+export function hasActiveTransactionImport(items: readonly TransactionImportStatusItem[]): boolean {
   return items.some((item) => ACTIVE.has(item.status));
 }
 
-export function resolveTransactionImportStatus(items: TransactionImportItem[]): TransactionImportStatusView | null {
+export function resolveTransactionImportStatus(items: readonly TransactionImportStatusItem[]): TransactionImportStatusView | null {
   if (!items.length) return null;
   if (items.some((item) => item.status === "failed")) {
     return { tone: "danger", title: "Couldn’t sync", detail: "Open Finance settings to retry this transaction.", review: true, active: false };

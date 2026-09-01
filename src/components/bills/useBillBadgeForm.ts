@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractBillFromEmail, sendToActualBudget } from "../../api";
 import { ensureMetadataLoaded, _metadataCache } from "../../lib/actualMetadata";
 import type { ActualMetadataEntry, ActualCategoryMetadata } from "../../lib/actualMetadata";
-import type { BillCandidate, BillType } from "../../../shared/types/bills";
+import type { BillCandidate, BillType, FinancialEmailPlan } from "../../../shared/types/bills";
 import {
   detectFee,
   formatModelName,
-  pickDefaultFromAccount,
   scheduleNameFor,
 } from "./bill-badge/helpers";
 
@@ -24,6 +23,7 @@ export interface UseBillBadgeFormOptions {
   emailBodyLoading?: boolean;
   emailBodySource?: string;
   emailBodyError?: unknown;
+  plan?: FinancialEmailPlan | null;
 }
 
 export default function useBillBadgeForm({
@@ -35,6 +35,7 @@ export default function useBillBadgeForm({
   emailBodyLoading = false,
   emailBodySource = "loaded",
   emailBodyError = null,
+  plan: initialPlan = null,
 }: UseBillBadgeFormOptions) {
   const touchedRef = useRef<Partial<Record<TouchedField, boolean>>>({});
   const [extractModel, setExtractModel] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export default function useBillBadgeForm({
   const extractDisabled = showExtract && extractionBodyUnavailable;
   const canExtract = showExtract && !extractDisabled;
   const [extractState, setExtractState] = useState<BillExtractState>("idle");
+  const [plan, setPlan] = useState<FinancialEmailPlan | null>(initialPlan);
   const [state, setState] = useState<BillFormState>("idle");
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -200,32 +202,8 @@ export default function useBillBadgeForm({
       setPayees(data.payees);
       setCategories(data.categories);
       setActualReady(true);
-
-      let matchedToId = "";
-      const billPayee = bill.payee;
-      if (bill.type === "transfer" && billPayee && data.accounts.length) {
-        const match = data.accounts.find((account) =>
-          account.name.toLowerCase().includes(billPayee.toLowerCase())
-          || billPayee.toLowerCase().includes(account.name.toLowerCase()));
-        if (match) {
-          if (!touchedRef.current.toAccount) setEditToAccountState(match.id);
-          matchedToId = match.id;
-        }
-      }
-
-      if (bill.type === "transfer" && data.accounts.length) {
-        const from = pickDefaultFromAccount(data.accounts);
-        if (from && !touchedRef.current.fromAccount) setEditFromAccountState(from.id);
-        const name = scheduleNameFor(data.accounts, matchedToId);
-        if (name && !touchedRef.current.scheduleName) setEditScheduleNameState(name);
-      }
-
-      if (billPayee && data.payees.length) {
-        const match = data.payees.find((payee) => payee.name.toLowerCase() === billPayee.toLowerCase());
-        if (match && !touchedRef.current.payee) setEditPayeeState(match.id);
-      }
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- bill props are stable
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,13 +215,13 @@ export default function useBillBadgeForm({
     };
   }, [applyBillSeed, bill]);
 
+  useEffect(() => {
+    setPlan(initialPlan);
+  }, [initialPlan]);
+
   const handleTypeChange = (key: BillType) => {
     setEditType(key);
     if (key === "transfer" && accounts.length) {
-      if (!editFromAccount) {
-        const from = pickDefaultFromAccount(accounts);
-        if (from) setEditFromAccount(from.id);
-      }
       const name = scheduleNameFor(accounts, editToAccount);
       if (name) setEditScheduleName(name);
     }
@@ -278,9 +256,10 @@ export default function useBillBadgeForm({
         category_id: result.category_id && categories.some((category) => category.id === result.category_id)
           ? result.category_id
           : undefined,
-        from_account_id: result.from_account_id || pickDefaultFromAccount(accounts)?.id,
-        schedule_name: result.schedule_name || scheduleNameFor(accounts, toId || editToAccount),
+        from_account_id: result.from_account_id,
+        schedule_name: result.schedule_name,
       }, { model: result.model || "claude-haiku-4-5" });
+      setPlan(result.plan);
       setExtractState("done");
     } catch (err) {
       console.error("Bill extract failed:", err);
@@ -319,13 +298,15 @@ export default function useBillBadgeForm({
       });
   };
 
-  const canSend = Boolean(editAmount.trim() && editDue
+  const planAllowsWrite = plan?.operation.kind !== "no_write" && plan?.operation.intended !== "no_write";
+  const canSend = Boolean(planAllowsWrite && editAmount.trim() && editDue
     && (isTransfer
       ? (editFromAccount && editToAccount && editScheduleName.trim())
       : (editPayee.trim() && editAccount)));
 
   return {
     effectiveModel,
+    plan,
     modelDisplayName,
     canExtract,
     showExtract,

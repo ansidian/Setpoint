@@ -5,6 +5,7 @@ import { GmailTransactionSearchError } from "../email/transaction-email-search.t
 import { searchTransactionEmails } from "./transaction-email-discovery.ts";
 import type { ConfiguredEmailAccount } from "../email/transaction-email-search.ts";
 import { prepareTransactionImportItems } from "./transaction-import-service.ts";
+import { attachTransactionImportFinancialPlans } from "./transaction-import-planner-adapter.ts";
 import { transactionImportStore, type ClaimedItem, type TransactionImportStore } from "./transaction-import-store.ts";
 import { importTransactionGroups } from "../actual/actual.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
@@ -59,6 +60,7 @@ export function createTransactionImportWorker({
   invalidateAfterCommit = invalidateActualAfterTransactionImport,
   createId = randomUUID,
   now = Date.now,
+  planItems = attachTransactionImportFinancialPlans,
 }: {
   store?: TransactionImportStore;
   dbClient?: WorkerDb;
@@ -67,6 +69,7 @@ export function createTransactionImportWorker({
   invalidateAfterCommit?: typeof invalidateActualAfterTransactionImport;
   createId?: () => string;
   now?: () => number;
+  planItems?: typeof attachTransactionImportFinancialPlans;
 } = {}) {
   async function loadGmailAccount(userId: string, accountId: string): Promise<ConfiguredEmailAccount | null> {
     const result = await dbClient.execute({
@@ -113,10 +116,11 @@ export function createTransactionImportWorker({
       });
       const mappings = await store.listMappings(run.userId);
       const prepared = prepareTransactionImportItems(run.userId, run.id, page.emails, mappings, createId, { includeOffAsObserve: true });
+      const plannedItems = await planItems(run.userId, prepared.items);
       let insertedQueued = 0;
       let insertedReview = 0;
       const insertedMessages = new Set<string>();
-      for (const item of prepared.items) {
+      for (const item of plannedItems) {
         if (await store.insertItem(item)) {
           insertedMessages.add(item.gmailMessageId);
           if (item.status === "queued") insertedQueued++;

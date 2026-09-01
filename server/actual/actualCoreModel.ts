@@ -44,17 +44,25 @@ export function actualSessionKey(config: ActualConfig): string {
 }
 
 export function classifySchedules(schedules: ActualSchedule[], rawPayees: Array<Pick<ActualPayee, "id" | "transfer_acct">>): ActualSchedule[] {
-  const transferPayeeIds = new Set(rawPayees.filter(p => p.transfer_acct && p.id).map(p => p.id!));
+  const transferAccountsByPayee = new Map(
+    rawPayees
+      .filter((payee) => payee.transfer_acct && payee.id)
+      .map((payee) => [payee.id!, payee.transfer_acct!] as const),
+  );
   return schedules.map(s => {
     const payeeValue = s.conditions?.find(c => c.field === "payee")?.value;
     const payeeId = typeof payeeValue === "string" ? payeeValue : undefined;
     const amtCond = s.conditions?.find(c => c.field === "amount");
     const signedAmt = amountConditionCents(amtCond);
     let type: ActualSchedule["type"];
-    if (payeeId && transferPayeeIds.has(payeeId)) type = "transfer";
+    if (payeeId && transferAccountsByPayee.has(payeeId)) type = "transfer";
     else if (signedAmt > 0) type = "income";
     else type = "bill";
-    return { ...s, type };
+    return {
+      ...s,
+      type,
+      ...(type === "transfer" ? { transferAccountId: transferAccountsByPayee.get(payeeId!) || null } : {}),
+    };
   });
 }
 

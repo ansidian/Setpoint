@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isActualActioned,
   resolveActualCalendarTarget,
+  resolveActualActionStatusView,
 } from "./actualActionStatusModel";
 
 describe("isActualActioned", () => {
@@ -39,6 +40,31 @@ describe("resolveActualCalendarTarget", () => {
     })).toEqual({
       date: "2026-07-16",
       itemId: "transaction-42",
+    });
+  });
+});
+
+describe("resolveActualActionStatusView", () => {
+  it("explains an exact fee-adjusted match", () => {
+    expect(resolveActualActionStatusView({
+      status: "resolved",
+      actualStatus: {
+        status: "already_scheduled",
+        evidence: {
+          amount: 101.65,
+          statementAmount: 100,
+          dueDate: "2026-08-12",
+          adjustment: {
+            policyId: "sce-card-fee",
+            kind: "fixed_processing_fee",
+            label: "SCE card fee",
+            amount: 1.65,
+          },
+        },
+      },
+    })).toMatchObject({
+      title: "Already scheduled in Actual",
+      detail: "$100.00 + $1.65 fee = $101.65 due Aug 12 · No further action needed.",
     });
   });
 });

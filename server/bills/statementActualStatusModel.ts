@@ -2,8 +2,10 @@ import {
   conditionForFields,
   scheduleAmountMatches,
 } from "../actual/scheduleMatchModel.ts";
+import { findBillPaymentAdjustment } from "../../shared/billPaymentAdjustments.ts";
 import type { ActualMetadata, ActualScheduleCondition } from "../../shared/types/actual.ts";
 import type { BillCandidate, BillsMirrorHealth, StatementActualEvidence, StatementActualStatus } from "../../shared/types/bills.ts";
+import type { BillPaymentAdjustmentPolicy } from "../../shared/billPaymentAdjustments.ts";
 
 interface StatementOccurrence {
   scheduleId: string;
@@ -85,15 +87,45 @@ function scheduleAmountCondition(schedule: StatementSchedule) {
   );
 }
 
-function statementAmountMatches(schedule: StatementSchedule, occurrence: StatementOccurrence | null, amountCents: number | null): boolean {
-  if (amountCents == null) return true;
-  if (
-    occurrence?.amount != null
-    && Math.round(Number(occurrence.amount) * 100) === amountCents
-  ) {
-    return true;
-  }
-  return scheduleAmountMatches(scheduleAmountCondition(schedule), amountCents);
+interface StatementAmountExpectation {
+  amountCents: number | null;
+  adjustment: BillPaymentAdjustmentPolicy | null;
+}
+
+function statementAmountExpectations(bill: BillCandidate): StatementAmountExpectation[] {
+  const amountCents = bill.amount != null && Number.isFinite(Number(bill.amount))
+    ? Math.round(Number(bill.amount) * 100)
+    : null;
+  if (amountCents == null) return [{ amountCents: null, adjustment: null }];
+
+  const adjustment = findBillPaymentAdjustment(
+    bill.payee,
+    bill.payee_hint,
+    bill.payee_label,
+    bill.schedule_name,
+  );
+  return [
+    { amountCents, adjustment: null },
+    ...(adjustment ? [{ amountCents: amountCents + adjustment.amountCents, adjustment }] : []),
+  ];
+}
+
+function statementAmountMatch(
+  schedule: StatementSchedule,
+  occurrence: StatementOccurrence | null,
+  expectations: StatementAmountExpectation[],
+): StatementAmountExpectation | null {
+  if (expectations[0]?.amountCents == null) return expectations[0] || null;
+  const occurrenceAmountCents = occurrence?.amount != null
+    ? Math.round(Number(occurrence.amount) * 100)
+    : null;
+  return expectations.find((expectation) => (
+    expectation.amountCents != null
+    && (
+      occurrenceAmountCents === expectation.amountCents
+      || scheduleAmountMatches(scheduleAmountCondition(schedule), expectation.amountCents)
+    )
+  )) || null;
 }
 
 function occurrenceForSchedule(occurrences: StatementOccurrence[], schedule: StatementSchedule, dueDate: string | null = null): StatementOccurrence | null {
@@ -107,7 +139,19 @@ function scheduleEvidence(
   occurrence: StatementOccurrence | null,
   bill: BillCandidate,
   conflicts: string[] = [],
+  amountMatch: StatementAmountExpectation | null = null,
 ): StatementActualEvidence {
+  const adjustmentEvidence = amountMatch?.adjustment && bill.amount != null
+    ? {
+        statementAmount: Number(bill.amount),
+        adjustment: {
+          policyId: amountMatch.adjustment.policyId,
+          kind: amountMatch.adjustment.kind,
+          label: amountMatch.adjustment.label,
+          amount: amountMatch.adjustment.amountCents / 100,
+        },
+      }
+    : {};
   return {
     kind: "schedule",
     scheduleId: schedule.id,
@@ -116,6 +160,7 @@ function scheduleEvidence(
     amount: occurrence?.amount ?? null,
     paid: !!occurrence?.paid,
     type: occurrence?.type || schedule.type || "bill",
+    ...adjustmentEvidence,
     ...(conflicts.length ? { conflicts } : {}),
   };
 }
@@ -135,7 +180,22 @@ function transactionIdentityMatches(transaction: StatementTransaction, bill: Bil
     && normalizeIdentity(transaction.payee) === expectedPayee;
 }
 
-function transactionEvidence(transaction: StatementTransaction): StatementActualEvidence {
+function transactionEvidence(
+  transaction: StatementTransaction,
+  bill: BillCandidate,
+  amountMatch: StatementAmountExpectation,
+): StatementActualEvidence {
+  const adjustmentEvidence = amountMatch.adjustment && bill.amount != null
+    ? {
+        statementAmount: Number(bill.amount),
+        adjustment: {
+          policyId: amountMatch.adjustment.policyId,
+          kind: amountMatch.adjustment.kind,
+          label: amountMatch.adjustment.label,
+          amount: amountMatch.adjustment.amountCents / 100,
+        },
+      }
+    : {};
   return {
     kind: "transaction",
     transactionId: transaction.id,
@@ -144,6 +204,7 @@ function transactionEvidence(transaction: StatementTransaction): StatementActual
     amount: transaction.amount,
     account: transaction.account || "",
     type: transaction.direction || "expense",
+    ...adjustmentEvidence,
   };
 }
 
@@ -173,22 +234,24 @@ export function resolveStatementActualStatus({
     };
   }
 
-  const expectedAmountCents = bill.amount != null
-    && Number.isFinite(Number(bill.amount))
-    ? Math.round(Number(bill.amount) * 100)
-    : null;
+  const amountExpectations = statementAmountExpectations(bill);
+  const expectedAmountCents = amountExpectations[0]?.amountCents ?? null;
   if (bill.due_date <= today && expectedAmountCents != null) {
-    const transactionMatches = transactions.filter((transaction) => (
-      transaction.date === bill.due_date
-      && Math.round(Number(transaction.amount) * 100) === expectedAmountCents
-      && transactionIdentityMatches(transaction, bill)
-    ));
+    const transactionMatches = transactions.flatMap((transaction) => {
+      if (transaction.date !== bill.due_date || !transactionIdentityMatches(transaction, bill)) return [];
+      const transactionAmountCents = Math.round(Number(transaction.amount) * 100);
+      const amountMatch = amountExpectations.find((expectation) => (
+        expectation.amountCents === transactionAmountCents
+      ));
+      return amountMatch ? [{ transaction, amountMatch }] : [];
+    });
     if (transactionMatches.length === 1) {
+      const match = transactionMatches[0]!;
       return {
         status: "already_recorded",
         reason: "exact_transaction_match",
         checkedAt: syncHealth?.lastSuccessAt || null,
-        evidence: transactionEvidence(transactionMatches[0]!),
+        evidence: transactionEvidence(match.transaction, bill, match.amountMatch),
       };
     }
     if (transactionMatches.length > 1) {
@@ -199,7 +262,7 @@ export function resolveStatementActualStatus({
         evidence: {
           kind: "transaction_candidates",
           count: transactionMatches.length,
-          transactionIds: transactionMatches.map((transaction) => transaction.id),
+          transactionIds: transactionMatches.map(({ transaction }) => transaction.id),
           conflicts: ["identity"],
         },
       };
@@ -214,13 +277,15 @@ export function resolveStatementActualStatus({
     schedule.next_date === bill.due_date
     || !!occurrenceForSchedule(occurrences, schedule, bill.due_date)
   ));
-  const exactMatches = dateMatches.filter((schedule) => (
-    statementAmountMatches(
+  const exactMatches = dateMatches.flatMap((schedule) => {
+    const occurrence = occurrenceForSchedule(occurrences, schedule, bill.due_date);
+    const amountMatch = statementAmountMatch(
       schedule,
-      occurrenceForSchedule(occurrences, schedule, bill.due_date),
-      expectedAmountCents,
-    )
-  ));
+      occurrence,
+      amountExpectations,
+    );
+    return amountMatch ? [{ schedule, occurrence, amountMatch }] : [];
+  });
   if (exactMatches.length > 1) {
     return {
       status: "needs_review",
@@ -229,22 +294,21 @@ export function resolveStatementActualStatus({
       evidence: {
         kind: "schedule_candidates",
         count: exactMatches.length,
-        scheduleIds: exactMatches.map((schedule) => schedule.id).filter((id): id is string => !!id),
+        scheduleIds: exactMatches.map(({ schedule }) => schedule.id).filter((id): id is string => !!id),
         conflicts: ["identity"],
       },
     };
   }
-  const matchingSchedule = exactMatches[0] || null;
-  const occurrence = matchingSchedule
-    ? occurrenceForSchedule(occurrences, matchingSchedule, bill.due_date)
-    : null;
+  const matchingEntry = exactMatches[0] || null;
+  const matchingSchedule = matchingEntry?.schedule || null;
+  const occurrence = matchingEntry?.occurrence || null;
 
-  if (matchingSchedule && occurrence) {
+  if (matchingEntry && matchingSchedule && occurrence) {
     return {
       status: "already_scheduled",
       reason: "exact_schedule_match",
       checkedAt: syncHealth?.lastSuccessAt || null,
-      evidence: scheduleEvidence(matchingSchedule, occurrence, bill),
+      evidence: scheduleEvidence(matchingSchedule, occurrence, bill, [], matchingEntry.amountMatch),
     };
   }
 

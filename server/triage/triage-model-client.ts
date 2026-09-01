@@ -4,6 +4,8 @@ import {
   DEFAULT_BILL_EXTRACT_MODEL,
   resolveBillExtractModelConfig,
 } from "../bills/bill-extractors/catalog.ts";
+import { createBillCandidateVerificationService } from "../bills/bill-candidate-verification-service.ts";
+import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "../bills/bill-semantic-prompt.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey, type AiProvider } from "../ai-credentials.ts";
 import type {
@@ -19,10 +21,16 @@ import type {
   TriageModelTier,
   TriageModelUsage,
 } from "./triage-types.ts";
+import {
+  BILL_AMOUNT_KINDS,
+  BILL_EVENT_KINDS,
+  type BillCandidate,
+  type BillExtractionProvider,
+} from "../../shared/types/bills.ts";
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
-const TRIAGE_PROMPT_CACHE_VERSION = "v1";
+const TRIAGE_PROMPT_CACHE_VERSION = "v5";
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
 const TRIAGE_MODEL_TIMEOUT_MS = 120_000;
@@ -64,6 +72,30 @@ const TRIAGE_TOOL = {
         properties: {
           payee_hint: { type: ["string", "null"] },
           amount: { type: ["number", "null"] },
+          amount_kind: { type: ["string", "null"], enum: [...BILL_AMOUNT_KINDS, null] },
+          amount_candidates: {
+            type: "array",
+            maxItems: 8,
+            items: {
+              type: "object",
+              properties: {
+                kind: { type: "string", enum: BILL_AMOUNT_KINDS },
+                value: { type: "number" },
+                evidence: { type: ["string", "null"] },
+                confidence: { type: ["number", "null"] },
+              },
+              required: ["kind", "value", "evidence", "confidence"],
+            },
+          },
+          event_kind: { type: "string", enum: BILL_EVENT_KINDS },
+          event_confidence: { type: "number" },
+          event_evidence: { type: "string" },
+          account_last4: { type: ["string", "null"], pattern: "^[0-9]{4}$" },
+          account_last4_evidence: { type: ["string", "null"] },
+          account_last4_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
+          target_policy_key: { type: ["string", "null"] },
+          target_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
+          target_evidence: { type: ["string", "null"] },
           due_date: { type: ["string", "null"] },
           requires_confirmation: { type: "boolean" },
         },
@@ -100,6 +132,7 @@ Rules:
 - Payment due ambiguity, low balance, failed payment, card expiration, service interruption, legal/school deadlines, and suspicious security events must stay needs_attention or escalate.
 - If a specific deadline or due date exists, set deadline_at as an ISO timestamp or null if uncertain.
 - Finance/payment bill candidates must require confirmation; never imply an Actual Budget write.
+${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 - Be compact. Summary and action should each be short enough for a dense dashboard row.`;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -223,6 +256,34 @@ function normalizeBillExtractChoice(row: Record<string, unknown> = {}): TriageMo
   });
 }
 
+async function verifyTriageBillAmounts({
+  decision,
+  email,
+  providerId,
+  model,
+  service,
+}: {
+  decision: Record<string, unknown>;
+  email: Partial<TriageEmail>;
+  providerId: string;
+  model: string;
+  service: ReturnType<typeof createBillCandidateVerificationService>;
+}): Promise<Record<string, unknown>> {
+  if (!isRecord(decision.bill_candidate)) return decision;
+  const candidate = await service.verifyEmailCandidate({
+    email: {
+      subject: email.subject,
+      from: email.from_address,
+      body: email.body_text,
+      body_snippet: email.body_snippet,
+    },
+    candidate: decision.bill_candidate as BillCandidate,
+    providerId,
+    model,
+  });
+  return { ...decision, bill_candidate: candidate };
+}
+
 export async function loadTriageModelConfig(userId: string, dbClient: TriageDb = db as unknown as TriageDb): Promise<TriageModelConfig> {
   let row: Record<string, unknown> = {};
   try {
@@ -252,6 +313,7 @@ export async function loadTriageModelConfig(userId: string, dbClient: TriageDb =
 export function createTriageModelClient({
   fetchImpl = fetch,
   credentialResolver = resolveAiApiKey,
+  billExtractionProviders,
   config = {
     cheap: { provider: "anthropic", model: DEFAULT_CHEAP_MODEL },
     strong: { provider: "anthropic", model: DEFAULT_STRONG_MODEL },
@@ -260,8 +322,27 @@ export function createTriageModelClient({
   fetchImpl?: unknown;
   config?: TriageModelConfig;
   credentialResolver?: (provider: AiProvider) => Promise<string | null>;
+  billExtractionProviders?: Partial<Record<"openai" | "anthropic", BillExtractionProvider>>;
 } = {}): TriageModelClient {
   const fetchFn = fetchImpl as TriageFetch;
+  const billCandidateVerification = createBillCandidateVerificationService({
+    credentialResolver,
+    providers: billExtractionProviders,
+  });
+  const verifyDecision = (
+    decision: Record<string, unknown>,
+    email: Partial<TriageEmail>,
+  ) => {
+    const choice = config.cheap;
+    const providerId = choice.provider === "openai" ? "openai" : "anthropic";
+    return verifyTriageBillAmounts({
+      decision,
+      email,
+      providerId,
+      model: choice.model,
+      service: billCandidateVerification,
+    });
+  };
   return {
     async classify({ tier, email, reason }): Promise<TriageModelResult> {
       const choice = config[tier] || config.cheap || config.strong;
@@ -320,7 +401,7 @@ export function createTriageModelClient({
                 cacheKey,
               });
               return {
-                decision: extractOpenAIToolInput(data),
+                decision: await verifyDecision(extractOpenAIToolInput(data), email),
                 usage,
                 provider: "openai",
                 model: responseModel,
@@ -344,7 +425,7 @@ export function createTriageModelClient({
           cacheKey,
         });
         return {
-          decision: extractOpenAIToolInput(data),
+          decision: await verifyDecision(extractOpenAIToolInput(data), email),
           usage,
           provider: "openai",
           model: responseModel,
@@ -404,7 +485,7 @@ export function createTriageModelClient({
         usage,
       });
       return {
-        decision: extractAnthropicToolInput(data),
+        decision: await verifyDecision(extractAnthropicToolInput(data), email),
         usage,
         provider: "anthropic",
         model: responseModel,

@@ -42,6 +42,8 @@ const item: TransactionImportItem = {
   automaticSafe: true,
   blockingWarnings: [],
   evidence: [{ code: "demo_fixture", value: "fictional" }],
+  financialPlan: null,
+  planShadow: null,
   status: "ready",
   reconciliationStatus: "would_add",
   attempts: 1,

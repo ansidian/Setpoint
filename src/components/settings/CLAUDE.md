@@ -21,7 +21,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ### Sections (one per tab)
 - `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
-- `sections/ActualBudgetSettingsSection.tsx` — Finance behavior: bill-pay mappings, mapping tests, and utility links
+- `sections/ActualBudgetSettingsSection.tsx` — Finance behavior: transaction imports and utility pay links; legacy mapping controls are no longer mounted
 - `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, lookback
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens
 
@@ -34,11 +34,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/ImportantSendersCard.tsx` — auto-learned and manual important sender lists
 - `cards/TrustedRemoteContentCard.tsx` — persisted exact-sender + receiving-account remote-image trust list and removal
 
-### Cards: bill pay mappings
-- `cards/BillPayMappingsCard.tsx` — profiles → behaviors → matchers/targets hierarchy editor
-- `cards/BillPayMappingInputs.tsx` — ChipEditor, TargetDropdown, MappingSelect, ReorderButtons
-- `cards/BillPayMappingTestCard.tsx` — tests mapping resolution against sample email text
-- `cards/billPayMappingsModel.ts` — normalizes/validates/mutates the mapping tree
+### Cards: utility links
 - `cards/UtilityPayLinksCard.tsx` — per-schedule bill-pay website URLs; source for the calendar "Pay Online" button
 
 ### Cards: connections + security

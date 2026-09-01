@@ -12,6 +12,7 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `parsers/parser-registry.ts` — source routing and public parser entry point
 - `transaction-email-discovery.ts` — allowlisted Gmail historical-search adapter
 - `transaction-import-store.ts` — durable mapping, run, item, claim, recovery, recent-run, and per-email status persistence
+- `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner plus redacted shadow-plan/equivalence projection
 - `transaction-import-service.ts` — arrival preparation and historical-run admission
 - `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains
 - `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
@@ -22,6 +23,8 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - Parsers are pure: no configuration, persistence, logging, or network calls.
 - Amounts are signed integer cents and dates are `YYYY-MM-DD`.
 - Parser warnings carry an explicit `blocking` flag; automatic safety is projected centrally.
+- Financial plans are shadow evidence until the documented equivalence gate passes; legacy mapped targets and modes remain authoritative during that phase.
+- Durable plan JSON must omit model/body evidence excerpts while retaining target provenance, reconciliation, and eligibility reasons.
 - Raw Gmail message IDs remain distinct from RFC Message-ID headers.
 - Raw bodies are transient input and must not cross persistence/status boundaries.
 

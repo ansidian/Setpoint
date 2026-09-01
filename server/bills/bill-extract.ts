@@ -62,6 +62,6 @@ export function trimBillBody({ subject, from, body }: BillExtractionInput): stri
 
   const header = `Subject: ${subject || ""}\nFrom: ${from || ""}\n\n`;
   const joined = header + out.join("\n");
-  return joined.length > 2000 ? joined.slice(0, 2000) : joined;
+  return joined.length > 3500 ? joined.slice(0, 3500) : joined;
 }
 import type { BillExtractionInput } from "../../shared/types/bills.ts";

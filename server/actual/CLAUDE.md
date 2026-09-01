@@ -7,7 +7,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual.ts` — facade routing writes to lightweight/worker/SDK path by mode
 - `actual-core.ts` — in-process Actual SDK ops: session lifecycle (lock/cache singletons), metadata/bill reads, transaction writes/imports, and orchestration over the schedule-write module; loads only an existing or bounded-validator-hydrated local budget
 - `actualSdkScheduleWrites.ts` — SDK schedule-write module over an injected Actual SDK port: schedule/rule hydration, payee/account resolution, bill/transfer matching and upsert, past-date posting, and one-off bill transaction projection
-- `actualCoreModel.ts` — pure derivation for the SDK path: schedule classification/matching, condition building, date helpers, and the metadata/upcoming-bill projections
+- `actualCoreModel.ts` — pure derivation for the SDK path: schedule classification/matching (including transfer-account projection), condition building, date helpers, and the metadata/upcoming-bill projections
 - `actual-lightweight-writes.ts` — fast CRDT-message writes without booting the SDK; thin orchestrator over the four seam modules below
 - `actualWriteModel.ts` — pure strict write-date validation and CRDT sync-cursor selection
 - `scheduleMatchModel.ts` — pure schedule fuzzy/exact match, dedup, and cross-type sign guard; consumes actual-amount-condition.ts
@@ -19,7 +19,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-worker-protocol.ts` — shared discriminated request/response protocol and runtime parsing for parent/child worker messages
 - `actual-worker-child.ts` — worker-child entry serializing ops onto the SDK singleton
 - `actual-local-metadata.ts` — local budget cache facade + orchestrator over the three seam modules below
-- `actualMetadataModel.ts` — pure derivation: Actual date coercion, rule-condition normalization, schedule classification, and the metadata projection
+- `actualMetadataModel.ts` — pure derivation: Actual date coercion, rule-condition normalization, schedule classification with transfer-account projection, and the metadata projection
 - `actualMetadataCacheStore.ts` — filesystem cache ops: locate the budget dir by sync id, prune zip backups, summarize disk usage
 - `actualMetadataSync.ts` — lightweight metadata sync engine: HTTP login/download, protobuf sync POST, and CRDT-message apply under the clock lock
 - `actual-budget-archive.ts` — bounded native stored/deflate reader for lightweight downloads: validates compressed/expanded size, entry count, local/central structure, encryption, CRC, and path-safe budget IDs, and returns only `db.sqlite` plus `metadata.json`

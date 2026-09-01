@@ -7,6 +7,7 @@ import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
 } from "../bills/bill-extractors/catalog.ts";
+import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "../bills/bill-semantic-prompt.ts";
 
 function createTriageModelClient(
   options: Parameters<typeof createRuntimeTriageModelClient>[0] = {},
@@ -104,6 +105,13 @@ describe("triage model client", () => {
     // System is now an ephemeral-cacheable block array; the tool carries a
     // matching cache_control so the tools+system prefix is one cache breakpoint.
     expect(body.system[0].text).toContain("Classify one email");
+    expect(body.system[0].text).toContain(BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS);
+    expect(body.tools[0].input_schema.properties.bill_candidate.properties.amount_candidates.items.properties.kind.enum)
+      .toContain("statement_balance");
+    expect(body.tools[0].input_schema.properties.bill_candidate.properties.event_kind.enum)
+      .toContain("payment_completed");
+    expect(body.tools[0].input_schema.properties.bill_candidate.properties.account_last4.pattern)
+      .toBe("^[0-9]{4}$");
     expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
     expect(body.tools[0].cache_control).toEqual({ type: "ephemeral" });
     expect(body.messages[0].content).toContain("Routing reason: hard_risk_override");
@@ -135,12 +143,83 @@ describe("triage model client", () => {
     expect((options!.headers as Record<string, string>).Authorization).toBe("Bearer test-openai-key");
     const body = JSON.parse(String(options!.body));
     expect(body.model).toBe("gpt-5.4-nano");
-    expect(body.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
+    expect(body.prompt_cache_key).toBe("ea-email-triage:v5:cheap:gpt-5.4-nano");
     expect(body.tool_choice).toEqual({ type: "function", name: "submit_email_triage" });
+    expect(body.tools[0].parameters.properties.bill_candidate.properties.amount_kind.enum)
+      .toContain("minimum_due");
+    expect(body.tools[0].parameters.properties.bill_candidate.properties.event_kind.enum)
+      .toContain("purchase");
+    expect(body.tools[0].parameters.properties.bill_candidate.properties.target_policy_key.type)
+      .toContain("null");
+    expect(body.tools[0].parameters.properties.bill_candidate.properties.account_last4_confidence.maximum)
+      .toBe(1);
     expect(result).toMatchObject({
       provider: "openai",
       tier: "cheap",
       decision: { lane: "needs_attention" },
+    });
+  });
+
+  it("returns a triage decision corrected by the shared multi-amount verifier", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const incompleteDecision = {
+      ...decision,
+      bill_candidate: {
+        amount: 40,
+        amount_kind: "minimum_due",
+        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+      },
+    };
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        model: "gpt-5.4-mini",
+        output: [{
+          type: "function_call",
+          name: "submit_email_triage",
+          arguments: JSON.stringify(incompleteDecision),
+        }],
+        usage: { input_tokens: 90, output_tokens: 30 },
+      }),
+    }));
+    const verifierProvider = {
+      extract: vi.fn(async () => ({
+        fields: {
+          amount: 391.2,
+          amount_kind: "statement_balance",
+          amount_candidates: [
+            { kind: "minimum_due", value: 40 },
+            { kind: "other", value: 0 },
+            { kind: "statement_balance", value: 391.2 },
+          ],
+        },
+        usage: {},
+      })),
+    };
+    const client = createTriageModelClient({
+      fetchImpl,
+      billExtractionProviders: { openai: verifierProvider as never },
+      config: {
+        cheap: { provider: "openai", model: "gpt-5.4-mini" },
+        strong: { provider: "openai", model: "gpt-5.4" },
+      },
+    });
+
+    const result = await client.classify({
+      tier: "cheap",
+      email: {
+        ...email,
+        body_text: "Minimum payment $40.00. Plan balance $0.00. Remaining statement balance $391.20.",
+      },
+      reason: "finance",
+    });
+
+    const resultDecision = result.decision as Record<string, unknown>;
+    expect(resultDecision.bill_candidate).toMatchObject({
+      amount: 391.2,
+      amount_kind: "statement_balance",
+      amount_verification: { status: "corrected" },
     });
   });
 
@@ -230,7 +309,7 @@ describe("triage model client", () => {
     const firstBody = JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body));
     // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const retryBody = JSON.parse(String(fetchImpl.mock.calls[1]![1]!.body));
-    expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
+    expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v5:cheap:gpt-5.4-nano");
     expect(firstBody.prompt_cache_retention).toBe("24h");
     expect(retryBody.store).toBe(false);
     expect(retryBody.prompt_cache_key).toBeUndefined();

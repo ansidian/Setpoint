@@ -7,6 +7,7 @@ import type {
   TransactionImportMapping,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
+import { attachTransactionImportFinancialPlans } from "./transaction-import-planner-adapter.ts";
 
 export interface HistoricalScanOptions {
   gmailAccountIds: string[];
@@ -161,7 +162,12 @@ export function prepareTransactionImportItems(
 export function createTransactionImportService({
   store = transactionImportStore,
   createId = randomUUID,
-}: { store?: TransactionImportStore; createId?: () => string } = {}) {
+  planItems = attachTransactionImportFinancialPlans,
+}: {
+  store?: TransactionImportStore;
+  createId?: () => string;
+  planItems?: typeof attachTransactionImportFinancialPlans;
+} = {}) {
   async function startHistoricalScan(userId: string, rawOptions: HistoricalScanOptions): Promise<{ runId: string; created: boolean }> {
     const options = validateHistoricalOptions(rawOptions);
     const result = await store.createRun({
@@ -184,6 +190,7 @@ export function createTransactionImportService({
     const runId = createId();
     const prepared = prepareTransactionImportItems(userId, runId, emails, mappings, createId);
     if (!prepared.items.length) return { queued: 0, review: 0, runId: null };
+    const plannedItems = await planItems(userId, prepared.items);
     await store.createRun({
       id: runId,
       userId,
@@ -195,7 +202,7 @@ export function createTransactionImportService({
       endDate: null,
     });
     let inserted = 0;
-    for (const item of prepared.items) {
+    for (const item of plannedItems) {
       if (await store.insertItem(item)) inserted++;
     }
     await store.updateRunProgress(userId, runId, {

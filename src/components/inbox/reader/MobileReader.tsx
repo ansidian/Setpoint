@@ -29,8 +29,7 @@ import type { SnapshotTriageLane } from "../../../../shared/types/snapshots";
 import type { InboxActionKind } from "../useInboxActionDispatch";
 import type { ReaderSurfaceProps } from "./readerTypes";
 import { IDLE_BILL_RESOLUTION } from "./readerTypes";
-import ActualActionStatus from "./ActualActionStatus";
-import TransactionImportStatus from "./TransactionImportStatus";
+import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 import {
   isActualActioned,
@@ -204,13 +203,9 @@ export default function MobileReader({
           onTrash={() => onAction("trash")}
         />
 
-        <TransactionImportStatus
+        <EmailActualStatus
           emailUid={String(email.uid || email.email_id || "")}
-          style={{ margin: "0 16px 10px" }}
-        />
-
-        <ActualActionStatus
-          resolution={billResolution}
+          billResolution={billResolution}
           style={{ margin: "0 16px 10px" }}
         />
 

@@ -1,9 +1,12 @@
-import type { StatementActualEvidence, StatementActualStatus } from "../../../../shared/types/bills";
+import type {
+  FinancialEmailReconciliation,
+  StatementActualEvidence,
+} from "../../../../shared/types/bills";
 import type { BillResolutionState } from "./readerTypes";
 
 export type ActualResolutionLike = Pick<BillResolutionState, "status"> & Partial<BillResolutionState>;
 
-const ACTIONED_STATUSES = new Set<StatementActualStatus["status"]>(["already_scheduled", "already_recorded"]);
+const ACTIONED_STATUSES = new Set<FinancialEmailReconciliation["status"]>(["already_scheduled", "already_recorded"]);
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -25,7 +28,17 @@ function formatDate(value: unknown): string | null {
 function evidenceSummary(evidence: StatementActualEvidence | null | undefined, datePrefix: string): string {
   const pieces = [];
   const amount = evidence?.amount;
-  if (Number.isFinite(Number(amount))) {
+  const statementAmount = evidence?.statementAmount;
+  const adjustmentAmount = evidence?.adjustment?.amount;
+  if (
+    Number.isFinite(Number(amount))
+    && Number.isFinite(Number(statementAmount))
+    && Number.isFinite(Number(adjustmentAmount))
+  ) {
+    pieces.push(
+      `${currencyFormatter.format(Number(statementAmount))} + ${currencyFormatter.format(Number(adjustmentAmount))} fee = ${currencyFormatter.format(Number(amount))}`,
+    );
+  } else if (Number.isFinite(Number(amount))) {
     pieces.push(currencyFormatter.format(Number(amount)));
   }
   const date = formatDate(evidence?.dueDate);
@@ -33,7 +46,7 @@ function evidenceSummary(evidence: StatementActualEvidence | null | undefined, d
   return pieces.join(" ");
 }
 
-function successDetail(actualStatus: StatementActualStatus, datePrefix: string): string {
+function successDetail(actualStatus: FinancialEmailReconciliation, datePrefix: string): string {
   const summary = evidenceSummary(actualStatus.evidence, datePrefix);
   return summary
     ? `${summary} · No further action needed.`
@@ -50,12 +63,12 @@ function reviewDetail(reason: string | undefined): string {
   return "More than one Actual item could match this statement.";
 }
 
-export function isActualActioned(actualStatus: StatementActualStatus | null | undefined): boolean {
+export function isActualActioned(actualStatus: FinancialEmailReconciliation | null | undefined): boolean {
   return actualStatus ? ACTIONED_STATUSES.has(actualStatus.status) : false;
 }
 
 export function resolveActualCalendarTarget(
-  actualStatus: StatementActualStatus | null | undefined,
+  actualStatus: FinancialEmailReconciliation | null | undefined,
 ): { date: string; itemId: string } | null {
   if (!actualStatus || !ACTIONED_STATUSES.has(actualStatus.status)) return null;
   const date = actualStatus.evidence?.dueDate;
@@ -111,7 +124,7 @@ export function resolveActualActionStatusView(
     return {
       tone: "warning",
       title: "Actual match needs review",
-      detail: reviewDetail(actualStatus.reason),
+      detail: reviewDetail(actualStatus.reason || undefined),
     };
   }
   if (actualStatus.status === "not_scheduled") {

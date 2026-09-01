@@ -138,6 +138,119 @@ describe("resolveStatementActualStatus", () => {
     });
   });
 
+  it("matches an SCE occurrence that includes the configured processing fee", () => {
+    const result = resolveStatementActualStatus({
+      bill: bill({
+        payee: "SCE",
+        payee_hint: "SCE",
+        amount: 100,
+      }),
+      metadata: {
+        schedules: [schedule({
+          name: "SCE",
+          conditions: [
+            { op: "is", field: "payee", value: "payee-acme" },
+            { op: "is", field: "account", value: "checking" },
+            { op: "is", field: "amount", value: -10165 },
+          ],
+        })],
+      },
+      occurrences: [{
+        scheduleId: "schedule-acme",
+        name: "SCE",
+        amount: 101.65,
+        next_date: "2026-08-12",
+        paid: false,
+        type: "bill",
+      }],
+      transactions: [],
+      syncHealth: currentSync,
+      today: "2026-07-16",
+    });
+
+    expect(result).toMatchObject({
+      status: "already_scheduled",
+      reason: "exact_schedule_match",
+      evidence: {
+        amount: 101.65,
+        statementAmount: 100,
+        adjustment: {
+          policyId: "sce-card-fee",
+          kind: "fixed_processing_fee",
+          amount: 1.65,
+        },
+      },
+    });
+  });
+
+  it("accepts either the exact base amount or exact configured-fee total", () => {
+    const baseInput = {
+      bill: bill({ payee: "SoCalGas", payee_hint: "SoCalGas", amount: 50 }),
+      metadata: { schedules: [schedule({ conditions: [
+        { op: "is", field: "payee", value: "payee-acme" },
+        { op: "is", field: "account", value: "checking" },
+        { op: "is", field: "amount", value: -5000 },
+      ] })] },
+      occurrences: [{
+        scheduleId: "schedule-acme",
+        amount: 50,
+        next_date: "2026-08-12",
+        type: "bill",
+      }],
+      transactions: [],
+      syncHealth: currentSync,
+      today: "2026-07-16",
+    };
+
+    expect(resolveStatementActualStatus(baseInput)).toMatchObject({
+      status: "already_scheduled",
+      evidence: { amount: 50 },
+    });
+    expect(resolveStatementActualStatus({
+      ...baseInput,
+      metadata: { schedules: [schedule({ conditions: [
+        { op: "is", field: "payee", value: "payee-acme" },
+        { op: "is", field: "account", value: "checking" },
+        { op: "is", field: "amount", value: -5150 },
+      ] })] },
+      occurrences: [{
+        scheduleId: "schedule-acme",
+        amount: 51.5,
+        next_date: "2026-08-12",
+        type: "bill",
+      }],
+    })).toMatchObject({
+      status: "already_scheduled",
+      evidence: {
+        amount: 51.5,
+        statementAmount: 50,
+        adjustment: { policyId: "socalgas-card-fee", amount: 1.5 },
+      },
+    });
+  });
+
+  it("does not turn configured fees into a fuzzy amount tolerance", () => {
+    const result = resolveStatementActualStatus({
+      bill: bill({ payee: "SCE", payee_hint: "SCE", amount: 100 }),
+      metadata: { schedules: [schedule({ conditions: [
+        { op: "is", field: "payee", value: "payee-acme" },
+        { op: "is", field: "account", value: "checking" },
+        { op: "is", field: "amount", value: -10164 },
+      ] })] },
+      occurrences: [{
+        scheduleId: "schedule-acme",
+        amount: 101.64,
+        next_date: "2026-08-12",
+        type: "bill",
+      }],
+      transactions: [],
+      syncHealth: currentSync,
+      today: "2026-07-16",
+    });
+
+    expect(result).toMatchObject({ status: "needs_review", reason: "amount_mismatch" });
+  });
+
   it("requires review when the matching Actual schedule is on another due date", () => {
     const result = resolveStatementActualStatus({
       bill: bill(),

@@ -171,8 +171,8 @@ export default function MobileBillDrawer({
           emailBodyLoading={extractionBody.loading}
           emailBodySource={extractionBody.source}
           emailBodyError={extractionBody.error}
-          mapping={billResolution?.mapping}
-          mappingLoading={billResolution?.status === "loading"}
+          plan={billResolution?.plan}
+          planLoading={billResolution?.status === "loading"}
         />
       </div>
     </Motion.div>

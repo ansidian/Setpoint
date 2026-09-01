@@ -32,6 +32,8 @@ function item(overrides: Partial<TransactionImportItem> = {}): TransactionImport
     automaticSafe: true,
     blockingWarnings: [],
     evidence: [],
+    financialPlan: null,
+    planShadow: null,
     status: "ready",
     reconciliationStatus: "would_add",
     attempts: 1,

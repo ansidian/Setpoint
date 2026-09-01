@@ -77,6 +77,7 @@ describe("classifySchedules", () => {
       { id: "s3", conditions: [{ field: "payee", value: "transfer-payee" }, { field: "amount", value: 5000 }] },
     ], rawPayees);
     expect(schedule!.type).toBe("transfer");
+    expect(schedule!.transferAccountId).toBe("acct-1");
   });
 });
 

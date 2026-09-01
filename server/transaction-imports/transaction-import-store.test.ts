@@ -15,7 +15,7 @@ describe("transaction import store", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute({
@@ -127,10 +127,55 @@ describe("transaction import store", () => {
     expect(detail).toMatchObject({
       cursor: { gmailAccountIndex: 0, pageToken: "next-page" },
       counts: { discovered: 1, parsed: 1, queued: 1 },
-      items: [{ importedId: "amazon-111-222", evidence: [{ code: "external_id", value: "111-222" }] }],
+      items: [{
+        importedId: "amazon-111-222",
+        evidence: [{ code: "external_id", value: "111-222" }],
+        financialPlan: null,
+        planShadow: null,
+      }],
     });
     expect(JSON.stringify(detail)).not.toMatch(/html|message body/i);
     await expect(subject.getRunDetail("different-owner", "run-1")).resolves.toBeNull();
+  });
+
+  it("persists the redacted financial plan and shadow comparison with the canonical item", async () => {
+    await createRun();
+    const subject = store();
+    const financialPlan = {
+      version: 1 as const,
+      identity: { version: 1 as const, status: "resolved" as const, key: "financial-email:v1:test" },
+      candidate: { payee: "Amazon", amount: 25.99, event_kind: "purchase" as const },
+      classification: { documentKind: "one_time_transaction" as const, eventKind: "purchase" as const, confidence: 1, reasons: [] },
+      operation: { intended: "create_transaction" as const, kind: "review" as const, reasons: ["actual_preflight_not_run" as const] },
+      targets: {
+        account: { kind: "account" as const, status: "resolved" as const, id: "planned-account", provenance: [] },
+        payee: { kind: "payee" as const, status: "resolved" as const, id: "amazon-payee", provenance: [] },
+        category: { kind: "category" as const, status: "unresolved" as const, provenance: [] },
+        fromAccount: { kind: "from_account" as const, status: "not_applicable" as const, provenance: [] },
+        toAccount: { kind: "to_account" as const, status: "not_applicable" as const, provenance: [] },
+        schedule: { kind: "schedule" as const, status: "not_applicable" as const, provenance: [] },
+      },
+      reconciliation: { status: "not_checked" as const, disposition: "review" as const },
+      reviewReasons: [],
+      automation: { eligible: false, operationClass: "one_time_expense" as const, rollout: "observe_only" as const, gates: [], reasons: ["actual_preflight_not_run" as const] },
+    };
+    const planShadow = {
+      status: "planned" as const,
+      operation: "review" as const,
+      reconciliationStatus: "not_checked" as const,
+      account: { liveId: "actual-checking", plannedId: "planned-account", agreement: "mismatch" as const },
+      category: { liveId: "actual-shopping", plannedId: null, agreement: "unresolved" as const },
+      automationEligible: false,
+      automationReasons: ["actual_preflight_not_run" as const],
+      failureCode: null,
+    };
+    await subject.insertItem(itemInput({ financialPlan, planShadow }));
+
+    await expect(subject.getItem("owner-1", "item-1")).resolves.toMatchObject({
+      importedId: "amazon-111-222",
+      financialPlan,
+      planShadow,
+    });
   });
 
   it("lists recent runs and bounded subject-bearing email items by owner", async () => {

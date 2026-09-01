@@ -12,7 +12,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 
 ### Briefing
 - `briefing/index.ts` — mounts briefing sub-routers, applies auth middleware
-- `briefing/bills.ts` — sends bills to Actual Budget, quick transactions
+- `briefing/bills.ts` — resolves financial-email plans, extracts manual financial emails, sends owner-confirmed bills to Actual Budget, and creates quick transactions
 - `briefing/email.ts` — email bodies, dismiss/snooze, inbox search
 - `briefing/email-index.ts` — email index health checks, backfill queuing
 - `briefing/snapshot.ts` — snapshot fetch/sync, kanban lane reorder
@@ -28,7 +28,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `tldraw.ts` — authenticated Notes bootstrap, revisioned document saves, and private content-addressed media
 - `news.ts` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.ts` — Discord reminder testing and configuration
-- `settings.ts` — user settings, model selection, integration configs
+- `settings.ts` — user settings, model selection, and active integration configs; legacy Bill Pay mappings are retained only in storage and are not exposed
 - `gmail-push.ts` — Gmail Pub/Sub push intake, queues history syncs
 - `todoist-webhook.ts` — Todoist webhook deliveries with signature verification
 - `todoist-oauth.ts` — Todoist OAuth begin/callback/status routes with callback-scoped browser binding

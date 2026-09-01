@@ -2,14 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createClient } from "@libsql/client";
 import type { InStatement } from "@libsql/client";
 
-interface MetadataFixture {
-  accounts?: unknown[];
-  payees?: unknown[];
-  categories?: unknown[];
-  schedules?: unknown[];
-  recentTransactions?: unknown[];
-}
-
 const mockActual = {
   sendBill: vi.fn(),
   markBillPaid: vi.fn(),
@@ -104,20 +96,6 @@ async function expectReconciliationState() {
   });
 }
 
-function metadataProjectionRow(metadata: MetadataFixture = {}) {
-  return {
-    status: "current",
-    accounts_json: JSON.stringify(metadata.accounts || []),
-    payees_json: JSON.stringify(metadata.payees || []),
-    categories_json: JSON.stringify(metadata.categories || []),
-    schedules_json: JSON.stringify(metadata.schedules || []),
-    recent_transactions_json: JSON.stringify(metadata.recentTransactions || []),
-    last_success_at: "2026-05-06T12:00:00.000Z",
-    last_attempt_at: "2026-05-06T12:00:00.000Z",
-    last_error: null,
-  };
-}
-
 beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
   process.env.OPENAI_API_KEY = "test-openai-key";
@@ -167,7 +145,6 @@ const {
   listAccounts,
   hydrateActualCache,
   resolveBillPaySeed,
-  resolveBillPaySample,
   stopBillsMirrorRefreshWorker,
 } = await import("./bills-service.ts");
 
@@ -204,7 +181,7 @@ describe("Bill Pay resolver service", () => {
       .mockResolvedValueOnce({
         rows: [{
           bill_pay_mappings_json: JSON.stringify({
-            version: 1,
+            version: 2,
             profiles: [{
               id: "edison",
               enabled: true,
@@ -213,8 +190,6 @@ describe("Bill Pay resolver service", () => {
                 id: "monthly",
                 enabled: true,
                 type: "expense",
-                intent: { subject: ["bill"] },
-                amountStrategy: "model_amount",
                 targets: {
                   payee_id: "payee-edison",
                   payee_label: "Southern California Edison",
@@ -228,9 +203,16 @@ describe("Bill Pay resolver service", () => {
       })
       .mockResolvedValueOnce({
         rows: [{
+          account_id: "gmail-work",
+          email_id: "msg-1",
           bill_candidate_json: JSON.stringify({
             payee_hint: "Edison",
             amount: 64.2,
+            amount_kind: "total_due",
+            amount_candidates: [{ kind: "total_due", value: 64.2 }],
+            event_kind: "bill_issued",
+            event_confidence: 0.99,
+            event_evidence: "Statement ready",
             due_date: "2026-05-29",
           }),
           from_name: "Edison",
@@ -239,7 +221,33 @@ describe("Bill Pay resolver service", () => {
           body_snippet: "Statement ready",
           body_text: "Statement ready",
         }],
-      });
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          bill_pay_mappings_json: JSON.stringify({
+            version: 2,
+            profiles: [{
+              id: "edison",
+              enabled: true,
+              identity: { aliases: ["edison"] },
+              behaviors: [{
+                id: "monthly",
+                enabled: true,
+                type: "expense",
+                targets: {
+                  payee_id: "payee-edison",
+                  payee_label: "Southern California Edison",
+                  category_id: "cat-utilities",
+                  category_label: "Utilities",
+                },
+              }],
+            }],
+          }),
+          bill_extract_provider: "openai",
+          bill_extract_model: "gpt-5.4-mini",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [], rowsAffected: 1 });
 
     const result = await resolveBillPaySeed(
       "u1",
@@ -284,55 +292,6 @@ describe("Bill Pay resolver service", () => {
     });
   });
 
-  it("resolves a pasted-text mapping sample without requiring an email id", async () => {
-    mockDb.execute.mockResolvedValueOnce(rowResult([metadataProjectionRow({
-      accounts: [],
-      payees: [{ id: "payee-spectrum", name: "Spectrum" }],
-      categories: [{ id: "cat-internet", name: "Internet" }],
-    })]));
-
-    const result = await resolveBillPaySample("u1", {
-      mappings: {
-        version: 1,
-        profiles: [{
-          id: "spectrum",
-          enabled: true,
-          identity: { aliases: ["spectrum"] },
-          behaviors: [{
-            id: "internet",
-            enabled: true,
-            type: "expense",
-            intent: { body: ["internet statement"] },
-            amountStrategy: "amount_due",
-            targets: {
-              payee_id: "payee-spectrum",
-              payee_label: "Spectrum",
-              category_id: "cat-internet",
-              category_label: "Internet",
-            },
-          }],
-        }],
-      },
-      email: {
-        from: "billing@spectrum.net",
-        subject: "Statement",
-        body: "Spectrum internet statement. Amount due: $84.99",
-      },
-      candidate: { payee_hint: "Spectrum", due_date: "2026-06-01" },
-    });
-
-    expect(result.mapping).toMatchObject({
-      status: "matched",
-      profileId: "spectrum",
-      behaviorId: "internet",
-      amountSource: "amount_due",
-    });
-    expect(result.bill).toMatchObject({
-      payee_id: "payee-spectrum",
-      category_id: "cat-internet",
-      amount: 84.99,
-    });
-  });
 });
 
 describe("sendBill", () => {

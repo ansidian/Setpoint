@@ -13,8 +13,7 @@ import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import EmailAttachmentShelf from "./EmailAttachmentShelf";
 import DraftReply from "./DraftReply";
-import ActualActionStatus from "./ActualActionStatus";
-import TransactionImportStatus from "./TransactionImportStatus";
+import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActionGroups } from "./readerActionsModel";
@@ -126,8 +125,8 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
               emailBodyLoading={extractionBody.loading}
               emailBodySource={extractionBody.source}
               emailBodyError={extractionBody.error}
-              mapping={billResolution?.mapping}
-              mappingLoading={billResolution?.status === "loading"}
+              plan={billResolution?.plan}
+              planLoading={billResolution?.status === "loading"}
             />
           </div>
         </Motion.aside>
@@ -338,13 +337,9 @@ export default function DesktopReader({
           </div>
         )}
 
-        <TransactionImportStatus
+        <EmailActualStatus
           emailUid={String(email.uid || email.email_id || "")}
-          style={{ margin: "8px 20px 0" }}
-        />
-
-        <ActualActionStatus
-          resolution={billResolution}
+          billResolution={billResolution}
           style={{ margin: "8px 20px 0" }}
         />
 

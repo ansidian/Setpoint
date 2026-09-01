@@ -1,0 +1,10 @@
+export const BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS: string = `For each bill candidate:
+- Classify event_kind as statement_issued for a newly available credit/financial statement; payment_due for a due reminder; payment_scheduled for upcoming or scheduled autopay; card_payment_completed when a payment was posted or applied to a credit-card/account balance (this is a transfer); payment_completed for a completed utility or merchant bill payment; payment_cancelled when autopay or a payment was cancelled; purchase for a charge, order, authorization, or receipt; refund for a refund or account credit; bill_issued for a recurring-service invoice or utility bill; reward for cashback/reward income; payment_failed for a declined, returned, or failed payment; other only when none applies. A cancellation in the body overrides scheduled wording in the subject.
+- Return event_confidence from 0 to 1 and short verbatim event_evidence.
+- When an explicit account/card suffix is present, return account_last4 as exactly four digits, short verbatim account_last4_evidence, and account_last4_confidence from 0 to 1. Otherwise return all three as null.
+- Set target_policy_key, target_confidence, and target_evidence to null. Target policy selection is a separate constrained audit; never invent an Actual ID, mapping, or target policy.
+- Preserve every distinct labeled monetary value in amount_candidates with its semantic kind, short verbatim evidence, and confidence. Distinguish statement_balance, minimum_due, total_due, payment_amount, transaction_amount, refund_amount, order_total, subtotal, and other.
+- Associate labels with nearby values even when email layout puts them on following lines.
+- Set amount_kind to the canonical amount for this document and amount to that candidate's value. A statement balance is canonical whenever present.
+- Preserve minimum_due only as an informational amount_candidate; never select minimum_due as amount_kind or use its value as amount.
+- If no non-minimum canonical amount is present, return null amount and null amount_kind.`;

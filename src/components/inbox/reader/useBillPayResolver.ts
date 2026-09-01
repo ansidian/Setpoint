@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { resolveBillPaySeed } from "../../../api";
+import { resolveFinancialEmailPlan } from "../../../api";
 import { resolveBillExtractionBody } from "./billExtractionBody";
-import type { BillPayResolution, BillPaySeedRequest } from "../../../../shared/types/bills";
+import type { BillPaySeedRequest, FinancialEmailPlan } from "../../../../shared/types/bills";
 import type { InboxEmailLike } from "../inboxTypes";
 import { asBillCandidate } from "./readerTypes";
 import type { BillResolutionState, BillResolutionValue, EmailBodyStateInput } from "./readerTypes";
@@ -32,11 +32,11 @@ function pruneBillResolutionCache(now: number): void {
   }
 }
 
-function resolvedValue(result: BillPayResolution): BillResolutionValue {
+function resolvedValue(result: FinancialEmailPlan): BillResolutionValue {
   return {
-    resolvedBill: result?.bill || null,
-    mapping: result?.mapping || null,
-    actualStatus: result?.actualStatus || null,
+    plan: result || null,
+    resolvedBill: result?.candidate || null,
+    actualStatus: result?.reconciliation || null,
   };
 }
 
@@ -56,7 +56,7 @@ function loadBillResolution(key: string, payload: BillPaySeedRequest): SharedCac
     promise: null,
     expiresAt: now + BILL_RESOLUTION_TTL_MS,
   };
-  const promise = resolveBillPaySeed(payload)
+  const promise = resolveFinancialEmailPlan(payload)
     .then((result) => {
       const value = resolvedValue(result);
       if (
@@ -122,8 +122,8 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
   const [state, setState] = useState<BillResolutionState>({
     key: null,
     status: "idle",
+    plan: null,
     resolvedBill: null,
-    mapping: null,
     actualStatus: null,
     error: null,
   });
@@ -143,8 +143,8 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
       setState({
         key: cacheRef.current.key,
         status: "idle",
+        plan: null,
         resolvedBill: null,
-        mapping: null,
         actualStatus: null,
         error: null,
       });
@@ -173,7 +173,7 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
       setState((current) => (
         current.status === "resolved"
           && current.resolvedBill === value.resolvedBill
-          && current.mapping === value.mapping
+          && current.plan === value.plan
           ? current
           : { key, status: "resolved", ...value, error: null }
       ));
@@ -217,8 +217,8 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
           setState({
             key,
             status: "error",
+            plan: null,
             resolvedBill: null,
-            mapping: null,
             actualStatus: null,
             error,
           });
@@ -231,8 +231,8 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
     : {
         key,
         status: "idle",
+        plan: null,
         resolvedBill: null,
-        mapping: null,
         actualStatus: null,
         error: null,
       };

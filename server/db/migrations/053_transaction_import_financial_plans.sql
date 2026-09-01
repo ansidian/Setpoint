@@ -1,0 +1,2 @@
+ALTER TABLE ea_transaction_import_items ADD COLUMN financial_email_plan_json TEXT;
+ALTER TABLE ea_transaction_import_items ADD COLUMN financial_plan_shadow_json TEXT;

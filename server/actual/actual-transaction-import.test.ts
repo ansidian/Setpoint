@@ -61,6 +61,29 @@ describe("Actual grouped transaction import", () => {
     ]);
   });
 
+  it("preserves positive integer cents for income imports", async () => {
+    const incomeGroups = [{
+      accountId: "account-1",
+      transactions: [{
+        itemId: "refund",
+        importedId: "financial-email:v1:refund",
+        date: "2026-04-19",
+        amountCents: 2599,
+        payee: "Example Merchant",
+        notes: "Refund",
+      }],
+    }];
+
+    await runActualTransactionImport({ groups: incomeGroups, dryRun: true, ...api });
+
+    // test-architecture: allow-boundary-interaction -- Actual import is the external financial boundary; signed cents are the public direction contract and must reach the SDK unchanged.
+    expect(api.importTransactions).toHaveBeenCalledWith(
+      "account-1",
+      [expect.objectContaining({ imported_id: "financial-email:v1:refund", amount: 2599 })],
+      { dryRun: true },
+    );
+  });
+
   it("treats transactions returned only in Actual's added list as new", async () => {
     api.importTransactions.mockResolvedValueOnce({
       errors: [],

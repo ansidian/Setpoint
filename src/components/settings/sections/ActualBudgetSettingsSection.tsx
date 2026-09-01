@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActualMetadata } from "@/api";
-import BillPayMappingsCard from "@/components/settings/cards/BillPayMappingsCard";
-import BillPayMappingTestCard from "@/components/settings/cards/BillPayMappingTestCard";
 import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
 import EmailTransactionImportCard from "@/components/settings/cards/EmailTransactionImportCard";
 import ConnectionDependencyPrompt from "@/components/settings/ConnectionDependencyPrompt";
@@ -64,7 +62,7 @@ export default function ActualBudgetSettingsSection({
     return (
       <ConnectionDependencyPrompt
         title="Connect Actual Budget"
-        description="Finance customization becomes available after Actual Budget is connected. Existing mappings and pay links remain saved while disconnected."
+        description="Finance tools become available after Actual Budget is connected. Existing pay links remain saved while disconnected."
         actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
       />
     );
@@ -75,7 +73,7 @@ export default function ActualBudgetSettingsSection({
       {dependency.actual === "needs_attention" ? (
         <ConnectionDependencyPrompt
           title="Actual Budget needs attention"
-          description="Retained mappings and pay links stay available for review. Repair the connection to refresh Actual accounts, payees, categories, schedules, or run a mapping test."
+          description="Pay links stay available for review. Repair the connection to refresh Actual accounts, payees, categories, and schedules."
           attention
           actions={[{ connectionId: "actual-budget", label: "Repair connection" }]}
         />
@@ -87,17 +85,6 @@ export default function ActualBudgetSettingsSection({
         gmailAccounts={accounts}
         liveOperationsAvailable={dependency.allowLiveMetadata}
       />
-      <BillPayMappingsCard
-        settings={settings}
-        setSettings={setSettings}
-        patch={patch}
-        metadata={metadata}
-        metadataLoading={metadataLoading}
-        metadataError={metadataError}
-        onRequestMetadata={requestMetadata}
-        liveMetadataAvailable={dependency.allowLiveMetadata}
-      />
-      <BillPayMappingTestCard settings={settings} liveMetadataAvailable={dependency.allowLiveMetadata} />
       <UtilityPayLinksCard
         settings={settings}
         setSettings={setSettings}

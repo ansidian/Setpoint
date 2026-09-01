@@ -55,6 +55,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/backfill-email-date-utc.ts` — normalizes historical email dates to UTC
 - `scripts/email-search-embedding-backfill.ts`, `scripts/email-search-embedding-status.ts` — batch (re)compute and report embedding coverage for email search
 - `scripts/email-search-retrieval-eval.ts`, `scripts/seed-email-search-retrieval-eval.ts` — email search retrieval quality eval and its fixture seeding
+- `scripts/financial-email-observe-report.ts` — bounded read-only report of persisted financial-email automation gates by operation class
 - `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME

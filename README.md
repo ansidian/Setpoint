@@ -101,6 +101,11 @@ The complete template is in [`.env.example`](.env.example):
   switches, and legacy owner/origin imports. Fresh installs do not set an owner
   ID, password hash, WebAuthn origin, or redirect URI.
 
+Financial emails use one zero-configuration planning path for semantic purpose,
+canonical amount, Actual target inference, reconciliation, and explicit review.
+Final plans are persisted so reopening an email does not repeat model work;
+generic unattended execution remains disabled until its observe-only safety gates pass.
+
 Production startup delays workers so the web server can accept initial requests
 before catch-up jobs start. The default worker delay is 60–120 seconds, with an
 extra 2 minutes before the passive email indexer and an extra 10 minutes before

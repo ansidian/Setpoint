@@ -9,7 +9,8 @@ import {
   type ActualConnectionCandidate,
 } from "../actual/actual.ts";
 import db from "../db/connection.ts";
-import { resolveBillPaySample as resolveBillPaySampleCore } from "./bill-pay-service.ts";
+import { extractBillCandidate } from "./bill-extraction-service.ts";
+import { planFinancialEmail as planFinancialEmailCore } from "./financial-email-planner.ts";
 import {
   describeLocalActualCache,
   hydrateLocalActualCache,
@@ -25,10 +26,14 @@ import {
   scheduleBillsMirrorRefresh,
 } from "./bills-mirror-sync.ts";
 import type { BillsMirrorDb } from "./bills-mirror-sync.ts";
-import type { SampleOptions } from "./bill-pay-service.ts";
 import type { LocalActualOptions } from "../actual/actual-local-metadata.ts";
 import type { ActualBillWriteInput, ActualQuickTransactionInput } from "../actual/actual.ts";
-import type { BillCandidate } from "../../shared/types/bills.ts";
+import type {
+  BillCandidate,
+  BillExtractionInput,
+  FinancialEmailExtractionResponse,
+} from "../../shared/types/bills.ts";
+import type { BillExtractionDependencies } from "./bill-extraction-service.ts";
 import { capabilityStatusService } from "../capability-status-service.ts";
 
 type ReconciliationError = Error & {
@@ -39,7 +44,15 @@ type ReconciliationError = Error & {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-export { resolveBillPaySeed } from "./bill-pay-service.ts";
+export { enrichBillCandidate, resolveBillPaySeed } from "./bill-pay-service.ts";
+export { resolveFinancialEmailSeed } from "./financial-email-adoption-service.ts";
+export { planFinancialEmail } from "./financial-email-planner.ts";
+export { evaluateFinancialEmail } from "./financial-email-evaluator.ts";
+export {
+  billSemanticHealthTelemetry,
+  emitBillSemanticHealthTelemetry,
+  type BillSemanticHealthTelemetry,
+} from "./billSemanticHealthTelemetry.ts";
 export {
   getMetadata,
   readActualMetadataProjection,
@@ -198,6 +211,26 @@ export async function createQuickTxn(userId: string, payload: ActualQuickTransac
   }, { delayMs: 60_000 });
 }
 
+export async function extractFinancialEmail(
+  userId: string,
+  input: BillExtractionInput,
+  dependencies: BillExtractionDependencies = {},
+): Promise<FinancialEmailExtractionResponse> {
+  const extracted = await extractBillCandidate(userId, input, dependencies);
+  const plan = await planFinancialEmailCore(userId, {
+    email: { subject: input.subject, from: input.from, body: input.body },
+    candidate: extracted.candidate,
+    source: "extract",
+    sourceIdentity: { senderAuthentication: "unavailable" },
+  });
+  return {
+    ...plan.candidate,
+    provider: extracted.provider,
+    model: extracted.model,
+    plan,
+  };
+}
+
 export async function hydrateActualCache(userId: string, {
   dbClient = db,
   now = new Date(),
@@ -217,9 +250,4 @@ export async function getActualCacheStatus(userId: string, {
   dbClient = db,
 }: { dbClient?: NonNullable<LocalActualOptions["dbClient"]> } = {}) {
   return describeLocalActualCache(userId, { dbClient });
-}
-
-export async function resolveBillPaySample(userId: string, payload: SampleOptions = {}) {
-  const metadata = await getMetadata(userId);
-  return resolveBillPaySampleCore(userId, { ...payload, metadata });
 }

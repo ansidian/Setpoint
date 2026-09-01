@@ -56,16 +56,24 @@ export function normalizeRuleConditions(value: unknown): ActualScheduleCondition
 }
 
 export function classifySchedules(schedules: ActualSchedule[], rawPayees: Array<Pick<ActualPayee, "id" | "transfer_acct">>): ActualSchedule[] {
-  const transferPayeeIds = new Set(rawPayees.filter((payee) => payee.transfer_acct && payee.id).map((payee) => payee.id!));
+  const transferAccountsByPayee = new Map(
+    rawPayees
+      .filter((payee) => payee.transfer_acct && payee.id)
+      .map((payee) => [payee.id!, payee.transfer_acct!] as const),
+  );
   return schedules.map((schedule) => {
     const payeeValue = schedule.conditions?.find((condition) => condition.field === "payee")?.value;
     const payeeId = typeof payeeValue === "string" ? payeeValue : undefined;
     const signedAmt = amountConditionCents(schedule.conditions?.find((condition) => condition.field === "amount"));
     let type: ActualSchedule["type"];
-    if (payeeId && transferPayeeIds.has(payeeId)) type = "transfer";
+    if (payeeId && transferAccountsByPayee.has(payeeId)) type = "transfer";
     else if (signedAmt > 0) type = "income";
     else type = "bill";
-    return { ...schedule, type };
+    return {
+      ...schedule,
+      type,
+      ...(type === "transfer" ? { transferAccountId: transferAccountsByPayee.get(payeeId!) || null } : {}),
+    };
   });
 }
 

@@ -42,6 +42,7 @@ describe("classifySchedules", () => {
     expect(income!.type).toBe("income");
     expect(bill!.type).toBe("bill");
     expect(transfer!.type).toBe("transfer");
+    expect(transfer!.transferAccountId).toBe("acct-1");
   });
 });
 

@@ -68,10 +68,9 @@ import type {
   ActualMetadataResponse,
   BillCandidate,
   BillExtractionInput,
-  BillExtractionResponse,
+  FinancialEmailExtractionResponse,
   BillMutationResponse,
-  BillPayResolution,
-  BillPaySampleRequest,
+  FinancialEmailPlan,
   BillPaySeedRequest,
   CalendarBillsRangeResponse,
 } from "../shared/types/bills.ts";
@@ -458,9 +457,8 @@ export const deleteTodoistTask = (id: ApiId): Promise<DeadlineDeleteResponse> =>
 
 // Actual Budget
 export const sendToActualBudget = (bill: BillCandidate): Promise<BillMutationResponse> => apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
-export const extractBillFromEmail = ({ subject, from, body }: BillExtractionInput): Promise<BillExtractionResponse> => apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
-export const resolveBillPaySeed = (payload: BillPaySeedRequest): Promise<BillPayResolution> => apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
-export const resolveBillPayMappingSample = (payload: BillPaySampleRequest): Promise<BillPayResolution> => apiFetch("/api/briefing/bills/resolve-sample", { method: "POST", body: JSON.stringify(payload || {}) });
+export const extractBillFromEmail = ({ subject, from, body }: BillExtractionInput): Promise<FinancialEmailExtractionResponse> => apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
+export const resolveFinancialEmailPlan = (payload: BillPaySeedRequest): Promise<FinancialEmailPlan> => apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
 export const markBillPaid = (id: ApiId): Promise<BillMutationResponse> => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
 export const getActualAccounts = (): Promise<ActualAccount[]> => apiFetch("/api/briefing/actual/accounts");
 export const getActualPayees = (): Promise<ActualPayee[]> => apiFetch("/api/briefing/actual/payees");

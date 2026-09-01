@@ -8,6 +8,7 @@
     "server/scripts/email-search-embedding-backfill.ts",
     "server/scripts/email-search-embedding-status.ts",
     "server/scripts/email-search-retrieval-eval.ts",
+    "server/scripts/financial-email-observe-report.ts",
     "server/scripts/hydrate-actual-cache.ts",
     "server/scripts/prune-actual-cache.ts",
     "server/scripts/reindex-emails.ts",

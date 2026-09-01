@@ -26,6 +26,8 @@ function item(status: TransactionImportItem["status"], overrides: Partial<Transa
     automaticSafe: true,
     blockingWarnings: [],
     evidence: [],
+    financialPlan: null,
+    planShadow: null,
     status,
     reconciliationStatus: null,
     attempts: 1,

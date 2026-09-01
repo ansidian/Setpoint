@@ -9,14 +9,107 @@ import type { TransactionRecord } from "./transactions.ts";
 export type BillType = "expense" | "income" | "bill" | "transfer";
 export type BillPaySource = "triage" | "pasted_text" | "extract" | string;
 export type BillPayMatcherGroup = Array<string | string[]>;
-export type BillPayAmountStrategy = "statement_balance" | "minimum_due" | "amount_due" | "model_amount" | "none";
-export type BillPayAmountFallback = "blank_if_not_found" | "use_model_amount";
+export const FINANCIAL_DOCUMENT_KINDS = [
+  "one_time_transaction",
+  "utility_statement",
+  "credit_card_statement",
+  "income",
+  "informational",
+] as const;
+export type FinancialDocumentKind = typeof FINANCIAL_DOCUMENT_KINDS[number];
+export const FINANCIAL_OPERATION_KINDS = [
+  "create_transaction",
+  "create_schedule",
+  "create_transfer_schedule",
+  "no_write",
+  "review",
+] as const;
+export type FinancialOperationKind = typeof FINANCIAL_OPERATION_KINDS[number];
+export type FinancialIntendedOperationKind = Exclude<FinancialOperationKind, "review">;
+export const BILL_EVENT_KINDS = [
+  "statement_issued",
+  "payment_due",
+  "payment_scheduled",
+  "card_payment_completed",
+  "payment_completed",
+  "payment_cancelled",
+  "purchase",
+  "refund",
+  "bill_issued",
+  "reward",
+  "payment_failed",
+  "other",
+] as const;
+export type BillEventKind = typeof BILL_EVENT_KINDS[number];
+export const BILL_AMOUNT_KINDS = [
+  "statement_balance",
+  "minimum_due",
+  "total_due",
+  "payment_amount",
+  "transaction_amount",
+  "refund_amount",
+  "order_total",
+  "subtotal",
+  "other",
+] as const;
+export type BillAmountKind = typeof BILL_AMOUNT_KINDS[number];
+
+export interface BillAmountCandidate {
+  kind: BillAmountKind;
+  value: number;
+  evidence?: string | null;
+  confidence?: number | null;
+}
+
+export interface BillAmountVerification {
+  status: "corrected" | "kept_initial" | "failed";
+  source_value_count: number;
+  initial_covered_count: number;
+  verified_covered_count?: number;
+  provider?: string;
+  model?: string;
+}
+
+export interface BillEventVerification {
+  status: "corrected" | "kept_initial" | "failed";
+  provider?: string;
+  model?: string;
+}
+
+export interface BillTargetVerification {
+  status: "selected" | "kept_ambiguous" | "failed";
+  option_count: number;
+  provider?: string;
+  model?: string;
+}
+
+export interface BillSemanticEnrichment {
+  status: "complete" | "failed";
+  provider: string;
+  model: string;
+  reason?: string | null;
+}
 
 export interface BillCandidate {
   payee?: string;
   payee_hint?: string;
   payee_id?: string | null;
   amount?: number | null;
+  amount_kind?: BillAmountKind | null;
+  amount_candidates?: BillAmountCandidate[];
+  amount_verification?: BillAmountVerification;
+  event_kind?: BillEventKind | null;
+  event_confidence?: number | null;
+  event_evidence?: string | null;
+  event_verification?: BillEventVerification;
+  account_last4?: string | null;
+  account_last4_evidence?: string | null;
+  account_last4_confidence?: number | null;
+  target_policy_key?: string | null;
+  target_confidence?: number | null;
+  target_evidence?: string | null;
+  target_verification?: BillTargetVerification;
+  semantic_enrichment?: BillSemanticEnrichment;
   due_date?: string | null;
   type?: BillType | string;
   notes?: string | null;
@@ -46,6 +139,197 @@ export interface BillEmailContext {
   [key: string]: unknown;
 }
 
+export type FinancialSenderAuthentication = "pass" | "fail" | "none" | "unavailable";
+
+export interface FinancialEmailSourceIdentity {
+  provider?: string | null;
+  accountId?: string | null;
+  senderAddress?: string | null;
+  senderAuthentication?: FinancialSenderAuthentication;
+  authenticationEvidence?: string[];
+}
+
+export interface FinancialEmailInput {
+  email?: BillEmailContext;
+  candidate?: BillCandidate | null;
+  source?: BillPaySource;
+  sourceIdentity?: FinancialEmailSourceIdentity | null;
+  providerMessageId?: string | null;
+  candidateIdentityHint?: string | number | null;
+  actualPreflight?: FinancialActualPreflight | null;
+}
+
+export interface FinancialActualPreflight {
+  status: "passed" | "failed" | "not_run";
+  reasons?: FinancialPlanReasonCode[];
+}
+
+export interface FinancialEmailIdentity {
+  version: 1;
+  status: "resolved" | "missing";
+  key: string | null;
+}
+
+export type FinancialTargetKind =
+  | "account"
+  | "payee"
+  | "category"
+  | "from_account"
+  | "to_account"
+  | "schedule";
+export type FinancialTargetStatus = "resolved" | "unresolved" | "not_applicable";
+export type FinancialTargetConfidence = "exact" | "high" | "medium" | "low" | "unknown";
+
+export interface FinancialTargetProvenance {
+  source: "persisted_candidate" | "source_adapter" | "actual_metadata" | "actual_history" | "model_ranking" | "deterministic_policy";
+  confidence: FinancialTargetConfidence;
+  reason: string;
+  evidence?: string | null;
+}
+
+export interface FinancialTargetCandidate {
+  key: string;
+  label: string;
+  confidence: FinancialTargetConfidence;
+  reason: string;
+}
+
+export interface FinancialPlanTarget {
+  kind: FinancialTargetKind;
+  status: FinancialTargetStatus;
+  id?: string | null;
+  label?: string | null;
+  provenance: FinancialTargetProvenance[];
+  competingCandidates?: FinancialTargetCandidate[];
+}
+
+export interface FinancialPlanTargets {
+  account: FinancialPlanTarget;
+  payee: FinancialPlanTarget;
+  category: FinancialPlanTarget;
+  fromAccount: FinancialPlanTarget;
+  toAccount: FinancialPlanTarget;
+  schedule: FinancialPlanTarget;
+}
+
+export const FINANCIAL_PLAN_REASON_CODES = [
+  "semantic_event_missing",
+  "semantic_event_ambiguous",
+  "provider_unavailable",
+  "canonical_amount_missing",
+  "minimum_due_only",
+  "due_date_missing",
+  "due_date_invalid",
+  "account_target_unresolved",
+  "payee_target_unresolved",
+  "category_target_unresolved",
+  "from_account_target_unresolved",
+  "to_account_target_unresolved",
+  "schedule_target_unresolved",
+  "credit_account_evidence_missing",
+  "reconciliation_unavailable",
+  "reconciliation_conflict",
+  "actual_metadata_unavailable",
+  "target_evidence_conflict",
+  "target_ranking_unresolved",
+  "already_recorded",
+  "already_scheduled",
+  "sender_authentication_failed",
+  "sender_authentication_unavailable",
+  "stable_identity_missing",
+  "actual_preflight_not_run",
+  "blocking_warning",
+  "automation_class_observe_only",
+  "informational_event",
+] as const;
+export type FinancialPlanReasonCode = typeof FINANCIAL_PLAN_REASON_CODES[number];
+
+export interface FinancialPlanReason {
+  code: FinancialPlanReasonCode;
+  message: string;
+  field?: string | null;
+  blocking: boolean;
+}
+
+export interface FinancialEmailClassification {
+  documentKind: FinancialDocumentKind;
+  eventKind: BillEventKind | null;
+  confidence: number | null;
+  evidence?: string | null;
+  reasons: FinancialPlanReasonCode[];
+}
+
+export interface FinancialEmailOperation {
+  intended: FinancialIntendedOperationKind | null;
+  kind: FinancialOperationKind;
+  reasons: FinancialPlanReasonCode[];
+}
+
+export type FinancialReconciliationStatus =
+  | StatementActualStatusKind
+  | "not_checked";
+
+export interface FinancialEmailReconciliation {
+  status: FinancialReconciliationStatus;
+  disposition?: "none" | "create" | "update_existing" | "no_write" | "review";
+  reason?: string | null;
+  checkedAt?: string | null;
+  evidence?: StatementActualEvidence | null;
+}
+
+export type FinancialAutomationGateKind =
+  | "semantic"
+  | "canonical_amount"
+  | "date"
+  | "targets"
+  | "authenticity"
+  | "stable_identity"
+  | "warnings"
+  | "reconciliation"
+  | "actual_preflight"
+  | "rollout";
+export type FinancialAutomationGateStatus = "pass" | "fail" | "unknown" | "not_applicable";
+
+export interface FinancialAutomationGate {
+  gate: FinancialAutomationGateKind;
+  status: FinancialAutomationGateStatus;
+  reasons: FinancialPlanReasonCode[];
+}
+
+export interface FinancialAutomationEligibility {
+  eligible: boolean;
+  operationClass: FinancialAutomationOperationClass;
+  rollout: "observe_only" | "enabled";
+  gates: FinancialAutomationGate[];
+  reasons: FinancialPlanReasonCode[];
+}
+
+export type FinancialAutomationOperationClass =
+  | "one_time_expense"
+  | "income"
+  | "utility_schedule"
+  | "transfer_schedule"
+  | "no_write"
+  | "unsupported";
+
+export interface FinancialEmailPlan {
+  version: 1;
+  identity: FinancialEmailIdentity;
+  candidate: BillCandidate;
+  classification: FinancialEmailClassification;
+  operation: FinancialEmailOperation;
+  targets: FinancialPlanTargets;
+  reconciliation: FinancialEmailReconciliation;
+  reviewReasons: FinancialPlanReason[];
+  automation: FinancialAutomationEligibility;
+}
+
+export interface FinancialEmailExtractionResponse extends BillCandidate {
+  provider: string;
+  model: string;
+  plan: FinancialEmailPlan;
+}
+
 export interface BillPayTargets {
   payee_id?: string | null;
   payee_label?: string | null;
@@ -63,17 +347,16 @@ export interface BillPayTargets {
 
 export interface BillPayBehavior {
   id?: string | null;
+  name?: string | null;
   enabled?: boolean;
   type?: BillType | string;
-  intent?: Record<string, BillPayMatcherGroup>;
-  amountStrategy?: BillPayAmountStrategy | string;
-  amountFallback?: BillPayAmountFallback | string;
   targets?: BillPayTargets;
   [key: string]: unknown;
 }
 
 export interface BillPayProfile {
   id?: string | null;
+  name?: string | null;
   enabled?: boolean;
   identity?: Record<string, BillPayMatcherGroup>;
   behaviors?: BillPayBehavior[];
@@ -81,7 +364,7 @@ export interface BillPayProfile {
 }
 
 export interface BillPayMappings {
-  version: number;
+  version: 2;
   profiles: BillPayProfile[];
   [key: string]: unknown;
 }
@@ -137,6 +420,13 @@ export interface StatementActualEvidence {
   conflicts?: string[];
   scheduleIds?: string[];
   transactionIds?: string[];
+  statementAmount?: number;
+  adjustment?: {
+    policyId: string;
+    kind: "fixed_processing_fee";
+    label: string;
+    amount: number;
+  };
 }
 
 export interface StatementActualStatus {
@@ -271,9 +561,3 @@ export type BillPaySeedRequest = Omit<BillPayResolveInput, "mappings" | "metadat
   body?: unknown;
   snippet?: unknown;
 };
-
-export interface BillPaySampleRequest {
-  mappings?: BillPayMappings | null;
-  email?: BillEmailContext;
-  candidate?: BillCandidate | null;
-}

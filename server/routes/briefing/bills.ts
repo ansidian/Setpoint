@@ -124,7 +124,7 @@ router.post("/bills/extract", extractLimiter, async (req, res) => {
     return res.status(400).json({ message: "body is required" });
   }
   try {
-    res.json(await service.extractBill(ownerUserId(), { subject, from, body }));
+    res.json(await service.extractFinancialEmail(ownerUserId(), { subject, from, body }));
   } catch (error: unknown) {
     const err = error as HttpError;
     const status = err.status || 500;
@@ -145,7 +145,7 @@ router.post("/bills/resolve", async (req, res) => {
     source = "triage",
   } = req.body || {};
   try {
-    res.json(await service.resolveBillPaySeed(ownerUserId(), {
+    res.json(await service.resolveFinancialEmailSeed(ownerUserId(), {
       emailId,
       accountId,
       subject,
@@ -159,22 +159,6 @@ router.post("/bills/resolve", async (req, res) => {
     const err = error as HttpError;
     const status = err.status || 500;
     if (status >= 500) console.error("Error resolving bill pay:", err);
-    res.status(status).json({ message: err.message });
-  }
-});
-
-router.post("/bills/resolve-sample", async (req, res) => {
-  const { mappings, email, candidate } = req.body || {};
-  try {
-    res.json(await service.resolveBillPaySample(ownerUserId(), {
-      mappings,
-      email,
-      candidate,
-    }));
-  } catch (error: unknown) {
-    const err = error as HttpError;
-    const status = err.status || 500;
-    if (status >= 500) console.error("Error resolving bill pay sample:", err);
     res.status(status).json({ message: err.message });
   }
 });

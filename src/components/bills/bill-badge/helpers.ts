@@ -7,6 +7,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { ActualMetadataEntry } from "../../../lib/actualMetadata";
 import type { BillPayMappingOutcome, BillType } from "../../../../shared/types/bills";
+import { findBillPaymentAdjustment } from "../../../../shared/billPaymentAdjustments";
 
 type BillPayMappingLabelInput = Omit<Partial<BillPayMappingOutcome>, "status"> & { status?: string };
 
@@ -24,18 +25,11 @@ export const typeHints: Record<BillType, string> = {
   income: "Creates one-time transaction",
 };
 
-const KNOWN_CC_FEES: Record<string, number> = {
-  socalgas: 1.50,
-  sce: 1.65,
-};
-
 export function detectFee(payeeName: string | null | undefined): { vendor: string; fee: number } | null {
-  if (!payeeName) return null;
-  const lower = payeeName.toLowerCase();
-  for (const [key, fee] of Object.entries(KNOWN_CC_FEES)) {
-    if (lower.includes(key)) return { vendor: key, fee };
-  }
-  return null;
+  const adjustment = findBillPaymentAdjustment(payeeName);
+  return adjustment
+    ? { vendor: adjustment.vendor, fee: adjustment.amountCents / 100 }
+    : null;
 }
 
 export function formatModelName(model: string | null | undefined): string {

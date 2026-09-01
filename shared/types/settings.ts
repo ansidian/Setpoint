@@ -76,55 +76,6 @@ export interface TriageCacheStatsResponse extends TriageCacheStatsWindow {
   };
 }
 
-export type BillPayMatcher = string | string[];
-export type BillPayMatcherGroup = BillPayMatcher[];
-
-export interface BillPayBehaviorTargets {
-  payee_id?: string;
-  payee_label?: string;
-  account_id?: string;
-  account_label?: string;
-  category_id?: string;
-  category_label?: string;
-  from_account_id?: string;
-  from_account_label?: string;
-  to_account_id?: string;
-  to_account_label?: string;
-  schedule_name?: string;
-}
-
-export interface BillPayBehavior {
-  id?: string;
-  name?: string;
-  enabled?: boolean;
-  type?: "transfer" | "bill" | "expense" | "income";
-  intent?: {
-    subject?: BillPayMatcherGroup;
-    body?: BillPayMatcherGroup;
-  };
-  amountStrategy?: "statement_balance" | "minimum_due" | "amount_due" | "model_amount" | "none";
-  amountFallback?: "blank_if_not_found" | "use_model_amount";
-  targets?: BillPayBehaviorTargets;
-}
-
-export interface BillPayProfile {
-  id?: string;
-  name?: string;
-  enabled?: boolean;
-  identity?: {
-    sender?: BillPayMatcherGroup;
-    domain?: BillPayMatcherGroup;
-    aliases?: BillPayMatcherGroup;
-    last4?: BillPayMatcherGroup;
-  };
-  behaviors?: BillPayBehavior[];
-}
-
-export interface BillPayMappings {
-  version: 1;
-  profiles: BillPayProfile[];
-}
-
 export interface UtilityPayLink {
   scheduleId: string;
   label: string;
@@ -191,7 +142,6 @@ export interface SettingsResponse {
   email_interests: string[];
   triage_sound_settings: TriageSoundSettings;
   triage_notification_sounds: TriageNotificationSound[];
-  bill_pay_mappings: BillPayMappings;
   utility_pay_links: UtilityPayLink[];
 }
 
@@ -229,7 +179,6 @@ export interface SettingsPatchRequest {
   email_triage_mode?: StoredEmailTriageMode;
   email_triage_classify_read_arrivals?: boolean;
   triage_sound_settings?: TriageSoundSettings;
-  bill_pay_mappings?: BillPayMappings;
   discord_webhook_url?: string;
   discord_user_id?: string;
   utility_pay_links?: UtilityPayLink[];

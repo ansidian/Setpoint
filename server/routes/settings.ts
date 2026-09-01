@@ -34,10 +34,6 @@ import {
   TRIAGE_NOTIFICATION_SOUNDS,
   validateTriageSoundSettings,
 } from "../triage/triage-sound-settings.ts";
-import {
-  parseBillPayMappingsJson,
-  validateBillPayMappings,
-} from "../bills/bill-pay-mappings.ts";
 import { getTriageCacheStats } from "../triage/triage-cache-stats.ts";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.ts";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
@@ -149,7 +145,6 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
       schedules_json,
       email_interests_json,
       triage_sound_settings_json,
-      bill_pay_mappings_json,
       utility_pay_links_json,
     } = row;
     const safe: Record<string, unknown> = Object.fromEntries(
@@ -200,7 +195,6 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
     safe.email_triage_classify_read_arrivals = !!safe.email_triage_classify_read_arrivals;
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
-    safe.bill_pay_mappings = parseBillPayMappingsJson(bill_pay_mappings_json);
     safe.utility_pay_links = utility_pay_links_json ? JSON.parse(String(utility_pay_links_json)) : [];
 
     res.json(safe as unknown as SettingsResponse);
@@ -232,7 +226,7 @@ router.get("/email-search/usage", async (_req, res) => {
 
 router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, SettingsPatchRequest>("/settings", requireRecentAuthForSecretSettings, async (req, res) => {
   const userId = process.env.EA_USER_ID!;
-  const { schedules_json, email_lookback_hours, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
+  const { schedules_json, email_lookback_hours, home_location_label, home_location_address, home_location_place_id, home_location_lat, home_location_lng, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, alfred_provider, alfred_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, email_triage_classify_read_arrivals, triage_sound_settings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
     if (actual_budget_url !== undefined || actual_budget_password !== undefined || actual_budget_sync_id !== undefined) {
@@ -365,14 +359,6 @@ router.put<Record<string, never>, SettingsMutationResponse | ErrorResponse, Sett
       }
       updates.push("triage_sound_settings_json = ?");
       args.push(JSON.stringify(triage_sound_settings));
-    }
-    if (bill_pay_mappings !== undefined) {
-      const validation = validateBillPayMappings(bill_pay_mappings);
-      if (!validation.valid) {
-        return res.status(400).json({ message: validation.message! });
-      }
-      updates.push("bill_pay_mappings_json = ?");
-      args.push(JSON.stringify(bill_pay_mappings));
     }
     if (utility_pay_links !== undefined) {
       const validation = validateUtilityPayLinks(utility_pay_links);

@@ -10,13 +10,15 @@ import {
   createRequireRecentPasswordAuth,
 } from "../../middleware/auth.ts";
 import { createBillsRouters } from "./bills.ts";
+import { makeBillExtractLimiter } from "../../middleware/rate-limits.ts";
 
 const mockBillsService = {
   sendBill: vi.fn(),
   createQuickTxn: vi.fn(),
   extractBill: vi.fn(),
+  extractFinancialEmail: vi.fn(),
   resolveBillPaySeed: vi.fn(),
-  resolveBillPaySample: vi.fn(),
+  resolveFinancialEmailSeed: vi.fn(),
   markBillPaid: vi.fn(),
   getMetadata: vi.fn(),
   listAccounts: vi.fn(),
@@ -37,6 +39,7 @@ function makeApp() {
   const { router } = createBillsRouters({
     service: mockBillsService as never,
     recentAuth: createRequireRecentPasswordAuth(db),
+    extractLimiter: makeBillExtractLimiter(),
   });
   const app = express();
   app.use(express.json());
@@ -105,11 +108,19 @@ describe("Bill Pay routes", () => {
     expect(res.body.message).toMatch(/due_date/);
   });
 
-  it("resolves a Bill Pay seed through briefing cookie auth", async () => {
-    mockBillsService.resolveBillPaySeed.mockResolvedValueOnce({
-      bill: { payee: "Power", amount: 42 },
-      mapping: { status: "matched", profileId: "power" },
-    });
+  it("resolves a financial email plan through briefing cookie auth", async () => {
+    const plan = {
+      version: 1,
+      identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
+      candidate: { payee: "Power", amount: 42 },
+      classification: { documentKind: "utility_statement", eventKind: "payment_due", confidence: 0.99, reasons: [] },
+      operation: { intended: "create_schedule", kind: "create_schedule", reasons: [] },
+      targets: {},
+      reconciliation: { status: "not_scheduled" },
+      reviewReasons: [],
+      automation: { eligible: false, operationClass: "utility_schedule", rollout: "observe_only", gates: [], reasons: ["automation_class_observe_only"] },
+    };
+    mockBillsService.resolveFinancialEmailSeed.mockResolvedValueOnce(plan);
 
     const res = await request(makeApp())
       .post("/api/briefing/bills/resolve")
@@ -124,41 +135,7 @@ describe("Bill Pay routes", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
-      bill: { payee: "Power", amount: 42 },
-      mapping: { status: "matched", profileId: "power" },
-    });
-  });
-
-  it("resolves a pasted Bill Pay sample through briefing cookie auth", async () => {
-    mockBillsService.resolveBillPaySample.mockResolvedValueOnce({
-      bill: { payee: "Citi", amount: 25 },
-      mapping: { status: "matched", profileId: "citi", behaviorId: "minimum" },
-    });
-
-    const mappings = {
-      version: 1,
-      profiles: [{ id: "citi", enabled: true, identity: { domain: ["citi.com"] } }],
-    };
-
-    const res = await request(makeApp())
-      .post("/api/briefing/bills/resolve-sample")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({
-        mappings,
-        email: {
-          from: "alerts@citi.com",
-          subject: "Payment due",
-          body: "Minimum due: $25",
-        },
-        candidate: { payee: "Citi", amount: 10, due_date: "2026-05-15" },
-      });
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({
-      bill: { payee: "Citi", amount: 25 },
-      mapping: { status: "matched", profileId: "citi", behaviorId: "minimum" },
-    });
+    expect(res.body).toEqual(plan);
   });
 
   it("hydrates the Actual cache through briefing cookie auth", async () => {
@@ -269,9 +246,9 @@ describe("Bill Pay routes", () => {
 });
 
 describe("POST /bills/extract rate limiting (REL-08)", () => {
-  it("returns 429 on the 21st request and stops calling billsService.extractBill after 20", async () => {
+  it("returns 429 on the 21st request and stops planning extracted emails after 20", async () => {
     let extractCount = 0;
-    mockBillsService.extractBill.mockImplementation(async () => {
+    mockBillsService.extractFinancialEmail.mockImplementation(async () => {
       extractCount += 1;
       return { payee: "Power", amount: 42 };
     });
@@ -289,4 +266,5 @@ describe("POST /bills/extract rate limiting (REL-08)", () => {
     expect(lastRes!.body).toEqual({ message: "Too many bill-extract requests, try again later" });
     expect(extractCount).toBe(20);
   });
+
 });

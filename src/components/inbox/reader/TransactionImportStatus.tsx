@@ -1,8 +1,7 @@
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { Link } from "react-router";
-import useTransactionImportStatus from "./useTransactionImportStatus";
-import { resolveTransactionImportStatus } from "./transactionImportStatusModel";
 import type { CSSProperties } from "react";
+import type { TransactionImportStatusView as TransactionImportStatusViewModel } from "./transactionImportStatusModel";
 
 const TONES = {
   success: {
@@ -31,16 +30,13 @@ const TONES = {
   },
 };
 
-export default function TransactionImportStatus({
-  emailUid,
+export function TransactionImportStatusView({
+  view,
   style,
 }: {
-  emailUid: string;
+  view: TransactionImportStatusViewModel;
   style?: CSSProperties;
 }) {
-  const state = useTransactionImportStatus(emailUid);
-  const view = resolveTransactionImportStatus(state.items);
-  if (!view) return null;
   const tone = TONES[view.tone];
   const Icon = tone.Icon;
 

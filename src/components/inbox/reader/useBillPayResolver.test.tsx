@@ -1,11 +1,12 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import useBillPayResolver from "./useBillPayResolver";
-import { resolveBillPaySeed } from "../../../api";
+import { resolveFinancialEmailPlan } from "../../../api";
+import type { BillCandidate, FinancialEmailPlan, FinancialReconciliationStatus } from "../../../../shared/types/bills";
 
 // test-architecture: allow-boundary-mock -- src/api.ts is the authenticated client/server boundary for bill-seed extraction; the hook and cache stay real.
 vi.mock("../../../api", () => ({
-  resolveBillPaySeed: vi.fn(),
+  resolveFinancialEmailPlan: vi.fn(),
 }));
 
 afterEach(() => {
@@ -23,13 +24,33 @@ const email = {
   bill_candidate: { payee_hint: "Power", amount: 10 },
 };
 
+function plan(candidate: BillCandidate, status: FinancialReconciliationStatus = "not_scheduled"): FinancialEmailPlan {
+  return {
+    version: 1,
+    identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
+    candidate,
+    classification: { documentKind: "utility_statement", eventKind: "payment_due", confidence: 0.99, reasons: [] },
+    operation: { intended: "create_schedule", kind: "create_schedule", reasons: [] },
+    targets: {
+      account: { kind: "account", status: "unresolved", provenance: [] },
+      payee: { kind: "payee", status: "unresolved", provenance: [] },
+      category: { kind: "category", status: "unresolved", provenance: [] },
+      fromAccount: { kind: "from_account", status: "not_applicable", provenance: [] },
+      toAccount: { kind: "to_account", status: "not_applicable", provenance: [] },
+      schedule: { kind: "schedule", status: "unresolved", provenance: [] },
+    },
+    reconciliation: { status },
+    reviewReasons: [],
+    automation: { eligible: false, operationClass: "one_time_expense", rollout: "observe_only", gates: [], reasons: ["automation_class_observe_only"] },
+  };
+}
+
 describe("useBillPayResolver", () => {
   it("resolves a bill candidate on selection before Bill Pay is opened and caches it", async () => {
-    vi.mocked(resolveBillPaySeed).mockResolvedValueOnce({
-      bill: { payee: "Power", amount: 42 },
-      mapping: { status: "matched" },
-      actualStatus: { status: "already_scheduled" },
-    });
+    vi.mocked(resolveFinancialEmailPlan).mockResolvedValueOnce(plan(
+      { payee: "Power", amount: 42 },
+      "already_scheduled",
+    ));
 
     const { result, rerender } = renderHook(
       ({ billOpen }) => useBillPayResolver({
@@ -45,7 +66,7 @@ describe("useBillPayResolver", () => {
     });
     expect(result.current.actualStatus).toEqual({ status: "already_scheduled" });
     // test-architecture: allow-boundary-interaction -- the extraction request fields are the outbound HTTP payload contract; hook state cannot expose omitted or misrouted fields.
-    expect(resolveBillPaySeed).toHaveBeenCalledWith({
+    expect(resolveFinancialEmailPlan).toHaveBeenCalledWith({
       emailId: "msg-1",
       accountId: "gmail-work",
       subject: "Power bill",
@@ -66,17 +87,9 @@ describe("useBillPayResolver", () => {
       uid: "msg-2",
       subject: "Water bill",
     };
-    vi.mocked(resolveBillPaySeed)
-      .mockResolvedValueOnce({
-        bill: { payee: "Power", amount: 42 },
-        mapping: { status: "matched" },
-        actualStatus: { status: "already_scheduled" },
-      })
-      .mockResolvedValueOnce({
-        bill: { payee: "Water", amount: 24 },
-        mapping: { status: "matched" },
-        actualStatus: { status: "not_scheduled" },
-      });
+    vi.mocked(resolveFinancialEmailPlan)
+      .mockResolvedValueOnce(plan({ payee: "Power", amount: 42 }, "already_scheduled"))
+      .mockResolvedValueOnce(plan({ payee: "Water", amount: 24 }));
 
     const { result, rerender } = renderHook(
       ({ selectedEmail }) => useBillPayResolver({
@@ -103,9 +116,9 @@ describe("useBillPayResolver", () => {
   });
 
   it("invalidates the cached seed on settings changes", async () => {
-    vi.mocked(resolveBillPaySeed)
-      .mockResolvedValueOnce({ bill: { payee: "Old" }, mapping: { status: "matched" } })
-      .mockResolvedValueOnce({ bill: { payee: "New" }, mapping: { status: "matched" } });
+    vi.mocked(resolveFinancialEmailPlan)
+      .mockResolvedValueOnce(plan({ payee: "Old" }))
+      .mockResolvedValueOnce(plan({ payee: "New" }));
 
     const { result } = renderHook(() => useBillPayResolver({
       email,
@@ -127,17 +140,9 @@ describe("useBillPayResolver", () => {
   });
 
   it("invalidates the cached seed when Actual data changes", async () => {
-    vi.mocked(resolveBillPaySeed)
-      .mockResolvedValueOnce({
-        bill: { payee: "Power" },
-        mapping: { status: "matched" },
-        actualStatus: { status: "not_scheduled" },
-      })
-      .mockResolvedValueOnce({
-        bill: { payee: "Power" },
-        mapping: { status: "matched" },
-        actualStatus: { status: "already_scheduled" },
-      });
+    vi.mocked(resolveFinancialEmailPlan)
+      .mockResolvedValueOnce(plan({ payee: "Power" }))
+      .mockResolvedValueOnce(plan({ payee: "Power" }, "already_scheduled"));
 
     const { result } = renderHook(() => useBillPayResolver({
       email,

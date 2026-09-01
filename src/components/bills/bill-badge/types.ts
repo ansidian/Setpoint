@@ -1,5 +1,5 @@
 import type { ActualCategoryMetadata, ActualMetadataEntry } from "../../../lib/actualMetadata";
-import type { BillCandidate, BillPayMappingOutcome } from "../../../../shared/types/bills";
+import type { BillCandidate } from "../../../../shared/types/bills";
 import type { BillBadgeFormModel } from "../useBillBadgeForm";
 
 export interface BillFieldsProps {
@@ -45,8 +45,7 @@ export interface FeeAndSendRowProps {
 
 export type BillBadgeFormProps = BillBadgeFormModel & {
   bill: BillCandidate;
-  mapping?: BillPayMappingOutcome | null;
-  mappingLoading: boolean;
+  planLoading: boolean;
   isMobile: boolean;
   usesStackedLayout: boolean;
 };

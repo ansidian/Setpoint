@@ -4,7 +4,10 @@
       "actual.ts"
     ],
     "bills": [
-      "bills-service.ts"
+      "bills-service.ts",
+      "bill-candidate-verification-service.ts",
+      "bill-semantic-prompt.ts",
+      "financial-email-planner.ts"
     ],
     "calendar": [
       "calendar.ts",
@@ -72,7 +75,6 @@
     "server/routes/calendar.ts -> server/reminders/reminder-hydration.ts",
     "server/routes/reminders.ts -> server/reminders/discord-reminders.ts",
     "server/routes/settings.ts -> server/bills/bill-extractors/catalog.ts",
-    "server/routes/settings.ts -> server/bills/bill-pay-mappings.ts",
     "server/routes/settings.ts -> server/email/email-ai-models.ts",
     "server/routes/settings.ts -> server/email/search/email-search-cost-stats.ts",
     "server/routes/settings.ts -> server/tasks/todoist-token.ts",

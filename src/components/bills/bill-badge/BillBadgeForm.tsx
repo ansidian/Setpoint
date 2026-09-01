@@ -287,11 +287,16 @@ function FeeAndSendRow({
       <>
         <div className={cn("flex items-center mt-3", isMobile ? "gap-3" : "gap-2")}>
           <button
+            type="button"
             onClick={(event) => {
               event.stopPropagation();
               setFeeOverride(!feeEnabled);
             }}
-            className={cn("relative rounded-full transition-colors duration-200 flex-shrink-0 cursor-pointer", isMobile ? "w-[34px] h-[18px]" : "w-[28px] h-[14px]")}
+            className={cn(
+              "relative rounded-full transition-colors duration-200 flex-shrink-0 cursor-pointer",
+              "hover:ring-1 hover:ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100",
+              isMobile ? "w-[34px] h-[18px]" : "w-[28px] h-[14px]",
+            )}
             style={{ background: feeEnabled ? "color-mix(in srgb, var(--sp-accent) 35%, transparent)" : "rgba(255,255,255,0.08)" }}
             aria-label="Toggle CC fee"
           >
@@ -338,7 +343,7 @@ function FeeAndSendRow({
           disabled={!canSend}
           aria-label="Send to Actual Budget"
           className={cn(
-            "w-full mt-3 gap-1.5 font-semibold transition-all duration-200",
+            "w-full mt-3 gap-1.5 font-semibold transition-all duration-200 motion-reduce:transition-none motion-reduce:transform-none",
             isMobile ? "h-10 text-[13px]" : "h-9 text-[12px]",
             canSend
               ? "bg-[var(--sp-accent)] text-[var(--sp-page)] border-none hover:bg-[#d4b3e2] hover:-translate-y-px active:translate-y-0"
@@ -355,11 +360,12 @@ function FeeAndSendRow({
   return (
     <div className="flex items-center gap-2 mt-2.5">
       <button
+        type="button"
         onClick={(event) => {
           event.stopPropagation();
           setFeeOverride(!feeEnabled);
         }}
-        className="relative w-[28px] h-[14px] rounded-full transition-colors duration-200 flex-shrink-0 cursor-pointer"
+        className="relative w-[28px] h-[14px] rounded-full transition-colors duration-200 flex-shrink-0 cursor-pointer hover:ring-1 hover:ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100"
         style={{ background: feeEnabled ? "color-mix(in srgb, var(--sp-accent) 35%, transparent)" : "rgba(255,255,255,0.08)" }}
         aria-label="Toggle CC fee"
       >
@@ -400,7 +406,7 @@ function FeeAndSendRow({
         disabled={!canSend}
         aria-label="Send to Actual Budget"
         className={cn(
-          "h-8 px-4 gap-1.5 text-[11px] font-semibold transition-all duration-200 shrink-0",
+          "h-8 px-4 gap-1.5 text-[11px] font-semibold transition-all duration-200 shrink-0 motion-reduce:transition-none motion-reduce:transform-none",
           canSend
             ? "bg-[var(--sp-accent)] text-[var(--sp-page)] border-none hover:bg-[#d4b3e2] hover:-translate-y-px active:translate-y-0"
             : "bg-[var(--sp-accent)]/20 text-muted-foreground border-none cursor-not-allowed",
@@ -415,8 +421,8 @@ function FeeAndSendRow({
 
 export default function BillBadgeForm({
   bill,
-  mapping,
-  mappingLoading,
+  plan,
+  planLoading,
   isMobile,
   usesStackedLayout,
   effectiveModel,
@@ -469,8 +475,8 @@ export default function BillBadgeForm({
       <BillBadgeHeader
         isMobile={isMobile}
         usesStackedLayout={usesStackedLayout}
-        mapping={mapping}
-        mappingLoading={mappingLoading}
+        plan={plan}
+        planLoading={planLoading}
         editType={editType}
         effectiveModel={effectiveModel}
         modelDisplayName={modelDisplayName}

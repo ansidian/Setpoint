@@ -11,6 +11,104 @@ vi.mock("../ai-credentials.ts", () => ({
 }));
 
 describe("email triage worker model routing", () => {
+  it("persists the same financial plan candidate for triage and snapshot reads", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Your warehouse order",
+      body_snippet: "Order total $84.12",
+      body_text: "Your Costco order total is $84.12.",
+      from_name: "Costco",
+      from_address: "orders@costco.com",
+    });
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "fyi",
+          category: "finance",
+          urgency: "normal",
+          escalation_badge: null,
+          summary: "Costco order confirmed.",
+          action: "Review order",
+          deadline_at: null,
+          confidence: 0.98,
+          bill_candidate: {
+            payee_hint: "Costco",
+            amount: 84.12,
+            amount_kind: "order_total",
+            amount_candidates: [{ kind: "order_total", value: 84.12 }],
+            event_kind: "purchase",
+            event_confidence: 0.99,
+            event_evidence: "order total",
+          },
+        },
+        usage: { input_tokens: 80, output_tokens: 30 },
+        latency_ms: 300,
+        tier,
+      })),
+    };
+    const financialEmailPlanner = async (_userId: string, input: { candidate?: Record<string, unknown> | null }) => {
+      const candidate = {
+        ...input.candidate,
+        target_policy_key: "policy_warehouse",
+        target_confidence: 0.99,
+        target_evidence: "Costco order",
+        target_verification: { status: "selected" as const, option_count: 2, provider: "openai", model: "gpt-5.4-mini" },
+        category_id: "category-warehouse",
+        category_label: "Warehouse",
+        semantic_enrichment: { status: "complete" as const, provider: "openai", model: "gpt-5.4-mini" },
+      };
+      return {
+        version: 1 as const,
+        candidate,
+        classification: { documentKind: "one_time_transaction" as const, eventKind: "purchase" as const, confidence: 0.99, reasons: [] },
+        operation: { intended: "create_transaction" as const, kind: "review" as const, reasons: ["due_date_missing" as const] },
+        targets: {
+          account: { kind: "account" as const, status: "unresolved" as const, provenance: [] },
+          payee: { kind: "payee" as const, status: "resolved" as const, id: "payee-costco", label: "Costco", provenance: [] },
+          category: { kind: "category" as const, status: "resolved" as const, id: "category-warehouse", label: "Warehouse", provenance: [] },
+          fromAccount: { kind: "from_account" as const, status: "not_applicable" as const, provenance: [] },
+          toAccount: { kind: "to_account" as const, status: "not_applicable" as const, provenance: [] },
+          schedule: { kind: "schedule" as const, status: "not_applicable" as const, provenance: [] },
+        },
+        reconciliation: { status: "not_checked" as const, disposition: "review" as const },
+        reviewReasons: [{ code: "due_date_missing" as const, message: "A date is required.", field: "due_date", blocking: true }],
+        automation: { eligible: false, gates: [], reasons: ["due_date_missing" as const] },
+      };
+    };
+
+    await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      financialEmailPlanner: financialEmailPlanner as never,
+      now: new Date("2026-05-03T12:20:00.000Z"),
+    });
+
+    const rows = await dbClient.execute({
+      sql: `SELECT t.bill_candidate_json AS triage_candidate,
+                   t.financial_email_plan_json AS financial_plan,
+                   t2.bill_candidate_json AS snapshot_candidate
+            FROM ea_email_triage t
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            JOIN ea_email_triage t2 ON t2.id = i.triage_id
+            WHERE t.email_id = ?`,
+      args: ["msg-1"],
+    });
+    const triageCandidate = JSON.parse(String(rows.rows[0]!.triage_candidate));
+    const financialPlan = JSON.parse(String(rows.rows[0]!.financial_plan));
+    const snapshotCandidate = JSON.parse(String(rows.rows[0]!.snapshot_candidate));
+    expect(triageCandidate).toEqual(snapshotCandidate);
+    expect(triageCandidate).toMatchObject({
+      target_policy_key: "policy_warehouse",
+      category_id: "category-warehouse",
+      semantic_enrichment: { status: "complete" },
+    });
+    expect(financialPlan).toMatchObject({
+      version: 1,
+      candidate: triageCandidate,
+      operation: { kind: "review" },
+    });
+  });
+
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
     clearCurrentDashboardEventSubscribers();
     const dbClient = await createMigratedDb();

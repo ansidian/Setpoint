@@ -4,6 +4,7 @@ import BillBadge from "./BillBadge";
 import type { ComponentProps } from "react";
 import { getActualMetadata, sendToActualBudget } from "../../api";
 import { invalidateActualMetadata } from "../../lib/actualMetadata";
+import type { FinancialEmailPlan } from "../../../shared/types/bills";
 
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
@@ -46,6 +47,27 @@ function renderBillBadge(props: Partial<ComponentProps<typeof BillBadge>> = {}) 
   );
 }
 
+function readyPlan(): FinancialEmailPlan {
+  return {
+    version: 1,
+    identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
+    candidate: { payee: "Power", amount: 42, type: "bill" },
+    classification: { documentKind: "utility_statement", eventKind: "payment_due", confidence: 0.99, reasons: [] },
+    operation: { intended: "create_schedule", kind: "create_schedule", reasons: [] },
+    targets: {
+      account: { kind: "account", status: "resolved", id: "checking", label: "Checking", provenance: [] },
+      payee: { kind: "payee", status: "resolved", id: "payee-power", label: "Power", provenance: [] },
+      category: { kind: "category", status: "resolved", id: "cat-utilities", label: "Utilities", provenance: [] },
+      fromAccount: { kind: "from_account", status: "not_applicable", provenance: [] },
+      toAccount: { kind: "to_account", status: "not_applicable", provenance: [] },
+      schedule: { kind: "schedule", status: "resolved", label: "Power bill", provenance: [] },
+    },
+    reconciliation: { status: "not_scheduled", disposition: "create" },
+    reviewReasons: [],
+    automation: { eligible: false, operationClass: "one_time_expense", rollout: "observe_only", gates: [], reasons: ["automation_class_observe_only"] },
+  };
+}
+
 async function renderSendableBill(overrides: Record<string, unknown> = {}) {
   renderBillBadge({
     bill: {
@@ -72,12 +94,12 @@ describe("BillBadge", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: /extract bill/i }).disabled).toBe(true);
   });
 
-  it("renders an editable notes field and the mapping status", async () => {
+  it("renders an editable notes field and the financial plan status", async () => {
     renderBillBadge({
-      mapping: { status: "matched", profileId: "edison", behaviorId: "monthly", amountSource: "blank" },
+      plan: readyPlan(),
     });
     expect(await screen.findByPlaceholderText("Optional note")).toBeTruthy();
-    expect(screen.getByText("Mapped: edison · monthly · amount missing")).toBeTruthy();
+    expect(screen.getByText("Recurring bill ready to review")).toBeTruthy();
   });
 
   it("sends an explicit empty note across the financial write boundary", async () => {

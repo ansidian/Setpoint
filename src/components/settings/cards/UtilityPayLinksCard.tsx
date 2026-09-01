@@ -38,7 +38,7 @@ export default function UtilityPayLinksCard({
   onRequestMetadata?: () => unknown;
   liveMetadataAvailable?: boolean;
 }) {
-  // Lazy metadata load (mirrors BillPayMappingsCard): the section must NOT spin
+  // Lazy metadata load: the section must NOT spin
   // up the Actual worker on mount, so we request schedules only on first user
   // interaction (adding a row or opening a schedule dropdown).
   const links = settings?.utility_pay_links || [];

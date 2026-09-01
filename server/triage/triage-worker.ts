@@ -19,6 +19,8 @@ import { heuristicNoModelDecision } from "./triage-heuristic-scorer.ts";
 import { createTriageModelClient, loadTriageModelConfig } from "./triage-model-client.ts";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { cheapEscalationReason } from "./triage-escalation-policy.ts";
+import { planFinancialEmail } from "../bills/bills-service.ts";
+import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills.ts";
 import {
   claimNextEmailTriageJob,
   requeueClaimedJob,
@@ -216,7 +218,14 @@ export async function processNextEmailTriageJob({
   modelClient,
   now = new Date(),
   batch = null,
-}: { dbClient?: TriageDb; modelClient?: TriageModelClient; now?: Date; batch?: TriageBatchContext | null } = {}): Promise<Record<string, unknown>> {
+  financialEmailPlanner = planFinancialEmail,
+}: {
+  dbClient?: TriageDb;
+  modelClient?: TriageModelClient;
+  now?: Date;
+  batch?: TriageBatchContext | null;
+  financialEmailPlanner?: typeof planFinancialEmail;
+} = {}): Promise<Record<string, unknown>> {
   // P2-18: claim the next job first (one ordered scan + UPDATE), then check
   // paused mode using the claimed row's user_id. This eliminates the separate
   // peek SELECT that re-ran the identical ordered scan before every claim. A
@@ -354,6 +363,29 @@ export async function processNextEmailTriageJob({
 
   if (!decision) throw new Error("Triage route returned no decision");
 
+  let financialEmailPlan: FinancialEmailPlan | null = null;
+  if (decision.bill_candidate) {
+    financialEmailPlan = await financialEmailPlanner(email.user_id, {
+      email: {
+        from: [email.from_name, email.from_address].filter(Boolean).join(" "),
+        from_name: email.from_name,
+        from_address: email.from_address,
+        subject: email.subject,
+        body: email.body_text,
+        body_snippet: email.body_snippet,
+      },
+      candidate: decision.bill_candidate as BillCandidate,
+      source: "triage",
+      providerMessageId: email.email_id,
+      sourceIdentity: {
+        accountId: email.account_id,
+        senderAddress: email.from_address || null,
+        senderAuthentication: "unavailable",
+      },
+    });
+    decision = { ...decision, bill_candidate: financialEmailPlan.candidate };
+  }
+
   try {
     // Attach BEFORE marking the triage row complete: that ordering makes a
     // 'complete' status imply the snapshot item already exists, so the recovery
@@ -365,6 +397,7 @@ export async function processNextEmailTriageJob({
       now,
       status,
       inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
+      financialEmailPlan,
     });
     await completeJob(job, dbClient, now, status === "failed" ? decision.error || "" : "");
   } catch (caught) {
