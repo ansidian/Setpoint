@@ -28,6 +28,7 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - Parser warnings carry an explicit `blocking` flag; automatic safety is projected centrally.
 - Financial plans are shadow evidence until the documented equivalence gate passes; legacy mapped targets and modes remain authoritative during that phase.
 - Generic financial-email items have no mapping or automatic mode: they enter observe-only with `automatic_safe = 0`, use the stable plan identity as imported ID, and require explicit owner confirmation after preview.
+- Planner no-write outcomes never enter generic preflight, including duplicates matched to existing Actual activity without a generic imported ID.
 - Durable plan JSON must omit model/body evidence excerpts while retaining target provenance, reconciliation, and eligibility reasons.
 - Raw Gmail message IDs remain distinct from RFC Message-ID headers.
 - Raw bodies are transient input and must not cross persistence/status boundaries.

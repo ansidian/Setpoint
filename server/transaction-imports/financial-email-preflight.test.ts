@@ -88,6 +88,21 @@ describe("generic financial email preflight staging", () => {
     )).toBeNull();
   });
 
+  it.each(["already_recorded", "already_scheduled"] as const)(
+    "does not stage a %s no-write plan even when reconciliation passes",
+    (status) => {
+      const plan = exactPlan();
+      plan.operation = { intended: "create_transaction", kind: "no_write", reasons: [status] };
+      plan.reconciliation = { status, disposition: "no_write", reason: "exact_transaction_match" };
+      plan.automation.gates.push({ gate: "reconciliation", status: "pass", reasons: [] });
+      expect(financialEmailPreflightItem(
+        "user-1", "run-1", "item-1",
+        { accountId: "gmail-work", emailId: "message-1" },
+        plan,
+      )).toBeNull();
+    },
+  );
+
   it("records a successful Actual preview while retaining the observe-only rollout lock", () => {
     const plan = exactPlan();
     plan.automation.gates.push(

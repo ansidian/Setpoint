@@ -46,6 +46,8 @@ export function financialEmailPreflightItem(
 ): InsertItemInput | null {
   if (plan.automation.operationClass !== "one_time_expense"
     || plan.automation.rollout !== "observe_only"
+    || plan.operation.kind === "no_write"
+    || plan.reconciliation.disposition === "no_write"
     || plan.identity.status !== "resolved"
     || !plan.identity.key
     || !REQUIRED_GATES.every((gate) => gatePassed(plan, gate))) return null;
