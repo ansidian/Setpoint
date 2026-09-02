@@ -20,17 +20,11 @@ import type {
   FinancialTargetRankingOption,
   FinancialTargetRankingResult,
 } from "./financialEmailTargetRanker.ts";
-
-interface TargetValue {
-  id: string | null;
-  label: string;
-}
-interface TargetEvidence extends TargetValue {
-  tier: 1 | 2 | 3 | 5;
-  decisive: boolean;
-  selectable?: boolean;
-  provenance: FinancialTargetProvenance;
-}
+import {
+  exactImportedTargetEvidence,
+  type TargetEvidence,
+  type TargetValue,
+} from "./financialEmailImportedHistory.ts";
 interface HistoryBundle {
   key: string;
   account: TargetValue;
@@ -507,6 +501,7 @@ export async function inferFinancialEmailTargets({
   targets.category = target("category", "unresolved");
   if (intended === "create_schedule") targets.schedule = target("schedule", "unresolved");
 
+  const exactImport = exactImportedTargetEvidence(candidate, history, metadata);
   const rows = matchingHistory(candidate, classification, history);
   const completeRows = rows.filter((row) => row.accountId && row.payeeId);
   const bundles = historyBundles(completeRows, categories);
@@ -547,6 +542,7 @@ export async function inferFinancialEmailTargets({
       );
 
   const accountSelection = selectEvidence("account", [
+    ...exactImport.account,
     ...suffixAccountEvidence(candidate, metadata, false),
     ...scheduleEvidence(schedules, metadata, "account"),
     ...accountHistoryEvidence,
@@ -555,6 +551,7 @@ export async function inferFinancialEmailTargets({
   if (accountSelection.conflict) reasons.add("target_evidence_conflict");
 
   const payeeSelection = selectEvidence("payee", [
+    ...exactImport.payee,
     ...scheduleEvidence(schedules, metadata, "payee"),
     ...exactPayeeEvidence(candidate, metadata),
     ...payeeHistoryEvidence,
@@ -574,6 +571,7 @@ export async function inferFinancialEmailTargets({
       }),
       conditionalRows.length,
     );
+    categoryEvidence.push(...exactImport.category);
     if (bundleEvidence?.category?.provenance.source === "model_ranking") {
       categoryEvidence.push(bundleEvidence.category);
     }

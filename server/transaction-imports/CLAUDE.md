@@ -13,6 +13,7 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `transaction-email-discovery.ts` — allowlisted Gmail historical-search adapter
 - `transaction-import-store.ts` — durable mapping, run, item, claim, recovery, recent-run, and per-email status persistence
 - `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner plus redacted shadow-plan/equivalence projection
+- `transaction-import-equivalence-report.ts` — read-only historical replay and redacted gate summary
 - `transaction-import-service.ts` — arrival preparation and historical-run admission
 - `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains
 - `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook

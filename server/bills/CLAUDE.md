@@ -27,6 +27,7 @@ Bill domain logic: AI extraction from emails, user bill-matching rules, and the 
 - `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; every class currently remains observe-only
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
+- `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
 - `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque history-bundle keys with high-confidence verbatim evidence
 - `billSemanticAmountPolicy.ts` — canonical semantic amount selection shared by the planner and legacy resolver; minimum due is never operational
 - `bill-pay-service.ts` — retained internal legacy resolver for the second Package 6 retirement slice; no public Settings or Mapping Test path remains

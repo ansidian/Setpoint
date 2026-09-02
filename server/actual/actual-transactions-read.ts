@@ -11,6 +11,13 @@ import type {
 
 const DEFAULT_LIMIT = 50;
 
+export interface ImportedTransactionState {
+  importedId: string;
+  tombstoned: boolean;
+  accountId: string | null;
+  categoryId: string | null;
+}
+
 // Escape LIKE wildcards so a literal % or _ in the search term is matched literally.
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -100,7 +107,7 @@ export async function readTransactionsRange(
     args.push(limit + 1);
 
     const result = await client.execute({
-      sql: `SELECT t.id, t.date, t.amount, t.payee, t.category, t.account, t.notes
+      sql: `SELECT t.id, t.imported_id, t.date, t.amount, t.payee, t.category, t.account, t.notes
             FROM v_transactions t
             WHERE ${clauses.join(" AND ")}
             ORDER BY t.date DESC
@@ -111,12 +118,14 @@ export async function readTransactionsRange(
       const rawAmount = Number(r.amount || 0);
       return {
         id: String(r.id),
+        importedId: r.imported_id ? String(r.imported_id) : null,
         date: ymdFromActualDate(r.date) || "",
         amount: Math.abs(rawAmount) / 100,
         direction: rawAmount > 0 ? "income" as const : "expense" as const,
         payee: payeeName[String(r.payee)] || "Unknown",
         payeeId: r.payee ? String(r.payee) : null,
         category: categoryName[String(r.category)] || "Uncategorized",
+        categoryId: r.category ? String(r.category) : null,
         account: accountName[String(r.account)] || "",
         accountId: r.account ? String(r.account) : null,
         transferAccountId: payeeTransferAccount[String(r.payee)]
@@ -127,6 +136,35 @@ export async function readTransactionsRange(
     });
     const truncated = all.length > limit;
     return { transactions: truncated ? all.slice(0, limit) : all, truncated };
+  } finally {
+    await client.close();
+  }
+}
+
+export async function readImportedTransactionStates(
+  userId: string,
+  importedIds: string[],
+  options: Parameters<typeof openLocalBudgetClient>[1] = {},
+): Promise<Record<string, ImportedTransactionState>> {
+  const ids = [...new Set(importedIds.filter(Boolean))];
+  if (!ids.length) return {};
+  const client = await openLocalBudgetClient(userId, options);
+  try {
+    const result = await client.execute({
+      sql: `SELECT imported_id, tombstone, account, category
+            FROM v_transactions_internal
+            WHERE imported_id IN (${ids.map(() => "?").join(", ")})`,
+      args: ids,
+    });
+    return Object.fromEntries(result.rows.map((row) => {
+      const importedId = String(row.imported_id);
+      return [importedId, {
+        importedId,
+        tombstoned: Number(row.tombstone || 0) === 1,
+        accountId: row.account ? String(row.account) : null,
+        categoryId: row.category ? String(row.category) : null,
+      }];
+    }));
   } finally {
     await client.close();
   }

@@ -3,7 +3,10 @@ import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import path from "path";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { readTransactionsRange } from "./actual-transactions-read.ts";
+import {
+  readImportedTransactionStates,
+  readTransactionsRange,
+} from "./actual-transactions-read.ts";
 
 let tempDir: string | null = null;
 
@@ -33,7 +36,7 @@ async function writeFixture(budgetDir: string): Promise<void> {
     CREATE TABLE payees (id TEXT, name TEXT, transfer_acct TEXT, tombstone INTEGER);
     CREATE TABLE categories (id TEXT, name TEXT, cat_group TEXT, sort_order REAL, tombstone INTEGER);
     CREATE TABLE v_transactions (
-      id TEXT, date INTEGER, amount INTEGER, payee TEXT, category TEXT, account TEXT, notes TEXT, tombstone INTEGER
+      id TEXT, imported_id TEXT, date INTEGER, amount INTEGER, payee TEXT, category TEXT, account TEXT, notes TEXT, tombstone INTEGER
     );
     INSERT INTO accounts VALUES ('acct-1','Checking','checking',0,0),('acct-2','Amex','credit',0,0);
     INSERT INTO payees VALUES
@@ -43,15 +46,17 @@ async function writeFixture(budgetDir: string): Promise<void> {
       ('p-xfer','Transfer to Amex','acct-2',0);
     INSERT INTO categories VALUES ('c-grocery','Groceries','g1',1,0),('c-rent','Rent','g1',2,0);
     INSERT INTO v_transactions VALUES
-      ('t-grocery1', 20260505, -4210, 'p-store', 'c-grocery', 'acct-1', 'Weekly run', 0),
-      ('t-grocery2', 20260518, -3990, 'p-store', 'c-grocery', 'acct-1', 'Snacks for party', 0),
-      ('t-rent',     20260501, -250000, 'p-rent', 'c-rent', 'acct-1', '', 0),
-      ('t-income',   20260515, 500000, 'p-job', NULL, 'acct-1', '', 0),
-      ('t-transfer', 20260510, -120000, 'p-xfer', NULL, 'acct-1', '', 0),
-      ('t-old',      20260105, -9999, 'p-store', 'c-grocery', 'acct-1', '', 0),
-      ('t-pct',      20260315, -1000, 'p-store', 'c-grocery', 'acct-1', 'Save 5% cashback', 0),
-      ('t-plain',    20260316, -1000, 'p-store', 'c-grocery', 'acct-1', 'Save 5 dollars', 0)
+      ('t-grocery1', 'amazon-order-1', 20260505, -4210, 'p-store', 'c-grocery', 'acct-1', 'Weekly run', 0),
+      ('t-grocery2', NULL, 20260518, -3990, 'p-store', 'c-grocery', 'acct-1', 'Snacks for party', 0),
+      ('t-rent',     NULL, 20260501, -250000, 'p-rent', 'c-rent', 'acct-1', '', 0),
+      ('t-income',   NULL, 20260515, 500000, 'p-job', NULL, 'acct-1', '', 0),
+      ('t-transfer', NULL, 20260510, -120000, 'p-xfer', NULL, 'acct-1', '', 0),
+      ('t-old',      NULL, 20260105, -9999, 'p-store', 'c-grocery', 'acct-1', '', 0),
+      ('t-pct',      NULL, 20260315, -1000, 'p-store', 'c-grocery', 'acct-1', 'Save 5% cashback', 0),
+      ('t-plain',    NULL, 20260316, -1000, 'p-store', 'c-grocery', 'acct-1', 'Save 5 dollars', 0)
     ;
+    CREATE VIEW v_transactions_internal AS
+      SELECT imported_id, tombstone, account, category FROM v_transactions;
   `);
   await client.close();
 }
@@ -82,8 +87,8 @@ describe("readTransactionsRange", () => {
     expect(ids).toEqual(["t-grocery2", "t-grocery1", "t-rent"]);
     const grocery = transactions.find((t) => t.id === "t-grocery1");
     expect(grocery).toMatchObject({
-      date: "2026-05-05", amount: 42.10, payee: "Trader Joes",
-      category: "Groceries", account: "Checking",
+      importedId: "amazon-order-1", date: "2026-05-05", amount: 42.10, payee: "Trader Joes",
+      category: "Groceries", categoryId: "c-grocery", account: "Checking",
     });
   });
 
@@ -209,5 +214,23 @@ describe("readTransactionsRange", () => {
       accountId: "acct-1",
       transferAccountId: "acct-2",
     })]);
+  });
+
+  it("reads live and tombstoned imported-ID state for a write-disabled replay", async () => {
+    await fixture();
+    const states = await readImportedTransactionStates(
+      "u1",
+      ["amazon-order-1", "missing"],
+      opts(),
+    );
+
+    expect(states).toEqual({
+      "amazon-order-1": {
+        importedId: "amazon-order-1",
+        tombstoned: false,
+        accountId: "acct-1",
+        categoryId: "c-grocery",
+      },
+    });
   });
 });

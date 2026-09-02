@@ -90,6 +90,15 @@ export interface BillSemanticEnrichment {
   reason?: string | null;
 }
 
+export interface BillTransactionImportEvidence {
+  source: string;
+  parserVersion: string;
+  externalId?: string | null;
+  importedId?: string | null;
+  amountCents: number;
+  currency?: string | null;
+}
+
 export interface BillCandidate {
   payee?: string;
   payee_hint?: string;
@@ -110,6 +119,7 @@ export interface BillCandidate {
   target_evidence?: string | null;
   target_verification?: BillTargetVerification;
   semantic_enrichment?: BillSemanticEnrichment;
+  transaction_import?: BillTransactionImportEvidence;
   due_date?: string | null;
   type?: BillType | string;
   notes?: string | null;

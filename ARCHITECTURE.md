@@ -704,7 +704,7 @@ erDiagram
 | `ea_dismissed_emails` | `001_ea_tables.sql` |
 | `ea_email_backfill_state` | `001_ea_tables.sql` |
 | `ea_email_fts` | `001_ea_tables.sql` |
-| `ea_email_index` | `001_ea_tables.sql`, `013_email_index_normalized_date.sql`, `025_email_thread_identity.sql`, `047_email_verification_codes.sql` |
+| `ea_email_index` | `001_ea_tables.sql`, `013_email_index_normalized_date.sql`, `025_email_thread_identity.sql`, `047_email_verification_codes.sql`, `054_email_sender_authentication.sql` |
 | `ea_email_remote_content_trust` | `045_email_remote_content_trust.sql` |
 | `ea_email_search_ai_usage` | `007_email_search_ai_usage.sql` |
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |

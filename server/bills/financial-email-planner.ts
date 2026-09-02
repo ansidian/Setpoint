@@ -225,6 +225,25 @@ async function reconcileCandidate(
   historyAvailable: boolean,
   dependencies: Required<Pick<FinancialEmailPlannerDependencies, "occurrenceReader" | "now">>,
 ): Promise<FinancialEmailReconciliation> {
+  const importedId = candidate.transaction_import?.importedId;
+  const importedTransaction = importedId
+    ? history.find((transaction) => transaction.importedId === importedId)
+    : null;
+  if (importedTransaction) {
+    return {
+      status: "already_recorded",
+      disposition: "no_write",
+      reason: "exact_imported_id_match",
+      checkedAt: metadata.syncHealth.lastSuccessAt || null,
+      evidence: {
+        kind: "transaction",
+        transactionId: importedTransaction.id,
+        dueDate: importedTransaction.date,
+        amount: importedTransaction.amount,
+        account: importedTransaction.account,
+      },
+    };
+  }
   if (!canReconcile(candidate)) {
     return {
       status: "not_checked",

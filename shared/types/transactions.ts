@@ -20,12 +20,14 @@ export interface TransactionFilters {
 
 export interface TransactionRecord {
   id: string;
+  importedId?: string | null;
   date: string;
   amount: number;
   direction: Exclude<TransactionDirection, "all">;
   payee: string;
   payeeId?: string | null;
   category: string;
+  categoryId?: string | null;
   account: string;
   accountId?: string | null;
   transferAccountId?: string | null;
