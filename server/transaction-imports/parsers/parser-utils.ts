@@ -74,6 +74,11 @@ export function commonWarnings(
   if (!hasTrustedSender(email.from, trustedSenders)) {
     warnings.push({ code: "untrusted_sender", blocking: true, detail: "Sender mailbox is not trusted for automatic import" });
   }
+  if (email.senderAuthentication?.status === "fail") {
+    warnings.push({ code: "sender_authentication_failed", blocking: true, detail: "Provider authentication failed for the claimed sender" });
+  } else if (email.senderAuthentication?.status !== "pass") {
+    warnings.push({ code: "sender_authentication_unavailable", blocking: true, detail: "Provider-authenticated sender evidence is unavailable" });
+  }
   if (!externalId) {
     warnings.push({ code: "missing_external_id", blocking: true, detail: "A stable provider transaction identity was not found" });
   }
@@ -86,6 +91,9 @@ export function commonWarnings(
   return warnings;
 }
 
-export function evidence(code: TransactionEvidence["code"], value: string): TransactionEvidence {
+export function evidence(
+  code: Exclude<TransactionEvidence["code"], "sender_authentication">,
+  value: string,
+): TransactionEvidence {
   return { code, value: cleanText(value, 160) };
 }

@@ -2,6 +2,20 @@ export type EmailProvider = "gmail" | "icloud";
 
 export type VerificationCodeKind = "numeric" | "alphanumeric" | "hyphenated";
 
+export type EmailAuthenticationStatus = "pass" | "fail" | "none" | "unavailable";
+
+export interface EmailAuthenticationProjection {
+  version: 1;
+  status: EmailAuthenticationStatus;
+  provider: EmailProvider;
+  source: "gmail_authentication_results" | "icloud_unavailable";
+  headerFromDomain: string | null;
+  dkim: Array<{ result: string; domain: string | null; aligned: boolean }>;
+  spf: { result: string; domain: string | null; aligned: boolean } | null;
+  dmarc: { result: string; domain: string | null; aligned: boolean } | null;
+  evaluatedAt: string;
+}
+
 export interface EmailAccountSummary {
   id: string;
   type: EmailProvider;
@@ -29,6 +43,7 @@ export interface NormalizedFetchedEmail extends Record<string, unknown> {
   thread_id?: string | null;
   labels?: string[];
   folders?: string[];
+  sender_authentication?: EmailAuthenticationProjection;
 }
 
 export interface EmailBodyAttachment {

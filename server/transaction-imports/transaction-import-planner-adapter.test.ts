@@ -32,7 +32,23 @@ function item(overrides: Partial<InsertItemInput> = {}): InsertItemInput {
     automationMode: "automatic",
     automaticSafe: true,
     blockingWarnings: [],
-    evidence: [{ code: "sender", value: "PayPal <service@paypal.com>" }],
+    evidence: [
+      { code: "sender", value: "PayPal <service@paypal.com>" },
+      {
+        code: "sender_authentication",
+        value: {
+          version: 1,
+          status: "pass",
+          provider: "gmail",
+          source: "gmail_authentication_results",
+          headerFromDomain: "paypal.com",
+          dkim: [{ result: "pass", domain: "paypal.com", aligned: true }],
+          spf: null,
+          dmarc: { result: "pass", domain: "paypal.com", aligned: true },
+          evaluatedAt: "2026-08-31T12:00:00.000Z",
+        },
+      },
+    ],
     status: "queued",
     ...overrides,
   };
@@ -187,6 +203,55 @@ describe("transaction import financial planner adapter", () => {
     expect(result.planShadow).toMatchObject({
       account: { liveId: null, plannedId: "card-1", agreement: "mismatch" },
       category: { liveId: null, plannedId: "shopping", agreement: "mismatch" },
+      automationEligible: false,
+    });
+  });
+
+  it("uses an exact Actual imported ID to prove targets and suppress a replayed duplicate", async () => {
+    const planner = createFinancialEmailPlanner({
+      metadataReader: async () => ({
+        accounts: [{ id: "mapped-account", name: "Everyday Card", type: "credit" }],
+        payees: [{ id: "example-store", name: "Example Store" }],
+        payeeMap: { "example-store": "Example Store" },
+        categories: [{ group_name: "Spending", categories: [{ id: "mapped-category", name: "Shopping" }] }],
+        schedules: [],
+        recentTransactions: [],
+        syncHealth: { state: "current", lastSuccessAt: "2026-09-01T12:00:00.000Z" },
+      }),
+      occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current" } }),
+      transactionReader: async () => ({
+        transactions: [{
+          id: "actual-transaction-1",
+          importedId: "paypal-ABC123",
+          date: "2026-08-31",
+          amount: 25.99,
+          direction: "expense",
+          payee: "Example Store",
+          payeeId: "example-store",
+          category: "Shopping",
+          categoryId: "mapped-category",
+          account: "Everyday Card",
+          accountId: "mapped-account",
+          notes: "",
+        }],
+      }),
+      now: () => new Date("2026-09-01T12:00:00.000Z"),
+    });
+
+    const result = (await attachTransactionImportFinancialPlans("owner-1", [item()], planner))[0]!;
+
+    expect(result.financialPlan).toMatchObject({
+      operation: { intended: "create_transaction", kind: "no_write", reasons: ["already_recorded"] },
+      targets: {
+        account: { status: "resolved", id: "mapped-account" },
+        payee: { status: "resolved", id: "example-store" },
+        category: { status: "resolved", id: "mapped-category" },
+      },
+      reconciliation: { status: "already_recorded", disposition: "no_write" },
+    });
+    expect(result.planShadow).toMatchObject({
+      account: { agreement: "match" },
+      category: { agreement: "match" },
       automationEligible: false,
     });
   });

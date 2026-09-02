@@ -33,6 +33,7 @@ export interface ExistingEmailIndexRow extends Record<string, unknown> {
   read?: number | boolean | null;
   thread_id?: string | null;
   message_id?: string | null;
+  sender_authentication_json?: string | null;
   verification_code?: string | null;
   verification_code_kind?: string | null;
   verification_code_detected_at?: string | null;

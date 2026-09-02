@@ -1,6 +1,8 @@
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import type { ConfiguredEmailAccount } from "./email-provider-types.ts";
 import { chunkArray, getAccessToken } from "./gmail.ts";
+import { evaluateGmailSenderAuthentication } from "./sender-authentication.ts";
+import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
 
 export type { ConfiguredEmailAccount } from "./email-provider-types.ts";
 export type GmailTransactionSource = "amazon" | "paypal";
@@ -36,6 +38,7 @@ export interface GmailTransactionEmail {
   internetMessageId: string | null;
   html: string | null;
   text: string | null;
+  senderAuthentication: EmailAuthenticationProjection;
 }
 
 export type GmailTransactionSearchErrorCode =
@@ -117,15 +120,17 @@ async function responseError(response: Response, hasPageToken: boolean): Promise
 function normalizeMessage(message: GmailMessage): GmailTransactionEmail {
   const headers = message.payload?.headers || [];
   const body = extractBody(message.payload);
+  const from = header(headers, "From");
   return {
     gmailMessageId: message.id,
     threadId: message.threadId || null,
-    from: header(headers, "From"),
+    from,
     subject: header(headers, "Subject"),
     date: header(headers, "Date"),
     internetMessageId: header(headers, "Message-ID") || null,
     html: body.html,
     text: body.text,
+    senderAuthentication: evaluateGmailSenderAuthentication(headers, from),
   };
 }
 

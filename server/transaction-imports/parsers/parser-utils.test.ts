@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decimalAmountToCents, hasTrustedSender, parseIsoDate } from "./parser-utils.ts";
+import {
+  commonWarnings,
+  decimalAmountToCents,
+  hasTrustedSender,
+  parseIsoDate,
+} from "./parser-utils.ts";
+import { emailFixture } from "./fixtures.ts";
 
 describe("transaction parser normalization", () => {
   it.each([
@@ -26,5 +32,36 @@ describe("transaction parser normalization", () => {
     ["forwarded by owner@example.com", false],
   ])("compares the exact normalized sender mailbox", (from, expected) => {
     expect(hasTrustedSender(from, ["auto-confirm@amazon.com"])).toBe(expected);
+  });
+
+  it("blocks automatic import when provider authentication is absent or failed", () => {
+    const unavailable = commonWarnings(
+      emailFixture({ senderAuthentication: undefined }),
+      ["auto-confirm@amazon.com"],
+      "111-2222222-3333333",
+      "USD",
+      false,
+    );
+    const failed = commonWarnings(
+      emailFixture({
+        senderAuthentication: {
+          ...emailFixture().senderAuthentication!,
+          status: "fail",
+        },
+      }),
+      ["auto-confirm@amazon.com"],
+      "111-2222222-3333333",
+      "USD",
+      false,
+    );
+
+    expect(unavailable).toContainEqual(expect.objectContaining({
+      code: "sender_authentication_unavailable",
+      blocking: true,
+    }));
+    expect(failed).toContainEqual(expect.objectContaining({
+      code: "sender_authentication_failed",
+      blocking: true,
+    }));
   });
 });

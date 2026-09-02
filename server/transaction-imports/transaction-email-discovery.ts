@@ -76,6 +76,7 @@ export async function searchTransactionEmails(
       date: email.date,
       html: email.html,
       text: email.text,
+      senderAuthentication: email.senderAuthentication,
     })),
     nextPageToken: page.nextPageToken,
     resultSizeEstimate: page.resultSizeEstimate,

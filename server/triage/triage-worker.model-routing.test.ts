@@ -13,12 +13,26 @@ vi.mock("../ai-credentials.ts", () => ({
 describe("email triage worker model routing", () => {
   it("persists the same financial plan candidate for triage and snapshot reads", async () => {
     const dbClient = await createMigratedDb();
-    await queueEmail(dbClient, {
+    const queued = await queueEmail(dbClient, {
       subject: "Your warehouse order",
       body_snippet: "Order total $84.12",
       body_text: "Your Costco order total is $84.12.",
       from_name: "Costco",
       from_address: "orders@costco.com",
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_email_index SET sender_authentication_json = ? WHERE uid = ?",
+      args: [JSON.stringify({
+        version: 1,
+        status: "pass",
+        provider: "gmail",
+        source: "gmail_authentication_results",
+        headerFromDomain: "costco.com",
+        dkim: [{ result: "pass", domain: "costco.com", aligned: true }],
+        spf: null,
+        dmarc: { result: "pass", domain: "costco.com", aligned: true },
+        evaluatedAt: "2026-05-03T12:00:00.000Z",
+      }), queued.uid],
     });
     const modelClient = {
       classify: vi.fn(async ({ tier }) => ({
@@ -46,7 +60,9 @@ describe("email triage worker model routing", () => {
         tier,
       })),
     };
-    const financialEmailPlanner = async (_userId: string, input: { candidate?: Record<string, unknown> | null }) => {
+    let plannerInput: Record<string, unknown> | null = null;
+    const financialEmailPlanner = async (_userId: string, input: { candidate?: Record<string, unknown> | null; sourceIdentity?: Record<string, unknown> }) => {
+      plannerInput = input as Record<string, unknown>;
       const candidate = {
         ...input.candidate,
         target_policy_key: "policy_warehouse",
@@ -106,6 +122,19 @@ describe("email triage worker model routing", () => {
       version: 1,
       candidate: triageCandidate,
       operation: { kind: "review" },
+    });
+    expect(plannerInput).toMatchObject({
+      sourceIdentity: {
+        provider: "gmail",
+        accountId: "gmail-work",
+        senderAddress: "orders@costco.com",
+        senderAuthentication: "pass",
+        authenticationEvidence: expect.arrayContaining([
+          "sender-auth:v1",
+          "dmarc:pass",
+          "dkim:pass:aligned",
+        ]),
+      },
     });
   });
 

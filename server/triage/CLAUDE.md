@@ -9,6 +9,7 @@ AI email classification: the batch worker, model client, preflight rules, escala
 - `triage-projections-model.ts` — pure DB-free triage projections: bill candidate, event details, sound trigger, search text
 - `triage-job-store.ts` — `ea_triage_jobs` queue SQL: claim/requeue/complete/defer/recover-stale/prune
 - `triage-finalize-store.ts` — `ea_email_triage` + snapshot persistence: load email, persist decisions/candidates/financial plans, attach to snapshot
+- `triage-sender-authentication.ts` — validates persisted email authentication projections and adapts them into planner source identity
 - `triage-model-client.ts` — LLM triage call and decision parsing; embeds the bills domain's shared first-pass semantic instructions
 - `triage-decision-normalize.ts` — normalizes decisions: action, rationale, confidence
 - `triage-heuristic-scorer.ts` — dev-only no-LLM classifier: sender/subject/body bands → lane (the `no_model` path)

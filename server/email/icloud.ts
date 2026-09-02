@@ -7,6 +7,7 @@ import { withTimeout } from "../platform/fetch-with-timeout.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount, EmailAttachmentContent, EmailHttpError } from "./email-provider-types.ts";
 import { emailErrorMessage } from "./email-provider-types.ts";
+import { unavailableEmailAuthentication } from "./sender-authentication.ts";
 
 const ICLOUD_HOST = "imap.mail.me.com";
 const ICLOUD_PORT = 993;
@@ -215,6 +216,7 @@ async function normalizeMessage(account: ConfiguredEmailAccount, msg: FetchMessa
     // IMAP has no Gmail-style thread id; Message-ID rides the envelope for free.
     thread_id: null,
     message_id: msg.envelope?.messageId || null,
+    sender_authentication: unavailableEmailAuthentication("icloud", fromAddress),
   };
 }
 

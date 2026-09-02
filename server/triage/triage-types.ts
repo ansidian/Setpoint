@@ -53,6 +53,7 @@ export interface TriageEmail extends Record<string, unknown> {
   body_text?: string | null;
   email_date?: string | null;
   email_date_utc?: string | null;
+  sender_authentication_json?: string | null;
   read?: boolean | number | string | bigint | null;
   snoozed_until_ts?: string | number | bigint | null;
 }

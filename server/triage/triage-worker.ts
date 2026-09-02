@@ -45,6 +45,7 @@ import type {
   TriageRule,
 } from "./triage-types.ts";
 import { triageError } from "./triage-types.ts";
+import { triageFinancialSourceIdentity } from "./triage-sender-authentication.ts";
 export {
   getNextEmailTriageWakeAt,
   recoverStaleRunningTriageJobs,
@@ -377,11 +378,7 @@ export async function processNextEmailTriageJob({
       candidate: decision.bill_candidate as BillCandidate,
       source: "triage",
       providerMessageId: email.email_id,
-      sourceIdentity: {
-        accountId: email.account_id,
-        senderAddress: email.from_address || null,
-        senderAuthentication: "unavailable",
-      },
+      sourceIdentity: triageFinancialSourceIdentity(email),
     });
     decision = { ...decision, bill_candidate: financialEmailPlan.candidate };
   }

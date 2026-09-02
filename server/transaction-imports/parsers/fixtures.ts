@@ -15,6 +15,17 @@ export function emailFixture(overrides: Partial<TransactionEmailInput> = {}): Tr
       "1  Stone bath mat  $24.99",
       "Order Total: $27.04",
     ].join("\n"),
+    senderAuthentication: {
+      version: 1,
+      status: "pass",
+      provider: "gmail",
+      source: "gmail_authentication_results",
+      headerFromDomain: "amazon.com",
+      dkim: [{ result: "pass", domain: "amazon.com", aligned: true }],
+      spf: null,
+      dmarc: { result: "pass", domain: "amazon.com", aligned: true },
+      evaluatedAt: "2026-07-21T17:30:00.000Z",
+    },
     ...overrides,
   };
 }

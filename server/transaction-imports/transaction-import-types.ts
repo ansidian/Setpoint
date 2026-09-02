@@ -12,6 +12,8 @@ export type TransactionWarningCode =
   | "untrusted_sender"
   | "missing_external_id"
   | "unsupported_currency"
+  | "sender_authentication_failed"
+  | "sender_authentication_unavailable"
   | "plain_text_fallback";
 
 export interface TransactionParserWarning {
@@ -20,10 +22,9 @@ export interface TransactionParserWarning {
   detail: string;
 }
 
-export interface TransactionEvidence {
-  code: "sender" | "subject" | "amount" | "external_id" | "item";
-  value: string;
-}
+export type TransactionEvidence =
+  | { code: "sender" | "subject" | "amount" | "external_id" | "item"; value: string }
+  | { code: "sender_authentication"; value: EmailAuthenticationProjection };
 
 export interface TransactionEmailInput {
   uid: string;
@@ -35,6 +36,7 @@ export interface TransactionEmailInput {
   date: string;
   html?: string | null;
   text?: string | null;
+  senderAuthentication?: EmailAuthenticationProjection;
 }
 
 export interface ParsedTransactionCandidate {
@@ -53,6 +55,7 @@ export interface ParsedTransactionCandidate {
   notes: string;
   warnings: TransactionParserWarning[];
   evidence: TransactionEvidence[];
+  senderAuthentication?: EmailAuthenticationProjection;
 }
 
 export type TransactionParseResult =
@@ -82,3 +85,4 @@ export function projectAutomaticSafety(candidate: ParsedTransactionCandidate): A
     blockingReasons,
   };
 }
+import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";

@@ -82,11 +82,13 @@ function buildCandidate(
     currency,
     payee: "Amazon",
     notes,
+    senderAuthentication: email.senderAuthentication,
     warnings: commonWarnings(email, AMAZON_SENDERS, externalId, currency, usedPlainFallback),
     evidence: [
       evidence("sender", email.from),
       evidence("subject", email.subject),
       evidence("amount", `${currency} ${(cents / 100).toFixed(2)}`),
+      ...(email.senderAuthentication ? [{ code: "sender_authentication" as const, value: email.senderAuthentication }] : []),
       ...(externalId ? [evidence("external_id", externalId)] : []),
       ...items.slice(0, 3).map((item) => evidence("item", item)),
     ],

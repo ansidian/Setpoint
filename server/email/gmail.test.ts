@@ -200,6 +200,10 @@ describe("fetchEmailsInRange", () => {
               { name: "Subject", value: "Range message" },
               { name: "Date", value: "Fri, 01 May 2026 10:00:00 -0700" },
               { name: "Message-ID", value: "<msg-1@example.com>" },
+              {
+                name: "Authentication-Results",
+                value: "mx.google.com; dkim=pass header.i=@example.com; spf=pass smtp.mailfrom=bounce@example.com; dmarc=pass header.from=example.com",
+              },
             ],
             parts: [
               {
@@ -239,6 +243,12 @@ describe("fetchEmailsInRange", () => {
           read: false,
           message_id: "<msg-1@example.com>",
           thread_id: "t-abc123",
+          sender_authentication: expect.objectContaining({
+            version: 1,
+            status: "pass",
+            provider: "gmail",
+            headerFromDomain: "example.com",
+          }),
         }),
       ],
       nextPageToken: "next-page",

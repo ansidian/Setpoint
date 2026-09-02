@@ -4,6 +4,7 @@ import { describeMimeAttachments, readMimeAttachment } from "./email-mime-attach
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount, EmailAttachmentContent } from "./email-provider-types.ts";
 import { getAccessToken } from "./gmail-credentials.ts";
+import { evaluateGmailSenderAuthentication } from "./sender-authentication.ts";
 export { getAccessToken, handleCallback } from "./gmail-credentials.ts";
 export { getAuthUrl } from "./gmail-oauth-url.ts";
 
@@ -93,6 +94,7 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
   const snippet = msg.snippet || "";
   const bodyText = extractBodyText(msg.payload);
   const amounts = extractAmounts(bodyText);
+  const from = getHeaderValue(headers, "From");
 
   return {
     uid: `gmail-${account.id}-${msg.id}`,
@@ -101,7 +103,7 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
     account_email: account.email,
     account_color: account.color,
     account_icon: account.icon || "Mail",
-    from: getHeaderValue(headers, "From"),
+    from,
     subject: getHeaderValue(headers, "Subject"),
     body_preview: snippet + amounts,
     body_text: bodyText,
@@ -109,6 +111,7 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
     read: !msg.labelIds?.includes("UNREAD"),
     message_id: getHeaderValue(headers, "Message-ID"),
     thread_id: msg.threadId || null,
+    sender_authentication: evaluateGmailSenderAuthentication(headers, from),
   };
 }
 

@@ -16,6 +16,7 @@ export function projectGmailArrivalEmail(accountId: string, email: NormalizedFet
     date: email.date,
     html: null,
     text: email.body_text,
+    senderAuthentication: email.sender_authentication,
   };
 }
 

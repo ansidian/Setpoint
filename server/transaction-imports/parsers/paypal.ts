@@ -93,11 +93,13 @@ export function parsePayPalEmail(email: TransactionEmailInput): TransactionParse
     currency,
     payee: merchant,
     notes,
+    senderAuthentication: email.senderAuthentication,
     warnings: commonWarnings(email, PAYPAL_SENDERS, transactionId, currency, body.usedPlainFallback),
     evidence: [
       evidence("sender", email.from),
       evidence("subject", email.subject),
       evidence("amount", `${currency} ${(amountCents / 100).toFixed(2)}`),
+      ...(email.senderAuthentication ? [{ code: "sender_authentication" as const, value: email.senderAuthentication }] : []),
       ...(transactionId ? [evidence("external_id", transactionId)] : []),
     ],
   };

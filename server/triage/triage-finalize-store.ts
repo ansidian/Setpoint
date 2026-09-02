@@ -53,6 +53,7 @@ export async function loadEmailForJob(job: TriageJob, dbClient: TriageDb): Promi
                  i.body_text,
                  i.email_date,
                  i.email_date_utc,
+                 i.sender_authentication_json,
                  i.read,
                  sz.until_ts AS snoozed_until_ts
           FROM ea_email_triage t

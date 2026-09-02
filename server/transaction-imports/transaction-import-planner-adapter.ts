@@ -39,6 +39,33 @@ function senderAddress(item: InsertItemInput): string | null {
   return typeof value === "string" && value.trim() ? normalizedMailbox(value) : null;
 }
 
+function senderAuthentication(item: InsertItemInput): {
+  status: "pass" | "fail" | "none" | "unavailable";
+  evidence: string[];
+} | null {
+  const entry = item.evidence.find((candidate) => (
+    typeof candidate === "object" && candidate !== null
+    && (candidate as { code?: unknown }).code === "sender_authentication"
+  ));
+  const value = entry && (entry as { value?: unknown }).value;
+  if (!value || typeof value !== "object") return null;
+  const projection = value as {
+    version?: unknown;
+    status?: unknown;
+    source?: unknown;
+    headerFromDomain?: unknown;
+  };
+  if (projection.version !== 1 || !["pass", "fail", "none", "unavailable"].includes(String(projection.status))) return null;
+  return {
+    status: projection.status as "pass" | "fail" | "none" | "unavailable",
+    evidence: [
+      "sender-auth:v1",
+      `source:${String(projection.source || "unavailable")}`,
+      `header-from:${String(projection.headerFromDomain || "unavailable")}`,
+    ],
+  };
+}
+
 export function transactionImportPlannerInput(item: InsertItemInput): FinancialEmailInput | null {
   if (!item.date || item.amountCents == null || !item.payee) return null;
   const warnings = parserWarnings(item);
@@ -86,6 +113,7 @@ export function transactionImportPlannerInput(item: InsertItemInput): FinancialE
     },
   };
   const sender = senderAddress(item);
+  const authentication = senderAuthentication(item);
   const untrusted = warnings.some((warning) => (
     typeof warning === "object" && warning !== null && (warning as { code?: unknown }).code === "untrusted_sender"
   ));
@@ -97,8 +125,12 @@ export function transactionImportPlannerInput(item: InsertItemInput): FinancialE
       provider: item.source,
       accountId: item.gmailAccountId,
       senderAddress: sender,
-      senderAuthentication: untrusted ? "fail" : sender ? "pass" : "unavailable",
-      authenticationEvidence: [`parser:${item.parserVersion}`, `source:${item.source}`],
+      senderAuthentication: untrusted ? "fail" : authentication?.status || "unavailable",
+      authenticationEvidence: [
+        `parser:${item.parserVersion}`,
+        `source:${item.source}`,
+        ...(authentication?.evidence || []),
+      ],
     },
   };
 }

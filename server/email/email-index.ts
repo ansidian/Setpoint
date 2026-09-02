@@ -258,7 +258,7 @@ async function loadExistingIndexRows(userId: string, uids: string[], { dbClient 
                    email_date, email_date_utc, read, thread_id, message_id,
                    verification_code, verification_code_kind,
                    verification_code_detected_at, verification_code_active_until,
-                   verification_code_detector_version
+                   verification_code_detector_version, sender_authentication_json
             FROM ea_email_index
             WHERE user_id = ?
               AND uid IN (${chunk.map(() => "?").join(",")})`,
@@ -302,6 +302,9 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
     const read = email.read ? 1 : 0;
     const threadId = email.thread_id || null;
     const messageId = email.message_id || null;
+    const senderAuthenticationJson = email.sender_authentication
+      ? JSON.stringify(email.sender_authentication)
+      : null;
     const existing = existingRows.get(uid);
     const verificationDetection = detectVerificationCode({
       subject,
@@ -339,6 +342,7 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
       || existing.email_date_utc !== emailDateUtc
       || (threadId && threadId !== existing.thread_id)
       || (messageId && messageId !== existing.message_id)
+      || (senderAuthenticationJson && senderAuthenticationJson !== existing.sender_authentication_json)
       || verificationMetadataChanged;
     if (!searchableChanged) {
       if (!indexMetadataChanged && !snippetChanged && Number(existing.read) === read) return [];
@@ -352,6 +356,7 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
                   read = ?,
                   thread_id = COALESCE(?, thread_id),
                   message_id = COALESCE(?, message_id),
+                  sender_authentication_json = COALESCE(?, sender_authentication_json),
                   verification_code = ?,
                   verification_code_kind = ?,
                   verification_code_detected_at = ?,
@@ -359,7 +364,7 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
                   verification_code_detector_version = ?
               WHERE uid = ? AND user_id = ?`,
         args: [
-          bodySnippet, emailDate, emailDateUtc, read, threadId, messageId,
+          bodySnippet, emailDate, emailDateUtc, read, threadId, messageId, senderAuthenticationJson,
           verificationCode, verificationCodeKind, verificationCodeDetectedAt,
           verificationCodeActiveUntil, verificationCodeDetectorVersion, uid, userId,
         ],
@@ -373,7 +378,7 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
       subject, bodySnippet, bodyText,
       emailDate, emailDateUtc, read, threadId, messageId,
       verificationCode, verificationCodeKind, verificationCodeDetectedAt,
-      verificationCodeActiveUntil, verificationCodeDetectorVersion,
+      verificationCodeActiveUntil, verificationCodeDetectorVersion, senderAuthenticationJson,
     ];
     // When an already-indexed email's searchable content changed, drop any
     // existing search embedding so the re-embedding worker re-selects it as a
@@ -400,8 +405,8 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
                subject, body_snippet, body_text, email_date, email_date_utc, read,
                thread_id, message_id, verification_code, verification_code_kind,
                verification_code_detected_at, verification_code_active_until,
-               verification_code_detector_version)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               verification_code_detector_version, sender_authentication_json)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(uid) DO UPDATE SET
                 account_id = excluded.account_id,
                 account_label = excluded.account_label,
@@ -418,6 +423,7 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
                 read = excluded.read,
                 thread_id = COALESCE(excluded.thread_id, ea_email_index.thread_id),
                 message_id = COALESCE(excluded.message_id, ea_email_index.message_id),
+                sender_authentication_json = COALESCE(excluded.sender_authentication_json, ea_email_index.sender_authentication_json),
                 verification_code = excluded.verification_code,
                 verification_code_kind = excluded.verification_code_kind,
                 verification_code_detected_at = excluded.verification_code_detected_at,
