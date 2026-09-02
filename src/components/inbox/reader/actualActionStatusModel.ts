@@ -1,5 +1,6 @@
 import type {
   FinancialEmailReconciliation,
+  FinancialPlanReasonCode,
   StatementActualEvidence,
 } from "../../../../shared/types/bills";
 import type { BillResolutionState } from "./readerTypes";
@@ -89,6 +90,54 @@ export interface ActualActionStatusView {
   detail: string;
 }
 
+const MISSING_DETAIL_LABELS: Partial<Record<FinancialPlanReasonCode, string>> = {
+  canonical_amount_missing: "amount",
+  due_date_missing: "date",
+  due_date_invalid: "valid date",
+  account_target_unresolved: "account",
+  payee_target_unresolved: "payee",
+  category_target_unresolved: "category",
+  from_account_target_unresolved: "funding account",
+  to_account_target_unresolved: "destination account",
+  schedule_target_unresolved: "schedule",
+};
+
+function missingDetailsView(resolution: ActualResolutionLike): ActualActionStatusView {
+  const reasons = (resolution.plan?.reviewReasons || []).filter((reason) => reason.blocking);
+  if (reasons.some((reason) => reason.code === "semantic_event_missing" || reason.code === "semantic_event_ambiguous")) {
+    return {
+      tone: "neutral",
+      title: "Financial activity unclear",
+      detail: "We couldn’t tell whether this email describes a bill, transaction, payment, income, or refund.",
+    };
+  }
+  if (reasons.some((reason) => reason.code === "actual_metadata_unavailable")) {
+    return {
+      tone: "unavailable",
+      title: "Couldn’t verify Actual",
+      detail: "Actual data is temporarily unavailable.",
+    };
+  }
+  const missingDetails = [...new Set(reasons.flatMap((reason) => {
+    const label = MISSING_DETAIL_LABELS[reason.code];
+    return label ? [label] : [];
+  }))];
+  // Preserve a distinct blocker ahead of field-level follow-up details.
+  const blocker = reasons.find((reason) => !MISSING_DETAIL_LABELS[reason.code]);
+  const details = missingDetails.length < 3
+    ? missingDetails.join(" and ")
+    : `${missingDetails.slice(0, -1).join(", ")}, and ${missingDetails[missingDetails.length - 1]}`;
+  return {
+    tone: "warning",
+    title: "More details needed to check Actual",
+    detail: blocker?.message || (missingDetails.length
+      ? `Missing details: ${details}.`
+      : resolution.actualStatus?.reason === "insufficient_statement_evidence"
+        ? "This email doesn’t include a clear payment date."
+        : "We couldn’t match the account or payee in Actual."),
+  };
+}
+
 export function resolveActualActionStatusView(
   resolution: ActualResolutionLike | null | undefined,
 ): ActualActionStatusView | null {
@@ -111,15 +160,7 @@ export function resolveActualActionStatusView(
   const actualStatus = resolution.actualStatus;
   if (actualStatus.reason === "insufficient_reconciliation_identity"
     || actualStatus.reason === "insufficient_statement_evidence") {
-    const reasons = resolution.plan?.reviewReasons || [];
-    const details = [...new Set(reasons.filter((reason) => reason.blocking).map((reason) => reason.message))];
-    return {
-      tone: "warning",
-      title: "More details needed to check Actual",
-      detail: details.length ? details.join(" ") : actualStatus.reason === "insufficient_statement_evidence"
-        ? "The payment date could not be established from this email."
-        : "The Actual account or payee could not be identified from this email.",
-    };
+    return missingDetailsView(resolution);
   }
   if (actualStatus.status === "already_scheduled") {
     return {
