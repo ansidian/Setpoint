@@ -19,7 +19,7 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
 - `financial-email-observe-report.ts` — bounded, read-only aggregation of persisted planner outcomes by automation operation class; never executes writes
 - `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
-- `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; one-time expenses are enabled, while income and schedule/transfer classes remain observe-only
+- `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; one-time expenses and transfer schedules are enabled; income and utility schedules remain observe-only
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates

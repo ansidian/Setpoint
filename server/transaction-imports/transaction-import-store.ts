@@ -369,6 +369,20 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     return Number(result.rowsAffected || 0) === 1;
   }
 
+  async function markTransferAttempt(userId: string, itemId: string, claimToken: string, attemptedAt: string): Promise<boolean> {
+    const result = await dbClient.execute({
+      sql: `UPDATE ea_transaction_import_items
+            SET financial_email_plan_json = json_set(financial_email_plan_json, '$.transferExecution.attemptedAt', ?), updated_at = ?
+            WHERE user_id = ? AND id = ? AND claim_token = ? AND status = 'importing'
+              AND source = 'generic'
+              AND json_extract(financial_email_plan_json, '$.operation.intended') = 'create_transfer_schedule'
+              AND json_extract(financial_email_plan_json, '$.transferExecution.budgetId') IS NOT NULL
+              AND json_extract(financial_email_plan_json, '$.transferExecution.attemptedAt') IS NULL`,
+      args: [attemptedAt, now(), userId, itemId, claimToken],
+    });
+    return Number(result.rowsAffected || 0) === 1;
+  }
+
   async function settleItem(userId: string, itemId: string, claimToken: string, input: {
     status: TransactionImportItemStatus;
     reconciliationStatus?: TransactionImportReconciliationStatus | null;
@@ -498,6 +512,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     settleRun,
     claimNextItem,
     settleItem,
+    markTransferAttempt,
     persistFinancialPlanForEmail,
     recoverStaleClaims,
     recoverAbandonedHistoricalRuns,

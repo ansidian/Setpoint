@@ -1,3 +1,4 @@
+import { isTransferImport, processTransferImportItem } from "./financial-email-transfer.ts";
 import { randomUUID } from "crypto";
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
@@ -268,8 +269,14 @@ export function createTransactionImportWorker({
   }
 
   async function processNextItemBatch(): Promise<boolean> {
-    const claimed = await claimItemBatch();
-    if (!claimed.length) return false;
+    const batch = await claimItemBatch();
+    if (!batch.length) return false;
+    for (const item of batch.filter(isTransferImport)) {
+      if (await processTransferImportItem(item, { store, now })) {
+        await invalidateAfterCommit(item.userId).catch((error) => console.error("[Transaction Imports] Transfer invalidation failed:", conciseError(error)));
+      }
+    }
+    const claimed = batch.filter((item) => !isTransferImport(item));
     const invalid = claimed.filter((item) => !item.actualAccountId || !item.importedId || !item.date || item.amountCents == null || !item.payee || item.currency !== "USD"
       || ((item.source === "generic" || item.financialPlan?.candidate.transaction_import?.executionOwner === "planner")
         && item.status === "importing" && item.confirmedAt == null

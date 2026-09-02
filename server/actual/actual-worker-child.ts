@@ -21,6 +21,7 @@ const OPERATIONS = new Set([
   "sendBill",
   "createQuickTxn",
   "importTransactionGroups",
+  "reconcileTransferSchedule",
 ].filter(isActualWorkerOperation));
 
 function serializeError(error: unknown): ActualWorkerErrorPayload {

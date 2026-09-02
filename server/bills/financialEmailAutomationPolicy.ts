@@ -10,7 +10,7 @@ import type {
   FinancialPlanReasonCode,
 } from "../../shared/types/bills.ts";
 
-const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense"]);
+const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "transfer_schedule"]);
 
 export function financialEmailAutomationEnabled(operation: FinancialAutomationOperationClass): boolean {
   return ENABLED_OPERATION_CLASSES.has(operation);
@@ -80,7 +80,7 @@ export function financialEmailAutomationEligibility({
       : gate("reconciliation", "pass");
   const hasBlockingWarnings = (Array.isArray(candidate.blocking_warnings)
     && candidate.blocking_warnings.length > 0)
-    || (intended === "create_transaction"
+    || (["create_transaction", "create_transfer_schedule"].includes(String(intended))
       && (candidate.transaction_import?.currency || candidate.currency) !== "USD");
   const preflight = input.actualPreflight?.status || "not_run";
   const preflightReasons = input.actualPreflight?.reasons || [];

@@ -151,6 +151,26 @@ export interface ActualImportAccountGroup {
   transactions: ActualImportTransaction[];
 }
 
+export interface ActualTransferScheduleInput {
+  identityKey: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amountCents: number;
+  date: string;
+  name: string;
+  budgetId?: string;
+}
+
+export type ActualTransferScheduleMode = "preview" | "create_once" | "recover";
+
+export interface ActualTransferScheduleResult {
+  outcome: "would_create" | "created" | "already_scheduled" | "already_recorded" | "needs_review";
+  reason: string;
+  budgetId: string;
+  scheduleId?: string;
+  transactionId?: string;
+}
+
 export type ActualImportItemOutcome =
   | "would_add"
   | "would_update"

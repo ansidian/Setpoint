@@ -331,6 +331,7 @@ export type FinancialAutomationOperationClass =
 
 export interface FinancialEmailPlan {
   version: 1;
+  transferExecution?: { budgetId: string; attemptedAt?: string };
   identity: FinancialEmailIdentity;
   candidate: BillCandidate;
   classification: FinancialEmailClassification;

@@ -38,6 +38,8 @@ interface SdkTransactionInput {
 export interface ActualScheduleQueryBuilder {
   filter(value: unknown): ActualScheduleQueryBuilder;
   select(fields: string[]): ActualScheduleQueryBuilder;
+  withDead(): ActualScheduleQueryBuilder;
+  withoutValidatedRefs(): ActualScheduleQueryBuilder;
 }
 
 export interface ActualSdkSchedulePort {

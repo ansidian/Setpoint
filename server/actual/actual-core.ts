@@ -1,3 +1,5 @@
+import { reconcileActualTransferSchedule } from "./actualTransferSchedules.ts";
+import type { ActualTransferScheduleInput, ActualTransferScheduleMode } from "../../shared/types/transaction-imports.ts";
 import actualApi from "@actual-app/api";
 import { decrypt } from "../platform/encryption.ts";
 import { settingsCredentialContext } from "../platform/credential-encryption-context.ts";
@@ -79,6 +81,8 @@ interface SdkTransactionInput {
 interface QueryBuilder {
   filter(value: unknown): QueryBuilder;
   select(fields: string[]): QueryBuilder;
+  withDead(): QueryBuilder;
+  withoutValidatedRefs(): QueryBuilder;
 }
 interface ActualSdk extends ActualSdkSchedulePort {
   init(options: { serverURL: string; password?: string | null; dataDir?: string }): Promise<void>;
@@ -472,4 +476,12 @@ export function importTransactionGroups(
       return result;
     });
   });
+}
+
+export function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode) {
+  return withLock(() => withActualBudget(userId, async (config) => {
+    const result = await reconcileActualTransferSchedule(sdk, config.syncId, input, mode);
+    clearMetadataCache();
+    return result;
+  }));
 }

@@ -1,3 +1,4 @@
+import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
 import { runActualWorkerOperation } from "./actual-worker.ts";
 import { testActualConnectionHttp } from "./actual-connection-test.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
@@ -188,5 +189,11 @@ export async function importTransactionGroups(
     WRITE_OPERATION_WORKER_OPTIONS,
   );
   if (!dryRun) clearMetadataCache();
+  return result;
+}
+
+export async function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode): Promise<ActualTransferScheduleResult> {
+  const result = await callActual<ActualTransferScheduleResult>("reconcileTransferSchedule", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
+  clearMetadataCache();
   return result;
 }

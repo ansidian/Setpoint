@@ -146,6 +146,7 @@ function redactTarget(target: FinancialPlanTarget): FinancialPlanTarget {
 export function redactTransactionImportPlan(plan: FinancialEmailPlan): FinancialEmailPlan {
   const {
     event_evidence: _eventEvidence,
+    type_evidence: _typeEvidence,
     account_last4_evidence: _accountEvidence,
     target_evidence: _targetEvidence,
     ...candidate

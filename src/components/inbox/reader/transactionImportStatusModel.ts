@@ -1,6 +1,6 @@
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 
-export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode">;
+export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode"> & Partial<Pick<TransactionImportItem, "financialPlan">>;
 
 export type TransactionImportStatusTone = "success" | "warning" | "danger" | "active";
 
@@ -20,6 +20,21 @@ export function hasActiveTransactionImport(items: readonly TransactionImportStat
 
 export function resolveTransactionImportStatus(items: readonly TransactionImportStatusItem[]): TransactionImportStatusView | null {
   if (!items.length) return null;
+  const transfer = items.some((item) => item.financialPlan?.operation.intended === "create_transfer_schedule");
+  if (transfer) {
+    const review = items.find((item) => ["failed", "paused", "needs_review", "ready"].includes(item.status));
+    if (review) return {
+      tone: "warning", title: "Payment needs review",
+      detail: review.financialPlan?.reviewReasons.find((reason) => reason.blocking)?.message || "Check the payment in Actual before making changes.",
+      review: true, active: false,
+    };
+    if (hasActiveTransactionImport(items)) return { tone: "active", title: "Checking payment", detail: "Checking for an existing schedule or recorded transfer in Actual.", review: false, active: true };
+    const completed = items.find((item) => ["added", "already_present"].includes(item.status));
+    if (completed) return {
+      tone: "success", title: completed.financialPlan?.reconciliation.status === "already_recorded" ? "Payment recorded in Actual" : "Payment scheduled in Actual",
+      detail: "This payment is already accounted for. Reminders won’t add another record.", review: false, active: false,
+    };
+  }
   if (items.some((item) => item.status === "failed")) {
     return { tone: "danger", title: "Couldn’t sync", detail: "Open Finance settings to retry this transaction.", review: true, active: false };
   }
