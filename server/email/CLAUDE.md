@@ -13,7 +13,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-provider-types.ts` — provider/account normalization contracts and adapter boundary types
 - `email-mime-attachments.ts` — shared MIME attachment descriptor and bounded byte-selection helpers
 - `email-index.ts` — parses headers, truncates bodies, writes `ea_email_index`
-- `sender-authentication.ts` — provider-neutral, redacted sender-authentication projection; trusts only Gmail's leading `mx.google.com` result and keeps iCloud unavailable
+- `sender-authentication.ts` — provider-neutral, redacted sender-authentication projection; trusts Gmail's leading `mx.google.com` result and iCloud's anchored Apple delivery/authentication block; unknown or ambiguous iCloud layouts remain unavailable
 - `verification-code-detector.ts` — pure conservative verification-code extraction from normalized subject/snippet/body context; returns one exact bounded token or null
 - `email-persistence-types.ts` — local index/pin database client and raw-row contracts
 - `email-backfill-worker.ts` — paginated backward-in-time index backfill worker

@@ -7,7 +7,8 @@ import { withTimeout } from "../platform/fetch-with-timeout.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount, EmailAttachmentContent, EmailHttpError } from "./email-provider-types.ts";
 import { emailErrorMessage } from "./email-provider-types.ts";
-import { unavailableEmailAuthentication } from "./sender-authentication.ts";
+import { evaluateICloudSenderAuthentication } from "./sender-authentication.ts";
+import type { AuthenticationHeader } from "./sender-authentication.ts";
 
 const ICLOUD_HOST = "imap.mail.me.com";
 const ICLOUD_PORT = 993;
@@ -198,7 +199,7 @@ async function normalizeMessage(account: ConfiguredEmailAccount, msg: FetchMessa
   const fromName = from?.name || from?.address || "Unknown";
   const fromAddress = from?.address || "";
 
-  const { bodyText, bodyPreview } = await extractBodyTextAndPreview(msg.source);
+  const { bodyText, bodyPreview, headers } = await extractBodyTextAndPreview(msg.source);
   return {
     uid: `icloud-${msg.uid}`,
     account_id: account.id,
@@ -216,7 +217,7 @@ async function normalizeMessage(account: ConfiguredEmailAccount, msg: FetchMessa
     // IMAP has no Gmail-style thread id; Message-ID rides the envelope for free.
     thread_id: null,
     message_id: msg.envelope?.messageId || null,
-    sender_authentication: unavailableEmailAuthentication("icloud", fromAddress),
+    sender_authentication: evaluateICloudSenderAuthentication(headers, fromAddress),
   };
 }
 
@@ -231,20 +232,28 @@ function extractAmounts(text: string): string {
 // and the 600-char body_preview (+amounts) from the same clean text.
 // D1 fix: MIME-parse with mailparser (same as gmail.ts and fetchEmailBody below)
 // so multipart/quoted-printable/base64 messages index as decoded text, not raw MIME.
-async function extractBodyTextAndPreview(source: Buffer | null | undefined): Promise<{ bodyText: string; bodyPreview: string }> {
-  if (!source) return { bodyText: "", bodyPreview: "" };
+async function extractBodyTextAndPreview(source: Buffer | null | undefined): Promise<{ bodyText: string; bodyPreview: string; headers: AuthenticationHeader[] }> {
+  if (!source) return { bodyText: "", bodyPreview: "", headers: [] };
   let clean = "";
+  let headers: AuthenticationHeader[] = [];
   try {
     const parsed = await simpleParser(source);
     const text = (parsed.text || "").trim();
     clean = text || htmlToPlainText(parsed.html || "");
+    // The IMAP source is bounded. A truncated header block cannot supply a
+    // verdict; mailparser preserves original header order and duplicate fields.
+    if (/\r?\n\r?\n/.test(source.toString("utf8"))) {
+      headers = (parsed.headerLines || []).map(({ key, line }) => ({
+        name: key, value: line.slice(line.indexOf(":") + 1),
+      }));
+    }
   } catch {
     // Malformed message: fall back to the old naive split so it still indexes.
     const text = source.toString("utf8");
     const bodyStart = text.indexOf("\r\n\r\n");
     clean = bodyStart === -1 ? "" : htmlToPlainText(text.slice(bodyStart + 4));
   }
-  return { bodyText: clean, bodyPreview: clean.slice(0, 600) + extractAmounts(clean) };
+  return { bodyText: clean, bodyPreview: clean.slice(0, 600) + extractAmounts(clean), headers };
 }
 
 export async function fetchEmailBody(email: string, password: string, uid: string): Promise<EmailBody> {

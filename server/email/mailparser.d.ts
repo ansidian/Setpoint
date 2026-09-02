@@ -15,6 +15,7 @@ declare module "mailparser" {
   }
 
   export interface ParsedMail {
+    headerLines?: Array<{ key: string; line: string }>;
     html?: string | false;
     textAsHtml?: string;
     text?: string;

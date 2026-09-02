@@ -8,7 +8,7 @@ export interface EmailAuthenticationProjection {
   version: 1;
   status: EmailAuthenticationStatus;
   provider: EmailProvider;
-  source: "gmail_authentication_results" | "icloud_unavailable";
+  source: "gmail_authentication_results" | "icloud_authentication_results" | "icloud_unavailable";
   headerFromDomain: string | null;
   dkim: Array<{ result: string; domain: string | null; aligned: boolean }>;
   spf: { result: string; domain: string | null; aligned: boolean } | null;
