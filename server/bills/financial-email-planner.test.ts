@@ -106,10 +106,10 @@ describe("financial email planner contract", () => {
     });
     expect(uncorroborated).toMatchObject({
       classification: {
-        documentKind: "utility_statement",
+        documentKind: "informational",
         reasons: ["credit_account_evidence_missing"],
       },
-      operation: { intended: "create_schedule", kind: "review" },
+      operation: { intended: null, kind: "review" },
     });
   });
 
@@ -142,6 +142,7 @@ describe("financial email planner contract", () => {
   it("never selects a minimum-due-only amount", async () => {
     const result = await planner()("u1", {
       candidate: candidate("payment_due", {
+        type: "bill", type_confidence: 0.99, type_evidence: "Utility payment due",
         amount: 25,
         amount_kind: "minimum_due",
         amount_candidates: [{ kind: "minimum_due", value: 25, confidence: 0.99 }],

@@ -1,3 +1,5 @@
+import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
+import { hasStrongFinancialType, hasVerbatimFinancialEvidence, shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
 import {
   BILL_EVENT_KINDS,
   type BillCandidate,
@@ -13,6 +15,7 @@ export interface BillEventVerificationResult {
 export function shouldVerifyBillEvent(candidate: BillCandidate): boolean {
   return !candidate.event_kind
     || candidate.event_kind === "other"
+    || shouldAttemptFinancialEmailTypeVerification(candidate)
     || (Boolean(candidate.event_kind) && Number(candidate.event_confidence) < 0.8);
 }
 
@@ -24,13 +27,13 @@ function metadata(
   return { status, provider, model };
 }
 
-function usableEvent(candidate: BillCandidate): boolean {
+function usableEvent(candidate: BillCandidate, content: string): boolean {
   return Boolean(
     candidate.event_kind
     && candidate.event_kind !== "other"
     && BILL_EVENT_KINDS.includes(candidate.event_kind)
     && Number(candidate.event_confidence) >= 0.7
-    && String(candidate.event_evidence || "").trim(),
+    && hasVerbatimFinancialEvidence(content, candidate.event_evidence),
   );
 }
 
@@ -49,9 +52,19 @@ export async function verifyBillEvent({
 }): Promise<BillEventVerificationResult> {
   if (!shouldVerifyBillEvent(candidate)) return { candidate, usage: {} };
 
+  const verifyType = shouldAttemptFinancialEmailTypeVerification(candidate);
+  const typeAttempt = (status: BillEventVerification["status"]) => ({
+    ...metadata(status, providerId, model),
+    attempted_at: new Date().toISOString(),
+    attempts: (candidate.type_verification?.attempts ?? (candidate.type_verification ? 1 : 0)) + 1,
+  });
+
   const prompt = `Audit the semantic event classification for this bill or financial email.
 
-Return a corrected extraction using the required schema. Focus only on event_kind, event_confidence, and event_evidence:
+Return a corrected extraction using the required schema. Focus on event_kind, event_confidence, event_evidence, type, type_confidence, type_evidence, account_hint, and account_hint_confidence. Preserve the original amount and date; this audit does not select Actual IDs.
+${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
+
+Event definitions:
 - statement_issued: a newly available credit or financial statement
 - payment_due: a due-date or payment-due reminder
 - payment_scheduled: upcoming autopay or a payment scheduled for a future date
@@ -72,29 +85,49 @@ ${JSON.stringify({
     event_kind: candidate.event_kind ?? null,
     event_confidence: candidate.event_confidence ?? null,
     event_evidence: candidate.event_evidence ?? null,
+    type: candidate.type ?? null,
+    type_confidence: candidate.type_confidence ?? null,
+    type_evidence: candidate.type_evidence ?? null,
+    account_hint: candidate.account_hint ?? null,
   })}`;
 
   try {
     const verified = await provider.extract({ model, systemPrompt: prompt, content });
-    if (!usableEvent(verified.fields)) {
-      return {
-        candidate: { ...candidate, event_verification: metadata("kept_initial", providerId, model) },
-        usage: verified.usage || {},
-      };
-    }
+    const eventAccepted = usableEvent(verified.fields, content);
+    const typeAccepted = hasStrongFinancialType(verified.fields)
+      && hasVerbatimFinancialEvidence(content, verified.fields.type_evidence);
+    const accountAccepted = Number(verified.fields.account_hint_confidence) >= 0.8
+      && Number(verified.fields.account_hint_confidence) <= 1
+      && hasVerbatimFinancialEvidence(content, verified.fields.account_hint);
     return {
       candidate: {
         ...candidate,
-        event_kind: verified.fields.event_kind,
-        event_confidence: verified.fields.event_confidence,
-        event_evidence: verified.fields.event_evidence,
-        event_verification: metadata("corrected", providerId, model),
+        ...(verifyType ? { type_verification: typeAttempt(typeAccepted ? "corrected" : "kept_initial") } : {}),
+        ...(typeAccepted
+          ? {
+              type: verified.fields.type,
+              type_confidence: verified.fields.type_confidence,
+              type_evidence: verified.fields.type_evidence,
+            }
+          : {}),
+        ...(accountAccepted
+          ? {
+              account_hint: verified.fields.account_hint,
+              account_hint_confidence: verified.fields.account_hint_confidence,
+            }
+          : {}),
+        ...(eventAccepted ? {
+          event_kind: verified.fields.event_kind,
+          event_confidence: verified.fields.event_confidence,
+          event_evidence: verified.fields.event_evidence,
+        } : {}),
+        event_verification: metadata(eventAccepted ? "corrected" : "kept_initial", providerId, model),
       },
       usage: verified.usage || {},
     };
   } catch {
     return {
-      candidate: { ...candidate, event_verification: metadata("failed", providerId, model) },
+      candidate: { ...candidate, event_verification: metadata("failed", providerId, model), ...(verifyType ? { type_verification: typeAttempt("failed") } : {}) },
       usage: {},
     };
   }

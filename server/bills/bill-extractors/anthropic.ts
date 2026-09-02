@@ -1,3 +1,4 @@
+import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bill-semantic-prompt.ts";
 import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey } from "../../ai-credentials.ts";
 import type { BillCandidate, BillExtractionProvider, BillExtractionRequest } from "../../../shared/types/bills.ts";
@@ -47,12 +48,12 @@ const TOOL = {
       target_evidence: { type: ["string", "null"] },
       due_date: { type: ["string", "null"] },
       currency: { type: ["string", "null"] },
-      type: { type: "string", enum: ["transfer", "bill", "expense", "income"] },
+      ...BILL_SEMANTIC_IDENTITY_PROPERTIES,
       category_code: { type: ["string", "null"] },
       category_name: { type: ["string", "null"] },
       to_account_code: { type: ["string", "null"] },
     },
-    required: ["payee", "amount", "amount_kind", "amount_candidates", "event_kind", "event_confidence", "event_evidence", "account_last4", "account_last4_evidence", "account_last4_confidence", "target_policy_key", "target_confidence", "target_evidence", "due_date", "currency", "type"],
+    required: ["payee", "amount", "amount_kind", "amount_candidates", "event_kind", "event_confidence", "event_evidence", "account_last4", "account_last4_evidence", "account_last4_confidence", "target_policy_key", "target_confidence", "target_evidence", "due_date", "currency", ...BILL_SEMANTIC_IDENTITY_REQUIRED],
   },
 };
 
@@ -82,7 +83,7 @@ export function createAnthropicProvider({
       },
       body: JSON.stringify({
         model,
-        max_tokens: 800,
+        max_tokens: 1400,
         system: systemPrompt,
         tools: [TOOL],
         tool_choice: { type: "tool", name: "submit_bill" },

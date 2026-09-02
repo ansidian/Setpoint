@@ -32,14 +32,15 @@ export async function rankFinancialTargetBundles({
   provider: BillExtractionProvider;
   model: string;
 }): Promise<FinancialTargetRankingResult> {
-  if (options.length < 2) {
+  if (options.length < 1 || options.length > 32) {
     return { status: "unresolved", key: null, confidence: null, evidence: null };
   }
   const prompt = `Choose the single existing Actual target bundle best supported by this financial email.
 
 Return a full extraction using the required schema, but only target_policy_key, target_confidence, and target_evidence will be used.
 - target_policy_key must be exactly one supplied opaque key, or null when evidence is insufficient.
-- Choose only from the supplied owner-history bundles. Never invent or infer another account, payee, category, schedule, or ID.
+- Choose only from the supplied existing Actual accounts or owner-history bundles. Never invent another account, payee, category, schedule, or ID. A single choice is not evidence by itself.
+- For a credit-card payment destination, identify the named card product, not the bank that funds the payment. A shared issuer alone is insufficient when more than one card is plausible.
 - target_evidence must be a short verbatim excerpt from the email supporting the choice.
 - Do not choose from habit, a default checking account, or general plausibility.
 

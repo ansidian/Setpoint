@@ -6,6 +6,7 @@ import { findBillPaymentAdjustment } from "../../shared/billPaymentAdjustments.t
 import type { ActualMetadata, ActualScheduleCondition } from "../../shared/types/actual.ts";
 import type { BillCandidate, BillsMirrorHealth, StatementActualEvidence, StatementActualStatus } from "../../shared/types/bills.ts";
 import type { BillPaymentAdjustmentPolicy } from "../../shared/billPaymentAdjustments.ts";
+import { scheduleAccountId, transferScheduleTopology } from "./financialEmailAccountEvidence.ts";
 
 interface StatementOccurrence {
   scheduleId: string;
@@ -36,6 +37,7 @@ interface StatementSchedule {
   completed?: boolean;
   type?: string;
   conditions?: ActualScheduleCondition[];
+  transferAccountId?: string | null;
 }
 
 interface StatementStatusInput {
@@ -63,6 +65,11 @@ function scheduleIdentityMatches(
   const accountId = conditionForFields(schedule.conditions || [], ["account", "acct"])?.value;
   const expectedAccountId = bill.type === "transfer" ? bill.to_account_id : bill.account_id;
   if (bill.type === "transfer" && schedule.type !== "transfer") return false;
+  if (bill.type === "transfer") {
+    const topology = transferScheduleTopology(schedule);
+    return Boolean(topology && topology.toAccountId === bill.to_account_id
+      && topology.fromAccountId === bill.from_account_id);
+  }
   if (bill.type === "bill" && schedule.type !== "bill") return false;
   if (bill.payee_id) {
     return payeeId === bill.payee_id && (!expectedAccountId || accountId === expectedAccountId);
@@ -167,8 +174,10 @@ function scheduleEvidence(
 
 function transactionIdentityMatches(transaction: StatementTransaction, bill: BillCandidate): boolean {
   if (bill.type === "transfer") {
-    return transaction.accountId === bill.from_account_id
-      && transaction.transferAccountId === bill.to_account_id;
+    return (transaction.direction === "expense" && transaction.accountId === bill.from_account_id
+      && transaction.transferAccountId === bill.to_account_id)
+      || (transaction.direction === "income" && transaction.accountId === bill.to_account_id
+        && transaction.transferAccountId === bill.from_account_id);
   }
   if (bill.payee_id) {
     return transaction.payeeId === bill.payee_id
@@ -237,7 +246,7 @@ export function resolveStatementActualStatus({
   const amountExpectations = statementAmountExpectations(bill);
   const expectedAmountCents = amountExpectations[0]?.amountCents ?? null;
   if (bill.due_date <= today && expectedAmountCents != null) {
-    const transactionMatches = transactions.flatMap((transaction) => {
+    const allTransactionMatches = transactions.flatMap((transaction) => {
       if (transaction.date !== bill.due_date || !transactionIdentityMatches(transaction, bill)) return [];
       const transactionAmountCents = Math.round(Number(transaction.amount) * 100);
       const amountMatch = amountExpectations.find((expectation) => (
@@ -245,6 +254,11 @@ export function resolveStatementActualStatus({
       ));
       return amountMatch ? [{ transaction, amountMatch }] : [];
     });
+    // Actual exposes both legs of one transfer. Prefer the funding leg so its
+    // destination mirror is not counted as another independent payment.
+    const sourceMatches = bill.type === "transfer"
+      ? allTransactionMatches.filter(({ transaction }) => transaction.direction === "expense") : [];
+    const transactionMatches = sourceMatches.length ? sourceMatches : allTransactionMatches;
     if (transactionMatches.length === 1) {
       const match = transactionMatches[0]!;
       return {
@@ -272,6 +286,21 @@ export function resolveStatementActualStatus({
   const schedules = (metadata.schedules || []).filter((schedule) => (
     !schedule.completed && schedule.type !== "income"
   ));
+  if (bill.type === "transfer") {
+    const names = new Set([bill.schedule_name, bill.payee, bill.payee_hint,
+      `${metadata.accounts?.find((account) => account.id === bill.to_account_id)?.name || ""} Payment`]
+      .map(normalizeIdentity).filter(Boolean));
+    const conflict = schedules.find((schedule) => {
+      if (schedule.type !== "transfer" || !names.has(normalizeIdentity(schedule.name))) return false;
+      if (scheduleAccountId(schedule) !== bill.to_account_id && schedule.transferAccountId !== bill.to_account_id) return false;
+      const topology = transferScheduleTopology(schedule);
+      return !topology || topology.toAccountId !== bill.to_account_id || topology.fromAccountId !== bill.from_account_id;
+    });
+    if (conflict) return {
+      status: "needs_review", reason: "transfer_direction_mismatch", checkedAt: syncHealth?.lastSuccessAt || null,
+      evidence: scheduleEvidence(conflict, occurrenceForSchedule(occurrences, conflict, bill.due_date), bill, ["account", "transfer_direction"]),
+    };
+  }
   const identityMatches = schedules.filter((schedule) => scheduleIdentityMatches(schedule, bill, metadata));
   const dateMatches = identityMatches.filter((schedule) => (
     schedule.next_date === bill.due_date

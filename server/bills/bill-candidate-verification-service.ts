@@ -95,3 +95,5 @@ export function createBillCandidateVerificationService({
 
   return { verifyEmailCandidate, rankEmailTargetBundles };
 }
+
+export { validateFinancialSemanticIdentity } from "./financialEmailClassificationPolicy.ts";

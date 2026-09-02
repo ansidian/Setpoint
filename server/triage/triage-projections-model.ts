@@ -57,8 +57,12 @@ export function emailTriageEventDetails(email: Pick<TriageEmail, "account_id" | 
   };
 }
 
-export function maybeBillCandidate(email: Record<string, unknown>, decision: Partial<Pick<TriageDecision, "bill_candidate" | "category" | "deadline_at">>): Record<string, unknown> | null {
+export function maybeBillCandidate(email: Record<string, unknown>, decision: Partial<Pick<TriageDecision, "bill_candidate" | "category" | "deadline_at" | "triage_source">>): Record<string, unknown> | null {
   if (decision.bill_candidate) return decision.bill_candidate;
+  // An explicit semantic non-candidate must survive finalization. Non-model
+  // decisions still use the conservative keyword fallback below.
+  if (decision.bill_candidate === null
+    && (!decision.triage_source || decision.triage_source === "cheap_model" || decision.triage_source === "strong_model")) return null;
   const text = emailSearchText(email);
   const looksFinancial = /\$\s*\d|payment|invoice|statement|balance|autopay|due/.test(text);
   if (!looksFinancial) return null;

@@ -6,7 +6,7 @@ describe("bill event verifier", () => {
     expect(shouldVerifyBillEvent({ amount: 42 })).toBe(true);
     expect(shouldVerifyBillEvent({ event_kind: "other", event_confidence: 0.99 })).toBe(true);
     expect(shouldVerifyBillEvent({ event_kind: "payment_scheduled", event_confidence: 0.65 })).toBe(true);
-    expect(shouldVerifyBillEvent({ event_kind: "payment_scheduled", event_confidence: 0.9 })).toBe(false);
+    expect(shouldVerifyBillEvent({ event_kind: "payment_scheduled", event_confidence: 0.9 })).toBe(true);
   });
 
   it("accepts a supported, evidenced correction without replacing other fields", async () => {

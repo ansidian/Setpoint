@@ -1,3 +1,4 @@
+import { validateFinancialSemanticIdentity } from "./financialEmailClassificationPolicy.ts";
 import db from "../db/connection.ts";
 import type { Client } from "@libsql/client";
 import { trimBillBody } from "./bill-extract.ts";
@@ -99,10 +100,9 @@ export async function extractBillCandidate(
   const systemPrompt = `Extract bill fields from an email. Return submit_bill with:
 - payee, due_date (YYYY-MM-DD)
 ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
-- type: "transfer" (credit card payment), "bill" (recurring), "expense" (one-off), "income"
 - category_code: closest category's code (c1, c2, ...) if confident, else null
 - category_name: the category's display name (copied from the list)
-- to_account_code: ONLY for type=transfer, code (a1, a2, ...) of the credit card being paid. Match on Visa/MC/Amex or last-4 digits. Null if unsure.${catList.length ? `\n\nCategories: ${catList.join(", ")}` : ""}${acctList.length ? `\n\nAccounts: ${acctList.join(", ")}` : ""}`;
+- to_account_code: ONLY for type=transfer, code (a1, a2, ...) of the credit card being paid. Use an unambiguous card product identity or explicit last-4 digits; a card-network name alone is insufficient. Null if unsure.${catList.length ? `\n\nCategories: ${catList.join(", ")}` : ""}${acctList.length ? `\n\nAccounts: ${acctList.join(", ")}` : ""}`;
 
   const { provider: providerId, model } = await loadBillExtractChoice(userId, { dbClient });
   const provider = providers[providerId];
@@ -118,7 +118,7 @@ ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
   });
   const verification = await verifyBillAmounts({
     content: trimmed,
-    candidate: firstPass.fields,
+    candidate: validateFinancialSemanticIdentity(firstPass.fields, trimmed),
     provider,
     providerId,
     model,
@@ -158,6 +158,11 @@ ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
     due_date: fields.due_date,
     ...(typeof fields.currency === "string" ? { currency: fields.currency } : {}),
     type: fields.type,
+    ...(fields.type_verification ? { type_verification: fields.type_verification } : {}),
+    ...(fields.type_confidence != null ? { type_confidence: fields.type_confidence } : {}),
+    ...(fields.type_evidence ? { type_evidence: fields.type_evidence } : {}),
+    ...(fields.account_hint ? { account_hint: fields.account_hint } : {}),
+    ...(fields.account_hint_confidence != null ? { account_hint_confidence: fields.account_hint_confidence } : {}),
     category_id: typeof fields.category_code === "string" ? catCodeToId.get(fields.category_code) || null : null,
     category_name: typeof fields.category_name === "string" ? fields.category_name : null,
     to_account_id: typeof fields.to_account_code === "string" ? acctCodeToId.get(fields.to_account_code) || null : null,

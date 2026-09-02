@@ -54,6 +54,9 @@ function successDetail(actualStatus: FinancialEmailReconciliation, datePrefix: s
 }
 
 function reviewDetail(reason: string | undefined): string {
+  if (reason === "transfer_direction_mismatch") {
+    return "The transfer accounts or direction in Actual differ from this payment.";
+  }
   if (reason === "amount_mismatch") {
     return "The amount in Actual differs from this statement.";
   }
@@ -108,10 +111,14 @@ export function resolveActualActionStatusView(
   const actualStatus = resolution.actualStatus;
   if (actualStatus.reason === "insufficient_reconciliation_identity"
     || actualStatus.reason === "insufficient_statement_evidence") {
+    const reasons = resolution.plan?.reviewReasons || [];
+    const details = [...new Set(reasons.filter((reason) => reason.blocking).map((reason) => reason.message))];
     return {
       tone: "warning",
       title: "More details needed to check Actual",
-      detail: "Review the amount, date, and account before checking for a match.",
+      detail: details.length ? details.join(" ") : actualStatus.reason === "insufficient_statement_evidence"
+        ? "The payment date could not be established from this email."
+        : "The Actual account or payee could not be identified from this email.",
     };
   }
   if (actualStatus.status === "already_scheduled") {

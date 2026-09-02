@@ -12,17 +12,18 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `bill-extractors/anthropic.ts` — Claude tool-use extraction call
 - `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call
 - `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete multi-amount candidate coverage
-- `billEventVerifier.ts` — bounded second-pass LLM audit for low-confidence or `other` semantic events
+- `billEventVerifier.ts` — bounded second-pass LLM audit for uncertain events or missing payment purpose, with source-grounded type/account evidence and persisted attempt markers
 - `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of email candidates
 - `financial-email-planner.ts` — zero-configuration financial-email contract seam; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes or persists
-- `financial-email-adoption-service.ts` — live read/persistence facade; refreshes historical plans when stronger authentication arrives, compare-and-swap persists the winner, and stages exact expense preflight without promoting stored observe-only plans
+- `financial-email-adoption-service.ts` — live read/persistence facade; refreshes historical plans for stronger authentication or bounded missing-purpose verification, compare-and-swap persists the winner, and stages exact expense preflight without promoting stored observe-only plans
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
 - `financial-email-observe-report.ts` — bounded, read-only aggregation of persisted planner outcomes by automation operation class; never executes writes
-- `financialEmailClassificationPolicy.ts` — pure semantic-event to document/intent classification policy used by the planner
+- `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
 - `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; one-time expenses are enabled, while income and schedule/transfer classes remain observe-only
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
+- `financialEmailAccountEvidence.ts` — exact card-product identity, constrained existing-account ranking, and signed schedule topology for transfer targets; never guesses a funding account
 - `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
 - `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque history-bundle keys with high-confidence verbatim evidence
 - `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; minimum due is never operational

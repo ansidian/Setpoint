@@ -1,6 +1,7 @@
 import db from "../db/connection.ts";
 import { planFinancialEmail } from "./financial-email-planner.ts";
 import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
+import { shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
 import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import type { InStatement } from "@libsql/client";
 import type {
@@ -178,7 +179,8 @@ export async function resolveFinancialEmailSeed(
       emailBody: String(stored.email.body || ""),
     }, plan).catch(() => undefined);
   };
-  if (stored?.plan && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {
+  const missingType = stored?.plan && shouldAttemptFinancialEmailTypeVerification(stored.plan.candidate);
+  if (stored?.plan && !missingType && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {
     await stage(stored.plan);
     return stored.plan;
   }

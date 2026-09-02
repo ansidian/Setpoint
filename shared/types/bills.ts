@@ -122,7 +122,13 @@ export interface BillCandidate {
   semantic_enrichment?: BillSemanticEnrichment;
   transaction_import?: BillTransactionImportEvidence;
   due_date?: string | null;
-  type?: BillType | string;
+  type?: BillType | string | null;
+  type_verification?: BillEventVerification & { attempted_at?: string; attempts?: number };
+  type_confidence?: number | null;
+  type_evidence?: string | null;
+  /** Verbatim card/account product name from the email, never an Actual identity. */
+  account_hint?: string | null;
+  account_hint_confidence?: number | null;
   notes?: string | null;
   category_id?: string | null;
   account_id?: string | null;

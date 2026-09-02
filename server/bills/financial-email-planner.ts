@@ -12,6 +12,7 @@ import { financialEmailAutomationEligibility } from "./financialEmailAutomationP
 import { financialEmailIdentity } from "./financialEmailIdentity.ts";
 import {
   classifyFinancialEmail,
+  shouldAttemptFinancialEmailTypeVerification,
   type FinancialEmailPolicyResult,
 } from "./financialEmailClassificationPolicy.ts";
 import {
@@ -132,6 +133,9 @@ function evidenceReasons(
   const reasons: FinancialPlanReason[] = [];
   if (providerUnavailable) {
     reasons.push(reason("provider_unavailable", "Semantic verification is currently unavailable."));
+  }
+  if (policy.classification.reasons.includes("credit_account_evidence_missing")) {
+    reasons.push(reason("semantic_event_ambiguous", "The email does not establish whether this is a card payment or a bill.", "type"));
   }
   if (!candidate.event_kind) {
     reasons.push(reason("semantic_event_missing", "The financial event could not be established.", "event_kind"));
@@ -405,7 +409,8 @@ async function resolveCandidate(
     }
   }
   const candidate = { ...input.candidate };
-  if (candidate.semantic_enrichment?.status === "complete" || !shouldVerifyBillEvent(candidate)) {
+  const missingType = shouldAttemptFinancialEmailTypeVerification(candidate);
+  if (!missingType && (candidate.semantic_enrichment?.status === "complete" || !shouldVerifyBillEvent(candidate))) {
     return { candidate, providerUnavailable: false };
   }
   try {
@@ -421,7 +426,13 @@ async function resolveCandidate(
       providerUnavailable: verified.event_verification?.status === "failed",
     };
   } catch {
-    return { candidate, providerUnavailable: true };
+    return {
+      candidate: missingType ? { ...candidate, type_verification: {
+        status: "failed", attempted_at: new Date().toISOString(),
+        attempts: (candidate.type_verification?.attempts ?? (candidate.type_verification ? 1 : 0)) + 1,
+      } } : candidate,
+      providerUnavailable: true,
+    };
   }
 }
 

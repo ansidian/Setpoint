@@ -1,5 +1,19 @@
+// Shared by triage and both manual-extraction providers so semantic identity
+// remains available before Actual account resolution.
+export const BILL_SEMANTIC_IDENTITY_PROPERTIES = {
+  type: { type: ["string", "null"], enum: ["transfer", "bill", "expense", "income", null] },
+  type_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
+  type_evidence: { type: ["string", "null"] },
+  account_hint: { type: ["string", "null"] },
+  account_hint_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
+};
+export const BILL_SEMANTIC_IDENTITY_REQUIRED = Object.keys(BILL_SEMANTIC_IDENTITY_PROPERTIES);
+
 export const BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS: string = `For each bill candidate:
 - Classify event_kind as statement_issued for a newly available credit/financial statement; payment_due for a due reminder; payment_scheduled for upcoming or scheduled autopay; card_payment_completed when a payment was posted or applied to a credit-card/account balance (this is a transfer); payment_completed for a completed utility or merchant bill payment; payment_cancelled when autopay or a payment was cancelled; purchase for a charge, order, authorization, or receipt; refund for a refund or account credit; bill_issued for a recurring-service invoice or utility bill; reward for cashback/reward income; payment_failed for a declined, returned, or failed payment; other only when none applies. A cancellation in the body overrides scheduled wording in the subject.
+- Classify type from the financial meaning of the email: transfer for a payment toward a credit-card balance (including upcoming autopay, a card statement, or a card payment reminder); bill for a recurring utility/service bill or its payment; expense for a one-off purchase/payment; income for a refund or reward. Paying a merchant with a card is an expense, not a transfer. If the payment purpose is unknown or ambiguous, return null type rather than defaulting to bill.
+- Return type_confidence from 0 to 1 and one short contiguous verbatim type_evidence excerpt establishing that meaning. Copy the excerpt directly without quotation delimiters, ellipses, paraphrases, or joining separate quotes. Identify a credit-card payment even when its card suffix or Actual account is unknown; type must never depend on resolving an Actual ID.
+- Return account_hint as a short verbatim card/account product name identifying the account involved, with account_hint_confidence from 0 to 1; otherwise return both as null. For a credit-card payment, this is the destination card being paid. Preserve the precise card product name separately from an issuer name; never concatenate names or invent a suffix. Generic payment wording cannot identify the funding account. Do not use a card-network name alone to infer an Actual account.
 - Return event_confidence from 0 to 1 and short verbatim event_evidence.
 - Return currency as the ISO currency code evidenced by the canonical amount (USD for a dollar amount identified as US dollars, including an unqualified $ in a US account/merchant context). Return null when currency is unknown or ambiguous; never convert a non-USD amount to USD.
 - due_date is the operation date in YYYY-MM-DD, not always a future bill deadline. For purchase, payment_completed, card_payment_completed, refund, reward, or other completed income, use the explicit transaction, purchase, paid, posted, or credited date for that event. For statements, due reminders, and recurring bills use the explicit payment due date; for payment_scheduled use the explicit scheduled payment date.

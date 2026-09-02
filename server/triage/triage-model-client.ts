@@ -4,8 +4,8 @@ import {
   DEFAULT_BILL_EXTRACT_MODEL,
   resolveBillExtractModelConfig,
 } from "../bills/bill-extractors/catalog.ts";
-import { createBillCandidateVerificationService } from "../bills/bill-candidate-verification-service.ts";
-import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "../bills/bill-semantic-prompt.ts";
+import { createBillCandidateVerificationService, validateFinancialSemanticIdentity } from "../bills/bill-candidate-verification-service.ts";
+import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS, BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bills/bill-semantic-prompt.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey, type AiProvider } from "../ai-credentials.ts";
 import type {
@@ -30,7 +30,7 @@ import {
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
-const TRIAGE_PROMPT_CACHE_VERSION = "v7";
+const TRIAGE_PROMPT_CACHE_VERSION = "v9";
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
 const TRIAGE_MODEL_TIMEOUT_MS = 120_000;
@@ -70,6 +70,7 @@ const TRIAGE_TOOL = {
       bill_candidate: {
         type: ["object", "null"],
         properties: {
+          ...BILL_SEMANTIC_IDENTITY_PROPERTIES,
           payee_hint: { type: ["string", "null"] },
           amount: { type: ["number", "null"] },
           amount_kind: { type: ["string", "null"], enum: [...BILL_AMOUNT_KINDS, null] },
@@ -100,6 +101,7 @@ const TRIAGE_TOOL = {
           currency: { type: ["string", "null"] },
           requires_confirmation: { type: "boolean" },
         },
+        required: BILL_SEMANTIC_IDENTITY_REQUIRED,
       },
     },
     required: [
@@ -132,6 +134,7 @@ Rules:
 - Marketing, recommendations, coupons, surveys, and generic newsletters are noise unless the sender/content matches a configured user interest or another real risk is present.
 - Payment due ambiguity, low balance, failed payment, card expiration, service interruption, legal/school deadlines, and suspicious security events must stay needs_attention or escalate.
 - If a specific deadline or due date exists, set deadline_at as an ISO timestamp or null if uncertain.
+- Return bill_candidate=null for informational checking, savings, or investment statement-availability notices that describe no transaction, credit-card repayment obligation, or bill. An account statement being available is not itself a payment event. Keep credit-card statement candidates even when their amount or due date is absent, so missing payment details can be reviewed honestly.
 - Finance/payment bill candidates must require confirmation; never imply an Actual Budget write.
 ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 - Be compact. Summary and action should each be short enough for a dense dashboard row.`;
@@ -226,7 +229,7 @@ function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeC
       : {}),
     instructions: TRIAGE_SYSTEM_PROMPT,
     input: compactEmailForPrompt(email, reason),
-    max_output_tokens: 500,
+    max_output_tokens: 1600,
     reasoning: { effort: "low" },
     tools: [{
       type: "function",
@@ -278,7 +281,7 @@ async function verifyTriageBillAmounts({
       body: email.body_text,
       body_snippet: email.body_snippet,
     },
-    candidate: decision.bill_candidate as BillCandidate,
+    candidate: validateFinancialSemanticIdentity(decision.bill_candidate as BillCandidate, compactEmailForPrompt(email, "")),
     providerId,
     model,
   });
@@ -451,7 +454,7 @@ export function createTriageModelClient({
         },
         body: JSON.stringify({
           model: choice.model,
-          max_tokens: 500,
+          max_tokens: 1400,
           // Mark the stable prefix (tools render before system) as ephemeral
           // cacheable so repeated classifications in a tick reuse it instead of
           // re-billing the prompt + schema. Prompt caching is GA — no beta

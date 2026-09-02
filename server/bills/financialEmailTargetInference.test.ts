@@ -209,6 +209,7 @@ describe("inferFinancialEmailTargets", () => {
           conditions: [
             { field: "account", value: "card" },
             { field: "payee", value: "transfer-card" },
+            { field: "amount", op: "is", value: 4225 },
           ],
         }],
       }),

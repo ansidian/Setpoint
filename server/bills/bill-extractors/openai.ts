@@ -1,3 +1,4 @@
+import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bill-semantic-prompt.ts";
 // OpenAI Responses API path with Structured Outputs (strict JSON schema).
 // Returns the same normalized field shape as the Anthropic extractor so the
 // caller does not branch on provider.
@@ -53,12 +54,12 @@ const SCHEMA = {
     target_evidence: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     currency: { type: ["string", "null"] },
-    type: { type: "string", enum: ["transfer", "bill", "expense", "income"] },
+    ...BILL_SEMANTIC_IDENTITY_PROPERTIES,
     category_code: { type: ["string", "null"] },
     category_name: { type: ["string", "null"] },
     to_account_code: { type: ["string", "null"] },
   },
-  required: ["payee", "amount", "amount_kind", "amount_candidates", "event_kind", "event_confidence", "event_evidence", "account_last4", "account_last4_evidence", "account_last4_confidence", "target_policy_key", "target_confidence", "target_evidence", "due_date", "currency", "type", "category_code", "category_name", "to_account_code"],
+  required: ["payee", "amount", "amount_kind", "amount_candidates", "event_kind", "event_confidence", "event_evidence", "account_last4", "account_last4_evidence", "account_last4_confidence", "target_policy_key", "target_confidence", "target_evidence", "due_date", "currency", ...BILL_SEMANTIC_IDENTITY_REQUIRED, "category_code", "category_name", "to_account_code"],
 };
 
 export function createOpenAiProvider({
@@ -88,7 +89,7 @@ export function createOpenAiProvider({
         model,
         instructions: systemPrompt,
         input: content,
-        max_output_tokens: 1000,
+        max_output_tokens: 1600,
         reasoning: { effort: "low" },
         text: {
           format: {

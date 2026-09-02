@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import type {
-  ActualAccount,
   ActualMetadata,
   ActualSchedule,
 } from "../../shared/types/actual.ts";
@@ -25,6 +24,11 @@ import {
   type TargetEvidence,
   type TargetValue,
 } from "./financialEmailImportedHistory.ts";
+import {
+  accountSuffix, creditCompatible, namedCreditAccountEvidence, rankedCreditAccountEvidence,
+  trustedAccountSuffix, scheduleAccountId, transferScheduleTopology,
+  financialScheduleEvidence as scheduleEvidence,
+} from "./financialEmailAccountEvidence.ts";
 interface HistoryBundle {
   key: string;
   account: TargetValue;
@@ -130,24 +134,6 @@ function selectEvidence(
   };
 }
 
-function accountSuffix(name: string): string | null {
-  return name.match(/(?:^|\D)(\d{4})\s*$/)?.[1] || null;
-}
-function trustedLastFour(candidate: BillCandidate): string | null {
-  const lastFour = String(candidate.account_last4 || "").replace(/\D/g, "");
-  const evidence = String(candidate.account_last4_evidence || "").replace(/\D/g, "");
-  return lastFour.length === 4
-    && evidence.includes(lastFour)
-    && Number(candidate.account_last4_confidence) >= 0.8
-    ? lastFour
-    : null;
-}
-
-function creditCompatible(account: ActualAccount): boolean {
-  const type = normalizeIdentity(account.type);
-  if (!type) return true;
-  return !["checking", "savings", "cash"].includes(type);
-}
 function identityValues(candidate: BillCandidate): Set<string> {
   return new Set([
     candidate.payee,
@@ -183,12 +169,6 @@ function schedulePayeeId(schedule: ActualSchedule): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function scheduleAccountId(schedule: ActualSchedule): string | null {
-  const value = schedule.conditions?.find((condition) => (
-    condition.field === "account" || condition.field === "acct"
-  ))?.value;
-  return typeof value === "string" ? value : null;
-}
 function exactSchedules(
   candidate: BillCandidate,
   metadata: ActualMetadata,
@@ -314,7 +294,7 @@ function suffixAccountEvidence(
   metadata: ActualMetadata,
   transfer: boolean,
 ): TargetEvidence[] {
-  const lastFour = trustedLastFour(candidate);
+  const lastFour = trustedAccountSuffix(candidate);
   if (!lastFour) return [];
   return metadata.accounts
     .filter((account) => (!transfer || creditCompatible(account)) && accountSuffix(account.name) === lastFour)
@@ -325,37 +305,6 @@ function suffixAccountEvidence(
       decisive: true,
       provenance: metadataProvenance("exact", "unique_account_last_four", candidate.account_last4_evidence || null),
     }));
-}
-
-function scheduleEvidence(
-  schedules: ActualSchedule[],
-  metadata: ActualMetadata,
-  field: "schedule" | "account" | "payee" | "from_account" | "to_account",
-): TargetEvidence[] {
-  return schedules.flatMap((schedule) => {
-    let value: TargetValue | null = null;
-    if (field === "schedule") value = schedule.name ? { id: schedule.id || null, label: schedule.name } : null;
-    if (field === "account" || field === "to_account") {
-      const accountId = scheduleAccountId(schedule);
-      const account = metadata.accounts.find((item) => item.id === accountId);
-      value = account ? { id: account.id, label: account.name } : null;
-    }
-    if (field === "from_account") {
-      const account = metadata.accounts.find((item) => item.id === schedule.transferAccountId);
-      value = account ? { id: account.id, label: account.name } : null;
-    }
-    if (field === "payee") {
-      const payeeId = schedulePayeeId(schedule);
-      const payee = metadata.payees.find((item) => item.id === payeeId);
-      value = payee ? { id: payee.id, label: payee.name } : null;
-    }
-    return value ? [{
-      ...value,
-      tier: 2 as const,
-      decisive: true,
-      provenance: metadataProvenance("exact", "exact_schedule_identity", schedule.name || null),
-    }] : [];
-  });
 }
 
 function derivedScheduleTarget(label: string): FinancialPlanTarget {
@@ -457,18 +406,35 @@ export async function inferFinancialEmailTargets({
   const schedules = exactSchedules(candidate, metadata, transfer);
   const categories = categoryValues(metadata);
   if (transfer) {
-    const toSelection = selectEvidence("to_account", [
+    let toSelection = selectEvidence("to_account", [
       ...suffixAccountEvidence(candidate, metadata, true),
+      ...namedCreditAccountEvidence(candidate, metadata),
       ...scheduleEvidence(schedules, metadata, "to_account"),
     ]);
+    if (toSelection.target.status === "unresolved" && !toSelection.conflict && rankBundles) {
+      toSelection = selectEvidence("to_account", await rankedCreditAccountEvidence(candidate, metadata, rankBundles));
+    }
     targets.toAccount = toSelection.target;
     if (toSelection.conflict) reasons.add("target_evidence_conflict");
 
     const destination = targetValue(targets.toAccount);
+    const accountSchedules = destination?.id ? metadata.schedules.filter((schedule) => (
+      !schedule.completed && transferScheduleTopology(schedule)?.toAccountId === destination.id
+    )) : schedules;
+    if (destination?.id && metadata.schedules.some((schedule) => {
+      const expectedName = normalizeIdentity(`${destination.label} Payment`);
+      const related = schedules.includes(schedule) || normalizeIdentity(schedule.name) === expectedName;
+      return !schedule.completed && schedule.type === "transfer" && related
+        && (scheduleAccountId(schedule) === destination.id || schedule.transferAccountId === destination.id)
+        && transferScheduleTopology(schedule)?.toAccountId !== destination.id;
+    })) reasons.add("target_evidence_conflict");
+    const datedSchedules = accountSchedules.filter((schedule) => schedule.next_date === candidate.due_date);
+    const transferSchedules = datedSchedules.length ? datedSchedules : accountSchedules;
     const transferRows = destination?.id
       ? history.filter((row) => (
           row.transferAccountId
-          && (row.accountId === destination.id || row.transferAccountId === destination.id)
+          && ((row.accountId === destination.id && row.direction === "income")
+            || (row.transferAccountId === destination.id && row.direction === "expense"))
         ))
       : [];
     const historySources = transferRows.flatMap((row) => {
@@ -477,16 +443,16 @@ export async function inferFinancialEmailTargets({
       return account ? [{ id: account.id, label: account.name }] : [];
     });
     const sourceSelection = selectEvidence("from_account", [
-      ...scheduleEvidence(schedules, metadata, "from_account"),
+      ...scheduleEvidence(transferSchedules, metadata, "from_account"),
       ...stableHistoryEvidence("from_account", historySources, transferRows.length),
     ]);
     targets.fromAccount = sourceSelection.target;
     if (sourceSelection.conflict) reasons.add("target_evidence_conflict");
 
-    const scheduleSelection = selectEvidence("schedule", scheduleEvidence(schedules, metadata, "schedule"));
+    const scheduleSelection = selectEvidence("schedule", scheduleEvidence(transferSchedules, metadata, "schedule"));
     targets.schedule = scheduleSelection.target;
     if (scheduleSelection.conflict) reasons.add("target_evidence_conflict");
-    if (targets.schedule.status === "unresolved" && targets.toAccount.status === "resolved" && !schedules.length) {
+    if (targets.schedule.status === "unresolved" && targets.toAccount.status === "resolved" && !transferSchedules.length) {
       targets.schedule = derivedScheduleTarget(`${targets.toAccount.label} Payment`);
     }
     return {
