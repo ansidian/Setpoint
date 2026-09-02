@@ -106,6 +106,14 @@ export function resolveActualActionStatusView(
   }
 
   const actualStatus = resolution.actualStatus;
+  if (actualStatus.reason === "insufficient_reconciliation_identity"
+    || actualStatus.reason === "insufficient_statement_evidence") {
+    return {
+      tone: "warning",
+      title: "More details needed to check Actual",
+      detail: "Review the amount, date, and account before checking for a match.",
+    };
+  }
   if (actualStatus.status === "already_scheduled") {
     return {
       tone: "success",
@@ -137,8 +145,8 @@ export function resolveActualActionStatusView(
   return {
     tone: "unavailable",
     title: "Couldn’t verify Actual",
-    detail: actualStatus.reason === "insufficient_statement_evidence"
-      ? "The statement does not include enough detail for a reliable match."
-      : "Actual data is not current enough for a reliable match.",
+    detail: actualStatus.reason === "actual_data_not_current"
+      ? "Actual data is not current enough for a reliable match."
+      : "Actual data is temporarily unavailable.",
   };
 }
