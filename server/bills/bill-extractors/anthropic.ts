@@ -45,7 +45,7 @@ const TOOL = {
       target_policy_key: { type: ["string", "null"] },
       target_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
       target_evidence: { type: ["string", "null"] },
-      due_date: { type: "string" },
+      due_date: { type: ["string", "null"] },
       type: { type: "string", enum: ["transfer", "bill", "expense", "income"] },
       category_code: { type: ["string", "null"] },
       category_name: { type: ["string", "null"] },
