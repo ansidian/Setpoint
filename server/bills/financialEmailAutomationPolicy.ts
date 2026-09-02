@@ -10,7 +10,11 @@ import type {
   FinancialPlanReasonCode,
 } from "../../shared/types/bills.ts";
 
-const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>();
+const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense"]);
+
+export function financialEmailAutomationEnabled(operation: FinancialAutomationOperationClass): boolean {
+  return ENABLED_OPERATION_CLASSES.has(operation);
+}
 
 function operationClass(
   candidate: BillCandidate,
@@ -74,12 +78,14 @@ export function financialEmailAutomationEligibility({
     : reconciliation.status === "unavailable" || reconciliation.status === "not_checked"
       ? gate("reconciliation", "unknown", ["reconciliation_unavailable"])
       : gate("reconciliation", "pass");
-  const hasBlockingWarnings = Array.isArray(candidate.blocking_warnings)
-    && candidate.blocking_warnings.length > 0;
+  const hasBlockingWarnings = (Array.isArray(candidate.blocking_warnings)
+    && candidate.blocking_warnings.length > 0)
+    || (intended === "create_transaction"
+      && (candidate.transaction_import?.currency || candidate.currency) !== "USD");
   const preflight = input.actualPreflight?.status || "not_run";
   const preflightReasons = input.actualPreflight?.reasons || [];
   const automationClass = operationClass(candidate, intended);
-  const rollout = ENABLED_OPERATION_CLASSES.has(automationClass) ? "enabled" : "observe_only";
+  const rollout = financialEmailAutomationEnabled(automationClass) ? "enabled" : "observe_only";
   const gates: FinancialAutomationGate[] = [
     gate("semantic", semanticReasons.length ? "fail" : "pass", semanticReasons),
     intended === "no_write"
@@ -110,7 +116,8 @@ export function financialEmailAutomationEligibility({
   ];
   const reasons = [...new Set(gates.flatMap((item) => item.reasons))];
   return {
-    eligible: gates.every((item) => item.status === "pass" || item.status === "not_applicable"),
+    eligible: reconciliation.disposition !== "no_write"
+      && gates.every((item) => item.status === "pass" || item.status === "not_applicable"),
     operationClass: automationClass,
     rollout,
     gates,

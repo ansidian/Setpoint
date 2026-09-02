@@ -30,7 +30,7 @@ import {
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
-const TRIAGE_PROMPT_CACHE_VERSION = "v6";
+const TRIAGE_PROMPT_CACHE_VERSION = "v7";
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
 const TRIAGE_MODEL_TIMEOUT_MS = 120_000;
@@ -97,6 +97,7 @@ const TRIAGE_TOOL = {
           target_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
           target_evidence: { type: ["string", "null"] },
           due_date: { type: ["string", "null"] },
+          currency: { type: ["string", "null"] },
           requires_confirmation: { type: "boolean" },
         },
       },

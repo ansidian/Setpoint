@@ -30,7 +30,7 @@ const SUBJECT_PATTERNS = [
 ];
 const ORDER_NUMBER_PATTERN = /\d{3}-\d{7}-\d{7}/g;
 
-export function matchesAmazonFamily(email: TransactionEmailInput): boolean {
+export function matchesAmazonFamily(email: Pick<TransactionEmailInput, "subject">): boolean {
   return SUBJECT_PATTERNS.some((pattern) => pattern.test(email.subject));
 }
 

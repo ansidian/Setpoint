@@ -27,7 +27,7 @@ const SUBJECT_PATTERNS = [
 ];
 const TRANSACTION_ID_PATTERN = /transaction\s*id[:\s]*((?:O-)?[A-Z0-9]{17,19})(?![A-Z0-9])/i;
 
-export function matchesPayPalFamily(email: TransactionEmailInput): boolean {
+export function matchesPayPalFamily(email: Pick<TransactionEmailInput, "subject" | "text">): boolean {
   if (SUBJECT_PATTERNS.some((pattern) => pattern.test(email.subject))) return true;
   return /you (?:paid|sent) \$[\d,.]+/i.test(email.text || "");
 }

@@ -161,6 +161,7 @@ describe("extractBill (Anthropic)", () => {
             name: "submit_bill",
             input: {
               payee: "PG&E",
+              currency: "USD",
               amount: 120,
               amount_kind: "total_due",
               amount_candidates: [{
@@ -189,6 +190,7 @@ describe("extractBill (Anthropic)", () => {
 
     expect(out).toEqual({
       payee: "PG&E",
+      currency: "USD",
       amount: 120,
       amount_kind: "total_due",
       amount_candidates: [{

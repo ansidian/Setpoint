@@ -6,10 +6,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ActualMetadataEntry } from "../../../lib/actualMetadata";
-import type { BillPayMappingOutcome, BillType } from "../../../../shared/types/bills";
+import type { BillType } from "../../../../shared/types/bills";
 import { findBillPaymentAdjustment } from "../../../../shared/billPaymentAdjustments";
-
-type BillPayMappingLabelInput = Omit<Partial<BillPayMappingOutcome>, "status"> & { status?: string };
 
 export const typeLabels: Record<BillType, { label: string; color: string; Icon: LucideIcon }> = {
   transfer: { label: "Card", color: "#b4befe", Icon: CreditCard },
@@ -48,30 +46,7 @@ export function formatModelName(model: string | null | undefined): string {
   return model;
 }
 
-export function pickDefaultFromAccount(accounts: ActualMetadataEntry[]): ActualMetadataEntry | null {
-  return accounts.find((account) => account.name.toLowerCase().includes("savings"))
-    || accounts.find((account) => account.type === "checking" || account.name.toLowerCase().includes("checking"))
-    || null;
-}
-
 export function scheduleNameFor(accounts: ActualMetadataEntry[], toAccountId: string): string | null {
   const account = accounts.find((entry) => entry.id === toAccountId);
   return account && /\(\d{4}\)/.test(account.name) ? `${account.name} Payment` : null;
-}
-
-export function mappingStatusLabel(mapping: BillPayMappingLabelInput | null | undefined, loading: boolean): string | null {
-  if (loading) return "Mapping...";
-  if (!mapping?.status) return null;
-  if (mapping.status === "matched") {
-    const parts = ["Mapped:"];
-    if (mapping.profileId) parts.push(mapping.profileId);
-    if (mapping.behaviorId) parts.push("·", mapping.behaviorId);
-    if (mapping.amountSource === "blank") parts.push("·", "amount missing");
-    return parts.join(" ");
-  }
-  if (mapping.status === "identity_only") return "Identity match: choose bill details";
-  if (mapping.status === "unmapped") return "Unmapped: review fields manually";
-  if (mapping.status === "invalid_target") return "Mapping needs review: Actual target changed";
-  if (mapping.status === "incomplete_mapping") return "Mapping incomplete: review fields manually";
-  return null;
 }

@@ -44,15 +44,9 @@ type ReconciliationError = Error & {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-export { enrichBillCandidate, resolveBillPaySeed } from "./bill-pay-service.ts";
 export { resolveFinancialEmailSeed } from "./financial-email-adoption-service.ts";
 export { planFinancialEmail } from "./financial-email-planner.ts";
 export { evaluateFinancialEmail } from "./financial-email-evaluator.ts";
-export {
-  billSemanticHealthTelemetry,
-  emitBillSemanticHealthTelemetry,
-  type BillSemanticHealthTelemetry,
-} from "./billSemanticHealthTelemetry.ts";
 export {
   getMetadata,
   readActualMetadataProjection,

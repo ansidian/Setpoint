@@ -16,6 +16,7 @@ function exactPlan(): FinancialEmailPlan {
       due_date: "2026-09-01",
       event_kind: "purchase",
       type: "expense",
+      currency: "USD",
     },
     classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 1, reasons: [] },
     operation: { intended: "create_transaction", kind: "create_transaction", reasons: [] },
@@ -42,6 +43,14 @@ function exactPlan(): FinancialEmailPlan {
 }
 
 describe("generic financial email preflight staging", () => {
+  it.each([
+    ["auto-confirm@amazon.com", "Ordered: Coffee"],
+    ["service@paypal.com", "You paid $12.34 to Example Market"],
+  ])("leaves %s receipts to their deterministic import owner", (emailFrom, emailSubject) => {
+    expect(financialEmailPreflightItem("user-1", "run-1", "item-1", {
+      accountId: "gmail-work", emailId: "message-1", emailFrom, emailSubject,
+    }, exactPlan())).toBeNull();
+  });
   it("projects an exact expense into an observe-only durable item", () => {
     const item = financialEmailPreflightItem(
       "user-1",
@@ -131,5 +140,19 @@ describe("generic financial email preflight staging", () => {
       reasons: ["already_recorded"],
     });
     expect(result.reconciliation).toMatchObject({ status: "already_recorded", disposition: "no_write" });
+  });
+
+  it("does not let an import preview replace a missing current-Actual duplicate check", () => {
+    const plan = exactPlan();
+    plan.automation.rollout = "enabled";
+    plan.automation.gates.push(
+      { gate: "reconciliation", status: "unknown", reasons: ["reconciliation_unavailable"] },
+      { gate: "actual_preflight", status: "unknown", reasons: ["actual_preflight_not_run"] },
+      { gate: "rollout", status: "pass", reasons: [] },
+    );
+    const result = applyFinancialEmailPreflightOutcome(plan, "would_add", "2026-09-01T22:00:00.000Z");
+    expect(result.reconciliation.status).toBe("not_checked");
+    expect(result.automation.eligible).toBe(false);
+    expect(result.automation.reasons).toEqual(["reconciliation_unavailable"]);
   });
 });

@@ -116,7 +116,7 @@ export default function TransactionImportReviewList({
   if (!items.length) {
     return (
       <div className="rounded-lg border border-dashed border-white/[0.08] px-4 py-5 text-[12px] leading-relaxed text-muted-foreground/75">
-        No candidates in this run. Start a manual backfill or leave a source in Observe only to collect reviewable results.
+        No candidates in this run. Start another manual backfill or check back after new financial email arrives.
       </div>
     );
   }

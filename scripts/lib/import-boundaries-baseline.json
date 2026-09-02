@@ -50,8 +50,6 @@
   },
   "edges": [
     "server/bills/bill-extraction-service.ts -> server/actual/actual-metadata-projection.ts",
-    "server/bills/bill-pay-service.ts -> server/actual/actual-metadata-projection.ts",
-    "server/bills/bill-pay-resolver.ts -> server/snapshots/snapshot-lifecycle.ts",
     "server/bills/bills-mirror-sync.ts -> server/actual/actual-metadata-projection.ts",
     "server/bills/bills-service.ts -> server/actual/actual-local-metadata.ts",
     "server/bills/bills-service.ts -> server/actual/actual-metadata-projection.ts",

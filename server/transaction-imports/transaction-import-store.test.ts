@@ -15,7 +15,7 @@ describe("transaction import store", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute({
@@ -72,33 +72,6 @@ describe("transaction import store", () => {
       ...overrides,
     };
   }
-
-  it("upserts owner-scoped mappings while preserving creation time", async () => {
-    const subject = store();
-    await subject.upsertMapping("owner-1", {
-      source: "amazon",
-      mode: "observe",
-      actualAccountId: "checking-1",
-      actualCategoryId: "shopping-1",
-    });
-    now = 2_000;
-    const updated = await subject.upsertMapping("owner-1", {
-      source: "amazon",
-      mode: "automatic",
-      actualAccountId: "checking-2",
-      actualCategoryId: null,
-    });
-
-    expect(updated).toMatchObject({
-      source: "amazon",
-      mode: "automatic",
-      actualAccountId: "checking-2",
-      actualCategoryId: null,
-      createdAt: 1_000,
-      updatedAt: 2_000,
-    });
-    await expect(subject.listMappings("different-owner")).resolves.toEqual([]);
-  });
 
   it("coalesces an identical active historical run and admits a new one after completion", async () => {
     const first = await createRun("run-1");
@@ -222,26 +195,16 @@ describe("transaction import store", () => {
     await expect(subject.listItemsForEmail("different-owner", "gmail-gmail-1-message-1")).resolves.toEqual([]);
   });
 
-  it("snapshots mappings on items so later mapping changes do not rewrite queued work", async () => {
+  it("retains historical item targets and mode without consulting legacy configuration", async () => {
     const subject = store();
-    await subject.upsertMapping("owner-1", {
-      source: "amazon",
-      mode: "observe",
-      actualAccountId: "checking-old",
-      actualCategoryId: "shopping-old",
-    });
     await createRun();
-    await subject.insertItem(itemInput({ actualAccountId: "checking-old", actualCategoryId: "shopping-old" }));
-    now = 2_000;
-    await subject.upsertMapping("owner-1", {
-      source: "amazon",
-      mode: "automatic",
-      actualAccountId: "checking-new",
-      actualCategoryId: "shopping-new",
-    });
+    await subject.insertItem(itemInput({ actualAccountId: "checking-old", actualCategoryId: "shopping-old", automationMode: "observe" }));
+    await db.execute(`INSERT INTO ea_transaction_import_mappings
+      (user_id, source, mode, actual_account_id, actual_category_id, created_at, updated_at)
+      VALUES ('owner-1', 'amazon', 'automatic', 'checking-new', 'shopping-new', 1000, 2000)`);
 
     const detail = await subject.getRunDetail("owner-1", "run-1");
-    expect(detail!.items[0]).toMatchObject({ actualAccountId: "checking-old", actualCategoryId: "shopping-old" });
+    expect(detail!.items[0]).toMatchObject({ actualAccountId: "checking-old", actualCategoryId: "shopping-old", automationMode: "observe" });
   });
 
   it("uses conditional updates so concurrent run and item claims have one winner", async () => {

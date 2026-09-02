@@ -3,9 +3,7 @@ import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type {
   TransactionImportItem,
   TransactionImportItemStatus,
-  TransactionImportMapping,
-  TransactionImportMappingSource,
-  TransactionImportMode,
+  TransactionImportExecutionMode,
   TransactionImportPlanShadow,
   TransactionImportReconciliationStatus,
   TransactionImportRunStatus,
@@ -29,17 +27,6 @@ function parseJson<T>(value: unknown, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-export function projectTransactionImportMapping(row: Row): TransactionImportMapping {
-  return {
-    source: String(row.source) as TransactionImportMappingSource,
-    mode: String(row.mode) as TransactionImportMode,
-    actualAccountId: nullableString(row.actual_account_id),
-    actualCategoryId: nullableString(row.actual_category_id),
-    createdAt: numberValue(row.created_at),
-    updatedAt: numberValue(row.updated_at),
-  };
 }
 
 export function projectTransactionImportRun(row: Row): TransactionImportRunSummary {
@@ -89,7 +76,7 @@ export function projectTransactionImportItem(row: Row): TransactionImportItem {
     notes: String(row.notes || ""),
     actualAccountId: nullableString(row.actual_account_id),
     actualCategoryId: nullableString(row.actual_category_id),
-    automationMode: String(row.automation_mode) as "observe" | "automatic",
+    automationMode: String(row.automation_mode) as TransactionImportExecutionMode,
     automaticSafe: numberValue(row.automatic_safe) === 1,
     blockingWarnings: parseJson<unknown[]>(row.blocking_warnings_json, []),
     evidence: parseJson<unknown[]>(row.evidence_json, []),

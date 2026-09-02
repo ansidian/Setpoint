@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import {
   attachTransactionImportFinancialPlans,
+  planTransactionImportItems,
   transactionImportPlannerInput,
 } from "./transaction-import-planner-adapter.ts";
 import type { InsertItemInput } from "./transaction-import-store.ts";
@@ -185,7 +186,7 @@ describe("transaction import financial planner adapter", () => {
       now: () => new Date("2026-09-01T12:00:00.000Z"),
     });
 
-    const result = (await attachTransactionImportFinancialPlans("owner-1", [item({
+    const result = (await planTransactionImportItems("owner-1", [item({
       actualAccountId: null,
       actualCategoryId: null,
       blockingWarnings: [{ code: "missing_mapping", blocking: true }],
@@ -200,10 +201,16 @@ describe("transaction import financial planner adapter", () => {
         category: { status: "resolved", id: "shopping" },
       },
     });
-    expect(result.planShadow).toMatchObject({
-      account: { liveId: null, plannedId: "card-1", agreement: "mismatch" },
-      category: { liveId: null, plannedId: "shopping", agreement: "mismatch" },
-      automationEligible: false,
+    expect(result).toMatchObject({
+      actualAccountId: "card-1",
+      actualCategoryId: "shopping",
+      automationMode: "automatic",
+      automaticSafe: false,
+      status: "queued",
+      importedId: "paypal-ABC123",
+      amountCents: -2599,
+      financialPlan: { candidate: { transaction_import: { executionOwner: "planner" } } },
+      planShadow: null,
     });
   });
 

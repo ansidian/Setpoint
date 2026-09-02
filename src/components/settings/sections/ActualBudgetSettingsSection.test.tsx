@@ -1,5 +1,5 @@
 import { StrictMode, useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import type { SettingsPatch, SettingsState } from "../settingsTypes";
@@ -11,7 +11,6 @@ const mockApi = vi.hoisted(() => ({
   hydrateActualBudgetCache: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
-  getTransactionImportMappings: vi.fn(),
   listTransactionImportRuns: vi.fn(),
   getTransactionImportRun: vi.fn(),
 }));
@@ -23,7 +22,6 @@ vi.mock("@/api", () => ({
   hydrateActualBudgetCache: mockApi.hydrateActualBudgetCache,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
-  getTransactionImportMappings: mockApi.getTransactionImportMappings,
   listTransactionImportRuns: mockApi.listTransactionImportRuns,
   getTransactionImportRun: mockApi.getTransactionImportRun,
 }));
@@ -114,30 +112,11 @@ beforeEach(() => {
     dbSizeBytes: 50_000_000,
     backupCount: 1,
   });
-  mockApi.getTransactionImportMappings.mockResolvedValue([]);
   mockApi.listTransactionImportRuns.mockResolvedValue({ runs: [] });
   mockApi.getTransactionImportRun.mockResolvedValue(null);
 });
 
 describe("ActualBudgetSettingsSection", () => {
-
-
-  it("restores persisted transaction-import account labels on a fresh visit", async () => {
-    mockApi.getTransactionImportMappings.mockResolvedValueOnce([{
-      source: "amazon",
-      mode: "automatic",
-      actualAccountId: "acct-visa",
-      actualCategoryId: null,
-      createdAt: 1,
-      updatedAt: 2,
-    }]);
-
-    renderSection();
-
-    const account = await screen.findByLabelText<HTMLButtonElement>("Amazon Actual account");
-    await waitFor(() => expect(account.textContent).toContain("Visa"));
-  });
-
   it("still loads Actual metadata after interaction under StrictMode", async () => {
     // Regression: the section's mount guard must reset to true on (re)mount so
     // StrictMode's mount → cleanup → remount does not leave it permanently false,

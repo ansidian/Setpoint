@@ -174,6 +174,8 @@ export async function resolveFinancialEmailSeed(
       accountId: stored.accountId,
       emailId: stored.emailId,
       emailSubject: String(stored.email.subject || ""),
+      emailFrom: String(stored.email.from_address || stored.email.from || ""),
+      emailBody: String(stored.email.body || ""),
     }, plan).catch(() => undefined);
   };
   if (stored?.plan && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {

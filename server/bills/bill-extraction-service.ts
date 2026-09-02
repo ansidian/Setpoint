@@ -156,6 +156,7 @@ ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
     ...(fields.target_confidence != null ? { target_confidence: fields.target_confidence } : {}),
     ...(fields.target_evidence ? { target_evidence: fields.target_evidence } : {}),
     due_date: fields.due_date,
+    ...(typeof fields.currency === "string" ? { currency: fields.currency } : {}),
     type: fields.type,
     category_id: typeof fields.category_code === "string" ? catCodeToId.get(fields.category_code) || null : null,
     category_name: typeof fields.category_name === "string" ? fields.category_name : null,

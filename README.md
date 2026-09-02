@@ -24,7 +24,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 
 - **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local rules, or pauses job draining.
 - **Semantic inbox search** — Searches the persisted email index with SQLite FTS5, OpenAI embeddings, and an Ask AI answer path over retrieved mail.
-- **Bill detection and bill pay** — Extracts payee, amount, due date, and payment context from emails, resolves bill-pay mappings, and connects bill actions to Actual Budget.
+- **Financial email planning and bill pay** — Extracts payment context, infers Actual targets without owner-authored mappings, reconciles existing activity, and connects bill actions and qualifying expense imports to Actual Budget.
 - **Calendar workspace** — Aggregates Google Calendar events across connected accounts with event creation/editing, deadline and bill overlays, reminders, and a local search mirror for fast calendar search.
 - **Todoist integration** — Syncs personal tasks, supports Todoist OAuth refresh and webhooks, creates/edits/deletes tasks, and preserves completed recurring occurrences long enough for the UI to stay stable.
 - **Weather** — Shows current conditions and forecasts via Pirate Weather.
@@ -104,7 +104,16 @@ The complete template is in [`.env.example`](.env.example):
 Financial emails use one zero-configuration planning path for semantic purpose,
 canonical amount, Actual target inference, reconciliation, and explicit review.
 Final plans are persisted so reopening an email does not repeat model work;
-generic unattended execution remains disabled until its observe-only safety gates pass.
+new generic and supported Amazon/PayPal USD one-time expenses automatically preview and import when their
+evidence, inferred targets, authentication, and duplicate checks pass. Exceptions
+remain in review. Existing observe-only items are not promoted by deployment;
+income and schedule/transfer automation remain unimplemented and observe-only.
+Finance retains scan history, review, retry, dismiss, and status controls, but no
+source modes or account/category mappings. New source-specific items use planner
+targets and eligibility; historical items preserve their captured targets and
+execution modes. Legacy mapping data remains untouched in storage for audit and
+recovery, with no runtime reads or fallback. Deterministic source receipts stay
+with their source importer and are excluded from generic staging.
 
 Production startup delays workers so the web server can accept initial requests
 before catch-up jobs start. The default worker delay is 60–120 seconds, with an

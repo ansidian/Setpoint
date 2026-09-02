@@ -105,6 +105,19 @@ function planned(source: InsertItemInput, kind: "no_write" | "review"): InsertIt
 }
 
 describe("transaction import equivalence policy", () => {
+  it("keeps duplicate suppression contained after expense automation is enabled", () => {
+    const source = item();
+    const replay = planned(source, "no_write");
+    replay.financialPlan!.automation.rollout = "enabled";
+    const report = summarizeTransactionImportEquivalence([source], [replay], {
+      "paypal-ABC123": { importedId: "paypal-ABC123", tombstoned: false, accountId: "account-1", categoryId: null },
+    });
+    expect(report).toMatchObject({
+      automation: { observeOnly: 0, contained: 1, eligible: 0, unsafe: 0 },
+      passed: true,
+    });
+  });
+
   it("accepts live duplicate suppression, tombstone containment, and a malformed review item", () => {
     const live = item();
     const deleted = item({ id: "item-2", importedId: "paypal-DEF456", externalId: "DEF456" });

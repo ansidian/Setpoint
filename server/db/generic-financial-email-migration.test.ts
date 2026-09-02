@@ -66,6 +66,20 @@ describe("generic financial email import migration", () => {
                                'financial-email:v1:stable', 'generic', 'financial-email-plan-v1',
                                'financial-email:v1:stable', '2026-09-01', -1200, 'USD', 'Market',
                                'observe', 0, 'queued', 1, 1)`)).rejects.toThrow();
+    const beforeAutomation = await db.execute("SELECT * FROM ea_transaction_import_items ORDER BY id");
+    await db.executeMultiple(readFileSync(join(migrationsDir, "056_generic_financial_email_automation.sql"), "utf8"));
+    expect((await db.execute("SELECT * FROM ea_transaction_import_items ORDER BY id")).rows).toEqual(beforeAutomation.rows);
+    await expect(db.execute("UPDATE ea_transaction_import_items SET automatic_safe = 1 WHERE id = 'generic-item'")).rejects.toThrow();
+    await db.execute(`UPDATE ea_transaction_import_items
+                      SET external_id = imported_id, actual_account_id = 'checking',
+                          financial_email_plan_json = '{"version":1}',
+                          automation_mode = 'automatic', automatic_safe = 1
+                      WHERE id = 'generic-item'`);
+    expect((await db.execute("SELECT automatic_safe, automation_mode FROM ea_transaction_import_items WHERE id = 'generic-item'")).rows[0])
+      .toEqual({ automatic_safe: 1, automation_mode: "automatic" });
+    await expect(db.execute("UPDATE ea_transaction_import_items SET amount_cents = 1200 WHERE id = 'generic-item'")).rejects.toThrow();
+    await expect(db.execute("UPDATE ea_transaction_import_items SET currency = 'EUR' WHERE id = 'generic-item'")).rejects.toThrow();
+    expect((await db.execute("PRAGMA foreign_key_check")).rows).toEqual([]);
     db.close();
   });
 });

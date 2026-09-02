@@ -46,12 +46,13 @@ const TOOL = {
       target_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
       target_evidence: { type: ["string", "null"] },
       due_date: { type: ["string", "null"] },
+      currency: { type: ["string", "null"] },
       type: { type: "string", enum: ["transfer", "bill", "expense", "income"] },
       category_code: { type: ["string", "null"] },
       category_name: { type: ["string", "null"] },
       to_account_code: { type: ["string", "null"] },
     },
-    required: ["payee", "amount", "amount_kind", "amount_candidates", "event_kind", "event_confidence", "event_evidence", "account_last4", "account_last4_evidence", "account_last4_confidence", "target_policy_key", "target_confidence", "target_evidence", "due_date", "type"],
+    required: ["payee", "amount", "amount_kind", "amount_candidates", "event_kind", "event_confidence", "event_evidence", "account_last4", "account_last4_evidence", "account_last4_confidence", "target_policy_key", "target_confidence", "target_evidence", "due_date", "currency", "type"],
   },
 };
 

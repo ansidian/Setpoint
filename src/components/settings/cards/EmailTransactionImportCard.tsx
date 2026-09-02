@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { History, Landmark, Loader2, RefreshCw, ScanSearch } from "lucide-react";
 import { SettingsCard, StatusPill } from "@/components/settings/settings-ui";
-import SearchableDropdown from "@/components/shared/SearchableDropdown";
 import {
   Select,
   SelectContent,
@@ -17,19 +16,17 @@ import { cn } from "@/lib/utils";
 import useTransactionImports from "@/hooks/settings/useTransactionImports";
 import TransactionImportReviewList from "./transaction-import/TransactionImportReviewList";
 import TransactionImportDateField from "./transaction-import/TransactionImportDateField";
-import { automaticImportConfirmation, runPhase } from "./transaction-import/transactionImportReviewModel";
+import { runPhase } from "./transaction-import/transactionImportReviewModel";
 import type { AccountSummary } from "../../../../shared/types/accounts";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 import type {
-  TransactionImportMapping,
-  TransactionImportMappingSource,
-  TransactionImportMode,
+  TransactionImportParserSource,
   TransactionImportRunSummary,
 } from "../../../../shared/types/transaction-imports";
 
-const SOURCES: Array<{ id: TransactionImportMappingSource; label: string; detail: string }> = [
-  { id: "amazon", label: "Amazon", detail: "Order confirmations from auto-confirm@amazon.com" },
-  { id: "paypal", label: "PayPal", detail: "Payment receipts from service@paypal.com" },
+const SOURCES: Array<{ id: TransactionImportParserSource; label: string }> = [
+  { id: "amazon", label: "Amazon" },
+  { id: "paypal", label: "PayPal" },
 ];
 const BUTTON_BASE = "inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-[11px] font-semibold outline-none transition-[background-color,border-color,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0";
 const SELECT_TRIGGER_CLASS = "min-h-9 w-full rounded-md border-white/[0.08] bg-input-bg px-2.5 text-[12px] font-medium text-foreground transition-[border-color,background-color,box-shadow,transform] duration-[var(--sp-motion-fast)] hover:border-white/[0.14] hover:bg-white/[0.03] focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none";
@@ -45,23 +42,6 @@ function defaultDates(): { start: string; end: string } {
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - 30);
   return { start: ymd(start), end: ymd(end) };
-}
-
-function mappingFor(mappings: TransactionImportMapping[], source: TransactionImportMappingSource): TransactionImportMapping {
-  return mappings.find((mapping) => mapping.source === source) || {
-    source,
-    mode: "off",
-    actualAccountId: null,
-    actualCategoryId: null,
-    createdAt: 0,
-    updatedAt: 0,
-  };
-}
-
-function mappingStatus(mapping: TransactionImportMapping): { label: string; tone: "neutral" | "accent" | "success" } {
-  if (mapping.mode === "automatic") return { label: "Automatic", tone: "success" };
-  if (mapping.mode === "observe") return { label: "Observe only", tone: "accent" };
-  return { label: "Off", tone: "neutral" };
 }
 
 function runLabel(run: TransactionImportRunSummary): string {
@@ -86,7 +66,7 @@ export default function EmailTransactionImportCard({
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
   const [scanAccounts, setScanAccounts] = useState<Set<string> | null>(null);
-  const [scanSources, setScanSources] = useState<Set<TransactionImportMappingSource>>(new Set(["amazon", "paypal"]));
+  const [scanSources, setScanSources] = useState<Set<TransactionImportParserSource>>(new Set(["amazon", "paypal"]));
   const [localError, setLocalError] = useState("");
   const actualAccounts = (metadata.accounts || []).filter((account) => !account.closed);
   const categoryGroups = metadata.categories || [];
@@ -96,26 +76,6 @@ export default function EmailTransactionImportCard({
     [gmailAccounts],
   );
   const effectiveScanAccounts = scanAccounts || defaultScanAccounts;
-
-  async function saveSource(
-    source: TransactionImportMappingSource,
-    patch: Partial<Pick<TransactionImportMapping, "mode" | "actualAccountId" | "actualCategoryId">>,
-  ) {
-    const current = mappingFor(imports.mappings, source);
-    const next = { ...current, ...patch };
-    if (next.mode !== "off" && !next.actualAccountId) {
-      setLocalError(`Choose an Actual account before enabling ${next.mode === "automatic" ? "Automatic" : "Observe only"} mode.`);
-      return;
-    }
-    const confirmation = automaticImportConfirmation(source, current.mode, next.mode);
-    if (confirmation && !window.confirm(confirmation)) return;
-    setLocalError("");
-    await imports.saveMapping(source, {
-      mode: next.mode,
-      actualAccountId: next.actualAccountId,
-      actualCategoryId: next.actualCategoryId,
-    }).catch(() => undefined);
-  }
 
   async function startScan() {
     const accountIds = [...effectiveScanAccounts];
@@ -134,14 +94,14 @@ export default function EmailTransactionImportCard({
 
   const selectedRun = imports.selectedRun;
   const error = localError || imports.error;
-  const hasPersistedAccountMapping = imports.mappings.some((mapping) => Boolean(mapping.actualAccountId));
+  const hasReviewableItems = Boolean(selectedRun?.items.some((item) => item.status === "ready" || item.status === "needs_review"));
 
   useEffect(() => {
-    if (!liveOperationsAvailable || metadataLoading || !hasPersistedAccountMapping || actualAccounts.length) return;
+    if (!liveOperationsAvailable || metadataLoading || !hasReviewableItems || actualAccounts.length) return;
     void onRequestMetadata();
   }, [
     actualAccounts.length,
-    hasPersistedAccountMapping,
+    hasReviewableItems,
     liveOperationsAvailable,
     metadataLoading,
     onRequestMetadata,
@@ -153,7 +113,7 @@ export default function EmailTransactionImportCard({
       ready={!imports.loading}
       title="Email Transaction Imports"
       icon={<Landmark size={14} aria-hidden="true" />}
-      description="Map trusted Amazon and PayPal receipts to Actual. Observe first, then opt into unattended imports when the results look right."
+      description="Review financial email imports and backfill Amazon or PayPal receipts. Accounts and categories are resolved from email evidence and Actual history."
       headerAction={imports.active ? <StatusPill tone="accent"><Loader2 size={11} className="animate-spin" /> Working</StatusPill> : null}
     >
       <div className="flex flex-col gap-5">
@@ -162,88 +122,6 @@ export default function EmailTransactionImportCard({
             {error}
           </div>
         ) : null}
-
-        <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
-          {SOURCES.map((source) => {
-            const mapping = mappingFor(imports.mappings, source.id);
-            const status = mappingStatus(mapping);
-            const mappingBusy = imports.busyKey === `mapping:${source.id}`;
-            return (
-              <div key={source.id} className="py-3.5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-semibold text-foreground">{source.label}</span>
-                      <StatusPill tone={status.tone}>{mappingBusy ? "Saving…" : status.label}</StatusPill>
-                    </div>
-                    <p className="mt-1 text-[10.5px] text-muted-foreground/70">{source.detail}</p>
-                  </div>
-                  <div className="min-w-48 text-[10px] text-muted-foreground">
-                    Mode
-                    <Select
-                      value={mapping.mode}
-                      disabled={mappingBusy || !liveOperationsAvailable}
-                      onValueChange={(value) => {
-                        if (value) void saveSource(source.id, { mode: value as TransactionImportMode });
-                      }}
-                    >
-                      <SelectTrigger className={cn(SELECT_TRIGGER_CLASS, "mt-1")} aria-label={`${source.label} import mode`}>
-                        <SelectValue>{status.label}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent align="start" alignItemWithTrigger={false} className={SELECT_CONTENT_CLASS}>
-                        <SelectItem value="off" className={SELECT_ITEM_CLASS}>Off</SelectItem>
-                        <SelectItem value="observe" className={SELECT_ITEM_CLASS}>Observe only (recommended)</SelectItem>
-                        <SelectItem value="automatic" className={SELECT_ITEM_CLASS}>Automatic</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="text-[10px] text-muted-foreground">
-                    Actual account
-                    <div className="mt-1">
-                      <SearchableDropdown
-                        ariaLabel={`${source.label} Actual account`}
-                        options={[
-                          { id: "", name: "Choose account" },
-                          ...actualAccounts.map((account) => ({ id: account.id, name: account.name })),
-                        ]}
-                        value={mapping.actualAccountId || ""}
-                        disabled={mappingBusy || !liveOperationsAvailable}
-                        onOpen={() => onRequestMetadata()}
-                        onChange={(value) => void saveSource(source.id, { actualAccountId: value || null })}
-                        placeholder={metadataLoading ? "Loading accounts…" : "Choose account"}
-                      />
-                    </div>
-                  </div>
-                  <div className="text-[10px] text-muted-foreground">
-                    Default category <span className="text-muted-foreground/55">(optional)</span>
-                    <div className="mt-1">
-                      <SearchableDropdown
-                        ariaLabel={`${source.label} default category`}
-                        options={[
-                          { id: "", name: "No default category" },
-                          ...categoryGroups.flatMap((group) => (group.categories || []).map((category) => ({
-                            id: category.id,
-                            name: `${group.group_name} · ${category.name}`,
-                          }))),
-                        ]}
-                        value={mapping.actualCategoryId || ""}
-                        disabled={mappingBusy || !liveOperationsAvailable}
-                        onOpen={() => onRequestMetadata()}
-                        onChange={(value) => void saveSource(source.id, { actualCategoryId: value || null })}
-                        placeholder="No default category"
-                      />
-                    </div>
-                  </div>
-                </div>
-                {mapping.mode === "observe" ? (
-                  <p className="mt-2 text-[10.5px] text-primary/80">Observe only checks Actual and collects results here. It never writes or syncs transactions.</p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
 
         <section aria-labelledby="transaction-scan-title">
           <div className="flex items-center gap-2">
@@ -350,15 +228,15 @@ export default function EmailTransactionImportCard({
           </div>
 
           {imports.runs.length ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <Select
                 value={imports.selectedRunId || ""}
                 onValueChange={(value) => {
                   if (value) void imports.selectRun(value);
                 }}
               >
-                <SelectTrigger className={SELECT_TRIGGER_CLASS} aria-label="Transaction import run">
-                  <SelectValue>{selectedRun ? runLabel(selectedRun) : "Choose a run"}</SelectValue>
+                <SelectTrigger className={cn(SELECT_TRIGGER_CLASS, "min-w-0")} aria-label="Transaction import run">
+                  <SelectValue className="truncate">{selectedRun ? runLabel(selectedRun) : "Choose a run"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent align="start" alignItemWithTrigger={false} className={SELECT_CONTENT_CLASS}>
                   {imports.runs.map((run) => (

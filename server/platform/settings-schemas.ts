@@ -2,8 +2,7 @@
 // Readers (scheduler, triage worker, settings GET) stay tolerant of legacy
 // rows; these validators reject malformed payloads at write time instead of
 // letting bad data surface at read/use time.
-// triage_sound_settings and bill_pay_mappings have their own validators in
-// triage-sound-settings.ts / bill-pay-mappings.ts.
+// triage_sound_settings has its own validator in triage-sound-settings.ts.
 
 const SCHEDULE_TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 const IMPORTANT_SENDER_SOURCES = new Set(["manual", "auto"]);

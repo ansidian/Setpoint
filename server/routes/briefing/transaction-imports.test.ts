@@ -16,8 +16,6 @@ const sessionHash = `sha256:${crypto.createHash("sha256").update("session-token"
 
 function serviceMock() {
   return {
-    listMappings: async (userId: string) => [{ source: "amazon", owner: userId }],
-    upsertMapping: async (userId: string, input: Record<string, unknown>) => ({ ...input, owner: userId }),
     startHistoricalScan: async (userId: string, input: { gmailAccountIds: string[] }) => ({
       runId: `${userId}:${input.gmailAccountIds.join(",")}`,
       created: true,
@@ -43,8 +41,6 @@ function makeApp(service = serviceMock()) {
   app.use("/api/briefing", requireCookieSession, createTransactionImportRouter({
     service: service as never,
     wake: () => { wakeCount += 1; },
-    loadAccounts: async () => [{ id: "actual-1" }] as never,
-    loadCategories: async () => [{ categories: [{ id: "category-1" }] }] as never,
   }));
   return { app, service, wakeCount: () => wakeCount };
 }
@@ -66,27 +62,20 @@ beforeEach(() => {
 describe("transaction import routes", () => {
   it("requires briefing authentication and derives the owner server-side", async () => {
     const { app } = makeApp();
-    expect((await request(app).get("/api/briefing/transaction-imports/mappings")).status).toBe(401);
+    expect((await request(app).get("/api/briefing/transaction-imports/runs")).status).toBe(401);
 
-    const response = await authenticated(request(app).get("/api/briefing/transaction-imports/mappings"));
+    const response = await authenticated(request(app).get("/api/briefing/transaction-imports/runs?limit=8"));
     expect(response.status).toBe(200);
-    expect(response.body).toEqual([{ source: "amazon", owner: "owner-1" }]);
+    expect(response.body).toEqual({ runs: [{ id: "owner-1:8" }] });
   });
 
-  it("validates mapping allowlists and live Actual IDs", async () => {
+  it("does not expose retired mapping read or write endpoints", async () => {
     const { app } = makeApp();
     expect((await authenticated(request(app)
-      .put("/api/briefing/transaction-imports/mappings/venmo")
-      .send({ mode: "automatic", actualAccountId: "actual-1" }))).status).toBe(400);
+      .get("/api/briefing/transaction-imports/mappings"))).status).toBe(404);
     expect((await authenticated(request(app)
       .put("/api/briefing/transaction-imports/mappings/amazon")
-      .send({ mode: "automatic", actualAccountId: "missing" }))).status).toBe(400);
-
-    const response = await authenticated(request(app)
-      .put("/api/briefing/transaction-imports/mappings/amazon")
-      .send({ mode: "automatic", actualAccountId: "actual-1", actualCategoryId: "category-1" }));
-    expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ owner: "owner-1", source: "amazon", mode: "automatic" });
+      .send({ mode: "automatic", actualAccountId: "actual-1", actualCategoryId: "category-1" }))).status).toBe(404);
   });
 
   it("returns 202 for scan, commit, and retry admission and wakes the worker", async () => {

@@ -3,14 +3,12 @@ import type {
   BillCandidate,
   BillEmailContext,
   BillExtractionProvider,
-  BillPayBehavior,
 } from "../../shared/types/bills.ts";
 import { trimBillBody } from "./bill-extract.ts";
 import { createAnthropicProvider } from "./bill-extractors/anthropic.ts";
 import { createOpenAiProvider } from "./bill-extractors/openai.ts";
 import { verifyBillAmounts } from "./billAmountVerifier.ts";
 import { verifyBillEvent } from "./billEventVerifier.ts";
-import { selectBillTargetPolicy } from "./billTargetPolicySelector.ts";
 import {
   rankFinancialTargetBundles,
   type FinancialTargetRankingOption,
@@ -65,35 +63,6 @@ export function createBillCandidateVerificationService({
     })).candidate;
   }
 
-  async function selectEmailTargetPolicy({
-    email,
-    candidate,
-    behaviors,
-    providerId,
-    model,
-  }: {
-    email: BillEmailContext;
-    candidate: BillCandidate;
-    behaviors: BillPayBehavior[];
-    providerId: string;
-    model: string;
-  }): Promise<BillCandidate> {
-    if (providerId !== "openai" && providerId !== "anthropic") return candidate;
-    const content = trimBillBody({
-      subject: String(email.subject || ""),
-      from: String(email.from || email.from_address || ""),
-      body: String(email.body || email.body_snippet || ""),
-    });
-    return (await selectBillTargetPolicy({
-      content,
-      candidate,
-      behaviors,
-      provider: configuredProviders[providerId],
-      providerId,
-      model,
-    })).candidate;
-  }
-
   async function rankEmailTargetBundles({
     email,
     candidate,
@@ -124,5 +93,5 @@ export function createBillCandidateVerificationService({
     });
   }
 
-  return { verifyEmailCandidate, selectEmailTargetPolicy, rankEmailTargetBundles };
+  return { verifyEmailCandidate, rankEmailTargetBundles };
 }

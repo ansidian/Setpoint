@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { projectAutomaticSafety } from "../transaction-import-types.ts";
 import { parseTransactionEmail } from "./parser-registry.ts";
 import {
   amazonMultiHtml,
@@ -29,7 +28,7 @@ describe("transaction parser registry", () => {
       payee: "Amazon",
       gmailMessageId: "msg-1",
     });
-    expect(projectAutomaticSafety(candidate)).toEqual({ safe: true, blockingReasons: [] });
+    expect(candidate.warnings.filter((warning) => warning.blocking)).toEqual([]);
   });
 
   it("emits distinct Amazon candidates only with independently supported totals", () => {
@@ -74,7 +73,7 @@ describe("transaction parser registry", () => {
       payee: "Valve Corp",
     });
     expect(candidate.notes).toContain("PayPal Transaction: 1AB23456CD789012E");
-    expect(projectAutomaticSafety(candidate).safe).toBe(true);
+    expect(candidate.warnings.filter((warning) => warning.blocking)).toEqual([]);
   });
 
   it("supports submitted-order subjects and O- transaction IDs", () => {
@@ -124,16 +123,16 @@ describe("transaction parser registry", () => {
   it.each([
     ["invalid date", { date: "not-a-date" }, "rejected"],
     ["zero amount", { text: "111-2222222-3333333 Order Total: $0.00" }, "rejected"],
-  ])("does not mark %s as auto-safe", (_name, overrides, expectedKind) => {
+  ])("rejects %s", (_name, overrides, expectedKind) => {
     const result = parseTransactionEmail(emailFixture(overrides));
     expect(result.kind).toBe(expectedKind);
   });
 
-  it("requires exact sender equality for automatic safety", () => {
+  it("emits a blocking warning when the sender is not an exact match", () => {
     const candidate = onlyCandidate(parseTransactionEmail(emailFixture({
       from: "Spoof <auto-confirm@amazon.com.attacker.test>",
     })));
-    expect(projectAutomaticSafety(candidate)).toEqual({ safe: false, blockingReasons: ["untrusted_sender"] });
+    expect(candidate.warnings).toContainEqual(expect.objectContaining({ code: "untrusted_sender", blocking: true }));
   });
 
   it("keeps candidates with missing IDs or foreign currency for review", () => {
@@ -143,14 +142,16 @@ describe("transaction parser registry", () => {
     })));
     expect(noId.gmailMessageId).toBe("msg-1");
     expect(noId.importedId).toBeNull();
-    expect(projectAutomaticSafety(noId)).toEqual({ safe: false, blockingReasons: ["missing_external_id"] });
+    expect(noId.externalId).toBeNull();
+    expect(noId.warnings).toContainEqual(expect.objectContaining({ code: "missing_external_id", blocking: true }));
 
     const foreign = onlyCandidate(parseTransactionEmail(emailFixture({
       from: "service@paypal.com",
       subject: "You paid $5.00 CAD to Merchant",
       text: "Transaction ID: 1AB23456CD789012E",
     })));
-    expect(projectAutomaticSafety(foreign)).toEqual({ safe: false, blockingReasons: ["unsupported_currency"] });
+    expect(foreign.currency).toBe("CAD");
+    expect(foreign.warnings).toContainEqual(expect.objectContaining({ code: "unsupported_currency", blocking: true }));
   });
 
   it("performs no network calls", () => {

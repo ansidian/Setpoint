@@ -3,10 +3,8 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
-  getTransactionImportMappings: vi.fn(),
   listTransactionImportRuns: vi.fn(),
   getTransactionImportRun: vi.fn(),
-  updateTransactionImportMapping: vi.fn(),
   startTransactionImportScan: vi.fn(),
   commitTransactionImportItems: vi.fn(),
   retryTransactionImportItem: vi.fn(),
@@ -23,17 +21,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-const paypalMapping = {
-  source: "paypal" as const,
-  mode: "observe" as const,
-  actualAccountId: "account-1",
-  actualCategoryId: null,
-  createdAt: 1,
-  updatedAt: 1,
-};
-
 beforeEach(() => {
-  api.getTransactionImportMappings.mockResolvedValue([]);
   api.listTransactionImportRuns.mockResolvedValue({ runs: [] });
 });
 
@@ -44,25 +32,23 @@ afterEach(() => {
 
 describe("useTransactionImports", () => {
   it("does not allow a stale initial response to overwrite a newer refresh", async () => {
-    const firstMappings = deferred<never[]>();
     const firstRuns = deferred<{ runs: never[] }>();
-    api.getTransactionImportMappings
-      .mockReturnValueOnce(firstMappings.promise)
-      .mockResolvedValueOnce([paypalMapping]);
+    const newerRun = { id: "newer-run", status: "completed", items: [] };
+    api.getTransactionImportRun.mockResolvedValue(newerRun);
     api.listTransactionImportRuns
       .mockReturnValueOnce(firstRuns.promise)
-      .mockResolvedValueOnce({ runs: [] });
+      .mockResolvedValueOnce({ runs: [newerRun] });
 
     const { result } = renderHook(() => useTransactionImports());
     await act(async () => result.current.refresh());
-    expect(result.current.mappings).toEqual([paypalMapping]);
+    expect(result.current.selectedRunId).toBe("newer-run");
 
     await act(async () => {
-      firstMappings.resolve([]);
       firstRuns.resolve({ runs: [] });
       await Promise.resolve();
     });
-    expect(result.current.mappings).toEqual([paypalMapping]);
+    expect(result.current.selectedRunId).toBe("newer-run");
+    expect(result.current.selectedRun).toEqual(newerRun);
   });
 
   it("polls only while a run or item is active", async () => {

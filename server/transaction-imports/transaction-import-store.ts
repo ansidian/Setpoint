@@ -1,15 +1,14 @@
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
 import type {
-  TransactionImportItem, TransactionImportItemStatus, TransactionImportMapping,
-  TransactionImportMode, TransactionImportPlanShadow, TransactionImportReconciliationStatus,
+  TransactionImportItem, TransactionImportItemStatus,
+  TransactionImportPlanShadow, TransactionImportReconciliationStatus,
   TransactionImportRunDetail, TransactionImportRunStatus, TransactionImportRunSummary,
-  TransactionImportRunTrigger, TransactionImportSource, TransactionImportMappingSource,
+  TransactionImportRunTrigger, TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import {
   projectTransactionImportItem as projectItem,
-  projectTransactionImportMapping as projectMapping,
   projectTransactionImportRun as projectRun,
 } from "./transaction-import-store-projections.ts";
 
@@ -70,39 +69,6 @@ function numberValue(value: unknown): number {
 }
 
 export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.now) {
-  async function listMappings(userId: string): Promise<TransactionImportMapping[]> {
-    const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_mappings WHERE user_id = ? ORDER BY source`,
-      args: [userId],
-    });
-    return result.rows.map(projectMapping);
-  }
-
-  async function upsertMapping(userId: string, input: {
-    source: TransactionImportMappingSource;
-    mode: TransactionImportMode;
-    actualAccountId?: string | null;
-    actualCategoryId?: string | null;
-  }): Promise<TransactionImportMapping> {
-    const timestamp = now();
-    await dbClient.execute({
-      sql: `INSERT INTO ea_transaction_import_mappings
-              (user_id, source, mode, actual_account_id, actual_category_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, source) DO UPDATE SET
-              mode = excluded.mode,
-              actual_account_id = excluded.actual_account_id,
-              actual_category_id = excluded.actual_category_id,
-              updated_at = excluded.updated_at`,
-      args: [userId, input.source, input.mode, input.actualAccountId ?? null, input.actualCategoryId ?? null, timestamp, timestamp],
-    });
-    const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_mappings WHERE user_id = ? AND source = ?`,
-      args: [userId, input.source],
-    });
-    return projectMapping(result.rows[0]!);
-  }
-
   async function createRun(input: CreateRunInput): Promise<{ run: TransactionImportRunSummary; created: boolean }> {
     const timestamp = now();
     const result = await dbClient.execute({
@@ -409,16 +375,19 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     lastError?: string | null;
     nextAttemptAt?: number | null;
     financialPlan?: FinancialEmailPlan | null;
+    automaticSafe?: boolean;
   }): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET status = ?, reconciliation_status = COALESCE(?, reconciliation_status), last_error = ?, next_attempt_at = ?,
                 financial_email_plan_json = COALESCE(?, financial_email_plan_json),
+                automatic_safe = COALESCE(?, automatic_safe),
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
             WHERE user_id = ? AND id = ? AND claim_token = ?`,
       args: [
         input.status, input.reconciliationStatus ?? null, input.lastError ?? null,
         input.nextAttemptAt ?? null, input.financialPlan ? JSON.stringify(input.financialPlan) : null,
+        input.automaticSafe == null ? null : input.automaticSafe ? 1 : 0,
         now(), userId, itemId, claimToken,
       ],
     });
@@ -512,8 +481,6 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     return Number.isFinite(nextWakeAt) ? nextWakeAt : null;
   }
   return {
-    listMappings,
-    upsertMapping,
     createRun,
     getRun,
     listRuns,

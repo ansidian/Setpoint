@@ -1,18 +1,17 @@
 import { randomUUID } from "crypto";
 import { parseTransactionEmail } from "./parsers/parser-registry.ts";
-import { projectAutomaticSafety, type TransactionEmailInput } from "./transaction-import-types.ts";
+import { type TransactionEmailInput } from "./transaction-import-types.ts";
 import { transactionImportStore, type InsertItemInput, type TransactionImportStore } from "./transaction-import-store.ts";
 import type {
   TransactionImportConfirmation,
-  TransactionImportMapping,
-  TransactionImportMappingSource,
+  TransactionImportParserSource,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
-import { attachTransactionImportFinancialPlans } from "./transaction-import-planner-adapter.ts";
+import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
 
 export interface HistoricalScanOptions {
   gmailAccountIds: string[];
-  sources: TransactionImportMappingSource[];
+  sources: TransactionImportParserSource[];
   startDate: string;
   endDate: string;
 }
@@ -42,7 +41,7 @@ export function historicalScanOptionsKey(options: HistoricalScanOptions): string
 
 function validateHistoricalOptions(options: HistoricalScanOptions): HistoricalScanOptions {
   const gmailAccountIds = normalizedUnique(options.gmailAccountIds);
-  const sources = normalizedUnique(options.sources) as TransactionImportMappingSource[];
+  const sources = normalizedUnique(options.sources) as TransactionImportParserSource[];
   if (!gmailAccountIds.length) throw Object.assign(new Error("At least one Gmail account is required"), { status: 400 });
   if (!sources.length || sources.some((source) => source !== "amazon" && source !== "paypal")) {
     throw Object.assign(new Error("At least one supported transaction source is required"), { status: 400 });
@@ -67,24 +66,18 @@ export function prepareTransactionImportItems(
   userId: string,
   runId: string,
   emails: TransactionEmailInput[],
-  mappings: TransactionImportMapping[],
   createId: () => string = randomUUID,
-  { includeOffAsObserve = false }: { includeOffAsObserve?: boolean } = {},
 ): PreparedItems {
-  const mappingBySource = new Map(mappings.map((mapping) => [mapping.source, mapping]));
   const items: InsertItemInput[] = [];
   let parsed = 0;
   let review = 0;
-  let queued = 0;
+  const queued = 0;
 
   for (const email of emails) {
     const result = parseTransactionEmail(email);
     if (result.kind === "unmatched") continue;
     const source = result.source;
     if (!source) continue;
-    const mapping = mappingBySource.get(source);
-    if (!mapping || mapping.mode === "off" && !includeOffAsObserve) continue;
-    const automationMode = mapping.mode === "automatic" ? "automatic" : "observe";
     parsed++;
 
     if (result.kind === "rejected") {
@@ -108,9 +101,9 @@ export function prepareTransactionImportItems(
         currency: "USD",
         payee: null,
         notes: "",
-        actualAccountId: mapping.actualAccountId,
-        actualCategoryId: mapping.actualCategoryId,
-        automationMode,
+        actualAccountId: null,
+        actualCategoryId: null,
+        automationMode: "automatic",
         automaticSafe: false,
         blockingWarnings: result.reasons.map((reason) => ({ code: reason, blocking: true })),
         evidence: result.reasons.map((reason) => ({ code: "parse_failure", value: reason })),
@@ -120,11 +113,7 @@ export function prepareTransactionImportItems(
     }
 
     result.candidates.forEach((candidate, candidateIndex) => {
-      const safety = projectAutomaticSafety(candidate);
-      const automaticSafe = safety.safe && Boolean(mapping.actualAccountId);
-      const status = mapping.actualAccountId ? "queued" : "needs_review";
-      if (status === "queued") queued++;
-      else review++;
+      review++;
       items.push({
         id: createId(),
         runId,
@@ -144,16 +133,13 @@ export function prepareTransactionImportItems(
         currency: candidate.currency,
         payee: candidate.payee,
         notes: candidate.notes,
-        actualAccountId: mapping.actualAccountId,
-        actualCategoryId: mapping.actualCategoryId,
-        automationMode,
-        automaticSafe,
-        blockingWarnings: [
-          ...candidate.warnings,
-          ...(!mapping.actualAccountId ? [{ code: "missing_mapping", blocking: true }] : []),
-        ],
+        actualAccountId: null,
+        actualCategoryId: null,
+        automationMode: "automatic",
+        automaticSafe: false,
+        blockingWarnings: candidate.warnings,
         evidence: candidate.evidence,
-        status,
+        status: "needs_review",
       });
     });
   }
@@ -163,11 +149,11 @@ export function prepareTransactionImportItems(
 export function createTransactionImportService({
   store = transactionImportStore,
   createId = randomUUID,
-  planItems = attachTransactionImportFinancialPlans,
+  planItems = planTransactionImportItems,
 }: {
   store?: TransactionImportStore;
   createId?: () => string;
-  planItems?: typeof attachTransactionImportFinancialPlans;
+  planItems?: typeof planTransactionImportItems;
 } = {}) {
   async function startHistoricalScan(userId: string, rawOptions: HistoricalScanOptions): Promise<{ runId: string; created: boolean }> {
     const options = validateHistoricalOptions(rawOptions);
@@ -187,9 +173,8 @@ export function createTransactionImportService({
 
   async function ingestArrivals(userId: string, emails: TransactionEmailInput[]): Promise<{ queued: number; review: number; runId: string | null }> {
     if (!emails.length) return { queued: 0, review: 0, runId: null };
-    const mappings = await store.listMappings(userId);
     const runId = createId();
-    const prepared = prepareTransactionImportItems(userId, runId, emails, mappings, createId);
+    const prepared = prepareTransactionImportItems(userId, runId, emails, createId);
     if (!prepared.items.length) return { queued: 0, review: 0, runId: null };
     const plannedItems = await planItems(userId, prepared.items);
     await store.createRun({
@@ -202,19 +187,26 @@ export function createTransactionImportService({
       startDate: null,
       endDate: null,
     });
-    let inserted = 0;
+    let queued = 0;
+    let review = 0;
+    let duplicate = 0;
     for (const item of plannedItems) {
-      if (await store.insertItem(item)) inserted++;
+      if (await store.insertItem(item)) {
+        if (item.status === "queued") queued++;
+        else if (item.status === "already_present") duplicate++;
+        else review++;
+      }
     }
     await store.updateRunProgress(userId, runId, {
       cursor: { complete: true },
       status: "completed",
       discovered: emails.length,
       parsed: prepared.parsed,
-      review: prepared.review,
-      queued: prepared.queued,
+      review,
+      queued,
     });
-    return { queued: Math.min(prepared.queued, inserted), review: prepared.review, runId };
+    if (duplicate) await store.incrementRunOutcomes(userId, runId, { duplicate });
+    return { queued, review, runId };
   }
 
   async function commitItems(
@@ -288,8 +280,6 @@ export function createTransactionImportService({
     getRun: store.getRunDetail,
     listRuns: store.listRuns,
     listItemsForEmail: store.listItemsForEmail,
-    listMappings: store.listMappings,
-    upsertMapping: store.upsertMapping,
     commitItems,
     retryItem,
     dismissItem,

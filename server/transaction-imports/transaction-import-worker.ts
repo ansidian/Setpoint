@@ -5,11 +5,12 @@ import { GmailTransactionSearchError } from "../email/transaction-email-search.t
 import { searchTransactionEmails } from "./transaction-email-discovery.ts";
 import type { ConfiguredEmailAccount } from "../email/transaction-email-search.ts";
 import { prepareTransactionImportItems } from "./transaction-import-service.ts";
-import { attachTransactionImportFinancialPlans } from "./transaction-import-planner-adapter.ts";
+import { planTransactionImportItems } from "./transaction-import-planner-adapter.ts";
 import { transactionImportStore, type ClaimedItem, type TransactionImportStore } from "./transaction-import-store.ts";
 import { importTransactionGroups } from "../actual/actual.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
 import { applyFinancialEmailPreflightOutcome } from "./financial-email-preflight.ts";
+import { financialEmailAutomationEnabled } from "../bills/financial-email-planner.ts";
 import type {
   ActualImportAccountGroup,
   ActualImportBatchResult,
@@ -61,7 +62,7 @@ export function createTransactionImportWorker({
   invalidateAfterCommit = invalidateActualAfterTransactionImport,
   createId = randomUUID,
   now = Date.now,
-  planItems = attachTransactionImportFinancialPlans,
+  planItems = planTransactionImportItems,
 }: {
   store?: TransactionImportStore;
   dbClient?: WorkerDb;
@@ -70,7 +71,7 @@ export function createTransactionImportWorker({
   invalidateAfterCommit?: typeof invalidateActualAfterTransactionImport;
   createId?: () => string;
   now?: () => number;
-  planItems?: typeof attachTransactionImportFinancialPlans;
+  planItems?: typeof planTransactionImportItems;
 } = {}) {
   async function loadGmailAccount(userId: string, accountId: string): Promise<ConfiguredEmailAccount | null> {
     const result = await dbClient.execute({
@@ -115,16 +116,17 @@ export function createTransactionImportWorker({
         pageSize: 50,
         pageToken: typeof run.cursor.pageToken === "string" ? run.cursor.pageToken : undefined,
       });
-      const mappings = await store.listMappings(run.userId);
-      const prepared = prepareTransactionImportItems(run.userId, run.id, page.emails, mappings, createId, { includeOffAsObserve: true });
+      const prepared = prepareTransactionImportItems(run.userId, run.id, page.emails, createId);
       const plannedItems = await planItems(run.userId, prepared.items);
       let insertedQueued = 0;
       let insertedReview = 0;
+      let insertedDuplicates = 0;
       const insertedMessages = new Set<string>();
       for (const item of plannedItems) {
         if (await store.insertItem(item)) {
           insertedMessages.add(item.gmailMessageId);
           if (item.status === "queued") insertedQueued++;
+          else if (item.status === "already_present") insertedDuplicates++;
           else insertedReview++;
         }
       }
@@ -154,6 +156,7 @@ export function createTransactionImportWorker({
         failed: page.failures.length,
         lastError: page.failures.length ? `${page.failures.length} Gmail messages could not be fetched` : null,
       });
+      if (insertedDuplicates) await store.incrementRunOutcomes(run.userId, run.id, { duplicate: insertedDuplicates });
       return true;
     } catch (error) {
       const isReauth = error instanceof GmailTransactionSearchError && error.code === "reauth_required";
@@ -211,21 +214,27 @@ export function createTransactionImportWorker({
         continue;
       }
       if (result.dryRun) {
+        const plannerOwned = item.source === "generic"
+          || item.financialPlan?.candidate.transaction_import?.executionOwner === "planner";
+        const financialPlan = plannerOwned && item.financialPlan
+          ? applyFinancialEmailPreflightOutcome(item.financialPlan, outcome.outcome, new Date(now()).toISOString())
+          : null;
+        const automaticSafe = plannerOwned
+          ? financialPlan?.automation.eligible === true
+          : item.automaticSafe;
         const status: TransactionImportItemStatus = outcome.outcome === "already_present"
           ? "already_present"
           : outcome.outcome === "failed"
             ? "failed"
-            : item.confirmedAt != null || item.automationMode === "automatic" && item.automaticSafe
+            : item.confirmedAt != null || item.automationMode === "automatic" && automaticSafe
               ? "ready"
               : "needs_review";
-        const financialPlan = item.source === "generic" && item.financialPlan
-          ? applyFinancialEmailPreflightOutcome(item.financialPlan, outcome.outcome, new Date(now()).toISOString())
-          : null;
         const settled = await store.settleItem(item.userId, item.id, item.claimToken, {
           status,
           reconciliationStatus: outcome.outcome,
           lastError: outcome.error,
           financialPlan,
+          automaticSafe,
         });
         if (financialPlan && settled) {
           await store.persistFinancialPlanForEmail(
@@ -261,7 +270,12 @@ export function createTransactionImportWorker({
   async function processNextItemBatch(): Promise<boolean> {
     const claimed = await claimItemBatch();
     if (!claimed.length) return false;
-    const invalid = claimed.filter((item) => !item.actualAccountId || !item.importedId || !item.date || item.amountCents == null || !item.payee || item.currency !== "USD");
+    const invalid = claimed.filter((item) => !item.actualAccountId || !item.importedId || !item.date || item.amountCents == null || !item.payee || item.currency !== "USD"
+      || ((item.source === "generic" || item.financialPlan?.candidate.transaction_import?.executionOwner === "planner")
+        && item.status === "importing" && item.confirmedAt == null
+        && (item.automationMode !== "automatic" || !item.automaticSafe
+          || !item.financialPlan?.automation.eligible
+          || !financialEmailAutomationEnabled(item.financialPlan.automation.operationClass))));
     for (const item of invalid) {
       await store.settleItem(item.userId, item.id, item.claimToken, {
         status: "needs_review",

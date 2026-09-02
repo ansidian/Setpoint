@@ -63,26 +63,4 @@ export type TransactionParseResult =
   | { kind: "rejected"; source: TransactionSource | null; reasons: TransactionParseReason[] }
   | { kind: "matched"; source: TransactionSource; candidates: ParsedTransactionCandidate[] };
 
-export interface AutomaticSafetyProjection {
-  safe: boolean;
-  blockingReasons: TransactionWarningCode[];
-}
-
-export function projectAutomaticSafety(candidate: ParsedTransactionCandidate): AutomaticSafetyProjection {
-  const blockingReasons = candidate.warnings
-    .filter((warning) => warning.blocking)
-    .map((warning) => warning.code);
-
-  if (!candidate.externalId && !blockingReasons.includes("missing_external_id")) {
-    blockingReasons.push("missing_external_id");
-  }
-  if (candidate.currency !== "USD" && !blockingReasons.includes("unsupported_currency")) {
-    blockingReasons.push("unsupported_currency");
-  }
-
-  return {
-    safe: candidate.amountCents < 0 && Boolean(candidate.date) && blockingReasons.length === 0,
-    blockingReasons,
-  };
-}
 import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";

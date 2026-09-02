@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
+import { describe, expect, it } from "vitest";
+import { createFinancialEmailPlanner, selectSemanticBillAmount } from "./financial-email-planner.ts";
 import type { BillCandidate } from "../../shared/types/bills.ts";
 
 const fixedNow = () => new Date("2026-09-01T12:00:00.000Z");
@@ -157,6 +157,19 @@ describe("financial email planner contract", () => {
     });
   });
 
+  it("selects statement balance over another selected amount", () => {
+    const result = selectSemanticBillAmount(candidate("statement_issued", {
+      amount: 40,
+      amount_kind: "payment_amount",
+      amount_candidates: [
+        { kind: "payment_amount", value: 40, confidence: 0.99 },
+        { kind: "statement_balance", value: 391.2, confidence: 0.9 },
+      ],
+    }));
+
+    expect(result).toMatchObject({ amount: 391.2, kind: "statement_balance" });
+  });
+
   it("keeps an invalid calendar date out of an actionable plan", async () => {
     const result = await planner()("u1", {
       candidate: candidate("purchase", { due_date: "2026-02-31" }),
@@ -179,7 +192,6 @@ describe("financial email planner contract", () => {
         verifyEmailCandidate: async () => {
           throw new Error("unexpected provider verification");
         },
-        selectEmailTargetPolicy: vi.fn(),
       },
       metadataReader: async () => ({
         accounts: [], payees: [], payeeMap: {}, categories: [], schedules: [], recentTransactions: [],
@@ -202,7 +214,6 @@ describe("financial email planner contract", () => {
         verifyEmailCandidate: async () => {
           throw new Error("provider down");
         },
-        selectEmailTargetPolicy: vi.fn(),
       },
       modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
       metadataReader: async () => ({
@@ -231,7 +242,6 @@ describe("financial email planner contract", () => {
         verifyEmailCandidate: async () => {
           throw new Error("provider down");
         },
-        selectEmailTargetPolicy: vi.fn(),
       },
       modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
       metadataReader: async () => ({
@@ -314,7 +324,7 @@ describe("financial email planner contract", () => {
     expect(result.reviewReasons).toEqual([]);
   });
 
-  it("maps an exact completed utility payment transaction to no-write", async () => {
+  it.each(["payment_completed", "purchase"] as const)("maps an exact %s transaction to no-write", async (eventKind) => {
     const plan = createFinancialEmailPlanner({
       metadataReader: async () => ({
         accounts: [{ id: "acct-1", name: "Checking" }],
@@ -346,7 +356,7 @@ describe("financial email planner contract", () => {
       now: fixedNow,
     });
     const result = await plan("u1", {
-      candidate: candidate("payment_completed", {
+      candidate: candidate(eventKind, {
         type: "expense",
         payee: "Power Co",
         payee_id: "payee-1",

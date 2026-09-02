@@ -4,7 +4,7 @@ AI email classification: the batch worker, model client, preflight rules, escala
 
 ## Files
 
-- `triage-worker.ts` — batch triage of snapshot items, applies escalation policy, plans financial candidates before finalization, and stages only exact observe-only expense preflight
+- `triage-worker.ts` — batch triage of snapshot items, applies escalation policy, plans financial candidates before finalization, and stages exact USD expenses for preview and policy-gated automatic execution
 - `triage-types.ts` — shared triage rows, decisions, rules, model, queue, and dependency contracts
 - `triage-projections-model.ts` — pure DB-free triage projections: bill candidate, event details, sound trigger, search text
 - `triage-job-store.ts` — `ea_triage_jobs` queue SQL: claim/requeue/complete/defer/recover-stale/prune

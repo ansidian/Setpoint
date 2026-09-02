@@ -1,18 +1,16 @@
 import { Router } from "express";
-import * as billsService from "../../bills/bills-service.ts";
 import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
-import type { TransactionImportMappingSource, TransactionImportMode } from "../../../shared/types/transaction-imports.ts";
+import type { TransactionImportParserSource } from "../../../shared/types/transaction-imports.ts";
 
 type HttpError = Error & { status?: number };
 type Service = typeof transactionImportService;
 
 const ownerUserId = (): string => process.env.EA_USER_ID!;
-const SOURCES = new Set<TransactionImportMappingSource>(["amazon", "paypal"]);
-const MODES = new Set<TransactionImportMode>(["off", "observe", "automatic"]);
+const SOURCES = new Set<TransactionImportParserSource>(["amazon", "paypal"]);
 
-function sourceParam(value: unknown): TransactionImportMappingSource | null {
-  return typeof value === "string" && SOURCES.has(value as TransactionImportMappingSource) ? value as TransactionImportMappingSource : null;
+function sourceParam(value: unknown): TransactionImportParserSource | null {
+  return typeof value === "string" && SOURCES.has(value as TransactionImportParserSource) ? value as TransactionImportParserSource : null;
 }
 
 function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: unknown): void {
@@ -23,57 +21,11 @@ function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: 
 export function createTransactionImportRouter({
   service = transactionImportService,
   wake = requestTransactionImportDrain,
-  loadAccounts = billsService.listAccounts,
-  loadCategories = billsService.listCategories,
 }: {
   service?: Service;
   wake?: () => void;
-  loadAccounts?: typeof billsService.listAccounts;
-  loadCategories?: typeof billsService.listCategories;
 } = {}): Router {
   const router = Router();
-
-  router.get("/transaction-imports/mappings", async (_req, res) => {
-    try {
-      res.json(await service.listMappings(ownerUserId()));
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
-
-  router.put("/transaction-imports/mappings/:source", async (req, res) => {
-    const source = sourceParam(req.params.source);
-    const { mode, actualAccountId = null, actualCategoryId = null } = req.body || {};
-    if (!source || !MODES.has(mode) || actualAccountId != null && typeof actualAccountId !== "string"
-      || actualCategoryId != null && typeof actualCategoryId !== "string") {
-      return res.status(400).json({ message: "Invalid transaction import mapping" });
-    }
-    if (mode !== "off" && (!actualAccountId || !actualAccountId.trim())) {
-      return res.status(400).json({ message: "An Actual account is required for observe or automatic mode" });
-    }
-    try {
-      if (actualAccountId) {
-        const accounts = await loadAccounts(ownerUserId()).catch(() => null);
-        if (accounts && !accounts.some((account) => account.id === actualAccountId)) {
-          return res.status(400).json({ message: "Actual account does not exist" });
-        }
-      }
-      if (actualCategoryId) {
-        const groups = await loadCategories(ownerUserId()).catch(() => null);
-        if (groups && !groups.some((group) => group.categories.some((category) => category.id === actualCategoryId))) {
-          return res.status(400).json({ message: "Actual category does not exist" });
-        }
-      }
-      res.json(await service.upsertMapping(ownerUserId(), {
-        source,
-        mode,
-        actualAccountId: actualAccountId?.trim() || null,
-        actualCategoryId: actualCategoryId?.trim() || null,
-      }));
-    } catch (error) {
-      errorResponse(res, error);
-    }
-  });
 
   router.post("/transaction-imports/runs", async (req, res) => {
     const { gmailAccountIds, sources, startDate, endDate } = req.body || {};

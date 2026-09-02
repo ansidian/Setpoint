@@ -4,7 +4,7 @@ import type { BillCandidate, FinancialEmailInput } from "../../shared/types/bill
 
 function eligibility(
   input: FinancialEmailInput = {},
-  candidate: BillCandidate = { type: "expense", event_kind: "purchase" },
+  candidate: BillCandidate = { type: "expense", event_kind: "purchase", currency: "USD" },
 ) {
   return financialEmailAutomationEligibility({
     input: {
@@ -22,16 +22,16 @@ function eligibility(
 }
 
 describe("financial email automation policy", () => {
-  it("keeps otherwise safe one-time expenses observe-only until cohort evidence enables the class", () => {
+  it("enables owner-authorized one-time expenses after every runtime gate passes", () => {
     expect(eligibility()).toEqual({
-      eligible: false,
+      eligible: true,
       operationClass: "one_time_expense",
-      rollout: "observe_only",
+      rollout: "enabled",
       gates: expect.arrayContaining([
         { gate: "actual_preflight", status: "pass", reasons: [] },
-        { gate: "rollout", status: "fail", reasons: ["automation_class_observe_only"] },
+        { gate: "rollout", status: "pass", reasons: [] },
       ]),
-      reasons: ["automation_class_observe_only"],
+      reasons: [],
     });
   });
 
@@ -61,5 +61,11 @@ describe("financial email automation policy", () => {
       blocking_warnings: [{ code: "unsupported_currency", blocking: true }],
     });
     expect(result.gates).toContainEqual({ gate: "warnings", status: "fail", reasons: ["blocking_warning"] });
+  });
+
+  it.each([null, "EUR", "CAD"])("keeps %s currency out of unattended USD imports", (currency) => {
+    const result = eligibility({}, { type: "expense", event_kind: "purchase", currency });
+    expect(result.eligible).toBe(false);
+    expect(result.reasons).toContain("blocking_warning");
   });
 });

@@ -1,6 +1,5 @@
 import type {
   TransactionImportItem,
-  TransactionImportMapping,
   TransactionImportRunDetail,
 } from "../../shared/types/transaction-imports";
 
@@ -8,16 +7,6 @@ export const NO_DEMO_TRANSACTION_IMPORT_RESPONSE = Symbol("NO_DEMO_TRANSACTION_I
 
 const clone = <T>(value: T): T => value == null ? value : structuredClone(value);
 const now = Date.now();
-
-function pathSegment(pathname: string, fromEnd: number): string {
-  const segments = pathname.split("/");
-  return segments[segments.length - fromEnd] ?? "";
-}
-
-let mappings: TransactionImportMapping[] = [
-  { source: "amazon", mode: "observe", actualAccountId: "demo-credit", actualCategoryId: null, createdAt: now, updatedAt: now },
-  { source: "paypal", mode: "observe", actualAccountId: "demo-checking", actualCategoryId: "demo-cloud-services", createdAt: now, updatedAt: now },
-];
 
 const item: TransactionImportItem = {
   id: "demo-transaction-item-1",
@@ -83,22 +72,6 @@ export function handleDemoTransactionImportRequest({
 }): unknown {
   if (!pathname.startsWith("/api/briefing/transaction-imports/")) {
     return NO_DEMO_TRANSACTION_IMPORT_RESPONSE;
-  }
-  if (pathname.endsWith("/mappings") && method === "GET") return clone(mappings);
-  if (pathname.match(/\/mappings\/(amazon|paypal)$/) && method === "PUT") {
-    const source = pathSegment(pathname, 1) as "amazon" | "paypal";
-    const previous = mappings.find((mapping) => mapping.source === source);
-    const saved: TransactionImportMapping = {
-      source,
-      mode: body.mode === "automatic" || body.mode === "observe" ? body.mode : "off",
-      actualAccountId: typeof body.actualAccountId === "string" ? body.actualAccountId : null,
-      actualCategoryId: typeof body.actualCategoryId === "string" ? body.actualCategoryId : null,
-      createdAt: previous?.createdAt || Date.now(),
-      updatedAt: Date.now(),
-    };
-    mappings = [...mappings.filter((mapping) => mapping.source !== source), saved]
-      .sort((a, b) => a.source.localeCompare(b.source));
-    return clone(saved);
   }
   if (pathname.endsWith("/runs") && method === "GET") {
     const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || 12)));

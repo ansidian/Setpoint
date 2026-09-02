@@ -1,12 +1,11 @@
 import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
 
-export const TRANSACTION_IMPORT_MAPPING_SOURCES = ["amazon", "paypal"] as const;
-export type TransactionImportMappingSource = typeof TRANSACTION_IMPORT_MAPPING_SOURCES[number];
-export const TRANSACTION_IMPORT_SOURCES = [...TRANSACTION_IMPORT_MAPPING_SOURCES, "generic"] as const;
+export const TRANSACTION_IMPORT_PARSER_SOURCES = ["amazon", "paypal"] as const;
+export type TransactionImportParserSource = typeof TRANSACTION_IMPORT_PARSER_SOURCES[number];
+export const TRANSACTION_IMPORT_SOURCES = [...TRANSACTION_IMPORT_PARSER_SOURCES, "generic"] as const;
 export type TransactionImportSource = typeof TRANSACTION_IMPORT_SOURCES[number];
 
-export const TRANSACTION_IMPORT_MODES = ["off", "observe", "automatic"] as const;
-export type TransactionImportMode = typeof TRANSACTION_IMPORT_MODES[number];
+export type TransactionImportExecutionMode = "observe" | "automatic";
 
 export type TransactionImportRunTrigger = "historical_scan" | "arrival";
 export type TransactionImportRunStatus = "queued" | "running" | "retry" | "paused" | "completed" | "failed";
@@ -46,15 +45,6 @@ export interface TransactionImportPlanShadow {
   automationEligible: boolean;
   automationReasons: FinancialPlanReasonCode[];
   failureCode: string | null;
-}
-
-export interface TransactionImportMapping {
-  source: TransactionImportMappingSource;
-  mode: TransactionImportMode;
-  actualAccountId: string | null;
-  actualCategoryId: string | null;
-  createdAt: number;
-  updatedAt: number;
 }
 
 export interface TransactionImportRunSummary {
@@ -101,7 +91,7 @@ export interface TransactionImportItem {
   notes: string;
   actualAccountId: string | null;
   actualCategoryId: string | null;
-  automationMode: Exclude<TransactionImportMode, "off">;
+  automationMode: TransactionImportExecutionMode;
   automaticSafe: boolean;
   blockingWarnings: unknown[];
   evidence: unknown[];
@@ -129,15 +119,9 @@ export interface TransactionImportEmailStatusResponse {
   items: TransactionImportItem[];
 }
 
-export interface TransactionImportMappingUpdate {
-  mode: TransactionImportMode;
-  actualAccountId: string | null;
-  actualCategoryId: string | null;
-}
-
 export interface TransactionImportHistoricalScanRequest {
   gmailAccountIds: string[];
-  sources: TransactionImportMappingSource[];
+  sources: TransactionImportParserSource[];
   startDate: string;
   endDate: string;
 }

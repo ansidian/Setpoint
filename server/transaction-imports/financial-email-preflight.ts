@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
+import { financialEmailAutomationEnabled, selectSemanticBillAmount } from "../bills/financial-email-planner.ts";
 import { redactTransactionImportPlan } from "./transaction-import-planner-adapter.ts";
+import { isTransactionParserOwnedEmail } from "./parsers/parser-registry.ts";
 import {
   transactionImportStore,
   type InsertItemInput,
@@ -27,6 +28,8 @@ export interface FinancialEmailPreflightContext {
   accountId: string;
   emailId: string;
   emailSubject?: string | null;
+  emailFrom?: string | null;
+  emailBody?: string | null;
 }
 
 function stableId(prefix: string, identity: string): string {
@@ -44,12 +47,15 @@ export function financialEmailPreflightItem(
   context: FinancialEmailPreflightContext,
   plan: FinancialEmailPlan,
 ): InsertItemInput | null {
+  if (isTransactionParserOwnedEmail({
+    from: context.emailFrom || "", subject: context.emailSubject || "", text: context.emailBody,
+  })) return null;
   if (plan.automation.operationClass !== "one_time_expense"
-    || plan.automation.rollout !== "observe_only"
     || plan.operation.kind === "no_write"
     || plan.reconciliation.disposition === "no_write"
     || plan.identity.status !== "resolved"
     || !plan.identity.key
+    || (plan.candidate.transaction_import?.currency || plan.candidate.currency) !== "USD"
     || !REQUIRED_GATES.every((gate) => gatePassed(plan, gate))) return null;
   const reconciliationGate = plan.automation.gates.find((gate) => gate.gate === "reconciliation");
   if (reconciliationGate?.status === "fail") return null;
@@ -58,7 +64,7 @@ export function financialEmailPreflightItem(
   const date = plan.candidate.due_date;
   const accountId = plan.targets.account.status === "resolved" ? plan.targets.account.id : null;
   const payee = plan.candidate.payee || plan.targets.payee.label;
-  if (!amountCents || !date || !accountId || !payee) return null;
+  if (amountCents >= 0 || !date || !accountId || !payee) return null;
   const categoryId = plan.targets.category.status === "resolved" ? plan.targets.category.id ?? null : null;
   const financialPlan = redactTransactionImportPlan({
     ...plan,
@@ -95,7 +101,8 @@ export function financialEmailPreflightItem(
     notes: String(plan.candidate.notes || "").slice(0, 2_000),
     actualAccountId: accountId,
     actualCategoryId: categoryId,
-    automationMode: "observe",
+    automationMode: plan.automation.rollout === "enabled"
+      && financialEmailAutomationEnabled(plan.automation.operationClass) ? "automatic" : "observe",
     automaticSafe: false,
     blockingWarnings: [],
     evidence: [{ code: "financial_email_identity", value: plan.identity.key }],
@@ -151,7 +158,9 @@ export function applyFinancialEmailPreflightOutcome(
 ): FinancialEmailPlan {
   const passed = outcome !== "failed";
   const duplicate = outcome === "already_present";
-  const reconciliation = duplicate
+  const missingDuplicateCheck = outcome === "would_add" && plan.automation.rollout === "enabled"
+    && (plan.reconciliation.status !== "not_scheduled" || plan.reconciliation.disposition !== "create");
+  const reconciliation = missingDuplicateCheck ? plan.reconciliation : duplicate
     ? { status: "already_recorded" as const, disposition: "no_write" as const, reason: "exact_imported_id_match", checkedAt, evidence: null }
     : outcome === "would_update"
       ? { status: "needs_review" as const, disposition: "update_existing" as const, reason: "exact_imported_id_update", checkedAt, evidence: null }
@@ -165,6 +174,7 @@ export function applyFinancialEmailPreflightOutcome(
         : { ...gate, status: "fail" as const, reasons: ["actual_preflight_not_run" as const] };
     }
     if (gate.gate === "reconciliation") {
+      if (missingDuplicateCheck) return gate;
       return passed
         ? { ...gate, status: "pass" as const, reasons: [] }
         : { ...gate, status: "fail" as const, reasons: ["reconciliation_unavailable" as const] };
@@ -172,18 +182,26 @@ export function applyFinancialEmailPreflightOutcome(
     return gate;
   });
   const reasons = [...new Set(gates.flatMap((gate) => gate.reasons))] as FinancialPlanReasonCode[];
+  const eligible = outcome === "would_add"
+    && plan.reconciliation.status === "not_scheduled"
+    && plan.reconciliation.disposition === "create"
+    && plan.automation.rollout === "enabled"
+    && financialEmailAutomationEnabled(plan.automation.operationClass)
+    && [...REQUIRED_GATES, "reconciliation", "actual_preflight", "rollout"].every((required) => (
+      gates.some((gate) => gate.gate === required && gate.status === "pass")
+    ));
   return {
     ...plan,
     operation: duplicate
       ? { intended: plan.operation.intended, kind: "no_write", reasons: ["already_recorded"] }
       : plan.operation,
     reconciliation,
-    reviewReasons: duplicate ? [] : plan.reviewReasons.filter((reason) => (
+    reviewReasons: duplicate ? [] : missingDuplicateCheck ? plan.reviewReasons : plan.reviewReasons.filter((reason) => (
       reason.code !== "reconciliation_unavailable" && reason.code !== "reconciliation_conflict"
     )),
     automation: {
       ...plan.automation,
-      eligible: false,
+      eligible,
       gates,
       reasons,
     },

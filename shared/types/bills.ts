@@ -8,7 +8,6 @@ import type { TransactionRecord } from "./transactions.ts";
 
 export type BillType = "expense" | "income" | "bill" | "transfer";
 export type BillPaySource = "triage" | "pasted_text" | "extract" | string;
-export type BillPayMatcherGroup = Array<string | string[]>;
 export const FINANCIAL_DOCUMENT_KINDS = [
   "one_time_transaction",
   "utility_statement",
@@ -93,6 +92,7 @@ export interface BillSemanticEnrichment {
 export interface BillTransactionImportEvidence {
   source: string;
   parserVersion: string;
+  executionOwner?: "planner";
   externalId?: string | null;
   importedId?: string | null;
   amountCents: number;
@@ -100,6 +100,7 @@ export interface BillTransactionImportEvidence {
 }
 
 export interface BillCandidate {
+  currency?: string | null;
   payee?: string;
   payee_hint?: string;
   payee_id?: string | null;
@@ -340,73 +341,10 @@ export interface FinancialEmailExtractionResponse extends BillCandidate {
   plan: FinancialEmailPlan;
 }
 
-export interface BillPayTargets {
-  payee_id?: string | null;
-  payee_label?: string | null;
-  account_id?: string | null;
-  account_label?: string | null;
-  category_id?: string | null;
-  category_label?: string | null;
-  from_account_id?: string | null;
-  from_account_label?: string | null;
-  to_account_id?: string | null;
-  to_account_label?: string | null;
-  schedule_name?: string | null;
-  [key: string]: unknown;
-}
-
-export interface BillPayBehavior {
-  id?: string | null;
-  name?: string | null;
-  enabled?: boolean;
-  type?: BillType | string;
-  targets?: BillPayTargets;
-  [key: string]: unknown;
-}
-
-export interface BillPayProfile {
-  id?: string | null;
-  name?: string | null;
-  enabled?: boolean;
-  identity?: Record<string, BillPayMatcherGroup>;
-  behaviors?: BillPayBehavior[];
-  [key: string]: unknown;
-}
-
-export interface BillPayMappings {
-  version: 2;
-  profiles: BillPayProfile[];
-  [key: string]: unknown;
-}
-
 export interface BillPayMetadata {
   accounts?: ActualMetadata["accounts"];
   payees?: ActualMetadata["payees"];
   categories?: Array<ActualCategoryGroup | ActualCategory>;
-}
-
-export interface BillPayResolveInput {
-  mappings?: unknown;
-  metadata?: BillPayMetadata;
-  source?: BillPaySource;
-  email?: BillEmailContext;
-  candidate?: BillCandidate | null;
-}
-
-export interface BillPayDiagnostic {
-  field: string;
-  id: unknown;
-  message: string;
-}
-
-export interface BillPayMappingOutcome {
-  status: "matched" | "incomplete_mapping" | "invalid_target" | "identity_only" | "unmapped";
-  profileId?: string | null;
-  behaviorId?: string | null;
-  matchedProfiles?: Array<string | null>;
-  amountSource?: string | null;
-  reason?: string;
-  diagnostics?: BillPayDiagnostic[];
 }
 
 export type StatementActualStatusKind =
@@ -444,12 +382,6 @@ export interface StatementActualStatus {
   reason?: string;
   checkedAt?: string | null;
   evidence?: StatementActualEvidence | null;
-}
-
-export interface BillPayResolution {
-  bill: BillCandidate;
-  mapping: BillPayMappingOutcome;
-  actualStatus?: StatementActualStatus;
 }
 
 export interface BillsMirrorHealth {
@@ -502,12 +434,6 @@ export interface BillMutationResponse {
   localWriteApplied?: boolean;
   code?: string;
   [key: string]: unknown;
-}
-
-export interface BillExtractionResponse extends BillCandidate {
-  provider: string;
-  model: string;
-  mapping: BillPayMappingOutcome;
 }
 
 export interface CalendarBillsRangeResponse {
@@ -563,11 +489,14 @@ export interface ActualCacheHydrationResponse extends BillMutationResponse {
   syncHealth?: BillsMirrorHealth | null;
 }
 
-export type BillPaySeedRequest = Omit<BillPayResolveInput, "mappings" | "metadata"> & {
+export interface BillPaySeedRequest {
+  source?: BillPaySource;
+  email?: BillEmailContext;
+  candidate?: BillCandidate | null;
   emailId?: string | null;
   accountId?: string | null;
   subject?: unknown;
   from?: unknown;
   body?: unknown;
   snippet?: unknown;
-};
+}

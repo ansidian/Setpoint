@@ -734,7 +734,7 @@ erDiagram
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
-| `ea_transaction_import_items_legacy` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql` |
+| `ea_transaction_import_items_before_automation` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql`, `056_generic_financial_email_automation.sql` |
 | `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
 | `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
@@ -875,8 +875,6 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/transaction-imports/email-status` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/items/:itemId/dismiss` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/items/:itemId/retry` | `server/routes/briefing/transaction-imports.ts` |
-| GET | `/api/briefing/transaction-imports/mappings` | `server/routes/briefing/transaction-imports.ts` |
-| PUT | `/api/briefing/transaction-imports/mappings/:source` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/transaction-imports/runs` | `server/routes/briefing/transaction-imports.ts` |
 | POST | `/api/briefing/transaction-imports/runs` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/transaction-imports/runs/:runId` | `server/routes/briefing/transaction-imports.ts` |

@@ -9,13 +9,13 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `parsers/fixtures.ts` — sanitized parser fixtures shared by focused tests
 - `parsers/amazon.ts` — pure Amazon order-confirmation parser
 - `parsers/paypal.ts` — pure PayPal payment/order parser
-- `parsers/parser-registry.ts` — source routing and public parser entry point
+- `parsers/parser-registry.ts` — source routing, deterministic receipt ownership, and public parser entry point
 - `transaction-email-discovery.ts` — allowlisted Gmail historical-search adapter
-- `transaction-import-store.ts` — durable mapping, run, item, claim, recovery, recent-run, and per-email status persistence
-- `transaction-import-store-projections.ts` — database-row projections for durable mappings, runs, and items
-- `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner plus redacted shadow-plan/equivalence projection
+- `transaction-import-store.ts` — durable run, item, claim, recovery, recent-run, and per-email status persistence; no mapping-table access
+- `transaction-import-store-projections.ts` — database-row projections for durable runs and items, including historical captured targets/modes
+- `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner, planner-owned targets/rollout for new items, and redacted historical equivalence projection
 - `transaction-import-equivalence-report.ts` — read-only historical replay and redacted gate summary
-- `financial-email-preflight.ts` — projects exact generic one-time expenses into stable observe-only items and applies Actual dry-run outcomes back to their plans
+- `financial-email-preflight.ts` — stages exact generic USD expenses, preserves their rollout mode, and applies Actual preview outcomes and unattended eligibility
 - `transaction-import-service.ts` — arrival preparation and historical-run admission
 - `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains
 - `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
@@ -26,12 +26,14 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - Parsers are pure: no configuration, persistence, logging, or network calls.
 - Amounts are signed integer cents and dates are `YYYY-MM-DD`.
 - Parser warnings carry an explicit `blocking` flag; automatic safety is projected centrally.
-- Financial plans are shadow evidence until the documented equivalence gate passes; legacy mapped targets and modes remain authoritative during that phase.
-- Generic financial-email items have no mapping or automatic mode: they enter observe-only with `automatic_safe = 0`, use the stable plan identity as imported ID, and require explicit owner confirmation after preview.
+- New source-specific items use planner-inferred Actual targets and rollout eligibility; `candidate.transaction_import.executionOwner = "planner"` distinguishes them from historical items whose captured targets and modes remain intact. No live path reads legacy mapping configuration.
+- Deterministic Amazon/PayPal receipts belong only to the source importer; generic staging checks that ownership first to avoid dual imported identities for one receipt.
+- Generic financial-email items never consult mappings. New enabled USD expenses enter automatic mode with `automatic_safe = 0`; only a would-add preview plus a previously passed current-Actual duplicate check and all plan gates can promote them to ready/automatic-safe. Existing observe-only items still require confirmation, and updates remain review-only.
 - Planner no-write outcomes never enter generic preflight, including duplicates matched to existing Actual activity without a generic imported ID.
 - Durable plan JSON must omit model/body evidence excerpts while retaining target provenance, reconciliation, and eligibility reasons.
 - Raw Gmail message IDs remain distinct from RFC Message-ID headers.
 - Raw bodies are transient input and must not cross persistence/status boundaries.
+- Legacy `ea_transaction_import_mappings` rows remain untouched for audit/recovery only; retirement does not delete configuration or import history.
 
 ## Boundaries
 

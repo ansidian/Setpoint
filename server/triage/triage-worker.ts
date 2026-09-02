@@ -404,6 +404,8 @@ export async function processNextEmailTriageJob({
         accountId: email.account_id,
         emailId: email.email_id,
         emailSubject: String(email.subject || ""),
+        emailFrom: String(email.from_address || email.from_name || ""),
+        emailBody: String(email.body_text || email.body_snippet || ""),
       }, financialEmailPlan).catch(() => undefined);
     }
     await completeJob(job, dbClient, now, status === "failed" ? decision.error || "" : "");

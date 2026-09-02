@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActualImportAccountGroup, ActualImportBatchResult } from "../../shared/types/transaction-imports.ts";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import { emailFixture, paypalPaidText } from "./parsers/fixtures.ts";
-import { createTransactionImportService } from "./transaction-import-service.ts";
+import { createTransactionImportService, prepareTransactionImportItems } from "./transaction-import-service.ts";
 import { createTransactionImportStore } from "./transaction-import-store.ts";
 import { createTransactionImportWorker } from "./transaction-import-worker.ts";
-import { financialEmailPreflightItem } from "./financial-email-preflight.ts";
+import { financialEmailPreflightItem, stageFinancialEmailPreflight } from "./financial-email-preflight.ts";
+import type { TransactionEmailInput } from "./transaction-import-types.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "..", "db", "migrations");
@@ -23,7 +24,7 @@ describe("transaction import worker", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)
@@ -36,12 +37,37 @@ describe("transaction import worker", () => {
 
   function setup(now = () => 1_000) {
     const store = createTransactionImportStore(db, now);
-    const service = createTransactionImportService({ store, createId, planItems: async (_userId, items) => items });
+    const service = createTransactionImportService({ store, createId });
     return { store, service };
   }
 
-  async function mapping(store: ReturnType<typeof setup>["store"], source: "amazon" | "paypal", mode: "off" | "observe" | "automatic", accountId = "actual-1") {
-    await store.upsertMapping("owner-1", { source, mode, actualAccountId: accountId, actualCategoryId: null });
+  async function seedLegacyItems(
+    store: ReturnType<typeof setup>["store"],
+    emails: TransactionEmailInput[] = [emailFixture()],
+    automationMode: "observe" | "automatic" = "automatic",
+    accounts: { amazon: string; paypal: string } = { amazon: "actual-1", paypal: "actual-1" },
+  ) {
+    const runId = createId();
+    const prepared = prepareTransactionImportItems("owner-1", runId, emails, createId);
+    await store.createRun({
+      id: runId, userId: "owner-1", trigger: "arrival", optionsKey: `legacy:${runId}`,
+      gmailAccountIds: ["gmail-1"], sources: [...new Set(prepared.items.map((item) => item.source))],
+    });
+    for (const item of prepared.items) {
+      await store.insertItem({
+        ...item,
+        actualAccountId: accounts[item.source as "amazon" | "paypal"],
+        actualCategoryId: null,
+        automationMode,
+        automaticSafe: Boolean(item.importedId && item.externalId && item.date && item.amountCents
+          && item.currency === "USD" && !item.blockingWarnings.some((warning) => (
+          typeof warning === "object" && warning !== null && (warning as { blocking?: boolean }).blocking
+        ))),
+        status: item.date && item.amountCents && item.payee ? "queued" : "needs_review",
+      });
+    }
+    await store.updateRunProgress("owner-1", runId, { status: "completed", cursor: { complete: true } });
+    return { runId };
   }
 
   function actualResult(groups: ActualImportAccountGroup[], dryRun: boolean): ActualImportBatchResult {
@@ -78,7 +104,7 @@ describe("transaction import worker", () => {
     return {
       version: 1,
       identity: { version: 1, status: "resolved", key: "financial-email:v1:worker" },
-      candidate: { payee: "Example Market", amount: 12.34, amount_kind: "transaction_amount", due_date: "2026-09-01", event_kind: "purchase", type: "expense" },
+      candidate: { payee: "Example Market", amount: 12.34, amount_kind: "transaction_amount", due_date: "2026-09-01", event_kind: "purchase", type: "expense", currency: "USD" },
       classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 1, reasons: [] },
       operation: { intended: "create_transaction", kind: "create_transaction", reasons: [] },
       targets: {
@@ -106,39 +132,112 @@ describe("transaction import worker", () => {
     };
   }
 
-  it("persists each historical page cursor and resumes without restarting", async () => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "off");
-    const started = await service.startHistoricalScan("owner-1", {
-      gmailAccountIds: ["gmail-1"],
-      sources: ["amazon"],
-      startDate: "2026-01-01",
-      endDate: "2026-02-01",
-    });
-    const searchPage = vi.fn()
-      .mockResolvedValueOnce({ emails: [emailFixture()], nextPageToken: "page-2", resultSizeEstimate: 2, failures: [] })
-      .mockResolvedValueOnce({ emails: [emailFixture({ gmailMessageId: "msg-2", uid: "gmail-personal-msg-2", subject: "Your Amazon.com order #444-5555555-6666666", text: "Order 444-5555555-6666666 Order Total: $8.72" })], nextPageToken: null, resultSizeEstimate: 2, failures: [] });
+  function enabledGenericPlan(): FinancialEmailPlan {
+    const plan = exactGenericPlan();
+    plan.reconciliation = { status: "not_scheduled", disposition: "create", reason: "no_match" };
+    plan.reviewReasons = [];
+    plan.automation.rollout = "enabled";
+    plan.automation.gates = plan.automation.gates.map((gate) => (
+      gate.gate === "rollout" || gate.gate === "reconciliation"
+        ? { ...gate, status: "pass", reasons: [] } : gate
+    ));
+    plan.automation.reasons = ["actual_preflight_not_run"];
+    return plan;
+  }
+
+  async function stageGeneric(store: ReturnType<typeof setup>["store"], plan = enabledGenericPlan()) {
+    const result = await stageFinancialEmailPreflight("owner-1", {
+      accountId: "gmail-1", emailId: "generic-email", emailSubject: "Receipt",
+    }, plan, store);
+    expect(result.staged).toBe(true);
+    return result.runId!;
+  }
+
+
+  it("automatically previews and commits an enabled generic expense exactly once", async () => {
+    const { store } = setup();
+    const runId = await stageGeneric(store);
+    const ledger = new Map<string, number>();
     const worker = createTransactionImportWorker({
-      store,
-      dbClient: db,
-      searchPage,
-      createId,
-      planItems: async (_userId, items) => items,
+      store, dbClient: db, createId,
+      importGroups: async (_userId, groups, dryRun) => {
+        if (!dryRun) {
+          for (const transaction of groups.flatMap((group) => group.transactions)) {
+            ledger.set(transaction.importedId, transaction.amountCents);
+          }
+        }
+        return actualResult(groups, dryRun);
+      },
+      invalidateAfterCommit: async () => undefined,
     });
 
-    await expect(worker.processNextHistoricalPage()).resolves.toBe(true);
-    expect(await store.getRun("owner-1", started.runId)).toMatchObject({
-      status: "queued",
-      cursor: { accountIndex: 0, sourceIndex: 0, pageToken: "page-2" },
+    await worker.processNextItemBatch();
+    expect(ledger.size).toBe(0);
+    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+      status: "ready", automationMode: "automatic", automaticSafe: true, confirmedAt: null,
+      financialPlan: { automation: { eligible: true, rollout: "enabled" } },
     });
-    await expect(worker.processNextHistoricalPage()).resolves.toBe(true);
-    const detail = await store.getRunDetail("owner-1", started.runId);
-    expect(detail).toMatchObject({ status: "completed", cursor: { complete: true } });
-    expect(detail!.items).toHaveLength(2);
-    expect(detail!.items.every((item) => item.automationMode === "observe")).toBe(true);
-    // test-architecture: allow-boundary-interaction -- Gmail search is the outbound provider boundary; durable resume must send the exact stored page token on the second request.
-    expect(searchPage).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({ pageToken: "page-2" }));
+    await worker.processNextItemBatch();
+    expect([...ledger.entries()]).toEqual([["financial-email:v1:worker", -1234]]);
+    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({ status: "added" });
+    expect(await stageFinancialEmailPreflight("owner-1", {
+      accountId: "gmail-1", emailId: "generic-email",
+    }, enabledGenericPlan(), store)).toEqual({ staged: false, runId });
+    await expect(worker.processNextItemBatch()).resolves.toBe(false);
   });
+
+  it.each([
+    ["already_present", "already_present"],
+    ["failed", "failed"],
+    ["would_update", "needs_review"],
+  ] as const)("does not automatically commit a generic %s preview", async (outcome, status) => {
+    const { store } = setup();
+    const runId = await stageGeneric(store);
+    const committed: string[] = [];
+    const worker = createTransactionImportWorker({
+      store, dbClient: db, createId,
+      importGroups: async (_userId, groups, dryRun) => {
+        if (!dryRun) committed.push(...groups.flatMap((group) => group.transactions.map((transaction) => transaction.importedId)));
+        const result = actualResult(groups, dryRun);
+        return { ...result, groups: result.groups.map((group) => ({
+          ...group, items: group.items.map((item) => ({ ...item, outcome })),
+        })) };
+      },
+    });
+    await worker.processNextItemBatch();
+    await expect(worker.processNextItemBatch()).resolves.toBe(false);
+    expect(committed).toEqual([]);
+    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+      status, automaticSafe: false, financialPlan: { automation: { eligible: false } },
+    });
+  });
+
+  it("re-previews an uncertain generic commit with its original identity", async () => {
+    const { store } = setup();
+    const runId = await stageGeneric(store);
+    const ledger = new Map<string, number>();
+    const worker = createTransactionImportWorker({
+      store, dbClient: db, createId, now: () => 1_000,
+      importGroups: async (_userId, groups, dryRun) => {
+        const transaction = groups[0]!.transactions[0]!;
+        if (ledger.has(transaction.importedId)) return alreadyPresentResult(groups, dryRun);
+        if (dryRun) return actualResult(groups, true);
+        ledger.set(transaction.importedId, transaction.amountCents);
+        throw Object.assign(new Error("Sync acknowledgement lost"), { code: "ACTUAL_IMPORT_SYNC_UNCERTAIN" });
+      },
+    });
+    await worker.processNextItemBatch();
+    await worker.processNextItemBatch();
+    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({ status: "queued" });
+    await worker.processNextItemBatch();
+    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+      status: "already_present", importedId: "financial-email:v1:worker", automaticSafe: false,
+      financialPlan: { operation: { kind: "no_write" }, automation: { eligible: false } },
+    });
+    expect([...ledger.entries()]).toEqual([["financial-email:v1:worker", -1234]]);
+    await expect(worker.processNextItemBatch()).resolves.toBe(false);
+  });
+
 
   it("resumes a coalesced paused historical scan when the owner starts it again", async () => {
     const { store, service } = setup();
@@ -155,13 +254,9 @@ describe("transaction import worker", () => {
     expect(await store.getRun("owner-1", first.runId)).toMatchObject({ status: "retry", lastError: null });
   });
 
-  it("off ignores arrivals while observe dry-runs and never commits", async () => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "off");
-    await expect(service.ingestArrivals("owner-1", [emailFixture()])).resolves.toEqual({ queued: 0, review: 0, runId: null });
-
-    await mapping(store, "amazon", "observe");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture()]);
+  it("honors a historical observe snapshot by dry-running without committing", async () => {
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store, [emailFixture()], "observe");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn();
     const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit, createId });
@@ -242,10 +337,8 @@ describe("transaction import worker", () => {
   });
 
   it("automatic dry-runs before one grouped commit and one invalidation fan-out", async () => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "automatic", "actual-checking");
-    await mapping(store, "paypal", "automatic", "actual-card");
-    const arrival = await service.ingestArrivals("owner-1", [
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store, [
       emailFixture(),
       emailFixture({
         uid: "gmail-personal-paypal-1",
@@ -254,7 +347,7 @@ describe("transaction import worker", () => {
         subject: "You paid $5.00 USD to Valve Corp.",
         text: paypalPaidText,
       }),
-    ]);
+    ], "automatic", { amazon: "actual-checking", paypal: "actual-card" });
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const invalidateAfterCommit = vi.fn().mockResolvedValue(undefined);
     const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit, createId });
@@ -265,7 +358,7 @@ describe("transaction import worker", () => {
     await worker.processNextItemBatch();
     detail = await store.getRunDetail("owner-1", arrival.runId!);
 
-    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; the first request must preview both mapped accounts together.
+    // test-architecture: allow-boundary-interaction -- Actual import is the outbound financial boundary; the first request must preview both historical account snapshots together.
     expect(importGroups).toHaveBeenNthCalledWith(1, "owner-1", expect.arrayContaining([
       expect.objectContaining({ accountId: "actual-checking" }),
       expect.objectContaining({ accountId: "actual-card" }),
@@ -278,9 +371,8 @@ describe("transaction import worker", () => {
   });
 
   it("retries an uncertain post-call failure with the same imported ID", async () => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "automatic");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture()]);
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store);
     const previewWorker = createTransactionImportWorker({
       store,
       dbClient: db,
@@ -323,9 +415,8 @@ describe("transaction import worker", () => {
     "ACTUAL_IMPORT_SYNC_UNCERTAIN",
     "ACTUAL_WORKER_TIMEOUT",
   ])("reconciles after an uncertain Actual commit (%s)", async (errorCode) => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "automatic");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture()]);
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store);
     const previewWorker = createTransactionImportWorker({
       store,
       dbClient: db,
@@ -364,9 +455,8 @@ describe("transaction import worker", () => {
   });
 
   it("reconciles safely when persistence fails after Actual success", async () => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "automatic");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture()]);
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store);
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const previewWorker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit: vi.fn(), createId });
     await previewWorker.processNextItemBatch();
@@ -410,9 +500,8 @@ describe("transaction import worker", () => {
   });
 
   it("keeps unsafe automatic candidates in review after Actual preview", async () => {
-    const { store, service } = setup();
-    await mapping(store, "paypal", "automatic");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture({
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store, [emailFixture({
       uid: "gmail-personal-paypal-cad",
       gmailMessageId: "paypal-cad",
       from: "service@paypal.com",
@@ -430,9 +519,8 @@ describe("transaction import worker", () => {
   });
 
   it("pauses incompatibility errors without changing the canonical imported ID", async () => {
-    const { store, service } = setup();
-    await mapping(store, "amazon", "automatic");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture()]);
+    const { store } = setup();
+    const arrival = await seedLegacyItems(store);
     const importGroups = vi.fn().mockRejectedValue(Object.assign(new Error("unsupported import"), { code: "ACTUAL_IMPORT_INCOMPATIBLE" }));
     const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, createId });
 
@@ -446,13 +534,12 @@ describe("transaction import worker", () => {
 
   it("dry-runs owner-confirmed corrections and uses the legacy raw Gmail ID fallback", async () => {
     const { store, service } = setup();
-    await mapping(store, "amazon", "observe");
-    const arrival = await service.ingestArrivals("owner-1", [emailFixture({
+    const arrival = await seedLegacyItems(store, [emailFixture({
       gmailMessageId: "raw-gmail-message-id",
       uid: "gmail-personal-raw-gmail-message-id",
       subject: "Order confirmation",
       text: "Order Total: $12.00",
-    })]);
+    })], "observe");
     const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
     const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, invalidateAfterCommit: vi.fn(), createId });
 

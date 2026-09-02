@@ -16,9 +16,6 @@
     "server/transaction-imports/parsers/fixtures.ts:emailFixture": "Sanitized phase-01 parser fixture factory exported only for focused parser tests",
     "server/transaction-imports/parsers/fixtures.ts:paypalPaidText": "Sanitized phase-01 parser fixture exported only for focused parser tests",
     "server/transaction-imports/parsers/fixtures.ts:paypalSubmittedText": "Sanitized phase-01 parser fixture exported only for focused parser tests",
-    "server/transaction-imports/transaction-email-discovery.ts:scanTransactionEmails": "Bounded full-scan helper is directly contract-tested while durable orchestration consumes the paged entry",
-    "shared/types/bills.ts:BillExtractionResponse": "Package 3 replaces the live extraction response with FinancialEmailExtractionResponse; Package 6 owns legacy contract retirement",
-    "src/components/bills/bill-badge/helpers.ts:mappingStatusLabel": "Package 3 removes mapping language from live bill review; Package 6 owns legacy helper and test retirement",
-    "src/components/bills/bill-badge/helpers.ts:pickDefaultFromAccount": "Package 3 removes unsafe default-account inference from live bill review; Package 6 owns legacy helper retirement"
+    "server/transaction-imports/transaction-email-discovery.ts:scanTransactionEmails": "Bounded full-scan helper is directly contract-tested while durable orchestration consumes the paged entry"
   }
 }

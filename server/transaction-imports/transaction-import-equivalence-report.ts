@@ -4,7 +4,7 @@ import type { InStatement } from "@libsql/client";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type {
   TransactionImportItemStatus,
-  TransactionImportMappingSource,
+  TransactionImportParserSource,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 import {
@@ -27,7 +27,7 @@ interface ReplayDb {
 
 interface ReplayDiscrepancy {
   key: string;
-  source: TransactionImportMappingSource;
+  source: TransactionImportParserSource;
   legacyStatus: TransactionImportItemStatus;
   codes: string[];
 }
@@ -35,7 +35,7 @@ interface ReplayDiscrepancy {
 export interface TransactionImportEquivalenceReport {
   writesEnabled: false;
   sampled: number;
-  bySource: Record<TransactionImportMappingSource, number>;
+  bySource: Record<TransactionImportParserSource, number>;
   byLegacyStatus: Partial<Record<TransactionImportItemStatus, number>>;
   canonical: { plannable: number; preserved: number; containedReview: number };
   targets: {
@@ -172,7 +172,7 @@ export function summarizeTransactionImportEquivalence(
   };
 
   sourceItems.forEach((item, index) => {
-    const source = item.source as TransactionImportMappingSource;
+    const source = item.source as TransactionImportParserSource;
     const planned = plannedItems[index];
     const plan = planned?.financialPlan || null;
     const shadow = planned?.planShadow || null;
@@ -235,7 +235,9 @@ export function summarizeTransactionImportEquivalence(
     }
 
     if (plan?.automation.rollout === "observe_only") report.automation.observeOnly++;
-    if ((!plan && item.status === "needs_review") || (plan?.automation.rollout === "observe_only" && !plan.automation.eligible)) {
+    // Replay never executes writes. Enabled rollout is still contained when the
+    // planner suppresses a duplicate or keeps the item behind review gates.
+    if ((!plan && item.status === "needs_review") || (plan && !plan.automation.eligible)) {
       report.automation.contained++;
     } else {
       codes.push("not_safely_contained");

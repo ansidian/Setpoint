@@ -36,6 +36,7 @@ import type { TransactionQueryResult, TransactionRecord } from "../../shared/typ
 
 export { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 export { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
+export { financialEmailAutomationEnabled } from "./financialEmailAutomationPolicy.ts";
 
 interface ProjectedActualMetadata extends ActualMetadata {
   syncHealth: BillsMirrorHealth;
@@ -64,7 +65,7 @@ export interface FinancialEmailPlannerDependencies {
   candidateExtractor?: typeof extractBillCandidate;
   candidateVerification?: Pick<
     ReturnType<typeof createBillCandidateVerificationService>,
-    "verifyEmailCandidate" | "selectEmailTargetPolicy"
+    "verifyEmailCandidate"
   > & Partial<Pick<ReturnType<typeof createBillCandidateVerificationService>, "rankEmailTargetBundles">>;
   targetRanker?: FinancialTargetBundleRanker;
   modelChoiceReader?: typeof loadBillExtractChoice;
@@ -75,6 +76,7 @@ export interface FinancialEmailPlannerDependencies {
 }
 
 const RECONCILABLE_EVENTS = new Set<BillEventKind>([
+  "purchase",
   "statement_issued",
   "payment_due",
   "payment_scheduled",

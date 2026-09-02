@@ -2,10 +2,6 @@ import type {
   TransactionImportConfirmation,
   TransactionImportItem,
   TransactionImportRunSummary,
-} from "../../../../../shared/types/transaction-imports";
-import type {
-  TransactionImportMappingSource,
-  TransactionImportMode,
   TransactionImportSource,
 } from "../../../../../shared/types/transaction-imports";
 
@@ -43,15 +39,6 @@ export function itemToConfirmation(
 export function formatImportAmount(amountCents: number | null): string {
   if (!Number.isSafeInteger(amountCents)) return "Amount unavailable";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((amountCents || 0) / 100);
-}
-
-export function automaticImportConfirmation(
-  source: TransactionImportMappingSource,
-  currentMode: TransactionImportMode,
-  nextMode: TransactionImportMode,
-): string | null {
-  if (nextMode !== "automatic" || currentMode === "automatic") return null;
-  return `Enable automatic ${source === "amazon" ? "Amazon" : "PayPal"} imports? Eligible messages will write to Actual without another click.`;
 }
 
 export function transactionImportSourceLabel(source: TransactionImportSource): string {

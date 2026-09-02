@@ -2,19 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   commitTransactionImportItems,
   dismissTransactionImportItem,
-  getTransactionImportMappings,
   getTransactionImportRun,
   listTransactionImportRuns,
   retryTransactionImportItem,
   startTransactionImportScan,
-  updateTransactionImportMapping,
 } from "@/api";
 import type {
   TransactionImportConfirmation,
   TransactionImportHistoricalScanRequest,
-  TransactionImportMapping,
-  TransactionImportMappingSource,
-  TransactionImportMappingUpdate,
   TransactionImportRunDetail,
   TransactionImportRunSummary,
 } from "../../../shared/types/transaction-imports";
@@ -35,7 +30,6 @@ export function isTransactionImportWorkActive(
 }
 
 export default function useTransactionImports({ enabled = true }: { enabled?: boolean } = {}) {
-  const [mappings, setMappings] = useState<TransactionImportMapping[]>([]);
   const [runs, setRuns] = useState<TransactionImportRunSummary[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<TransactionImportRunDetail | null>(null);
@@ -65,12 +59,8 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
     const requestId = ++requestRef.current;
     if (!quiet) setLoading(true);
     try {
-      const [nextMappings, response] = await Promise.all([
-        getTransactionImportMappings(),
-        listTransactionImportRuns(),
-      ]);
+      const response = await listTransactionImportRuns();
       if (!mountedRef.current || requestId !== requestRef.current) return;
-      setMappings(nextMappings);
       setRuns(response.runs);
       const currentId = selectedRunIdRef.current;
       const nextId = currentId && response.runs.some((run) => run.id === currentId)
@@ -127,27 +117,6 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
       if (mountedRef.current && requestId === requestRef.current) setLoading(false);
     }
   }, [loadRun]);
-
-  const saveMapping = useCallback(async (
-    source: TransactionImportMappingSource,
-    update: TransactionImportMappingUpdate,
-  ) => {
-    setBusyKey(`mapping:${source}`);
-    try {
-      const saved = await updateTransactionImportMapping(source, update);
-      if (mountedRef.current) {
-        setMappings((current) => [...current.filter((entry) => entry.source !== source), saved]
-          .sort((a, b) => a.source.localeCompare(b.source)));
-        setError("");
-      }
-      return saved;
-    } catch (nextError) {
-      if (mountedRef.current) setError(errorText(nextError));
-      throw nextError;
-    } finally {
-      if (mountedRef.current) setBusyKey(null);
-    }
-  }, []);
 
   const startScan = useCallback(async (request: TransactionImportHistoricalScanRequest) => {
     setBusyKey("scan");
@@ -206,7 +175,6 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
   }, [refresh]);
 
   return {
-    mappings,
     runs,
     selectedRun,
     selectedRunId,
@@ -216,7 +184,6 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
     error,
     refresh,
     selectRun,
-    saveMapping,
     startScan,
     commit,
     retry,

@@ -8,7 +8,7 @@ import type {
   TransactionImportPlanShadow,
   TransactionImportPlanTargetComparison,
 } from "../../shared/types/transaction-imports.ts";
-import { planFinancialEmail } from "../bills/financial-email-planner.ts";
+import { financialEmailAutomationEnabled, planFinancialEmail } from "../bills/financial-email-planner.ts";
 import { normalizedMailbox } from "./parsers/parser-utils.ts";
 import type { InsertItemInput } from "./transaction-import-store.ts";
 
@@ -89,6 +89,7 @@ export function transactionImportPlannerInput(item: InsertItemInput): FinancialE
     },
     event_kind: "purchase",
     event_confidence: 1,
+    event_evidence: item.emailSubject,
     event_verification: {
       status: "kept_initial",
       provider: "source_adapter",
@@ -233,4 +234,42 @@ export async function attachTransactionImportFinancialPlans(
     () => planNext(),
   ));
   return results;
+}
+
+/** New imports use the planner; shadow comparisons remain available only for historical replay. */
+export async function planTransactionImportItems(
+  userId: string,
+  items: InsertItemInput[],
+  planner: TransactionImportFinancialPlanner = planFinancialEmail,
+): Promise<InsertItemInput[]> {
+  const planned = await attachTransactionImportFinancialPlans(userId, items, planner);
+  return planned.map((item) => {
+    const plan = item.financialPlan;
+    const accountId = plan?.targets.account.status === "resolved" ? plan.targets.account.id ?? null : null;
+    const categoryId = plan?.targets.category.status === "resolved" ? plan.targets.category.id ?? null : null;
+    const noWrite = plan?.operation.kind === "no_write" || plan?.reconciliation.disposition === "no_write";
+    const readyForPreview = plan && item.importedId && accountId && item.currency === "USD"
+      && item.amountCents != null && item.amountCents < 0
+      && ["semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings"].every((required) => (
+        plan.automation.gates.some((gate) => gate.gate === required && gate.status === "pass")
+      ))
+      && !plan.automation.gates.some((gate) => gate.gate === "reconciliation" && gate.status === "fail");
+    return {
+      ...item,
+      actualAccountId: accountId,
+      actualCategoryId: categoryId,
+      automationMode: plan?.automation.rollout === "enabled"
+        && financialEmailAutomationEnabled(plan.automation.operationClass) ? "automatic" : "observe",
+      automaticSafe: false,
+      status: noWrite ? "already_present" : readyForPreview ? "queued" : "needs_review",
+      financialPlan: plan ? {
+        ...plan,
+        candidate: {
+          ...plan.candidate,
+          transaction_import: { ...plan.candidate.transaction_import!, executionOwner: "planner" },
+        },
+      } : null,
+      planShadow: null,
+    };
+  });
 }

@@ -1,6 +1,6 @@
 import { planFinancialEmail } from "./financial-email-planner.ts";
 import type {
-  BillPayResolution,
+  BillCandidate,
   FinancialDocumentKind,
   FinancialEmailInput,
   FinancialEmailPlan,
@@ -9,10 +9,23 @@ import type {
   FinancialPlanTarget,
   FinancialReconciliationStatus,
   FinancialTargetStatus,
+  StatementActualStatus,
 } from "../../shared/types/bills.ts";
 
+// Historical outcomes may be supplied for read-only comparison; no legacy resolver runs.
+interface LegacyFinancialResolution {
+  bill: BillCandidate;
+  mapping: {
+    status: "matched" | "incomplete_mapping" | "invalid_target" | "identity_only" | "unmapped";
+    reason?: string;
+    profileId?: string | null;
+    behaviorId?: string | null;
+  };
+  actualStatus?: StatementActualStatus;
+}
+
 export interface RedactedLegacyFinancialOutcome {
-  mappingStatus: BillPayResolution["mapping"]["status"];
+  mappingStatus: LegacyFinancialResolution["mapping"]["status"];
   mappingReason: string | null;
   billType: string | null;
   actualStatus: FinancialReconciliationStatus | null;
@@ -52,7 +65,7 @@ function legacyOperation(type: unknown): Exclude<FinancialOperationKind, "review
   return null;
 }
 
-function redactedLegacyOutcome(resolution: BillPayResolution | null): RedactedLegacyFinancialOutcome | null {
+function redactedLegacyOutcome(resolution: LegacyFinancialResolution | null): RedactedLegacyFinancialOutcome | null {
   if (!resolution) return null;
   return {
     mappingStatus: resolution.mapping.status,
@@ -75,7 +88,7 @@ function compareTarget(
 
 function targetAgreement(
   planTargets: Awaited<ReturnType<typeof planFinancialEmail>>["targets"],
-  legacyResolution: BillPayResolution | null,
+  legacyResolution: LegacyFinancialResolution | null,
 ): Record<string, TargetAgreement> | null {
   if (!legacyResolution) return null;
   const legacy = legacyResolution.bill;
@@ -92,7 +105,7 @@ function targetAgreement(
 export async function evaluateFinancialEmail(
   userId: string,
   input: FinancialEmailInput,
-  legacyResolution: BillPayResolution | null = null,
+  legacyResolution: LegacyFinancialResolution | null = null,
 ): Promise<FinancialEmailEvaluation> {
   const plan = await planFinancialEmail(userId, input);
   const legacy = redactedLegacyOutcome(legacyResolution);
