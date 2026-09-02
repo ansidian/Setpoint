@@ -6,10 +6,10 @@ AI email classification: the batch worker, model client, preflight rules, escala
 
 - `triage-worker.ts` — batch triage of snapshot items, applies escalation policy, plans financial candidates before finalization, and stages exact USD expenses for preview and policy-gated automatic execution
 - `triage-types.ts` — shared triage rows, decisions, rules, model, queue, and dependency contracts
-- `triage-projections-model.ts` — pure DB-free triage projections: bill candidate, event details, sound trigger, search text
+- `triage-projections-model.ts` — pure DB-free triage projections: email interests, event details, and sound trigger
 - `triage-job-store.ts` — `ea_triage_jobs` queue SQL: claim/requeue/complete/defer/recover-stale/prune
 - `triage-finalize-store.ts` — `ea_email_triage` + snapshot persistence: load email, persist decisions/candidates/financial plans, attach to snapshot
-- `triage-model-client.ts` — LLM triage call and decision parsing; embeds the bills domain's shared first-pass semantic instructions
+- `triage-model-client.ts` — LLM triage call and decision parsing; owns financial candidate admission and embeds the bills domain's shared first-pass semantic instructions
 - `triage-decision-normalize.ts` — normalizes decisions: action, rationale, confidence
 - `triage-heuristic-scorer.ts` — dev-only no-LLM classifier: sender/subject/body bands → lane (the `no_model` path)
 - `triage-escalation-policy.ts` — routes actions to destinations (snooze/archive/bill/…)
@@ -25,7 +25,7 @@ AI email classification: the batch worker, model client, preflight rules, escala
 
 ## Local patterns
 
-- Preflight rules are data (`triage-preflight-rules.json`), not code; edit the JSON and its test together.
+- Preflight rules are data (`triage-preflight-rules.json`), not code; edit the JSON and its test together. Financial-event profiles route to semantic classification; finalization never manufactures candidates from monetary keywords.
 - Escalation destinations live in `triage-escalation-policy.ts`; the worker never routes actions inline.
 
 ## Related

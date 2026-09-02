@@ -312,9 +312,31 @@ describe("triage preflight engine", () => {
       from_address: "return@amazon.com",
       subject: "Dropoff confirmed for Zacurate 500C Elite Fingertip",
     }))).toMatchObject({
-      action: "finalize",
+      action: "route_model",
+      modelTier: "cheap",
       lane: "fyi",
       reasonCode: "amazon_return_confirmation_fyi",
+    });
+
+    expect(evaluateTriagePreflight(email({
+      from_name: "Amazon.com",
+      from_address: "return@amazon.com",
+      subject: "Advance refund issued for your return",
+    }))).toMatchObject({
+      action: "route_model",
+      modelTier: "cheap",
+      modelSaved: false,
+      reasonCode: "amazon_return_confirmation_fyi",
+    });
+
+    expect(evaluateTriagePreflight(email({
+      subject: "Your automatic payment confirmation",
+      body_snippet: "Your payment has been processed.",
+    }))).toMatchObject({
+      action: "route_model",
+      modelTier: "cheap",
+      modelSaved: false,
+      reasonCode: "routine_payment_fyi",
     });
 
     expect(evaluateTriagePreflight(email({
@@ -334,7 +356,9 @@ describe("triage preflight engine", () => {
       subject: "A $44.72 transaction was made on your Costco Anywhere account",
     }));
     expect(citi).toMatchObject({
-      action: "finalize",
+      action: "route_model",
+      modelTier: "cheap",
+      modelSaved: false,
       lane: "fyi",
       category: "finance",
       reasonCode: "finance_transaction_fyi",
@@ -357,14 +381,16 @@ describe("triage preflight engine", () => {
     });
   });
 
-  it("finalizes third-pass exact-profile FYI and Noise candidates without model spend", () => {
+  it("routes financial profiles to semantic triage while finalizing unrelated noise", () => {
     expect(evaluateTriagePreflight(email({
       from_name: "SoFi",
       from_address: "statements@sofi.com",
       subject: "Your SoFi Credit Card payment is due on May 05, 2026",
       body_snippet: "Your statement balance of $156.98 is due May 5, 2026. You're enrolled in autopay.",
     }))).toMatchObject({
-      action: "finalize",
+      action: "route_model",
+      modelTier: "cheap",
+      modelSaved: false,
       lane: "fyi",
       category: "finance",
       reasonCode: "autopay_due_covered_fyi",
@@ -375,7 +401,9 @@ describe("triage preflight engine", () => {
       from_address: "service@paypal.com",
       subject: "Mercari: $9.06 USD",
     }))).toMatchObject({
-      action: "finalize",
+      action: "route_model",
+      modelTier: "cheap",
+      modelSaved: false,
       lane: "fyi",
       category: "finance",
       reasonCode: "finance_transaction_fyi",

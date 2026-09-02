@@ -114,7 +114,7 @@
     "profile_group": "first_wave",
     "priority": 42,
     "match_json": {
-      "mode": "finalize",
+      "action": "route_model",
       "from_name_includes": [
         "amazon",
         "return@amazon.com"
@@ -143,7 +143,7 @@
     "key": "default_autopay_confirmation_fyi",
     "priority": 45,
     "match_json": {
-      "mode": "finalize",
+      "action": "route_model",
       "subject_regex": "(autopay|auto pay|automatic payment|payment confirmation)",
       "snippet_includes": [
         "scheduled",
@@ -172,7 +172,7 @@
     "profile_group": "first_wave",
     "priority": 47,
     "match_json": {
-      "mode": "finalize",
+      "action": "route_model",
       "from_name_includes": [
         "citi alerts",
         "fidelity investments",
@@ -212,7 +212,7 @@
     "profile_group": "third_wave",
     "priority": 47.5,
     "match_json": {
-      "mode": "finalize",
+      "action": "route_model",
       "from_name_includes": [
         "paypal"
       ],
@@ -271,7 +271,7 @@
     "profile_group": "third_wave",
     "priority": 48.5,
     "match_json": {
-      "mode": "finalize",
+      "action": "route_model",
       "from_name_includes": [
         "sofi"
       ],

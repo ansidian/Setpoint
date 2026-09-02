@@ -1,5 +1,4 @@
 import { getOrCreateActiveSnapshot } from "../snapshots/snapshot-service.ts";
-import { maybeBillCandidate } from "./triage-projections-model.ts";
 import { nowIso } from "./triage-job-store.ts";
 import type { SnapshotWriteDb } from "../snapshots/snapshot-types.ts";
 import type {
@@ -99,7 +98,9 @@ export async function updateTriageRow(email: TriageEmail, decision: TriageDecisi
   inferBillCandidate?: boolean;
   financialEmailPlan?: FinancialEmailPlan | null;
 }): Promise<void> {
-  const billCandidate = inferBillCandidate ? maybeBillCandidate(email, decision) : null;
+  // Only semantic classification can admit a financial candidate. Money-related
+  // wording in a rule or failure fallback is not evidence of a recordable event.
+  const billCandidate = inferBillCandidate ? decision.bill_candidate : null;
   await dbClient.execute({
     sql: `UPDATE ea_email_triage
           SET lane = ?,

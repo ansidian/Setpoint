@@ -1,7 +1,7 @@
-import type { TriageDecision, TriageEmail, TriageLane } from "./triage-types.ts";
+import type { TriageEmail, TriageLane } from "./triage-types.ts";
 
 // Pure, DB-free triage projections lifted from triage-worker.ts so they can be
-// unit-tested as input -> output. No db access, no IO; safeJson/toText stay
+// unit-tested as input -> output. No db access, no IO; safeJson stays
 // module-private.
 
 function safeJson(value: unknown, fallback: unknown = {}): unknown {
@@ -11,20 +11,6 @@ function safeJson(value: unknown, fallback: unknown = {}): unknown {
   } catch {
     return fallback;
   }
-}
-
-function toText(value: unknown): string {
-  return String(value || "").toLowerCase();
-}
-
-export function emailSearchText(email: Record<string, unknown>): string {
-  return [
-    email.from_name,
-    email.from_address,
-    email.subject,
-    email.body_snippet,
-    email.body_text,
-  ].map(toText).join("\n");
 }
 
 export function normalizeEmailInterests(raw: unknown): string[] {
@@ -54,25 +40,5 @@ export function emailTriageEventDetails(email: Pick<TriageEmail, "account_id" | 
     triageSource,
     reason,
     ...(email.read ? { read: true } : {}),
-  };
-}
-
-export function maybeBillCandidate(email: Record<string, unknown>, decision: Partial<Pick<TriageDecision, "bill_candidate" | "category" | "deadline_at" | "triage_source">>): Record<string, unknown> | null {
-  if (decision.bill_candidate) return decision.bill_candidate;
-  // An explicit semantic non-candidate must survive finalization. Non-model
-  // decisions still use the conservative keyword fallback below.
-  if (decision.bill_candidate === null
-    && (!decision.triage_source || decision.triage_source === "cheap_model" || decision.triage_source === "strong_model")) return null;
-  const text = emailSearchText(email);
-  const looksFinancial = /\$\s*\d|payment|invoice|statement|balance|autopay|due/.test(text);
-  if (!looksFinancial) return null;
-  if (decision.category !== "finance" && !/\$\s*\d/.test(text)) return null;
-  return {
-    source: "triage",
-    payee_hint: email.from_name || email.from_address || "",
-    subject: email.subject || "",
-    amount: null,
-    due_date: decision.deadline_at || null,
-    requires_confirmation: true,
   };
 }

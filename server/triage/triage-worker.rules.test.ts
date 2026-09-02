@@ -71,6 +71,92 @@ describe("email triage worker rule finalization", () => {
     });
     });
 
+  it.each([
+    {
+      from_name: "Example Deals", from_address: "deals@example.com",
+      subject: "Weekend sale - save $40", body: "Get $40 off your next order.",
+      lane: "noise", category: "marketing",
+    },
+    {
+      from_name: "Chase Credit Journey", from_address: "alerts@chase.com",
+      subject: "Your latest credit summary", body: "Your reported balance is $400.",
+      lane: "fyi", category: "finance",
+    },
+    {
+      from_name: "PikaPods Support", from_address: "support@pikapods.com",
+      subject: "Low balance", body: "Your balance is $2. Add funds to keep your apps running.",
+      lane: "needs_attention", category: "finance",
+    },
+    {
+      from_name: "PayPal", from_address: "service@paypal.com",
+      subject: "Your payment method has expired", body: "Update your payment method.",
+      lane: "needs_attention", category: "finance",
+    },
+  ])("does not persist financial candidates for rule-finalized $subject", async (fixture) => {
+    const dbClient = await createMigratedDb();
+    try {
+      await queueEmail(dbClient, {
+        from_name: fixture.from_name,
+        from_address: fixture.from_address,
+        subject: fixture.subject,
+        body_snippet: fixture.body,
+        body_text: fixture.body,
+      });
+      await processNextEmailTriageJob({
+        dbClient,
+        modelClient: { classify: async () => { throw new Error("Unexpected model request"); } },
+        now: new Date("2026-05-03T12:10:00.000Z"),
+      });
+      const rows = await dbClient.execute({
+        sql: `SELECT lane, category, triage_source, triage_status,
+                     bill_candidate_json, financial_email_plan_json
+              FROM ea_email_triage WHERE email_id = ?`,
+        args: ["msg-1"],
+      });
+      expect(rows.rows[0]).toMatchObject({
+        lane: fixture.lane,
+        category: fixture.category,
+        triage_source: "rule",
+        triage_status: "complete",
+        bill_candidate_json: null,
+        financial_email_plan_json: null,
+      });
+    } finally {
+      dbClient.close();
+    }
+  });
+
+  it("preserves semantic rejection after a financial preflight match", async () => {
+    const dbClient = await createMigratedDb();
+    try {
+      await queueEmail(dbClient, {
+        from_name: "Apple", from_address: "news@apple.com",
+        subject: "Your receipt preferences", body_snippet: "Receive offers up to $50.",
+        body_text: "Your receipt preferences were saved. Receive offers up to $50.",
+      });
+      await processNextEmailTriageJob({
+        dbClient,
+        modelClient: { classify: async () => ({ decision: {
+          lane: "fyi", category: "updates", urgency: "normal", confidence: 0.99,
+          summary: "Receipt preferences saved.", action: "No action needed", bill_candidate: null,
+        } }) },
+        now: new Date("2026-05-03T12:10:00.000Z"),
+      });
+      const rows = await dbClient.execute({
+        sql: `SELECT triage_source, triage_status, category,
+                     bill_candidate_json, financial_email_plan_json
+              FROM ea_email_triage WHERE email_id = ?`,
+        args: ["msg-1"],
+      });
+      expect(rows.rows[0]).toMatchObject({
+        triage_source: "cheap_model", triage_status: "complete", category: "updates",
+        bill_candidate_json: null, financial_email_plan_json: null,
+      });
+    } finally {
+      dbClient.close();
+    }
+  });
+
   it("keeps configured email interests out of noise", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {

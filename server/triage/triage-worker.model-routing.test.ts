@@ -11,14 +11,14 @@ vi.mock("../ai-credentials.ts", () => ({
 }));
 
 describe("email triage worker model routing", () => {
-  it("persists the same financial plan candidate for triage and snapshot reads", async () => {
+  it("routes a receipt rule through semantic triage and persists its incomplete financial candidate", async () => {
     const dbClient = await createMigratedDb();
     const queued = await queueEmail(dbClient, {
-      subject: "Your warehouse order",
+      subject: "Your Apple receipt",
       body_snippet: "Order total $84.12",
-      body_text: "Your Costco order total is $84.12.",
-      from_name: "Costco",
-      from_address: "orders@costco.com",
+      body_text: "Your Apple order total is $84.12.",
+      from_name: "Apple",
+      from_address: "orders@apple.com",
     });
     await dbClient.execute({
       sql: "UPDATE ea_email_index SET sender_authentication_json = ? WHERE uid = ?",
@@ -27,10 +27,10 @@ describe("email triage worker model routing", () => {
         status: "pass",
         provider: "gmail",
         source: "gmail_authentication_results",
-        headerFromDomain: "costco.com",
-        dkim: [{ result: "pass", domain: "costco.com", aligned: true }],
+        headerFromDomain: "apple.com",
+        dkim: [{ result: "pass", domain: "apple.com", aligned: true }],
         spf: null,
-        dmarc: { result: "pass", domain: "costco.com", aligned: true },
+        dmarc: { result: "pass", domain: "apple.com", aligned: true },
         evaluatedAt: "2026-05-03T12:00:00.000Z",
       }), queued.uid],
     });
@@ -41,12 +41,12 @@ describe("email triage worker model routing", () => {
           category: "finance",
           urgency: "normal",
           escalation_badge: null,
-          summary: "Costco order confirmed.",
+          summary: "Apple order confirmed.",
           action: "Review order",
           deadline_at: null,
           confidence: 0.98,
           bill_candidate: {
-            payee_hint: "Costco",
+            payee_hint: "Apple",
             amount: 84.12,
             amount_kind: "order_total",
             amount_candidates: [{ kind: "order_total", value: 84.12 }],
@@ -65,12 +65,12 @@ describe("email triage worker model routing", () => {
       plannerInput = input as Record<string, unknown>;
       const candidate = {
         ...input.candidate,
-        target_policy_key: "policy_warehouse",
+        target_policy_key: "policy_software",
         target_confidence: 0.99,
-        target_evidence: "Costco order",
+        target_evidence: "Apple order",
         target_verification: { status: "selected" as const, option_count: 2, provider: "openai", model: "gpt-5.4-mini" },
-        category_id: "category-warehouse",
-        category_label: "Warehouse",
+        category_id: "category-software",
+        category_label: "Software",
         semantic_enrichment: { status: "complete" as const, provider: "openai", model: "gpt-5.4-mini" },
       };
       return {
@@ -80,8 +80,8 @@ describe("email triage worker model routing", () => {
         operation: { intended: "create_transaction" as const, kind: "review" as const, reasons: ["due_date_missing" as const] },
         targets: {
           account: { kind: "account" as const, status: "unresolved" as const, provenance: [] },
-          payee: { kind: "payee" as const, status: "resolved" as const, id: "payee-costco", label: "Costco", provenance: [] },
-          category: { kind: "category" as const, status: "resolved" as const, id: "category-warehouse", label: "Warehouse", provenance: [] },
+          payee: { kind: "payee" as const, status: "resolved" as const, id: "payee-apple", label: "Apple", provenance: [] },
+          category: { kind: "category" as const, status: "resolved" as const, id: "category-software", label: "Software", provenance: [] },
           fromAccount: { kind: "from_account" as const, status: "not_applicable" as const, provenance: [] },
           toAccount: { kind: "to_account" as const, status: "not_applicable" as const, provenance: [] },
           schedule: { kind: "schedule" as const, status: "not_applicable" as const, provenance: [] },
@@ -114,8 +114,8 @@ describe("email triage worker model routing", () => {
     const snapshotCandidate = JSON.parse(String(rows.rows[0]!.snapshot_candidate));
     expect(triageCandidate).toEqual(snapshotCandidate);
     expect(triageCandidate).toMatchObject({
-      target_policy_key: "policy_warehouse",
-      category_id: "category-warehouse",
+      target_policy_key: "policy_software",
+      category_id: "category-software",
       semantic_enrichment: { status: "complete" },
     });
     expect(financialPlan).toMatchObject({
@@ -127,7 +127,7 @@ describe("email triage worker model routing", () => {
       sourceIdentity: {
         provider: "gmail",
         accountId: "gmail-work",
-        senderAddress: "orders@costco.com",
+        senderAddress: "orders@apple.com",
         senderAuthentication: "pass",
         authenticationEvidence: expect.arrayContaining([
           "sender-auth:v1",
