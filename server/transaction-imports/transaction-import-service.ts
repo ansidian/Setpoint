@@ -5,13 +5,14 @@ import { transactionImportStore, type InsertItemInput, type TransactionImportSto
 import type {
   TransactionImportConfirmation,
   TransactionImportMapping,
+  TransactionImportMappingSource,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 import { attachTransactionImportFinancialPlans } from "./transaction-import-planner-adapter.ts";
 
 export interface HistoricalScanOptions {
   gmailAccountIds: string[];
-  sources: TransactionImportSource[];
+  sources: TransactionImportMappingSource[];
   startDate: string;
   endDate: string;
 }
@@ -41,7 +42,7 @@ export function historicalScanOptionsKey(options: HistoricalScanOptions): string
 
 function validateHistoricalOptions(options: HistoricalScanOptions): HistoricalScanOptions {
   const gmailAccountIds = normalizedUnique(options.gmailAccountIds);
-  const sources = normalizedUnique(options.sources) as TransactionImportSource[];
+  const sources = normalizedUnique(options.sources) as TransactionImportMappingSource[];
   if (!gmailAccountIds.length) throw Object.assign(new Error("At least one Gmail account is required"), { status: 400 });
   if (!sources.length || sources.some((source) => source !== "amazon" && source !== "paypal")) {
     throw Object.assign(new Error("At least one supported transaction source is required"), { status: 400 });

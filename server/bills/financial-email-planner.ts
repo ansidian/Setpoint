@@ -34,6 +34,9 @@ import type {
 } from "../../shared/types/bills.ts";
 import type { TransactionQueryResult, TransactionRecord } from "../../shared/types/transactions.ts";
 
+export { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
+export { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
+
 interface ProjectedActualMetadata extends ActualMetadata {
   syncHealth: BillsMirrorHealth;
 }

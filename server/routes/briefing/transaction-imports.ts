@@ -2,17 +2,17 @@ import { Router } from "express";
 import * as billsService from "../../bills/bills-service.ts";
 import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
-import type { TransactionImportMode, TransactionImportSource } from "../../../shared/types/transaction-imports.ts";
+import type { TransactionImportMappingSource, TransactionImportMode } from "../../../shared/types/transaction-imports.ts";
 
 type HttpError = Error & { status?: number };
 type Service = typeof transactionImportService;
 
 const ownerUserId = (): string => process.env.EA_USER_ID!;
-const SOURCES = new Set<TransactionImportSource>(["amazon", "paypal"]);
+const SOURCES = new Set<TransactionImportMappingSource>(["amazon", "paypal"]);
 const MODES = new Set<TransactionImportMode>(["off", "observe", "automatic"]);
 
-function sourceParam(value: unknown): TransactionImportSource | null {
-  return typeof value === "string" && SOURCES.has(value as TransactionImportSource) ? value as TransactionImportSource : null;
+function sourceParam(value: unknown): TransactionImportMappingSource | null {
+  return typeof value === "string" && SOURCES.has(value as TransactionImportMappingSource) ? value as TransactionImportMappingSource : null;
 }
 
 function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: unknown): void {

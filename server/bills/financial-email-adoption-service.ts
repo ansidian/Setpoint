@@ -1,11 +1,14 @@
 import db from "../db/connection.ts";
 import { planFinancialEmail } from "./financial-email-planner.ts";
+import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
+import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import type { InStatement } from "@libsql/client";
 import type {
   BillCandidate,
   BillEmailContext,
   BillPaySource,
   FinancialEmailPlan,
+  FinancialEmailSourceIdentity,
 } from "../../shared/types/bills.ts";
 
 interface FinancialPlanDb {
@@ -38,6 +41,7 @@ interface StoredFinancialContext {
   accountId: string;
   emailId: string;
   email: BillEmailContext;
+  sourceIdentity: FinancialEmailSourceIdentity;
 }
 
 function parseJson<T>(value: unknown): T | null {
@@ -58,6 +62,14 @@ function validStoredPlan(value: FinancialEmailPlan | null): value is FinancialEm
     && Boolean(value.reconciliation);
 }
 
+function shouldRefreshAuthentication(
+  plan: FinancialEmailPlan,
+  sourceIdentity: FinancialEmailSourceIdentity,
+): boolean {
+  if (sourceIdentity.senderAuthentication !== "pass") return false;
+  return !plan.automation.gates.some((gate) => gate.gate === "authenticity" && gate.status === "pass");
+}
+
 async function loadStoredFinancialContext(
   userId: string,
   { emailId, accountId }: Pick<FinancialEmailSeedOptions, "emailId" | "accountId">,
@@ -75,7 +87,8 @@ async function loadStoredFinancialContext(
                  i.from_address,
                  i.subject,
                  i.body_snippet,
-                 i.body_text
+                 i.body_text,
+                 i.sender_authentication_json
           FROM ea_email_triage t
           LEFT JOIN ea_email_index i
             ON i.user_id = t.user_id
@@ -105,6 +118,11 @@ async function loadStoredFinancialContext(
       snippet: row.body_snippet || "",
       body: row.body_text || "",
     },
+    sourceIdentity: financialEmailSourceIdentity(row as {
+      account_id: string;
+      from_address?: string | null;
+      sender_authentication_json?: unknown;
+    }),
   };
 }
 
@@ -142,13 +160,26 @@ export async function resolveFinancialEmailSeed(
   payload: FinancialEmailSeedOptions = {},
   {
     planner = planFinancialEmail,
+    stagePreflight = stageFinancialEmailPreflight,
   }: {
     planner?: typeof planFinancialEmail;
+    stagePreflight?: typeof stageFinancialEmailPreflight;
   } = {},
 ): Promise<FinancialEmailPlan> {
   const dbClient = payload.dbClient || db;
   const stored = await loadStoredFinancialContext(userId, payload, dbClient);
-  if (stored?.plan) return stored.plan;
+  const stage = async (plan: FinancialEmailPlan): Promise<void> => {
+    if (!stored) return;
+    await stagePreflight(userId, {
+      accountId: stored.accountId,
+      emailId: stored.emailId,
+      emailSubject: String(stored.email.subject || ""),
+    }, plan).catch(() => undefined);
+  };
+  if (stored?.plan && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {
+    await stage(stored.plan);
+    return stored.plan;
+  }
 
   const requestEmail: BillEmailContext = {
     ...(stored?.email || {}),
@@ -164,21 +195,24 @@ export async function resolveFinancialEmailSeed(
     source: payload.source || "triage",
     providerMessageId: payload.providerMessageId || stored?.emailId || payload.emailId || null,
     candidateIdentityHint: payload.candidateIdentityHint,
-    sourceIdentity: {
-      accountId: stored?.accountId || payload.accountId || null,
-      senderAddress: typeof requestEmail.from_address === "string"
-        ? requestEmail.from_address
-        : null,
+    sourceIdentity: stored?.sourceIdentity || {
+      accountId: payload.accountId || null,
+      senderAddress: typeof requestEmail.from_address === "string" ? requestEmail.from_address : null,
       senderAuthentication: "unavailable",
     },
   });
   if (!stored) return plan;
 
   const persisted = await persistPlanCompareAndSwap(userId, stored, plan, dbClient);
-  if (persisted) return plan;
+  if (persisted) {
+    await stage(plan);
+    return plan;
+  }
   const winner = await loadStoredFinancialContext(userId, {
     emailId: stored.emailId,
     accountId: stored.accountId,
   }, dbClient);
-  return winner?.plan || plan;
+  const result = winner?.plan || plan;
+  await stage(result);
+  return result;
 }

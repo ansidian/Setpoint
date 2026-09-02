@@ -15,7 +15,7 @@ describe("transaction import store", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute({
@@ -136,6 +136,31 @@ describe("transaction import store", () => {
     });
     expect(JSON.stringify(detail)).not.toMatch(/html|message body/i);
     await expect(subject.getRunDetail("different-owner", "run-1")).resolves.toBeNull();
+  });
+
+  it("admits one observe-only generic item per stable financial-email identity", async () => {
+    const subject = store();
+    for (const id of ["generic-run-1", "generic-run-2"]) {
+      await subject.createRun({
+        id,
+        userId: "owner-1",
+        trigger: "arrival",
+        optionsKey: id,
+        gmailAccountIds: ["gmail-1"],
+        sources: ["generic"],
+      });
+    }
+    const generic = {
+      source: "generic" as const,
+      parserVersion: "financial-email-plan-v1",
+      candidateKey: "financial-email:v1:stable",
+      externalId: "financial-email:v1:stable",
+      importedId: "financial-email:v1:stable",
+      automationMode: "observe" as const,
+      automaticSafe: false,
+    };
+    expect(await subject.insertItem(itemInput({ ...generic, id: "generic-1", runId: "generic-run-1" }))).toBe(true);
+    expect(await subject.insertItem(itemInput({ ...generic, id: "generic-2", runId: "generic-run-2" }))).toBe(false);
   });
 
   it("persists the redacted financial plan and shadow comparison with the canonical item", async () => {

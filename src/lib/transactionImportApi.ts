@@ -4,17 +4,17 @@ import type {
   TransactionImportEmailStatusResponse,
   TransactionImportHistoricalScanRequest,
   TransactionImportMapping,
+  TransactionImportMappingSource,
   TransactionImportMappingUpdate,
   TransactionImportRunDetail,
   TransactionImportRunListResponse,
-  TransactionImportSource,
 } from "../../shared/types/transaction-imports";
 
 export const getTransactionImportMappings = (): Promise<TransactionImportMapping[]> =>
   apiFetch("/api/briefing/transaction-imports/mappings");
 
 export const updateTransactionImportMapping = (
-  source: TransactionImportSource,
+  source: TransactionImportMappingSource,
   mapping: TransactionImportMappingUpdate,
 ): Promise<TransactionImportMapping> => apiFetch(`/api/briefing/transaction-imports/mappings/${encodeURIComponent(source)}`, {
   method: "PUT",

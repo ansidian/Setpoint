@@ -20,12 +20,13 @@ Bill domain logic: AI extraction from emails, user bill-matching rules, and the 
 - `billEventVerifier.ts` — bounded second-pass LLM audit for low-confidence or `other` semantic events
 - `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of email candidates
 - `financial-email-planner.ts` — zero-configuration financial-email contract seam; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes or persists
-- `financial-email-adoption-service.ts` — live read/persistence facade; reuses stored plans and compare-and-swap persists one plan for historical candidates
+- `financial-email-adoption-service.ts` — live read/persistence facade; refreshes historical plans when stronger authentication arrives, compare-and-swap persists the winner, and stages exact observe-only expense preflight
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
 - `financial-email-observe-report.ts` — bounded, read-only aggregation of persisted planner outcomes by automation operation class; never executes writes
 - `financialEmailClassificationPolicy.ts` — pure semantic-event to document/intent classification policy used by the planner
 - `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; every class currently remains observe-only
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
+- `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
 - `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
 - `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque history-bundle keys with high-confidence verbatim evidence

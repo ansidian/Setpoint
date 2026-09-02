@@ -87,4 +87,66 @@ describe("resolveFinancialEmailSeed", () => {
     expect(rows.rows).toHaveLength(0);
     await dbClient.close();
   });
+
+  it("refreshes a stored unavailable-authentication plan when indexed Gmail evidence now passes", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Your warehouse order",
+      body_snippet: "Order total $84.12",
+      body_text: "Your Costco warehouse order total is $84.12.",
+      from_name: "Costco",
+      from_address: "orders@costco.com",
+    });
+    const candidate = {
+      payee_hint: "Costco",
+      amount: 84.12,
+      amount_kind: "order_total" as const,
+      event_kind: "purchase" as const,
+      event_confidence: 0.99,
+      event_evidence: "warehouse order",
+    };
+    const stale = reviewPlan(candidate);
+    stale.automation.gates = [{
+      gate: "authenticity",
+      status: "fail",
+      reasons: ["sender_authentication_unavailable"],
+    }];
+    await dbClient.execute({
+      sql: `UPDATE ea_email_index
+            SET sender_authentication_json = ?
+            WHERE user_id = ? AND account_id = ? AND uid = ?`,
+      args: [JSON.stringify({
+        version: 1,
+        status: "pass",
+        provider: "gmail",
+        source: "gmail_authentication_results",
+        headerFromDomain: "costco.com",
+        dkim: [],
+        spf: null,
+        dmarc: { result: "pass", domain: "costco.com", aligned: true },
+        evaluatedAt: "2026-09-01T20:00:00.000Z",
+      }), "user-1", "gmail-work", "msg-1"],
+    });
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET bill_candidate_json = ?, financial_email_plan_json = ?
+            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
+      args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
+    });
+    const refreshed = reviewPlan(candidate);
+    refreshed.automation.gates = [{ gate: "authenticity", status: "pass", reasons: [] }];
+    const planner = vi.fn(async (_userId: string, input: { sourceIdentity?: { senderAuthentication?: string } }) => {
+      expect(input.sourceIdentity?.senderAuthentication).toBe("pass");
+      return refreshed;
+    });
+
+    await expect(resolveFinancialEmailSeed(
+      "user-1",
+      { emailId: "msg-1", accountId: "gmail-work", dbClient },
+      { planner: planner as never },
+    )).resolves.toEqual(refreshed);
+    const stored = await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
+    expect(JSON.parse(String(stored.rows[0]!.financial_email_plan_json))).toEqual(refreshed);
+    await dbClient.close();
+  });
 });

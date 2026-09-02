@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { triageFinancialSourceIdentity } from "./triage-sender-authentication.ts";
+import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 
-describe("triage financial sender identity", () => {
+describe("financial email sender identity", () => {
   it("projects persisted normalized evidence without raw authentication headers", () => {
-    const identity = triageFinancialSourceIdentity({
+    const identity = financialEmailSourceIdentity({
       account_id: "gmail-work",
       from_address: "notice@billing.example",
       sender_authentication_json: JSON.stringify({
@@ -36,7 +36,7 @@ describe("triage financial sender identity", () => {
   });
 
   it("fails closed for absent or malformed projections", () => {
-    expect(triageFinancialSourceIdentity({
+    expect(financialEmailSourceIdentity({
       account_id: "icloud-main",
       from_address: "notice@billing.example",
       sender_authentication_json: "not-json",

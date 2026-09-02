@@ -1,9 +1,5 @@
-import type {
-  EmailAuthenticationProjection,
-} from "../../shared/types/email.ts";
-import type {
-  FinancialEmailSourceIdentity,
-} from "../../shared/types/bills.ts";
+import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
+import type { FinancialEmailSourceIdentity } from "../../shared/types/bills.ts";
 
 function parseProjection(value: unknown): EmailAuthenticationProjection | null {
   try {
@@ -19,7 +15,7 @@ function parseProjection(value: unknown): EmailAuthenticationProjection | null {
   }
 }
 
-export function triageFinancialSourceIdentity(email: {
+export function financialEmailSourceIdentity(email: {
   account_id: string;
   from_address?: string | null;
   sender_authentication_json?: unknown;

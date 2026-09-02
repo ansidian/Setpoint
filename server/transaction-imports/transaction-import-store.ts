@@ -1,12 +1,17 @@
-import type { Client, Row } from "@libsql/client";
+import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
 import type {
   TransactionImportItem, TransactionImportItemStatus, TransactionImportMapping,
   TransactionImportMode, TransactionImportPlanShadow, TransactionImportReconciliationStatus,
   TransactionImportRunDetail, TransactionImportRunStatus, TransactionImportRunSummary,
-  TransactionImportRunTrigger, TransactionImportSource,
+  TransactionImportRunTrigger, TransactionImportSource, TransactionImportMappingSource,
 } from "../../shared/types/transaction-imports.ts";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
+import {
+  projectTransactionImportItem as projectItem,
+  projectTransactionImportMapping as projectMapping,
+  projectTransactionImportRun as projectRun,
+} from "./transaction-import-store-projections.ts";
 
 type StoreDb = Pick<Client, "execute">;
 export interface CreateRunInput {
@@ -64,92 +69,6 @@ function numberValue(value: unknown): number {
   return Number(value || 0);
 }
 
-function nullableString(value: unknown): string | null {
-  return value == null ? null : String(value);
-}
-function parseJson<T>(value: unknown, fallback: T): T {
-  if (typeof value !== "string") return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function projectMapping(row: Row): TransactionImportMapping {
-  return {
-    source: String(row.source) as TransactionImportSource,
-    mode: String(row.mode) as TransactionImportMode,
-    actualAccountId: nullableString(row.actual_account_id),
-    actualCategoryId: nullableString(row.actual_category_id),
-    createdAt: numberValue(row.created_at),
-    updatedAt: numberValue(row.updated_at),
-  };
-}
-
-function projectRun(row: Row): TransactionImportRunSummary {
-  return {
-    id: String(row.id),
-    trigger: String(row.trigger) as TransactionImportRunTrigger,
-    status: String(row.status) as TransactionImportRunStatus,
-    gmailAccountIds: parseJson<string[]>(row.gmail_account_ids_json, []),
-    sources: parseJson<TransactionImportSource[]>(row.sources_json, []),
-    startDate: nullableString(row.start_date),
-    endDate: nullableString(row.end_date),
-    cursor: parseJson<Record<string, unknown>>(row.cursor_json, {}),
-    counts: {
-      discovered: numberValue(row.discovered_count),
-      parsed: numberValue(row.parsed_count),
-      review: numberValue(row.review_count),
-      queued: numberValue(row.queued_count),
-      added: numberValue(row.added_count),
-      updated: numberValue(row.updated_count),
-      duplicate: numberValue(row.duplicate_count),
-      failed: numberValue(row.failed_count),
-    },
-    attempts: numberValue(row.attempts),
-    lastError: nullableString(row.last_error),
-    createdAt: numberValue(row.created_at),
-    updatedAt: numberValue(row.updated_at),
-  };
-}
-
-function projectItem(row: Row): TransactionImportItem {
-  return {
-    id: String(row.id),
-    runId: String(row.run_id),
-    gmailAccountId: String(row.gmail_account_id),
-    gmailMessageId: String(row.gmail_message_id),
-    emailUid: String(row.email_uid),
-    emailSubject: String(row.email_subject || ""),
-    internetMessageId: nullableString(row.internet_message_id),
-    source: String(row.source) as TransactionImportSource,
-    parserVersion: String(row.parser_version),
-    externalId: nullableString(row.external_id),
-    importedId: nullableString(row.imported_id),
-    date: nullableString(row.transaction_date),
-    amountCents: row.amount_cents == null ? null : numberValue(row.amount_cents),
-    currency: nullableString(row.currency),
-    payee: nullableString(row.payee),
-    notes: String(row.notes || ""),
-    actualAccountId: nullableString(row.actual_account_id),
-    actualCategoryId: nullableString(row.actual_category_id),
-    automationMode: String(row.automation_mode) as "observe" | "automatic",
-    automaticSafe: numberValue(row.automatic_safe) === 1,
-    blockingWarnings: parseJson<unknown[]>(row.blocking_warnings_json, []),
-    evidence: parseJson<unknown[]>(row.evidence_json, []),
-    financialPlan: parseJson<FinancialEmailPlan | null>(row.financial_email_plan_json, null),
-    planShadow: parseJson<TransactionImportPlanShadow | null>(row.financial_plan_shadow_json, null),
-    status: String(row.status) as TransactionImportItemStatus,
-    reconciliationStatus: nullableString(row.reconciliation_status) as TransactionImportReconciliationStatus | null,
-    attempts: numberValue(row.attempts),
-    lastError: nullableString(row.last_error),
-    confirmedAt: row.confirmed_at == null ? null : numberValue(row.confirmed_at),
-    createdAt: numberValue(row.created_at),
-    updatedAt: numberValue(row.updated_at),
-  };
-}
-
 export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.now) {
   async function listMappings(userId: string): Promise<TransactionImportMapping[]> {
     const result = await dbClient.execute({
@@ -160,7 +79,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
   }
 
   async function upsertMapping(userId: string, input: {
-    source: TransactionImportSource;
+    source: TransactionImportMappingSource;
     mode: TransactionImportMode;
     actualAccountId?: string | null;
     actualCategoryId?: string | null;
@@ -207,6 +126,10 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     if (Number(result.rowsAffected || 0) > 0) {
       const created = await getRun(input.userId, input.id);
       return { run: created!, created: true };
+    }
+    if (input.trigger === "arrival") {
+      const existing = await getRun(input.userId, input.id);
+      if (existing) return { run: existing, created: false };
     }
     const active = await dbClient.execute({
       sql: `SELECT * FROM ea_transaction_import_runs
@@ -485,16 +408,34 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     reconciliationStatus?: TransactionImportReconciliationStatus | null;
     lastError?: string | null;
     nextAttemptAt?: number | null;
+    financialPlan?: FinancialEmailPlan | null;
   }): Promise<boolean> {
     const result = await dbClient.execute({
       sql: `UPDATE ea_transaction_import_items
             SET status = ?, reconciliation_status = COALESCE(?, reconciliation_status), last_error = ?, next_attempt_at = ?,
+                financial_email_plan_json = COALESCE(?, financial_email_plan_json),
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
             WHERE user_id = ? AND id = ? AND claim_token = ?`,
       args: [
         input.status, input.reconciliationStatus ?? null, input.lastError ?? null,
-        input.nextAttemptAt ?? null, now(), userId, itemId, claimToken,
+        input.nextAttemptAt ?? null, input.financialPlan ? JSON.stringify(input.financialPlan) : null,
+        now(), userId, itemId, claimToken,
       ],
+    });
+    return Number(result.rowsAffected || 0) === 1;
+  }
+
+  async function persistFinancialPlanForEmail(
+    userId: string,
+    accountId: string,
+    emailId: string,
+    plan: FinancialEmailPlan,
+  ): Promise<boolean> {
+    const result = await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET financial_email_plan_json = ?, updated_at = datetime('now')
+            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
+      args: [JSON.stringify(plan), userId, accountId, emailId],
     });
     return Number(result.rowsAffected || 0) === 1;
   }
@@ -590,6 +531,7 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     settleRun,
     claimNextItem,
     settleItem,
+    persistFinancialPlanForEmail,
     recoverStaleClaims,
     recoverAbandonedHistoricalRuns,
     getNextWakeAt,

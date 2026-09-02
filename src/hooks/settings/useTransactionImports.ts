@@ -13,10 +13,10 @@ import type {
   TransactionImportConfirmation,
   TransactionImportHistoricalScanRequest,
   TransactionImportMapping,
+  TransactionImportMappingSource,
   TransactionImportMappingUpdate,
   TransactionImportRunDetail,
   TransactionImportRunSummary,
-  TransactionImportSource,
 } from "../../../shared/types/transaction-imports";
 
 const ACTIVE_RUN_STATUSES = new Set(["queued", "running", "retry"]);
@@ -129,7 +129,7 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
   }, [loadRun]);
 
   const saveMapping = useCallback(async (
-    source: TransactionImportSource,
+    source: TransactionImportMappingSource,
     update: TransactionImportMappingUpdate,
   ) => {
     setBusyKey(`mapping:${source}`);

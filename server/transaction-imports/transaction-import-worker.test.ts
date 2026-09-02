@@ -4,10 +4,12 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActualImportAccountGroup, ActualImportBatchResult } from "../../shared/types/transaction-imports.ts";
+import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import { emailFixture, paypalPaidText } from "./parsers/fixtures.ts";
 import { createTransactionImportService } from "./transaction-import-service.ts";
 import { createTransactionImportStore } from "./transaction-import-store.ts";
 import { createTransactionImportWorker } from "./transaction-import-worker.ts";
+import { financialEmailPreflightItem } from "./financial-email-preflight.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "..", "db", "migrations");
@@ -21,7 +23,7 @@ describe("transaction import worker", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)
@@ -69,6 +71,38 @@ describe("transaction import worker", () => {
           error: null,
         })),
       })),
+    };
+  }
+
+  function exactGenericPlan(): FinancialEmailPlan {
+    return {
+      version: 1,
+      identity: { version: 1, status: "resolved", key: "financial-email:v1:worker" },
+      candidate: { payee: "Example Market", amount: 12.34, amount_kind: "transaction_amount", due_date: "2026-09-01", event_kind: "purchase", type: "expense" },
+      classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 1, reasons: [] },
+      operation: { intended: "create_transaction", kind: "create_transaction", reasons: [] },
+      targets: {
+        account: { kind: "account", status: "resolved", id: "actual-checking", label: "Checking", provenance: [] },
+        payee: { kind: "payee", status: "resolved", id: "payee-1", label: "Example Market", provenance: [] },
+        category: { kind: "category", status: "resolved", id: "category-1", label: "Groceries", provenance: [] },
+        fromAccount: { kind: "from_account", status: "not_applicable", provenance: [] },
+        toAccount: { kind: "to_account", status: "not_applicable", provenance: [] },
+        schedule: { kind: "schedule", status: "not_applicable", provenance: [] },
+      },
+      reconciliation: { status: "not_checked", disposition: "review" },
+      reviewReasons: [{ code: "reconciliation_unavailable", message: "Preflight required.", blocking: true }],
+      automation: {
+        eligible: false,
+        operationClass: "one_time_expense",
+        rollout: "observe_only",
+        gates: [
+          ...["semantic", "canonical_amount", "date", "targets", "authenticity", "stable_identity", "warnings"].map((gate) => ({ gate, status: "pass", reasons: [] })),
+          { gate: "reconciliation", status: "unknown", reasons: ["reconciliation_unavailable"] },
+          { gate: "actual_preflight", status: "unknown", reasons: ["actual_preflight_not_run"] },
+          { gate: "rollout", status: "fail", reasons: ["automation_class_observe_only"] },
+        ] as FinancialEmailPlan["automation"]["gates"],
+        reasons: ["reconciliation_unavailable", "actual_preflight_not_run", "automation_class_observe_only"],
+      },
     };
   }
 
@@ -143,6 +177,67 @@ describe("transaction import worker", () => {
     expect((await store.getRunDetail("owner-1", arrival.runId!))!.items[0]).toMatchObject({
       status: "needs_review",
       reconciliationStatus: "would_add",
+    });
+  });
+
+  it("previews a generic financial email once and persists the observe-only outcome", async () => {
+    const { store } = setup();
+    const plan = exactGenericPlan();
+    await db.batch([
+      {
+        sql: `INSERT INTO ea_email_index
+                (uid, user_id, account_id, account_label, account_email, subject, email_date, read)
+              VALUES ('message-generic', 'owner-1', 'gmail-1', 'Personal', 'owner@example.test', 'Receipt', '2026-09-01', 0)`,
+        args: [],
+      },
+      {
+        sql: `INSERT INTO ea_email_triage
+                (user_id, account_id, email_id, financial_email_plan_json)
+              VALUES ('owner-1', 'gmail-1', 'message-generic', ?)`,
+        args: [JSON.stringify(plan)],
+      },
+    ]);
+    await store.createRun({
+      id: "generic-run",
+      userId: "owner-1",
+      trigger: "arrival",
+      optionsKey: "financial-email:v1:worker",
+      gmailAccountIds: ["gmail-1"],
+      sources: ["generic"],
+    });
+    const item = financialEmailPreflightItem(
+      "owner-1",
+      "generic-run",
+      "generic-item",
+      { accountId: "gmail-1", emailId: "message-generic", emailSubject: "Receipt" },
+      plan,
+    );
+    expect(item).not.toBeNull();
+    await store.insertItem(item!);
+    const importGroups = vi.fn(async (_userId, groups, dryRun) => actualResult(groups, dryRun));
+    const worker = createTransactionImportWorker({ store, dbClient: db, importGroups, createId });
+
+    await expect(worker.processNextItemBatch()).resolves.toBe(true);
+    await expect(worker.processNextItemBatch()).resolves.toBe(false);
+    // test-architecture: allow-boundary-interaction -- Actual preview is the external financial boundary; one invocation proves the generic item reached preflight exactly once.
+    expect(importGroups).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- The dry-run flag is the external Actual contract that prevents this observe-only item from crossing the commit point.
+    expect(importGroups).toHaveBeenCalledWith("owner-1", expect.any(Array), true);
+    const stored = await store.getItem("owner-1", "generic-item");
+    expect(stored).toMatchObject({
+      source: "generic",
+      status: "needs_review",
+      reconciliationStatus: "would_add",
+      automaticSafe: false,
+      financialPlan: {
+        reconciliation: { status: "not_scheduled", disposition: "create" },
+        automation: { eligible: false, rollout: "observe_only", reasons: ["automation_class_observe_only"] },
+      },
+    });
+    const triage = await db.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id = 'message-generic'");
+    expect(JSON.parse(String(triage.rows[0]!.financial_email_plan_json))).toMatchObject({
+      reconciliation: { status: "not_scheduled", disposition: "create" },
+      automation: { eligible: false, rollout: "observe_only" },
     });
   });
 

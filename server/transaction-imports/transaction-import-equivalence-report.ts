@@ -4,6 +4,7 @@ import type { InStatement } from "@libsql/client";
 import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type {
   TransactionImportItemStatus,
+  TransactionImportMappingSource,
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 import {
@@ -26,7 +27,7 @@ interface ReplayDb {
 
 interface ReplayDiscrepancy {
   key: string;
-  source: TransactionImportSource;
+  source: TransactionImportMappingSource;
   legacyStatus: TransactionImportItemStatus;
   codes: string[];
 }
@@ -34,7 +35,7 @@ interface ReplayDiscrepancy {
 export interface TransactionImportEquivalenceReport {
   writesEnabled: false;
   sampled: number;
-  bySource: Record<TransactionImportSource, number>;
+  bySource: Record<TransactionImportMappingSource, number>;
   byLegacyStatus: Partial<Record<TransactionImportItemStatus, number>>;
   canonical: { plannable: number; preserved: number; containedReview: number };
   targets: {
@@ -171,12 +172,13 @@ export function summarizeTransactionImportEquivalence(
   };
 
   sourceItems.forEach((item, index) => {
+    const source = item.source as TransactionImportMappingSource;
     const planned = plannedItems[index];
     const plan = planned?.financialPlan || null;
     const shadow = planned?.planShadow || null;
     const actualState = item.importedId ? actualStates[item.importedId] : undefined;
     const codes: string[] = [];
-    report.bySource[item.source]++;
+    report.bySource[source]++;
     report.byLegacyStatus[item.status] = (report.byLegacyStatus[item.status] || 0) + 1;
 
     const plannerInput = transactionImportPlannerInput(item);
@@ -248,7 +250,7 @@ export function summarizeTransactionImportEquivalence(
     if (codes.length) {
       report.discrepancies.push({
         key: opaqueItemKey(item),
-        source: item.source,
+        source,
         legacyStatus: item.status,
         codes,
       });

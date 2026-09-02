@@ -5,6 +5,7 @@ import {
   isBulkSelectable,
   itemToConfirmation,
   selectedTotal,
+  transactionImportSourceLabel,
 } from "./transactionImportReviewModel";
 import type { TransactionImportItem } from "../../../../../shared/types/transaction-imports";
 
@@ -44,6 +45,12 @@ function item(overrides: Partial<TransactionImportItem> = {}): TransactionImport
     ...overrides,
   };
 }
+
+describe("transaction import source labels", () => {
+  it("names generic planner candidates without mislabeling them as PayPal", () => {
+    expect(transactionImportSourceLabel("generic")).toBe("Financial email");
+  });
+});
 
 describe("transaction import review model", () => {
   it("bulk-selects only safe, reviewable candidates that are not already present", () => {

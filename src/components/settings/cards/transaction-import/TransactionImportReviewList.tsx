@@ -13,6 +13,7 @@ import {
   isIndividuallyReviewable,
   itemToConfirmation,
   selectedTotal,
+  transactionImportSourceLabel,
 } from "./transactionImportReviewModel";
 import type { ActualAccount, ActualCategoryGroup } from "../../../../../shared/types/actual";
 import type {
@@ -107,7 +108,7 @@ export default function TransactionImportReviewList({
 
   async function commitOne(item: TransactionImportItem) {
     const confirmation = editFor(item);
-    if (!window.confirm(`Add ${formatImportAmount(confirmation.amountCents ?? null)} from ${item.source === "amazon" ? "Amazon" : "PayPal"} to Actual?`)) return;
+    if (!window.confirm(`Add ${formatImportAmount(confirmation.amountCents ?? null)} from ${transactionImportSourceLabel(item.source)} to Actual?`)) return;
     await onCommit([confirmation]);
     setEditingId(null);
   }
@@ -178,10 +179,10 @@ export default function TransactionImportReviewList({
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <div className="min-w-0">
                       <div className="truncate text-[12px] font-semibold text-foreground">
-                        {item.emailSubject || `${item.source === "amazon" ? "Amazon" : "PayPal"} transaction`}
+                        {item.emailSubject || `${transactionImportSourceLabel(item.source)} transaction`}
                       </div>
                       <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">
-                        {item.source === "amazon" ? "Amazon" : "PayPal"}
+                        {transactionImportSourceLabel(item.source)}
                         {item.date ? ` · ${item.date}` : ""}
                         {item.externalId ? ` · ${item.externalId}` : ""}
                       </div>

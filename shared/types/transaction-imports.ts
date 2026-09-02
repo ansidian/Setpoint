@@ -1,6 +1,8 @@
 import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
 
-export const TRANSACTION_IMPORT_SOURCES = ["amazon", "paypal"] as const;
+export const TRANSACTION_IMPORT_MAPPING_SOURCES = ["amazon", "paypal"] as const;
+export type TransactionImportMappingSource = typeof TRANSACTION_IMPORT_MAPPING_SOURCES[number];
+export const TRANSACTION_IMPORT_SOURCES = [...TRANSACTION_IMPORT_MAPPING_SOURCES, "generic"] as const;
 export type TransactionImportSource = typeof TRANSACTION_IMPORT_SOURCES[number];
 
 export const TRANSACTION_IMPORT_MODES = ["off", "observe", "automatic"] as const;
@@ -47,7 +49,7 @@ export interface TransactionImportPlanShadow {
 }
 
 export interface TransactionImportMapping {
-  source: TransactionImportSource;
+  source: TransactionImportMappingSource;
   mode: TransactionImportMode;
   actualAccountId: string | null;
   actualCategoryId: string | null;
@@ -135,7 +137,7 @@ export interface TransactionImportMappingUpdate {
 
 export interface TransactionImportHistoricalScanRequest {
   gmailAccountIds: string[];
-  sources: TransactionImportSource[];
+  sources: TransactionImportMappingSource[];
   startDate: string;
   endDate: string;
 }

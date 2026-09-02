@@ -22,12 +22,12 @@ import type { AccountSummary } from "../../../../shared/types/accounts";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
 import type {
   TransactionImportMapping,
+  TransactionImportMappingSource,
   TransactionImportMode,
   TransactionImportRunSummary,
-  TransactionImportSource,
 } from "../../../../shared/types/transaction-imports";
 
-const SOURCES: Array<{ id: TransactionImportSource; label: string; detail: string }> = [
+const SOURCES: Array<{ id: TransactionImportMappingSource; label: string; detail: string }> = [
   { id: "amazon", label: "Amazon", detail: "Order confirmations from auto-confirm@amazon.com" },
   { id: "paypal", label: "PayPal", detail: "Payment receipts from service@paypal.com" },
 ];
@@ -47,7 +47,7 @@ function defaultDates(): { start: string; end: string } {
   return { start: ymd(start), end: ymd(end) };
 }
 
-function mappingFor(mappings: TransactionImportMapping[], source: TransactionImportSource): TransactionImportMapping {
+function mappingFor(mappings: TransactionImportMapping[], source: TransactionImportMappingSource): TransactionImportMapping {
   return mappings.find((mapping) => mapping.source === source) || {
     source,
     mode: "off",
@@ -86,7 +86,7 @@ export default function EmailTransactionImportCard({
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
   const [scanAccounts, setScanAccounts] = useState<Set<string> | null>(null);
-  const [scanSources, setScanSources] = useState<Set<TransactionImportSource>>(new Set(["amazon", "paypal"]));
+  const [scanSources, setScanSources] = useState<Set<TransactionImportMappingSource>>(new Set(["amazon", "paypal"]));
   const [localError, setLocalError] = useState("");
   const actualAccounts = (metadata.accounts || []).filter((account) => !account.closed);
   const categoryGroups = metadata.categories || [];
@@ -98,7 +98,7 @@ export default function EmailTransactionImportCard({
   const effectiveScanAccounts = scanAccounts || defaultScanAccounts;
 
   async function saveSource(
-    source: TransactionImportSource,
+    source: TransactionImportMappingSource,
     patch: Partial<Pick<TransactionImportMapping, "mode" | "actualAccountId" | "actualCategoryId">>,
   ) {
     const current = mappingFor(imports.mappings, source);

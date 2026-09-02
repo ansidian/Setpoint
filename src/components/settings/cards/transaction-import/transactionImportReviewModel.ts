@@ -3,7 +3,11 @@ import type {
   TransactionImportItem,
   TransactionImportRunSummary,
 } from "../../../../../shared/types/transaction-imports";
-import type { TransactionImportMode, TransactionImportSource } from "../../../../../shared/types/transaction-imports";
+import type {
+  TransactionImportMappingSource,
+  TransactionImportMode,
+  TransactionImportSource,
+} from "../../../../../shared/types/transaction-imports";
 
 const SELECTABLE_STATUSES = new Set(["needs_review", "ready"]);
 
@@ -42,12 +46,18 @@ export function formatImportAmount(amountCents: number | null): string {
 }
 
 export function automaticImportConfirmation(
-  source: TransactionImportSource,
+  source: TransactionImportMappingSource,
   currentMode: TransactionImportMode,
   nextMode: TransactionImportMode,
 ): string | null {
   if (nextMode !== "automatic" || currentMode === "automatic") return null;
   return `Enable automatic ${source === "amazon" ? "Amazon" : "PayPal"} imports? Eligible messages will write to Actual without another click.`;
+}
+
+export function transactionImportSourceLabel(source: TransactionImportSource): string {
+  if (source === "amazon") return "Amazon";
+  if (source === "paypal") return "PayPal";
+  return "Financial email";
 }
 
 export function runPhase(run: TransactionImportRunSummary): string {

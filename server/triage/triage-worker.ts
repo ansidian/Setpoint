@@ -20,6 +20,7 @@ import { createTriageModelClient, loadTriageModelConfig } from "./triage-model-c
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { cheapEscalationReason } from "./triage-escalation-policy.ts";
 import { planFinancialEmail } from "../bills/bills-service.ts";
+import { financialEmailSourceIdentity } from "../bills/financial-email-planner.ts";
 import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills.ts";
 import {
   claimNextEmailTriageJob,
@@ -45,7 +46,7 @@ import type {
   TriageRule,
 } from "./triage-types.ts";
 import { triageError } from "./triage-types.ts";
-import { triageFinancialSourceIdentity } from "./triage-sender-authentication.ts";
+import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 export {
   getNextEmailTriageWakeAt,
   recoverStaleRunningTriageJobs,
@@ -220,12 +221,14 @@ export async function processNextEmailTriageJob({
   now = new Date(),
   batch = null,
   financialEmailPlanner = planFinancialEmail,
+  financialEmailPreflight = stageFinancialEmailPreflight,
 }: {
   dbClient?: TriageDb;
   modelClient?: TriageModelClient;
   now?: Date;
   batch?: TriageBatchContext | null;
   financialEmailPlanner?: typeof planFinancialEmail;
+  financialEmailPreflight?: typeof stageFinancialEmailPreflight;
 } = {}): Promise<Record<string, unknown>> {
   // P2-18: claim the next job first (one ordered scan + UPDATE), then check
   // paused mode using the claimed row's user_id. This eliminates the separate
@@ -378,7 +381,7 @@ export async function processNextEmailTriageJob({
       candidate: decision.bill_candidate as BillCandidate,
       source: "triage",
       providerMessageId: email.email_id,
-      sourceIdentity: triageFinancialSourceIdentity(email),
+      sourceIdentity: financialEmailSourceIdentity(email),
     });
     decision = { ...decision, bill_candidate: financialEmailPlan.candidate };
   }
@@ -396,6 +399,13 @@ export async function processNextEmailTriageJob({
       inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
       financialEmailPlan,
     });
+    if (financialEmailPlan) {
+      await financialEmailPreflight(email.user_id, {
+        accountId: email.account_id,
+        emailId: email.email_id,
+        emailSubject: String(email.subject || ""),
+      }, financialEmailPlan).catch(() => undefined);
+    }
     await completeJob(job, dbClient, now, status === "failed" ? decision.error || "" : "");
   } catch (caught) {
     const finalizeErr = triageError(caught);

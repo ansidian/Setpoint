@@ -46,9 +46,9 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/HomeLocationCard.tsx` — Places-backed atomic Home selection/removal for driving Time-to-Leave estimates
 - `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration
 - `cards/EmailTransactionImportCard.tsx` — Amazon/PayPal Actual mappings, observe/automatic modes, bounded historical scans, durable progress, and review
-- `cards/transaction-import/TransactionImportReviewList.tsx` — candidate bulk selection, corrections, confirmation, retry, and dismiss
+- `cards/transaction-import/TransactionImportReviewList.tsx` — Amazon, PayPal, and generic financial-email candidate labeling, corrections, confirmation, retry, and dismiss
 - `cards/transaction-import/TransactionImportDateField.tsx` — shared-calendar date trigger for bounded manual backfill dates
-- `cards/transaction-import/transactionImportReviewModel.ts` — pure candidate eligibility, total, confirmation, amount, and run-phase projection
+- `cards/transaction-import/transactionImportReviewModel.ts` — pure candidate eligibility, source labels, total, confirmation, amount, and run-phase projection
 - `cards/BriefingSchedulesCard.tsx` — snapshot window boundaries with FLIP reorder animation
 - `cards/ApiTokensCard.tsx` — API token list/create/revoke with scopes and expiry
 - `cards/PasskeysCard.tsx` — passkey registration/deletion, explicit auth mode, password step-up/change, and recovery-code regeneration

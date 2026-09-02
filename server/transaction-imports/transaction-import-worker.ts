@@ -9,6 +9,7 @@ import { attachTransactionImportFinancialPlans } from "./transaction-import-plan
 import { transactionImportStore, type ClaimedItem, type TransactionImportStore } from "./transaction-import-store.ts";
 import { importTransactionGroups } from "../actual/actual.ts";
 import { invalidateActualAfterTransactionImport } from "../bills/bills-service.ts";
+import { applyFinancialEmailPreflightOutcome } from "./financial-email-preflight.ts";
 import type {
   ActualImportAccountGroup,
   ActualImportBatchResult,
@@ -91,7 +92,7 @@ export function createTransactionImportWorker({
     const sourceIndex = Number(run.cursor.sourceIndex || 0);
     const accountId = run.gmailAccountIds[accountIndex];
     const source = run.sources[sourceIndex];
-    if (!accountId || !source) {
+    if (!accountId || !source || source === "generic") {
       await store.settleRun(run.userId, run.id, claimToken, { status: "completed", cursor: { complete: true } });
       return true;
     }
@@ -217,11 +218,25 @@ export function createTransactionImportWorker({
             : item.confirmedAt != null || item.automationMode === "automatic" && item.automaticSafe
               ? "ready"
               : "needs_review";
-        await store.settleItem(item.userId, item.id, item.claimToken, {
+        const financialPlan = item.source === "generic" && item.financialPlan
+          ? applyFinancialEmailPreflightOutcome(item.financialPlan, outcome.outcome, new Date(now()).toISOString())
+          : null;
+        const settled = await store.settleItem(item.userId, item.id, item.claimToken, {
           status,
           reconciliationStatus: outcome.outcome,
           lastError: outcome.error,
+          financialPlan,
         });
+        if (financialPlan && settled) {
+          await store.persistFinancialPlanForEmail(
+            item.userId,
+            item.gmailAccountId,
+            item.emailUid,
+            financialPlan,
+          ).catch((error) => {
+            console.error("[Transaction Imports] Financial plan projection sync failed:", conciseError(error));
+          });
+        }
         if (outcome.outcome === "already_present") await store.incrementRunOutcomes(item.userId, item.runId, { duplicate: 1 });
         if (outcome.outcome === "failed") await store.incrementRunOutcomes(item.userId, item.runId, { failed: 1 });
       } else {
