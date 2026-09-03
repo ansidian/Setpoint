@@ -1,3 +1,4 @@
+import { formatAgendaHeaderLabel } from "../agenda/agendaDateModel";
 import { memo } from "react";
 import type { MutableRefObject } from "react";
 import { ChevronDown } from "lucide-react";
@@ -53,6 +54,7 @@ function AgendaHeader({
   onActivate,
   registerHeader,
   dropActive,
+  mobileAgenda,
   quickActions,
 }: {
   group: EventsAgendaGroup;
@@ -60,6 +62,7 @@ function AgendaHeader({
   onActivate: (dateKey: string) => void;
   registerHeader: (dateKey: string, node: HTMLElement | null) => void;
   dropActive: boolean;
+  mobileAgenda: boolean;
   quickActions?: EventsAgendaRailQuickActions | null;
 }) {
   const date = groupDate(group);
@@ -123,7 +126,7 @@ function AgendaHeader({
           : "var(--sp-panel)";
       }}
     >
-      <span>{group.headerLabel}</span>
+      <span>{mobileAgenda ? formatAgendaHeaderLabel(group.dateKey, todayKey, true) : group.headerLabel}</span>
       <WeatherHeader weather={group.weather} />
     </button>
   );
@@ -199,6 +202,7 @@ const EventsAgendaMonthSection = memo(function EventsAgendaMonthSection({
       renderHeader={({ group, registerHeader: registerGroupHeader }) => (
         <AgendaHeader
           group={group}
+          mobileAgenda={mobileAgenda}
           todayKey={todayKey}
           registerHeader={registerGroupHeader}
           onActivate={onDateAction}

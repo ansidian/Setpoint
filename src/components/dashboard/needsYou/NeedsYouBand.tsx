@@ -3,7 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel, collectNeedsYouCandidateIds } from "./needsYouModel";
 import { NeedsYouCountBlock } from "./NeedsYouCountBlock";
 import { PriorityCard } from "./PriorityCard";
-import { NeedsYouCarousel } from "./NeedsYouCarousel";
+import { MobileNeedsYouList } from "./MobileNeedsYouList";
 import type { NeedsYouBill, NeedsYouCard, NeedsYouDeadlines, NeedsYouLanes } from "./needsYouModel";
 
 export interface NeedsYouBandProps {
@@ -130,23 +130,17 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
 
   if (isMobile) {
     return (
-      <div
-        data-testid="needs-you-band"
-        style={{ flex: "none", display: "flex", flexDirection: "column", gap: 12, padding: "14px 14px", borderRadius: 16,
-          background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-rose) 5%, rgba(255,255,255,0.018)) 0%, rgba(255,255,255,0.005) 100%)",
-          border: "1px solid color-mix(in srgb, var(--sp-rose) 15%, rgba(255,255,255,0.06))" }}
-      >
-        {header}
-        {errorLine}
-        <NeedsYouCarousel
-          urgentCards={model.urgentCards}
-          backfillCards={model.backfillCards}
-          onOpen={handleOpen}
-          onMarkHandled={handleMarkHandled}
-          onComplete={handleComplete}
-          onJump={onOpen}
-        />
-      </div>
+      <MobileNeedsYouList
+        urgentCards={model.urgentCards}
+        countN={model.countN}
+        countColor={model.countColor}
+        breakdown={model.breakdown}
+        actionError={actionError}
+        onOpen={handleOpen}
+        onMarkHandled={handleMarkHandled}
+        onComplete={handleComplete}
+        onJump={onOpen}
+      />
     );
   }
 

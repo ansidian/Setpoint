@@ -43,4 +43,23 @@ describe("buildComingUp", () => {
     const out = buildComingUp({ liveDeadlines: wrapped, liveBills: [], days: 7 });
     expect(out.map((x) => x.id)).toEqual(["deadline:w"]);
   });
+
+  it("can reserve Coming Up for future days while preserving the default window", () => {
+    freezeToJan15();
+    const liveDeadlines = [
+      { id: "today", due_date: "2026-01-15" },
+      { id: "tomorrow", due_date: "2026-01-16" },
+      { id: "boundary", due_date: "2026-01-22" },
+      { id: "outside", due_date: "2026-01-23" },
+    ];
+    const liveBills = [
+      { id: "today", next_date: "2026-01-15" },
+      { id: "tomorrow", next_date: "2026-01-16" },
+    ];
+    expect(buildComingUp({ liveDeadlines, liveBills, includeToday: false }).map((row) => row.id))
+      .toEqual(["deadline:tomorrow", "bill:tomorrow", "deadline:boundary"]);
+    expect(buildComingUp({ liveDeadlines, liveBills }).filter((row) => row.sortDays === 0).map((row) => row.id))
+      .toEqual(["deadline:today", "bill:today"]);
+  });
+
 });

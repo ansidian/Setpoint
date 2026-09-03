@@ -1,103 +1,112 @@
+import SnapshotNavigationControls from "../SnapshotNavigationControls";
+import { formatSnapshotContext } from "../snapshotSummary";
+import type { InboxSnapshotNavigation } from "../inboxViewTypes";
+import { Check, CheckCheck } from "lucide-react";
 import BottomSheet from "@/components/ui/BottomSheet";
-import type { CSSProperties, Dispatch, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
+import { selectVisibleInboxLaneChips } from "../inboxCountsModel";
 import type { InboxAccount } from "../inboxTypes";
 
-const accountButtonStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: 12,
-  color: "#fff",
-  cursor: "pointer",
-  fontFamily: "inherit",
-  textAlign: "left",
-};
+const LANES = [
+  { key: "__all", label: "All" },
+  { key: "needs_attention", label: "Needs attention" },
+  { key: "fyi", label: "FYI" },
+  { key: "noise", label: "Noise" },
+];
 
 export default function MobileFilterSheet({
-  open,
-  accent,
-  accountId,
-  setAccountId,
-  accounts,
-  totalUnread,
-  onClose,
+  snapshotNavigation,
+  open, accent, accountId, setAccountId, accounts, totalUnread,
+  lane, setLane, chipCounts, indexedSearchActive, unreadInView, onMarkAllRead, readOnly, onClose,
 }: {
+  snapshotNavigation: InboxSnapshotNavigation | null;
   open: boolean;
   accent: string;
   accountId: string;
   setAccountId: Dispatch<SetStateAction<string>>;
   accounts: InboxAccount[];
   totalUnread: number;
+  lane: string;
+  chipCounts: Record<string, number>;
+  setLane: Dispatch<SetStateAction<string>>;
+  indexedSearchActive: boolean;
+  unreadInView: number;
+  onMarkAllRead: () => void;
+  readOnly: boolean;
   onClose: () => void;
 }) {
   return (
-    <BottomSheet open={open} onClose={onClose} title="Accounts">
-      <div
-        data-testid="inbox-mobile-filter-sheet"
-        style={{ padding: "8px 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}
-      >
-        <button
-          type="button"
-          onClick={() => { setAccountId("__all"); onClose(); }}
-          style={{
-            ...accountButtonStyle,
-            background: accountId === "__all" ? `${accent}14` : "rgba(255,255,255,0.03)",
-            border: `1px solid ${accountId === "__all" ? `${accent}40` : "rgba(255,255,255,0.08)"}`,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>All accounts</div>
-            <div style={{ fontSize: 11, color: "var(--color-text-faint)", marginTop: 2 }}>
-              {totalUnread} unread across inbox
+    <BottomSheet open={open} onClose={onClose} title="Filters">
+      <div data-testid="inbox-mobile-filter-sheet" className="mobile-filter-content">
+        {!indexedSearchActive && snapshotNavigation && (
+          <section className="mobile-filter-group" aria-label="Snapshots">
+            <h3>Snapshot</h3>
+            <p className="mobile-filter-snapshot-copy">{formatSnapshotContext(snapshotNavigation.snapshot) || (readOnly ? "Historical snapshot" : "Current snapshot")}</p>
+            <SnapshotNavigationControls navigation={snapshotNavigation} historical={readOnly} mobile onNavigate={(direction) => { void snapshotNavigation.onNavigate(direction); }} />
+          </section>
+        )}
+        {!indexedSearchActive && (
+          <section className="mobile-filter-group" aria-label="Triage">
+            <h3>Triage</h3>
+            <div className="mobile-filter-lanes">
+              {selectVisibleInboxLaneChips(LANES, chipCounts).map((item) => (
+                <button
+                  type="button"
+                  key={item.key}
+                  className="mobile-filter-option"
+                  aria-pressed={lane === item.key}
+                  onClick={() => { setLane(item.key); onClose(); }}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-          </div>
-        </button>
-        {accounts.map((account) => {
-          const accountKey = account.id || account.name;
-          const active = accountId === accountKey;
-          return (
-            <button
-              key={accountKey}
-              type="button"
-              onClick={() => { setAccountId(accountKey); onClose(); }}
-              style={{
-                ...accountButtonStyle,
-                background: active ? `${account.color || accent}14` : "rgba(255,255,255,0.03)",
-                border: `1px solid ${active ? `${account.color || accent}40` : "rgba(255,255,255,0.08)"}`,
-              }}
-            >
-              <span
-                style={{
-                  width: 10, height: 10, borderRadius: 999,
-                  background: account.color || accent,
-                  boxShadow: `0 0 8px ${(account.color || accent)}66`,
-                  flexShrink: 0,
-                }}
-              />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {account.name || account.email}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--color-text-faint)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {account.email}
-                </div>
-              </div>
-              <span
-                style={{
-                  fontSize: 10, fontWeight: 700,
-                  color: account.color || accent,
-                  background: `${account.color || accent}18`,
-                  borderRadius: 999, padding: "2px 7px",
-                  fontVariantNumeric: "tabular-nums",
-                }}
+          </section>
+        )}
+        <section className="mobile-filter-group" aria-label="Accounts">
+          <h3>Accounts</h3>
+          <button
+            type="button"
+            className="mobile-filter-option mobile-filter-account"
+            aria-pressed={accountId === "__all"}
+            onClick={() => { setAccountId("__all"); onClose(); }}
+          >
+            <span className="mobile-filter-account-copy">All accounts</span>
+            <span className="mobile-filter-count">{totalUnread} unread</span>
+            {accountId === "__all" && <Check size={14} color={accent} aria-hidden="true" />}
+          </button>
+          {accounts.map((account) => {
+            const accountKey = account.id || account.name;
+            const active = accountId === accountKey;
+            return (
+              <button
+                key={accountKey}
+                type="button"
+                className="mobile-filter-option mobile-filter-account"
+                aria-pressed={active}
+                onClick={() => { setAccountId(accountKey); onClose(); }}
               >
-                {account.unread || 0}
-              </span>
-            </button>
-          );
-        })}
+                <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: account.color || accent, flexShrink: 0 }} />
+                <span className="mobile-filter-account-copy">
+                  {account.name || account.email}
+                  {account.name && account.email !== account.name && <small>{account.email}</small>}
+                </span>
+                {active && <Check size={14} color={account.color || accent} aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </section>
+        {!readOnly && (
+          <button
+            type="button"
+            className="mobile-filter-mark-read"
+            disabled={unreadInView === 0}
+            onClick={() => { onMarkAllRead(); onClose(); }}
+          >
+            <CheckCheck size={16} color={accent} aria-hidden="true" />
+            Mark all read in this view{unreadInView > 0 ? ` (${unreadInView})` : ""}
+          </button>
+        )}
       </div>
     </BottomSheet>
   );

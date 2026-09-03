@@ -48,9 +48,11 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `useIndexedSearch.ts` — debounced indexed-search hook: query effect, stale-response guard, local read-override reconciliation (`updateIndexedSearchRead`/`markIndexedSearchReadBulk`)
 
 ### Mobile
-- `mobile/MobileInboxView.tsx` — mobile layout: chip filter bar, compact rows, reader
-- `mobile/MobileSnapshotHeader.tsx` — mobile snapshot summary, historical orientation, and adjacent navigation
-- `mobile/MobileFilterSheet.tsx` — dismissible account/lane filter sheet
+- `mobile/MobileInboxView.tsx` — mobile layout: compact toolbar with expandable search and local unread toggle, chronological rows, filters, reader
+- `mobile/MobileSnapshotHeader.tsx` — persistent historical context and direct return to Current
+- `mobile/MobileFilterSheet.tsx` — dismissible account/lane filters, adjacent snapshot navigation, and scoped mark-all-read action
+- `mobile/MobileEmailRow.tsx` — readable mobile message row with full-width subject, unread dot, and separate status line
+- `mobile/MobileInbox.css` — mobile list, controls, and filter-sheet layout and interaction states
 
 ### Snooze, undo, hotkeys
 - `SnoozePicker.tsx` — floating date/time picker anchored to the snooze button

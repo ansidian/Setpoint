@@ -1,3 +1,4 @@
+import "./MobileComingUp.css";
 import { useState } from "react";
 import { CreditCard, CalendarClock, Circle } from "lucide-react";
 import { SectionHeader, EmptyRow } from "../rails/railPrimitives";
@@ -20,11 +21,23 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }: {
   isLast: boolean;
   isMobile?: boolean;
   onJump?: (row: ComingUpRowModel, anchor: HTMLElement) => void;
-  onComplete?: (row: ComingUpRowModel) => void;
+  onComplete?: (row: ComingUpRowModel) => unknown | Promise<unknown>;
 }) {
   const [rowHover, setRowHover] = useState(false);
   const completable = row.kind === "deadline" && !!onComplete;
   const ItemIcon = row.kind === "bill" ? CreditCard : Circle;
+
+  if (isMobile) {
+    return (
+      <div className="mobile-coming-row">
+        <button type="button" className="mobile-coming-open" onClick={(event) => onJump?.(row, event.currentTarget)}>
+          <span className="mobile-coming-title">{row.title}</span>
+          <span className="mobile-coming-meta"><ItemIcon size={12} aria-hidden="true" />{row.chipLabel} · {row.meta}</span>
+        </button>
+        {completable && <MarkDoneAction onComplete={() => onComplete(row)} itemTitle={row.title} compact isMobile alwaysVisible />}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -74,18 +87,25 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
   items?: ComingUpRowModel[];
   isMobile?: boolean;
   onJump?: (row: ComingUpRowModel, anchor: HTMLElement) => void;
-  onComplete?: (row: ComingUpRowModel) => void;
+  onComplete?: (row: ComingUpRowModel) => unknown | Promise<unknown>;
 }) {
-  // Optimistically hide a just-completed deadline so it leaves instantly, before
-  // the dashboard refetch drops it from the feed (mirrors the needs-you band).
-  // No completer wired (e.g. mobile) => no action affordance at all.
+  const [expanded, setExpanded] = useState(false);
   const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const [actionError, setActionError] = useState<string | null>(null);
   const visible = items.filter((row) => !completedIds.includes(row.id));
+  const displayed = isMobile && !expanded ? visible.slice(0, 3) : visible;
 
   const handleComplete = onComplete
-    ? (row: ComingUpRowModel) => {
+    ? async (row: ComingUpRowModel) => {
       setCompletedIds((prev) => (prev.includes(row.id) ? prev : [...prev, row.id]));
-      onComplete(row);
+      try {
+        const result = await onComplete(row);
+        if (result === false) throw new Error("Completion failed");
+        setActionError(null);
+      } catch {
+        setCompletedIds((prev) => prev.filter((id) => id !== row.id));
+        setActionError("Couldn't mark done. Try again.");
+      }
     }
     : undefined;
 
@@ -98,18 +118,24 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
         border: "1px solid rgba(255,255,255,0.055)", borderRadius: 14,
       }}
     >
-      <SectionHeader title="Coming up" right={<div style={{ fontSize: 10, color: "rgba(205,214,244,0.4)" }}>Next 7 days</div>} />
+      <SectionHeader isMobile={isMobile} title="Coming up" right={<div style={{ fontSize: 10, color: "rgba(205,214,244,0.4)" }}>Next 7 days</div>} />
       <div style={{ marginTop: 6 }}>
-        {visible.map((row, i) => (
+        {displayed.map((row, i) => (
           <ComingUpRow
             key={row.id}
             row={row}
-            isLast={i === visible.length - 1}
+            isLast={i === displayed.length - 1}
             isMobile={isMobile}
             onJump={onJump}
             onComplete={handleComplete}
           />
         ))}
+        {isMobile && visible.length > 3 && (
+          <button type="button" className="mobile-coming-toggle" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+            {expanded ? "Show less" : `View all ${visible.length} upcoming items`}
+          </button>
+        )}
+        {actionError && <p role="status" style={{ color: "var(--sp-rose)", fontSize: 12 }}>{actionError}</p>}
         {visible.length === 0 && <EmptyRow icon={CalendarClock} label="Nothing in the next 7 days" />}
       </div>
     </div>

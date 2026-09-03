@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactElement } from "react";
+import { useRef, useState, type ReactElement, type ReactNode } from "react";
 import eventsView from "../../components/calendar/views/eventsView.tsx";
 import { getCalendarLayoutMetrics } from "../../components/calendar/calendarLayout.ts";
 import useIsMobile from "../useIsMobile";
@@ -31,6 +31,7 @@ import useCalendarControllerViewData, {
 import type { CalendarEventCreateRequest } from "./calendarEventCreateBridge";
 
 export interface CalendarModalControllerOptions {
+  mobileShellActions?: ReactNode;
   open: boolean;
   view?: string;
   onViewChange?: (view: string) => void;
@@ -56,6 +57,7 @@ export interface CalendarModalControllerOptions {
 export type CalendarModalControllerResult = ReactElement | null;
 
 export default function useCalendarModalController({
+  mobileShellActions,
   open,
   view: requestedView,
   onViewChange,
@@ -107,6 +109,7 @@ export default function useCalendarModalController({
   });
   const todayDateKey = ymdFromParts(currentYear, currentMonth, todayDate);
   const viewportWidth = useViewportWidth();
+  const isMobile = useIsMobile();
   const {
     eventOverlayVisible,
     deadlineOverlayVisible,
@@ -189,7 +192,7 @@ export default function useCalendarModalController({
     isEditorDirty,
   } = useCalendarEditorScrollRouting({
     sync: {
-      requestAgendaScroll, viewDate: { year: viewYear, month: viewMonth },
+      requestAgendaScroll, viewDate: { year: viewYear, month: viewMonth }, agendaOnly: isMobile,
       firstDay: new Date(viewYear, viewMonth, 1).getDay(), setViewDate,
       setFetchAnchor, setLabelMonth, shakeEditor: shakeFloatingEditor,
     },
@@ -440,7 +443,6 @@ export default function useCalendarModalController({
   });
 
   const shellViewData = viewData;
-  const isMobile = useIsMobile();
   const domainEnsureRange = "ensureRange" in viewData ? viewData.ensureRange : undefined;
   useCalendarControllerLifecycle({
     open,
@@ -533,7 +535,7 @@ export default function useCalendarModalController({
   });
 
   return useCalendarControllerShell({
-    open, isMobile, eventEditor,
+    open, isMobile, eventEditor, mobileShellActions,
     editorOverlays: {
       view, eventOverlayVisible, toggleEventOverlay, deadlineOverlayVisible,
       completedDeadlineOverlayVisible, planningReadiness,

@@ -253,6 +253,7 @@ export function RailAction({
   const compact = size === "compact";
 
   const sharedProps = {
+    className: "calendar-detail-action",
     onMouseEnter: () => setHovered(true),
     onMouseLeave: () => setHovered(false),
     onClick: (event: MouseEvent<HTMLElement>) => {

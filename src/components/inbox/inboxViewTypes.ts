@@ -14,11 +14,16 @@ export interface InboxSnapshotNavigation {
   historyLoading: boolean;
   navigating: InboxSnapshotNavigationDirection | null;
   error: string | null;
+  onReturnToCurrent?: () => void;
   onNavigate: (direction: InboxSnapshotNavigationDirection) => void | Promise<void>;
 }
 
 export type InboxPaneProps = InboxControllerState & {
   accent: string;
+  mobileShellActions?: ReactNode;
+  mobileScrollTopRequestId?: number;
+  onMobileReaderBack?: () => void;
+  mobileReaderBackLabel?: string;
   briefingSummary?: ReactNode;
   emailAccounts: InboxAccount[];
   liveEmailsLoading?: boolean;

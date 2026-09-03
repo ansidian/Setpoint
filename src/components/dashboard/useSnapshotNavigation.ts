@@ -76,7 +76,15 @@ export default function useSnapshotNavigation({
     }
   }, [currentId, history, navigating, onSelectSnapshot]);
 
+  const onReturnToCurrent = useCallback(() => {
+    navigationRequestRef.current += 1;
+    setNavigating(null);
+    setError(null);
+    onSelectSnapshot(null, { readOnly: false });
+  }, [onSelectSnapshot]);
+
   return {
+    onReturnToCurrent,
     snapshot: currentSnapshot,
     canOlder: !!older,
     canNewer: !!newer,

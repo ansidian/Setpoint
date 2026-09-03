@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
+import { monthBounds } from "../../components/calendar/views/agenda/agendaDateModel";
 import { pacificTodayParts } from "../../components/calendar/calendarDateUtils.ts";
 import {
   agendaCrossesGridBoundary,
@@ -19,6 +20,7 @@ export interface CalendarScrollSyncOptions {
   requestAgendaScroll: (command: AgendaScrollCommand) => void;
   viewDate: CalendarMonthTarget;
   firstDay: number;
+  agendaOnly?: boolean;
   setViewDate: (target: CalendarMonthTarget) => void;
   setFetchAnchor: (target: CalendarMonthTarget) => void;
   setLabelMonth: (target: CalendarMonthTarget) => void;
@@ -42,6 +44,7 @@ export default function useCalendarScrollSync({
   requestAgendaScroll,
   viewDate,
   firstDay,
+  agendaOnly = false,
   setViewDate,
   setFetchAnchor,
   setLabelMonth,
@@ -53,8 +56,15 @@ export default function useCalendarScrollSync({
   const gridSuppressedUntilRef = useRef(0);
 
   const visibleRange = useMemo(
-    () => gridVisibleDateRange(viewDate, { firstDay }),
-    [viewDate, firstDay],
+    () => {
+      // Phones have no grid spillover week: follow the month of the visible day.
+      if (agendaOnly) {
+        const { start, end } = monthBounds(viewDate.year, viewDate.month);
+        return { firstDate: start, lastDate: end };
+      }
+      return gridVisibleDateRange(viewDate, { firstDay });
+    },
+    [viewDate, firstDay, agendaOnly],
   );
 
   const suppressBoth = useCallback(() => {

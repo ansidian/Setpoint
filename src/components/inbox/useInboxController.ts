@@ -99,6 +99,7 @@ export default function useInboxController({
   } = useInboxSessionState({ sessionState, onSessionStateChange });
   const searchRef = useRef<HTMLInputElement>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileUnreadOnly, setMobileUnreadOnly] = useState(false);
   const [snoozedMap, setSnoozedMap] = useState<Map<string, number>>(
     () => new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])),
   );
@@ -282,6 +283,8 @@ export default function useInboxController({
     lane,
     snoozedMap,
     nowTick,
+    sortOrder: isMobile ? "newest" : "lane",
+    unreadOnly: isMobile && mobileUnreadOnly,
   }), [
     flatEmails,
     accountId,
@@ -290,6 +293,8 @@ export default function useInboxController({
     nowTick,
     indexedSearch.emails,
     indexedSearchActive,
+    isMobile,
+    mobileUnreadOnly,
   ]);
 
   const laneCounts = useMemo(
@@ -441,6 +446,8 @@ export default function useInboxController({
     selectedAccount,
     mobileFiltersOpen,
     setMobileFiltersOpen,
+    mobileUnreadOnly,
+    setMobileUnreadOnly,
     billOpen,
     setBillOpen,
     accountsById,

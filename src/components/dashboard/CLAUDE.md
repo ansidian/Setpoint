@@ -5,7 +5,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ## Files
 
 ### Shell + layout
-- `DashboardShell.tsx` — orchestrates state and tab switching; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`; routes Alfred proposal review into the typed Calendar bridge without pre-closing the panel
+- `DashboardShell.tsx` — orchestrates state and tab switching; supplies mobile Inbox app actions while hiding its redundant shell header; mobile Dashboard uses a compact date/title header with shared app actions; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`; routes Alfred proposal review into the typed Calendar bridge without pre-closing the panel
 - `DashboardTabPanel.tsx` — dashboard-specific tab seam combining keep-alive/freeze behavior with the responsive `tabpanel` ID and accessible name contract
 - `DashboardBody.tsx` — renders the three tiers (NeedsYouBand / TodayTimeline / ContextColumn) through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
@@ -16,8 +16,9 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `useDashboardShellHotkeys.ts` — global shortcuts: command palette, g+d/e chords
 - `useCalendarWorkspaceState.ts` — calendar workspace state slice: view/focus/overlay deep-link state, one-shot typed event-create request ownership/acknowledgement consumption, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
 - `useDashboardItemSheet.ts` — dashboard glance-sheet selection/toggle state, tab-leave cleanup, direct item routing, and kind-aware "Open in calendar" handoff
+- `useMobileInboxNavigation.ts` — owns mobile email origin/history: Dashboard opens return directly home, list opens return to Inbox, overlays dismiss first
 - `useMobileDashboardScrollRestoration.ts` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
-- `useSnapshotNavigation.ts` — loads ordered snapshot history while Inbox is active and resolves adjacent frozen/current snapshot transitions
+- `useSnapshotNavigation.ts` — loads ordered snapshot history while Inbox is active, resolves adjacent frozen/current transitions, and cancels pending navigation when returning directly to Current
 - `snapshotNavigationModel.ts` — pure older/newer adjacency resolver over newest-first snapshot history
 - `useAlfredPanelState.ts` — Alfred panel mount/open/new-chat/handoff state and its stable actions
 - `useLiveReadOverrides.ts` — live read-override map + derived inbox unread-signal count; prunes overrides whose emails left the active snapshot
@@ -25,17 +26,18 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `layout/dashboard-scene-tokens.ts` — transition timings and stagger delays
 
 ### Tier 1 — Needs-you band
-- `needsYou/NeedsYouBand.tsx` — the band: a needs-you count plus every overdue/due-today/email priority card; desktop switches to a wheel-scroll horizontal rail above five cards
+- `needsYou/NeedsYouBand.tsx` — the band: a needs-you count with expandable urgent rows on mobile and priority cards on desktop; desktop switches to a wheel-scroll horizontal rail above five cards
 - `needsYou/needsYouModel.ts` — classifies deadlines/bills/emails into urgent cards plus up to two quiet upcoming backfill cards (overdue/due-today only; bills admit `days===0`)
 - `needsYou/NeedsYouCountBlock.tsx` — the leading count + breakdown block
 - `needsYou/PriorityCard.tsx` — a single priority card; deadline/bill bodies are click-to-open, emails open via their button
-- `needsYou/NeedsYouCarousel.tsx` — mobile-only horizontal scroll-snap carousel of every priority/backfill card (full-width count header, fixed-width peeking slides, position dots); `NeedsYouBand` renders it instead of the desktop row on phones
+- `needsYou/MobileNeedsYouList.tsx` / `needsYou/MobileNeedsYouList.css` — compact mobile count/breakdown and first three urgent rows, expandable to all, with separate open and completion actions
 
 ### Tier 2 — Timeline
 - `TodayTimeline.tsx` — merges events and deadlines chronologically with live now marker
 - `timeline/TimelineClock.tsx` — ticking current-time source for the now marker
 - `timeline/TimelineDayGroup.tsx` — day grouping and the spine; injects the focus-window now marker into the today rail
 - `timeline/TimelineHeader.tsx` — section title, live clock, and refresh status
+- `timeline/MobileTodayTimeline.tsx` / `timeline/timeline-mobile.css` — mobile primary timeline and Earlier today disclosure for ended timed events; touch targets and row states
 - `timeline/TimelineRow.tsx` — event/deadline row; the live row renders the bounded in-card now-marker (NOW H:MM · N% elapsed)
 - `timeline/TimelineNowMarker.tsx` — standalone "NOW · H:MM" marker for a focus-window gap (no live event); mutually exclusive with TimelineRow's in-card line
 - `timeline/TimelineSkeleton.tsx` — loading placeholders
@@ -45,8 +47,9 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `context/ContextColumn.tsx` — the right column: weather, coming-up, and the inbox peek
 - `context/WeatherCard.tsx` — weather card that expands on hover/focus/tap to reveal the rest-of-today hourly strip and a next-3-days forecast
 - `context/weatherCardModel.ts` — pure transforms shaping the live feed into the hover card's hour/day view-models (now-accent, rain chip, condition labels)
-- `context/ComingUpCard.tsx` — upcoming (future) deadlines/bills list
-- `context/comingUpModel.ts` — builds the coming-up rows from live deadlines/bills
+- `context/ComingUpCard.tsx` — upcoming deadlines/bills list; mobile starts tomorrow with three rows and View all
+- `context/MobileComingUp.css` — mobile upcoming-row layout, completion/open controls, and preview disclosure states
+- `context/comingUpModel.ts` — builds the coming-up rows from live deadlines/bills; mobile excludes today through includeToday
 
 ### Rails (context-column building blocks)
 - `rails/InboxPeek.tsx` — important-email preview with needs-you count (used by `ContextColumn`)

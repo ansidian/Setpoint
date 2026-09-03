@@ -12,7 +12,7 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 
 ### Entry + rails
 - `CalendarModal.tsx` — entry point delegating to the calendar controller hook
-- `CalendarMobileAgenda.tsx` — mobile-only (≤639px) agenda-only calendar root: slim month strip + events/bills toggle + full-width agenda (MiniCalendar suppressed) + tap-to-open detail BottomSheet; rendered by `useCalendarModalController` instead of `CalendarModalShell`
+- `CalendarMobileAgenda.tsx` — mobile-only (≤639px) agenda-only calendar root: compact icon/title/view header + persistent Today/month navigation + full-width agenda (MiniCalendar suppressed) + tap-to-open detail BottomSheet; rendered by `useCalendarModalController` instead of `CalendarModalShell`
 - `CalendarOverviewRail.tsx` — month navigator with stats and loading frame
 - `CalendarRailPrimitives.tsx` — reusable rail components and utilities
 - `CalendarRailStates.tsx` — rail state transitions: loading, expanded, collapsed
@@ -21,6 +21,8 @@ Calendar UI root: `CalendarModal.tsx` is the entry point (named for history; the
 - `TimelineDetailRail.tsx` — timeline layout with collapsible sections and motion
 - `NearbyActivityCard.tsx` — adjacent days' activity with neighbor navigation
 - `GoogleSpecialDateBadge.tsx` — birthday/anniversary badge with color customization
+
+- `CalendarMobileAgenda.css` — mobile-only agenda typography, date labels, toolbar interactions, and portaled detail-sheet readability/touch targets; scoped to mobile roots to preserve desktop rows.
 
 ### Models + utilities
 - `calendarDateUtils.ts` — Pacific-timezone date parsing, formatting, manipulation

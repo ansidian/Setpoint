@@ -1,3 +1,5 @@
+import { publicAssetUrl } from "@/publicAsset";
+import MobileShellActions from "./MobileShellActions";
 import { memo, useEffect, useRef, useState } from "react";
 import {
   AnalyticsTriggerButton,
@@ -144,6 +146,19 @@ function ShellHeader({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onTab, anyBlockingOverlayOpen, demoMode, isMobile, tab]);
+
+  if (isMobile && tab === "dashboard") {
+    const date = new Date();
+    return (
+      <header className="mobile-dashboard-header" data-testid="shell-header-mobile">
+        <h1><img src={publicAssetUrl("favicon.svg")} alt="" width={22} height={22} />Dashboard</h1>
+        <time dateTime={new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(date)}>
+          {new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Los_Angeles" }).format(date)}
+        </time>
+        <MobileShellActions refreshing={refreshing} onQuickRefresh={onQuickRefresh} systemStatus={systemStatus} onOpenHistory={onOpenHistory} onOpenAnalytics={onOpenAnalytics} />
+      </header>
+    );
+  }
 
   return (
     <div

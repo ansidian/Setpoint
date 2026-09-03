@@ -64,7 +64,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
                 {needsYou} needs you
               </span>
             )}
-            <OpenInboxButton accent={accent} onClick={onOpenInbox} />
+            <OpenInboxButton isMobile={isMobile} accent={accent} onClick={onOpenInbox} />
           </div>
         }
       />

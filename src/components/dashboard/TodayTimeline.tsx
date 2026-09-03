@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { buildTimeline } from "../../lib/shell-helpers";
 import type { TimelineEvent } from "../../lib/shell-helpers";
 import TimelineDayGroup from "./timeline/TimelineDayGroup";
+import MobileTodayTimeline from "./timeline/MobileTodayTimeline";
 import TimelineHeader from "./timeline/TimelineHeader";
 import {
   buildTodayTomorrowRestGroups,
@@ -159,7 +160,16 @@ function TodayTimeline({
 
         {!showEventSkeletons && (
           <>
-            <TimelineDayGroup
+            {isMobile ? (
+              <MobileTodayTimeline
+                items={ttr.today}
+                now={now}
+                accent={accent}
+                onJump={onJump}
+                showEmptyState={filters.events || filters.deadlines}
+                emptyDescription={emptyDescription}
+              />
+            ) : <TimelineDayGroup
               day={0}
               items={ttr.today}
               now={now}
@@ -169,7 +179,7 @@ function TodayTimeline({
               isMobile={isMobile}
               showEmptyState={filters.events || filters.deadlines}
               emptyDescription={emptyDescription}
-            />
+            />}
             <div
               style={{
                 marginTop: 16,
@@ -253,7 +263,7 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
 
   return (
     <div>
-      <button type="button" aria-expanded={open} onClick={onToggle}
+      <button type="button" className={isMobile ? "timeline-mobile-control" : undefined} aria-expanded={open} onClick={onToggle}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onPointerDown={() => setPressed(true)} onPointerUp={() => setPressed(false)}
@@ -325,7 +335,7 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
 
   return (
     <div>
-      <button type="button" aria-expanded={open} onClick={onToggle}
+      <button type="button" className={isMobile ? "timeline-mobile-control" : undefined} aria-expanded={open} onClick={onToggle}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onPointerDown={() => setPressed(true)} onPointerUp={() => setPressed(false)}

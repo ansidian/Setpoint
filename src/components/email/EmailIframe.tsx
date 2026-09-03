@@ -15,10 +15,8 @@ export interface EmailIframeRemoteContentTrust {
   onTrustSender?: (() => Promise<void>) | null;
 }
 
-// Renders a sanitized email body inside an iframe. The iframe always fills
-// its parent container's height (100%) — EmailReader provides a fixed-size
-// scrollable region, and the iframe's own scrollbar handles overflow for
-// long emails. Width is 100% so multi-column layouts can reflow.
+// Sanitized iframe: desktop scrolls inside the frame; mobile measures its
+// content so the message and metadata share the reader scroll container.
 export default function EmailIframe({ html, isMobile = false, messageKey, remoteContentTrust }: {
   html: string;
   isMobile?: boolean;
@@ -26,6 +24,7 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
   remoteContentTrust?: EmailIframeRemoteContentTrust;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const sizingCleanupRef = useRef<(() => void) | null>(null);
   const hotkeyDocumentRef = useRef<Document | null>(null);
 
   // Sanitize then wrap in a full document so the email's own styles apply.
@@ -116,6 +115,58 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
     try {
       const doc = iframeRef.current?.contentDocument;
       if (!doc) return;
+      sizingCleanupRef.current?.();
+      sizingCleanupRef.current = null;
+      if (isMobile && doc.body) {
+        const frame = iframeRef.current!;
+        // Measure natural body height, not the document scrollHeight (which
+        // includes the iframe viewport and prevents shrinking on reflow).
+        doc.documentElement.style.setProperty("height", "auto", "important");
+        doc.documentElement.style.setProperty("min-height", "0", "important");
+        doc.body.style.setProperty("height", "auto", "important");
+        doc.body.style.setProperty("min-height", "0", "important");
+        let pendingFrame = 0;
+        const measure = () => {
+          cancelAnimationFrame(pendingFrame);
+          pendingFrame = requestAnimationFrame(() => {
+            // Fixed-width newsletter tables can otherwise force the entire
+            // document wider than a phone. Relax only oversized tables, from
+            // the innermost layout outward, retaining small tables/buttons.
+            [...doc.querySelectorAll("table")].reverse().forEach((table) => {
+              if (table.getBoundingClientRect().width > frame.clientWidth) {
+                table.style.setProperty("width", "100%", "important");
+                table.style.setProperty("min-width", "0", "important");
+              }
+            });
+            // The body box excludes its margins. Chase's template, for
+            // example, adds a 10px top margin; leaving that out creates a
+            // second scroll range inside the frame that traps early gestures.
+            const bodyRect = doc.body.getBoundingClientRect();
+            const view = doc.defaultView;
+            const bottomMargin = parseFloat(view?.getComputedStyle(doc.body).marginBottom || "0") || 0;
+            const height = Math.ceil(
+              Math.max(0, bodyRect.top + (view?.scrollY || 0))
+              + Math.max(bodyRect.height, doc.body.scrollHeight)
+              + Math.max(0, bottomMargin),
+            );
+            if (height > 0 && frame.style.height !== `${height}px`) frame.style.height = `${height}px`;
+            // Once the full body fits, keep gestures in the reader's scroll
+            // container instead of allowing an independent iframe scroll.
+            if (height > 0) doc.documentElement.style.setProperty("overflow-y", "hidden", "important");
+          });
+        };
+        const observer = new ResizeObserver(measure);
+        observer.observe(doc.body);
+        doc.addEventListener("load", measure, true);
+        window.addEventListener("resize", measure);
+        measure();
+        sizingCleanupRef.current = () => {
+          observer.disconnect();
+          cancelAnimationFrame(pendingFrame);
+          doc.removeEventListener("load", measure, true);
+          window.removeEventListener("resize", measure);
+        };
+      }
       doc.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
         a.target = "_blank";
         a.rel = "noopener noreferrer";
@@ -129,7 +180,7 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
     } catch {
       // contentDocument may be inaccessible in edge cases; silently skip
     }
-  }, [relayReaderHotkey]);
+  }, [isMobile, relayReaderHotkey]);
 
   useEffect(() => {
     // React Activity disconnects effects while a keep-alive tab is hidden and
@@ -138,13 +189,20 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
     // requiring the unchanged email document to load again.
     handleLoad();
     return () => {
+      sizingCleanupRef.current?.();
       hotkeyDocumentRef.current?.removeEventListener("keydown", relayReaderHotkey);
     };
   }, [handleLoad, relayReaderHotkey]);
 
   return (
-    <div className="w-full h-full flex flex-col min-h-0">
-      {(showBlockedBanner || showTrustConfirmation) && (
+    <div className={isMobile ? "w-full" : "w-full h-full flex flex-col min-h-0"}>
+      {isMobile && showBlockedBanner && (
+        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 text-xs text-slate-600">
+          <span>Images blocked</span>
+          <button type="button" onClick={() => setAllowedContentKey(contentKey)} className="min-h-11 rounded-md px-2 font-semibold text-blue-700 transition-[background-color,transform] hover:-translate-y-px hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-blue-600 active:translate-y-0 active:bg-blue-200 motion-reduce:transform-none motion-reduce:transition-none">Show once</button>
+        </div>
+      )}
+      {!isMobile && (showBlockedBanner || showTrustConfirmation) && (
         // This banner sits on the email body's white backdrop, not the dark app
         // chrome, so its text/button colors below are literal hex/rgba, not --sp-* tokens.
         <div
@@ -225,7 +283,8 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
       )}
       <iframe
         ref={iframeRef}
-        className="w-full flex-1 border-none rounded-default bg-white"
+        className={isMobile ? "block w-full border-none bg-white" : "w-full flex-1 border-none rounded-default bg-white"}
+        style={isMobile ? { minHeight: 1 } : undefined}
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         srcDoc={srcDoc}
         title="Email content"

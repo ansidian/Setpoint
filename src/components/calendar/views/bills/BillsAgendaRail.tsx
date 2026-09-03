@@ -1,3 +1,4 @@
+import { formatAgendaHeaderLabel } from "../agenda/agendaDateModel";
 import { forwardRef, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import type { ForwardedRef } from "react";
 import { Receipt } from "lucide-react";
@@ -26,8 +27,9 @@ function groupDate(group: Pick<BillsAgendaGroup, "dateKey">): Date | null {
   return parsed ? new Date(parsed.year, parsed.month, parsed.day) : null;
 }
 
-function AgendaHeader({ group, todayKey, onActivate, registerHeader }: {
+function AgendaHeader({ group, todayKey, onActivate, registerHeader, mobileAgenda }: {
   group: BillsAgendaGroup;
+  mobileAgenda: boolean;
   todayKey: string;
   onActivate?: (dateKey: string) => void;
   registerHeader: (dateKey: string, node: HTMLElement | null) => void;
@@ -79,7 +81,7 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }: {
         event.currentTarget.style.background = "var(--sp-panel)";
       }}
     >
-      <span>{group.headerLabel}</span>
+      <span>{mobileAgenda ? formatAgendaHeaderLabel(group.dateKey, todayKey, true) : group.headerLabel}</span>
     </button>
   );
 }
@@ -96,7 +98,7 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }: {
   return (
     <button
       type="button"
-      className="sp-agenda-touch"
+      className="sp-agenda-touch calendar-agenda-finance"
       data-testid={`calendar-agenda-${itemKind}-row`}
       data-item-kind={itemKind}
       data-item-id={bill.agendaItemId}
@@ -152,7 +154,7 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }: {
           boxShadow: selected ? `0 0 0 3px color-mix(in srgb, ${color} 16%, transparent)` : "none",
         }}
       />
-      <span
+      <span className="calendar-agenda-body"
         style={{
           minWidth: 0,
           gridColumn: 2,
@@ -161,19 +163,19 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }: {
           gap: 4,
         }}
       >
-        <span style={{ color: bill.agendaComplete ? "rgba(166,173,200,0.75)" : "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 700, lineHeight: 1.2 }}>
+        <span className="calendar-agenda-time" style={{ color: bill.agendaComplete ? "rgba(166,173,200,0.75)" : "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 700, lineHeight: 1.2 }}>
           {bill.agendaMeta}
         </span>
-        <span style={{ color: bill.agendaComplete ? "rgba(205,214,244,0.62)" : "#f1f2fb", fontSize: 12, fontWeight: 650, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: bill.agendaComplete ? "line-through" : "none", textDecorationColor: "rgba(205,214,244,0.28)" }}>
+        <span className="calendar-agenda-title" style={{ color: bill.agendaComplete ? "rgba(205,214,244,0.62)" : "#f1f2fb", fontSize: 12, fontWeight: 650, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: bill.agendaComplete ? "line-through" : "none", textDecorationColor: "rgba(205,214,244,0.28)" }}>
           {bill.agendaTitle}
         </span>
         {bill.agendaSubtitle ? (
-          <span style={{ color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span className="calendar-agenda-meta" style={{ color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {bill.agendaSubtitle}
           </span>
         ) : null}
       </span>
-      <span style={{ gridColumn: 3, gridRow: "1 / span 3", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, minWidth: 68 }}>
+      <span className="calendar-agenda-finance-value" style={{ gridColumn: 3, gridRow: "1 / span 3", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, minWidth: 68 }}>
         <span style={{ color: bill.agendaComplete ? "color-mix(in srgb, var(--sp-green) 72%, transparent)" : color, fontSize: 12, fontWeight: 750, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
           {bill.agendaAmount}
         </span>
@@ -409,6 +411,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
       renderHeader={({ group, registerHeader: regHeader }) => (
         <AgendaHeader
           group={group}
+          mobileAgenda={mobileAgenda}
           todayKey={todayKey}
           registerHeader={regHeader}
           onActivate={onDateAction}

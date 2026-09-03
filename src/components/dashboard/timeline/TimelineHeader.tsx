@@ -106,6 +106,7 @@ function TimelineFilterChip({ active, accent, isMobile = false, label, onToggle 
   return (
     <button
       type="button"
+      className={isMobile ? "timeline-mobile-control" : undefined}
       role="switch"
       aria-checked={active}
       onClick={onToggle}
@@ -114,7 +115,8 @@ function TimelineFilterChip({ active, accent, isMobile = false, label, onToggle 
       onFocus={() => setFocus(true)}
       onBlur={() => setFocus(false)}
       style={{
-        padding: isMobile ? "6px 9px" : "4px 10px",
+        minHeight: isMobile ? 44 : undefined,
+        padding: isMobile ? "8px 12px" : "4px 10px",
         borderRadius: 6,
         cursor: "pointer",
         fontSize: isMobile ? 10 : 10.5,
@@ -163,6 +165,22 @@ export default function TimelineHeader({
   showRefreshStatus?: boolean;
   todayLabel?: string;
 }) {
+  if (isMobile) {
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--sp-text)" }}>Today</h2>
+          {typeof now === "number" && <TimelineClock now={now} />}
+        </div>
+        <div role="group" aria-label="Timeline filters" style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <TimelineFilterChip active={filters.events} accent={accent} isMobile label="Events" onToggle={() => onToggleFilter("events")} />
+          <TimelineFilterChip active={filters.deadlines} accent={accent} isMobile label="Deadlines" onToggle={() => onToggleFilter("deadlines")} />
+          {showRefreshStatus && <TimelineRefreshStatus accent={accent} />}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SectionHeader
       title={(

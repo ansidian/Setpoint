@@ -7,7 +7,7 @@ import { lazy, Suspense, useMemo } from "react";
 import { makeCalendarBillsData } from "./calendarBillsData";
 import { dashboardCalendarDeadlineData } from "./dashboardCalendarModalModel";
 import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import type { DashboardBriefingProjection, CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { DashboardCalendarBillsData } from "./calendarBillsData";
 import type { CalendarView } from "../../../shared/types/calendar";
@@ -20,6 +20,7 @@ const CalendarModal = lazy(importCalendar);
 type CalendarModalProps = ComponentProps<typeof CalendarModal>;
 export interface DashboardCalendarModalMountProps {
   [key: string]: unknown;
+  mobileShellActions?: ReactNode;
   calendarOpenRequestId: number;
   calendarEventCreateRequest?: CalendarEventCreateRequest | null;
   calendarJumpTodayRequestId?: number;
@@ -49,6 +50,7 @@ export interface DashboardCalendarModalMountProps {
 }
 
 export default function DashboardCalendarModalMount({
+  mobileShellActions,
   calendarOpenRequestId,
   calendarEventCreateRequest,
   calendarJumpTodayRequestId,
@@ -79,6 +81,7 @@ export default function DashboardCalendarModalMount({
   return (
     <Suspense fallback={null}>
       <CalendarModal
+        mobileShellActions={mobileShellActions}
         open={true}
         openRequestId={calendarOpenRequestId}
         eventCreateRequest={calendarEventCreateRequest}

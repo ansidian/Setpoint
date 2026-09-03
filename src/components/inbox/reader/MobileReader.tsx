@@ -1,11 +1,15 @@
 import { useRef, useState } from "react";
 import {
   ArrowLeft,
+  BellOff,
+  Clock,
+  Ellipsis,
+  ShieldCheck,
+  Trash2,
   Check,
   CheckCircle2,
   CreditCard,
   FileText,
-  ExternalLink,
   Mail,
   MailOpen,
   Pin,
@@ -13,8 +17,7 @@ import {
   Zap,
   BellPlus,
 } from "lucide-react";
-import { getGmailUrl } from "../../../lib/email-links";
-import { timeSince } from "../helpers";
+import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
 import SnoozePicker from "../SnoozePicker";
 import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
 import EmailBodyPane from "./EmailBodyPane";
@@ -25,7 +28,7 @@ import MobileActionRow from "./MobileActionRow";
 import { resolveReaderActions } from "./readerActionsModel";
 import MobileBillDrawer from "./MobileBillDrawer";
 import MobileReaderHeader from "./MobileReaderHeader";
-import MobileTriageBar from "./MobileTriageBar";
+import "./MobileReader.css";
 import type { SnapshotTriageLane } from "../../../../shared/types/snapshots";
 import type { InboxActionKind } from "../useInboxActionDispatch";
 import type { ReaderSurfaceProps } from "./readerTypes";
@@ -43,6 +46,7 @@ export default function MobileReader({
   accent,
   onAction,
   onClose,
+  backLabel = "Back to inbox",
   showTriage,
   billOpen,
   billMounted = billOpen,
@@ -59,7 +63,6 @@ export default function MobileReader({
   readOnly = false,
 }: ReaderSurfaceProps) {
   const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
-  const gmailUrl = getGmailUrl(email);
   const actions = resolveReaderActions(email, { readOnly });
   const {
     catchUp,
@@ -81,6 +84,12 @@ export default function MobileReader({
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
+  const [trustSaving, setTrustSaving] = useState(false);
+  const [trustError, setTrustError] = useState<string | null>(null);
+  const remoteTrust = useRemoteContentTrust(
+    email.account_id || email.accountId || email._account?.account_id || email._account?.id,
+    email.from_address || email.fromEmail || email.from_email,
+  );
   const actionsBtnRef = useRef<HTMLButtonElement>(null);
   const actionsPanelRef = useRef<HTMLDivElement>(null);
   const handleAction = (kind: InboxActionKind, payload?: SnapshotTriageLane | number) => {
@@ -91,18 +100,11 @@ export default function MobileReader({
     setActionsOpen(false);
     setSnoozeOpen(true);
   };
-  const overflowActionCount = [
-    !!onRemind,
-    canPin,
-    showBillToggle,
-    !catchUp && !!email.claude?.draftReply,
-    canReopen,
-    canMoveToNeeds,
-    canDismiss,
-    showMutableActions,
-    !!gmailUrl,
-  ].filter(Boolean).length;
-  const overflowPanelHeight = Math.min(360, 72 + overflowActionCount * 52);
+  const hasTriageActions = actions.canHandle || canReopen || canPin || showMutableActions
+    || actions.canMoveToFyi || actions.canMoveToNoise || canMoveToNeeds || canDismiss;
+  const hasFollowUpActions = showDestructiveActions || !!onRemind || showBillToggle
+    || (!catchUp && !!email.claude?.draftReply);
+  const hasMessageActions = !!remoteTrust.trustSender;
 
   return (
     <div
@@ -116,85 +118,31 @@ export default function MobileReader({
         background: "var(--sp-panel)",
       }}
     >
-      <div
-        style={{
-          padding: "12px 14px 10px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
-          background: "color-mix(in srgb, var(--sp-deep) 94%, transparent)",
-          flexShrink: 0,
-        }}
-      >
-        <button
-          type="button"
-          aria-label="Back to inbox"
-          onClick={onClose}
-          style={{
-            width: "var(--sp-touch-min)",
-            height: "var(--sp-touch-min)",
-            flexShrink: 0,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 12,
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.03)",
-            color: "rgba(205,214,244,0.8)",
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          <ArrowLeft size={18} />
+      <div className="mobile-reader-toolbar">
+        <button type="button" className="mobile-reader-icon-button" aria-label={backLabel} onClick={onClose}>
+          <ArrowLeft size={20} />
         </button>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 1.8,
-              textTransform: "uppercase",
-              color: accent,
-            }}
-          >
-            {account?.name || account?.email || "Inbox"}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: "rgba(205,214,244,0.6)",
-              marginTop: 2,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {timeSince(email.date)}
-          </div>
-        </div>
+        <span className="mobile-reader-account">{account?.name || account?.email || "Inbox"}</span>
+        <button
+          ref={actionsBtnRef}
+          type="button"
+          className="mobile-reader-icon-button"
+          aria-label="More email actions"
+          aria-haspopup="dialog"
+          aria-expanded={actionsOpen}
+          onClick={() => setActionsOpen((value) => !value)}
+        >
+          <Ellipsis size={21} />
+        </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="mobile-reader-scroll" data-testid="inbox-mobile-reader-scroll">
         <MobileReaderHeader
           email={email}
-          account={account}
           accent={accent}
-          actionsBtnRef={actionsBtnRef}
-          actionsActive={actionsOpen || snoozeOpen}
-          onToggleActions={() => setActionsOpen((value) => !value)}
           isQueuedSnapshot={isQueuedSnapshot}
           isUntriagedReadSnapshot={isUntriagedReadSnapshot}
-          billOpen={billOpen}
-          drafting={drafting}
           triageSummary={triageSummary}
-        />
-
-        <MobileTriageBar
-          actions={actions}
-          onAction={onAction}
-          onSnooze={openSnoozePicker}
-          snapshotPending={snapshotPending}
         />
 
         <VerificationCodeCallout
@@ -231,7 +179,7 @@ export default function MobileReader({
           </div>
         </AnimatedCollapse>
 
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div>
           <EmailAttachmentShelf
             emailUid={String(email.uid || email.email_id || email.id || "")}
             attachments={bodyState.attachments}
@@ -239,18 +187,18 @@ export default function MobileReader({
           />
           <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} isMobile />
         </div>
-
-        {billMounted && (
-          <MobileBillDrawer
-            email={email}
-            open={billOpen}
-            billExpanded={billExpanded}
-            setBillExpanded={setBillExpanded}
-            bodyState={bodyState}
-            billResolution={resolvedBillResolution}
-          />
-        )}
       </div>
+
+      {billMounted && (
+        <MobileBillDrawer
+          email={email}
+          open={billOpen}
+          billExpanded={billExpanded}
+          setBillExpanded={setBillExpanded}
+          bodyState={bodyState}
+          billResolution={resolvedBillResolution}
+        />
+      )}
 
       {actionsOpen && (
         <AnchoredFloatingPanel
@@ -258,97 +206,143 @@ export default function MobileReader({
           panelRef={actionsPanelRef}
           onClose={() => setActionsOpen(false)}
           width={220}
-          height={overflowPanelHeight}
-          role="menu"
+          mobileHeight={null}
+          role="dialog"
           ariaLabel="Email actions"
           forceMobileSheet
           style={{
             padding: 8,
           }}
         >
-          <div data-testid="inbox-mobile-actions-menu" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {onRemind && (
-              <MobileActionRow icon={BellPlus} label="Remind me" onClick={() => { setActionsOpen(false); onRemind(); }} />
+          <div data-testid="inbox-mobile-actions-menu" className="mobile-reader-actions">
+            {hasTriageActions && (
+              <section className="mobile-reader-action-group" aria-label="Triage">
+                <h3>Triage</h3>
+                <div className="mobile-reader-action-grid">
+                  {actions.canHandle && <MobileActionRow icon={Check} iconColor="var(--sp-green)" label="Handled" disabled={snapshotPending} onClick={() => handleAction("snapshot-handled")} />}
+                  {canReopen && (
+                    <MobileActionRow
+                      icon={Check}
+                      iconColor="var(--sp-green)"
+                      label="Reopen"
+                      disabled={snapshotPending}
+                      onClick={() => handleAction("snapshot-reopen")}
+                    />
+                  )}
+                  {showMutableActions && (
+                    <MobileActionRow
+                      icon={email.read ? Mail : MailOpen}
+                      iconColor="var(--sp-blue)"
+                      label={email.read ? "Mark unread" : "Mark read"}
+                      onClick={() => handleAction("toggle-read")}
+                    />
+                  )}
+                  {canPin && (
+                    <MobileActionRow
+                      icon={Pin}
+                      label={pinned ? "Unpin" : "Pin"}
+                      active={pinned}
+                      accent="#b4befe"
+                      onClick={() => handleAction("pin-toggle")}
+                    />
+                  )}
+                  {canMoveToNeeds && (
+                    <MobileActionRow
+                      icon={Zap}
+                      iconColor="var(--sp-rose)"
+                      label="Move to Needs"
+                      disabled={snapshotPending}
+                      onClick={() => handleAction("snapshot-move-lane", "needs_attention")}
+                    />
+                  )}
+                  {actions.canMoveToFyi && <MobileActionRow icon={FileText} iconColor="var(--sp-blue)" label="Move to FYI" disabled={snapshotPending} onClick={() => handleAction("snapshot-move-lane", "fyi")} />}
+                  {actions.canMoveToNoise && <MobileActionRow icon={BellOff} iconColor="var(--sp-subtext)" label="Move to Noise" disabled={snapshotPending} onClick={() => handleAction("snapshot-move-lane", "noise")} />}
+                  {canDismiss && (
+                    <MobileActionRow
+                      icon={XCircle}
+                      iconColor="var(--sp-subtext)"
+                      label="Dismiss"
+                      disabled={snapshotPending}
+                      onClick={() => handleAction("snapshot-dismiss")}
+                    />
+                  )}
+                </div>
+              </section>
             )}
-            {canPin && (
-              <MobileActionRow
-                icon={Pin}
-                label={pinned ? "Unpin" : "Pin"}
-                active={pinned}
-                accent="#b4befe"
-                onClick={() => handleAction("pin-toggle")}
-              />
+            {hasFollowUpActions && (
+              <section className="mobile-reader-action-group" aria-label="Follow up">
+                <h3>Follow up</h3>
+                <div className="mobile-reader-action-grid">
+                  {showDestructiveActions && <MobileActionRow icon={Clock} iconColor="var(--sp-orange)" label="Snooze" onClick={openSnoozePicker} />}
+                  {onRemind && (
+                    <MobileActionRow icon={BellPlus} iconColor="var(--sp-peach)" label="Remind me" onClick={() => { setActionsOpen(false); onRemind(); }} />
+                  )}
+                  {!catchUp && email.claude?.draftReply && (
+                    <MobileActionRow
+                      icon={FileText}
+                      iconColor={accent}
+                      label={drafting ? "Hide draft reply" : "Show draft reply"}
+                      active={drafting}
+                      onClick={() => {
+                        setActionsOpen(false);
+                        setDrafting((value) => !value);
+                      }}
+                    />
+                  )}
+                  {showBillToggle && (
+                    <MobileActionRow
+                      icon={actualActioned ? CheckCircle2 : CreditCard}
+                      iconColor="var(--sp-green)"
+                      label={actualCalendarTarget
+                        ? "View bill details"
+                        : actualActioned
+                        ? (billOpen ? "Hide bill details" : "View bill details")
+                        : (billOpen ? "Hide bill pay" : "Open bill pay")}
+                      active={billOpen}
+                      onClick={() => {
+                        setActionsOpen(false);
+                        if (actualCalendarTarget && onOpenRecordedBill) {
+                          onOpenRecordedBill(actualCalendarTarget);
+                          return;
+                        }
+                        setBillOpen((value) => !value);
+                      }}
+                    />
+                  )}
+                </div>
+              </section>
             )}
-            {showBillToggle && (
-              <MobileActionRow
-                icon={actualActioned ? CheckCircle2 : CreditCard}
-                label={actualCalendarTarget
-                  ? "View bill details"
-                  : actualActioned
-                  ? (billOpen ? "Hide bill details" : "View bill details")
-                  : (billOpen ? "Hide bill pay" : "Open bill pay")}
-                active={billOpen}
-                onClick={() => {
-                  setActionsOpen(false);
-                  if (actualCalendarTarget && onOpenRecordedBill) {
-                    onOpenRecordedBill(actualCalendarTarget);
-                    return;
-                  }
-                  setBillOpen((value) => !value);
-                }}
-              />
+            {hasMessageActions && (
+              <section className="mobile-reader-action-group" aria-label="Message">
+                <h3>Message</h3>
+                <div className="mobile-reader-action-list">
+                  {remoteTrust.trustSender && (
+                    <MobileActionRow
+                      icon={ShieldCheck}
+                      iconColor="var(--sp-cyan)"
+                      label={trustSaving ? "Saving…" : remoteTrust.status === "trusted" ? "Images allowed for this sender" : "Always allow images from this sender"}
+                      disabled={trustSaving || remoteTrust.status !== "untrusted"}
+                      onClick={async () => {
+                        setTrustSaving(true);
+                        setTrustError(null);
+                        try {
+                          await remoteTrust.trustSender?.();
+                        } catch {
+                          setTrustError("Could not save this trusted sender. Try again.");
+                        } finally {
+                          setTrustSaving(false);
+                        }
+                      }}
+                    />
+                  )}
+                  {trustError && <p role="alert" style={{ color: "var(--sp-rose)", fontSize: 12, padding: "0 12px" }}>{trustError}</p>}
+                </div>
+              </section>
             )}
-            {!catchUp && email.claude?.draftReply && (
-              <MobileActionRow
-                icon={FileText}
-                label={drafting ? "Hide draft reply" : "Show draft reply"}
-                active={drafting}
-                onClick={() => {
-                  setActionsOpen(false);
-                  setDrafting((value) => !value);
-                }}
-              />
-            )}
-            {canReopen && (
-              <MobileActionRow
-                icon={Check}
-                label="Reopen"
-                disabled={snapshotPending}
-                onClick={() => handleAction("snapshot-reopen")}
-              />
-            )}
-            {canMoveToNeeds && (
-              <MobileActionRow
-                icon={Zap}
-                label="Move to Needs"
-                disabled={snapshotPending}
-                onClick={() => handleAction("snapshot-move-lane", "needs_attention")}
-              />
-            )}
-            {canDismiss && (
-              <MobileActionRow
-                icon={XCircle}
-                label="Dismiss"
-                disabled={snapshotPending}
-                onClick={() => handleAction("snapshot-dismiss")}
-              />
-            )}
-            {showMutableActions && (
-              <MobileActionRow
-                icon={email.read ? Mail : MailOpen}
-                label={email.read ? "Mark unread" : "Mark read"}
-                onClick={() => handleAction("toggle-read")}
-              />
-            )}
-            {gmailUrl && (
-              <MobileActionRow
-                icon={ExternalLink}
-                label="Open in Gmail"
-                onClick={() => {
-                  setActionsOpen(false);
-                  window.open(gmailUrl, "_blank", "noopener,noreferrer");
-                }}
-              />
+            {showDestructiveActions && (
+              <div className="mobile-reader-action-group mobile-reader-trash">
+                <MobileActionRow icon={Trash2} label="Trash" danger onClick={() => handleAction("trash")} />
+              </div>
             )}
           </div>
         </AnchoredFloatingPanel>

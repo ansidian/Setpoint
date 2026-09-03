@@ -7,6 +7,7 @@ interface MarkDoneActionProps {
   revealed?: boolean;
   itemTitle?: string;
   compact?: boolean;
+  isMobile?: boolean;
   alwaysVisible?: boolean;
   style?: CSSProperties;
 }
@@ -20,14 +21,15 @@ interface MarkDoneActionProps {
 // `compact` renders an icon-only 20x20 check button (used beside the Coming-up
 // chip, where a text label would crowd the slot); the default is the text-only
 // "Mark done" used by the needs-you band's upcoming-card footer.
-export default function MarkDoneAction({ onComplete, revealed = false, itemTitle = "", compact = false, alwaysVisible = false, style }: MarkDoneActionProps) {
+export default function MarkDoneAction({ onComplete, revealed = false, itemTitle = "", compact = false, isMobile = false, alwaysVisible = false, style }: MarkDoneActionProps) {
   const [active, setActive] = useState(false);
   const visible = revealed || active || alwaysVisible;
   return (
     <button
       type="button"
-      className="sp-focus-ring"
+      className={isMobile ? "sp-focus-ring mobile-dashboard-complete" : "sp-focus-ring"}
       aria-label={itemTitle ? `Mark ${itemTitle} done` : "Mark done"}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
       onClick={(e) => { e.stopPropagation(); onComplete?.(); }}
       onMouseEnter={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
@@ -44,7 +46,7 @@ export default function MarkDoneAction({ onComplete, revealed = false, itemTitle
         pointerEvents: visible ? "auto" : "none",
         transition: "opacity 130ms ease, color 130ms ease, background 130ms ease",
         ...(compact
-          ? { justifyContent: "center", width: 20, height: 20, borderRadius: 6, padding: 0 }
+          ? { justifyContent: "center", width: isMobile ? 44 : 20, height: isMobile ? 44 : 20, borderRadius: 6, padding: 0 }
           : { gap: 4, padding: 0, fontSize: 10.5, fontWeight: 600 }),
         ...style,
       }}

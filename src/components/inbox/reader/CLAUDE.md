@@ -7,7 +7,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 ### Entry + surfaces
 - `Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
 - `DesktopReader.tsx` — desktop detail layout with triage panel
-- `MobileReader.tsx` — mobile detail pane with action row
+- `MobileReader.tsx` — focused mobile reading screen with one top bar and actions sheet
 - `ReaderShared.tsx` — section accordion and empty-state primitives
 - `readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
 
@@ -17,10 +17,10 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 
 ### Mobile
 - `MobileBillDrawer.tsx` — mobile slide-up bill-pay sheet with expand/collapse affordance
-- `MobileReaderHeader.tsx` — mobile reader subject/sender/status-pills/briefing-triage header block
+- `MobileReaderHeader.tsx` — scrolling subject/sender with expandable details and AI summary
 - `MobileActionRow.tsx` — single-row mobile action buttons
-- `MobileTriageBar.tsx` — always-visible primary one-tap triage verbs
-- `MobileReaderControls.tsx` — pill badges and inline mobile controls
+- `MobileReader.css` — mobile reading layout, safe areas, and disclosure/control states
+- `MobileReaderControls.tsx` — mobile status badges
 
 ### Body + triage
 - `EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
@@ -56,6 +56,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 
 ## Local patterns
 
+- `Open in Gmail` is desktop-only: mobile omits the web handoff until a reliable iPhone message deep link is verified.
 - Body HTML renders inside the existing iframe safety seam; do not render provider HTML directly into the app document.
 - Shared action visibility belongs in `readerActionsModel.ts` so desktop, mobile, hotkeys, and dispatch stay aligned.
 - `Ask Alfred` is intentionally passed only to the desktop reader and hidden in demo builds; it stages context without sending a prompt or starting a model run.

@@ -10,6 +10,7 @@ function AgendaDeadlineStatus({ deadline }: { deadline: AgendaDeadline }) {
 
   return (
     <span
+      className="calendar-agenda-status"
       data-testid={`events-agenda-deadline-status-${deadline.agendaItemId}`}
       style={{
         display: "inline-flex",
@@ -67,7 +68,7 @@ export default function EventsAgendaDeadlineRow({
       key={`deadline-${deadline.agendaItemId}-${dateKey}`}
       ref={(node) => registerRow(`${deadline.agendaItemId}-${dateKey}`, node, dateKey)}
       type="button"
-      className="sp-agenda-touch"
+      className="sp-agenda-touch calendar-agenda-deadline"
       data-testid="calendar-agenda-deadline-row"
       data-item-id={deadline.agendaItemId}
       onClick={(clickEvent) => onSelect(deadline, clickEvent.currentTarget)}
@@ -118,11 +119,11 @@ export default function EventsAgendaDeadlineRow({
           boxShadow: selected ? `0 0 0 3px ${colorWithAlpha(color, 0.16)}` : "none",
         }}
       />
-      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <span style={{ color: "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 650, fontVariantNumeric: "tabular-nums", lineHeight: 1.25 }}>
+      <span className="calendar-agenda-body" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+        <span className="calendar-agenda-time" style={{ color: "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 650, fontVariantNumeric: "tabular-nums", lineHeight: 1.25 }}>
           {deadline.agendaTimeRange}
         </span>
-        <span
+        <span className="calendar-agenda-title"
           style={{
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -138,12 +139,12 @@ export default function EventsAgendaDeadlineRow({
         >
           <TitleTag>{deadline.agendaTitle}</TitleTag>
         </span>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3 }}>
+        <span className="calendar-agenda-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3 }}>
           {deadline.agendaSubtitle}
         </span>
         {reminderSummary ? (
           <span
-            data-testid="calendar-agenda-reminder-label"
+            className="calendar-agenda-meta" data-testid="calendar-agenda-reminder-label"
             aria-label={reminderSummary}
             style={{
               display: "inline-flex",

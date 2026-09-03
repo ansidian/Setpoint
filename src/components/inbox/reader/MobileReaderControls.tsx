@@ -1,6 +1,3 @@
-import type { MouseEventHandler, RefObject } from "react";
-import type { LucideIcon } from "lucide-react";
-
 export function MobileStatusPill({ color, label, subtle = false }: { color: string; label: string; subtle?: boolean }) {
   return (
     <span
@@ -32,43 +29,5 @@ export function MobileStatusPill({ color, label, subtle = false }: { color: stri
       )}
       {label}
     </span>
-  );
-}
-
-export function InlineControlButton({ icon, label, active = false, onClick, buttonRef }: {
-  icon: LucideIcon;
-  label: string;
-  active?: boolean;
-  onClick: MouseEventHandler<HTMLButtonElement>;
-  buttonRef?: RefObject<HTMLButtonElement | null>;
-}) {
-  const IconComponent = icon;
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        padding: "7px 10px",
-        minHeight: "var(--sp-touch-min)",
-        minWidth: "var(--sp-touch-min)",
-        borderRadius: 10,
-        border: `1px solid ${active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
-        background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
-        color: active ? "#fff" : "rgba(205,214,244,0.72)",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        fontSize: 10,
-        fontWeight: 600,
-        flexShrink: 0,
-      }}
-    >
-      <IconComponent size={11} />
-      {label}
-    </button>
   );
 }

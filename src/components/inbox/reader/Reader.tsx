@@ -21,6 +21,7 @@ export default function Reader({
   accent,
   onAction,
   onClose,
+  backLabel,
   onRemind,
   onAskAlfred,
   showTriage,
@@ -37,6 +38,7 @@ export default function Reader({
   accent: string;
   onAction: InboxActionDispatcher;
   onClose: () => void;
+  backLabel?: string;
   onRemind?: () => void;
   onAskAlfred?: () => void;
   showTriage: boolean;
@@ -51,7 +53,7 @@ export default function Reader({
   const reduceMotion = useReducedMotion() ?? false;
   const snoozeBtnRef = useRef<HTMLButtonElement>(null);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
-  const [drafting, setDrafting] = useState(showDraft);
+  const [drafting, setDrafting] = useState(isMobile ? false : showDraft);
   const [billMounted, setBillMounted] = useState(billOpen);
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskDirty, setTaskDirty] = useState(false);
@@ -148,6 +150,7 @@ export default function Reader({
     accent,
     onAction,
     onClose,
+    backLabel,
     onRemind: onRemind || toggleTask,
     onAskAlfred,
     showTriage,

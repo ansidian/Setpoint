@@ -149,9 +149,6 @@ function StatusPanel({ status, onClose, panelRef, position }: {
   const [closeHover, setCloseHover] = useState(false);
   const [closeFocus, setCloseFocus] = useState(false);
   const [closePressed, setClosePressed] = useState(false);
-  const sources = status.sources?.length
-    ? status.sources
-    : [{ key: "system", label: "System", state: status.state, message: "System status is current." }];
   const closeActive = (closeHover || closeFocus) && !closePressed;
 
   return createPortal(
@@ -231,6 +228,18 @@ function StatusPanel({ status, onClose, panelRef, position }: {
           Close
         </button>
       </div>
+      <SystemStatusDetails status={status} />
+    </div>,
+    document.body,
+  );
+}
+
+export function SystemStatusDetails({ status }: { status: SystemStatusView }) {
+  const sources = status.sources?.length
+    ? status.sources
+    : [{ key: "system", label: "System", state: status.state, message: "System status is current." }];
+
+  return (
       <div style={{ display: "grid", gap: 6, paddingTop: 8 }}>
         {sources.map((source) => {
           const state = normalizeState(source.state);
@@ -274,8 +283,6 @@ function StatusPanel({ status, onClose, panelRef, position }: {
           );
         })}
       </div>
-    </div>,
-    document.body,
   );
 }
 

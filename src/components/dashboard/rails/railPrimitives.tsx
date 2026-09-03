@@ -31,7 +31,7 @@ export function SectionHeader({ title, subtitle, right, isMobile = false }: Sect
   );
 }
 
-export function OpenInboxButton({ accent, onClick }: { accent: string; onClick?: () => void }) {
+export function OpenInboxButton({ accent, onClick, isMobile = false }: { accent: string; onClick?: () => void; isMobile?: boolean }) {
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
   const active = hover || focus;
@@ -39,12 +39,15 @@ export function OpenInboxButton({ accent, onClick }: { accent: string; onClick?:
   return (
     <button
       type="button"
+      className={isMobile ? "mobile-dashboard-open-inbox" : undefined}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onFocus={() => setFocus(true)}
       onBlur={() => setFocus(false)}
       style={{
+        minHeight: isMobile ? 44 : undefined,
+        minWidth: isMobile ? 44 : undefined,
         padding: "3px 8px",
         borderRadius: 6,
         border: `1px solid ${active ? `${accent}3f` : "rgba(255,255,255,0.08)"}`,

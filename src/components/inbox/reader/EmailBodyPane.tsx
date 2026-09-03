@@ -44,22 +44,23 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, email
   }
   const isHtml = /<[a-z!/]/i.test(text);
   if (isHtml) {
-    // Iframe handles its own scroll; outer wrapper just clips and tints.
+    // Mobile expands into the reader scroll; desktop retains its own iframe scroll.
     return (
       <div
         data-testid={isMobile ? "inbox-mobile-reader-body" : undefined}
         style={{
-          flex: 1,
+          flex: isMobile ? undefined : 1,
           minHeight: 0,
           display: "flex",
-          padding: isMobile ? "0 16px 12px" : "12px 16px 16px",
+          padding: isMobile ? "0" : "12px 16px 16px",
         }}
       >
         <div
           style={{
-            flex: 1,
+            flex: isMobile ? undefined : 1,
             minHeight: 0,
-            borderRadius: 8,
+            width: "100%",
+            borderRadius: isMobile ? 0 : 8,
             overflow: "hidden",
             background: "#fff",
             border: "1px solid rgba(255,255,255,0.04)",
@@ -83,9 +84,9 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, email
     <div
       data-testid={isMobile ? "inbox-mobile-reader-body" : undefined}
       style={{
-        flex: 1,
+        flex: isMobile ? undefined : 1,
         minHeight: 0,
-        overflowY: "auto",
+        overflowY: isMobile ? undefined : "auto",
         padding: isMobile ? "16px 16px 12px" : "22px 24px 28px",
       }}
     >

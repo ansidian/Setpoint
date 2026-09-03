@@ -52,7 +52,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarRange.ts` — per-month event caching/fetching, prefetch radius, staleness
 - `useCalendarDomainRange.ts` — deadline/bill range cache, fetch, seed, stale, and prefetch orchestration over the domain-range data model
 - `useAgendaFetch.ts` — agenda month fetching: initial mount fetch, scroll-driven prefetch
-- `useCalendarScrollSync.ts` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands
+- `useCalendarScrollSync.ts` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands, and immediate calendar-month boundaries for the mobile agenda
 - `useCalendarScrollViewport.ts` — the infinite multi-month scroll state machine (user-vs-programmatic refs, settle lifecycle via `calendarSettleModel`, mount centering, rAF scroll handler, prop-driven nav/crossfade) extracted from `CalendarScrollContainer`; returns `{containerRef, refYear, refMonth, wFirst, wLast, getHeight}`
 - `useEditorCancelOnScroll.ts` — clean-floating-editor cancel-on-owner-scroll latch; exposes `maybeCancelEditorOnScroll(programmaticNavActive)` consumed by the scroll handler
 - `useStaleDomainCache.ts` — generic TTL-gated cache wrapper for domain fetches

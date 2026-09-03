@@ -3,11 +3,29 @@ import {
   buildTimelineGroups,
   buildTodayTomorrowRestGroups,
   percentElapsed,
+  partitionTodayEvents,
   resolveTodayNowMarkerIndex,
   shouldHoldPartialTimeline,
 } from "./timeline-helpers";
 
 describe("timeline helpers", () => {
+  it("folds only ended timed events, preserving deadlines and events that still need attention", () => {
+    const now = Date.parse("2026-05-11T20:00:00.000Z");
+    const ended = { kind: "event", endMs: now - 1, data: { title: "Finished" } };
+    const justEnded = { kind: "event", data: { title: "Just ended", endMs: now } };
+    const overdue = { kind: "deadline", dueAtMs: now - 3600000, data: { status: "pending" } };
+    const live = { kind: "event", startMs: now - 1000, endMs: now + 1000 };
+    const upcoming = { kind: "event", startMs: now + 1000, endMs: now + 2000 };
+    const allDay = { kind: "event", endMs: now - 1, data: { allDay: true } };
+    const unknownEnd = { kind: "event", startMs: now - 3600000 };
+    const items = [ended, overdue, justEnded, live, upcoming, allDay, unknownEnd];
+
+    expect(partitionTodayEvents(items, now)).toEqual({
+      earlier: [ended, justEnded],
+      remaining: [overdue, live, upcoming, allDay, unknownEnd],
+    });
+  });
+
   it("keeps an empty today group whenever a timeline filter remains active", () => {
     expect(buildTimelineGroups([], Date.now(), { events: false, deadlines: true })).toEqual([[0, []]]);
     expect(buildTimelineGroups([], Date.now(), { events: true, deadlines: false })).toEqual([[0, []]]);

@@ -34,6 +34,7 @@ export default function TransactionSelectedCard({ transaction, compact = false }
         </Motion.div>
 
         <Motion.div
+          className="calendar-detail-title"
           layout="position"
           transition={layoutTransition}
           style={{ color: "#fff", fontSize: compact ? 20 : 24, fontWeight: 500, lineHeight: 1.08 }}

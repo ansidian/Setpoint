@@ -23,7 +23,7 @@ interface ContextColumnProps {
   showInboxPeek?: boolean;
   onJump?: (payload: { kind?: string | null; id?: string | number | null; data?: unknown; date?: string | null; email?: unknown }, anchor?: HTMLElement) => void;
   onOpenInbox?: () => void;
-  onCompleteDeadline?: (id: string, record: ContextDeadline) => void;
+  onCompleteDeadline?: (id: string, record: ContextDeadline) => unknown | Promise<unknown>;
 }
 
 export default function ContextColumn({
@@ -31,7 +31,7 @@ export default function ContextColumn({
   emailAccounts = [], accent = "#cba6da", isMobile = false,
   showInboxPeek = true, onJump, onOpenInbox, onCompleteDeadline,
 }: ContextColumnProps) {
-  const comingUp = useMemo(() => buildComingUp({ liveDeadlines, liveBills, days: 7 }), [liveDeadlines, liveBills]);
+  const comingUp = useMemo(() => buildComingUp({ liveDeadlines, liveBills, days: 7, includeToday: !isMobile }), [liveDeadlines, liveBills, isMobile]);
 
   const recordsById = useMemo(() => {
     const map = new Map<string, ContextRecord>();
@@ -58,7 +58,7 @@ export default function ContextColumn({
   const handleComingUpComplete = (row: ComingUpRow) => {
     const record = recordsById.get(row.id);
     if (!record) return;
-    onCompleteDeadline?.(record.id, record as ContextDeadline);
+    return onCompleteDeadline?.(record.id, record as ContextDeadline);
   };
 
   return (

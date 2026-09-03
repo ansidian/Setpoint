@@ -1,149 +1,19 @@
+import { publicAssetUrl } from "@/publicAsset";
 import {
-  CheckCheck,
   Filter,
   Pin,
   Search,
 } from "lucide-react";
-import EmailRow from "../EmailRow";
+import MobileEmailRow from "./MobileEmailRow";
 import Reader from "../reader/Reader";
 import MobileFilterSheet from "./MobileFilterSheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import InboxSearchFlagChips from "../InboxSearchFlagChips";
 import InboxUndoToast from "../InboxUndoToast";
 import MobileSnapshotHeader from "./MobileSnapshotHeader";
-import { selectVisibleInboxLaneChips } from "../inboxCountsModel";
-import type { CSSProperties, MouseEventHandler, Ref } from "react";
-import type { LucideIcon } from "lucide-react";
+import { LANE } from "../../../lib/shell-helpers";
+import "./MobileInbox.css";
 import type { InboxPaneProps } from "../inboxViewTypes";
-import { useState } from "react";
-
-const MOBILE_FILTER_CHIPS = [
-  { key: "__all", label: "All" },
-  { key: "needs_attention", label: "Needs" },
-  { key: "fyi", label: "FYI" },
-  { key: "noise", label: "Noise" },
-];
-
-function MobileChip({ active, label, count, onClick, accent }: {
-  active: boolean;
-  label?: string;
-  count?: number;
-  onClick: MouseEventHandler<HTMLButtonElement>;
-  accent: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={typeof count === "number" ? `${label}, ${count}` : label}
-      aria-pressed={active}
-      onClick={onClick}
-      className="transition-transform duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        minWidth: 0,
-        minHeight: "var(--sp-touch-min)",
-        padding: 0,
-        borderRadius: 8,
-        border: "none",
-        background: "transparent",
-        color: "inherit",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        fontSize: 10.5,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          height: 30,
-          padding: "0 9px",
-          borderRadius: 8,
-          border: `1px solid ${active ? `${accent}48` : "rgba(255,255,255,0.08)"}`,
-          background: active ? `${accent}16` : "rgba(255,255,255,0.03)",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            color: active ? "#fff" : "rgba(205,214,244,0.72)",
-          }}
-        >
-          {label}
-        </span>
-        {typeof count === "number" && (
-          <span
-            style={{
-              color: active ? accent : "rgba(205,214,244,0.46)",
-              fontSize: 9,
-              fontWeight: 750,
-              fontVariantNumeric: "tabular-nums",
-              flexShrink: 0,
-            }}
-          >
-            {count}
-          </span>
-        )}
-      </span>
-    </button>
-  );
-}
-
-function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = false, testId }: {
-  icon: LucideIcon;
-  label: string;
-  onClick: MouseEventHandler<HTMLButtonElement>;
-  accent: string;
-  buttonRef?: Ref<HTMLButtonElement>;
-  tinted?: boolean;
-  testId?: string;
-}) {
-  const Icon = icon;
-  const baseStyle: CSSProperties = {
-    width: "var(--sp-touch-min)",
-    height: "var(--sp-touch-min)",
-    flexShrink: 0,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    border: `1px solid ${tinted ? `${accent}40` : "rgba(255,255,255,0.08)"}`,
-    background: tinted ? `${accent}16` : "rgba(255,255,255,0.03)",
-    color: tinted ? accent : "rgba(205,214,244,0.7)",
-    cursor: "pointer",
-    fontFamily: "inherit",
-    transition: "background 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out",
-  };
-  const focusStyle: CSSProperties = {
-    background: tinted ? `${accent}24` : "rgba(255,255,255,0.07)",
-    borderColor: tinted ? `${accent}66` : "rgba(255,255,255,0.14)",
-    color: tinted ? "#fff" : "rgba(205,214,244,0.9)",
-  };
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      aria-label={label}
-      data-testid={testId}
-      onClick={onClick}
-      className="transition-transform duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
-      onFocus={(event) => Object.assign(event.currentTarget.style, focusStyle)}
-      onBlur={(event) => Object.assign(event.currentTarget.style, baseStyle)}
-      style={baseStyle}
-    >
-      <Icon size={18} />
-    </button>
-  );
-}
+import { useLayoutEffect, useRef, useState } from "react";
 
 function MobileLiveSkeletonRows({ count = 4, compact = false }: { count?: number; compact?: boolean }) {
   return (
@@ -194,8 +64,11 @@ function MobileLiveLoadingBlock({ compact = false, activeSnapshotMode = false }:
 
 export default function MobileInboxView({
   accent,
+  mobileShellActions,
+  mobileScrollTopRequestId,
+  onMobileReaderBack,
+  mobileReaderBackLabel,
   nowTick,
-  briefingSummary,
   emailAccounts,
   accountId,
   setAccountId,
@@ -223,14 +96,14 @@ export default function MobileInboxView({
   visibleEmails,
   chipCounts,
   totalUnread,
-  noiseUnreadCount = 0,
   unreadInView,
   markAllVisibleRead,
+  mobileUnreadOnly,
+  setMobileUnreadOnly,
   onAction,
   showTriage,
   showDraft,
   showPreview,
-  density,
   scopedAccount,
   liveEmailsLoading = false,
   activeSnapshotMode = false,
@@ -240,7 +113,39 @@ export default function MobileInboxView({
   onUndo,
   announcement,
 }: InboxPaneProps) {
+  const [searchExpanded, setSearchExpanded] = useState(!!search);
+  const searchButtonRef = useRef<HTMLButtonElement | null>(null);
+  const searchOpen = searchExpanded || !!search;
+  useLayoutEffect(() => {
+    if (searchExpanded) searchRef.current?.focus();
+  }, [searchExpanded, searchRef]);
+  const cancelSearch = () => {
+    setSearch("");
+    setSearchExpanded(false);
+    requestAnimationFrame(() => searchButtonRef.current?.focus());
+  };
   const [workspaceDirty, setWorkspaceDirty] = useState(false);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const listScrollTopRef = useRef(0);
+  const readerOpen = !!selectedEmail;
+
+  useLayoutEffect(() => {
+    if (readerOpen || !listRef.current) return undefined;
+    const scrollTop = listScrollTopRef.current;
+    listRef.current.scrollTop = scrollTop;
+    // The shell restores its navigation in the same render; reapply after its
+    // height settles so returning to the list preserves the scanning position.
+    const frame = window.requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = scrollTop;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [readerOpen]);
+
+  useLayoutEffect(() => {
+    listScrollTopRef.current = 0;
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [accountId, lane, search, mobileUnreadOnly, snapshotNavigation?.snapshot?.id, mobileScrollTopRequestId]);
+
   const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
   const guardedOpen: typeof onOpen = (...args) => {
     if (!allowWorkspaceExit()) return;
@@ -250,7 +155,7 @@ export default function MobileInboxView({
   const guardedClose = () => {
     if (!allowWorkspaceExit()) return;
     setWorkspaceDirty(false);
-    closeSelectedEmail();
+    (onMobileReaderBack || closeSelectedEmail)();
   };
   // visibleEmails arrives pinned-first (selectVisibleEmails sorts pinned rows
   // ahead of everything else, newest pin first), so splitting off the pinned
@@ -278,6 +183,7 @@ export default function MobileInboxView({
           accent={accent}
           onAction={onAction}
           onClose={guardedClose}
+          backLabel={mobileReaderBackLabel}
           onWorkspaceDirtyChange={setWorkspaceDirty}
           showTriage={showTriage}
           showDraft={showDraft}
@@ -289,134 +195,76 @@ export default function MobileInboxView({
         />
       ) : (
         <div
+          ref={listRef}
+          onScroll={(event) => { listScrollTopRef.current = event.currentTarget.scrollTop; }}
           data-testid="inbox-mobile-list"
           style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}
         >
-          <MobileSnapshotHeader
-            accent={accent}
-            activeSnapshotMode={activeSnapshotMode}
-            readOnly={readOnly}
-            summary={activeSnapshotMode ? null : briefingSummary}
-            noiseUnreadCount={noiseUnreadCount}
-            snapshotNavigation={snapshotNavigation}
-          />
-
-          <div
-            style={{
-              position: "sticky",
-              top: 0,
-              zIndex: 4,
-              padding: "20px 16px 10px",
-              marginTop: 0,
-              // Opaque sticky header (mirrors the desktop StickyHeader pattern). A
-              // backdrop-filter blur here forced a full-viewport GPU re-rasterization
-              // on every scroll frame — one of the most expensive mobile scroll costs.
-              // The background was already ~98% opaque, so dropping the blur is visually
-              // near-identical while removing the per-frame compositor work.
-              background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-deep) 99%, transparent), color-mix(in srgb, var(--sp-deep) 97%, transparent))",
-              borderTop: "1px solid rgba(255,255,255,0.04)",
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "0 10px",
-                  height: 36,
-                  borderRadius: 10,
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                <Search size={13} color="rgba(205,214,244,0.45)" />
-                <input
-                  ref={searchRef}
-                  aria-label="Search indexed mail"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search indexed mail"
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    background: "transparent",
-                    border: "none",
-                    outline: "none",
-                    color: "var(--sp-text)",
-                    fontSize: 16,
-                    fontFamily: "inherit",
-                  }}
-                />
-              </div>
-              <MobileIconButton
-                icon={Filter}
-                label="Open filters"
-                onClick={() => setMobileFiltersOpen(true)}
-                accent={accent}
-                testId="inbox-mobile-filter-trigger"
-              />
-              {!readOnly && (
-                <MobileIconButton
-                  icon={CheckCheck}
-                  label="Mark all read"
-                  onClick={markAllVisibleRead}
-                  accent={accent}
-                  tinted={unreadInView > 0}
-                />
+          <div className="mobile-inbox-controls">
+            <div className="mobile-inbox-search-row">
+              {searchOpen ? (
+                <>
+                  <label className="mobile-inbox-search">
+                    <Search size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
+                    <input
+                      ref={searchRef}
+                      aria-label="Search indexed mail"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); cancelSearch(); } }}
+                      placeholder="Search mail"
+                      type="search"
+                      enterKeyHint="search"
+                    />
+                  </label>
+                  <button type="button" className="mobile-inbox-control" onClick={cancelSearch}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <h1 className="mobile-inbox-title"><img src={publicAssetUrl("favicon.svg")} alt="" width={22} height={22} />Inbox</h1>
+                  <button
+                    type="button"
+                    className="mobile-inbox-control"
+                    aria-label="Unread in this view"
+                    aria-pressed={mobileUnreadOnly}
+                    onClick={() => setMobileUnreadOnly((value) => !value)}
+                  >
+                    Unread
+                  </button>
+                  <button
+                    ref={searchButtonRef}
+                    type="button"
+                    className="mobile-inbox-control mobile-inbox-control-icon"
+                    aria-label="Search mail"
+                    onClick={() => setSearchExpanded(true)}
+                  >
+                    <Search size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-inbox-control mobile-inbox-control-icon"
+                    aria-label="Open filters"
+                    aria-haspopup="dialog"
+                    aria-expanded={mobileFiltersOpen}
+                    data-active={accountId !== "__all" || (!indexedSearchActive && lane !== "__all")}
+                    data-testid="inbox-mobile-filter-trigger"
+                    onClick={() => setMobileFiltersOpen(true)}
+                  >
+                    <Filter size={18} />
+                  </button>
+                  {mobileShellActions}
+                </>
               )}
             </div>
-            <div
-              data-testid="inbox-mobile-chip-grid"
-              style={{
-                display: "flex",
-                flexWrap: "nowrap",
-                alignItems: "center",
-                gap: 4,
-                paddingTop: 10,
-                overflowX: "auto",
-                scrollbarWidth: "none",
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
-              <InboxSearchFlagChips
-                query={search}
-                onChange={setSearch}
-                accent={accent}
-                compact
-              />
-              {(indexedSearchActive
-                ? [{ key: "__all", label: "All" }]
-                : selectVisibleInboxLaneChips(MOBILE_FILTER_CHIPS, chipCounts)
-              ).map((chip) => (
-                <MobileChip
-                  key={chip.key}
-                  active={indexedSearchActive ? true : lane === chip.key}
-                  label={chip.label}
-                  count={chip.key === "__all" ? undefined : chipCounts[chip.key]}
-                  onClick={() => setLane(chip.key)}
-                  accent={accent}
-                />
-              ))}
-            </div>
-
-            {(scopedAccount || indexedSearchActive) && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  paddingTop: 7,
-                  fontSize: 10.5,
-                  color: "var(--color-text-faint)",
-                }}
-              >
+            <MobileSnapshotHeader readOnly={readOnly} snapshotNavigation={snapshotNavigation} />
+            {(scopedAccount || (!indexedSearchActive && lane !== "__all") || indexedSearchActive) && (
+              <div className="mobile-inbox-scope">
                 {scopedAccount && <span>{scopedAccount.name || scopedAccount.email}</span>}
+                {!indexedSearchActive && lane !== "__all" && <span>{LANE[lane]?.label || lane}</span>}
                 {indexedSearchActive && (
-                  <span>{`${visibleEmails.length} of ${indexedSearchTotal ?? visibleEmails.length} indexed`}</span>
+                  <span>{mobileUnreadOnly
+                    ? `${visibleEmails.length} unread in loaded results`
+                    : `${visibleEmails.length} of ${indexedSearchTotal ?? visibleEmails.length} results`}</span>
                 )}
               </div>
             )}
@@ -473,61 +321,27 @@ export default function MobileInboxView({
                   </div>
                 )}
                 {pinnedRows.map((email) => (
-                  <EmailRow
+                  <MobileEmailRow
                     key={email.id || email.uid}
                     email={email}
                     account={rowAccountsById[email.accountId || ""] || rowAccountsById[email._accountKey || ""]}
-                    selected={false}
                     onOpen={guardedOpen}
-                    density={density}
                     showPreview={showPreview}
                     accent={accent}
                     nowTick={nowTick}
-                    showLaneTag
                   />
                 ))}
                 {restRows.map((email) => (
-                  <EmailRow
+                  <MobileEmailRow
                     key={email.id || email.uid}
                     email={email}
                     account={rowAccountsById[email.accountId || ""] || rowAccountsById[email._accountKey || ""]}
-                    selected={false}
                     onOpen={guardedOpen}
-                    density={density}
                     showPreview={showPreview}
                     accent={accent}
                     nowTick={nowTick}
-                    showLaneTag
                   />
                 ))}
-                {indexedSearchActive && indexedSearchHasMore && (
-                  <div style={{ padding: "6px 16px 0" }}>
-                    <button
-                      type="button"
-                      onClick={loadMoreIndexedSearch}
-                      disabled={indexedSearchLoading}
-                      className="transition-transform duration-150 enabled:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 enabled:active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
-                      style={{
-                        width: "100%",
-                        minHeight: "var(--sp-touch-min)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: 12,
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        background: "rgba(255,255,255,0.03)",
-                        color: "rgba(205,214,244,0.7)",
-                        cursor: indexedSearchLoading ? "default" : "pointer",
-                        opacity: indexedSearchLoading ? 0.6 : 1,
-                        fontFamily: "inherit",
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {indexedSearchLoading ? "Loading…" : "Show more results"}
-                    </button>
-                  </div>
-                )}
               </>
             ) : (
               <div
@@ -538,7 +352,35 @@ export default function MobileInboxView({
                   fontSize: 12,
                 }}
               >
-                {indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
+                {mobileUnreadOnly ? (indexedSearchActive && indexedSearchHasMore ? "No unread messages in the loaded results." : "No unread messages in this view.") : indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
+              </div>
+            )}
+            {indexedSearchActive && indexedSearchHasMore && (
+              <div style={{ padding: "6px 16px 0" }}>
+                <button
+                  type="button"
+                  onClick={loadMoreIndexedSearch}
+                  disabled={indexedSearchLoading}
+                  className="transition-transform duration-150 enabled:hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 enabled:active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
+                  style={{
+                    width: "100%",
+                    minHeight: "var(--sp-touch-min)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(255,255,255,0.03)",
+                    color: "rgba(205,214,244,0.7)",
+                    cursor: indexedSearchLoading ? "default" : "pointer",
+                    opacity: indexedSearchLoading ? 0.6 : 1,
+                    fontFamily: "inherit",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                  }}
+                >
+                  {indexedSearchLoading ? "Loading…" : "Show more results"}
+                </button>
               </div>
             )}
           </div>
@@ -552,6 +394,14 @@ export default function MobileInboxView({
         setAccountId={setAccountId}
         accounts={emailAccounts}
         totalUnread={totalUnread}
+        chipCounts={chipCounts}
+        lane={lane}
+        setLane={setLane}
+        indexedSearchActive={indexedSearchActive}
+        snapshotNavigation={activeSnapshotMode ? snapshotNavigation : null}
+        unreadInView={unreadInView}
+        onMarkAllRead={markAllVisibleRead}
+        readOnly={readOnly}
         onClose={() => setMobileFiltersOpen(false)}
       />
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />

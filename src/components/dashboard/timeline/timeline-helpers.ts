@@ -32,6 +32,21 @@ export interface DashboardTimelineItem {
 
 export type TimelineGroup = [day: number, items: DashboardTimelineItem[]];
 
+/** Only events with a known elapsed end belong in the mobile history disclosure. */
+export function partitionTodayEvents(items: DashboardTimelineItem[], now: number) {
+  const earlier: DashboardTimelineItem[] = [];
+  const remaining: DashboardTimelineItem[] = [];
+  for (const item of items) {
+    const endMs = item.endMs ?? item.data?.endMs;
+    if (item.kind === "event" && !item.data?.allDay && endMs != null && endMs <= now) {
+      earlier.push(item);
+    } else {
+      remaining.push(item);
+    }
+  }
+  return { earlier, remaining };
+}
+
 export const GUTTER = 44;
 export const SPINE_LEFT = GUTTER - 16;
 export const MOBILE_GUTTER = 30;

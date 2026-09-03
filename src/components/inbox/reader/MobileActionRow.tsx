@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 
 export default function MobileActionRow({
   icon,
+  iconColor,
   label,
   onClick,
   active = false,
@@ -11,6 +12,7 @@ export default function MobileActionRow({
   disabled = false,
 }: {
   icon: LucideIcon;
+  iconColor?: string;
   label: string;
   onClick: MouseEventHandler<HTMLButtonElement>;
   active?: boolean;
@@ -38,7 +40,7 @@ export default function MobileActionRow({
         padding: "11px 12px",
         minHeight: "var(--sp-touch-min)",
         borderRadius: 10,
-        border: `1px solid ${danger ? "color-mix(in srgb, var(--sp-rose) 18%, transparent)" : accentActive ? `color-mix(in srgb, ${accent} 18%, transparent)` : active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
+        border: "1px solid transparent",
         background,
         color: tint,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -48,8 +50,8 @@ export default function MobileActionRow({
         transition: "transform 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease",
       }}
     >
-      <IconComponent size={14} style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 600 }}>
+      <IconComponent size={14} aria-hidden="true" style={{ flexShrink: 0, color: iconColor || (danger ? "var(--sp-rose)" : accent || undefined) }} />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.4, fontWeight: 500 }}>
         {label}
       </span>
     </button>

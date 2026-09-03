@@ -67,7 +67,7 @@ export function AllDayChip({
   return (
     <button
       type="button"
-      className="sp-agenda-touch"
+      className="sp-agenda-touch calendar-agenda-all-day"
       data-testid="calendar-agenda-event-chip"
       data-item-id={event.agendaItemId}
       data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
@@ -171,7 +171,7 @@ export function AllDayChip({
           style={{ width: 6, height: 6, borderRadius: 999, background: color, flexShrink: 0 }}
         />
       ) : null}
-      <span style={{
+      <span className="calendar-agenda-title" style={{
         minWidth: 0,
         overflow: "hidden",
         textOverflow: specialDate ? "clip" : "ellipsis",
@@ -183,7 +183,7 @@ export function AllDayChip({
         {event.agendaTitle}
       </span>
       {reminderSummary ? (
-        <span data-testid="calendar-agenda-reminder-label" aria-label={reminderSummary} style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, color: "var(--sp-cream)", fontSize: 10 }}>
+        <span className="calendar-agenda-meta" data-testid="calendar-agenda-reminder-label" aria-label={reminderSummary} style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, color: "var(--sp-cream)", fontSize: 10 }}>
           <Bell size={10} aria-hidden />
           {reminderSummary.replace(/^Reminder\s+/, "")}
         </span>
@@ -213,7 +213,7 @@ export function TimedRow({
   return (
     <button
       type="button"
-      className="sp-agenda-touch"
+      className="sp-agenda-touch calendar-agenda-event"
       data-testid="calendar-agenda-event-row"
       data-item-id={event.agendaItemId}
       data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
@@ -309,7 +309,7 @@ export function TimedRow({
           boxShadow: selected || batchSelected ? `0 0 0 3px ${colorWithAlpha(color, batchSelected ? 0.22 : 0.16)}` : "none",
         }}
       />
-      <span
+      <span className="calendar-agenda-time"
         style={{
           color: past ? "rgba(166,173,200,0.75)" : "rgba(166,173,200,0.82)",
           fontSize: 10,
@@ -327,8 +327,8 @@ export function TimedRow({
       >
         {event.agendaTimeRange}
       </span>
-      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3, gridColumn: 2, gridRow: 2 }}>
-        <span
+      <span className="calendar-agenda-body" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3, gridColumn: 2, gridRow: 2 }}>
+        <span className="calendar-agenda-title"
           style={{
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -344,7 +344,7 @@ export function TimedRow({
           {event.agendaTitle}
         </span>
         {location ? (
-          <span
+          <span className="calendar-agenda-meta"
             style={{
               display: "-webkit-box",
               WebkitLineClamp: 2,
@@ -359,7 +359,7 @@ export function TimedRow({
           </span>
         ) : null}
         {reminderSummary ? (
-          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--sp-cream)", fontSize: 10.5, lineHeight: 1.3 }}>
+          <span className="calendar-agenda-meta" data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--sp-cream)", fontSize: 10.5, lineHeight: 1.3 }}>
             <Bell size={11} aria-hidden />
             {reminderSummary}
           </span>

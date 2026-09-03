@@ -287,7 +287,7 @@ function DashboardBodyInner({
 
   const timelinePanel = (
     <DashboardSurface isMobile={isMobile}
-      style={{ minHeight: isMobile ? 520 : 0, height: !isMobile ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
+      style={{ minHeight: 0, height: !isMobile ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
       {timeline}
     </DashboardSurface>
   );

@@ -27,6 +27,10 @@ export interface InboxViewProps {
   customize?: unknown;
   emailAccounts: InboxAccount[];
   briefingSummary?: ReactNode;
+  mobileShellActions?: ReactNode;
+  mobileScrollTopRequestId?: number;
+  onMobileReaderBack?: () => void;
+  mobileReaderBackLabel?: string;
   liveEmails?: InboxEmailLike[];
   liveEmailsLoading?: boolean;
   activeSnapshot?: InboxActiveSnapshotController | null;
@@ -60,6 +64,10 @@ export default function InboxView({
   accent,
   emailAccounts,
   briefingSummary,
+  mobileShellActions,
+  mobileScrollTopRequestId,
+  onMobileReaderBack,
+  mobileReaderBackLabel,
   liveEmails = [],
   liveEmailsLoading = false,
   activeSnapshot: controlledActiveSnapshot = null,
@@ -177,6 +185,10 @@ export default function InboxView({
   const sharedProps = {
     accent,
     briefingSummary,
+    mobileShellActions,
+    mobileScrollTopRequestId,
+    onMobileReaderBack,
+    mobileReaderBackLabel,
     emailAccounts: displayedAccounts,
     liveEmailsLoading: snapshotInboxMode
       ? triageActivity.syncing

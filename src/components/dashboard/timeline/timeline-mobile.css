@@ -1,0 +1,82 @@
+.timeline-mobile-row,
+.timeline-mobile-control {
+  min-height: 44px;
+}
+
+.timeline-mobile-control {
+  transition: transform 130ms ease, background 130ms ease !important;
+}
+
+.timeline-mobile-row:focus-visible,
+.timeline-mobile-control:focus-visible {
+  outline: 2px solid var(--sp-accent) !important;
+  outline-offset: 2px !important;
+  transform: translateY(-1px);
+}
+
+@media (hover: hover) {
+  .timeline-mobile-row:hover,
+  .timeline-mobile-control:hover {
+    background: rgba(255, 255, 255, 0.035) !important;
+    transform: translateY(-1px);
+  }
+}
+
+.timeline-mobile-row:active,
+.timeline-mobile-control:active {
+  background: rgba(255, 255, 255, 0.065) !important;
+  transform: translateY(1px);
+}
+
+.timeline-earlier {
+  margin-bottom: 8px;
+}
+
+.timeline-earlier > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--sp-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.timeline-earlier > summary::-webkit-details-marker {
+  display: none;
+}
+
+.timeline-earlier > summary > svg {
+  color: var(--color-text-faint);
+  transition: transform 130ms ease;
+}
+
+.timeline-earlier[open] > summary > svg {
+  transform: rotate(90deg);
+}
+
+.timeline-earlier-count {
+  margin-left: auto;
+  color: var(--color-text-faint);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-mobile-row,
+  .timeline-mobile-row *,
+  .timeline-mobile-control,
+  .timeline-mobile-control *,
+  .timeline-earlier > summary > svg {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .timeline-mobile-row,
+  .timeline-mobile-control {
+    transform: none !important;
+  }
+}

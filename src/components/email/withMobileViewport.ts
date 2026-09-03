@@ -27,7 +27,7 @@ function injectIntoHead(docHtml: string, headHtml: string): string {
 // of <head> so the reset acts as a default the email's own styles can override.
 export function withMobileViewport(docHtml = ""): string {
   const head = '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    + '<style>html,body{margin:0;padding:0}img{max-width:100%;height:auto}</style>';
+    + '<style>html,body{margin:0;padding:0;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%!important}</style>';
   return injectIntoHead(docHtml, head);
 }
 

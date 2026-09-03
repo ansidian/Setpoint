@@ -26,5 +26,10 @@ export default function useMobileDashboardScrollRestoration({ isMobile, tab }: {
     return () => window.cancelAnimationFrame(frame);
   }, [isMobile, tab]);
 
-  return { scrollRef, onScroll };
+  const scrollToTop = useCallback(() => {
+    dashboardScrollTopRef.current = 0;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, []);
+
+  return { scrollRef, onScroll, scrollToTop };
 }

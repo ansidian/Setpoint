@@ -1,4 +1,5 @@
 import { memo } from "react";
+import "./timeline-mobile.css";
 import {
   Calendar,
   Bell,
@@ -182,21 +183,25 @@ function TimelineRow({
     : railDotColor
       ? `0 0 0 1px ${effectiveRailDotColor}18`
       : "none";
-  const timeColumnWidth = isMobile ? 52 : 54;
+  const timeColumnWidth = 54;
 
   return (
     <div
       data-testid={isMobile ? "timeline-row-mobile" : "timeline-row-desktop"}
+      className={isMobile ? "timeline-mobile-row" : undefined}
       role="button"
       tabIndex={0}
       onClick={(e) => onJump?.(jumpPayload, e.currentTarget)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onJump?.(jumpPayload, e.currentTarget);
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onJump?.(jumpPayload, e.currentTarget);
+        }
       }}
       style={{
         position: "relative",
         overflow: isLive ? "hidden" : "visible",
-        padding: isMobile ? "10px 10px 10px 22px" : "11px 12px",
+        padding: isMobile ? "12px 8px" : "11px 12px",
         marginBottom: 4,
         borderRadius: 10,
         cursor: "pointer",
@@ -204,20 +209,20 @@ function TimelineRow({
         border: isLive ? `1px solid ${accent}24` : "1px solid transparent",
         transition: "transform 180ms ease, background 130ms ease, border-color 130ms ease",
         display: "grid",
-        gridTemplateColumns: isMobile ? `${timeColumnWidth}px minmax(0, 1fr)` : `${timeColumnWidth}px 1fr auto`,
+        gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : `${timeColumnWidth}px 1fr auto`,
         gap: isMobile ? 10 : 14,
         alignItems: isMobile ? "start" : "center",
         background: isLive ? `${accent}08` : "transparent",
       }}
       onMouseEnter={(e) => {
-        if (!isLive) {
+        if (!isMobile && !isLive) {
           e.currentTarget.style.background = "rgba(255,255,255,0.024)";
           e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)";
           e.currentTarget.style.transform = "translateX(2px)";
         }
       }}
       onMouseLeave={(e) => {
-        if (!isLive) {
+        if (!isMobile && !isLive) {
           e.currentTarget.style.background = "transparent";
           e.currentTarget.style.borderColor = "transparent";
           e.currentTarget.style.transform = "translateX(0)";
@@ -251,9 +256,9 @@ function TimelineRow({
         />
       </div>
 
-      <div
+      {!isMobile && <div
         style={{
-          fontSize: isMobile ? 10.5 : 11.5,
+          fontSize: 11.5,
           fontWeight: 500,
           fontVariantNumeric: "tabular-nums",
           color: isLive ? dotColor : "rgba(205,214,244,0.7)",
@@ -262,18 +267,24 @@ function TimelineRow({
         }}
       >
         {leftLabel}
-      </div>
+      </div>}
 
       <div style={{ minWidth: 0 }}>
         <div
           style={{
             display: "flex",
-            alignItems: isMobile ? "flex-start" : "center",
+            alignItems: "center",
             flexWrap: isMobile ? "wrap" : "nowrap",
             gap: 8,
             marginBottom: 2,
           }}
         >
+          {isMobile && leftLabel && (
+            <span style={{ fontSize: 11.5, color: "rgba(205,214,244,0.7)", fontVariantNumeric: "tabular-nums" }}>{leftLabel}</span>
+          )}
+          {isMobile && meta && (
+            <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{meta}</span>
+          )}
           {isSpecialDateEvent ? (
             <GoogleSpecialDateBadge
               item={item.data}
@@ -286,7 +297,7 @@ function TimelineRow({
           <div
             data-dashboard-timeline-title="true"
             style={{
-              fontSize: isMobile ? 12.5 : 13,
+              fontSize: isMobile ? 14 : 13,
               fontWeight: 500,
               color: "var(--sp-text)",
               overflow: "hidden",
@@ -296,9 +307,11 @@ function TimelineRow({
               display: isSpecialDateEvent ? "-webkit-box" : "block",
               WebkitLineClamp: isSpecialDateEvent ? 2 : undefined,
               WebkitBoxOrient: isSpecialDateEvent ? "vertical" : undefined,
-              flex: 1,
+              flex: isMobile ? "0 0 100%" : 1,
+              order: isMobile ? -1 : undefined,
+              overflowWrap: isMobile ? "anywhere" : undefined,
               minWidth: 0,
-              textDecoration: isPast ? "line-through" : "none",
+              textDecorationLine: isPast ? "line-through" : "none",
               textDecorationColor: "rgba(205,214,244,0.25)",
             }}
           >
@@ -378,23 +391,6 @@ function TimelineRow({
             }}
           >
             {sub}
-          </div>
-        )}
-        {isMobile && meta && (
-          <div
-            style={{
-              marginTop: 6,
-              display: "inline-flex",
-              maxWidth: "100%",
-              fontSize: isMobile ? 10 : 10.5,
-              color: "var(--color-text-faint)",
-              fontVariantNumeric: "tabular-nums",
-              padding: "2px 8px",
-              borderRadius: 6,
-              background: "rgba(255,255,255,0.03)",
-            }}
-          >
-            {meta}
           </div>
         )}
       </div>

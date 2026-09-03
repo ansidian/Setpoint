@@ -163,4 +163,68 @@ describe("selectVisibleEmails", () => {
     expect(result.map((e) => e.uid)).toEqual(["pin-newer", "pin-older", "untriaged", "plain"]);
   });
 
+  it("orders mobile rows by message date across lanes and resurfacing, after matching pins", () => {
+    const flatEmails = [
+      email({ uid: "resurfaced", _lane: "needs_attention", date: "2026-01-01T00:00:00.000Z", _resurfacedAt: Date.parse("2026-12-01T00:00:00.000Z") }),
+      email({ uid: "pin-older", _pinned: true, _pinnedAt: 100 }),
+      email({ uid: "queued", _lane: "queued", date: "2026-03-01T00:00:00.000Z" }),
+      email({ uid: "pin-newer", _pinned: true, _pinnedAt: 900 }),
+      email({ uid: "noise-newest", _lane: "noise", date: "2026-06-01T00:00:00.000Z" }),
+    ];
+    const result = selectVisibleEmails({ flatEmails, sortOrder: "newest" });
+
+    expect(result.map((row) => row.uid)).toEqual([
+      "pin-newer", "pin-older", "noise-newest", "queued", "resurfaced",
+    ]);
+  });
+
+  it("narrows the scoped inbox to unread rows, including only unread pins", () => {
+    const flatEmails = [
+      email({ uid: "unread", _lane: "fyi" }),
+      email({ uid: "read", _lane: "fyi", read: true }),
+      email({ uid: "untriaged-read", _lane: "untriaged_read" }),
+      email({ uid: "read-pin", _pinned: true, _pinnedAt: 900, read: true }),
+      email({ uid: "unread-pin", _pinned: true, _pinnedAt: 100 }),
+      email({ uid: "other-account", _accountKey: "personal", _lane: "fyi" }),
+      email({ uid: "other-lane", _lane: "noise" }),
+      email({ uid: "snoozed", _lane: "fyi" }),
+    ];
+    const result = selectVisibleEmails({
+      flatEmails,
+      sortOrder: "newest",
+      unreadOnly: true,
+      accountId: "work",
+      lane: "fyi",
+      nowTick: 1_000,
+      snoozedMap: new Map([["snoozed", 2_000], ["unread-pin", 2_000]]),
+    });
+
+    expect(result.map((row) => row.uid)).toEqual(["unread-pin", "unread"]);
+    expect(selectVisibleEmails({ flatEmails, unreadOnly: true }).map((row) => row.uid))
+      .not.toContain("untriaged-read");
+  });
+
+  it("filters and sorts loaded search matches without introducing inbox rows or changing search scope", () => {
+    const indexedSearchEmails = [
+      email({ uid: "older", date: "2026-01-01T00:00:00.000Z" }),
+      email({ uid: "read-match", read: true }),
+      email({ uid: "newer", _accountKey: "personal", _lane: "noise", date: "2026-06-01T00:00:00.000Z" }),
+    ];
+    const result = selectVisibleEmails({
+      flatEmails: [email({ uid: "inbox-pin", _pinned: true })],
+      indexedSearchActive: true,
+      indexedSearchEmails,
+      accountId: "work",
+      lane: "fyi",
+      snoozedMap: new Map([["newer", 2_000]]),
+      nowTick: 1_000,
+      sortOrder: "newest",
+      unreadOnly: true,
+    });
+
+    expect(result.map((row) => row.uid)).toEqual(["newer", "older"]);
+    // The source remains intact for the open reader and for turning Unread off.
+    expect(indexedSearchEmails.map((row) => row.uid)).toEqual(["older", "read-match", "newer"]);
+  });
+
 });

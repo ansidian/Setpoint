@@ -29,7 +29,14 @@ function shortDateLabel(dateKey: string): string {
   return `${parsed.month + 1}/${parsed.day}/${year}`;
 }
 
-export function formatAgendaHeaderLabel(dateKey: string, todayKey = pacificYMD(Date.now())): string {
+export function formatAgendaHeaderLabel(dateKey: string, todayKey = pacificYMD(Date.now()), mobile = false): string {
+  if (mobile) {
+    const parsed = parseYmd(dateKey);
+    if (!parsed) return dateKey;
+    const date = localDate(parsed);
+    const day = dateKey === todayKey ? "Today" : dateKey === addDaysYmd(todayKey, 1) ? "Tomorrow" : dateKey === addDaysYmd(todayKey, -1) ? "Yesterday" : date.toLocaleDateString("en-US", { weekday: "short" });
+    return `${day} · ${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  }
   if (dateKey === addDaysYmd(todayKey, -1)) return `YESTERDAY ${shortDateLabel(dateKey)}`;
   if (dateKey === todayKey) return `TODAY ${shortDateLabel(dateKey)}`;
   if (dateKey === addDaysYmd(todayKey, 1)) return `TOMORROW ${shortDateLabel(dateKey)}`;

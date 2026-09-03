@@ -42,17 +42,19 @@ export function buildComingUp({
   liveDeadlines,
   liveBills,
   days = 7,
+  includeToday = true,
 }: {
   liveDeadlines?: DashboardComingUpDeadlines | null;
   liveBills?: DashboardComingUpBill[] | null;
   days?: number;
+  includeToday?: boolean;
 } = {}): ComingUpRow[] {
   const rows: ComingUpRow[] = [];
 
   for (const d of asDeadlineList(liveDeadlines)) {
     if (d?.status === "complete") continue;
     const n = daysUntil(d?.due_date);
-    if (n == null || n < 0 || n > days) continue;
+    if (n == null || n < (includeToday ? 0 : 1) || n > days) continue;
     rows.push({
       id: `deadline:${d.id}`, kind: "deadline", title: d.title || "",
       meta: d.class_name || d.project_name || "Deadline", sortDays: n,
@@ -63,7 +65,7 @@ export function buildComingUp({
   for (const b of liveBills || []) {
     if (b?.paid) continue;
     const n = daysUntil(b?.next_date);
-    if (n == null || n < 0 || n > days) continue;
+    if (n == null || n < (includeToday ? 0 : 1) || n > days) continue;
     const amount = `$${Number(b.amount || 0).toFixed(2)}`;
     rows.push({
       id: `bill:${b.id}`, kind: "bill", title: b.name || "",

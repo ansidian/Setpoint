@@ -47,6 +47,7 @@ export interface ReaderSurfaceProps {
   accent: string;
   onAction: InboxActionDispatcher;
   onClose: () => void;
+  backLabel?: string;
   onRemind?: () => void;
   onAskAlfred?: () => void;
   showTriage: boolean;

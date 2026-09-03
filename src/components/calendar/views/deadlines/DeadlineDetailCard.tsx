@@ -161,7 +161,7 @@ export default function DeadlineDetailCard({
             <Motion.div
               layout="position"
               transition={layoutTransition}
-              data-testid="calendar-selected-deadline-title"
+              className="calendar-detail-title" data-testid="calendar-selected-deadline-title"
               style={{
                 fontSize: 17,
                 fontWeight: 500,
@@ -295,7 +295,7 @@ export default function DeadlineDetailCard({
           <Motion.div
             layout="position"
             transition={layoutTransition}
-            data-testid="calendar-selected-deadline-title"
+            className="calendar-detail-title" data-testid="calendar-selected-deadline-title"
             style={{
               fontSize: compact ? 17 : 18,
               fontWeight: 500,

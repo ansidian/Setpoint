@@ -51,6 +51,7 @@ export default function EventSelectedCard({ ev, actions, accent = "#89b4fa" }: {
     >
       <RailHeroCard accent={accent} compact actions={actions}>
         <Motion.div
+          className="calendar-detail-eyebrow"
           layout
           transition={layoutTransition}
           style={{
@@ -88,7 +89,7 @@ export default function EventSelectedCard({ ev, actions, accent = "#89b4fa" }: {
           <Motion.div
             layout="position"
             transition={layoutTransition}
-            data-testid="calendar-selected-event-title"
+            className="calendar-detail-title" data-testid="calendar-selected-event-title"
             style={{
               fontSize: 17,
               lineHeight: 1.08,
@@ -129,7 +130,7 @@ export default function EventSelectedCard({ ev, actions, accent = "#89b4fa" }: {
                 {compactEventTimeRange(ev)}
               </span>
               {accessoryLabel ? (
-                <span
+                <span className="calendar-detail-location"
                   style={{
                     fontSize: 11.5,
                     lineHeight: 1.4,

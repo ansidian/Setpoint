@@ -1,4 +1,4 @@
-import { Suspense, type ReactElement } from "react";
+import { Suspense, type ReactElement, type ReactNode } from "react";
 import buildCalendarModalShellProps, { type BuildCalendarModalShellPropsInput } from "../../components/calendar/modal/buildCalendarModalShellProps";
 import { CalendarMobileAgenda, CalendarModalShell } from "./calendarShellLoaders";
 
@@ -7,6 +7,7 @@ type LooseShellInput = {
 };
 
 type CalendarControllerShellOptions = LooseShellInput & {
+  mobileShellActions?: ReactNode;
   open: boolean;
   isMobile: boolean;
   eventEditor: object;
@@ -28,6 +29,7 @@ type CalendarControllerShellOptions = LooseShellInput & {
 /** Builds the shared mobile/desktop shell contract and selects its renderer. */
 export default function useCalendarControllerShell({
   open,
+  mobileShellActions,
   isMobile,
   eventEditor,
   editorOverlays,
@@ -66,7 +68,7 @@ export default function useCalendarControllerShell({
 
   return (
     <Suspense fallback={null}>
-      {isMobile ? <CalendarMobileAgenda {...shellProps} /> : <CalendarModalShell {...shellProps} />}
+      {isMobile ? <CalendarMobileAgenda {...shellProps} mobileShellActions={mobileShellActions} /> : <CalendarModalShell {...shellProps} />}
     </Suspense>
   );
 }

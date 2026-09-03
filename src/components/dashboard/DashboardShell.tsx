@@ -1,3 +1,4 @@
+import MobileShellActions from "../shell/MobileShellActions";
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import type { ComponentType, Dispatch, RefObject, SetStateAction } from "react";
 import { useNavigate } from "react-router";
@@ -7,7 +8,6 @@ import { useDashboard } from "../../context/DashboardContext";
 import { readDemoSafeLocalStorage, writeDemoSafeLocalStorage } from "../../demo/demoSafeLocalStorage";
 import { isDemoMode } from "../../demo/config";
 import useIsMobile from "../../hooks/useIsMobile";
-import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
 import { MOBILE_MEDIA_QUERY } from "../../lib/breakpoints";
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays";
@@ -24,7 +24,8 @@ import useLiveReadOverrides from "./useLiveReadOverrides";
 import useDashboardItemSheet from "./useDashboardItemSheet";
 import useMobileDashboardScrollRestoration from "./useMobileDashboardScrollRestoration";
 import useSnapshotNavigation from "./useSnapshotNavigation";
-import { getInboxSession, resetInboxSession, setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
+import useMobileInboxNavigation from "./useMobileInboxNavigation";
+import { resetInboxSession } from "../inbox/useInboxSessionState";
 import type { CurrentDashboardHookResult } from "../../hooks/useCurrentDashboard";
 import type useCalendarRange from "../../hooks/calendar/useCalendarRange";
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
@@ -100,7 +101,6 @@ export function DashboardShell({
   calendarDeadlinesError = false, loadCalendarDeadlines = () => {}, calendarBillsData, calendarBillRange,
   calendarDeadlineRange, domainRefreshing = false, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
 }: DashboardShellProps) {
-  type InboxSession = { accountId: string; lane: string; search: string; selectedId: string | number | null };
   const bd = bdInput as CurrentDashboardHookResult["briefingData"];
   const liveData = liveDataInput as CurrentDashboardLiveData;
   const calendarRange = calendarRangeInput as ReturnType<typeof useCalendarRange>;
@@ -142,24 +142,14 @@ export function DashboardShell({
   // Warm heavier secondary tabs on desktop only; mobile loads them on first use.
   useWarmImport(importCalendar, { enabled: !isMobile });
   useWarmImport(importNewsTab, { enabled: !isMobile });
-  // Mobile shell history is owned here (the parent) so the tab entry and the
-  // reader entry are pushed in a deterministic order (tab, then reader) for both
-  // entry points: tapping a list row and opening an email from a dashboard rail.
-  // On mobile, useInboxSelectionHistory is disabled so this is the single owner.
-  const mobileSelectedId = useInboxSelectedId();
-  useBrowserBackDismiss({
-    enabled: isMobile && tab === "inbox",
-    historyKey: "eaDashboardMobileTab",
-    onDismiss: () => setTab("dashboard"),
-  });
-  useBrowserBackDismiss({
-    enabled: isMobile && tab === "inbox" && !!mobileSelectedId,
-    historyKey: "eaMobileReader",
-    onDismiss: () => setInboxSession((prev: InboxSession) => (prev.selectedId ? { ...prev, selectedId: null } : prev)),
-  });
+  const {
+    readerOpen: mobileReaderOpen, prepareEmailOpen, dismissReader,
+    returnHome, readerBackLabel,
+  } = useMobileInboxNavigation({ isMobile, tab, setTab });
   // Declared before setShellTab so the calendar mount-on-first-visit setter is in
   // scope; the calendar tab stays mounted (Activity-frozen) once first visited.
   const [calendarMounted, setCalendarMounted] = useState(false);
+  const [inboxScrollTopRequestId, setInboxScrollTopRequestId] = useState(0);
   // Same mount-on-first-visit treatment for news: it fetches on mount, so avoid
   // eagerly hitting the news API before the owner ever opens the tab.
   const [newsMounted, setNewsMounted] = useState(false);
@@ -177,15 +167,11 @@ export function DashboardShell({
       return;
     }
     if (tab === "inbox" && nextTab === "dashboard") {
-      // Explicit jump to dashboard: unwind the synthetic mobile entries (tab,
-      // plus reader if open) in one history traversal. The back-dismiss popstate
-      // handlers clear the selection and switch the tab; no extra taps.
-      const depth = 1 + (getInboxSession().selectedId ? 1 : 0);
-      window.history.go(-depth);
+      returnHome();
       return;
     }
     startTransition(() => setTab(nextTab));
-  }, [demoMode, isMobile, tab]);
+  }, [demoMode, isMobile, returnHome, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState<SnapshotView | null>(null);
@@ -298,14 +284,9 @@ export function DashboardShell({
   // Email click anywhere → switch to inbox and let its state handle selection.
   const openEmailInInbox = useCallback((id: string | number | null) => {
     setHistoricalSnapshotView(null);
-    if (id) {
-      setInboxSession((prev: InboxSession) => ({
-        ...prev,
-        selectedId: id,
-      }));
-    }
+    prepareEmailOpen(id);
     setShellTab("inbox");
-  }, [setShellTab]);
+  }, [prepareEmailOpen, setShellTab]);
 
 
 
@@ -351,6 +332,7 @@ export function DashboardShell({
   const {
     scrollRef: dashboardScrollRef,
     onScroll: handleSharedScroll,
+    scrollToTop: scrollDashboardToTop,
   } = useMobileDashboardScrollRestoration({ isMobile, tab });
 
   const navigate = useNavigate();
@@ -436,7 +418,7 @@ export function DashboardShell({
         overflow: "hidden",
       }}
     >
-      <ShellHeader
+      {!(isMobile && (tab === "inbox" || tab === "calendar")) && <ShellHeader
         isMobile={isMobile}
         tab={tab}
         onTab={setShellTab}
@@ -449,7 +431,7 @@ export function DashboardShell({
         refreshing={bd.refreshing}
         onQuickRefresh={onQuickRefresh}
         systemStatus={liveData.systemStatus}
-      />
+      />}
 
       <div
         ref={historyTriggerRef}
@@ -498,6 +480,18 @@ export function DashboardShell({
               liveEmailsLoading={liveEmailsLoading}
               activeSnapshot={inboxActiveSnapshot}
               snapshotNavigation={snapshotNavigation}
+              onMobileReaderBack={dismissReader}
+              mobileReaderBackLabel={readerBackLabel}
+              mobileScrollTopRequestId={inboxScrollTopRequestId}
+              mobileShellActions={isMobile ? (
+                <MobileShellActions
+                  refreshing={bd.refreshing}
+                  onQuickRefresh={onQuickRefresh}
+                  systemStatus={liveData.systemStatus}
+                  onOpenHistory={handleHeaderToggleHistory}
+                  onOpenAnalytics={openAnalytics}
+                />
+              ) : undefined}
               liveReadOverrides={liveReadOverrides}
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
               snoozedEntries={liveData.snoozedEntries}
@@ -514,7 +508,9 @@ export function DashboardShell({
         <DashboardTabPanel tab="calendar" active={tab === "calendar"} isMobile={isMobile}>
           {calendarMounted ? (
             <Suspense fallback={null}>
-              <DashboardCalendarModalMount {...calendarMountProps} />
+              <DashboardCalendarModalMount {...calendarMountProps}
+                mobileShellActions={isMobile ? <MobileShellActions refreshing={bd.refreshing} onQuickRefresh={onQuickRefresh} systemStatus={liveData.systemStatus} onOpenHistory={handleHeaderToggleHistory} onOpenAnalytics={openAnalytics} /> : undefined}
+              />
             </Suspense>
           ) : null}
         </DashboardTabPanel>
@@ -534,11 +530,15 @@ export function DashboardShell({
         </DashboardTabPanel>
       </div>
 
-      {isMobile && (
+      {isMobile && !mobileReaderOpen && (
         <MobileBottomNav
           tab={tab}
           onTab={setShellTab}
-          onRetap={(t: DashboardTab) => { if (t === "calendar") jumpCalendarToToday(); }}
+          onRetap={(t: DashboardTab) => {
+            if (t === "calendar") jumpCalendarToToday();
+            if (t === "dashboard") scrollDashboardToTop();
+            if (t === "inbox") setInboxScrollTopRequestId((id) => id + 1);
+          }}
           inboxUnreadSignalCount={inboxUnreadSignalCount}
         />
       )}

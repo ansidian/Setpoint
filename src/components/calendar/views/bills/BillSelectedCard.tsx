@@ -67,6 +67,7 @@ export default function BillSelectedCard({ bill, compact = false, actions }: {
           style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}
         >
           <Motion.div
+            className="calendar-detail-title"
             layout="position"
             transition={layoutTransition}
             style={{
