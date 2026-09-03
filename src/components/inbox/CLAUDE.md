@@ -64,6 +64,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `helpers.ts` — time formatters and snooze preset builder
 - `primitives.tsx` — Kbd, Avatar, Eyebrow, StickyHeader, LaneIcon, QuickAction
 - `test-utils/inboxFixtures.ts` — email/account test factories
+- `test-utils/mobileInboxActions.test-utils.ts` — shared mobile action-sheet and search drivers for existing Inbox behavior tests
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 

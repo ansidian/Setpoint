@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
+import AnimatedHeight from "@/components/shared/AnimatedHeight";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Circle, CircleDashed } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -170,16 +170,17 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
                         />
                       </button>
 
-                      <AnimatedCollapse open={expanded}>
-                        <div
+                      <AnimatedHeight>
+                        {/* Dispose form state on close; only the empty height shell may linger. */}
+                        {expanded ? <div
                           id={`connection-panel-${row.id}`}
                           role="region"
                           aria-labelledby={row.id}
                           className="border-t border-white/[0.06] bg-black/[0.08] px-3 py-5 sm:px-4"
                         >
                           {renderPanel(row)}
-                        </div>
-                      </AnimatedCollapse>
+                        </div> : null}
+                      </AnimatedHeight>
                     </div>
                   );
                 })}

@@ -12,6 +12,7 @@ import {
   makeLiveInboxEmail,
 } from "./test-utils/inboxFixtures";
 import { resetInboxSession } from "./useInboxSessionState";
+import { openMobileEmailActions, openMobileInboxSearch } from "./test-utils/mobileInboxActions.test-utils";
 import type { EmailSearchClientResponse, EmailSearchResult } from "../../../shared/types/email";
 import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
 
@@ -169,7 +170,7 @@ describe("InboxView action workflows", () => {
     renderInbox({ liveEmails: [makeLiveInboxEmail({ uid: "live-trash" })] });
 
     fireEvent.click(await screen.findByText("Fresh live ping"));
-    fireEvent.click(screen.getByRole("button", { name: "Trash" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Trash" }));
 
     await waitFor(() => expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy());
     expect(screen.queryByText("Fresh live ping")).toBeNull();
@@ -188,7 +189,7 @@ describe("InboxView action workflows", () => {
     renderInbox({ activeSnapshot: makeSnapshotController() });
 
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(screen.getByRole("button", { name: "Handled" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Handled" }));
 
     // test-architecture: allow-boundary-interaction -- snapshot-item mutation payload is the outbound API contract for this rendered workflow.
     await waitFor(() => expect(api.markSnapshotItemHandled).toHaveBeenCalledWith(11));
@@ -198,14 +199,14 @@ describe("InboxView action workflows", () => {
 
     // test-architecture: allow-boundary-interaction -- Undo restores the snapshot item's provider-owned lifecycle state.
     await waitFor(() => expect(api.reopenSnapshotItem).toHaveBeenCalledWith(11));
-    expect(screen.getByRole("button", { name: "Handled" })).toBeTruthy();
+    expect(openMobileEmailActions().getByRole("button", { name: "Handled" })).toBeTruthy();
   });
 
   it("snoozes a selected live email with its row snapshot and unsnoozes it from Undo", async () => {
     renderInbox({ liveEmails: [makeLiveInboxEmail({ uid: "live-snooze", subject: "Snooze this email" })] });
 
     fireEvent.click(await screen.findByText("Snooze this email"));
-    fireEvent.click(screen.getByRole("button", { name: "Snooze" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Snooze" }));
     const picker = await screen.findByRole("dialog", { name: "Snooze" });
     fireEvent.click(within(picker).getByRole("menuitem", { name: /^6 hours/ }));
 
@@ -228,16 +229,14 @@ describe("InboxView action workflows", () => {
     renderInbox({ activeSnapshot: makeSnapshotController() });
 
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Pin" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Pin" }));
 
     // test-architecture: allow-boundary-interaction -- pin payload is the user-visible provider write contract.
     await waitFor(() => expect(api.pinEmail).toHaveBeenCalledWith(
       "snapshot-msg-1",
       expect.objectContaining({ uid: "snapshot-msg-1", subject: "Snapshot action" }),
     ));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    expect(screen.getByRole("button", { name: "Unpin" })).toBeTruthy();
+    expect(openMobileEmailActions().getByRole("button", { name: "Unpin" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
@@ -295,8 +294,7 @@ describe("InboxView action workflows", () => {
     );
 
     fireEvent.click(screen.getByText("Read failure row"));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Mark unread" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Mark unread" }));
 
     // test-architecture: allow-boundary-interaction -- the rejected provider mutation is the failure boundary under test.
     await waitFor(() => expect(api.markEmailAsUnread).toHaveBeenCalledWith("read-failure"));
@@ -314,7 +312,7 @@ describe("InboxView search workflows", () => {
       .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
 
     renderInbox({ liveEmails: [] });
-    const input = await screen.findByLabelText("Search indexed mail");
+    const input = openMobileInboxSearch();
     fireEvent.change(input, { target: { value: "older" } });
 
     // test-architecture: allow-boundary-interaction -- indexed search requests are the authenticated HTTP boundary.
@@ -373,26 +371,24 @@ describe("InboxView search workflows", () => {
       }));
 
     renderInbox({ liveEmails: [] });
-    const input = await screen.findByLabelText("Search indexed mail");
+    const input = openMobileInboxSearch();
     fireEvent.change(input, { target: { value: "first" } });
     await waitFor(() => expect(screen.getByText("Search read state")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Search read state"));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Mark unread" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Mark unread" }));
     expect(await screen.findByTestId("inbox-mobile-list")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Search indexed mail"), { target: { value: "second" } });
+    fireEvent.change(openMobileInboxSearch(), { target: { value: "second" } });
     // test-architecture: allow-boundary-interaction -- the second search request is the HTTP boundary for the fresh-response reconciliation.
     await waitFor(() => expect(api.searchEmails).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByText("Search read state"));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
-    expect(screen.getByRole("button", { name: "Mark read" })).toBeTruthy();
+    expect(openMobileEmailActions().getByRole("button", { name: "Mark read" })).toBeTruthy();
   });
 
   it("suppresses short queries and shows a recoverable indexed-search failure", async () => {
     renderInbox({ liveEmails: [] });
-    const input = await screen.findByLabelText("Search indexed mail");
+    const input = openMobileInboxSearch();
     fireEvent.change(input, { target: { value: "x" } });
     // test-architecture: allow-boundary-interaction -- sub-threshold queries must not cross the indexed-search HTTP boundary.
     expect(api.searchEmails).not.toHaveBeenCalled();
@@ -411,7 +407,7 @@ describe("InboxView search workflows", () => {
       has_more: true,
     }));
     renderInbox({ liveEmails: [] });
-    const input = await screen.findByLabelText("Search indexed mail");
+    const input = openMobileInboxSearch();
     fireEvent.change(input, { target: { value: "ceiling" } });
     expect(await screen.findByText("ceiling result 30")).toBeTruthy();
 

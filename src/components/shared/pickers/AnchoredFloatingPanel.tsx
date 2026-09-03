@@ -430,6 +430,8 @@ function AnchoredPanelDesktop({
         data-floating-dragging={dragging ? "true" : undefined}
         initial={reducedMotion ? false : animateDisclosure
           ? {
+            opacity: 1,
+            scale: 1,
             clipPath: "inset(0% -30% 100% -30%)",
             ...(animatePosition || draggable ? { x: displayPos.left, y: displayPos.top } : {}),
           }

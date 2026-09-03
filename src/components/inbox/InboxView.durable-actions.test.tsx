@@ -13,6 +13,7 @@ import {
   makeLiveInboxEmail,
 } from "./test-utils/inboxFixtures";
 import { resetInboxSession } from "./useInboxSessionState";
+import { openMobileEmailActions, openMobileInboxSearch } from "./test-utils/mobileInboxActions.test-utils";
 import useDashboardShellHotkeys from "../dashboard/useDashboardShellHotkeys";
 
 // test-architecture: allow-boundary-mock -- these rendered Inbox workflows keep the real controller, rows, reader, optimistic state, and undo lifecycle together while replacing only the authenticated HTTP boundary.
@@ -96,7 +97,7 @@ function renderInbox(options: RenderInboxOptions = {}) {
 
 async function openActions(subject: string) {
   fireEvent.click(await screen.findByText(subject));
-  fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+  openMobileEmailActions();
   return screen.getByRole("dialog", { name: "Email actions" });
 }
 
@@ -112,7 +113,7 @@ describe("InboxView durable trash workflows", () => {
     const view = renderInbox({ liveEmails: [makeLiveInboxEmail({ uid: "live-commit" })], commitPendingUndoSignal: 0 });
 
     fireEvent.click(await screen.findByText("Fresh live ping"));
-    fireEvent.click(screen.getByRole("button", { name: "Trash" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Trash" }));
     // test-architecture: allow-boundary-interaction -- Active-snapshot refresh is an authenticated HTTP boundary; the pre-commit count distinguishes the one required reconciliation after the provider write.
     const beforeCommitRefreshes = vi.mocked(api.getActiveSnapshot).mock.calls.length;
     view.rerenderInbox({ commitPendingUndoSignal: 1 });
@@ -127,7 +128,7 @@ describe("InboxView durable trash workflows", () => {
     renderInbox({ liveEmails: [makeLiveInboxEmail({ uid: "live-exit" })] });
 
     fireEvent.click(await screen.findByText("Fresh live ping"));
-    fireEvent.click(screen.getByRole("button", { name: "Trash" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Trash" }));
     act(() => window.dispatchEvent(new Event("pagehide")));
 
     // test-architecture: allow-boundary-interaction -- page exit must use the sendBeacon-compatible provider boundary instead of the ordinary async commit.
@@ -141,7 +142,7 @@ describe("InboxView durable trash workflows", () => {
     const view = renderInbox({ activeSnapshot: controller, commitPendingUndoSignal: 0 });
 
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(screen.getByRole("button", { name: "Trash" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Trash" }));
     view.rerenderInbox({ commitPendingUndoSignal: 1 });
 
     // test-architecture: allow-boundary-interaction -- snapshot trash must commit the provider UID and reconcile the durable snapshot.
@@ -178,10 +179,10 @@ describe("InboxView durable trash workflows", () => {
       query: "indexed",
     } satisfies EmailSearchClientResponse);
     const view = renderInbox({ activeSnapshot: controller, commitPendingUndoSignal: 0 });
-    fireEvent.change(screen.getByLabelText("Search indexed mail"), { target: { value: "indexed" } });
+    fireEvent.change(openMobileInboxSearch(), { target: { value: "indexed" } });
 
     fireEvent.click(await screen.findByText("Indexed trash result"));
-    fireEvent.click(screen.getByRole("button", { name: "Trash" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Trash" }));
     view.rerenderInbox({ commitPendingUndoSignal: 1 });
 
     // test-architecture: allow-boundary-interaction -- indexed/briefing trash commits the provider UID without snapshot reconciliation.
@@ -240,7 +241,7 @@ describe("InboxView snapshot mutation recovery", () => {
     const controller = makeSnapshotController();
     renderInbox({ activeSnapshot: controller });
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(screen.getByRole("button", { name: "FYI" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Move to FYI" }));
 
     // test-architecture: allow-boundary-interaction -- the lane payload is the durable snapshot mutation contract.
     await waitFor(() => expect(api.moveSnapshotItemLane).toHaveBeenCalledWith(11, "fyi"));
@@ -333,7 +334,7 @@ describe("InboxView snapshot mutation recovery", () => {
     const controller = makeSnapshotController();
     renderInbox({ activeSnapshot: controller });
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(screen.getByRole("button", { name: "Snooze" }));
+    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Snooze" }));
     fireEvent.click(within(await screen.findByRole("dialog", { name: "Snooze" })).getByRole("menuitem", { name: /^6 hours/ }));
     await waitFor(() => expect(screen.getByText("Snapshot action")).toBeTruthy());
 
@@ -342,7 +343,7 @@ describe("InboxView snapshot mutation recovery", () => {
     fireEvent.click(within(actions).getByRole("button", { name: "Pin" }));
     await waitFor(() => expect(screen.getByText("Snapshot action")).toBeTruthy());
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openMobileEmailActions();
     expect(within(screen.getByRole("dialog", { name: "Email actions" })).getByRole("button", { name: "Pin" })).toBeTruthy();
   });
 
@@ -354,7 +355,7 @@ describe("InboxView snapshot mutation recovery", () => {
 
     // test-architecture: allow-boundary-interaction -- the rejected provider write is the failure boundary whose optimistic read state must roll back.
     await waitFor(() => expect(api.markEmailAsRead).toHaveBeenCalledWith("snapshot-msg-1"));
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openMobileEmailActions();
     actions = screen.getByRole("dialog", { name: "Email actions" });
     expect(within(actions).getByRole("button", { name: "Mark read" })).toBeTruthy();
   });

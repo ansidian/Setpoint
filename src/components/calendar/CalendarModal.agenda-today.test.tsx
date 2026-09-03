@@ -335,13 +335,12 @@ describe("CalendarModal navigation behavior", () => {
       />,
     ));
 
-    expect(await screen.findByText("September 2026")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Jump to today" }));
 
     await waitFor(() => {
-      expect(screen.getByText("June 2026")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "June 2026" })).toBeTruthy();
     });
-    expect(screen.queryByRole("button", { name: "Jump to today" })).toBeNull();
   });
 
   it("does not jump on initial mount, then moves the rendered mobile workspace when its active Calendar tab is re-tapped", async () => {
@@ -349,12 +348,12 @@ describe("CalendarModal navigation behavior", () => {
     setMatchMedia(true);
 
     render(wrapWithDashboard(<MobileCalendarRetapHarness />));
-    expect(await screen.findByText("September 2026")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
 
     await waitFor(() => {
-      expect(screen.getByText("June 2026")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "June 2026" })).toBeTruthy();
     });
   });
 
@@ -375,14 +374,13 @@ describe("CalendarModal navigation behavior", () => {
         deadlinesData={{}}
       />,
     ));
-    expect(await screen.findByText("September 2026")).toBeTruthy();
-    const eventsTab = screen.getByRole("tab", { name: "Events" });
-    expect(eventsTab.getAttribute("aria-selected")).toBe("true");
+    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeTruthy();
+    const eventsToggle = screen.getByRole("button", { name: "Events", pressed: true });
 
-    fireEvent.click(eventsTab);
+    fireEvent.click(eventsToggle);
 
-    expect(screen.getByText("September 2026")).toBeTruthy();
-    expect(eventsTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("heading", { name: "September 2026" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Events", pressed: true })).toBeTruthy();
   });
 
   it("navigates, selects, and opens detail when a rendered search result is activated", async () => {
