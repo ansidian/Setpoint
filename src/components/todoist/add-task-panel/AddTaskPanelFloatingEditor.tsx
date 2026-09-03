@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ExpandingTextarea from "../../shared/ExpandingTextarea";
 import { CalendarClock, Trash2, X } from "lucide-react";
 import { Dropdown, LabelPicker, PriorityIndicator } from "./controls";
 import { buildContainerStyle, buildDropdownRowStyle, DRAG_HANDLE_STYLE } from "./styles";
@@ -171,16 +172,17 @@ export default function AddTaskPanelFloatingEditor({
 
           <div>
             <FieldLabel>Description</FieldLabel>
-            <textarea
+            <ExpandingTextarea
               value={description}
               aria-label="Task description"
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Optional"
-              rows={descriptionVariant === "email-context" ? 7 : 2}
+              expandable={descriptionVariant !== "email-context"}
+              rows={descriptionVariant === "email-context" ? 7 : 1}
               style={{
                 ...(textFieldStyle() as CSSProperties),
                 resize: descriptionVariant === "email-context" || isMobile ? "none" : "vertical",
-                minHeight: descriptionVariant === "email-context" ? 152 : 40,
+                minHeight: descriptionVariant === "email-context" ? 152 : undefined,
                 maxHeight: descriptionVariant === "email-context" ? 240 : undefined,
                 overflowY: descriptionVariant === "email-context" ? "auto" : undefined,
               }}

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { AnimatePresence, motion as Motion } from "motion/react";
-import { useDetailRailMotion } from "./detailRailMotion.ts";
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 
 export interface TimelineItem {
   id: string | number | null;
@@ -34,6 +33,8 @@ function SectionLabel({
       <button
         type="button"
         data-testid={`timeline-detail-section-toggle-${sectionId}`}
+        aria-expanded={expanded}
+        className="rounded-sm transition-[opacity,transform] duration-150 hover:opacity-80 hover:translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-x-0 active:opacity-60 motion-reduce:transform-none motion-reduce:transition-none"
         onClick={onToggle}
         style={{
           width: "100%",
@@ -339,7 +340,6 @@ export default function TimelineDetailRail({
   headerContent = null,
   sections = [],
 }: TimelineDetailRailProps) {
-  const motion = useDetailRailMotion();
   const visibleSections = sections.filter((section) => {
     if (section.collapsible) return (section.itemCount || section.items?.length || 0) > 0;
     return section.items?.length;
@@ -475,29 +475,13 @@ export default function TimelineDetailRail({
             >
               {section.label}
             </SectionLabel>
-            <AnimatePresence initial={false}>
-              {(!section.collapsible || section.expanded) ? (
-                <Motion.div
-                  key={`${section.id}-content`}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{
-                    height: motion.fade as never,
-                    opacity: motion.fade as never,
-                  }}
-                  style={{
-                    overflow: "hidden",
-                  }}
-                >
-                  <div style={{ marginTop: compactRows ? 4 : 6, display: "flex", flexDirection: "column", gap: compactRows ? 2 : 3 }}>
-                    {section.items.map((item) => (
-                      <TimelineRow key={item.id} item={item} compact={compactRows} />
-                    ))}
-                  </div>
-                </Motion.div>
-              ) : null}
-            </AnimatePresence>
+            <AnimatedCollapse open={!section.collapsible || !!section.expanded}>
+              <div style={{ marginTop: compactRows ? 4 : 6, display: "flex", flexDirection: "column", gap: compactRows ? 2 : 3 }}>
+                {section.items.map((item) => (
+                  <TimelineRow key={item.id} item={item} compact={compactRows} />
+                ))}
+              </div>
+            </AnimatedCollapse>
           </div>
         ))}
         {!visibleSections.length ? (

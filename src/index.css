@@ -720,6 +720,9 @@
   --sp-safe-top: env(safe-area-inset-top, 0px);        /* notch / status-bar inset (sticky header) */
   --sp-safe-bottom: env(safe-area-inset-bottom, 0px);  /* home-indicator inset (sheets; Phase-1 nav) */
   --sp-motion-fast: 150ms;
+  /* Keep in sync with heightTransition in src/lib/motion.ts. */
+  --sp-motion-height: 160ms;
+  --sp-ease-height: cubic-bezier(0.25, 0.1, 0.25, 1);
   --sp-motion-panel: 360ms;
   --sp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   /* Top-layer z-index tokens. Valued in the existing 9998–10020 band to preserve current stacking.
@@ -743,6 +746,36 @@
   --shadow-2xl: 0px 4px 6px 0px hsl(240 30% 25% / 0.30);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+}
+
+.sp-expanding-textarea {
+  transition: min-height var(--sp-motion-height) var(--sp-ease-height),
+    background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+/* Native disclosures keep their normal toggle in browsers without intrinsic
+   size interpolation. Scope this to details, not calendar/canvas geometry. */
+@supports (interpolate-size: allow-keywords) {
+  details {
+    interpolate-size: allow-keywords;
+  }
+
+  details::details-content {
+    height: 0;
+    overflow: clip;
+    transition: height var(--sp-motion-height) var(--sp-ease-height),
+      content-visibility var(--sp-motion-height) allow-discrete;
+  }
+
+  details[open]::details-content {
+    height: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sp-motion-height: 0ms;
+  }
 }
 
 @theme inline {
@@ -2276,6 +2309,14 @@ body {
 }
 .inbox-lane-toggle:active {
   transform: translateY(1px);
+}
+.inbox-email-row:active {
+  filter: brightness(1.08);
+}
+@media (prefers-reduced-motion: reduce) {
+  .inbox-email-selection-edge {
+    transform: none !important;
+  }
 }
 .toast-undo-button:focus-visible {
   outline-color: color-mix(in srgb, var(--sp-accent) 72%, white);

@@ -3,6 +3,7 @@
 // expands to the verbatim domain rows behind it (ADR 0006: read-only, never
 // reshape values). Buckets arrive pre-ordered (count desc, "Other" last).
 import { memo, useState } from "react";
+import AnimatedCollapse from "../shared/AnimatedCollapse";
 import type { ComponentType } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { countBreakdownRows } from "./alfredPanelModel";
@@ -46,6 +47,8 @@ function Bucket({ row, items, kind, accent, onActivateItem, todayYmd, now }: Buc
       <div
         role="button"
         tabIndex={0}
+        aria-expanded={open}
+        className="rounded-sm transition-transform duration-150 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none"
         onClick={toggle}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5, cursor: "pointer" }}
@@ -63,7 +66,7 @@ function Bucket({ row, items, kind, accent, onActivateItem, todayYmd, now }: Buc
           style={{ width: `${row.pct}%`, height: "100%", borderRadius: 2, transformOrigin: "left", background: row.isOther ? "color-mix(in srgb, var(--sp-overlay) 70%, transparent)" : accent, opacity: 0.85 }}
         />
       </div>
-      {open && Row ? (
+      <AnimatedCollapse open={open && !!Row}>
         <div style={{ display: "flex", flexDirection: "column", gap: 5, margin: "9px 0 2px 19px" }}>
           {items.map((item, i) => {
             const action = onActivateItem ? resolveAlfredChipAction(kind, item) : null;
@@ -83,7 +86,7 @@ function Bucket({ row, items, kind, accent, onActivateItem, todayYmd, now }: Buc
             );
           })}
         </div>
-      ) : null}
+      </AnimatedCollapse>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { BarChart3 } from "lucide-react";
 import { getAlfredUsageStats, getEmailAiUsageStats, getEmailSearchStats } from "@/api";
+import AnimatedHeight from "@/components/shared/AnimatedHeight";
 import {
   Dialog,
   DialogContent,
@@ -172,11 +173,13 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
           })}
         </div>
 
-        <div role="tabpanel" className="p-5">
-          {slice.loading ? <SectionSkeleton /> : null}
-          {slice.error ? <SectionError onRetry={() => retry(active)} /> : null}
-          {slice.data ? <Section stats={slice.data as never} /> : null}
-        </div>
+        <AnimatedHeight>
+          <div role="tabpanel" className="p-5">
+            {slice.loading ? <SectionSkeleton /> : null}
+            {slice.error ? <SectionError onRetry={() => retry(active)} /> : null}
+            {slice.data ? <Section stats={slice.data as never} /> : null}
+          </div>
+        </AnimatedHeight>
       </DialogContent>
     </Dialog>
   );

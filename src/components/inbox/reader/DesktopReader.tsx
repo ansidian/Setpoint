@@ -13,6 +13,7 @@ import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import EmailAttachmentShelf from "./EmailAttachmentShelf";
 import DraftReply from "./DraftReply";
+import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
 import { resolveBillExtractionBody } from "./billExtractionBody";
@@ -331,11 +332,9 @@ export default function DesktopReader({
           onTrash={() => onAction("trash")}
         />
 
-        {showTriage && email.claude && (
-          <div style={{ flexShrink: 0 }}>
-            <TriagePanel email={email} accent={accent} />
-          </div>
-        )}
+        <AnimatedCollapse open={!!(showTriage && email.claude)} style={{ flexShrink: 0 }}>
+          <TriagePanel email={email} accent={accent} />
+        </AnimatedCollapse>
 
         <EmailActualStatus
           emailUid={String(email.uid || email.email_id || "")}
@@ -362,17 +361,18 @@ export default function DesktopReader({
           <ReminderDrawer open={taskOpen} workspace={taskWorkspace} />
         </div>
 
-        {(drafting || showDraft) && !catchUp && email.claude?.draftReply && (
-          <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}>
-            <DraftReply
-              key={email.id}
-              email={email}
-              accent={accent}
-              onDiscard={() => setDrafting(false)}
-              onDirtyChange={setDraftDirty}
-            />
-          </div>
-        )}
+        <AnimatedCollapse
+          open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}
+          style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}
+        >
+          <DraftReply
+            key={email.id}
+            email={email}
+            accent={accent}
+            onDiscard={() => setDrafting(false)}
+            onDirtyChange={setDraftDirty}
+          />
+        </AnimatedCollapse>
       </div>
 
       {!drafting && !showDraft && !catchUp && email.claude?.draftReply && (

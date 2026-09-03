@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Circle, CircleDashed } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -169,7 +170,7 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
                         />
                       </button>
 
-                      {expanded ? (
+                      <AnimatedCollapse open={expanded}>
                         <div
                           id={`connection-panel-${row.id}`}
                           role="region"
@@ -178,7 +179,7 @@ export default function ConnectionsDirectory({ groups, rows, onboardingProgress,
                         >
                           {renderPanel(row)}
                         </div>
-                      ) : null}
+                      </AnimatedCollapse>
                     </div>
                   );
                 })}

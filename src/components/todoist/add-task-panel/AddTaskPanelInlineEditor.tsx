@@ -1,4 +1,6 @@
-import { useState } from "react";
+import ExpandingTextarea from "../../shared/ExpandingTextarea";
+import AnimatedCollapse from "../../shared/AnimatedCollapse";
+import AnimatedHeight from "../../shared/AnimatedHeight";
 import type { ComponentProps, CSSProperties, Dispatch, MouseEventHandler, ReactNode, SetStateAction } from "react";
 import { PriorityIndicator } from "./controls";
 import { buildInlineContainerStyle } from "./styles";
@@ -93,24 +95,20 @@ function CompactDescriptionField({
   isMobile: boolean;
   emailContext?: boolean;
 }) {
-  const [focused, setFocused] = useState(false);
-  const expanded = emailContext || focused || !!description.trim();
-
   return (
     <div>
-      <textarea
+      <ExpandingTextarea
         value={description}
         data-compact-notes="true"
         aria-label="Task description"
         onChange={(event) => setDescription(event.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         placeholder="Notes"
-        rows={emailContext ? 7 : expanded ? 3 : 1}
+        expandable={!emailContext}
+        rows={emailContext ? 7 : 1}
         style={{
           ...(textFieldStyle() as CSSProperties),
           resize: emailContext || isMobile ? "none" : "vertical",
-          minHeight: emailContext ? 152 : expanded ? 72 : 38,
+          minHeight: emailContext ? 152 : undefined,
           maxHeight: emailContext ? 240 : undefined,
           overflowY: emailContext ? "auto" : undefined,
           padding: "8px 10px",
@@ -322,7 +320,7 @@ export default function AddTaskPanelInlineEditor({
       data-testid="todoist-inline-editor"
       data-editor-layout="slim-icon"
       data-calendar-local-scroll="true"
-      data-suspend-calendar-hotkeys="true"
+      data-suspend-calendar-hotkeys={active && openCompactPanel ? "blocking" : "true"}
       role="region"
       aria-labelledby="todoist-editor-title"
       style={buildInlineContainerStyle({ active })}
@@ -356,26 +354,34 @@ export default function AddTaskPanelInlineEditor({
             recurrenceSummary={null}
             titleError={titleError}
           />
-          <TodoistDeadlineFactSheet
-            openCompactPanel={openCompactPanel}
-            setOpenCompactPanel={setOpenCompactPanel}
-            state={state}
-          />
-
-          <CompactDetailPanel
-            labels={labels}
-            openCompactPanel={openCompactPanel}
-            priorityOptions={priorityOptions}
-            projects={projects}
-            resolvedLabels={resolvedLabels}
-            resolvedPriority={resolvedPriority}
-            resolvedProject={resolvedProject}
-            setManualLabels={setManualLabels}
-            setManualPriority={setManualPriority}
-            setManualProject={setManualProject}
-            setOpenCompactPanel={setOpenCompactPanel}
-            setOverrides={setOverrides}
-          />
+          <div style={{ flexShrink: 0 }}>
+            <TodoistDeadlineFactSheet
+              openCompactPanel={openCompactPanel}
+              setOpenCompactPanel={setOpenCompactPanel}
+              state={state}
+            />
+            {/* Keep the panel's spacing inside its collapsing height envelope. */}
+            <AnimatedCollapse open={openCompactPanel === "project" || openCompactPanel === "priority" || openCompactPanel === "labels"}>
+              <div style={{ paddingTop: 14 }}>
+                <AnimatedHeight>
+                  <CompactDetailPanel
+                    labels={labels}
+                    openCompactPanel={openCompactPanel}
+                    priorityOptions={priorityOptions}
+                    projects={projects}
+                    resolvedLabels={resolvedLabels}
+                    resolvedPriority={resolvedPriority}
+                    resolvedProject={resolvedProject}
+                    setManualLabels={setManualLabels}
+                    setManualPriority={setManualPriority}
+                    setManualProject={setManualProject}
+                    setOpenCompactPanel={setOpenCompactPanel}
+                    setOverrides={setOverrides}
+                  />
+                </AnimatedHeight>
+              </div>
+            </AnimatedCollapse>
+          </div>
 
           <CompactDescriptionField description={description} setDescription={setDescription} isMobile={isMobile} emailContext={descriptionVariant === "email-context"} />
 

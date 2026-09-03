@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { Cloud } from "lucide-react";
 import { addICloudAccount, getAccounts, removeAccount } from "@/api";
 import { isDemoMode } from "@/demo/config";
@@ -84,7 +85,7 @@ export default function ICloudMailAccountsPanel({ accounts, setAccounts }: Setti
           {demoMode ? <StatusPill tone="neutral">Not available in demo</StatusPill> : null}
         </div>
 
-        {form.show ? (
+        <AnimatedCollapse open={form.show}>
           <div className="border-t border-white/[0.06] pt-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <StatusPill tone="neutral">iCloud IMAP</StatusPill>
@@ -129,7 +130,8 @@ export default function ICloudMailAccountsPanel({ accounts, setAccounts }: Setti
               </Button>
             </div>
           </div>
-        ) : error ? <FieldHint className="text-danger">{error}</FieldHint> : null}
+        </AnimatedCollapse>
+        {!form.show && error ? <FieldHint className="text-danger">{error}</FieldHint> : null}
       </div>
     </SettingsCard>
   );

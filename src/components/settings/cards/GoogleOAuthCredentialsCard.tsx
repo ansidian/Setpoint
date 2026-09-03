@@ -1,3 +1,4 @@
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { KeyRound } from "lucide-react";
@@ -247,7 +248,7 @@ export default function GoogleOAuthCredentialsCard({
               ) : null}
             </div>
           </form>
-          {confirmingDisable ? (
+          <AnimatedCollapse open={confirmingDisable}>
             <div className="rounded-lg border border-danger/25 bg-danger/[0.05] p-3">
               <p className="max-w-[70ch] text-[11px] leading-relaxed text-foreground">
                 This deletes both stored and pending Google application credentials and blocks host fallback. Google connections cannot be renewed until credentials are restored.
@@ -275,7 +276,7 @@ export default function GoogleOAuthCredentialsCard({
                 </Button>
               </div>
             </div>
-          ) : null}
+          </AnimatedCollapse>
           <SensitiveActionStepUp state={stepUp} />
           {pendingExpiry ? <FieldHint>{pendingExpiry}</FieldHint> : null}
           {callbackUrl ? (

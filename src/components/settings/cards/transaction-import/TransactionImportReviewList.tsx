@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { AlertTriangle, CheckCircle2, ChevronDown, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SearchableDropdown from "@/components/shared/SearchableDropdown";
+import ExpandingTextarea from "@/components/shared/ExpandingTextarea";
 import {
   SETTINGS_GHOST_BUTTON_CLASS,
   SETTINGS_PRIMARY_BUTTON_CLASS,
@@ -203,7 +205,7 @@ export default function TransactionImportReviewList({
                     {item.lastError ? <span className="text-danger">{item.lastError}</span> : null}
                   </div>
 
-                  {editing ? (
+                  <AnimatedCollapse open={editing}>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <label className="text-[10px] text-muted-foreground">
                         Date
@@ -260,10 +262,10 @@ export default function TransactionImportReviewList({
                       </div>
                       <label className="text-[10px] text-muted-foreground sm:col-span-2">
                         Notes
-                        <textarea value={itemEdit.notes || ""} onChange={(event) => patchEdit(item, { notes: event.target.value })} rows={2} className={cn(FIELD_CLASS, "mt-1 min-h-16 py-2")} />
+                        <ExpandingTextarea value={itemEdit.notes || ""} onChange={(event) => patchEdit(item, { notes: event.target.value })} className={cn(FIELD_CLASS, "mt-1 py-2")} />
                       </label>
                     </div>
-                  ) : null}
+                  </AnimatedCollapse>
 
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {reviewable ? (

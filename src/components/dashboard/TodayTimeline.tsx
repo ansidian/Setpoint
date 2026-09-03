@@ -17,7 +17,7 @@ import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { DashboardTimelineItem, TimelineFilters, TimelineGroup } from "./timeline/timeline-helpers";
 import type { TimelineRowJumpPayload } from "./timeline/TimelineRow";
 import useMotionPresence from "../../hooks/useMotionPresence";
-import { motionDuration, motionTransition } from "../../lib/motion";
+import { heightMotionDuration, heightTransition, motionDuration, motionTransition } from "../../lib/motion";
 
 type TimelineJump = (payload: TimelineRowJumpPayload, anchor: HTMLElement) => void;
 interface TodayTimelineProps {
@@ -241,7 +241,7 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
   isMobile?: boolean;
 }) {
   const reduceMotion = useReducedMotion() ?? false;
-  const contentPresence = useMotionPresence(open, reduceMotion ? 0 : motionDuration.exit * 1000);
+  const contentPresence = useMotionPresence(open, reduceMotion ? 0 : heightMotionDuration * 1000);
   const contentRendered = open || contentPresence;
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -280,7 +280,7 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
           inert={!open ? true : undefined}
           initial={reduceMotion ? false : { height: 0, opacity: 0 }}
           animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
-          transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+          transition={heightTransition(reduceMotion)}
           style={{ overflow: "hidden" }}
         >
         <div style={{ padding: "4px 0 6px" }}>
@@ -316,7 +316,7 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
   rest: TimelineGroup[];
 }) {
   const reduceMotion = useReducedMotion() ?? false;
-  const contentPresence = useMotionPresence(open, reduceMotion ? 0 : motionDuration.exit * 1000);
+  const contentPresence = useMotionPresence(open, reduceMotion ? 0 : heightMotionDuration * 1000);
   const contentRendered = open || contentPresence;
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -351,7 +351,7 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
           inert={!open ? true : undefined}
           initial={reduceMotion ? false : { height: 0, opacity: 0 }}
           animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
-          transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+          transition={heightTransition(reduceMotion)}
           style={{ overflow: "hidden" }}
         >
         <div style={{ paddingTop: 12 }}>

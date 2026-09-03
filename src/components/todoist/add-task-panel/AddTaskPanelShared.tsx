@@ -343,9 +343,9 @@ export function TodoistDuePickerLayer({
   handleDueSelect: (epochMs: number) => void;
   pickerDueEpoch: number | null;
 }) {
-  if (!duePickerOpen) return null;
   return (
     <TodoistDuePicker
+      open={duePickerOpen}
       anchorRef={dueTriggerRef}
       panelRef={duePickerRef}
       nowTick={duePickerNow}

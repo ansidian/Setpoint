@@ -8,6 +8,7 @@ const PICKER_HEIGHT = 432;
 const ACCENT = "var(--sp-accent)";
 
 export default function TodoistDuePicker({
+  open,
   anchorRef,
   panelRef,
   nowTick,
@@ -15,6 +16,7 @@ export default function TodoistDuePicker({
   onSelect,
   onClose,
 }: {
+  open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   panelRef: RefObject<HTMLDivElement | null>;
   nowTick: number;
@@ -25,59 +27,66 @@ export default function TodoistDuePicker({
   const width = PICKER_WIDTH;
   const height = PICKER_HEIGHT;
   return (
-    <AnchoredFloatingPanel
-      anchorRef={anchorRef}
-      panelRef={panelRef}
-      onClose={onClose}
-      width={width}
-      height={height}
-      role="dialog"
-      ariaLabel="Todoist due date picker"
-      style={{
-        overflow: "hidden",
-        padding: 8,
-        zIndex: 10001,
-      }}
-    >
-      <div
+    <>
+      {/* The picker owns Escape even while focus remains on its editor trigger. */}
+      {open ? <span hidden data-suspend-calendar-hotkeys="blocking" /> : null}
+      <AnchoredFloatingPanel
+        open={open}
+        animateDisclosure
+        anchorRef={anchorRef}
+        panelRef={panelRef}
+        onClose={onClose}
+        width={width}
+        height={height}
+        role="dialog"
+        ariaLabel="Todoist due date picker"
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "4px 8px 10px",
-          color: "rgba(205,214,244,0.72)",
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: 2,
-          textTransform: "uppercase",
+          overflow: "hidden",
+          padding: 8,
+          zIndex: 10001,
         }}
       >
-        <span
-          aria-hidden
+        <div
           style={{
-            width: 22,
-            height: 22,
-            borderRadius: 8,
-            display: "inline-grid",
-            placeItems: "center",
-            color: ACCENT,
-            background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${ACCENT} 24%, transparent)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "4px 8px 10px",
+            color: "rgba(205,214,244,0.72)",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 2,
+            textTransform: "uppercase",
           }}
         >
-          <CalendarClock size={12} />
-        </span>
-        Due date
-      </div>
-      <CalendarDateTimeView
-        nowTick={nowTick}
-        initialEpoch={initialEpoch}
-        onSelect={onSelect}
-        onBack={onClose}
-        accent={ACCENT}
-        confirmLabel="Set due date"
-        allowPastDates
-      />
-    </AnchoredFloatingPanel>
+          <span
+            aria-hidden
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 8,
+              display: "inline-grid",
+              placeItems: "center",
+              color: ACCENT,
+              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${ACCENT} 24%, transparent)`,
+            }}
+          >
+            <CalendarClock size={12} />
+          </span>
+          Due date
+        </div>
+        <CalendarDateTimeView
+          key={nowTick}
+          nowTick={nowTick}
+          initialEpoch={initialEpoch}
+          onSelect={onSelect}
+          onBack={onClose}
+          accent={ACCENT}
+          confirmLabel="Set due date"
+          allowPastDates
+        />
+      </AnchoredFloatingPanel>
+    </>
   );
 }

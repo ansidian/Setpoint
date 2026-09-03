@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { AnimatePresence } from "motion/react";
 import type { MouseEventHandler, RefObject } from "react";
 import {
   Mail, Search, CheckCheck, RefreshCw,
@@ -6,6 +7,7 @@ import {
 } from "lucide-react";
 import { Kbd, IconBtn } from "./primitives";
 import EmailRow from "./EmailRow";
+import InboxRowTransition from "./InboxRowTransition";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
@@ -177,12 +179,12 @@ export default function InboxList({
   // state, etc.) so LaneSection's memo actually engages — see LaneSection.tsx.
   // selectedId and nowTick still legitimately churn this on selection changes
   // and the relative-time tick.
-  const renderRows = useCallback((list: InboxEmailLike[]) => list.map((email) => {
+  const renderRows = useCallback((list: InboxEmailLike[]) => <AnimatePresence initial={false}>{list.map((email) => {
     const rowKey = email.id || email.uid;
     const accountKey = email.accountId || email.account_id || email._accountKey || "";
     return (
-      <div
-        key={rowKey}
+      <InboxRowTransition
+        key={`${rowKey}:${email._lane}`}
       >
         <EmailRow
           email={email}
@@ -194,9 +196,9 @@ export default function InboxList({
           accent={accent}
           nowTick={nowTick}
         />
-      </div>
+      </InboxRowTransition>
     );
-  }), [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick]);
+  })}</AnimatePresence>, [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick]);
 
   return (
     <div
@@ -364,9 +366,10 @@ export default function InboxList({
         ) : showSkeletonRows ? (
           <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
-          <>
+          <AnimatePresence initial={false}>
             {grouped.pinned.length > 0 && (
               <LaneSection
+                key="pinned"
                 laneKey="pinned"
                 emails={grouped.pinned}
                 collapsed={!!effectiveCollapsed.pinned}
@@ -390,7 +393,7 @@ export default function InboxList({
                 />
               )
             ))}
-          </>
+          </AnimatePresence>
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {renderRows(emails)}

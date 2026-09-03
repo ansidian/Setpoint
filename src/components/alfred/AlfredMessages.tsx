@@ -7,6 +7,7 @@
 // streamed token / keystroke and only the active say block re-renders. Props are
 // primitive/stable (text, tools, accent, done).
 import { memo, useState } from "react";
+import AnimatedCollapse from "../shared/AnimatedCollapse";
 import type { AlfredSuggestion, AlfredToolEntry } from "./alfredPanelModel";
 import {
   AlignLeft,
@@ -154,7 +155,7 @@ export const ToolSteps = memo(function ToolSteps({ tools, done, accent }: { tool
   const n = tools.length;
   const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
-    <div data-alfred-message-kind="tools" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div data-alfred-message-kind="tools" style={{ display: "flex", flexDirection: "column" }}>
       <button
         type="button"
         className={done ? "transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none" : undefined}
@@ -177,7 +178,11 @@ export const ToolSteps = memo(function ToolSteps({ tools, done, accent }: { tool
         )}
         <span>{n} step{n === 1 ? "" : "s"}</span>
       </button>
-      {expanded ? <ToolRows tools={tools} accent={accent} /> : null}
+      <AnimatedCollapse open={expanded}>
+        <div style={{ paddingTop: 6 }}>
+          <ToolRows tools={tools} accent={accent} />
+        </div>
+      </AnimatedCollapse>
     </div>
   );
 });

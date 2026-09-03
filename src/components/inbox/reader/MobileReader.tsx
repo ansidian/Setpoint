@@ -20,6 +20,7 @@ import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
 import EmailBodyPane from "./EmailBodyPane";
 import EmailAttachmentShelf from "./EmailAttachmentShelf";
 import DraftReply from "./DraftReply";
+import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import MobileActionRow from "./MobileActionRow";
 import { resolveReaderActions } from "./readerActionsModel";
 import MobileBillDrawer from "./MobileBillDrawer";
@@ -209,7 +210,7 @@ export default function MobileReader({
           style={{ margin: "0 16px 10px" }}
         />
 
-        {drafting && !catchUp && email.claude?.draftReply && (
+        <AnimatedCollapse open={!!(drafting && !catchUp && email.claude?.draftReply)} style={{ flexShrink: 0 }}>
           <div
             data-testid="inbox-mobile-draft-panel"
             style={{
@@ -228,7 +229,7 @@ export default function MobileReader({
               isMobile
             />
           </div>
-        )}
+        </AnimatedCollapse>
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <EmailAttachmentShelf

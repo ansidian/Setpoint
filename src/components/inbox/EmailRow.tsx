@@ -50,6 +50,7 @@ function EmailRow({
   return (
     <div
       role="button"
+      className="inbox-email-row sp-focus-ring"
       aria-busy={snapshotPending || undefined}
       tabIndex={0}
       onClick={() => onOpen(email)}
@@ -63,7 +64,7 @@ function EmailRow({
         cursor: "pointer",
         background: selected ? `${accent}14` : hover ? "rgba(255,255,255,0.025)" : "transparent",
         boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
-        transition: "background 120ms, box-shadow 120ms",
+        transition: "background var(--sp-motion-height) var(--sp-ease-height), box-shadow var(--sp-motion-height) var(--sp-ease-height), opacity var(--sp-motion-height) var(--sp-ease-height), filter var(--sp-motion-height) var(--sp-ease-height)",
         opacity: snapshotPending ? 0.6 : email._providerRemoved ? 0.55 : dimmed && !hover ? 0.82 : 1,
         // Skip layout+paint for offscreen rows (the dominant cost at large N);
         // reserve a representative row height so the scrollbar does not jump
@@ -73,12 +74,25 @@ function EmailRow({
       }}
     >
       <div
+        aria-hidden="true"
         style={{
           position: "absolute", left: 0, top: vPad, bottom: vPad,
           width: 3, borderRadius: 2,
           background: barColor,
           opacity: 0.7,
           boxShadow: `0 0 6px ${barColor}40`,
+        }}
+      />
+      <span
+        aria-hidden="true"
+        className="inbox-email-selection-edge"
+        style={{
+          position: "absolute", left: 0, top: vPad, bottom: vPad,
+          width: 3, borderRadius: 2, background: accent,
+          pointerEvents: "none",
+          opacity: selected ? 1 : 0,
+          transform: selected ? "scaleY(1)" : "scaleY(0.55)",
+          transition: "transform var(--sp-motion-height) var(--sp-ease-height), opacity var(--sp-motion-height) var(--sp-ease-height)",
         }}
       />
       {density === "compact" ? (

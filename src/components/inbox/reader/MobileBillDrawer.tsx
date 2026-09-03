@@ -7,7 +7,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { InboxEmailLike } from "../inboxTypes";
 import type { BillResolutionState, EmailBodyState } from "./readerTypes";
 import { asBillCandidate } from "./readerTypes";
-import { motionDuration, motionTransition } from "../../../lib/motion";
+import { heightTransition, motionDuration, motionTransition } from "../../../lib/motion";
 
 // Mobile slide-up bill-pay sheet with an expand/collapse affordance. Extracted
 // from MobileReader; expand state is owned by the parent (so it persists across
@@ -43,7 +43,7 @@ export default function MobileBillDrawer({
         opacity: open ? 1 : 0,
         y: reduceMotion || open ? 0 : 16,
       }}
-      transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
+      transition={heightTransition(reduceMotion)}
       aria-hidden={!open}
       inert={!open ? true : undefined}
       style={{

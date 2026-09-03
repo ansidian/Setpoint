@@ -150,6 +150,16 @@ The visual system is compact, border-led, and data-first. Purple is the default 
 - A single sans-serif family with hierarchy carried by size, weight, and spacing.
 - Subtle motion for orientation only.
 
+**Height changes.** Content-driven height changes use the same 160ms CSS `ease` (`cubic-bezier(0.25, 0.1, 0.25, 1)`) transition in both directions across Setpoint, matching the event notes field and analytics modal. This is the default for new and updated UI: in-flow disclosures, expanding notes, panels, and modals whose height changes when switching tabs or moving between loading, error, empty, and populated states. Animate the containing surface's growth and shrinkage, not just the incoming content's opacity. Keep initial presentation at its natural height rather than growing from zero.
+
+Reuse the shared implementations rather than introducing per-surface timings or measurement logic:
+
+- Use `AnimatedHeight` from `src/components/shared/AnimatedHeight.tsx` around bounded content swaps; keep the wrapper mounted across tab and data-state changes, with padding and spacing inside its measured content. The analytics modal is the reference for tab-driven resizing.
+- Use `AnimatedCollapse` from `src/components/shared/AnimatedCollapse.tsx` for content that mounts/unmounts with a disclosure; keep spacing inside its height envelope and make exiting content inert immediately.
+- For explicit height targets, use `heightTransition` from `src/lib/motion.ts` for Motion and `--sp-motion-height` / `--sp-ease-height` for CSS. Ordinary notes expand on focus, remain expanded with content, and collapse when empty on blur.
+
+Preserve viewport height limits and scrolling so taller content remains reachable. Reduced motion makes height changes immediate. Direct manipulation, virtualized geometry, and streamed text retain immediate sizing. This height rule does not replace separate entrance/exit or hover/focus motion. Verify growth, shrinkage, rapid switching, small-screen scrolling, and reduced motion when adopting it on a new surface.
+
 ## Colors
 
 The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, lavender as the primary accent, orange reserved for notification and warning roles, and named status colors tied to real data states.

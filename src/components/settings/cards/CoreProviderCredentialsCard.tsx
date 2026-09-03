@@ -1,3 +1,4 @@
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -300,7 +301,7 @@ function CredentialRow({
           </Button>
         ) : null}
       </div>
-      {confirmingDisable ? (
+      <AnimatedCollapse open={confirmingDisable}>
         <div className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] p-3">
           <p className="max-w-[70ch] text-[11px] leading-relaxed text-foreground">
             This deletes the stored and pending {definition.label} credential and blocks host fallback. The provider will stop working until a credential is restored.
@@ -328,7 +329,7 @@ function CredentialRow({
             </Button>
           </div>
         </div>
-      ) : null}
+      </AnimatedCollapse>
       <SensitiveActionStepUp state={stepUp} className="mt-3" />
       {pendingExpiry ? <FieldHint className="mt-2">{pendingExpiry}</FieldHint> : null}
       {lastTest || lastSuccess || lastFailure ? (

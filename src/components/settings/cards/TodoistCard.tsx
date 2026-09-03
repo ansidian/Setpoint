@@ -1,3 +1,4 @@
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { useEffect, useState } from "react";
 import { SiTodoist } from "@icons-pack/react-simple-icons";
 import { disconnectTodoistConnection, saveTodoistPersonalToken } from "@/api";
@@ -302,7 +303,7 @@ export default function TodoistCard({
           {todoistMessage ? <StatusPill tone="danger">{todoistMessage}</StatusPill> : null}
         </div>
 
-        {confirmingDisconnect ? (
+        <AnimatedCollapse open={confirmingDisconnect}>
           <div className="rounded-md border border-danger/20 bg-danger/[0.06] p-3">
             <FieldHint>
               Task and deadline sync will stop. Mirrored tasks and automation settings stay available for review.
@@ -330,7 +331,7 @@ export default function TodoistCard({
               </Button>
             </div>
           </div>
-        ) : null}
+        </AnimatedCollapse>
 
         <SensitiveActionStepUp state={stepUp} />
 

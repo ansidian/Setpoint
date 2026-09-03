@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
+import type { ComponentProps, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
-import { motion as Motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion as Motion, useIsPresent, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
 import { computePlacement } from "@/components/inbox/helpers";
 import useDismissablePortal from "@/hooks/useDismissablePortal";
 import useIsMobile from "@/hooks/useIsMobile";
 import BottomSheet from "@/components/ui/BottomSheet";
+import { heightTransition } from "@/lib/motion";
 import { resolveMobileSheetHeight } from "./anchoredFloatingPanelModel";
 
 export type AnchoredFloatingPanelProps = {
@@ -28,6 +29,7 @@ export type AnchoredFloatingPanelProps = {
   hideTitle?: boolean;
   animatePosition?: boolean;
   animateSize?: boolean;
+  animateDisclosure?: boolean;
   draggable?: boolean;
   dragHandleLabel?: string;
   placementKey?: string;
@@ -70,11 +72,12 @@ type PanelDragSession = {
 // `height` and `ariaLabel` are translated; `mobileHeight={null}` opts into
 // content sizing when a desktop placement hint should not size the whole sheet.
 // `open` gates the sheet (see below).
-export default function AnchoredFloatingPanel({ open = true, disableMobileSheet = false, forceMobileSheet = false, mobileHeight, hideTitle = false, ...props }: AnchoredFloatingPanelProps) {
+export default function AnchoredFloatingPanel({ open = true, disableMobileSheet = false, forceMobileSheet = false, mobileHeight, hideTitle = false, animateDisclosure = false, ...props }: AnchoredFloatingPanelProps) {
   const isMobile = useIsMobile();
   if ((forceMobileSheet || isMobile) && !disableMobileSheet) {
+    const Sheet = animateDisclosure ? DisclosureSheet : BottomSheet;
     return (
-      <BottomSheet
+      <Sheet
         open={open}
         onClose={props.onClose as () => void}
         title={props.ariaLabel}
@@ -82,7 +85,14 @@ export default function AnchoredFloatingPanel({ open = true, disableMobileSheet 
         height={resolveMobileSheetHeight(props.height, mobileHeight)}
       >
         {props.children}
-      </BottomSheet>
+      </Sheet>
+    );
+  }
+  if (animateDisclosure) {
+    return (
+      <AnimatePresence initial={false}>
+        {open ? <AnchoredPanelDesktop {...props} animateDisclosure /> : null}
+      </AnimatePresence>
     );
   }
   // hideTitle is mobile-only (the desktop panel has no header), so it is
@@ -90,6 +100,14 @@ export default function AnchoredFloatingPanel({ open = true, disableMobileSheet 
   // stays mounted when `open` is false (e.g. behind a sibling editor), but its
   // outside-click/Escape listener pauses so the sibling owns dismissal.
   return <AnchoredPanelDesktop {...props} dismissActive={open} />;
+}
+
+function DisclosureSheet({ open, children, ...props }: ComponentProps<typeof BottomSheet>) {
+  const [snapshot, setSnapshot] = useState({ children });
+  // Preserve the last open render while the sheet exits, including inputs and
+  // suggestions that callers clear as soon as the menu closes.
+  if (open && snapshot.children !== children) setSnapshot({ children });
+  return <BottomSheet {...props} open={open}>{open ? children : snapshot.children}</BottomSheet>;
 }
 
 type AnchoredPanelDesktopProps = Omit<AnchoredFloatingPanelProps, "disableMobileSheet" | "forceMobileSheet" | "mobileHeight" | "hideTitle" | "open"> & {
@@ -111,12 +129,14 @@ function AnchoredPanelDesktop({
   dismissActive = true,
   animatePosition = false,
   animateSize = false,
+  animateDisclosure = false,
   draggable = false,
   dragHandleLabel,
   placementKey = "panel",
   children,
 }: AnchoredPanelDesktopProps) {
   const reducedMotion = useReducedMotion() ?? false;
+  const present = useIsPresent();
   const internalPanelRef = useRef<HTMLDivElement>(null);
   const resolvedPanelRef = panelRef || internalPanelRef;
   const positionRafRef = useRef(0);
@@ -230,7 +250,7 @@ function AnchoredPanelDesktop({
   // the panel (capture phase) — the panel previously had no Escape handling.
   useDismissablePortal({
     ref: undefined,
-    active: dismissActive,
+    active: dismissActive && present,
     refs: [resolvedPanelRef, anchorRef],
     ignoreSelector: "[data-calendar-popover-panel='true']",
     onDismiss: onClose,
@@ -339,10 +359,19 @@ function AnchoredPanelDesktop({
     boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
     zIndex: "var(--z-popover)",
     ...style,
+    // Explicit height belongs to the consumer; the `height` prop alone is only
+    // a placement hint. CSS can interpolate its viewport-clamped min() values.
+    transition: animateSize && style?.height !== undefined
+      ? [
+        style.transition,
+        ...["height", "max-height"].map((property) => `${property} ${dragging || reducedMotion ? "0ms" : "var(--sp-motion-height)"} var(--sp-ease-height)`),
+      ].filter(Boolean).join(", ")
+      : style?.transition,
     maxHeight: style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined),
     overflow: style?.overflow === "hidden" ? undefined : style?.overflow,
     overflowY: "auto",
     overscrollBehavior: "contain",
+    ...(!present ? { pointerEvents: "none" } : {}),
   };
 
   const dragHandle = draggable ? (
@@ -384,30 +413,40 @@ function AnchoredPanelDesktop({
   ) : null;
 
   return createPortal(
-    animatePosition || animateSize || draggable ? (
+    animatePosition || animateSize || animateDisclosure || draggable ? (
       <Motion.div
         ref={resolvedPanelRef}
-        role={role}
+        role={present ? role : undefined}
         aria-label={ariaLabel}
+        aria-hidden={!present || undefined}
+        inert={!present || undefined}
         data-calendar-popover-panel="true"
         data-floating-position-source={activeManualPos ? "drag" : "anchor"}
         data-floating-left={displayPos.left}
         data-floating-top={displayPos.top}
         data-floating-dragging={dragging ? "true" : undefined}
-        initial={reducedMotion ? false : { opacity: 0, scale: 0.985, x: displayPos.left, y: displayPos.top + 6 }}
+        initial={reducedMotion ? false : animateDisclosure
+          ? {
+            clipPath: "inset(0% -30% 100% -30%)",
+            ...(animatePosition || draggable ? { x: displayPos.left, y: displayPos.top } : {}),
+          }
+          : { opacity: 0, scale: 0.985, x: displayPos.left, y: displayPos.top + 6 }}
         animate={{
           opacity: 1,
           scale: dragging ? 1.01 : 1,
-          x: displayPos.left,
-          y: displayPos.top,
+          ...(!animateDisclosure || animatePosition || draggable ? { x: displayPos.left, y: displayPos.top } : {}),
+          // Include the surrounding shadow without changing measured bounds.
+          ...(animateDisclosure ? { clipPath: "inset(-20% -30% -20% -30%)" } : {}),
           ...(animateSize ? { width: displayPos.width } : {}),
         }}
+        exit={animateDisclosure ? { clipPath: "inset(0% -30% 100% -30%)" } : undefined}
         transition={dragging || reducedMotion ? { duration: 0 } : {
           x: { type: "spring", stiffness: 420, damping: 42, mass: 0.8 },
           y: { type: "spring", stiffness: 420, damping: 42, mass: 0.8 },
           opacity: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
           scale: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
           width: { duration: 0.24, ease: [0.16, 1, 0.3, 1] },
+          clipPath: heightTransition(reducedMotion),
         }}
         style={floatingPanelStyle}
       >

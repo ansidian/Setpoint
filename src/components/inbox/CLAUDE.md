@@ -24,6 +24,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `InboxLaneFilterBar.tsx` — compact desktop lane scope with non-empty, lane-tinted count chips
 - `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
 - `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
+- `InboxRowTransition.tsx` — desktop row/lane entry and exit shell; retains departing content as inert while its space closes
 - `DigestStrip.tsx` — header strip: snapshot status, lane counts, processing activity
 - `DesktopSnapshotNavigator.tsx` — desktop list-local snapshot context, adjacent navigation, and active update status
 - `SnapshotNavigationControls.tsx` — shared desktop/mobile adjacent-snapshot controls with boundary, loading, and error states

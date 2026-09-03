@@ -47,7 +47,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   const [activeSourceSuggestion, setActiveSourceSuggestion] = useState(0);
   const [dismissedAutoLocationQuery, setDismissedAutoLocationQuery] = useState("");
   const [dismissedAutoSourceQuery, setDismissedAutoSourceQuery] = useState("");
-  const pickerPanelRef = useRef<HTMLDivElement | null>(null);
   const [nowTick] = useState(() => Date.now());
   const titleRef = useRef<HTMLInputElement | null>(null);
   const sourceRef = useRef<HTMLButtonElement | null>(null);
@@ -127,7 +126,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   }, [save]);
 
   const sharedDatePickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: DATE_PICKER_WIDTH,
     height: DATE_PICKER_HEIGHT,
@@ -136,7 +134,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   };
 
   const sharedTimePickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: TIME_PICKER_WIDTH,
     height: TIME_PICKER_HEIGHT,
@@ -145,7 +142,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   };
 
   const sharedSchedulePickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: SCHEDULE_PICKER_WIDTH,
     height: SCHEDULE_PICKER_HEIGHT,
@@ -160,7 +156,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   };
 
   const sharedSourcePickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: SOURCE_PICKER_WIDTH,
     height: SOURCE_PICKER_HEIGHT,
@@ -169,7 +164,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   };
 
   const sharedLocationPickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => {
       setOpenPicker(null);
       clearLocationSuggestions();
@@ -184,7 +178,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   };
 
   const sharedRecurrencePickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: recurrenceDraft ? RECURRENCE_PICKER_WIDTH : RECURRENCE_PICKER_COMPACT_WIDTH,
     height: recurrenceDraft ? RECURRENCE_PICKER_HEIGHT : RECURRENCE_PICKER_COMPACT_HEIGHT,
@@ -201,7 +194,6 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
   };
 
   const sharedConflictPickerProps = {
-    panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
     width: CONFLICT_PICKER_WIDTH,
     height: CONFLICT_PICKER_HEIGHT,

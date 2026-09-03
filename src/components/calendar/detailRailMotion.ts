@@ -1,23 +1,14 @@
 import { useReducedMotion } from "motion/react";
+import { heightTransition } from "@/lib/motion";
 
 export const EDITOR_ENTRANCE_TRANSITION = {
   duration: 0.3,
   ease: [0.22, 1, 0.36, 1],
 };
 
-const DETAIL_RAIL_LAYOUT_TRANSITION = {
-  duration: 0.18,
-  ease: [0.16, 1, 0.3, 1],
-};
-
 const DETAIL_RAIL_FADE_TRANSITION = {
   duration: 0.14,
   ease: [0.22, 1, 0.36, 1],
-};
-
-const XL_DETAIL_RAIL_LAYOUT_TRANSITION = {
-  duration: 0.14,
-  ease: [0.16, 1, 0.3, 1],
 };
 
 const RAIL_SWAP_POSITION_TRANSITION = {
@@ -65,19 +56,18 @@ export function getRailSwapMotion(layoutTier?: string | null, reducedMotion = fa
   };
 }
 
-export function useDetailRailMotion(layoutTier?: string | null) {
+export function useDetailRailMotion() {
   const reducedMotion = useReducedMotion();
 
   if (reducedMotion) {
     return {
-      layout: { duration: 0.01 },
+      layout: heightTransition(true),
       fade: { duration: 0 },
     };
   }
 
-  const tier = resolveTier(layoutTier);
   return {
-    layout: tier === "xl" ? XL_DETAIL_RAIL_LAYOUT_TRANSITION : DETAIL_RAIL_LAYOUT_TRANSITION,
+    layout: heightTransition(false),
     fade: DETAIL_RAIL_FADE_TRANSITION,
   };
 }

@@ -8,6 +8,8 @@ import {
 } from "../../api";
 import { describeSourceHealth, summarizeTopicSourceHealth } from "./newsPageModel";
 import NewsAddSourceForm from "./NewsAddSourceForm";
+import AnimatedCollapse from "../shared/AnimatedCollapse";
+import AnimatedHeight from "../shared/AnimatedHeight";
 import NewsCatalogPicker from "./NewsCatalogPicker";
 import { ManageButton } from "./manageUi";
 import { manageInputStyle } from "./manageStyles";
@@ -421,15 +423,18 @@ export default function NewsManagePanel({
                 ) : null}
               </div>
 
-              {addSourceTopicId === selectedTopic.id ? (
-                <NewsAddSourceForm
-                  topicId={selectedTopic.id}
-                  onAdded={() => { setAddSourceTopicId(null); onChanged?.(); }}
-                  onCancel={() => setAddSourceTopicId(null)}
-                />
-              ) : (
+              <AnimatedCollapse open={addSourceTopicId === selectedTopic.id}>
+                <AnimatedHeight>
+                  <NewsAddSourceForm
+                    topicId={selectedTopic.id}
+                    onAdded={() => { setAddSourceTopicId(null); onChanged?.(); }}
+                    onCancel={() => setAddSourceTopicId(null)}
+                  />
+                </AnimatedHeight>
+              </AnimatedCollapse>
+              <AnimatedCollapse open={addSourceTopicId !== selectedTopic.id}>
                 <div><ManageButton onClick={() => setAddSourceTopicId(selectedTopic.id)}>Add source</ManageButton></div>
-              )}
+              </AnimatedCollapse>
             </section>
 
             <section style={{ display: "grid", gap: 9 }}>

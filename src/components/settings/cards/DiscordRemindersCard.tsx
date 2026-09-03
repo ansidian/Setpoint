@@ -1,3 +1,4 @@
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { useEffect, useState } from "react";
 import { Bell, Send } from "lucide-react";
 import { testDiscordReminderWebhook, updateSettings } from "@/api";
@@ -234,7 +235,7 @@ export default function DiscordRemindersCard({
           {discordForm.testStatus === "save-failed" ? <StatusPill tone="danger">Save failed</StatusPill> : null}
           {demoMode ? <StatusPill tone="neutral">Test not available in demo</StatusPill> : null}
         </div>
-        {confirmingRemoval ? (
+        <AnimatedCollapse open={confirmingRemoval}>
           <div className="rounded-md border border-danger/20 bg-danger/[0.06] p-3">
             <FieldHint>
               Discord reminder delivery will stop. Reminder schedules remain saved.
@@ -262,7 +263,7 @@ export default function DiscordRemindersCard({
               </Button>
             </div>
           </div>
-        ) : null}
+        </AnimatedCollapse>
         <SensitiveActionStepUp state={stepUp} />
       </div>
     </SettingsCard>

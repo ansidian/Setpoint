@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import AnimatedHeight from "../shared/AnimatedHeight";
 import {
   AlertCircle,
   CalendarDays,
@@ -169,19 +170,21 @@ function AlfredCalendarProposalCard({
 
       {display.description ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          <div style={{
-            fontSize: 10.5,
-            lineHeight: 1.5,
-            color: "rgba(205,214,244,0.62)",
-            ...(!detailsOpen ? {
-              display: "-webkit-box",
-              WebkitBoxOrient: "vertical",
-              WebkitLineClamp: 2,
-              overflow: "hidden",
-            } : {}),
-          }}>
-            {display.description}
-          </div>
+          <AnimatedHeight>
+            <div style={{
+              fontSize: 10.5,
+              lineHeight: 1.5,
+              color: "rgba(205,214,244,0.62)",
+              ...(!detailsOpen ? {
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
+                WebkitLineClamp: 2,
+                overflow: "hidden",
+              } : {}),
+            }}>
+              {display.description}
+            </div>
+          </AnimatedHeight>
           {longDescription ? (
             <button
               type="button"

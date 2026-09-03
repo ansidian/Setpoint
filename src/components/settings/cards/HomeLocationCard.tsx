@@ -1,3 +1,4 @@
+import AnimatedCollapse from "@/components/shared/AnimatedCollapse";
 import { useEffect, useState } from "react";
 import { Home, LoaderCircle, MapPin, Search, Trash2 } from "lucide-react";
 import {
@@ -223,7 +224,7 @@ export default function HomeLocationCard({
           </div>
         ) : null}
 
-        {confirmingRemoval ? (
+        <AnimatedCollapse open={confirmingRemoval}>
           <div className="rounded-xl border border-warning/20 bg-warning/[0.06] p-3">
             <p className="text-[12px] leading-relaxed text-foreground/85">
               Removing Home blocks every pending Time-to-Leave reminder until a new Home is saved.
@@ -251,7 +252,7 @@ export default function HomeLocationCard({
               </Button>
             </div>
           </div>
-        ) : null}
+        </AnimatedCollapse>
 
         {error ? <p role="alert" className="text-[11px] leading-relaxed text-danger">{error}</p> : null}
         <FieldHint>

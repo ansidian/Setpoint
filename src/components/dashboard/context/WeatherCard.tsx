@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import { useReducedMotion } from "motion/react";
 import { ChevronDown } from "lucide-react";
 import { Icon } from "../../../lib/Icon";
@@ -80,14 +81,7 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
       {hasForecast && (
         <>
           {/* ── Expansion (revealed on hover/focus/tap) ── */}
-          <div
-            style={{
-              maxHeight: open ? 360 : 0,
-              opacity: open ? 1 : 0,
-              overflow: "hidden",
-              transition: reduce ? "none" : "max-height 340ms cubic-bezier(0.16,1,0.3,1), opacity 240ms ease",
-            }}
-          >
+          <AnimatedCollapse open={open}>
             <div style={{ marginTop: 15, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               {hours.length > 0 && (
                 <>
@@ -138,27 +132,25 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
                 </>
               )}
             </div>
-          </div>
+          </AnimatedCollapse>
 
           {/* ── Hint (rest only) ── */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 10,
-              letterSpacing: 0.3,
-              color: "rgba(205,214,244,0.34)",
-              maxHeight: open ? 0 : 26,
-              opacity: open ? 0 : 1,
-              marginTop: open ? 0 : 12,
-              overflow: "hidden",
-              transition: reduce ? "none" : "all 220ms ease",
-            }}
-          >
-            <ChevronDown size={12} strokeWidth={2} color="rgba(205,214,244,0.34)" />
-            <span>{coarse ? "Tap for the forecast" : "Hover for the forecast"}</span>
-          </div>
+          <AnimatedCollapse open={!open}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 10,
+                letterSpacing: 0.3,
+                color: "rgba(205,214,244,0.34)",
+                marginTop: 12,
+              }}
+            >
+              <ChevronDown size={12} strokeWidth={2} color="rgba(205,214,244,0.34)" />
+              <span>{coarse ? "Tap for the forecast" : "Hover for the forecast"}</span>
+            </div>
+          </AnimatedCollapse>
         </>
       )}
     </div>
