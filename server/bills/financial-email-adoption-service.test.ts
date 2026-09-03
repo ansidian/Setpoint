@@ -88,6 +88,54 @@ describe("resolveFinancialEmailSeed", () => {
     await dbClient.close();
   });
 
+  it("refreshes a cached unresolved payee once for the current target inference", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "A transaction was made on your card",
+      body_snippet: "Merchant ACME STORE #104",
+      body_text: "Amount $42.25 Merchant ACME STORE #104 Card ending in 4242",
+      from_name: "Card Alerts",
+      from_address: "alerts@example.com",
+    });
+    const candidate = {
+      payee_hint: "ACME STORE #104",
+      amount: 42.25,
+      event_kind: "purchase" as const,
+      event_confidence: 0.99,
+      event_evidence: "Merchant ACME STORE #104",
+    };
+    const stale = reviewPlan(candidate);
+    stale.candidate = candidate;
+    stale.targets.payee = { kind: "payee", status: "unresolved", provenance: [] };
+    stale.operation = { intended: "create_transaction", kind: "review", reasons: ["payee_target_unresolved"] };
+    stale.reviewReasons = [{ code: "payee_target_unresolved", message: "Choose a payee.", field: "payee", blocking: true }];
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET bill_candidate_json = ?, financial_email_plan_json = ?
+            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
+      args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
+    });
+    const refreshed = { ...reviewPlan(candidate), targetInferenceVersion: 2 };
+    const planner = vi.fn(async () => refreshed);
+
+    const first = await resolveFinancialEmailSeed(
+      "user-1",
+      { emailId: "msg-1", accountId: "gmail-work", dbClient },
+      { planner: planner as never },
+    );
+    const second = await resolveFinancialEmailSeed(
+      "user-1",
+      { emailId: "msg-1", accountId: "gmail-work", dbClient },
+      { planner: planner as never },
+    );
+
+    expect(first).toEqual(refreshed);
+    expect(second).toEqual(refreshed);
+    // test-architecture: allow-boundary-interaction -- the planner is the outbound AI/Actual read boundary; one-time persisted upgrade behavior cannot be proven from the equal plan value alone.
+    expect(planner).toHaveBeenCalledTimes(1);
+    await dbClient.close();
+  });
+
   it("refreshes a stored unavailable-authentication plan when indexed Gmail evidence now passes", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {

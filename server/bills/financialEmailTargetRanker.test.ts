@@ -35,6 +35,27 @@ describe("rankFinancialTargetBundles", () => {
     });
   });
 
+  it("can validate one corroborated Actual option from semantic email evidence", async () => {
+    const result = await rankFinancialTargetBundles({
+      ...input,
+      content: "Merchant EXAMPLE MARKET #100 TEST CITY charged your card.",
+      candidate: { event_kind: "purchase", payee_hint: "EXAMPLE MARKET #100 TEST CITY" },
+      options: [{ key: "option_1", description: "Costco Anywhere Card · Costco" }],
+      provider: providerWith({
+        target_policy_key: "option_1",
+        target_confidence: 0.98,
+        target_evidence: "EXAMPLE MARKET #100 TEST CITY",
+      }),
+    });
+
+    expect(result).toEqual({
+      status: "selected",
+      key: "option_1",
+      confidence: 0.98,
+      evidence: "EXAMPLE MARKET #100 TEST CITY",
+    });
+  });
+
   it.each([
     [{ target_policy_key: "invented", target_confidence: 0.99, target_evidence: "household card" }],
     [{ target_policy_key: "option_1", target_confidence: 0.79, target_evidence: "household card" }],

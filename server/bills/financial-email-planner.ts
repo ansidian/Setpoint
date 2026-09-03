@@ -17,6 +17,7 @@ import {
   type FinancialEmailPolicyResult,
 } from "./financialEmailClassificationPolicy.ts";
 import {
+  FINANCIAL_TARGET_INFERENCE_VERSION,
   inferFinancialEmailTargets,
   type FinancialTargetBundleRanker,
 } from "./financialEmailTargetInference.ts";
@@ -540,6 +541,7 @@ export function createFinancialEmailPlanner({
           : [...evidence, ...unresolved, ...reconciliationReview];
       return {
         version: 1,
+        targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
         identity: financialEmailIdentity(userId, input),
         candidate: inference.candidate,
         classification: policy.classification,

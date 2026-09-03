@@ -29,6 +29,7 @@ import {
   trustedAccountSuffix, scheduleAccountId, transferScheduleTopology,
   financialScheduleEvidence as scheduleEvidence,
 } from "./financialEmailAccountEvidence.ts";
+import { discoverCorroboratedMerchantHistory } from "./financialEmailMerchantCandidates.ts";
 interface HistoryBundle {
   key: string;
   account: TargetValue;
@@ -42,6 +43,8 @@ export type FinancialTargetBundleRanker = (input: {
   candidate: BillCandidate;
   options: FinancialTargetRankingOption[];
 }) => Promise<FinancialTargetRankingResult>;
+
+export const FINANCIAL_TARGET_INFERENCE_VERSION = 2;
 
 export interface FinancialTargetInferenceResult {
   candidate: BillCandidate;
@@ -215,11 +218,14 @@ function matchingHistory(
 function historyBundles(
   rows: TransactionRecord[],
   categories: Map<string, TargetValue[]>,
+  { includeCategory = true }: { includeCategory?: boolean } = {},
 ): HistoryBundle[] {
   const bundles = new Map<string, HistoryBundle>();
   for (const row of rows) {
     if (!row.accountId || !row.payeeId) continue;
-    const categoryMatches = categories.get(normalizeIdentity(row.category)) || [];
+    const categoryMatches = includeCategory
+      ? categories.get(normalizeIdentity(row.category)) || []
+      : [];
     const category = categoryMatches.length === 1 ? categoryMatches[0]! : null;
     const key = [row.accountId, row.payeeId, category?.id || "none"].join(":");
     const existing = bundles.get(key);
@@ -324,8 +330,9 @@ async function rankHistoryBundles(
   candidate: BillCandidate,
   bundles: HistoryBundle[],
   rankBundles: FinancialTargetBundleRanker | undefined,
+  { allowSingle = false }: { allowSingle?: boolean } = {},
 ): Promise<{ bundle: HistoryBundle; ranking: FinancialTargetRankingResult } | null> {
-  if (!rankBundles || bundles.length < 2 || bundles.length > 8) return null;
+  if (!rankBundles || bundles.length < (allowSingle ? 1 : 2) || bundles.length > 8) return null;
   const keyed = bundles.map((bundle, index) => ({
     bundle,
     option: {
@@ -468,14 +475,33 @@ export async function inferFinancialEmailTargets({
   if (intended === "create_schedule") targets.schedule = target("schedule", "unresolved");
 
   const exactImport = exactImportedTargetEvidence(candidate, history, metadata);
-  const rows = matchingHistory(candidate, classification, history);
+  const exactRows = matchingHistory(candidate, classification, history);
+  const suffixAccounts = suffixAccountEvidence(candidate, metadata, false);
+  const constrainedAccountId = suffixAccounts.length === 1 ? suffixAccounts[0]!.id : null;
+  const semanticRows = exactRows.length ? [] : discoverCorroboratedMerchantHistory({
+    candidate,
+    payees: metadata.payees,
+    history,
+    direction: directionFor(classification),
+    accountId: constrainedAccountId,
+  });
+  const semanticSelectionRequired = exactRows.length === 0 && semanticRows.length > 0;
+  const rows = exactRows.length ? exactRows : semanticRows;
   const completeRows = rows.filter((row) => row.accountId && row.payeeId);
-  const bundles = historyBundles(completeRows, categories);
-  const stableBundle = rows.length >= 2 && completeRows.length === rows.length && bundles.length === 1
+  const bundles = historyBundles(completeRows, categories, { includeCategory: !semanticSelectionRequired });
+  const stableBundle = !semanticSelectionRequired
+    && rows.length >= 2 && completeRows.length === rows.length && bundles.length === 1
     ? bundles[0]!
     : null;
-  const rankedBundle = stableBundle ? null : await rankHistoryBundles(candidate, bundles, rankBundles);
-  if (!stableBundle && bundles.length > 1 && !rankedBundle) reasons.add("target_ranking_unresolved");
+  const rankedBundle = stableBundle ? null : await rankHistoryBundles(
+    candidate,
+    bundles,
+    rankBundles,
+    { allowSingle: semanticSelectionRequired },
+  );
+  if (!stableBundle && bundles.length > (semanticSelectionRequired ? 0 : 1) && !rankedBundle) {
+    reasons.add("target_ranking_unresolved");
+  }
   const bundle = stableBundle || rankedBundle?.bundle || null;
   const bundleEvidence = bundle
     ? rankedBundle
@@ -496,20 +522,20 @@ export async function inferFinancialEmailTargets({
     ? [bundleEvidence.account]
     : stableHistoryEvidence(
         "account",
-        completeRows.map((row) => ({ id: row.accountId!, label: row.account })),
-        rows.length,
+        semanticSelectionRequired ? [] : completeRows.map((row) => ({ id: row.accountId!, label: row.account })),
+        semanticSelectionRequired ? 0 : rows.length,
       );
   const payeeHistoryEvidence = bundleEvidence?.payee
     ? [bundleEvidence.payee]
     : stableHistoryEvidence(
         "payee",
-        completeRows.map((row) => ({ id: row.payeeId!, label: row.payee })),
-        rows.length,
+        semanticSelectionRequired ? [] : completeRows.map((row) => ({ id: row.payeeId!, label: row.payee })),
+        semanticSelectionRequired ? 0 : rows.length,
       );
 
   const accountSelection = selectEvidence("account", [
     ...exactImport.account,
-    ...suffixAccountEvidence(candidate, metadata, false),
+    ...suffixAccounts,
     ...scheduleEvidence(schedules, metadata, "account"),
     ...accountHistoryEvidence,
   ]);

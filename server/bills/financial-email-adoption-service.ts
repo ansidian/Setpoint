@@ -3,6 +3,7 @@ import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { planFinancialEmail } from "./financial-email-planner.ts";
 import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 import { shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
+import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
 import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import type { InStatement } from "@libsql/client";
 import type {
@@ -70,6 +71,13 @@ function shouldRefreshAuthentication(
 ): boolean {
   if (sourceIdentity.senderAuthentication !== "pass") return false;
   return !plan.automation.gates.some((gate) => gate.gate === "authenticity" && gate.status === "pass");
+}
+
+function shouldRefreshTargetInference(plan: FinancialEmailPlan): boolean {
+  return plan.targetInferenceVersion !== FINANCIAL_TARGET_INFERENCE_VERSION
+    && plan.operation.intended === "create_transaction"
+    && plan.targets.payee?.status === "unresolved"
+    && Boolean(plan.candidate?.payee || plan.candidate?.payee_hint || plan.candidate?.payee_label);
 }
 
 async function loadStoredFinancialContext(
@@ -184,7 +192,12 @@ export async function resolveFinancialEmailSeed(
       }, plan).catch(() => undefined);
     };
     const missingType = stored?.plan && shouldAttemptFinancialEmailTypeVerification(stored.plan.candidate);
-    if (stored?.plan && !missingType && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {
+    if (
+      stored?.plan
+      && !missingType
+      && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)
+      && !shouldRefreshTargetInference(stored.plan)
+    ) {
       await stage(stored.plan);
       return stored.plan;
     }

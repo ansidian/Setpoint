@@ -265,6 +265,100 @@ describe("inferFinancialEmailTargets", () => {
     expect(result.targets.account.provenance[0]).toMatchObject({ source: "model_ranking" });
   });
 
+  it("semantically resolves a bank merchant descriptor from repeated compatible Actual history", async () => {
+    const rankBundles = vi.fn(async ({ options }) => ({
+      status: "selected" as const,
+      key: options[0]!.key,
+      confidence: 0.98,
+      evidence: "COSTCO",
+    }));
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({
+        payee: undefined,
+        payee_hint: "EXAMPLE MARKET #100 TEST CITY",
+        account_last4: "0004",
+        account_last4_confidence: 1,
+        account_last4_evidence: "Card Ending In 0004",
+      }),
+      classification: classification(),
+      intended: "create_transaction",
+      metadata: metadata({
+        accounts: [{ id: "costco-card", name: "Example Rewards Card 0004", type: "credit" }],
+        payees: [{ id: "costco", name: "Costco" }],
+        payeeMap: { costco: "Costco" },
+      }),
+      history: [
+        transaction({ id: "costco-1", payee: "Costco", payeeId: "costco", account: "Example Rewards Card 0004", accountId: "costco-card" }),
+        transaction({ id: "costco-2", date: "2026-07-01", payee: "Costco", payeeId: "costco", account: "Example Rewards Card 0004", accountId: "costco-card" }),
+      ],
+      rankBundles,
+    });
+
+    expect(result.targets.account).toMatchObject({ status: "resolved", id: "costco-card" });
+    expect(result.targets.payee).toMatchObject({
+      status: "resolved",
+      id: "costco",
+      label: "Costco",
+      provenance: [expect.objectContaining({ source: "model_ranking" })],
+    });
+    expect(result.candidate).toMatchObject({ payee: "Costco", payee_id: "costco" });
+  });
+
+  it("does not offer a non-exact payee without repeated compatible history", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({ payee: undefined, payee_hint: "ACME STORE #104" }),
+      classification: classification(),
+      intended: "create_transaction",
+      metadata: metadata(),
+      history: [transaction()],
+      rankBundles: async () => ({ status: "selected", key: "option_1", confidence: 0.99, evidence: "ACME" }),
+    });
+
+    expect(result.targets.payee.status).toBe("unresolved");
+  });
+
+  it("keeps a corroborated non-exact payee unresolved when semantic ranking fails", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({ payee: undefined, payee_hint: "ACME STORE #104" }),
+      classification: classification(),
+      intended: "create_transaction",
+      metadata: metadata(),
+      history: [transaction(), transaction({ id: "txn-2", date: "2026-07-01" })],
+      rankBundles: async () => ({ status: "unresolved", key: null, confidence: 0.72, evidence: "ACME" }),
+    });
+
+    expect(result.targets.payee.status).toBe("unresolved");
+    expect(result.reasons).toContain("target_ranking_unresolved");
+  });
+
+  it("constrains non-exact payee history to the uniquely matched account suffix", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({
+        payee: undefined,
+        payee_hint: "ACME STORE #104",
+        account_last4: "4242",
+        account_last4_confidence: 0.99,
+        account_last4_evidence: "Card ending in 4242",
+      }),
+      classification: classification(),
+      intended: "create_transaction",
+      metadata: metadata(),
+      history: [
+        transaction({ accountId: "card", account: "Everyday Card 4242" }),
+        transaction({ id: "txn-2", date: "2026-07-01", accountId: "card", account: "Everyday Card 4242" }),
+        transaction({ id: "other-1", accountId: "checking", account: "Household Checking 1111" }),
+        transaction({ id: "other-2", date: "2026-07-01", accountId: "checking", account: "Household Checking 1111" }),
+      ],
+      rankBundles: async ({ options }) => options.length === 1
+        && options[0]!.description === "Everyday Card 4242 · Acme"
+        ? { status: "selected", key: options[0]!.key, confidence: 0.97, evidence: "ACME" }
+        : { status: "unresolved", key: null, confidence: null, evidence: null },
+    });
+
+    expect(result.targets.account).toMatchObject({ status: "resolved", id: "card" });
+    expect(result.targets.payee).toMatchObject({ status: "resolved", id: "acme" });
+  });
+
   it("allows constrained ranking to resolve competing category bundles", async () => {
     const result = await inferFinancialEmailTargets({
       candidate: candidate(),
