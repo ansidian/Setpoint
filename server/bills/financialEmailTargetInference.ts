@@ -543,7 +543,10 @@ export async function inferFinancialEmailTargets({
     }
     const categorySelection = selectEvidence("category", categoryEvidence);
     targets.category = categorySelection.target;
-    if (categorySelection.conflict) reasons.add("target_evidence_conflict");
+    if (categorySelection.conflict && intended !== "create_transaction") reasons.add("target_evidence_conflict");
+    // With the account and payee resolved, remaining bundle ambiguity only
+    // affects optional categorization for a transaction.
+    if (intended === "create_transaction") reasons.delete("target_ranking_unresolved");
   }
 
   if (intended === "create_schedule") {

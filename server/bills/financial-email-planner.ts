@@ -163,6 +163,7 @@ function targetReasons(
   targets: FinancialPlanTargets,
   inferenceReasons: FinancialPlanReasonCode[],
   metadataAvailable: boolean,
+  intended: FinancialEmailPolicyResult["intended"],
 ): FinancialPlanReason[] {
   const reasons: FinancialPlanReason[] = [];
   const unresolved: Array<[
@@ -179,6 +180,8 @@ function targetReasons(
     ["schedule", "schedule_target_unresolved", "The Actual schedule could not be inferred.", "schedule"],
   ];
   for (const [field, code, message, reasonField] of unresolved) {
+    // Actual transactions can be categorized by the owner after import.
+    if (field === "category" && intended === "create_transaction") continue;
     if (targets[field].status === "unresolved") reasons.push(reason(code, message, reasonField));
   }
   if (!metadataAvailable) {
@@ -513,7 +516,7 @@ export function createFinancialEmailPlanner({
       });
       const targets = inference.targets;
       const evidence = evidenceReasons(inference.candidate, policy, resolved.providerUnavailable);
-      const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
+      const unresolved = targetReasons(targets, inference.reasons, metadataAvailable, policy.intended);
       const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
         occurrenceReader,
         now,
