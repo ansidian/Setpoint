@@ -276,6 +276,10 @@ Setpoint uses gently rounded, border-led geometry. Dense controls use 6px to 8px
 - **Mobile:** Tabs and sheets must meet the `--sp-touch-min` (44px) canonical hit-target size and avoid reflowing labels into cramped controls. Text inputs must render at ≥16px on mobile viewports to prevent iOS auto-zoom.
 - **Keyboard:** Existing hotkeys and command palette affordances should stay visible through compact labels or key pills.
 
+### Reminders
+
+Event and deadline editors use **Reminders** as the section title and **Delivered via Discord** as secondary text. Deadlines also clarify that these are separate from Todoist notifications; reserve “webhook” for connection setup. Place the custom date/time trigger inline with preset chips, wrapping naturally when space is tight. Custom pickers use the shared floating-panel disclosure animation and reduced-motion behavior. Date/time pickers size to their bounded content without internal scrolling; scrollable suggestion lists remain separate.
+
 ### Floating Panels
 
 Floating panels must be portaled to `document.body`, fixed-positioned from the trigger rect, opaque `#16161e`, isolated with `isolation: isolate`, and scroll-contained. Outside click must check both trigger and portal refs.

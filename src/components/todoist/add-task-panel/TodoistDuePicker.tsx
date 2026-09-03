@@ -33,6 +33,7 @@ export default function TodoistDuePicker({
       <AnchoredFloatingPanel
         open={open}
         animateDisclosure
+        scrollable={false}
         anchorRef={anchorRef}
         panelRef={panelRef}
         onClose={onClose}

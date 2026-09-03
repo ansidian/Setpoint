@@ -145,10 +145,11 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
     onClose: () => setOpenPicker(null),
     width: SCHEDULE_PICKER_WIDTH,
     height: SCHEDULE_PICKER_HEIGHT,
+    scrollable: false,
     mobileHeight: "min(620px, calc(100dvh - 20px))",
     role: "dialog",
     style: {
-      height: `min(${SCHEDULE_PICKER_HEIGHT}px, calc(100vh - 20px))`,
+      minHeight: SCHEDULE_PICKER_HEIGHT,
       overflow: "hidden",
       padding: 10,
       zIndex: 10001,

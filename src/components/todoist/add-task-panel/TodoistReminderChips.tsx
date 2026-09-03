@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { ButtonHTMLAttributes, ComponentType, PropsWithChildren } from "react";
 import { Bell, X } from "lucide-react";
 import { ActionButton } from "../../calendar/events/CalendarEditorControls";
@@ -35,7 +34,6 @@ function ReminderPill({
   disabled: boolean;
   onRemove: (reminder: TodoistReminderEntry) => void;
 }) {
-  const [hover, setHover] = useState(false);
   const muted = chip.sent;
   return (
     <span
@@ -69,21 +67,18 @@ function ReminderPill({
         aria-label={`Remove reminder ${chip.label}`}
         disabled={disabled || muted}
         onClick={() => onRemove(chip.raw)}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
+        className="transition-[background-color,color,transform] duration-150 enabled:hover:-translate-y-px enabled:hover:!bg-white/[0.08] enabled:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transform-none motion-reduce:transition-none"
         style={{
           width: 20,
           height: 20,
           borderRadius: 999,
           border: "1px solid transparent",
-          background: hover && !disabled && !muted ? "rgba(255,255,255,0.08)" : "transparent",
+          background: "transparent",
           color: disabled || muted ? "rgba(205,214,244,0.28)" : "rgba(205,214,244,0.68)",
           display: "inline-grid",
           placeItems: "center",
           padding: 0,
           cursor: disabled || muted ? "not-allowed" : "pointer",
-          transform: hover && !disabled && !muted ? "translateY(-1px)" : "translateY(0)",
-          transition: "transform 140ms, background 140ms, color 140ms",
         }}
       >
         <X size={11} aria-hidden />
@@ -122,7 +117,7 @@ export default function TodoistReminderChips({
   return (
     <section
       data-testid="todoist-reminders"
-      aria-label="Discord webhook reminders"
+      aria-label="Deadline reminders"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -138,11 +133,11 @@ export default function TodoistReminderChips({
           <div style={{ display: "inline-flex", alignItems: "center", gap: 7, minWidth: 0 }}>
             <Bell size={13} color="color-mix(in srgb, var(--sp-cream) 86%, transparent)" aria-hidden />
             <span style={{ color: "rgba(205,214,244,0.72)", fontSize: 11, fontWeight: 700 }}>
-              Discord webhook reminders
+              Reminders
             </span>
           </div>
           <span style={{ paddingLeft: 20, color: "var(--color-text-faint)", fontSize: 9.5, lineHeight: 1.4 }}>
-            Separate from the Todoist deadline and notifications.
+            Delivered via Discord. Separate from Todoist notifications.
           </span>
         </div>
         {chips.length ? (
@@ -162,7 +157,7 @@ export default function TodoistReminderChips({
               subtle
               disabled={presetDisabled}
               title={disabledPresetTitle(state.reason)}
-              aria-label={`${preset.label} Discord webhook reminder preset`}
+              aria-label={`${preset.label} reminder preset`}
               dataTestId={`todoist-reminder-preset-${Math.abs(preset.offsetMinutes)}`}
               onClick={() => onAddPreset(preset.offsetMinutes)}
               style={{ padding: "6px 8px", fontSize: 10.5 }}
@@ -171,6 +166,16 @@ export default function TodoistReminderChips({
             </TypedActionButton>
           );
         })}
+        <ReminderDateTimePicker
+          accent="var(--sp-cream)"
+          ariaLabel="Custom deadline reminder picker"
+          customReminder={customReminder}
+          disabled={disabled || !hasAnchor}
+          onSelect={(selection) => {
+            onUpdateCustomReminder(selection);
+            onAddCustom(selection);
+          }}
+        />
       </div>
 
       {chips.length ? (
@@ -185,17 +190,6 @@ export default function TodoistReminderChips({
           ))}
         </div>
       ) : null}
-
-      <ReminderDateTimePicker
-        accent="var(--sp-cream)"
-        ariaLabel="Custom Discord webhook reminder picker"
-        customReminder={customReminder}
-        disabled={disabled || !hasAnchor}
-        onSelect={(selection) => {
-          onUpdateCustomReminder(selection);
-          onAddCustom(selection);
-        }}
-      />
 
       {reminderError ? (
         <div style={{ color: "var(--sp-cream)", fontSize: 11, lineHeight: 1.35 }}>

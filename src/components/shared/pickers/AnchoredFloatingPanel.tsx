@@ -30,6 +30,8 @@ export type AnchoredFloatingPanelProps = {
   animatePosition?: boolean;
   animateSize?: boolean;
   animateDisclosure?: boolean;
+  /** Bounded desktop pickers opt out of scrolling and size to their content. */
+  scrollable?: boolean;
   draggable?: boolean;
   dragHandleLabel?: string;
   placementKey?: string;
@@ -130,6 +132,7 @@ function AnchoredPanelDesktop({
   animatePosition = false,
   animateSize = false,
   animateDisclosure = false,
+  scrollable = true,
   draggable = false,
   dragHandleLabel,
   placementKey = "panel",
@@ -367,9 +370,9 @@ function AnchoredPanelDesktop({
         ...["height", "max-height"].map((property) => `${property} ${dragging || reducedMotion ? "0ms" : "var(--sp-motion-height)"} var(--sp-ease-height)`),
       ].filter(Boolean).join(", ")
       : style?.transition,
-    maxHeight: style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined),
-    overflow: style?.overflow === "hidden" ? undefined : style?.overflow,
-    overflowY: "auto",
+    maxHeight: scrollable ? style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined) : undefined,
+    overflow: scrollable ? style?.overflow === "hidden" ? undefined : style?.overflow : "visible",
+    overflowY: scrollable ? "auto" : "visible",
     overscrollBehavior: "contain",
     ...(!present ? { pointerEvents: "none" } : {}),
   };

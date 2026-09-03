@@ -67,12 +67,16 @@ export default function ReminderDateTimePicker({
 
   return (
     <>
+      {open ? <span hidden data-suspend-calendar-hotkeys="blocking" /> : null}
       <button
         ref={anchorRef}
         type="button"
         data-testid="reminder-custom-picker-trigger"
         data-calendar-focus-ring="true"
         aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-safe:focus-visible:-translate-y-px active:!scale-[0.98] motion-reduce:!transform-none motion-reduce:!transition-none"
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
@@ -118,34 +122,36 @@ export default function ReminderDateTimePicker({
         </span>
         <CalendarClock size={12} aria-hidden />
       </button>
-      {open ? (
-        <AnchoredFloatingPanel
-          anchorRef={anchorRef as RefObject<HTMLElement | null>}
-          panelRef={panelRef}
-          onClose={() => setOpen(false)}
-          width={PICKER_WIDTH}
-          height={PICKER_HEIGHT}
-          role="dialog"
-          ariaLabel={ariaLabel}
-          style={{
-            overflow: "hidden",
-            padding: 8,
-            zIndex: 10002,
+      <AnchoredFloatingPanel
+        open={open}
+        animateDisclosure
+        scrollable={false}
+        anchorRef={anchorRef as RefObject<HTMLElement | null>}
+        panelRef={panelRef}
+        onClose={() => setOpen(false)}
+        width={PICKER_WIDTH}
+        height={PICKER_HEIGHT}
+        role="dialog"
+        ariaLabel={ariaLabel}
+        style={{
+          overflow: "hidden",
+          padding: 8,
+          zIndex: 10002,
+        }}
+      >
+        <CalendarDateTimeView
+          key={nowTick}
+          nowTick={nowTick}
+          initialEpoch={futureSelectedEpoch}
+          onSelect={(epoch) => {
+            onSelect?.(selectionFromEpoch(epoch));
+            setOpen(false);
           }}
-        >
-          <CalendarDateTimeView
-            nowTick={nowTick}
-            initialEpoch={futureSelectedEpoch}
-            onSelect={(epoch) => {
-              onSelect?.(selectionFromEpoch(epoch));
-              setOpen(false);
-            }}
-            onBack={() => setOpen(false)}
-            accent={accent}
-            confirmLabel="Add"
-          />
-        </AnchoredFloatingPanel>
-      ) : null}
+          onBack={() => setOpen(false)}
+          accent={accent}
+          confirmLabel="Add"
+        />
+      </AnchoredFloatingPanel>
     </>
   );
 }
