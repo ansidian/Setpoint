@@ -553,7 +553,6 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     }];
   }
   if (pathname === "/api/ea/important-senders") return clone(seed.importantSenders);
-  if (pathname === "/api/ea/triage/cache-stats") return { enabled: false, demo: true };
   if (pathname === "/api/alfred/usage") return { enabled: false, demo: true };
   if (pathname === "/api/ea/email-search/usage") return { enabled: false, demo: true };
   if (pathname === "/api/ea/reminders") {

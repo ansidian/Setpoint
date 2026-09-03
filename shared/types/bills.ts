@@ -421,6 +421,7 @@ export interface BillExtractionRequest {
   model: string;
   systemPrompt: string;
   content: string;
+  usagePurpose?: "extraction" | "verification" | "matching";
 }
 
 export interface BillExtractionProviderResult {

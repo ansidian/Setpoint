@@ -55,12 +55,12 @@ function TriageCacheGlance({ stats, loading, error }: { stats: TriageCacheStatsR
   const calls = Number(stats?.openaiCalls || 0);
   const windowDays = Number(stats?.windowDays || 7);
   const detail = error
-    ? "Cache stats unavailable."
+    ? "Legacy usage snapshot unavailable."
     : loading
-      ? "Loading recent cache usage."
+      ? "Loading legacy usage snapshot."
       : calls
-        ? `${calls} OpenAI ${calls === 1 ? "call" : "calls"} in ${windowDays} days`
-        : `No OpenAI calls in ${windowDays} days`;
+        ? `${calls} legacy OpenAI ${calls === 1 ? "call" : "calls"} dated within ${windowDays} days. Current usage is in AI analytics.`
+        : `No legacy OpenAI calls dated within ${windowDays} days. Current usage is in AI analytics.`;
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2">
@@ -70,7 +70,7 @@ function TriageCacheGlance({ stats, loading, error }: { stats: TriageCacheStatsR
         </div>
       </div>
       <div className="shrink-0">
-        <StatusPill tone="neutral">OpenAI only</StatusPill>
+        <StatusPill tone="neutral">Legacy snapshot</StatusPill>
       </div>
     </div>
   );

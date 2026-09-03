@@ -239,13 +239,18 @@ export async function getTriageCacheStats(userId: string, {
   const monthCutoff = monthToDateCutoff(now);
   const queryCutoff = new Date(Math.min(windowCutoff.getTime(), monthCutoff.getTime()));
   const result = await dbClient.execute({
-    sql: `SELECT last_triaged_at, model_usage_json,
-                 cheap_model_result_json, strong_model_result_json
-          FROM ea_email_triage
+    // Legacy-only frozen snapshot. New events are exposed separately by
+    // getEmailAiUsageStats; never sum mutable decisions into event totals.
+    sql: `SELECT last_triaged_at, NULL AS model_usage_json,
+            CASE WHEN tier = 'cheap' THEN json_object('provider', provider, 'model', model,
+              'usage', json_object('input_tokens', input_tokens, 'output_tokens', output_tokens,
+                'input_tokens_details', json_object('cached_tokens', cached_input_tokens))) END AS cheap_model_result_json,
+            CASE WHEN tier = 'strong' THEN json_object('provider', provider, 'model', model,
+              'usage', json_object('input_tokens', input_tokens, 'output_tokens', output_tokens,
+                'input_tokens_details', json_object('cached_tokens', cached_input_tokens))) END AS strong_model_result_json
+          FROM ea_ai_usage_legacy_triage
           WHERE user_id = ?
-            AND last_triaged_at >= ?
-            AND model_usage_json IS NOT NULL
-            AND model_usage_json != '{}'`,
+            AND last_triaged_at >= ?`,
     args: [userId, queryCutoff.toISOString()],
   });
 

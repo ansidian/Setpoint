@@ -7,6 +7,7 @@ import {
 import { createBillCandidateVerificationService, validateFinancialSemanticIdentity } from "../bills/bill-candidate-verification-service.ts";
 import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS, BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bills/bill-semantic-prompt.ts";
 import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
+import { trackedAiProviderCall, withAiUsageContext } from "../platform/ai-usage.ts";
 import { resolveAiApiKey, type AiProvider } from "../ai-credentials.ts";
 import type {
   TriageDb,
@@ -355,153 +356,153 @@ export function createTriageModelClient({
   };
   return {
     async classify({ tier, email, reason }): Promise<TriageModelResult> {
-      const choice = config[tier] || config.cheap || config.strong;
-      if (choice.provider === "openai") {
-        const apiKey = await credentialResolver("openai");
-        if (!apiKey) {
-          const err = new Error("OPENAI_API_KEY not set for triage") as TriageError;
-          err.status = 503;
-          throw err;
-        }
-        const started = Date.now();
-        const cacheKey = openAITriagePromptCacheKey(tier, choice.model);
-        const requestOptions = {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify(buildOpenAITriageRequestBody({
-            model: choice.model,
-            email,
-            reason,
-            cacheKey,
-          })),
-        };
-        let res = await fetchWithTimeout<TriageFetchResponse>("https://api.openai.com/v1/responses", requestOptions, {
-          timeoutMs: TRIAGE_MODEL_TIMEOUT_MS,
-          fetchFn,
-        });
-        if (!res.ok) {
-          const text = await res.text?.();
-          if (isOpenAICacheParameterError(res.status, text)) {
+      return withAiUsageContext({
+        userId: String(email.user_id || ""), origin: "background_triage",
+        accountId: typeof email.account_id === "string" ? email.account_id : null,
+        emailId: typeof email.email_id === "string" ? email.email_id : null,
+      }, async () => {
+        const choice = config[tier] || config.cheap || config.strong;
+        if (choice.provider === "openai") {
+          const apiKey = await credentialResolver("openai");
+          if (!apiKey) {
+            const err = new Error("OPENAI_API_KEY not set for triage") as TriageError;
+            err.status = 503;
+            throw err;
+          }
+          const started = Date.now();
+          const cacheKey = openAITriagePromptCacheKey(tier, choice.model);
+          const requestOptions = {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+          };
+          const attempt = (includeCacheFields: boolean) => trackedAiProviderCall({
+            provider: "openai", model: choice.model, purpose: tier === "cheap" ? "triage_cheap" : "triage_strong",
+          }, async (call) => {
+            const res = await fetchWithTimeout<TriageFetchResponse>("https://api.openai.com/v1/responses", {
+                ...requestOptions,
+                body: JSON.stringify(buildOpenAITriageRequestBody({
+                  model: choice.model,
+                  email,
+                  reason,
+                  cacheKey,
+                  includeCacheFields,
+                })),
+              }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn });
+            call.setHttpStatus(res.status);
+            if (!res.ok) {
+              const text = await res.text?.();
+              throw Object.assign(new Error(`OpenAI triage API error (${res.status})`), {
+                status: res.status,
+                retryable: res.status === 429 || res.status >= 500,
+                cacheFieldsRejected: includeCacheFields && isOpenAICacheParameterError(res.status, text),
+              });
+            }
+            const data = await res.json();
+            await call.capture(data);
+            const source = isRecord(data) ? data : {};
+            return {
+              decision: extractOpenAIToolInput(data),
+              usage: isRecord(source.usage) ? source.usage as TriageModelUsage : {},
+              responseModel: typeof source.model === "string" ? source.model : choice.model,
+            };
+          });
+          let result: Awaited<ReturnType<typeof attempt>>;
+          try {
+            result = await attempt(true);
+          } catch (error) {
+            if (!isRecord(error) || !error.cacheFieldsRejected) throw error;
             console.warn(
               `[Email Triage] OpenAI cache fields rejected for tier=${tier} model=${choice.model}; `
               + "retrying without cache-only fields",
             );
-            res = await fetchWithTimeout("https://api.openai.com/v1/responses", {
-              ...requestOptions,
-              body: JSON.stringify(buildOpenAITriageRequestBody({
-                model: choice.model,
-                email,
-                reason,
-                cacheKey,
-                includeCacheFields: false,
-              })),
-            }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn });
-            if (res.ok) {
-              const data = await res.json();
-              const source = isRecord(data) ? data : {};
-              const usage = isRecord(source.usage) ? source.usage as TriageModelUsage : {};
-              const responseModel = typeof source.model === "string" ? source.model : choice.model;
-              logOpenAITriageCacheUsage({
-                tier,
-                model: responseModel,
-                usage,
-                cacheKey,
-              });
-              return {
-                decision: await verifyDecision(extractOpenAIToolInput(data), email),
-                usage,
-                provider: "openai",
-                model: responseModel,
-                tier,
-                latency_ms: Date.now() - started,
-              };
-            }
-            await res.text?.();
-            throw Object.assign(new Error(`OpenAI triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
+            result = await attempt(false);
           }
-          throw Object.assign(new Error(`OpenAI triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
+          const { decision, usage, responseModel } = result;
+          logOpenAITriageCacheUsage({
+            tier,
+            model: responseModel,
+            usage,
+            cacheKey,
+          });
+          return {
+            decision: await verifyDecision(decision, email),
+            usage,
+            provider: "openai",
+            model: responseModel,
+            tier,
+            latency_ms: Date.now() - started,
+          };
         }
-        const data = await res.json();
-        const source = isRecord(data) ? data : {};
-        const usage = isRecord(source.usage) ? source.usage as TriageModelUsage : {};
-        const responseModel = typeof source.model === "string" ? source.model : choice.model;
-        logOpenAITriageCacheUsage({
+
+        const apiKey = await credentialResolver("anthropic");
+        if (!apiKey) {
+          const err = new Error("ANTHROPIC_API_KEY not set for triage") as TriageError;
+          err.status = 503;
+          throw err;
+        }
+        const started = Date.now();
+        const { decision, usage, responseModel } = await trackedAiProviderCall({
+          provider: "anthropic", model: choice.model, purpose: tier === "cheap" ? "triage_cheap" : "triage_strong",
+        }, async (call) => {
+          const res = await fetchWithTimeout<TriageFetchResponse>("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: choice.model,
+              max_tokens: 1400,
+              // Mark the stable prefix (tools render before system) as ephemeral
+              // cacheable so repeated classifications in a tick reuse it instead of
+              // re-billing the prompt + schema. Prompt caching is GA — no beta
+              // header needed. Only the per-email user turn stays uncached.
+              // NB: caching engages only when the system+tools prefix exceeds the
+              // model's minimum cacheable size (2048 tok Sonnet, 4096 tok Haiku);
+              // below that it is a harmless no-op (cache_read stays 0).
+              system: [{
+                type: "text",
+                text: TRIAGE_SYSTEM_PROMPT,
+                cache_control: { type: "ephemeral" },
+              }],
+              tools: [{ ...TRIAGE_TOOL, cache_control: { type: "ephemeral" } }],
+              tool_choice: { type: "tool", name: "submit_email_triage" },
+              messages: [{
+                role: "user",
+                content: compactEmailForPrompt(email, reason),
+              }],
+            }),
+          }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn });
+          call.setHttpStatus(res.status);
+          if (!res.ok) {
+            await res.text?.();
+            throw Object.assign(new Error(`Anthropic triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
+          }
+          const data = await res.json();
+          await call.capture(data);
+          const source = isRecord(data) ? data : {};
+          const usage = isRecord(source.usage) ? source.usage as TriageModelUsage : {};
+          const responseModel = typeof source.model === "string" ? source.model : choice.model;
+          return { decision: extractAnthropicToolInput(data), usage, responseModel };
+        });
+        logAnthropicTriageCacheUsage({
           tier,
           model: responseModel,
           usage,
-          cacheKey,
         });
         return {
-          decision: await verifyDecision(extractOpenAIToolInput(data), email),
+          decision: await verifyDecision(decision, email),
           usage,
-          provider: "openai",
+          provider: "anthropic",
           model: responseModel,
           tier,
           latency_ms: Date.now() - started,
         };
-      }
-
-      const apiKey = await credentialResolver("anthropic");
-      if (!apiKey) {
-        const err = new Error("ANTHROPIC_API_KEY not set for triage") as TriageError;
-        err.status = 503;
-        throw err;
-      }
-      const started = Date.now();
-      const res = await fetchWithTimeout<TriageFetchResponse>("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: choice.model,
-          max_tokens: 1400,
-          // Mark the stable prefix (tools render before system) as ephemeral
-          // cacheable so repeated classifications in a tick reuse it instead of
-          // re-billing the prompt + schema. Prompt caching is GA — no beta
-          // header needed. Only the per-email user turn stays uncached.
-          // NB: caching engages only when the system+tools prefix exceeds the
-          // model's minimum cacheable size (2048 tok Sonnet, 4096 tok Haiku);
-          // below that it is a harmless no-op (cache_read stays 0).
-          system: [{
-            type: "text",
-            text: TRIAGE_SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" },
-          }],
-          tools: [{ ...TRIAGE_TOOL, cache_control: { type: "ephemeral" } }],
-          tool_choice: { type: "tool", name: "submit_email_triage" },
-          messages: [{
-            role: "user",
-            content: compactEmailForPrompt(email, reason),
-          }],
-        }),
-      }, { timeoutMs: TRIAGE_MODEL_TIMEOUT_MS, fetchFn });
-      if (!res.ok) {
-        await res.text?.();
-        throw Object.assign(new Error(`Anthropic triage API error (${res.status})`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
-      }
-      const data = await res.json();
-      const source = isRecord(data) ? data : {};
-      const usage = isRecord(source.usage) ? source.usage as TriageModelUsage : {};
-      const responseModel = typeof source.model === "string" ? source.model : choice.model;
-      logAnthropicTriageCacheUsage({
-        tier,
-        model: responseModel,
-        usage,
       });
-      return {
-        decision: await verifyDecision(extractAnthropicToolInput(data), email),
-        usage,
-        provider: "anthropic",
-        model: responseModel,
-        tier,
-        latency_ms: Date.now() - started,
-      };
     },
   };
 }

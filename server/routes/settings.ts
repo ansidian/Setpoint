@@ -35,6 +35,7 @@ import {
   validateTriageSoundSettings,
 } from "../triage/triage-sound-settings.ts";
 import { getTriageCacheStats } from "../triage/triage-cache-stats.ts";
+import { getEmailAiUsageStats } from "../platform/ai-usage-stats.ts";
 import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.ts";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.ts";
 import { clearTodoistNeedsReauth } from "../platform/provider-reauth.ts";
@@ -201,6 +202,14 @@ router.get<Record<string, never>, SettingsResponse | ErrorResponse>("/settings",
   } catch (err) {
     console.error("Error fetching EA settings:", err);
     res.status(500).json({ message: "Failed to fetch settings" });
+  }
+});
+
+router.get("/email-ai/usage", async (_req, res) => {
+  try {
+    res.json(await getEmailAiUsageStats(process.env.EA_USER_ID!));
+  } catch {
+    res.status(500).json({ message: "Failed to fetch email AI usage" });
   }
 });
 

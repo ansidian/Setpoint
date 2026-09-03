@@ -1,4 +1,5 @@
 import { planFinancialEmail } from "./financial-email-planner.ts";
+import { withAiUsageContext } from "../platform/ai-usage.ts";
 import type {
   BillCandidate,
   FinancialDocumentKind,
@@ -107,7 +108,10 @@ export async function evaluateFinancialEmail(
   input: FinancialEmailInput,
   legacyResolution: LegacyFinancialResolution | null = null,
 ): Promise<FinancialEmailEvaluation> {
-  const plan = await planFinancialEmail(userId, input);
+  const plan = await withAiUsageContext({
+    userId, origin: "evaluation", runContext: "evaluation",
+    accountId: input.sourceIdentity?.accountId, emailId: input.providerMessageId,
+  }, () => planFinancialEmail(userId, input));
   const legacy = redactedLegacyOutcome(legacyResolution);
   const expectedLegacyOperation = legacyOperation(legacy?.billType);
   return {

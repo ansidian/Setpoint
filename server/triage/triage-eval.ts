@@ -1,4 +1,6 @@
 import { readFile } from "fs/promises";
+import { randomUUID } from "node:crypto";
+import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { routeEmailForTriage } from "./triage-worker.ts";
 import type {
   TriageDb,
@@ -131,6 +133,7 @@ function expectedFromRow(row: TriageEvalRow): TriageEvalExpected | null {
 function emailFromRow(row: TriageEvalRow): TriageEmail {
   return {
     uid: row.email_id || row.uid || row.sample_id,
+    email_id: row.email_id || row.uid || row.sample_id,
     user_id: row.user_id || "triage-eval-user",
     account_id: row.account_id || "triage-eval-account",
     account_label: row.account_label || "",
@@ -349,21 +352,34 @@ export async function runTriageEval({
   fixturePath,
   useRealModels = false,
   dbClient = createNoRulesDbClient(),
-}: { fixturePath?: string; useRealModels?: boolean; dbClient?: TriageDb } = {}) {
+  accountingUserId = process.env.EA_USER_ID,
+}: { fixturePath?: string; useRealModels?: boolean; dbClient?: TriageDb; accountingUserId?: string } = {}) {
   if (!fixturePath) throw new Error("fixturePath is required");
   if (useRealModels && process.env.EA_TRIAGE_EVAL_REAL_MODELS !== "1") {
     throw new Error("Set EA_TRIAGE_EVAL_REAL_MODELS=1 to run real triage model calls");
+  }
+  if (useRealModels && !accountingUserId?.trim()) {
+    throw new Error("Set EA_USER_ID or accountingUserId to the Setpoint owner for real-model evaluation settings");
   }
 
   const fixture: unknown = JSON.parse(await readFile(fixturePath, "utf8"));
   const examples = parseLabeledTriageExamples(fixture);
   const results: TriageEvalResult[] = [];
+  const runId = randomUUID();
 
   for (const example of examples) {
-    const routed = await routeEmailForTriage(example.email, {
+    // Fixture identities are labels, not billing owners. Real runs use the
+    // configured owner for model settings; evaluation usage is not persisted.
+    const routedEmail = useRealModels
+      ? { ...example.email, user_id: accountingUserId!.trim() }
+      : example.email;
+    const routed = await withAiUsageContext({
+      userId: routedEmail.user_id, origin: "evaluation", runContext: "evaluation", runId,
+      accountId: routedEmail.account_id, emailId: routedEmail.email_id,
+    }, () => routeEmailForTriage(routedEmail, {
       dbClient,
       modelClient: useRealModels ? undefined : createMockModelClient(example),
-    });
+    }));
     const decisionMetadata = routed.decision && isRecord(routed.decision.decision_metadata)
       ? routed.decision.decision_metadata
       : {};

@@ -1,11 +1,13 @@
 import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import AiAnalyticsModal from "./AiAnalyticsModal";
+import { demoEmailAiUsageStats } from "@/demo/emailAiUsageData";
 
 const statsByPath: Record<string, unknown> = {
   "/api/alfred/usage": { queries: 5, tools: { totalCalls: 3, byTool: [], distinctTools: 0 }, byModel: {}, cacheHitRate: 0.5 },
   "/api/ea/email-search/usage": { coverage: { total_indexed: 100 }, corpusEmbeddings: {}, querySearch: { actualUsage: {} } },
   "/api/ea/triage/cache-stats": { openaiCalls: 2, byTier: { cheap: {}, strong: {} }, models: [] },
+  "/api/ea/email-ai/usage": demoEmailAiUsageStats(),
 };
 
 function response(body: unknown, status = 200): Response {

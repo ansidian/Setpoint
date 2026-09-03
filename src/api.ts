@@ -1,5 +1,6 @@
 import { isDemoMode } from "./demo/config.ts";
 import { apiFetch } from "./lib/apiFetch";
+import type { EmailAiUsageStats } from "../shared/types/ai-usage.ts";
 import type {
   AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
@@ -272,6 +273,8 @@ export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> =>
 export const requestCurrentDashboardRefresh = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
 export const getTriageCacheStats = (): Promise<TriageCacheStatsResponse> => apiFetch("/api/ea/triage/cache-stats");
+
+export const getEmailAiUsageStats = (): Promise<EmailAiUsageStats> => apiFetch("/api/ea/email-ai/usage");
 
 export const getAlfredUsageStats = (): Promise<AlfredUsageStats> => apiFetch("/api/alfred/usage");
 

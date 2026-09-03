@@ -220,7 +220,7 @@ ${JSON.stringify({
   })}`;
 
   try {
-    const verified = await provider.extract({ model, systemPrompt: prompt, content });
+    const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
     const verifiedCandidate = withoutMinimumDueSelection(verified.fields);
     const verifiedCovered = coveredCurrencyValueCount(sourceValues, verifiedCandidate);
     const improved = verifiedCovered > initialCovered && selectionIsValid(verifiedCandidate);

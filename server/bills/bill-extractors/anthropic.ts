@@ -1,6 +1,7 @@
 import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } from "../bill-semantic-prompt.ts";
 import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey } from "../../ai-credentials.ts";
+import { trackedAiProviderCall } from "../../platform/ai-usage.ts";
 import type { BillCandidate, BillExtractionProvider, BillExtractionRequest } from "../../../shared/types/bills.ts";
 import { BILL_AMOUNT_KINDS, BILL_EVENT_KINDS } from "../../../shared/types/bills.ts";
 
@@ -66,7 +67,7 @@ export function createAnthropicProvider({
   id: "anthropic",
   envVar: "ANTHROPIC_API_KEY",
 
-  async extract({ model, systemPrompt, content }: BillExtractionRequest) {
+  async extract({ model, systemPrompt, content, usagePurpose = "extraction" }: BillExtractionRequest) {
     const apiKey = await resolveApiKey("anthropic");
     if (!apiKey) {
       const err: HttpError = new Error("ANTHROPIC_API_KEY not set");
@@ -74,43 +75,47 @@ export function createAnthropicProvider({
       throw err;
     }
 
-    const apiRes = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1400,
-        system: systemPrompt,
-        tools: [TOOL],
-        tool_choice: { type: "tool", name: "submit_bill" },
-        messages: [{ role: "user", content }],
-      }),
-    }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
+    return trackedAiProviderCall({ provider: "anthropic", model, purpose: usagePurpose }, async (call) => {
+      const apiRes = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1400,
+          system: systemPrompt,
+          tools: [TOOL],
+          tool_choice: { type: "tool", name: "submit_bill" },
+          messages: [{ role: "user", content }],
+        }),
+      }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
+      call.setHttpStatus(apiRes.status);
 
-    if (!apiRes.ok) {
-      await apiRes.text();
-      console.error(`[EA] Bill extract Anthropic error (${apiRes.status})`);
-      const err: HttpError = new Error(`Anthropic API error (${apiRes.status})`);
-      err.status = 502;
-      throw err;
-    }
+      if (!apiRes.ok) {
+        await apiRes.text();
+        console.error(`[EA] Bill extract Anthropic error (${apiRes.status})`);
+        const err: HttpError = new Error(`Anthropic API error (${apiRes.status})`);
+        err.status = 502;
+        throw err;
+      }
 
-    const data = await apiRes.json() as AnthropicResponse;
-    const toolBlock = (data.content || []).find(
-      (c) => c.type === "tool_use" && c.name === "submit_bill",
-    );
-    if (!toolBlock?.input) {
-      console.error("[EA] Bill extract: no tool_use in Anthropic response");
-      const err: HttpError = new Error("Extraction failed");
-      err.status = 502;
-      throw err;
-    }
+      const data = await apiRes.json() as AnthropicResponse;
+      await call.capture(data);
+      const toolBlock = (data.content || []).find(
+        (c) => c.type === "tool_use" && c.name === "submit_bill",
+      );
+      if (!toolBlock?.input) {
+        console.error("[EA] Bill extract: no tool_use in Anthropic response");
+        const err: HttpError = new Error("Extraction failed");
+        err.status = 502;
+        throw err;
+      }
 
-    return { fields: toolBlock.input, usage: data.usage || {} };
+      return { fields: toolBlock.input, usage: data.usage || {} };
+    });
   },
   };
 }

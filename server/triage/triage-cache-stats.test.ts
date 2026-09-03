@@ -189,6 +189,9 @@ describe("getTriageCacheStats", () => {
         },
       ]);
 
+      await db.executeMultiple(readFileSync(
+        new URL("../db/migrations/057_email_ai_usage.sql", import.meta.url), "utf8",
+      ));
       const stats = await getTriageCacheStats("user-42", { dbClient: db, windowDays: 7, now: NOW });
 
       // queryCutoff = min(rolling 2026-04-30T12:00, month 2026-05-01T00:00).

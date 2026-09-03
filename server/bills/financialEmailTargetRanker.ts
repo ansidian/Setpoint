@@ -50,7 +50,7 @@ Choices:
 ${JSON.stringify(options)}`;
 
   try {
-    const selected = await provider.extract({ model, systemPrompt: prompt, content });
+    const selected = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "matching" });
     const key = typeof selected.fields.target_policy_key === "string"
       ? selected.fields.target_policy_key
       : null;

@@ -1,4 +1,5 @@
 import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
+import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { queryTransactions } from "../transactions/transactions-service.ts";
 import { readBillsMirrorRange } from "./bills-mirror-sync.ts";
 import { createBillCandidateVerificationService } from "./bill-candidate-verification-service.ts";
@@ -454,97 +455,105 @@ export function createFinancialEmailPlanner({
     userId: string,
     input: FinancialEmailInput,
   ): Promise<FinancialEmailPlan> {
-    validateInput(userId, input);
-    const resolved = await resolveCandidate(userId, input, {
-      candidateExtractor,
-      candidateVerification,
-      modelChoiceReader,
-    });
-    const policy = classifyFinancialEmail(resolved.candidate);
-    const needsActualEvidence = policy.classification.documentKind === "credit_card_statement"
-      || Boolean(policy.intended && policy.intended !== "no_write");
-    const metadata = needsActualEvidence
-      ? await metadataReader(userId).catch(() => unavailableMetadata())
-      : { ...unavailableMetadata(), syncHealth: { state: "current", lastSuccessAt: null } };
-    const metadataAvailable = metadata.syncHealth.state === "current";
-    const today = todayYmd(now());
-    const historyResult: TransactionQueryResult = needsActualEvidence && metadataAvailable
-      ? await transactionReader(userId, {
-          start: addDaysYmd(today, -365),
-          end: today,
-          direction: "all",
-          include_transfers: true,
-          limit: 1000,
-        }).catch(() => ({ error: "transaction_history_unavailable" }))
-      : { transactions: [] };
-    const historyAvailable = !historyResult.error && !historyResult.sync_state;
-    const history = historyAvailable ? historyResult.transactions || [] : [];
-    const defaultRanker: FinancialTargetBundleRanker | undefined = candidateVerification.rankEmailTargetBundles
-      ? async ({ candidate, options }) => {
-          try {
-            const choice = await modelChoiceReader(userId);
-            return await candidateVerification.rankEmailTargetBundles!({
-              email: input.email || {},
-              candidate,
-              options,
-              providerId: choice.provider,
-              model: choice.model,
-            });
-          } catch {
-            return { status: "failed", key: null, confidence: null, evidence: null };
+    return withAiUsageContext({
+      userId,
+      origin: input.source === "transaction_import" ? "transaction_import"
+        : input.source === "extract" ? "manual_extraction" : "reader_adoption",
+      accountId: input.sourceIdentity?.accountId,
+      emailId: input.providerMessageId,
+    }, async () => {
+      validateInput(userId, input);
+      const resolved = await resolveCandidate(userId, input, {
+        candidateExtractor,
+        candidateVerification,
+        modelChoiceReader,
+      });
+      const policy = classifyFinancialEmail(resolved.candidate);
+      const needsActualEvidence = policy.classification.documentKind === "credit_card_statement"
+        || Boolean(policy.intended && policy.intended !== "no_write");
+      const metadata = needsActualEvidence
+        ? await metadataReader(userId).catch(() => unavailableMetadata())
+        : { ...unavailableMetadata(), syncHealth: { state: "current", lastSuccessAt: null } };
+      const metadataAvailable = metadata.syncHealth.state === "current";
+      const today = todayYmd(now());
+      const historyResult: TransactionQueryResult = needsActualEvidence && metadataAvailable
+        ? await transactionReader(userId, {
+            start: addDaysYmd(today, -365),
+            end: today,
+            direction: "all",
+            include_transfers: true,
+            limit: 1000,
+          }).catch(() => ({ error: "transaction_history_unavailable" }))
+        : { transactions: [] };
+      const historyAvailable = !historyResult.error && !historyResult.sync_state;
+      const history = historyAvailable ? historyResult.transactions || [] : [];
+      const defaultRanker: FinancialTargetBundleRanker | undefined = candidateVerification.rankEmailTargetBundles
+        ? async ({ candidate, options }) => {
+            try {
+              const choice = await modelChoiceReader(userId);
+              return await candidateVerification.rankEmailTargetBundles!({
+                email: input.email || {},
+                candidate,
+                options,
+                providerId: choice.provider,
+                model: choice.model,
+              });
+            } catch {
+              return { status: "failed", key: null, confidence: null, evidence: null };
+            }
           }
-        }
-      : undefined;
-    const inference = await inferFinancialEmailTargets({
-      candidate: resolved.candidate,
-      classification: policy.classification,
-      intended: policy.intended,
-      metadata: metadataAvailable ? metadata : unavailableMetadata(),
-      history,
-      rankBundles: targetRanker || defaultRanker,
-    });
-    const targets = inference.targets;
-    const evidence = evidenceReasons(inference.candidate, policy, resolved.providerUnavailable);
-    const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
-    const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
-      occurrenceReader,
-      now,
-    });
-    const reconciliation = reconcileUpdateDisposition(reconciled, targets);
-    const reconciliationReview = reconciliationReasons(reconciliation)
-      .filter((item) => item.code === "reconciliation_conflict" || item.code === "reconciliation_unavailable");
-    const operation = finalOperation(policy, evidence, unresolved, reconciliation);
-    const completedPaymentReview = policy.intended === "no_write"
-      && policy.classification.documentKind !== "informational"
-      && reconciliation.status !== "already_recorded"
-      && reconciliation.status !== "already_scheduled"
-      ? [reconciliation.status === "needs_review"
-          ? reason("reconciliation_conflict", "Existing Actual activity conflicts with this payment confirmation.")
-          : reason("reconciliation_unavailable", "The completed payment could not be reconciled to Actual.")]
-      : [];
-    const reviewReasons = operation.kind === "no_write"
-      ? []
-      : policy.intended === "no_write"
-        ? [...evidence, ...completedPaymentReview]
-        : [...evidence, ...unresolved, ...reconciliationReview];
-    return {
-      version: 1,
-      identity: financialEmailIdentity(userId, input),
-      candidate: inference.candidate,
-      classification: policy.classification,
-      operation,
-      targets,
-      reconciliation,
-      reviewReasons,
-      automation: financialEmailAutomationEligibility({
-        input,
-        candidate: inference.candidate,
-        evidence,
-        targets: unresolved,
-        reconciliation,
+        : undefined;
+      const inference = await inferFinancialEmailTargets({
+        candidate: resolved.candidate,
+        classification: policy.classification,
         intended: policy.intended,
-      }),
-    };
+        metadata: metadataAvailable ? metadata : unavailableMetadata(),
+        history,
+        rankBundles: targetRanker || defaultRanker,
+      });
+      const targets = inference.targets;
+      const evidence = evidenceReasons(inference.candidate, policy, resolved.providerUnavailable);
+      const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
+      const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
+        occurrenceReader,
+        now,
+      });
+      const reconciliation = reconcileUpdateDisposition(reconciled, targets);
+      const reconciliationReview = reconciliationReasons(reconciliation)
+        .filter((item) => item.code === "reconciliation_conflict" || item.code === "reconciliation_unavailable");
+      const operation = finalOperation(policy, evidence, unresolved, reconciliation);
+      const completedPaymentReview = policy.intended === "no_write"
+        && policy.classification.documentKind !== "informational"
+        && reconciliation.status !== "already_recorded"
+        && reconciliation.status !== "already_scheduled"
+        ? [reconciliation.status === "needs_review"
+            ? reason("reconciliation_conflict", "Existing Actual activity conflicts with this payment confirmation.")
+            : reason("reconciliation_unavailable", "The completed payment could not be reconciled to Actual.")]
+        : [];
+      const reviewReasons = operation.kind === "no_write"
+        ? []
+        : policy.intended === "no_write"
+          ? [...evidence, ...completedPaymentReview]
+          : [...evidence, ...unresolved, ...reconciliationReview];
+      return {
+        version: 1,
+        identity: financialEmailIdentity(userId, input),
+        candidate: inference.candidate,
+        classification: policy.classification,
+        operation,
+        targets,
+        reconciliation,
+        reviewReasons,
+        automation: financialEmailAutomationEligibility({
+          input,
+          candidate: inference.candidate,
+          evidence,
+          targets: unresolved,
+          reconciliation,
+          intended: policy.intended,
+        }),
+      };
+    });
   };
 }
 

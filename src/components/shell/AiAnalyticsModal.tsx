@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { BarChart3 } from "lucide-react";
-import { getAlfredUsageStats, getEmailSearchStats, getTriageCacheStats } from "@/api";
+import { getAlfredUsageStats, getEmailAiUsageStats, getEmailSearchStats } from "@/api";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,9 @@ import {
 import AlfredAnalyticsSection from "./analytics/AlfredAnalyticsSection";
 import EmailSearchAnalyticsSection from "./analytics/EmailSearchAnalyticsSection";
 import TriageAnalyticsSection from "./analytics/TriageAnalyticsSection";
+import FinancialEmailAnalyticsSection from "./analytics/FinancialEmailAnalyticsSection";
 
-type AnalyticsTabKey = "alfred" | "search" | "triage";
+type AnalyticsTabKey = "alfred" | "search" | "triage" | "financial";
 
 interface AnalyticsTab {
   key: AnalyticsTabKey;
@@ -33,7 +34,8 @@ type SectionState = Partial<Record<AnalyticsTabKey, SectionSlice>>;
 const TABS: AnalyticsTab[] = [
   { key: "alfred", label: "Alfred", fetcher: getAlfredUsageStats, Section: AlfredAnalyticsSection as ComponentType<{ stats: never }> },
   { key: "search", label: "Email Search", fetcher: getEmailSearchStats, Section: EmailSearchAnalyticsSection as ComponentType<{ stats: never }> },
-  { key: "triage", label: "Triage", fetcher: getTriageCacheStats, Section: TriageAnalyticsSection as ComponentType<{ stats: never }> },
+  { key: "triage", label: "Triage", fetcher: getEmailAiUsageStats, Section: TriageAnalyticsSection as ComponentType<{ stats: never }> },
+  { key: "financial", label: "Financial email", fetcher: getEmailAiUsageStats, Section: FinancialEmailAnalyticsSection as ComponentType<{ stats: never }> },
 ];
 
 // Each section fetches independently the first time the hub opens, so a slow or
@@ -92,7 +94,7 @@ function SectionError({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="mt-2.5 rounded-md border border-[var(--sp-rose)]/30 bg-[var(--sp-rose)]/[0.10] px-2.5 py-1 text-[11px] font-medium text-[var(--sp-rose)] transition-colors duration-150 hover:bg-[var(--sp-rose)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sp-rose)]/50"
+        className="mt-2.5 min-h-11 rounded-md border border-[var(--sp-rose)]/30 bg-[var(--sp-rose)]/[0.10] px-2.5 py-1 text-[11px] font-medium text-[var(--sp-rose)] transition-[background-color,transform] duration-150 hover:bg-[var(--sp-rose)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sp-rose)]/50 motion-safe:hover:-translate-y-px motion-safe:focus-visible:-translate-y-px active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-0"
       >
         Try again
       </button>
@@ -130,7 +132,7 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
             "linear-gradient(color-mix(in srgb, var(--sp-deep) 62%, transparent), color-mix(in srgb, var(--sp-deep) 74%, transparent))",
           ].join(", "),
         }}
-        className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[var(--sp-panel)] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px]"
+        className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[var(--sp-panel)] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px] max-sm:[&>[data-slot=dialog-close]]:min-h-11 max-sm:[&>[data-slot=dialog-close]]:min-w-11 [&>[data-slot=dialog-close]]:transition-[background-color,transform] [&>[data-slot=dialog-close]]:hover:bg-white/10 [&>[data-slot=dialog-close]]:focus-visible:ring-2 [&>[data-slot=dialog-close]]:focus-visible:ring-primary/60 motion-safe:[&>[data-slot=dialog-close]]:hover:-translate-y-px motion-safe:[&>[data-slot=dialog-close]]:focus-visible:-translate-y-px [&>[data-slot=dialog-close]]:active:scale-95 motion-reduce:[&>[data-slot=dialog-close]]:transform-none motion-reduce:[&>[data-slot=dialog-close]]:transition-none"
       >
         <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
           <div className="flex items-start gap-3">
@@ -142,13 +144,13 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
                 AI analytics
               </DialogTitle>
               <DialogDescription className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/75">
-                Alfred assistant usage, email-search retrieval cost, and triage model spend.
+                Alfred, email search, triage, and financial-email model usage.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div role="tablist" aria-label="AI analytics sections" className="flex gap-1 border-b border-white/[0.06] px-4">
+        <div role="tablist" aria-label="AI analytics sections" className="flex flex-wrap gap-1 border-b border-white/[0.06] px-4">
           {TABS.map((tab) => {
             const selected = tab.key === active;
             return (
@@ -158,7 +160,7 @@ export default function AiAnalyticsModal({ open, onClose }: { open: boolean; onC
                 type="button"
                 aria-selected={selected}
                 onClick={() => setActive(tab.key)}
-                className={`-mb-px rounded-t-md border-b-2 px-3 py-2.5 text-[12px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                className={`-mb-px min-h-11 rounded-t-md border-b-2 px-2.5 py-2.5 text-[11px] font-medium transition-[color,background-color,transform] duration-150 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 motion-safe:hover:-translate-y-px motion-safe:focus-visible:-translate-y-px active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none sm:min-h-0 ${
                   selected
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"

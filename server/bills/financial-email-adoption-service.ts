@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { planFinancialEmail } from "./financial-email-planner.ts";
 import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 import { shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
@@ -167,56 +168,60 @@ export async function resolveFinancialEmailSeed(
     stagePreflight?: typeof stageFinancialEmailPreflight;
   } = {},
 ): Promise<FinancialEmailPlan> {
-  const dbClient = payload.dbClient || db;
-  const stored = await loadStoredFinancialContext(userId, payload, dbClient);
-  const stage = async (plan: FinancialEmailPlan): Promise<void> => {
-    if (!stored) return;
-    await stagePreflight(userId, {
-      accountId: stored.accountId,
+  return withAiUsageContext({
+    userId, origin: "reader_adoption", accountId: payload.accountId, emailId: payload.emailId,
+  }, async () => {
+    const dbClient = payload.dbClient || db;
+    const stored = await loadStoredFinancialContext(userId, payload, dbClient);
+    const stage = async (plan: FinancialEmailPlan): Promise<void> => {
+      if (!stored) return;
+      await stagePreflight(userId, {
+        accountId: stored.accountId,
+        emailId: stored.emailId,
+        emailSubject: String(stored.email.subject || ""),
+        emailFrom: String(stored.email.from_address || stored.email.from || ""),
+        emailBody: String(stored.email.body || ""),
+      }, plan).catch(() => undefined);
+    };
+    const missingType = stored?.plan && shouldAttemptFinancialEmailTypeVerification(stored.plan.candidate);
+    if (stored?.plan && !missingType && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {
+      await stage(stored.plan);
+      return stored.plan;
+    }
+
+    const requestEmail: BillEmailContext = {
+      ...(stored?.email || {}),
+      ...(payload.email || {}),
+      ...(payload.subject !== undefined ? { subject: payload.subject } : {}),
+      ...(payload.from !== undefined ? { from: payload.from } : {}),
+      ...(payload.body !== undefined ? { body: payload.body } : {}),
+      ...(payload.snippet !== undefined ? { snippet: payload.snippet } : {}),
+    };
+    const plan = await planner(userId, {
+      email: requestEmail,
+      candidate: stored?.candidate || payload.candidate || null,
+      source: payload.source || "triage",
+      providerMessageId: payload.providerMessageId || stored?.emailId || payload.emailId || null,
+      candidateIdentityHint: payload.candidateIdentityHint,
+      sourceIdentity: stored?.sourceIdentity || {
+        accountId: payload.accountId || null,
+        senderAddress: typeof requestEmail.from_address === "string" ? requestEmail.from_address : null,
+        senderAuthentication: "unavailable",
+      },
+    });
+    if (!stored) return plan;
+
+    const persisted = await persistPlanCompareAndSwap(userId, stored, plan, dbClient);
+    if (persisted) {
+      await stage(plan);
+      return plan;
+    }
+    const winner = await loadStoredFinancialContext(userId, {
       emailId: stored.emailId,
-      emailSubject: String(stored.email.subject || ""),
-      emailFrom: String(stored.email.from_address || stored.email.from || ""),
-      emailBody: String(stored.email.body || ""),
-    }, plan).catch(() => undefined);
-  };
-  const missingType = stored?.plan && shouldAttemptFinancialEmailTypeVerification(stored.plan.candidate);
-  if (stored?.plan && !missingType && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)) {
-    await stage(stored.plan);
-    return stored.plan;
-  }
-
-  const requestEmail: BillEmailContext = {
-    ...(stored?.email || {}),
-    ...(payload.email || {}),
-    ...(payload.subject !== undefined ? { subject: payload.subject } : {}),
-    ...(payload.from !== undefined ? { from: payload.from } : {}),
-    ...(payload.body !== undefined ? { body: payload.body } : {}),
-    ...(payload.snippet !== undefined ? { snippet: payload.snippet } : {}),
-  };
-  const plan = await planner(userId, {
-    email: requestEmail,
-    candidate: stored?.candidate || payload.candidate || null,
-    source: payload.source || "triage",
-    providerMessageId: payload.providerMessageId || stored?.emailId || payload.emailId || null,
-    candidateIdentityHint: payload.candidateIdentityHint,
-    sourceIdentity: stored?.sourceIdentity || {
-      accountId: payload.accountId || null,
-      senderAddress: typeof requestEmail.from_address === "string" ? requestEmail.from_address : null,
-      senderAuthentication: "unavailable",
-    },
+      accountId: stored.accountId,
+    }, dbClient);
+    const result = winner?.plan || plan;
+    await stage(result);
+    return result;
   });
-  if (!stored) return plan;
-
-  const persisted = await persistPlanCompareAndSwap(userId, stored, plan, dbClient);
-  if (persisted) {
-    await stage(plan);
-    return plan;
-  }
-  const winner = await loadStoredFinancialContext(userId, {
-    emailId: stored.emailId,
-    accountId: stored.accountId,
-  }, dbClient);
-  const result = winner?.plan || plan;
-  await stage(result);
-  return result;
 }

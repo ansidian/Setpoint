@@ -92,7 +92,7 @@ ${JSON.stringify({
   })}`;
 
   try {
-    const verified = await provider.extract({ model, systemPrompt: prompt, content });
+    const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
     const eventAccepted = usableEvent(verified.fields, content);
     const typeAccepted = hasStrongFinancialType(verified.fields)
       && hasVerbatimFinancialEvidence(content, verified.fields.type_evidence);

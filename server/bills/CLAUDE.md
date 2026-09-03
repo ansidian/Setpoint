@@ -9,8 +9,8 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `bill-extraction-service.ts` — owns candidate-only LLM extraction/verification for the financial-email planner
 - `bill-semantic-prompt.ts` — public bills-domain entry that owns first-pass bill-semantic extraction instructions shared by email triage and manual extraction
 - `bill-extractors/catalog.ts` — bill-extraction defaults and validation facade over the centralized AI model catalog
-- `bill-extractors/anthropic.ts` — Claude tool-use extraction call
-- `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call
+- `bill-extractors/anthropic.ts` — Claude tool-use extraction call; records provider usage before field parsing
+- `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call; records provider usage before field parsing
 - `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete multi-amount candidate coverage
 - `billEventVerifier.ts` — bounded second-pass LLM audit for uncertain events or missing payment purpose, with source-grounded type/account evidence and persisted attempt markers
 - `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of email candidates
@@ -38,6 +38,7 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 
 - Bills write through `server/actual/actual.ts`; this domain decides *what* to write, the actual domain decides *how*.
 - Extraction providers are registered in `bill-extractors/catalog.ts`; add new providers there, not inline.
+- Provider adapters record actual extraction/verification/matching attempts. Scoped AI usage context preserves the triggering origin and evaluation status through planning; deterministic repairs and cached plan reuse create no usage events.
 
 ## Related
 

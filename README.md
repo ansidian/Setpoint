@@ -121,6 +121,22 @@ extra 2 minutes before the passive email indexer and an extra 10 minutes before
 email backfill. Backfill resumes interrupted jobs by default; set
 `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` only to queue a new broad backfill.
 
+AI analytics separates the shared initial **Triage** classification from
+**Financial email** extraction, verification, and AI-assisted Actual matching.
+Migration 057 starts durable per-provider-call accounting and freezes the old
+OpenAI-only latest-row usage snapshot separately in storage; analytics displays
+only the new ledger. It does not reconstruct past financial calls or dry runs.
+The last-seven-days view includes cache reads/writes,
+estimated cost, provider-call latency, failures, and unknown/partial measurements.
+Analytics displays production usage only. Tagged evaluation calls skip usage
+recording entirely; any existing evaluation records remain excluded. Real `triage:eval` runs require
+`EA_USER_ID` (the claimed owner's ID) or the programmatic `accountingUserId` option
+to load the owner's model settings, not to persist evaluation usage.
+Recording is best-effort: outages or process crashes can leave gaps or unfinished
+outcomes. See [FLOWS.md](FLOWS.md#2a-email-ai-calls--durable-usage--analytics)
+for the accounting boundary and pricing limitations. Alfred and Email Search
+keep their existing accounting.
+
 ### Dashboard auth and passkey recovery
 
 On a fresh database, open Setpoint after startup, enter the out-of-band

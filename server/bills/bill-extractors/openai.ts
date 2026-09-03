@@ -5,6 +5,7 @@ import { BILL_SEMANTIC_IDENTITY_PROPERTIES, BILL_SEMANTIC_IDENTITY_REQUIRED } fr
 
 import { fetchWithTimeout } from "../../platform/fetch-with-timeout.ts";
 import { resolveAiApiKey } from "../../ai-credentials.ts";
+import { trackedAiProviderCall } from "../../platform/ai-usage.ts";
 import type { BillCandidate, BillExtractionProvider, BillExtractionRequest } from "../../../shared/types/bills.ts";
 import { BILL_AMOUNT_KINDS, BILL_EVENT_KINDS } from "../../../shared/types/bills.ts";
 
@@ -71,7 +72,7 @@ export function createOpenAiProvider({
   id: "openai",
   envVar: "OPENAI_API_KEY",
 
-  async extract({ model, systemPrompt, content }: BillExtractionRequest) {
+  async extract({ model, systemPrompt, content, usagePurpose = "extraction" }: BillExtractionRequest) {
     const apiKey = await resolveApiKey("openai");
     if (!apiKey) {
       const err: HttpError = new Error("OPENAI_API_KEY not set");
@@ -79,60 +80,64 @@ export function createOpenAiProvider({
       throw err;
     }
 
-    const apiRes = await fetchWithTimeout("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        instructions: systemPrompt,
-        input: content,
-        max_output_tokens: 1600,
-        reasoning: { effort: "low" },
-        text: {
-          format: {
-            type: "json_schema",
-            name: "submit_bill",
-            schema: SCHEMA,
-            strict: true,
-          },
+    return trackedAiProviderCall({ provider: "openai", model, purpose: usagePurpose }, async (call) => {
+      const apiRes = await fetchWithTimeout("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
         },
-      }),
-    }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
+        body: JSON.stringify({
+          model,
+          instructions: systemPrompt,
+          input: content,
+          max_output_tokens: 1600,
+          reasoning: { effort: "low" },
+          text: {
+            format: {
+              type: "json_schema",
+              name: "submit_bill",
+              schema: SCHEMA,
+              strict: true,
+            },
+          },
+        }),
+      }, { timeoutMs: BILL_EXTRACT_TIMEOUT_MS });
+      call.setHttpStatus(apiRes.status);
 
-    if (!apiRes.ok) {
-      await apiRes.text();
-      console.error(`[EA] Bill extract OpenAI error (${apiRes.status})`);
-      const err: HttpError = new Error(`OpenAI API error (${apiRes.status})`);
-      err.status = 502;
-      throw err;
-    }
+      if (!apiRes.ok) {
+        await apiRes.text();
+        console.error(`[EA] Bill extract OpenAI error (${apiRes.status})`);
+        const err: HttpError = new Error(`OpenAI API error (${apiRes.status})`);
+        err.status = 502;
+        throw err;
+      }
 
-    const data = await apiRes.json() as OpenAiResponse;
-    const text = extractOutputText(data);
-    if (!text) {
-      console.error("[EA] Bill extract: no output_text in OpenAI response", {
-        status: data.status,
-        incompleteReason: data.incomplete_details?.reason,
-      });
-      const err: HttpError = new Error("Extraction failed");
-      err.status = 502;
-      throw err;
-    }
+      const data = await apiRes.json() as OpenAiResponse;
+      await call.capture(data);
+      const text = extractOutputText(data);
+      if (!text) {
+        console.error("[EA] Bill extract: no output_text in OpenAI response", {
+          status: data.status,
+          incompleteReason: data.incomplete_details?.reason,
+        });
+        const err: HttpError = new Error("Extraction failed");
+        err.status = 502;
+        throw err;
+      }
 
-    let fields: BillCandidate;
-    try {
-      fields = JSON.parse(text) as BillCandidate;
-    } catch (parseErr: unknown) {
-      console.error("[EA] Bill extract: OpenAI returned an invalid structured response", parseErr instanceof Error ? parseErr.message : String(parseErr));
-      const err: HttpError = new Error("Extraction failed");
-      err.status = 502;
-      throw err;
-    }
+      let fields: BillCandidate;
+      try {
+        fields = JSON.parse(text) as BillCandidate;
+      } catch (parseErr: unknown) {
+        console.error("[EA] Bill extract: OpenAI returned an invalid structured response", parseErr instanceof Error ? parseErr.message : String(parseErr));
+        const err: HttpError = new Error("Extraction failed");
+        err.status = 502;
+        throw err;
+      }
 
-    return { fields, usage: data.usage || {} };
+      return { fields, usage: data.usage || {} };
+    });
   },
   };
 }

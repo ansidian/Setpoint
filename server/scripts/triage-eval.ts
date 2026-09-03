@@ -31,7 +31,8 @@ Default fixture:
   ${DEFAULT_FIXTURE}
 
 Default behavior uses deterministic mocked model outputs from the fixture.
-Real model calls require both --real-models and EA_TRIAGE_EVAL_REAL_MODELS=1.`;
+Real model calls require --real-models, EA_TRIAGE_EVAL_REAL_MODELS=1, and EA_USER_ID
+set to the claimed owner for model settings. Evaluation usage is not persisted.`;
 }
 
 function parseArgs(argv: string[]): TriageEvalCliOptions {

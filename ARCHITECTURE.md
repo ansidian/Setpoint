@@ -689,6 +689,9 @@ erDiagram
 |-------|------------|
 | `ea_accounts` | `001_ea_tables.sql`, `028_provider_needs_reauth.sql` |
 | `ea_actual_metadata_mirror` | `009_actual_metadata_mirror.sql` |
+| `ea_ai_usage_cutover` | `057_email_ai_usage.sql` |
+| `ea_ai_usage_events` | `057_email_ai_usage.sql` |
+| `ea_ai_usage_legacy_triage` | `057_email_ai_usage.sql` |
 | `ea_alfred_usage` | `016_alfred_usage.sql`, `019_alfred_usage_cache_creation.sql` |
 | `ea_api_tokens` | `001_ea_tables.sql` |
 | `ea_bill_occurrence_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
@@ -946,6 +949,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/onboarding/` | `server/routes/onboarding.ts` |
 | PATCH | `/api/onboarding/` | `server/routes/onboarding.ts` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.ts` |
+| GET | `/email-ai/usage` | `server/routes/settings.ts` |
 | GET | `/email-search/usage` | `server/routes/settings.ts` |
 | POST | `/preview` | `server/routes/auth-canonical-origin.ts` |
 | POST | `/recovery` | `server/routes/auth-security.ts` |

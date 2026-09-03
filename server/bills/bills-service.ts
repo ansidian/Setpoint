@@ -9,6 +9,7 @@ import {
   type ActualConnectionCandidate,
 } from "../actual/actual.ts";
 import db from "../db/connection.ts";
+import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { extractBillCandidate } from "./bill-extraction-service.ts";
 import { planFinancialEmail as planFinancialEmailCore } from "./financial-email-planner.ts";
 import {
@@ -210,19 +211,21 @@ export async function extractFinancialEmail(
   input: BillExtractionInput,
   dependencies: BillExtractionDependencies = {},
 ): Promise<FinancialEmailExtractionResponse> {
-  const extracted = await extractBillCandidate(userId, input, dependencies);
-  const plan = await planFinancialEmailCore(userId, {
-    email: { subject: input.subject, from: input.from, body: input.body },
-    candidate: extracted.candidate,
-    source: "extract",
-    sourceIdentity: { senderAuthentication: "unavailable" },
+  return withAiUsageContext({ userId, origin: "manual_extraction" }, async () => {
+    const extracted = await extractBillCandidate(userId, input, dependencies);
+    const plan = await planFinancialEmailCore(userId, {
+      email: { subject: input.subject, from: input.from, body: input.body },
+      candidate: extracted.candidate,
+      source: "extract",
+      sourceIdentity: { senderAuthentication: "unavailable" },
+    });
+    return {
+      ...plan.candidate,
+      provider: extracted.provider,
+      model: extracted.model,
+      plan,
+    };
   });
-  return {
-    ...plan.candidate,
-    provider: extracted.provider,
-    model: extracted.model,
-    plan,
-  };
 }
 
 export async function hydrateActualCache(userId: string, {
