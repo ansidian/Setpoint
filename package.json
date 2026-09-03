@@ -26,6 +26,7 @@
     "typecheck:server": "tsc -p tsconfig.server.json --pretty false",
     "typecheck:tools": "tsc -p tsconfig.tools.json --pretty false",
     "typecheck": "tsc -b --pretty false",
+    "verify": "npm run typecheck && npm run lint && npm run test:fast && npm run test:slow && npm run check:harness && npm run build",
     "check:harness": "node scripts/check-agent-harness.mts",
     "check:reachability": "node scripts/check-module-reachability.mts",
     "check:exports": "node scripts/audit-test-only-exports.mts",
@@ -132,7 +133,8 @@
     "better-sqlite3": "13.0.3"
   },
   "simple-git-hooks": {
-    "pre-commit": "node scripts/regen-architecture.mts && git add ARCHITECTURE.md"
+    "pre-commit": "node scripts/regen-architecture.mts && git add ARCHITECTURE.md",
+    "pre-push": "npm run verify"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,

@@ -31,6 +31,9 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 
 ## Mechanical Checks
 
+- `npm run verify` - required final verification before handing off code changes or pushing: full typecheck, lint, fast tests, slow integrations, harness, and production build. CI and the pre-push hook use this same command.
+- Targeted tests and browser checks are development feedback, not substitutes for final verification. Run verification after the final code edit; state explicitly if it failed or was not completed. "No new presentation tests" does not mean "skip existing tests."
+- Before pushing, verify that the checkout being tested matches the commits being pushed. The hook tests the current working tree; uncommitted fixes or pushes of another branch are not verified commit snapshots.
 - `npm run lint` - ESLint.
 - `npm run build` - production build.
 - `npm run check:harness` - agent-harness checks for the agent map, local-doc cleanup when present, and oversized components.

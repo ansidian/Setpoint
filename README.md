@@ -239,12 +239,20 @@ By default, `email_triage_mode = auto` resolves to `no_model` outside production
 ### Tests
 
 ```bash
+npm run verify     # required pre-push / CI gate: types, lint, fast + slow tests, harness, build
 npm run test:fast  # local feedback without real filesystem/libsql/Actual integrations
 npm run test:slow  # real filesystem, file-backed libsql, and Actual compatibility tests
 npm test           # complete required non-Playwright suite (fast + slow)
 ```
 
-CI requires both the fast and slow commands and reports them as separate steps.
+CI and the pre-push hook run the same `verify` command, stopping at the first
+failure. Targeted tests remain useful while editing, but are not full verification.
+The hook is installed by `npm install` / `npm ci`; after changing hook configuration
+in an existing checkout, run `npx simple-git-hooks` to refresh it. Commits keep the
+lightweight architecture-regeneration hook; full verification runs only at push.
+Push from the verified checkout without uncommitted fixes: local verification
+tests the working tree, while CI tests the pushed commit after a clean `npm ci`.
+CI also supplies its base revision for the harness's historical comparison.
 Playwright remains opt-in through the `test:e2e*` commands.
 Filesystem fixtures are contained under the `setpoint-tests` child of the OS
 temp directory. Windows-locked residue is retained for a 24-hour safety window,

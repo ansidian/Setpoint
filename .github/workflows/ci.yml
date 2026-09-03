@@ -34,22 +34,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test fast suite
-        run: npm run test:fast
-
-      - name: Test slow integrations
-        run: npm run test:slow
-
-      - name: Check agent harness
-        run: npm run check:harness
+      - name: Verify
+        run: npm run verify
         env:
           TEST_ARCHITECTURE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
-
-      - name: Build
-        run: npm run build
