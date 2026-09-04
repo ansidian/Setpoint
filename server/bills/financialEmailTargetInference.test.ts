@@ -383,7 +383,7 @@ describe("inferFinancialEmailTargets", () => {
       status: "selected" as const,
       key: options[0]!.key,
       confidence: 0.98,
-      evidence: "COSTCO",
+      evidence: "EXAMPLE MARKET",
     }));
     const result = await inferFinancialEmailTargets({
       candidate: candidate({
@@ -396,25 +396,25 @@ describe("inferFinancialEmailTargets", () => {
       classification: classification(),
       intended: "create_transaction",
       metadata: metadata({
-        accounts: [{ id: "costco-card", name: "Example Rewards Card 0004", type: "credit" }],
-        payees: [{ id: "costco", name: "Costco" }],
-        payeeMap: { costco: "Costco" },
+        accounts: [{ id: "market-card", name: "Example Rewards Card 0004", type: "credit" }],
+        payees: [{ id: "market", name: "Example Market" }],
+        payeeMap: { market: "Example Market" },
       }),
       history: [
-        transaction({ id: "costco-1", payee: "Costco", payeeId: "costco", account: "Example Rewards Card 0004", accountId: "costco-card" }),
-        transaction({ id: "costco-2", date: "2026-07-01", payee: "Costco", payeeId: "costco", account: "Example Rewards Card 0004", accountId: "costco-card" }),
+        transaction({ id: "market-1", payee: "Example Market", payeeId: "market", account: "Example Rewards Card 0004", accountId: "market-card" }),
+        transaction({ id: "market-2", date: "2026-07-01", payee: "Example Market", payeeId: "market", account: "Example Rewards Card 0004", accountId: "market-card" }),
       ],
       rankBundles,
     });
 
-    expect(result.targets.account).toMatchObject({ status: "resolved", id: "costco-card" });
+    expect(result.targets.account).toMatchObject({ status: "resolved", id: "market-card" });
     expect(result.targets.payee).toMatchObject({
       status: "resolved",
-      id: "costco",
-      label: "Costco",
+      id: "market",
+      label: "Example Market",
       provenance: [expect.objectContaining({ source: "model_ranking" })],
     });
-    expect(result.candidate).toMatchObject({ payee: "Costco", payee_id: "costco" });
+    expect(result.candidate).toMatchObject({ payee: "Example Market", payee_id: "market" });
   });
 
   it("does not offer a non-exact payee without repeated compatible history", async () => {
