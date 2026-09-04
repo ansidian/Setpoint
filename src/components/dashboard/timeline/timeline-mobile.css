@@ -25,7 +25,7 @@
 .timeline-mobile-row:active,
 .timeline-mobile-control:active {
   background: rgba(255, 255, 255, 0.065) !important;
-  transform: translateY(1px);
+  transform: scale(0.98);
 }
 
 .timeline-earlier {

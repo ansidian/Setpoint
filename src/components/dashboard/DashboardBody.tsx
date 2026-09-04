@@ -15,6 +15,7 @@ import type { ActiveSnapshotView, SnapshotItem } from "../../../shared/types/sna
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { NeedsYouBill } from "./needsYou/needsYouModel";
+import "./dashboard-interactions.css";
 
 interface DashboardBodyCalendarRange {
   ensureRange: (start: string, end: string) => Promise<Array<Partial<NormalizedCalendarEvent>>>;
@@ -212,6 +213,15 @@ function DashboardBodyInner({
   // NeedsYouBand reads liveDeadlines.upcoming (object form); `deadlines` is the
   // flattened array, so wrap it (memoized to keep the band's model cache stable).
   const bandDeadlines = useMemo(() => ({ upcoming: deadlines }), [deadlines]);
+  const [promotedDeadlineIds, setPromotedDeadlineIds] = useState<readonly string[]>([]);
+  const handlePromotedDeadlineIdsChange = useCallback((nextIds: readonly string[]) => {
+    setPromotedDeadlineIds((previousIds) => (
+      previousIds.length === nextIds.length
+      && previousIds.every((id, index) => id === nextIds[index])
+        ? previousIds
+        : [...nextIds]
+    ));
+  }, []);
   const displayEvents = liveEventsReady ? events : seededEvents;
   const eventLoadingState = liveEventsReady
     ? "ready"
@@ -275,11 +285,13 @@ function DashboardBodyInner({
       onMarkHandled={handleMarkHandled}
       onCompleteDeadline={handleCompleteDeadline}
       onOpen={handleRailJump}
+      onPromotedDeadlineIdsChange={handlePromotedDeadlineIdsChange}
     />
   );
 
   const timeline = (
     <TodayTimeline accent={accent} isMobile={isMobile} events={displayEvents} deadlines={deadlines}
+      promotedDeadlineIds={promotedDeadlineIds}
       onJump={handleRailJump} eventLoadingState={eventLoadingState}
       domainRefreshing={domainRefreshing} deadlinesLoading={calendarDeadlinesLoading}
       scrollContained={!isMobile} />

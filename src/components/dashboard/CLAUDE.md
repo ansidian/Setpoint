@@ -8,6 +8,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `DashboardShell.tsx` — orchestrates state and tab switching; supplies mobile Inbox app actions while hiding its redundant shell header; mobile Dashboard uses a compact date/title header with shared app actions; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`; routes Alfred proposal review into the typed Calendar bridge without pre-closing the panel
 - `DashboardTabPanel.tsx` — dashboard-specific tab seam combining keep-alive/freeze behavior with the responsive `tabpanel` ID and accessible name contract
 - `DashboardBody.tsx` — renders the three tiers (NeedsYouBand / TodayTimeline / ContextColumn) through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
+- `dashboard-interactions.css` — shared lift/press feedback for primary dashboard item triggers; Inbox Peek intentionally does not opt in
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.tsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
 - `KeepAliveTab.tsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
@@ -29,6 +30,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `needsYou/NeedsYouBand.tsx` — the band: a needs-you count with expandable urgent rows on mobile and priority cards on desktop; desktop switches to a wheel-scroll horizontal rail above five cards
 - `needsYou/needsYouModel.ts` — classifies deadlines/bills/emails into urgent cards plus up to two quiet upcoming backfill cards (overdue/due-today only; bills admit `days===0`)
 - `needsYou/NeedsYouCountBlock.tsx` — the leading count + breakdown block
+- `needsYou/StartHereStrip.tsx` / `needsYou/StartHereStrip.css` — compact ranked recommendation command that reuses the first urgent card and routes through its existing open behavior
 - `needsYou/PriorityCard.tsx` — a single priority card; deadline/bill bodies are click-to-open, emails open via their button
 - `needsYou/MobileNeedsYouList.tsx` / `needsYou/MobileNeedsYouList.css` — compact mobile count/breakdown and first three urgent rows, expandable to all, with separate open and completion actions
 

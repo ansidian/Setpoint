@@ -1,0 +1,27 @@
+.dashboard-item-trigger {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .dashboard-item-trigger:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.dashboard-item-trigger:focus-visible {
+  transform: translateY(-1px);
+}
+
+.dashboard-item-trigger:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-item-trigger {
+    transition: none !important;
+  }
+
+  .dashboard-item-trigger:is(:hover, :focus-visible, :active) {
+    transform: none;
+  }
+}

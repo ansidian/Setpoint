@@ -32,6 +32,7 @@ interface TodayTimelineProps {
   eventLoadingState?: string;
   domainRefreshing?: boolean;
   scrollContained?: boolean;
+  promotedDeadlineIds?: readonly string[];
 }
 
 // Module singleton — used only to derive the day-granular memo key for groups.
@@ -59,6 +60,7 @@ function TodayTimeline({
   eventLoadingState = "ready",
   domainRefreshing = false,
   scrollContained = true,
+  promotedDeadlineIds = [],
 }: TodayTimelineProps) {
   const [filters, setFilters] = useState<TimelineFilters>({ events: true, deadlines: true });
   const [now, setNow] = useState(() => Date.now());
@@ -168,6 +170,7 @@ function TodayTimeline({
                 onJump={onJump}
                 showEmptyState={filters.events || filters.deadlines}
                 emptyDescription={emptyDescription}
+                promotedDeadlineIds={promotedDeadlineIds}
               />
             ) : <TimelineDayGroup
               day={0}
@@ -179,6 +182,7 @@ function TodayTimeline({
               isMobile={isMobile}
               showEmptyState={filters.events || filters.deadlines}
               emptyDescription={emptyDescription}
+              promotedDeadlineIds={promotedDeadlineIds}
             />}
             <div
               style={{

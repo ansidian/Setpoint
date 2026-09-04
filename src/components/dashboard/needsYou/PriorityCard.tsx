@@ -104,13 +104,22 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
 
   return (
     <div
-      className={bodyClickable ? "sp-focus-ring" : undefined}
+      className={bodyClickable ? "dashboard-item-trigger sp-focus-ring" : undefined}
       style={
         !hover
           ? style
           : variant === "urgent"
-            ? { ...style, transform: "translateY(-2px)", boxShadow: "0 10px 30px rgba(0,0,0,0.35)" }
-            : { ...style, transform: "translateY(-1px)", boxShadow: "0 6px 16px rgba(0,0,0,0.25)", opacity: 1 }
+            ? {
+                ...style,
+                background: `color-mix(in srgb, ${cardTone} 11%, color-mix(in srgb, var(--sp-surface) 50%, transparent))`,
+                border: `1px solid color-mix(in srgb, ${cardTone} 34%, transparent)`,
+              }
+            : {
+                ...style,
+                background: "color-mix(in srgb, var(--sp-surface) 66%, transparent)",
+                border: "1px solid rgba(255,255,255,0.11)",
+                opacity: 1,
+              }
       }
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       onFocus={() => setHover(true)} onBlur={() => setHover(false)}

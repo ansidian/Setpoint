@@ -30,7 +30,7 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }: {
   if (isMobile) {
     return (
       <div className="mobile-coming-row">
-        <button type="button" className="mobile-coming-open" onClick={(event) => onJump?.(row, event.currentTarget)}>
+        <button type="button" className="mobile-coming-open dashboard-item-trigger" onClick={(event) => onJump?.(row, event.currentTarget)}>
           <span className="mobile-coming-title">{row.title}</span>
           <span className="mobile-coming-meta"><ItemIcon size={12} aria-hidden="true" />{row.chipLabel} · {row.meta}</span>
         </button>
@@ -41,6 +41,7 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }: {
 
   return (
     <div
+      className="dashboard-item-trigger sp-focus-ring"
       role="button"
       tabIndex={0}
       onClick={(e) => onJump?.(row, e.currentTarget)}
@@ -51,7 +52,7 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }: {
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
         padding: "9px 0",
         borderBottom: isLast ? "none" : "1px solid rgba(255,255,255,0.04)",
-        cursor: "pointer", transition: "background 150ms",
+        cursor: "pointer", transition: "background 150ms ease, transform 150ms cubic-bezier(0.22,1,0.36,1)",
         background: rowHover ? "rgba(255,255,255,0.02)" : "transparent",
       }}
     >

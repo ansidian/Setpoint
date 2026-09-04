@@ -4,13 +4,14 @@ import { partitionTodayEvents } from "./timeline-helpers";
 import type { DashboardTimelineItem } from "./timeline-helpers";
 import type { TimelineRowJumpPayload } from "./TimelineRow";
 
-export default function MobileTodayTimeline({ items, now, accent, onJump, showEmptyState, emptyDescription }: {
+export default function MobileTodayTimeline({ items, now, accent, onJump, showEmptyState, emptyDescription, promotedDeadlineIds = [] }: {
   items: DashboardTimelineItem[];
   now: number;
   accent: string;
   onJump?: (payload: TimelineRowJumpPayload, anchor: HTMLElement) => void;
   showEmptyState: boolean;
   emptyDescription: string;
+  promotedDeadlineIds?: readonly string[];
 }) {
   const { earlier, remaining } = partitionTodayEvents(items, now);
 
@@ -31,6 +32,7 @@ export default function MobileTodayTimeline({ items, now, accent, onJump, showEm
             accent={accent}
             onJump={onJump}
             isMobile
+            promotedDeadlineIds={promotedDeadlineIds}
           />
         </details>
       )}
@@ -45,6 +47,7 @@ export default function MobileTodayTimeline({ items, now, accent, onJump, showEm
           isMobile
           showEmptyState={showEmptyState}
           emptyDescription={emptyDescription}
+          promotedDeadlineIds={promotedDeadlineIds}
         />
       )}
     </>

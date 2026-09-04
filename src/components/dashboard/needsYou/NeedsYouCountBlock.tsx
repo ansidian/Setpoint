@@ -14,7 +14,7 @@ export function NeedsYouCountBlock({ countN, countColor, breakdown = [], isMobil
   return (
     <div style={isMobile
       ? { width: "100%", flex: "none", display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.07)" }
-      : { width: 190, flex: "none", display: "flex", flexDirection: "column", justifyContent: "center", paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+      : { width: 190, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "var(--sp-rose)" }}>
         <StatusDot tone="var(--sp-rose)" state="glow" />
         Needs you now

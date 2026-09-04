@@ -3,6 +3,7 @@ import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock
 import type { NeedsYouBandProps } from "./NeedsYouBand";
 import type { NeedsYouBreakdownSegment } from "./NeedsYouCountBlock";
 import type { NeedsYouCard } from "./needsYouModel";
+import { StartHereStrip } from "./StartHereStrip";
 import "./MobileNeedsYouList.css";
 
 const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
@@ -18,13 +19,17 @@ interface MobileNeedsYouListProps {
   onMarkHandled: (card: NeedsYouCard) => void;
   onComplete: (card: NeedsYouCard) => void;
   onJump: NeedsYouBandProps["onOpen"];
+  recommendation: NeedsYouCard | null;
+  onStartHere: (card: NeedsYouCard, anchor: HTMLButtonElement) => void;
 }
 
-export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown, actionError, onOpen, onMarkHandled, onComplete, onJump }: MobileNeedsYouListProps) {
+export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown, actionError, onOpen, onMarkHandled, onComplete, onJump, recommendation, onStartHere }: MobileNeedsYouListProps) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const headingId = useId();
-  const visibleCards = expanded ? urgentCards : urgentCards.slice(0, COLLAPSED_COUNT);
+  const queuedCards = recommendation ? urgentCards.filter((card) => card.id !== recommendation.id) : urgentCards;
+  const collapsedQueueCount = recommendation ? COLLAPSED_COUNT - 1 : COLLAPSED_COUNT;
+  const visibleCards = expanded ? queuedCards : queuedCards.slice(0, collapsedQueueCount);
 
   return (
     <section className="mobile-needs-you" data-testid="needs-you-band" aria-labelledby={headingId}>
@@ -48,6 +53,10 @@ export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown,
         </header>
       )}
       {actionError && <p className="mobile-needs-you__error" role="alert">{actionError}</p>}
+      {recommendation && (
+        <StartHereStrip card={recommendation} isMobile onActivate={onStartHere}
+          onMarkHandled={onMarkHandled} onComplete={onComplete} />
+      )}
       {countN > 0 && (
         <ul id={listId} className="mobile-needs-you__list">
           {visibleCards.map((card) => {
@@ -58,7 +67,7 @@ export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown,
               <li key={card.id} className="mobile-needs-you__row">
                 <button
                   type="button"
-                  className="mobile-needs-you__open sp-focus-ring"
+                  className="mobile-needs-you__open dashboard-item-trigger sp-focus-ring"
                   aria-label={`Open ${card.source.toLowerCase()}: ${card.title}`}
                   onClick={(event) => {
                     if (card.email) onOpen(card);
@@ -90,7 +99,7 @@ export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown,
           })}
         </ul>
       )}
-      {urgentCards.length > COLLAPSED_COUNT && (
+      {queuedCards.length > collapsedQueueCount && (
         <button
           type="button"
           className="mobile-needs-you__disclosure sp-focus-ring"

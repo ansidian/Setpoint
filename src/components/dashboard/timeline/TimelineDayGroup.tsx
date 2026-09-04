@@ -24,6 +24,7 @@ export default function TimelineDayGroup({
   items,
   now,
   onJump,
+  promotedDeadlineIds = [],
   showEmptyState = true,
   emptyDescription = "No events or deadlines scheduled.",
 }: {
@@ -35,6 +36,7 @@ export default function TimelineDayGroup({
   items: DashboardTimelineItem[];
   now: number;
   onJump?: (payload: TimelineRowJumpPayload, anchor: HTMLElement) => void;
+  promotedDeadlineIds?: readonly string[];
   showEmptyState?: boolean;
   emptyDescription?: string;
 }) {
@@ -138,6 +140,7 @@ export default function TimelineDayGroup({
               overdueText={rowStates[index]!.overdueText}
               reminderSummary={rowStates[index]!.reminderSummary}
               liveMarker={rowStates[index]!.liveMarker}
+              isNeedsYouReference={item.kind === "deadline" && promotedDeadlineIds.includes(String(item.data?.id))}
             />
           </Fragment>
         ))}

@@ -1,8 +1,9 @@
-import { memo, useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel, collectNeedsYouCandidateIds } from "./needsYouModel";
 import { NeedsYouCountBlock } from "./NeedsYouCountBlock";
 import { PriorityCard } from "./PriorityCard";
+import { StartHereStrip } from "./StartHereStrip";
 import { MobileNeedsYouList } from "./MobileNeedsYouList";
 import type { NeedsYouBill, NeedsYouCard, NeedsYouDeadlines, NeedsYouLanes } from "./needsYouModel";
 
@@ -16,11 +17,12 @@ export interface NeedsYouBandProps {
   onMarkHandled?: (snapshotItemId: number) => Promise<unknown> | unknown;
   onCompleteDeadline?: (id: string | number, data: unknown) => Promise<unknown> | unknown;
   onOpen?: (payload: { kind?: string | null; id?: string | number | null; date?: string | null; data?: unknown }, anchor?: HTMLElement) => void;
+  onPromotedDeadlineIdsChange?: (ids: readonly string[]) => void;
 }
 
 const ACTION_ERROR_TEXT = "Couldn't mark done — try again";
 
-function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThreshold = 5, isMobile = false, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen }: NeedsYouBandProps) {
+function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThreshold = 5, isMobile = false, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen, onPromotedDeadlineIdsChange }: NeedsYouBandProps) {
   const [opened, setOpened] = useState<string[]>([]);
   const [handled, setHandled] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -29,7 +31,19 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
     () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, opened, handled, maxCards: Infinity }),
     [snapshotLanes, liveDeadlines, liveBills, opened, handled],
   );
-  const useDesktopRail = model.urgentCards.length + model.backfillCards.length > railThreshold;
+  const recommendation = model.urgentCards[0] ?? null;
+  const queuedUrgentCards = recommendation ? model.urgentCards.slice(1) : model.urgentCards;
+  const useDesktopRail = queuedUrgentCards.length + model.backfillCards.length > railThreshold;
+  const promotedDeadlineIds = useMemo(
+    () => model.urgentCards.flatMap((card) => (
+      card.jumpKind === "deadline" && card.jumpId != null ? [String(card.jumpId)] : []
+    )),
+    [model.urgentCards],
+  );
+
+  useLayoutEffect(() => {
+    onPromotedDeadlineIdsChange?.(promotedDeadlineIds);
+  }, [onPromotedDeadlineIdsChange, promotedDeadlineIds]);
 
   // Stale-id pruning (ARCH-06): `opened`/`handled` only ever grow via the
   // handlers below, so a re-surfaced item (server sends the same id again
@@ -53,6 +67,15 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
     setOpened((prev) => (prev.includes(card.id) ? prev : [...prev, card.id]));
     if (card.uid) onOpenEmail?.(card.uid);
   }, [onOpenEmail]);
+
+  const handleStartHere = useCallback((card: NeedsYouCard, anchor: HTMLButtonElement) => {
+    if (card.email) {
+      handleOpen(card);
+      return;
+    }
+
+    onOpen?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, anchor);
+  }, [handleOpen, onOpen]);
 
   const handleMarkHandled = useCallback(async (card: NeedsYouCard) => {
     setHandled((prev) => (prev.includes(card.id) ? prev : [...prev, card.id]));
@@ -140,6 +163,8 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
         onMarkHandled={handleMarkHandled}
         onComplete={handleComplete}
         onJump={onOpen}
+        recommendation={recommendation}
+        onStartHere={handleStartHere}
       />
     );
   }
@@ -155,7 +180,11 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
         {header}
         {errorLine}
       </div>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch" }}>
+        {recommendation && (
+          <StartHereStrip card={recommendation} onActivate={handleStartHere}
+            onMarkHandled={handleMarkHandled} onComplete={handleComplete} />
+        )}
         <div
           ref={desktopCardRowRef}
           data-testid="needs-you-card-row"
@@ -168,7 +197,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
             padding: useDesktopRail ? "3px 1px 6px" : 0,
           }}
         >
-          {model.urgentCards.map((card) => (
+          {queuedUrgentCards.map((card) => (
             <div key={card.id} style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
               <PriorityCard card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
             </div>
