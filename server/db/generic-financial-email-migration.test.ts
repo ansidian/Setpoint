@@ -79,6 +79,22 @@ describe("generic financial email import migration", () => {
       .toEqual({ automatic_safe: 1, automation_mode: "automatic" });
     await expect(db.execute("UPDATE ea_transaction_import_items SET amount_cents = 1200 WHERE id = 'generic-item'")).rejects.toThrow();
     await expect(db.execute("UPDATE ea_transaction_import_items SET currency = 'EUR' WHERE id = 'generic-item'")).rejects.toThrow();
+    const beforeIncomeAutomation = await db.execute("SELECT * FROM ea_transaction_import_items ORDER BY id");
+    await db.executeMultiple(readFileSync(join(migrationsDir, "058_generic_financial_email_income_automation.sql"), "utf8"));
+    expect((await db.execute("SELECT * FROM ea_transaction_import_items ORDER BY id")).rows).toEqual(beforeIncomeAutomation.rows);
+    await db.execute(`INSERT INTO ea_transaction_import_items
+                        (id, run_id, user_id, gmail_account_id, gmail_message_id, email_uid,
+                         candidate_key, source, parser_version, external_id, imported_id, transaction_date,
+                         amount_cents, currency, payee, actual_account_id, automation_mode, automatic_safe,
+                         status, created_at, updated_at, financial_email_plan_json)
+                      VALUES
+                        ('income-item', 'generic-run', 'owner-1', 'gmail-1', 'message-income', 'uid-income',
+                         'financial-email:v1:income', 'generic', 'financial-email-semantics-v2', 'reward-1',
+                         'financial-email:v1:income', '2026-09-03', 2225, 'USD', 'Cashback', 'savings',
+                         'automatic', 1, 'ready', 1, 1,
+                         '{"automation":{"operationClass":"income"}}')`);
+    await expect(db.execute("UPDATE ea_transaction_import_items SET amount_cents = -2225 WHERE id = 'income-item'"))
+      .rejects.toThrow();
     expect((await db.execute("PRAGMA foreign_key_check")).rows).toEqual([]);
     db.close();
   });

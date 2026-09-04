@@ -31,7 +31,7 @@ import {
 
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
-const TRIAGE_PROMPT_CACHE_VERSION = "v9";
+const TRIAGE_PROMPT_CACHE_VERSION = "v11";
 // LLM completions legitimately run long; this deadline is a wedge-breaker
 // (guards against a hung connection), not a latency budget.
 const TRIAGE_MODEL_TIMEOUT_MS = 120_000;
@@ -89,9 +89,9 @@ const TRIAGE_TOOL = {
               required: ["kind", "value", "evidence", "confidence"],
             },
           },
-          event_kind: { type: "string", enum: BILL_EVENT_KINDS },
-          event_confidence: { type: "number" },
-          event_evidence: { type: "string" },
+          event_kind: { type: ["string", "null"], enum: [...BILL_EVENT_KINDS, null] },
+          event_confidence: { type: ["number", "null"] },
+          event_evidence: { type: ["string", "null"] },
           account_last4: { type: ["string", "null"], pattern: "^[0-9]{4}$" },
           account_last4_evidence: { type: ["string", "null"] },
           account_last4_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
@@ -102,7 +102,25 @@ const TRIAGE_TOOL = {
           currency: { type: ["string", "null"] },
           requires_confirmation: { type: "boolean" },
         },
-        required: BILL_SEMANTIC_IDENTITY_REQUIRED,
+        required: [
+          ...BILL_SEMANTIC_IDENTITY_REQUIRED,
+          "payee_hint",
+          "amount",
+          "amount_kind",
+          "amount_candidates",
+          "event_kind",
+          "event_confidence",
+          "event_evidence",
+          "account_last4",
+          "account_last4_evidence",
+          "account_last4_confidence",
+          "target_policy_key",
+          "target_confidence",
+          "target_evidence",
+          "due_date",
+          "currency",
+          "requires_confirmation",
+        ],
       },
     },
     required: [

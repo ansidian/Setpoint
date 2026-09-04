@@ -71,6 +71,43 @@ describe("generic financial email preflight staging", () => {
     });
   });
 
+  it("projects income with positive cents and provider identity", () => {
+    const plan = exactPlan();
+    plan.candidate = {
+      ...plan.candidate,
+      payee: "Cashback",
+      type: "income",
+      event_kind: "reward",
+      provider_reference: "TEST-SC-0001",
+      transaction_import: {
+        source: "generic",
+        parserVersion: "financial-email-semantics-v2",
+        executionOwner: "planner",
+        externalId: "TEST-SC-0001",
+        importedId: "financial-email:provider:v1:cashback",
+        amountCents: 1234,
+        currency: "USD",
+      },
+    };
+    plan.classification = { documentKind: "income", eventKind: "reward", confidence: 1, reasons: [] };
+    plan.targets.payee = { kind: "payee", status: "resolved", id: "cashback", label: "Cashback", provenance: [] };
+    plan.targets.category = { kind: "category", status: "resolved", id: "cashback-category", label: "Cashback", provenance: [] };
+    plan.automation.operationClass = "income";
+
+    expect(financialEmailPreflightItem(
+      "user-1", "run-1", "item-1",
+      { accountId: "gmail-work", emailId: "message-1" },
+      plan,
+    )).toMatchObject({
+      externalId: "TEST-SC-0001",
+      importedId: "financial-email:provider:v1:cashback",
+      amountCents: 1234,
+      payee: "Cashback",
+      notes: "Provider reference: TEST-SC-0001",
+      actualCategoryId: "cashback-category",
+    });
+  });
+
   it("refuses staging when any locked prerequisite gate has not passed", () => {
     const plan = exactPlan();
     plan.automation.gates = plan.automation.gates.map((gate) => (

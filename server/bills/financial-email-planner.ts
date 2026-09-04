@@ -8,9 +8,13 @@ import {
   loadBillExtractChoice,
 } from "./bill-extraction-service.ts";
 import { shouldVerifyBillEvent } from "./billEventVerifier.ts";
+import { shouldVerifyBillAmounts } from "./billAmountVerifier.ts";
+import { trimBillBody } from "./bill-extract.ts";
+import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 import { financialEmailAutomationEligibility } from "./financialEmailAutomationPolicy.ts";
-import { financialEmailIdentity } from "./financialEmailIdentity.ts";
+import { financialEmailIdentity, withFinancialEmailProviderTransactionIdentity } from "./financialEmailIdentity.ts";
+import { applyOwnerFinancialEmailPolicy } from "./financialEmailRewardEvidence.ts";
 import {
   classifyFinancialEmail,
   shouldAttemptFinancialEmailTypeVerification,
@@ -80,12 +84,16 @@ export interface FinancialEmailPlannerDependencies {
 
 const RECONCILABLE_EVENTS = new Set<BillEventKind>([
   "purchase",
+  "refund",
+  "reward",
   "statement_issued",
   "payment_due",
   "payment_scheduled",
   "card_payment_completed",
   "payment_completed",
   "bill_issued",
+  "account_transfer_pending",
+  "account_transfer_completed",
 ]);
 
 function reason(
@@ -415,7 +423,14 @@ async function resolveCandidate(
   }
   const candidate = { ...input.candidate };
   const missingType = shouldAttemptFinancialEmailTypeVerification(candidate);
-  if (!missingType && (candidate.semantic_enrichment?.status === "complete" || !shouldVerifyBillEvent(candidate))) {
+  const content = trimBillBody({
+    subject: String(input.email?.subject || ""),
+    from: String(input.email?.from || input.email?.from_address || ""),
+    body: String(input.email?.body || input.email?.body_snippet || ""),
+  });
+  const needsEvidenceRepair = shouldVerifyBillEvent(candidate)
+    || shouldVerifyBillAmounts(content, candidate);
+  if (!missingType && !needsEvidenceRepair) {
     return { candidate, providerUnavailable: false };
   }
   try {
@@ -472,7 +487,9 @@ export function createFinancialEmailPlanner({
         candidateVerification,
         modelChoiceReader,
       });
-      const policy = classifyFinancialEmail(resolved.candidate);
+      const policyCandidate = applyOwnerFinancialEmailPolicy(resolved.candidate);
+      const candidate = withFinancialEmailProviderTransactionIdentity(userId, input, policyCandidate);
+      const policy = classifyFinancialEmail(candidate);
       const needsActualEvidence = policy.classification.documentKind === "credit_card_statement"
         || Boolean(policy.intended && policy.intended !== "no_write");
       const metadata = needsActualEvidence
@@ -508,7 +525,7 @@ export function createFinancialEmailPlanner({
           }
         : undefined;
       const inference = await inferFinancialEmailTargets({
-        candidate: resolved.candidate,
+        candidate,
         classification: policy.classification,
         intended: policy.intended,
         metadata: metadataAvailable ? metadata : unavailableMetadata(),
@@ -541,6 +558,7 @@ export function createFinancialEmailPlanner({
           : [...evidence, ...unresolved, ...reconciliationReview];
       return {
         version: 1,
+        candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
         targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
         identity: financialEmailIdentity(userId, input),
         candidate: inference.candidate,

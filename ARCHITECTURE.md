@@ -738,7 +738,7 @@ erDiagram
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
-| `ea_transaction_import_items_before_automation` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql`, `056_generic_financial_email_automation.sql` |
+| `ea_transaction_import_items_before_income_automation` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql`, `056_generic_financial_email_automation.sql`, `058_generic_financial_email_income_automation.sql` |
 | `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
 | `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |

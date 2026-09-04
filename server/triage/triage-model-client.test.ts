@@ -143,7 +143,7 @@ describe("triage model client", () => {
     expect((options!.headers as Record<string, string>).Authorization).toBe("Bearer test-openai-key");
     const body = JSON.parse(String(options!.body));
     expect(body.model).toBe("gpt-5.4-nano");
-    expect(body.prompt_cache_key).toBe("ea-email-triage:v9:cheap:gpt-5.4-nano");
+    expect(body.prompt_cache_key).toBe("ea-email-triage:v11:cheap:gpt-5.4-nano");
     expect(body.tool_choice).toEqual({ type: "function", name: "submit_email_triage" });
     expect(body.tools[0].parameters.properties.bill_candidate.properties.amount_kind.enum)
       .toContain("minimum_due");
@@ -153,6 +153,12 @@ describe("triage model client", () => {
       .toContain("null");
     expect(body.tools[0].parameters.properties.bill_candidate.properties.account_last4_confidence.maximum)
       .toBe(1);
+    expect(body.tools[0].parameters.properties.bill_candidate.properties.event_kind.type)
+      .toContain("null");
+    expect(body.tools[0].parameters.properties.bill_candidate.properties.from_account_hint.type)
+      .toContain("null");
+    expect(body.tools[0].parameters.properties.bill_candidate.required.sort())
+      .toEqual(Object.keys(body.tools[0].parameters.properties.bill_candidate.properties).sort());
     expect(result).toMatchObject({
       provider: "openai",
       tier: "cheap",
@@ -309,7 +315,7 @@ describe("triage model client", () => {
     const firstBody = JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body));
     // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const retryBody = JSON.parse(String(fetchImpl.mock.calls[1]![1]!.body));
-    expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v9:cheap:gpt-5.4-nano");
+    expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v11:cheap:gpt-5.4-nano");
     expect(firstBody.prompt_cache_retention).toBe("24h");
     expect(retryBody.store).toBe(false);
     expect(retryBody.prompt_cache_key).toBeUndefined();

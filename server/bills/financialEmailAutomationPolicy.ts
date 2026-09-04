@@ -10,7 +10,7 @@ import type {
   FinancialPlanReasonCode,
 } from "../../shared/types/bills.ts";
 
-const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "transfer_schedule"]);
+const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "income", "transfer_schedule"]);
 
 export function financialEmailAutomationEnabled(operation: FinancialAutomationOperationClass): boolean {
   return ENABLED_OPERATION_CLASSES.has(operation);

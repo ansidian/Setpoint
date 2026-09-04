@@ -30,6 +30,7 @@ import {
   financialScheduleEvidence as scheduleEvidence,
 } from "./financialEmailAccountEvidence.ts";
 import { discoverCorroboratedMerchantHistory } from "./financialEmailMerchantCandidates.ts";
+import { cashbackSettlementAccountEvidence, isCashbackIncome, semanticRewardCategoryEvidence, semanticRewardPayeeEvidence } from "./financialEmailRewardEvidence.ts";
 interface HistoryBundle {
   key: string;
   account: TargetValue;
@@ -38,13 +39,12 @@ interface HistoryBundle {
   count: number;
   latestDate: string;
 }
-
 export type FinancialTargetBundleRanker = (input: {
   candidate: BillCandidate;
   options: FinancialTargetRankingOption[];
 }) => Promise<FinancialTargetRankingResult>;
 
-export const FINANCIAL_TARGET_INFERENCE_VERSION = 2;
+export const FINANCIAL_TARGET_INFERENCE_VERSION = 4;
 
 export interface FinancialTargetInferenceResult {
   candidate: BillCandidate;
@@ -475,8 +475,13 @@ export async function inferFinancialEmailTargets({
   if (intended === "create_schedule") targets.schedule = target("schedule", "unresolved");
 
   const exactImport = exactImportedTargetEvidence(candidate, history, metadata);
-  const exactRows = matchingHistory(candidate, classification, history);
-  const suffixAccounts = suffixAccountEvidence(candidate, metadata, false);
+  const exactRows = isCashbackIncome(candidate)
+    ? history.filter((transaction) => transaction.direction === "income" && ["cashback", "cash back"].includes(normalizeIdentity(transaction.payee)))
+    : matchingHistory(candidate, classification, history);
+  const settlementAccounts = cashbackSettlementAccountEvidence(candidate, metadata, history);
+  const suffixAccounts = settlementAccounts.length && candidate.settlement_kind !== "statement_credit"
+    ? []
+    : suffixAccountEvidence(candidate, metadata, false);
   const constrainedAccountId = suffixAccounts.length === 1 ? suffixAccounts[0]!.id : null;
   const semanticRows = exactRows.length ? [] : discoverCorroboratedMerchantHistory({
     candidate,
@@ -535,6 +540,7 @@ export async function inferFinancialEmailTargets({
 
   const accountSelection = selectEvidence("account", [
     ...exactImport.account,
+    ...settlementAccounts,
     ...suffixAccounts,
     ...scheduleEvidence(schedules, metadata, "account"),
     ...accountHistoryEvidence,
@@ -546,6 +552,7 @@ export async function inferFinancialEmailTargets({
     ...exactImport.payee,
     ...scheduleEvidence(schedules, metadata, "payee"),
     ...exactPayeeEvidence(candidate, metadata),
+    ...semanticRewardPayeeEvidence(candidate, metadata),
     ...payeeHistoryEvidence,
   ]);
   targets.payee = payeeSelection.target;
@@ -564,6 +571,7 @@ export async function inferFinancialEmailTargets({
       conditionalRows.length,
     );
     categoryEvidence.push(...exactImport.category);
+    categoryEvidence.push(...semanticRewardCategoryEvidence(candidate, metadata));
     if (bundleEvidence?.category?.provenance.source === "model_ranking") {
       categoryEvidence.push(bundleEvidence.category);
     }

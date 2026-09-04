@@ -79,7 +79,7 @@ describe("Actual grouped transaction import", () => {
     // test-architecture: allow-boundary-interaction -- Actual import is the external financial boundary; signed cents are the public direction contract and must reach the SDK unchanged.
     expect(api.importTransactions).toHaveBeenCalledWith(
       "account-1",
-      [expect.objectContaining({ imported_id: "financial-email:v1:refund", amount: 2599 })],
+      [expect.objectContaining({ imported_id: "financial-email:v1:refund", amount: 2599, cleared: false })],
       { dryRun: true },
     );
   });

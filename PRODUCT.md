@@ -22,7 +22,7 @@ Success means the owner can trust Setpoint as the first place to look. Important
 
 Setpoint is a private, single-owner operating workspace rather than a general-purpose productivity app or multi-tenant dashboard. Its defining mechanism is a continuously refreshed operational model assembled from the owner's existing provider systems: live feeds, local indexes and mirrors, triage, reminders, and action surfaces are coordinated in one shell instead of maintained as separate manual lists.
 
-AI assists with retrieval, triage, extraction, and planning, but it does not become an independent authority. Provider-backed data remains the source of truth, and consequential actions stay explicit and reviewable.
+AI assists with retrieval, triage, extraction, and planning, but it does not become an independent authority. Provider-backed data remains the source of truth. Owner-authorized financial automation must be grounded in source evidence, reconciled against Actual, idempotent, and auditable; ambiguous exceptions stay explicit and reviewable.
 
 ## Operating Context
 

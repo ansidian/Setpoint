@@ -5,7 +5,7 @@ import type {
   BillAmountVerification,
 } from "../../shared/types/bills.ts";
 
-const MIN_VERIFY_VALUES = 2;
+const MIN_VERIFY_VALUES = 1;
 const MAX_VERIFY_VALUES = 8;
 
 export interface BillAmountVerificationResult {

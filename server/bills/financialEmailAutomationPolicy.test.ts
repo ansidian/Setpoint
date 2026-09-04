@@ -45,12 +45,12 @@ describe("financial email automation policy", () => {
     expect(result.reasons).toContain(reason);
   });
 
-  it("classifies positive-direction candidates as income while retaining the observe gate", () => {
-    const result = eligibility({}, { type: "income", event_kind: "refund" });
+  it("enables owner-authorized income after every runtime gate passes", () => {
+    const result = eligibility({}, { type: "income", event_kind: "refund", currency: "USD" });
     expect(result).toMatchObject({
-      eligible: false,
+      eligible: true,
       operationClass: "income",
-      rollout: "observe_only",
+      rollout: "enabled",
     });
   });
 

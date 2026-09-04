@@ -52,7 +52,8 @@ export function financialEmailPreflightItem(
     from: context.emailFrom || "", subject: context.emailSubject || "", text: context.emailBody,
   })) return null;
   const transfer = plan.automation.operationClass === "transfer_schedule" && plan.operation.intended === "create_transfer_schedule";
-  if ((!transfer && plan.automation.operationClass !== "one_time_expense")
+  const transaction = ["one_time_expense", "income"].includes(plan.automation.operationClass);
+  if ((!transfer && !transaction)
     || plan.operation.kind === "no_write"
     || plan.reconciliation.disposition === "no_write"
     || plan.identity.status !== "resolved"
@@ -62,23 +63,31 @@ export function financialEmailPreflightItem(
   const reconciliationGate = plan.automation.gates.find((gate) => gate.gate === "reconciliation");
   if (reconciliationGate?.status === "fail") return null;
   const amount = selectSemanticBillAmount(plan.candidate)?.amount;
-  const amountCents = Number.isFinite(amount) ? -Math.round(Number(amount) * 100) : 0;
+  const amountCents = Number.isFinite(amount)
+    ? (plan.automation.operationClass === "income" ? 1 : -1) * Math.round(Number(amount) * 100)
+    : 0;
   const date = plan.candidate.due_date;
   const target = transfer ? plan.targets.fromAccount : plan.targets.account;
   const accountId = target.status === "resolved" ? target.id : null;
-  const payee = transfer ? plan.candidate.schedule_name || `${plan.targets.toAccount.label || "Credit card"} Payment` : plan.candidate.payee || plan.targets.payee.label;
-  const executionId = transfer ? transferPaymentIdentity(userId, plan) : plan.identity.key;
+  const payee = transfer ? plan.candidate.schedule_name || `${plan.targets.toAccount.label || "Credit card"} Payment` : plan.targets.payee.label || plan.candidate.payee;
+  const providerIdentity = plan.candidate.transaction_import?.importedId || null;
+  const executionId = transfer ? transferPaymentIdentity(userId, plan) : providerIdentity || plan.identity.key;
   if (!executionId) return null;
-  if (amountCents >= 0 || !date || !accountId || !payee) return null;
+  if (!amountCents || !date || !accountId || !payee) return null;
   const categoryId = plan.targets.category.status === "resolved" ? plan.targets.category.id ?? null : null;
+  const providerReference = String(plan.candidate.provider_reference || "").trim();
+  const notes = [
+    String(plan.candidate.notes || "").trim(),
+    providerReference ? `Provider reference: ${providerReference}` : "",
+  ].filter(Boolean).join(" | ").slice(0, 2_000);
   const financialPlan = redactTransactionImportPlan({
     ...plan,
     candidate: {
       ...plan.candidate,
       transaction_import: {
         source: "generic",
-        parserVersion: "financial-email-plan-v1",
-        externalId: executionId,
+        parserVersion: "financial-email-semantics-v2",
+        externalId: plan.candidate.transaction_import?.externalId || executionId,
         importedId: executionId,
         amountCents,
         currency: "USD",
@@ -96,14 +105,14 @@ export function financialEmailPreflightItem(
     internetMessageId: null,
     candidateKey: plan.identity.key,
     source: "generic",
-    parserVersion: "financial-email-plan-v1",
-    externalId: executionId,
+    parserVersion: "financial-email-semantics-v2",
+    externalId: plan.candidate.transaction_import?.externalId || executionId,
     importedId: executionId,
     date,
     amountCents,
     currency: "USD",
     payee,
-    notes: String(plan.candidate.notes || "").slice(0, 2_000),
+    notes,
     actualAccountId: accountId,
     actualCategoryId: categoryId,
     automationMode: plan.automation.rollout === "enabled"
@@ -124,7 +133,9 @@ export async function stageFinancialEmailPreflight(
   store: TransactionImportStore = transactionImportStore,
 ): Promise<{ staged: boolean; runId: string | null }> {
   if (!plan.identity.key) return { staged: false, runId: null };
-  const executionId = plan.automation.operationClass === "transfer_schedule" ? transferPaymentIdentity(userId, plan) : plan.identity.key;
+  const executionId = plan.automation.operationClass === "transfer_schedule"
+    ? transferPaymentIdentity(userId, plan)
+    : plan.candidate.transaction_import?.importedId || plan.identity.key;
   if (!executionId) return { staged: false, runId: null };
   const runId = stableId("financial-email-run", executionId);
   const item = financialEmailPreflightItem(

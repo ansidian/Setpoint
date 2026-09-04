@@ -173,6 +173,119 @@ describe("inferFinancialEmailTargets", () => {
     expect(result.targets.payee).toMatchObject({ status: "resolved", id: "acme" });
   });
 
+  it("maps grounded cash-back rewards to a unique Cashback payee", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({
+        payee: "Chase Ultimate Rewards",
+        event_kind: "reward",
+        event_confidence: 0.99,
+        event_evidence: "$60.00 cash back",
+      }),
+      classification: { ...classification("income"), eventKind: "reward" },
+      intended: "create_transaction",
+      metadata: metadata({
+        payees: [{ id: "cashback", name: "Cashback" }],
+        payeeMap: { cashback: "Cashback" },
+      }),
+    });
+
+    expect(result.targets.payee).toMatchObject({
+      status: "resolved",
+      id: "cashback",
+      label: "Cashback",
+      provenance: [expect.objectContaining({ reason: "semantic_reward_payee" })],
+    });
+  });
+
+  it("keeps a cash-back reward unresolved when Cashback payees are ambiguous", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({ event_kind: "reward", event_evidence: "$60.00 cash back" }),
+      classification: { ...classification("income"), eventKind: "reward" },
+      intended: "create_transaction",
+      metadata: metadata({
+        payees: [
+          { id: "cashback-1", name: "Cashback" },
+          { id: "cashback-2", name: "Cash Back" },
+        ],
+        payeeMap: { "cashback-1": "Cashback", "cashback-2": "Cash Back" },
+      }),
+    });
+
+    expect(result.targets.payee.status).toBe("unresolved");
+  });
+
+  it("routes a statement-credit reward to the source card", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({
+        payee: "Chase Ultimate Rewards",
+        event_kind: "reward",
+        event_confidence: 0.99,
+        event_evidence: "Cash amount $19.32",
+        settlement_kind: "statement_credit",
+        settlement_confidence: 0.99,
+        settlement_evidence: "Order number TEST-SC-0001",
+        account_last4: "0002",
+        account_last4_confidence: 0.99,
+        account_last4_evidence: "Account ending in 0002",
+      }),
+      classification: { ...classification("income"), eventKind: "reward" },
+      intended: "create_transaction",
+      metadata: metadata({
+        accounts: [
+          { id: "savings", name: "Example Savings (0001)", type: "savings" },
+          { id: "chase", name: "Example Rewards Card (0002)", type: "credit" },
+        ],
+        payees: [{ id: "cashback", name: "Cashback" }],
+        payeeMap: { cashback: "Cashback" },
+        categories: [{ group_name: "Income", categories: [{ id: "cashback-category", name: "Cashback" }] }],
+      }),
+    });
+
+    expect(result.targets).toMatchObject({
+      account: { status: "resolved", id: "chase" },
+      payee: { status: "resolved", id: "cashback" },
+      category: { status: "resolved", id: "cashback-category" },
+    });
+  });
+
+  it("routes a bank-deposit reward to stable Cashback bank history instead of the source card", async () => {
+    const result = await inferFinancialEmailTargets({
+      candidate: candidate({
+        payee: "Chase Ultimate Rewards",
+        event_kind: "reward",
+        event_confidence: 0.99,
+        event_evidence: "Cash amount $60.00",
+        settlement_kind: "bank_deposit",
+        settlement_confidence: 0.99,
+        settlement_evidence: "Order number TEST-BD-0001",
+        account_last4: "0003",
+        account_last4_confidence: 0.99,
+        account_last4_evidence: "Account ending in 0003",
+      }),
+      classification: { ...classification("income"), eventKind: "reward" },
+      intended: "create_transaction",
+      metadata: metadata({
+        accounts: [
+          { id: "savings", name: "Example Savings (0001)", type: "savings" },
+          { id: "prime", name: "Example Travel Card (0003)", type: "credit" },
+        ],
+        payees: [{ id: "cashback", name: "Cashback" }],
+        payeeMap: { cashback: "Cashback" },
+        categories: [{ group_name: "Income", categories: [{ id: "cashback-category", name: "Cashback" }] }],
+      }),
+      history: [
+        transaction({ id: "cashback-1", direction: "income", payee: "Cashback", payeeId: "cashback", category: "Cashback", categoryId: "cashback-category", account: "Example Savings (0001)", accountId: "savings" }),
+        transaction({ id: "cashback-2", date: "2026-07-01", direction: "income", payee: "Cashback", payeeId: "cashback", category: "Cashback", categoryId: "cashback-category", account: "Example Savings (0001)", accountId: "savings" }),
+      ],
+    });
+
+    expect(result.targets.account).toMatchObject({
+      status: "resolved",
+      id: "savings",
+      provenance: [expect.objectContaining({ reason: "stable_cashback_bank_destination" })],
+    });
+  });
+
   it("does not treat partially identified history as fully consistent", async () => {
     const result = await inferFinancialEmailTargets({
       candidate: candidate({ payee: "Merchant Without Metadata" }),

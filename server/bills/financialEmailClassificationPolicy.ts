@@ -3,6 +3,7 @@ import type {
   FinancialEmailClassification,
   FinancialIntendedOperationKind,
 } from "../../shared/types/bills.ts";
+import { FINANCIAL_SETTLEMENT_KINDS } from "../../shared/types/bills.ts";
 
 export interface FinancialEmailPolicyResult {
   classification: FinancialEmailClassification;
@@ -36,6 +37,36 @@ export function validateFinancialSemanticIdentity(candidate: BillCandidate, cont
       && hasVerbatimFinancialEvidence(content, candidate.account_hint))) {
     normalized.account_hint = null;
     normalized.account_hint_confidence = null;
+  }
+  for (const [hintKey, confidenceKey] of [
+    ["from_account_hint", "from_account_hint_confidence"],
+    ["to_account_hint", "to_account_hint_confidence"],
+  ] as const) {
+    if ((candidate[hintKey] != null || candidate[confidenceKey] != null)
+      && !(Number(candidate[confidenceKey]) >= 0.8
+        && Number(candidate[confidenceKey]) <= 1
+        && hasVerbatimFinancialEvidence(content, candidate[hintKey]))) {
+      normalized[hintKey] = null;
+      normalized[confidenceKey] = null;
+    }
+  }
+  if ((candidate.settlement_kind != null || candidate.settlement_confidence != null || candidate.settlement_evidence != null)
+    && !(Number(candidate.settlement_confidence) >= 0.8
+      && Number(candidate.settlement_confidence) <= 1
+      && FINANCIAL_SETTLEMENT_KINDS.some((kind) => kind === candidate.settlement_kind)
+      && hasVerbatimFinancialEvidence(content, candidate.settlement_evidence))) {
+    normalized.settlement_kind = null;
+    normalized.settlement_confidence = null;
+    normalized.settlement_evidence = null;
+  }
+  if ((candidate.provider_reference != null || candidate.provider_reference_confidence != null || candidate.provider_reference_evidence != null)
+    && !(Number(candidate.provider_reference_confidence) >= 0.8
+      && Number(candidate.provider_reference_confidence) <= 1
+      && hasVerbatimFinancialEvidence(content, candidate.provider_reference)
+      && hasVerbatimFinancialEvidence(content, candidate.provider_reference_evidence))) {
+    normalized.provider_reference = null;
+    normalized.provider_reference_confidence = null;
+    normalized.provider_reference_evidence = null;
   }
   return normalized;
 }
@@ -124,6 +155,14 @@ export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmail
         classification: { ...base, documentKind: "informational", reasons: ["informational_event"] },
         intended: "no_write",
       };
+    case "account_transfer_pending":
+    case "account_transfer_completed":
+      return candidate.type === "income"
+        ? { classification: { ...base, documentKind: "income", reasons: [] }, intended: "create_transaction" }
+        : {
+            classification: { ...base, documentKind: "informational", reasons: ["informational_event"] },
+            intended: "no_write",
+          };
     case "other":
     default:
       return {

@@ -4,6 +4,7 @@ import { planFinancialEmail } from "./financial-email-planner.ts";
 import { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 import { shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
 import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
+import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 import type { InStatement } from "@libsql/client";
 import type {
@@ -78,6 +79,27 @@ function shouldRefreshTargetInference(plan: FinancialEmailPlan): boolean {
     && plan.operation.intended === "create_transaction"
     && plan.targets.payee?.status === "unresolved"
     && Boolean(plan.candidate?.payee || plan.candidate?.payee_hint || plan.candidate?.payee_label);
+}
+
+const SEMANTIC_REFRESH_REASON_CODES = new Set([
+  "semantic_event_missing",
+  "semantic_event_ambiguous",
+  "canonical_amount_missing",
+  "due_date_missing",
+  "due_date_invalid",
+  "account_target_unresolved",
+  "payee_target_unresolved",
+  "category_target_unresolved",
+  "from_account_target_unresolved",
+  "to_account_target_unresolved",
+  "schedule_target_unresolved",
+]);
+
+function shouldRefreshCandidateSemantics(plan: FinancialEmailPlan): boolean {
+  return plan.candidateSemanticsVersion !== FINANCIAL_CANDIDATE_SEMANTICS_VERSION
+    && ((plan.operation.kind === "review"
+      && (plan.reviewReasons || []).some((reason) => SEMANTIC_REFRESH_REASON_CODES.has(reason.code)))
+      || ["account_transfer_pending", "account_transfer_completed", "reward"].includes(String(plan.candidate.event_kind || "")));
 }
 
 async function loadStoredFinancialContext(
@@ -192,9 +214,11 @@ export async function resolveFinancialEmailSeed(
       }, plan).catch(() => undefined);
     };
     const missingType = stored?.plan && shouldAttemptFinancialEmailTypeVerification(stored.plan.candidate);
+    const refreshCandidateSemantics = Boolean(stored?.plan && shouldRefreshCandidateSemantics(stored.plan));
     if (
       stored?.plan
       && !missingType
+      && !refreshCandidateSemantics
       && !shouldRefreshAuthentication(stored.plan, stored.sourceIdentity)
       && !shouldRefreshTargetInference(stored.plan)
     ) {
@@ -212,7 +236,7 @@ export async function resolveFinancialEmailSeed(
     };
     const plan = await planner(userId, {
       email: requestEmail,
-      candidate: stored?.candidate || payload.candidate || null,
+      candidate: refreshCandidateSemantics ? null : stored?.candidate || payload.candidate || null,
       source: payload.source || "triage",
       providerMessageId: payload.providerMessageId || stored?.emailId || payload.emailId || null,
       candidateIdentityHint: payload.candidateIdentityHint,
@@ -223,6 +247,11 @@ export async function resolveFinancialEmailSeed(
       },
     });
     if (!stored) return plan;
+    if (refreshCandidateSemantics
+      && plan.reviewReasons.some((reason) => reason.code === "provider_unavailable")) {
+      await stage(stored.plan || plan);
+      return stored.plan || plan;
+    }
 
     const persisted = await persistPlanCompareAndSwap(userId, stored, plan, dbClient);
     if (persisted) {

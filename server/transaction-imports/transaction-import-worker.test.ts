@@ -24,7 +24,7 @@ describe("transaction import worker", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql"]) {
+    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)
@@ -144,7 +144,20 @@ describe("transaction import worker", () => {
     plan.automation.reasons = ["actual_preflight_not_run"];
     return plan;
   }
-
+  function enabledIncomePlan(): FinancialEmailPlan {
+    const plan = enabledGenericPlan();
+    plan.candidate = {
+      ...plan.candidate, payee: "Cashback", amount: 22.25, type: "income", event_kind: "reward",
+      transaction_import: {
+        source: "generic", parserVersion: "financial-email-semantics-v2", executionOwner: "planner",
+        externalId: "reward-1", importedId: "financial-email:provider:v1:reward-1",
+        amountCents: 2225, currency: "USD",
+      },
+    };
+    plan.classification = { documentKind: "income", eventKind: "reward", confidence: 1, reasons: [] }; plan.automation.operationClass = "income";
+    plan.targets.payee = { kind: "payee", status: "resolved", id: "cashback", label: "Cashback", provenance: [] }; plan.targets.category = { kind: "category", status: "resolved", id: "cashback-category", label: "Cashback", provenance: [] };
+    return plan;
+  }
   async function stageGeneric(store: ReturnType<typeof setup>["store"], plan = enabledGenericPlan()) {
     const result = await stageFinancialEmailPreflight("owner-1", {
       accountId: "gmail-1", emailId: "generic-email", emailSubject: "Receipt",
@@ -152,8 +165,6 @@ describe("transaction import worker", () => {
     expect(result.staged).toBe(true);
     return result.runId!;
   }
-
-
   it("automatically previews and commits an enabled generic expense exactly once", async () => {
     const { store } = setup();
     const runId = await stageGeneric(store);
@@ -184,6 +195,29 @@ describe("transaction import worker", () => {
       accountId: "gmail-1", emailId: "generic-email",
     }, enabledGenericPlan(), store)).toEqual({ staged: false, runId });
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
+  });
+
+  it("automatically previews and commits enabled income with positive cents", async () => {
+    const { store } = setup();
+    const runId = await stageGeneric(store, enabledIncomePlan());
+    const ledger = new Map<string, number>();
+    const worker = createTransactionImportWorker({
+      store, dbClient: db, createId,
+      importGroups: async (_userId, groups, dryRun) => {
+        if (!dryRun) for (const transaction of groups.flatMap((group) => group.transactions)) {
+          ledger.set(transaction.importedId, transaction.amountCents);
+        }
+        return actualResult(groups, dryRun);
+      },
+      invalidateAfterCommit: async () => undefined,
+    });
+    await worker.processNextItemBatch();
+    expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({
+      status: "ready", amountCents: 2225, automaticSafe: true,
+      financialPlan: { automation: { operationClass: "income", eligible: true } },
+    });
+    await worker.processNextItemBatch();
+    expect([...ledger.entries()]).toEqual([["financial-email:provider:v1:reward-1", 2225]]);
   });
 
   it.each([

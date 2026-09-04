@@ -104,7 +104,7 @@ export async function extractBillCandidate(
   ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
   - category_code: closest category's code (c1, c2, ...) if confident, else null
   - category_name: the category's display name (copied from the list)
-  - to_account_code: ONLY for type=transfer, code (a1, a2, ...) of the credit card being paid. Use an unambiguous card product identity or explicit last-4 digits; a card-network name alone is insufficient. Null if unsure.${catList.length ? `\n\nCategories: ${catList.join(", ")}` : ""}${acctList.length ? `\n\nAccounts: ${acctList.join(", ")}` : ""}`;
+  - to_account_code: ONLY for a credit-card repayment event with type=transfer, code (a1, a2, ...) of the credit card being paid. Never set it for account_transfer_pending or account_transfer_completed. Use an unambiguous card product identity or explicit last-4 digits; a card-network name alone is insufficient. Null if unsure.${catList.length ? `\n\nCategories: ${catList.join(", ")}` : ""}${acctList.length ? `\n\nAccounts: ${acctList.join(", ")}` : ""}`;
 
     const { provider: providerId, model } = await loadBillExtractChoice(userId, { dbClient });
     const provider = providers[providerId];
@@ -165,6 +165,16 @@ export async function extractBillCandidate(
       ...(fields.type_evidence ? { type_evidence: fields.type_evidence } : {}),
       ...(fields.account_hint ? { account_hint: fields.account_hint } : {}),
       ...(fields.account_hint_confidence != null ? { account_hint_confidence: fields.account_hint_confidence } : {}),
+      ...(fields.from_account_hint ? { from_account_hint: fields.from_account_hint } : {}),
+      ...(fields.from_account_hint_confidence != null ? { from_account_hint_confidence: fields.from_account_hint_confidence } : {}),
+      ...(fields.to_account_hint ? { to_account_hint: fields.to_account_hint } : {}),
+      ...(fields.to_account_hint_confidence != null ? { to_account_hint_confidence: fields.to_account_hint_confidence } : {}),
+      ...(fields.settlement_kind ? { settlement_kind: fields.settlement_kind } : {}),
+      ...(fields.settlement_confidence != null ? { settlement_confidence: fields.settlement_confidence } : {}),
+      ...(fields.settlement_evidence ? { settlement_evidence: fields.settlement_evidence } : {}),
+      ...(fields.provider_reference ? { provider_reference: fields.provider_reference } : {}),
+      ...(fields.provider_reference_confidence != null ? { provider_reference_confidence: fields.provider_reference_confidence } : {}),
+      ...(fields.provider_reference_evidence ? { provider_reference_evidence: fields.provider_reference_evidence } : {}),
       category_id: typeof fields.category_code === "string" ? catCodeToId.get(fields.category_code) || null : null,
       category_name: typeof fields.category_name === "string" ? fields.category_name : null,
       to_account_id: typeof fields.to_account_code === "string" ? acctCodeToId.get(fields.to_account_code) || null : null,

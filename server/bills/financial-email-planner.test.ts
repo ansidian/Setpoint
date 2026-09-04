@@ -20,6 +20,7 @@ function candidate(
     event_kind,
     event_confidence: 0.99,
     event_evidence: `${event_kind} evidence`,
+    event_verification: { status: "kept_initial", provider: "openai", model: "fixture" },
     due_date: "2026-09-10",
     semantic_enrichment: { status: "complete", provider: "openai", model: "fixture" },
     ...overrides,

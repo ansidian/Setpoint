@@ -83,9 +83,30 @@ describe("semantic bill amount verifier", () => {
     ]);
     expect(shouldVerifyBillAmounts("Only $40.00", {
       amount: 40,
-      amount_kind: "minimum_due",
-      amount_candidates: [{ kind: "minimum_due", value: 40 }],
+      amount_kind: "transaction_amount",
+      amount_candidates: [{ kind: "transaction_amount", value: 40 }],
     })).toBe(false);
+  });
+
+  it("audits one visible currency value when the first pass omitted it", async () => {
+    const provider = providerWith({
+      amount: 19.32,
+      amount_kind: "transaction_amount",
+      amount_candidates: [{ kind: "transaction_amount", value: 19.32 }],
+    });
+    const result = await verifyBillAmounts({
+      content: "You redeemed $19.32 cash back.",
+      candidate: { event_kind: "reward", amount: null, amount_kind: null, amount_candidates: [] },
+      provider,
+      providerId: "openai",
+      model: "test-model",
+    });
+
+    expect(result.candidate).toMatchObject({
+      amount: 19.32,
+      amount_kind: "transaction_amount",
+      amount_verification: { status: "corrected", source_value_count: 1 },
+    });
   });
 
   it("accepts a verifier that recovers a missing statement balance", async () => {

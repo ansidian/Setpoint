@@ -19,13 +19,14 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
 - `financial-email-observe-report.ts` — bounded, read-only aggregation of persisted planner outcomes by automation operation class; never executes writes
 - `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
-- `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; one-time expenses and transfer schedules are enabled; income and utility schedules remain observe-only
+- `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; one-time expenses, income transactions, and transfer schedules are enabled; utility schedules remain observe-only
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
 - `financialEmailAccountEvidence.ts` — exact card-product identity, constrained existing-account ranking, and signed schedule topology for transfer targets; never guesses a funding account
 - `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
 - `financialEmailMerchantCandidates.ts` — bounded generic merchant similarity retrieval over real Actual payees plus repeated direction/account-compatible history; discovery never selects a target
+- `financialEmailRewardEvidence.ts` — owner-approved Cashback interpretation plus evidence-gated payee/category and settlement-account discovery; ambiguous Actual evidence remains unresolved
 - `financialEmailTargetRanker.ts` — constrained external-provider adapter that can select only supplied opaque history-bundle keys with high-confidence verbatim evidence
 - `billSemanticAmountPolicy.ts` — canonical semantic amount selection for the planner; minimum due is never operational
 - `statementActualStatusModel.ts` — strict pure matcher for statement candidates against Actual schedules, occurrences, and exact transactions

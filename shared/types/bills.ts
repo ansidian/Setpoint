@@ -29,6 +29,8 @@ export const BILL_EVENT_KINDS = [
   "statement_issued",
   "payment_due",
   "payment_scheduled",
+  "account_transfer_pending",
+  "account_transfer_completed",
   "card_payment_completed",
   "payment_completed",
   "payment_cancelled",
@@ -40,6 +42,12 @@ export const BILL_EVENT_KINDS = [
   "other",
 ] as const;
 export type BillEventKind = typeof BILL_EVENT_KINDS[number];
+export const FINANCIAL_SETTLEMENT_KINDS = [
+  "statement_credit",
+  "bank_deposit",
+  "balance_to_bank",
+] as const;
+export type FinancialSettlementKind = typeof FINANCIAL_SETTLEMENT_KINDS[number];
 export const BILL_AMOUNT_KINDS = [
   "statement_balance",
   "minimum_due",
@@ -129,6 +137,20 @@ export interface BillCandidate {
   /** Verbatim card/account product name from the email, never an Actual identity. */
   account_hint?: string | null;
   account_hint_confidence?: number | null;
+  /** Verbatim source account description for a non-card account transfer. */
+  from_account_hint?: string | null;
+  from_account_hint_confidence?: number | null;
+  /** Verbatim destination account description for a non-card account transfer. */
+  to_account_hint?: string | null;
+  to_account_hint_confidence?: number | null;
+  /** How an income or movement settles in the owner's ledger. */
+  settlement_kind?: FinancialSettlementKind | null;
+  settlement_confidence?: number | null;
+  settlement_evidence?: string | null;
+  /** Provider-issued transaction/order reference used to converge lifecycle emails. */
+  provider_reference?: string | null;
+  provider_reference_confidence?: number | null;
+  provider_reference_evidence?: string | null;
   notes?: string | null;
   category_id?: string | null;
   account_id?: string | null;
@@ -331,6 +353,7 @@ export type FinancialAutomationOperationClass =
 
 export interface FinancialEmailPlan {
   version: 1;
+  candidateSemanticsVersion?: number;
   targetInferenceVersion?: number;
   transferExecution?: { budgetId: string; attemptedAt?: string };
   identity: FinancialEmailIdentity;

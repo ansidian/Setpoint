@@ -6,6 +6,8 @@ import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills
 function reviewPlan(candidate: BillCandidate): FinancialEmailPlan {
   return {
     version: 1,
+    candidateSemanticsVersion: 2,
+    targetInferenceVersion: 4,
     identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
     candidate: { ...candidate, payee: "Costco" },
     classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 0.99, reasons: [] },
@@ -105,6 +107,7 @@ describe("resolveFinancialEmailSeed", () => {
       event_evidence: "Merchant ACME STORE #104",
     };
     const stale = reviewPlan(candidate);
+    stale.targetInferenceVersion = 2;
     stale.candidate = candidate;
     stale.targets.payee = { kind: "payee", status: "unresolved", provenance: [] };
     stale.operation = { intended: "create_transaction", kind: "review", reasons: ["payee_target_unresolved"] };
@@ -115,7 +118,7 @@ describe("resolveFinancialEmailSeed", () => {
             WHERE user_id = ? AND account_id = ? AND email_id = ?`,
       args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
     });
-    const refreshed = { ...reviewPlan(candidate), targetInferenceVersion: 2 };
+    const refreshed = reviewPlan(candidate);
     const planner = vi.fn(async () => refreshed);
 
     const first = await resolveFinancialEmailSeed(
@@ -132,6 +135,60 @@ describe("resolveFinancialEmailSeed", () => {
     expect(first).toEqual(refreshed);
     expect(second).toEqual(refreshed);
     // test-architecture: allow-boundary-interaction -- the planner is the outbound AI/Actual read boundary; one-time persisted upgrade behavior cannot be proven from the equal plan value alone.
+    expect(planner).toHaveBeenCalledTimes(1);
+    await dbClient.close();
+  });
+
+  it("re-extracts a stale blocked candidate once under the current semantic contract", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Your transfer request is processing",
+      body_snippet: "$22.25 to EXAMPLE BANK x-0001",
+      body_text: "Your $22.25 transfer request is processing from PayPal balance to EXAMPLE BANK x-0001.",
+      from_name: "PayPal",
+      from_address: "service@paypal.com",
+    });
+    const candidate = {
+      amount: 22.25,
+      event_kind: "payment_scheduled" as const,
+      event_confidence: 0.99,
+      event_evidence: "transfer request is processing",
+      type: "transfer",
+    };
+    const stale = reviewPlan(candidate);
+    delete stale.candidateSemanticsVersion;
+    stale.candidate = candidate;
+    stale.operation = { intended: "create_transfer_schedule", kind: "review", reasons: ["from_account_target_unresolved"] };
+    stale.reviewReasons = [{ code: "from_account_target_unresolved", message: "Choose a funding account.", field: "from_account", blocking: true }];
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET bill_candidate_json = ?, financial_email_plan_json = ?
+            WHERE user_id = ? AND account_id = ? AND email_id = ?`,
+      args: [JSON.stringify(candidate), JSON.stringify(stale), "user-1", "gmail-work", "msg-1"],
+    });
+    const refreshed = reviewPlan({
+      ...candidate,
+      event_kind: "account_transfer_pending" as BillCandidate["event_kind"],
+    });
+    const planner = vi.fn(async (_userId: string, input: { candidate?: BillCandidate | null }) => {
+      expect(input.candidate).toBeNull();
+      return refreshed;
+    });
+
+    const first = await resolveFinancialEmailSeed(
+      "user-1",
+      { emailId: "msg-1", accountId: "gmail-work", dbClient },
+      { planner: planner as never },
+    );
+    const second = await resolveFinancialEmailSeed(
+      "user-1",
+      { emailId: "msg-1", accountId: "gmail-work", dbClient },
+      { planner: planner as never },
+    );
+
+    expect(first).toEqual(refreshed);
+    expect(second).toEqual(refreshed);
+    // test-architecture: allow-boundary-interaction -- the planner is the outbound AI/Actual boundary; one-time persisted semantic adoption is observable only by proving the second read avoided that boundary.
     expect(planner).toHaveBeenCalledTimes(1);
     await dbClient.close();
   });
