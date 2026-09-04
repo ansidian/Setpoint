@@ -722,7 +722,7 @@ erDiagram
 | `ea_news_sources` | `026_news.sql`, `029_news_retry_after.sql` |
 | `ea_news_topics` | `026_news.sql`, `027_news_mute_terms.sql` |
 | `ea_onboarding_progress` | `037_onboarding_progress.sql` |
-| `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql` |
+| `ea_owner` | `030_owner_bootstrap.sql`, `031_auth_recovery.sql`, `038_auth_security_generation.sql`, `061_owner_password_login_throttle.sql` |
 | `ea_owner_recovery_codes` | `031_auth_recovery.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql`, `038_auth_security_generation.sql` |

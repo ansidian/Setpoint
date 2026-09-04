@@ -7,6 +7,7 @@ const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENT_AUTH_MAX_AGE_MS = 10 * 60 * 1000;
 export const PASSWORD_STEP_UP_WINDOW_MS = 15 * 60 * 1000;
 export const PASSWORD_STEP_UP_MAX_FAILURES = 5;
+// Stored hashes are never bearer credentials, including previously double-hashed rows.
 const SESSION_TOKEN_PREFIX = "sha256:";
 
 export type SessionAuthMethod = "legacy" | "password" | "passkey" | "password_plus_passkey" | "recovery";
@@ -71,9 +72,10 @@ export async function validateBearer(raw: string | null | undefined): Promise<Ap
 }
 
 export async function deleteSession(token: string) {
+  if (!token || token.startsWith(SESSION_TOKEN_PREFIX)) return;
   await db.execute({
-    sql: "DELETE FROM ea_sessions WHERE token IN (?, ?)",
-    args: [token, hashSessionToken(token)],
+    sql: "DELETE FROM ea_sessions WHERE token = ?",
+    args: [hashSessionToken(token)],
   });
 }
 
@@ -138,11 +140,11 @@ export async function getSessionSecurityContext(
   token: string | null | undefined,
   dbClient: Pick<Client, "execute"> = db,
 ): Promise<SessionSecurityContext | null> {
-  if (!token) return null;
+  if (!token || token.startsWith(SESSION_TOKEN_PREFIX)) return null;
   const hashedToken = hashSessionToken(token);
   const nowMs = Date.now();
 
-  const selectSession = async (storedToken: string) => dbClient.execute({
+  const result = await dbClient.execute({
     sql: `SELECT s.expires_at, s.authenticated_at, s.password_authenticated_at,
                  s.security_generation, s.auth_method
             FROM ea_sessions s
@@ -150,26 +152,14 @@ export async function getSessionSecurityContext(
               ON o.singleton_id = 1
              AND o.security_generation = s.security_generation
            WHERE s.token = ?`,
-    args: [storedToken],
+    args: [hashedToken],
   });
 
-  let result = await selectSession(hashedToken);
-  let storedToken = hashedToken;
-  if (!result.rows.length) {
-    result = await selectSession(token);
-    storedToken = token;
-  }
   const context = mapSessionContext(result.rows[0] as Record<string, unknown> | undefined);
   if (!context) return null;
   if (nowMs > context.expiresAt) {
-    await dbClient.execute({ sql: "DELETE FROM ea_sessions WHERE token = ?", args: [storedToken] });
+    await dbClient.execute({ sql: "DELETE FROM ea_sessions WHERE token = ?", args: [hashedToken] });
     return null;
-  }
-  if (storedToken === token) {
-    await dbClient.execute({
-      sql: "UPDATE ea_sessions SET token = ? WHERE token = ?",
-      args: [hashedToken, token],
-    }).catch((err: unknown) => console.error("[EA] session hash migration failed:", errorMessage(err)));
   }
   return context;
 }
@@ -197,7 +187,7 @@ export async function markSessionPasswordAuthenticated(
   token: string | null | undefined,
   authenticatedAt = Date.now(),
 ): Promise<boolean> {
-  if (!token) return false;
+  if (!token || token.startsWith(SESSION_TOKEN_PREFIX)) return false;
   const result = await db.execute({
     sql: `UPDATE ea_sessions
              SET authenticated_at = ?,
@@ -206,11 +196,11 @@ export async function markSessionPasswordAuthenticated(
                  step_up_failure_count = 0,
                  step_up_blocked_until = 0,
                  step_up_window_started_at = 0
-           WHERE token IN (?, ?)
+           WHERE token = ?
              AND security_generation = (
                SELECT security_generation FROM ea_owner WHERE singleton_id = 1
              )`,
-    args: [authenticatedAt, authenticatedAt, hashSessionToken(token), token],
+    args: [authenticatedAt, authenticatedAt, hashSessionToken(token)],
   });
   return result.rowsAffected > 0;
 }
@@ -224,15 +214,15 @@ export async function getPasswordStepUpThrottle(
   token: string | null | undefined,
   now = Date.now(),
 ): Promise<PasswordStepUpThrottle | null> {
-  if (!token) return null;
+  if (!token || token.startsWith(SESSION_TOKEN_PREFIX)) return null;
   const result = await db.execute({
     sql: `SELECT s.step_up_failure_count, s.step_up_blocked_until, s.step_up_window_started_at
             FROM ea_sessions s
             JOIN ea_owner o
               ON o.singleton_id = 1
              AND o.security_generation = s.security_generation
-           WHERE s.token IN (?, ?)`,
-    args: [hashSessionToken(token), token],
+           WHERE s.token = ?`,
+    args: [hashSessionToken(token)],
   });
   const row = result.rows[0];
   if (!row) return null;
@@ -245,8 +235,8 @@ export async function getPasswordStepUpThrottle(
                SET step_up_failure_count = 0,
                    step_up_blocked_until = 0,
                    step_up_window_started_at = 0
-             WHERE token IN (?, ?)`,
-      args: [hashSessionToken(token), token],
+             WHERE token = ?`,
+      args: [hashSessionToken(token)],
     });
     return { failureCount: 0, blockedUntil: 0 };
   }
@@ -260,7 +250,7 @@ export async function recordPasswordStepUpFailure(
   token: string | null | undefined,
   now = Date.now(),
 ): Promise<PasswordStepUpThrottle | null> {
-  if (!token) return null;
+  if (!token || token.startsWith(SESSION_TOKEN_PREFIX)) return null;
   const windowCutoff = now - PASSWORD_STEP_UP_WINDOW_MS;
   const blockedUntil = now + PASSWORD_STEP_UP_WINDOW_MS;
   const result = await db.execute({
@@ -280,7 +270,7 @@ export async function recordPasswordStepUpFailure(
                    END) >= ? THEN ?
                    ELSE 0
                  END
-           WHERE token IN (?, ?)
+           WHERE token = ?
              AND security_generation = (
                SELECT security_generation FROM ea_owner WHERE singleton_id = 1
              )
@@ -293,7 +283,6 @@ export async function recordPasswordStepUpFailure(
       PASSWORD_STEP_UP_MAX_FAILURES,
       blockedUntil,
       hashSessionToken(token),
-      token,
     ],
   });
   const row = result.rows[0];

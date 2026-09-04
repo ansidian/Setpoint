@@ -19,6 +19,7 @@ const migrationFiles = [
   "034_google_oauth_binding.sql",
   "038_auth_security_generation.sql",
   "039_password_step_up_window.sql",
+  "060_revoke_legacy_sessions.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>

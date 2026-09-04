@@ -64,6 +64,48 @@ describe("authentication security migrations", () => {
     expect((await db.execute("SELECT * FROM ea_webauthn_challenges")).rows).toEqual([]);
   });
 
+  it("revokes replayable sessions and ceremonies while preserving owner credentials", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "012_passkey_auth.sql",
+      "030_owner_bootstrap.sql",
+      "031_auth_recovery.sql",
+      "038_auth_security_generation.sql",
+      "039_password_step_up_window.sql",
+    ]);
+    await db.execute(`INSERT INTO ea_owner
+                        (singleton_id, user_id, password_hash, claimed_at, security_generation)
+                      VALUES (1, 'owner-1', 'owner-password-hash', 100, 7)`);
+    await db.execute(`INSERT INTO ea_passkey_credentials
+                        (credential_id, user_id, label, public_key, sign_count, created_at)
+                      VALUES ('credential-1', 'owner-1', 'Owner passkey', 'public-key', 42, 100)`);
+    await db.execute(`INSERT INTO ea_sessions (token, expires_at, security_generation)
+                      VALUES ('legacy-raw-token', 999999, 7),
+                             ('sha256:stored-hash', 999999, 7)`);
+    await db.execute(`INSERT INTO ea_pending_auth
+                        (token_hash, user_id, created_at, expires_at, security_generation)
+                      VALUES ('pending', 'owner-1', 100, 999999, 7)`);
+    await db.execute(`INSERT INTO ea_webauthn_challenges
+                        (challenge_hash, user_id, challenge_type, created_at, expires_at, security_generation)
+                      VALUES ('challenge', 'owner-1', 'authentication', 100, 999999, 7)`);
+    const passkeysBefore = (await db.execute("SELECT * FROM ea_passkey_credentials")).rows;
+
+    await applyMigrations(db, ["060_revoke_legacy_sessions.sql"]);
+
+    expect((await db.execute("SELECT * FROM ea_sessions")).rows).toEqual([]);
+    expect((await db.execute("SELECT * FROM ea_pending_auth")).rows).toEqual([]);
+    expect((await db.execute("SELECT * FROM ea_webauthn_challenges")).rows).toEqual([]);
+    expect((await db.execute(
+      "SELECT user_id, password_hash, security_generation FROM ea_owner",
+    )).rows).toEqual([{
+      user_id: "owner-1",
+      password_hash: "owner-password-hash",
+      security_generation: 8,
+    }]);
+    expect((await db.execute("SELECT * FROM ea_passkey_credentials")).rows).toEqual(passkeysBefore);
+  });
+
   it("adds password step-up window state in a forward migration", async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute(`CREATE TABLE ea_sessions (

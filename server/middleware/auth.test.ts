@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
+import express from "express";
+import cookieParser from "cookie-parser";
+import request from "../test-utils/supertest.ts";
 import { createAuthTestDb, hashApiToken, hashSessionToken, seedOwner, seedSession } from "../test-utils/auth-db.ts";
 import type { Client, InStatement } from "@libsql/client";
 
@@ -21,6 +24,10 @@ vi.mock("../db/connection.ts", () => ({
 
 const {
   createSession,
+  createRequireCookieSession,
+  createRequireRecentPasswordAuth,
+  getPasswordStepUpThrottle,
+  recordPasswordStepUpFailure,
   validateSession,
   deleteSession,
   validateBearer,
@@ -116,7 +123,7 @@ describe("auth middleware session storage", () => {
     expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("cookie-session")]);
   });
 
-  it("accepts raw session rows and migrates them to hashed storage", async () => {
+  it("rejects legacy raw session rows", async () => {
     await currentDb().execute({
       sql: "INSERT INTO ea_sessions (token, expires_at, security_generation) VALUES (?, ?, ?)",
       args: ["raw-session", Date.now() + 60_000, 1],
@@ -128,8 +135,8 @@ describe("auth middleware session storage", () => {
       sql: "SELECT token FROM ea_sessions ORDER BY token",
       args: [],
     });
-    expect(ok).toBe(true);
-    expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("raw-session")]);
+    expect(ok).toBe(false);
+    expect(result.rows.map((row) => row.token)).toEqual(["raw-session"]);
   });
 
   it("authenticates an unexpired api token and returns its scopes", async () => {
@@ -158,25 +165,38 @@ describe("auth middleware session storage", () => {
     expect(await validateBearer("eatk_legacy")).toBeNull();
   });
 
-  it("deletes both raw and hashed token forms on logout", async () => {
-    await currentDb().batch([
-      {
-        sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-        args: ["logout-session", Date.now() + 60_000],
-      },
-      {
-        sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-        args: [hashSessionToken("logout-session"), Date.now() + 60_000],
-      },
-    ]);
+  it("rejects stored-hash replay at both cookie guards without changing the real session", async () => {
+    const rawToken = await createSession({ securityGeneration: 1, authMethod: "password" });
+    expect(rawToken).not.toBeNull();
+    const storedToken = String((await currentDb().execute("SELECT token FROM ea_sessions")).rows[0]!.token);
+    const app = express();
+    app.use(cookieParser());
+    app.get("/private", createRequireCookieSession(currentDb()), (_req, res) => res.json({ ok: true }));
+    app.get("/sensitive", createRequireRecentPasswordAuth(currentDb()), (_req, res) => res.json({ ok: true }));
 
-    await deleteSession("logout-session");
+    for (const path of ["/private", "/sensitive"]) {
+      const replay = await request(app).get(path).set("Cookie", `ea_session=${storedToken}`);
+      expect(replay.status).toBe(401);
+      const legitimate = await request(app).get(path).set("Cookie", `ea_session=${rawToken}`);
+      expect(legitimate.status).toBe(200);
+      expect(legitimate.body).toEqual({ ok: true });
+    }
+    expect((await currentDb().execute("SELECT token FROM ea_sessions")).rows.map((row) => row.token))
+      .toEqual([storedToken]);
+  });
 
-    const result = await currentDb().execute({
-      sql: "SELECT token FROM ea_sessions",
-      args: [],
-    });
-    expect(result.rows).toHaveLength(0);
+  it("does not let stored hashes update, throttle, or delete their sessions", async () => {
+    const rawToken = await createSession({ securityGeneration: 1, authMethod: "passkey" });
+    const storedToken = String((await currentDb().execute("SELECT token FROM ea_sessions")).rows[0]!.token);
+
+    await expect(markSessionPasswordAuthenticated(storedToken)).resolves.toBe(false);
+    await expect(recordPasswordStepUpFailure(storedToken)).resolves.toBeNull();
+    await expect(getPasswordStepUpThrottle(storedToken)).resolves.toBeNull();
+    await deleteSession(storedToken);
+
+    await expect(validateSession(rawToken)).resolves.toBe(true);
+    await expect(hasRecentPasswordAuth(rawToken)).resolves.toBe(false);
+    await expect(getPasswordStepUpThrottle(rawToken)).resolves.toEqual({ failureCount: 0, blockedUntil: 0 });
   });
 
   it("sweeps expired sessions when a new session is created (P3-18)", async () => {
