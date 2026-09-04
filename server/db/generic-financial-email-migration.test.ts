@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "migrations");
 
 describe("generic financial email import migration", () => {
-  it("preserves legacy items and admits one generic row per stable imported identity", async () => {
+  it("preserves legacy items and admits safe generic expenses, income, and transfer schedules", async () => {
     const db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
     for (const file of [
@@ -94,6 +94,33 @@ describe("generic financial email import migration", () => {
                          'automatic', 1, 'ready', 1, 1,
                          '{"automation":{"operationClass":"income"}}')`);
     await expect(db.execute("UPDATE ea_transaction_import_items SET amount_cents = -2225 WHERE id = 'income-item'"))
+      .rejects.toThrow();
+    await db.execute(`INSERT INTO ea_transaction_import_items
+                        (id, run_id, user_id, gmail_account_id, gmail_message_id, email_uid,
+                         candidate_key, source, parser_version, external_id, imported_id, transaction_date,
+                         amount_cents, currency, payee, actual_account_id, automation_mode, automatic_safe,
+                         status, attempts, next_attempt_at, last_error, created_at, updated_at,
+                         financial_email_plan_json)
+                      VALUES
+                        ('transfer-item', 'generic-run', 'owner-1', 'gmail-1', 'message-transfer', 'uid-transfer',
+                         'financial-email:v1:transfer', 'generic', 'financial-email-semantics-v2', 'transfer-1',
+                         'financial-transfer:v1:transfer', '2026-09-28', -21266, 'USD',
+                         'Example Rewards Card (0002) Payment', 'savings', 'automatic', 0,
+                         'needs_review', 5, 123,
+                         'Transfer check failed: SQLITE_CONSTRAINT: SQLite error: CHECK constraint failed: automatic_safe = 0 OR (...)',
+                         1, 1,
+                         '{"automation":{"operationClass":"transfer_schedule"}}')`);
+    const beforeTransferAutomation = await db.execute("SELECT * FROM ea_transaction_import_items WHERE id <> 'transfer-item' ORDER BY id");
+    await db.executeMultiple(readFileSync(join(migrationsDir, "059_generic_financial_email_transfer_automation.sql"), "utf8"));
+    expect((await db.execute("SELECT * FROM ea_transaction_import_items WHERE id <> 'transfer-item' ORDER BY id")).rows)
+      .toEqual(beforeTransferAutomation.rows);
+    expect((await db.execute(`SELECT status, attempts, next_attempt_at, last_error
+                              FROM ea_transaction_import_items WHERE id = 'transfer-item'`)).rows[0])
+      .toEqual({ status: "queued", attempts: 0, next_attempt_at: null, last_error: null });
+    await db.execute("UPDATE ea_transaction_import_items SET automatic_safe = 1, status = 'ready' WHERE id = 'transfer-item'");
+    expect((await db.execute("SELECT automatic_safe, status FROM ea_transaction_import_items WHERE id = 'transfer-item'")).rows[0])
+      .toEqual({ automatic_safe: 1, status: "ready" });
+    await expect(db.execute("UPDATE ea_transaction_import_items SET amount_cents = 21266 WHERE id = 'transfer-item'"))
       .rejects.toThrow();
     expect((await db.execute("PRAGMA foreign_key_check")).rows).toEqual([]);
     db.close();
