@@ -19,6 +19,7 @@ interface TransferSdk {
 }
 interface ScheduleRow {
   id: string;
+  name: string | null;
   rule: string;
   next_date: string | null;
   completed: boolean;
@@ -40,6 +41,17 @@ function validInput(input: ActualTransferScheduleInput): boolean {
     && Number.isSafeInteger(input.amountCents) && input.amountCents > 0
     && !!input.identityKey?.trim() && !!input.name?.trim()
     && !!input.fromAccountId && !!input.toAccountId && input.fromAccountId !== input.toAccountId;
+}
+
+function availableScheduleName(input: ActualTransferScheduleInput, schedules: ScheduleRow[]): string {
+  const base = input.name.trim();
+  const used = new Set(schedules.filter((schedule) => !schedule.tombstone).map((schedule) => schedule.name?.trim()).filter(Boolean));
+  if (!used.has(base)) return base;
+  const dated = `${base} (${input.date})`;
+  if (!used.has(dated)) return dated;
+  let suffix = 2;
+  while (used.has(`${base} (${input.date}, ${suffix})`)) suffix += 1;
+  return `${base} (${input.date}, ${suffix})`;
 }
 
 // This operation is called inside actual-core's SDK lock. create_once is admitted
@@ -65,7 +77,7 @@ export async function reconcileActualTransferSchedule(
   const [accounts, payees, rules, scheduleData, transactionData] = await Promise.all([
     sdk.getAccounts(), sdk.getPayees(),
     sdk.runQuery(sdk.q("rules").withDead().select(["id", "conditions", "conditions_op", "actions", "tombstone"])),
-    sdk.runQuery(sdk.q("schedules").withDead().withoutValidatedRefs().select(["id", "rule", "next_date", "completed", "tombstone"])),
+    sdk.runQuery(sdk.q("schedules").withDead().withoutValidatedRefs().select(["id", "name", "rule", "next_date", "completed", "tombstone"])),
     sdk.runQuery(sdk.q("transactions").withoutValidatedRefs().filter({ date: input.date }).select(["id", "account", "payee", "amount", "date", "transfer_id"])),
   ]);
   if (![input.fromAccountId, input.toAccountId].every((id) => accounts.some((a) => a.id === id && !a.closed))) {
@@ -132,7 +144,7 @@ export async function reconcileActualTransferSchedule(
   if (mode === "preview") return result("would_create", "No existing payment matches; a future transfer schedule can be created.", { scheduleId });
 
   await sdk.internal.send("schedule/create", {
-    schedule: { id: scheduleId, name: input.name, completed: false, posts_transaction: false, tombstone: false },
+    schedule: { id: scheduleId, name: availableScheduleName(input, schedules), completed: false, posts_transaction: false, tombstone: false },
     conditions: [
       { field: "account", op: "is", value: input.toAccountId },
       { field: "payee", op: "is", value: transferPayees[0]!.id },
