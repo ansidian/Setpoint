@@ -20,6 +20,7 @@ const migrationFiles = [
   "038_auth_security_generation.sql",
   "039_password_step_up_window.sql",
   "060_revoke_legacy_sessions.sql",
+  "061_owner_password_login_throttle.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>

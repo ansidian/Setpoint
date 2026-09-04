@@ -34,6 +34,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `auth/session-cookie.ts` — centralized secure session-cookie issue/clear behavior around generation-conditional session creation
 - `auth/security-transition.ts` — transactional owner-generation compare-and-swap for credential mutations plus session/pending/challenge revocation
 - `auth/password-policy.ts` — existing-password verification bounds and the minimum policy for every newly chosen password
+- `auth/password-login-throttle.ts` — atomic durable singleton-owner password attempt budget shared across IPs and processes
 - `auth/setup-token.ts` — constant-time validation of the out-of-band first-claim deployment secret
 - `auth/owner-store.ts` — singleton owner persistence and atomic claim invariant
 - `auth/owner-bootstrap.ts` — startup resolution and fail-closed legacy env import

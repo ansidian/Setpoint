@@ -353,6 +353,38 @@ describe("auth routes", () => {
     expect(setCookieHeader(res)).toContain("ea_session=;");
   });
 
+  it("shares the password budget across source IPs and keeps existing sessions and passkey login available", async () => {
+    const app = makeApp();
+    // Model a trusted ingress assigning different client IPs. The production
+    // account budget must remain shared regardless of this transport boundary.
+    app.set("trust proxy", 1);
+    await seedSession(currentDb(), "existing-session");
+    await seedPasskey();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const failed = await request(app).post("/api/auth/login")
+        .set("X-Forwarded-For", `192.0.2.${attempt + 1}`)
+        .send({ password: "wrong-password" });
+      expect(failed.status).toBe(401);
+    }
+    for (const authMode of ["password_or_passkey", "password_plus_passkey"]) {
+      await currentDb().execute({ sql: "UPDATE ea_owner SET auth_mode = ?", args: [authMode] });
+      const blocked = await request(app).post("/api/auth/login")
+        .set("X-Forwarded-For", "198.51.100.1")
+        .send({ password: "correct-password" });
+      expect(blocked.status).toBe(429);
+      expect(Number(blocked.headers["retry-after"])).toBeGreaterThan(0);
+      expect(Number(blocked.headers["retry-after"])).toBeLessThanOrEqual(900);
+      expect((await currentDb().execute("SELECT * FROM ea_pending_auth")).rows).toEqual([]);
+    }
+    expect((await request(app).get("/protected").set("Cookie", "ea_session=existing-session")).status).toBe(200);
+    await currentDb().execute("UPDATE ea_owner SET auth_mode = 'password_or_passkey'");
+    const passkey = await request(app).post("/api/auth/passkey/authentication/options")
+      .set("X-Forwarded-For", "198.51.100.2").send({});
+    expect(passkey.status).toBe(200);
+    expect((await currentDb().execute("SELECT password_login_attempt_count FROM ea_owner")).rows)
+      .toEqual([{ password_login_attempt_count: 10 }]);
+  });
+
   it("requires recent authentication before enabling explicit strict mode", async () => {
     await seedSession(currentDb(), "cookie-session");
     await seedPasskey();

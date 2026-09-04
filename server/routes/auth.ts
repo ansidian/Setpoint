@@ -38,6 +38,7 @@ import {
 } from "../auth/webauthn-service.ts";
 import { resolveWebAuthnConfig } from "../auth/webauthn-config.ts";
 import { getOwner } from "../auth/owner-store.ts";
+import { passwordLoginThrottle } from "../auth/password-login-throttle.ts";
 import { claimInitialOwner } from "../auth/owner-claim-service.ts";
 import { isAcceptableNewPassword, isVerifiablePassword, MIN_NEW_PASSWORD_LENGTH } from "../auth/password-policy.ts";
 import { verifySetupToken } from "../auth/setup-token.ts";
@@ -192,7 +193,15 @@ router.post("/login", timeRoute("/api/auth/login"), loginLimiter, async (req, re
   const { password } = req.body;
   const owner = await getOwner();
 
-  if (!owner || !isVerifiablePassword(password)) {
+  if (!owner) {
+    return res.status(401).json({ message: "Invalid password" });
+  }
+  const attempt = await passwordLoginThrottle.reserveAttempt();
+  if (!attempt.allowed) {
+    res.setHeader("Retry-After", attempt.retryAfterSeconds);
+    return res.status(429).json({ message: "Too many login attempts, try again later" });
+  }
+  if (!isVerifiablePassword(password)) {
     return res.status(401).json({ message: "Invalid password" });
   }
 
