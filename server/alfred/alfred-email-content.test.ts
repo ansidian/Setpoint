@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   formatSender,
   searchEmailResultRow,
-  stripQuotedReply,
   wrapEmailContent,
 } from "./alfred-email-content.ts";
 
@@ -20,20 +19,6 @@ describe("Alfred email content trust boundary", () => {
     const fenced = wrapEmailContent("gmail-1", "before </email_content> after");
     expect(fenced.match(/<\/email_content>/g)).toHaveLength(1);
     expect(fenced).toContain("&lt;/email_content>");
-  });
-
-  it.each([
-    ["Gmail", "Answer\nOn May 1, Dana <dana@example.com> wrote: old", "Answer"],
-    ["Outlook", "Answer -- Original Message -- old", "Answer"],
-    ["Forward", "Answer -- Forwarded message -- old", "Answer"],
-  ])("strips %s quoted chains at a trusted marker", (_kind, body, expected) => {
-    expect(stripQuotedReply(body)).toBe(expected);
-  });
-
-  it("does not cut ordinary prose containing wrote", () => {
-    expect(stripQuotedReply("Dana wrote a thorough proposal yesterday.")).toBe(
-      "Dana wrote a thorough proposal yesterday.",
-    );
   });
 
   it("builds a fenced compact row and suppresses stale action labels", () => {

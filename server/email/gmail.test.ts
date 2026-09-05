@@ -177,6 +177,35 @@ describe("fetchEmailsInRange", () => {
     vi.resetAllMocks();
   });
 
+  it("indexes one readable MIME alternative without flattening its labels or including text attachments", async () => {
+    const plain = "Minimum payment: $40.00\nRemaining statement balance: $472.32\nAutopay: September 10, 2026";
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "msg-1" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        id: "msg-1", payload: { mimeType: "multipart/mixed", parts: [
+          { mimeType: "multipart/alternative", parts: [
+            { mimeType: "text/html", body: { data: Buffer.from('<table><tr><td>Plan balance</td><td>Statement balance</td></tr><tr><td>$0.00</td><td>$472.32</td></tr></table>').toString("base64url") } },
+            { mimeType: "text/plain", body: { data: Buffer.from(plain).toString("base64url") } },
+          ] },
+          { mimeType: "text/plain", filename: "old-statement.txt", body: { data: Buffer.from("Unrelated balance $999.00").toString("base64url") } },
+        ] },
+      }) });
+    const result = await fetchEmailsInRange(fakeAccount, { start: "2026-09-01", end: "2026-09-06" });
+    expect(result.emails[0]!.body_text).toBe(plain);
+    expect(result.emails[0]!.body_preview).not.toContain("$999.00");
+  });
+
+  it.each(["  ", "This message requires an HTML-capable email client."])("uses structured HTML when the plain-text alternative is empty or only a display placeholder (%s)", async (plain) => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ messages: [{ id: "msg-1" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        id: "msg-1", payload: { mimeType: "multipart/alternative", parts: [
+          { mimeType: "text/plain", body: { data: Buffer.from(plain).toString("base64url") } },
+          { mimeType: "text/html", body: { data: Buffer.from("<p>Remaining statement balance</p><p>$472.32</p>").toString("base64url") } },
+        ] },
+      }) });
+    const result = await fetchEmailsInRange(fakeAccount, { start: "2026-09-01", end: "2026-09-06" });
+    expect(result.emails[0]!.body_text).toBe("Remaining statement balance\n\n$472.32");
+  });
+
   it("fetches a bounded INBOX date window and returns normalized indexable emails", async () => {
     fetchMock
       .mockResolvedValueOnce({

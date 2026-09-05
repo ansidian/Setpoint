@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "../email/email-ai-models.ts";
 import {
   DEFAULT_BILL_EXTRACT_MODEL,
@@ -183,7 +184,7 @@ function compactEmailForPrompt(email: Partial<TriageEmail>, reason: string): str
     email.body_snippet || "",
     "",
     "Body:",
-    String(email.body_text || "").slice(0, 3500),
+    requireCompleteEmailEvidence(email.body_text || ""),
   ].join("\n");
 }
 

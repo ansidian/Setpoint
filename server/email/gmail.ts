@@ -1,5 +1,6 @@
 import { simpleParser } from "mailparser";
 import { htmlToPlainText } from "./html-to-text.ts";
+import { emailEvidenceText } from "./email-evidence.ts";
 import { describeMimeAttachments, readMimeAttachment } from "./email-mime-attachments.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
 import type { ConfiguredEmailAccount, EmailAttachmentContent } from "./email-provider-types.ts";
@@ -14,6 +15,7 @@ interface GmailHeader {
 }
 
 interface GmailMessagePart {
+  filename?: string;
   mimeType?: string;
   body?: { data?: string };
   parts?: GmailMessagePart[];
@@ -64,19 +66,30 @@ function extractAmounts(text: string): string {
 // Decode body text from Gmail API full-format message parts
 function extractBodyText(payload: GmailMessagePart | null | undefined): string {
   if (!payload) return "";
-  const parts: string[] = [];
-
-  function walk(part: GmailMessagePart): void {
-    if (part.body?.data && part.mimeType?.startsWith("text/")) {
-      try {
-        parts.push(Buffer.from(part.body.data, "base64url").toString("utf8"));
-      } catch { /* skip malformed */ }
+  const disposition = payload.headers?.find((header) => header.name.toLowerCase() === "content-disposition")?.value || "";
+  if (payload.filename || /^attachment\b/i.test(disposition)) return "";
+  const mimeType = payload.mimeType?.toLowerCase();
+  if (mimeType === "multipart/alternative") {
+    // Alternatives describe the same message. A genuine readable plain-text
+    // part usually preserves label/value pairs better than email layout HTML.
+    const parts = [...(payload.parts || [])].sort((left, right) => Number(right.mimeType === "text/plain") - Number(left.mimeType === "text/plain"));
+    let placeholder = "";
+    for (const part of parts) {
+      const text = extractBodyText(part);
+      if (part.mimeType === "text/plain" && text.length < 300
+        && /(?:html[- ](?:capable|enabled|compatible)|(?:view|read|display)[\s\S]{0,60}\bhtml\b|requires?\s+(?:an?\s+)?html)/i.test(text)) {
+        placeholder = text;
+        continue;
+      }
+      if (text) return text;
     }
-    if (part.parts) part.parts.forEach(walk);
+    return placeholder;
   }
-
-  walk(payload);
-  return htmlToPlainText(parts.join(" "));
+  if (payload.body?.data && (mimeType === "text/plain" || mimeType === "text/html")) {
+    const text = Buffer.from(payload.body.data, "base64url").toString("utf8");
+    return mimeType === "text/html" ? htmlToPlainText(text) : emailEvidenceText(text, "text");
+  }
+  return (payload.parts || []).map(extractBodyText).filter(Boolean).join("\n\n");
 }
 
 // --- Email fetch ---

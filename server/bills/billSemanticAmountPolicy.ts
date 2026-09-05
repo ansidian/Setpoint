@@ -11,6 +11,7 @@ export interface SemanticBillAmount {
 }
 
 export function selectSemanticBillAmount(candidate: BillCandidate): SemanticBillAmount | null {
+  if (candidate.amount_verification?.status === "failed") return null;
   const candidates = Array.isArray(candidate.amount_candidates)
     ? candidate.amount_candidates.filter((item): item is BillAmountCandidate => (
         !!item

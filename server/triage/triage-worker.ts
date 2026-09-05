@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+import { requireCompleteEmailEvidence } from "../email/email-evidence.ts";
 import { getEmailTriageClassifyReadArrivalsForUser } from "../platform/config-service.ts";
 import { getEmailTriageModeForUser } from "./triage-mode.ts";
 import { ARRIVAL_GRACE_SOURCE } from "../snapshots/arrival-grace.ts";
@@ -346,6 +347,9 @@ export async function processNextEmailTriageJob({
         };
       }
 
+      // Run before either heuristics or preflight rules can finalize a lane.
+      // An incomplete body cannot establish that an email needs no action.
+      requireCompleteEmailEvidence(email.body_text || "");
       if (mode.effective_email_triage_mode === "no_model") {
         // Dev-only heuristic classifier (sender/subject/body bands -> lane).
         decision = heuristicNoModelDecision(email);

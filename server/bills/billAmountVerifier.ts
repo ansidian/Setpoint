@@ -122,11 +122,33 @@ function repairSelectionFromSemanticCandidates(candidate: BillCandidate): BillCa
   return null;
 }
 
+function hasGroundedAmountEvidence(content: string, candidate: BillCandidate): boolean {
+  const source = content.replace(/\s+/g, " ").trim();
+  return (candidate.amount_candidates || []).every((item) => {
+    const evidence = String(item.evidence || "").replace(/\s+/g, " ").trim();
+    return evidence.length > 0
+      && evidence.length <= 320
+      && source.includes(evidence)
+      && currencyValuesInText(evidence).some((value) => amountKey(value) === amountKey(item.value));
+  });
+}
+
+function hasConflictingStatementBalances(candidate: BillCandidate): boolean {
+  return new Set((candidate.amount_candidates || [])
+    .filter((item) => item.kind === "statement_balance")
+    .map((item) => amountKey(item.value))).size > 1;
+}
+
+function amountEvidenceNeedsAudit(content: string, candidate: BillCandidate): boolean {
+  return !hasGroundedAmountEvidence(content, candidate) || hasConflictingStatementBalances(candidate);
+}
+
 export function shouldVerifyBillAmounts(content: string, candidate: BillCandidate): boolean {
   const sourceValues = currencyValuesInText(content);
   if (sourceValues.length < MIN_VERIFY_VALUES || sourceValues.length > MAX_VERIFY_VALUES) return false;
   return coveredCurrencyValueCount(sourceValues, candidate) < sourceValues.length
-    || !selectionIsValid(candidate);
+    || !selectionIsValid(candidate)
+    || (sourceValues.length > 1 && amountEvidenceNeedsAudit(content, candidate));
 }
 
 function verificationMetadata(
@@ -182,7 +204,8 @@ export async function verifyBillAmounts({
       usage: {},
     };
   }
-  if (initialCovered === sourceValues.length && !selectionIsValid(canonicalCandidate)) {
+  const needsEvidenceAudit = sourceValues.length > 1 && amountEvidenceNeedsAudit(content, canonicalCandidate);
+  if (initialCovered === sourceValues.length && !selectionIsValid(canonicalCandidate) && !needsEvidenceAudit) {
     const repaired = repairSelectionFromSemanticCandidates(canonicalCandidate);
     if (repaired) {
       return {
@@ -206,7 +229,10 @@ export async function verifyBillAmounts({
 
 Return a corrected extraction using the required schema. Focus on amount, amount_kind, and amount_candidates:
 - Account for every distinct numeric currency value visible in the source, up to the schema limit.
-- Associate labels with values on nearby following lines, including layouts where several labels precede several values.
+- Audit each semantic label as well as each numeric value. Complete numeric coverage does not establish correct label/value associations.
+- Preserve source rows and table relationships. When several labels precede several values, use explicit structural or repeated source evidence to resolve their association; do not guess from proximity.
+- For each amount_candidate, copy one short contiguous verbatim evidence excerpt (at most 320 characters) containing its currency value and supporting label. Do not paraphrase, add ellipses, or join separate source excerpts. An informational zero balance is not a statement balance unless the source explicitly labels it as such.
+- When conflicting statement balances cannot be resolved from the source, preserve the conflict rather than inventing a canonical selection.
 - Keep minimum_due separate from statement_balance and total_due.
 - Select the canonical amount actually charged, paid, refunded, or billed. A statement balance is canonical whenever present. Preserve minimum_due only as an informational candidate and never select it. If no non-minimum canonical amount exists, return null amount and null amount_kind.
 - Use null amount and null amount_kind when values are informational, promotional, projected, or otherwise not payable.
@@ -223,16 +249,17 @@ ${JSON.stringify({
     const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
     const verifiedCandidate = withoutMinimumDueSelection(verified.fields);
     const verifiedCovered = coveredCurrencyValueCount(sourceValues, verifiedCandidate);
-    const improved = verifiedCovered > initialCovered && selectionIsValid(verifiedCandidate);
-    const repairedSelection = !selectionIsValid(canonicalCandidate)
+    const accepted = verifiedCovered === sourceValues.length
       && selectionIsValid(verifiedCandidate)
-      && verifiedCovered >= initialCovered;
-    if (!improved && !repairedSelection) {
+      && !amountEvidenceNeedsAudit(content, verifiedCandidate);
+    if (!accepted) {
       return {
         candidate: {
           ...canonicalCandidate,
           amount_verification: verificationMetadata(
-            "kept_initial",
+            needsEvidenceAudit || initialCovered < sourceValues.length || !selectionIsValid(canonicalCandidate)
+              ? "failed"
+              : "kept_initial",
             sourceValues.length,
             initialCovered,
             providerId,

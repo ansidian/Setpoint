@@ -13,6 +13,7 @@
     "server/scripts/hydrate-actual-cache.ts",
     "server/scripts/prune-actual-cache.ts",
     "server/scripts/reindex-emails.ts",
+    "server/scripts/reindex-email-evidence.ts",
     "server/scripts/reindex-icloud-mime.ts",
     "server/scripts/reset-passkeys.ts",
     "server/scripts/rotate-encryption-key.ts",

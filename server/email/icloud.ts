@@ -2,6 +2,7 @@ import { ImapFlow } from "imapflow";
 import type { FetchMessageObject } from "imapflow";
 import { simpleParser } from "mailparser";
 import { htmlToPlainText } from "./html-to-text.ts";
+import { emailEvidenceText, EMAIL_EVIDENCE_TRUNCATED } from "./email-evidence.ts";
 import { describeMimeAttachments, readMimeAttachment } from "./email-mime-attachments.ts";
 import { withTimeout } from "../platform/fetch-with-timeout.ts";
 import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../shared/types/email.ts";
@@ -13,6 +14,7 @@ import type { AuthenticationHeader } from "./sender-authentication.ts";
 const ICLOUD_HOST = "imap.mail.me.com";
 const ICLOUD_PORT = 993;
 const ICLOUD_CONNECT_TIMEOUT_MS = 15_000;
+const ICLOUD_INDEX_SOURCE_BYTE_LIMIT = 262144;
 
 // --- Connection pool: one persistent connection per iCloud account ---
 interface ICloudPoolEntry {
@@ -140,9 +142,9 @@ export async function fetchEmails(
       envelope: true,
       flags: true,
       bodyStructure: true,
-      // 256KB is comfortably larger than virtually any real email. Raised from
-      // 16KB so body_text captures the full content for FTS indexing.
-      source: { start: 0, maxLength: 262144 },
+      // Bound indexing source bytes; normalization marks a full-sized response
+      // incomplete so downstream decisions cannot trust a partial message.
+      source: { start: 0, maxLength: ICLOUD_INDEX_SOURCE_BYTE_LIMIT },
     })) {
       const msgDate = msg.envelope?.date;
       if (msgDate && new Date(msgDate) < cutoffDate) continue;
@@ -180,7 +182,7 @@ export async function fetchEmailsInRange(account: ConfiguredEmailAccount, passwo
       envelope: true,
       flags: true,
       bodyStructure: true,
-      source: { start: 0, maxLength: 262144 },
+      source: { start: 0, maxLength: ICLOUD_INDEX_SOURCE_BYTE_LIMIT },
     })) {
       const msgDate = msg.envelope?.date ? new Date(msg.envelope.date) : null;
       if (msgDate && (msgDate < startDate || msgDate >= endDate)) continue;
@@ -237,9 +239,9 @@ async function extractBodyTextAndPreview(source: Buffer | null | undefined): Pro
   let clean = "";
   let headers: AuthenticationHeader[] = [];
   try {
-    const parsed = await simpleParser(source);
+    const parsed = await simpleParser(source, { skipHtmlToText: true });
     const text = (parsed.text || "").trim();
-    clean = text || htmlToPlainText(parsed.html || "");
+    clean = text ? emailEvidenceText(text, "text") : htmlToPlainText(parsed.html || "");
     // The IMAP source is bounded. A truncated header block cannot supply a
     // verdict; mailparser preserves original header order and duplicate fields.
     if (/\r?\n\r?\n/.test(source.toString("utf8"))) {
@@ -252,6 +254,9 @@ async function extractBodyTextAndPreview(source: Buffer | null | undefined): Pro
     const text = source.toString("utf8");
     const bodyStart = text.indexOf("\r\n\r\n");
     clean = bodyStart === -1 ? "" : htmlToPlainText(text.slice(bodyStart + 4));
+  }
+  if (source.length >= ICLOUD_INDEX_SOURCE_BYTE_LIMIT) {
+    clean = `${clean}\n\n${EMAIL_EVIDENCE_TRUNCATED}`;
   }
   return { bodyText: clean, bodyPreview: clean.slice(0, 600) + extractAmounts(clean), headers };
 }

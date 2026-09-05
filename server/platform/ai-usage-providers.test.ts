@@ -131,7 +131,7 @@ describe("provider attempts to durable AI accounting", () => {
       const prompt = JSON.parse(String(options?.body)).instructions as string;
       if (prompt.startsWith("Choose")) return billResponse({ target_policy_key: "invented", target_confidence: 0.99, target_evidence: "purchase" });
       return billResponse({
-        amount: 20, amount_kind: "order_total", amount_candidates: [{ kind: "minimum_due", value: 10 }, { kind: "order_total", value: 20 }],
+        amount: 20, amount_kind: "order_total", amount_candidates: [{ kind: "minimum_due", value: 10, evidence: "Minimum payment $10" }, { kind: "order_total", value: 20, evidence: "Your purchase total $20" }],
         event_kind: "purchase", event_confidence: 0.99, event_evidence: "purchase",
         type: "expense", type_confidence: 0.99, type_evidence: "purchase",
       });
@@ -160,7 +160,7 @@ describe("provider attempts to durable AI accounting", () => {
     const candidate = await scoped(() => service.verifyEmailCandidate({
       email: { body: "Minimum payment $40.00. Statement balance $391.20." },
       candidate: {
-        amount: 40, amount_kind: "payment_amount", amount_candidates: [{ kind: "minimum_due", value: 40 }, { kind: "statement_balance", value: 391.2 }],
+        amount: 40, amount_kind: "payment_amount", amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }, { kind: "statement_balance", value: 391.2, evidence: "Statement balance $391.20" }],
         event_kind: "statement_issued", event_confidence: 0.99,
         type: "transfer", type_confidence: 0.99, type_evidence: "Statement balance",
       }, providerId: "openai", model,

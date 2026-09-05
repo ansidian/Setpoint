@@ -3,7 +3,7 @@ import { trimBillBody } from "./bill-extract.ts";
 
 describe("trimBillBody", () => {
   it("preserves a separated statement-balance block beyond the former evidence cutoff", () => {
-    const prefix = Array.from({ length: 70 }, (_, index) => `Account notice ${index}: payment information`).join("\n");
+    const prefix = Array.from({ length: 100 }, (_, index) => `Account notice ${index}: payment information`).join("\n");
     const result = trimBillBody({
       subject: "Payment due",
       from: "billing@example.test",
@@ -12,6 +12,11 @@ describe("trimBillBody", () => {
 
     expect(result).toContain("Remaining statement balance");
     expect(result).toContain("$391.20");
-    expect(result.length).toBeLessThanOrEqual(3500);
+    expect(result.length).toBeGreaterThan(3500);
+  });
+
+  it("keeps context that financial keyword filtering previously removed", () => {
+    const result = trimBillBody({ subject: "Notice", from: "bank@example.test", body: "Your request was cancelled.\nNo further action is needed.\n\nPrevious details:\n$472.32" });
+    expect(result).toContain("Your request was cancelled.\nNo further action is needed.");
   });
 });

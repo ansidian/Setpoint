@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { EMAIL_EVIDENCE_TRUNCATED } from "./email-evidence.ts";
 
 type MockFunction = ReturnType<typeof vi.fn>;
 
@@ -118,6 +119,27 @@ class FakeImapFlowMime {
       };
     });
     activeClient = this as unknown as TestImapClient;
+  }
+}
+
+class FakeImapFlowEvidence extends FakeImapFlowMime {
+  constructor() {
+    super();
+    this.fetch = vi.fn(async function* () {
+      const htmlSource = [
+        "Content-Type: text/html; charset=utf-8", "",
+        "<table><tr><td>Plan adjusted balance</td><td>Remaining statement balance</td></tr><tr><td>$0.00</td><td>$472.32</td></tr></table>",
+      ].join("\r\n");
+      const cappedSource = ["Content-Type: text/plain; charset=utf-8", "", "Statement balance $472.32"].join("\r\n").padEnd(262144, " ");
+      for (const [index, source] of [htmlSource, cappedSource].entries()) {
+        yield {
+          uid: 31 + index,
+          envelope: { date: new Date("2026-05-01T15:00:00Z"), subject: "Statement" },
+          flags: new Set(),
+          source: Buffer.from(source),
+        };
+      }
+    });
   }
 }
 
@@ -308,6 +330,31 @@ describe("iCloud fetchEmailsInRange MIME parsing (D1)", () => {
     expect(email.body_text).not.toContain("XYZBOUNDARY");
     expect(email.body_text).not.toContain("Content-Transfer-Encoding");
     expect(email.body_preview.endsWith(" [amounts: $29.00]")).toBe(true);
+  });
+});
+
+describe("iCloud ingestion evidence", () => {
+  beforeEach(() => {
+    imapFlowHolder.current = FakeImapFlowEvidence;
+  });
+
+  const account = {
+    id: "icloud-evidence", type: "icloud" as const, label: "iCloud",
+    email: "evidence@icloud.com", color: "#abcdef", icon: "Apple", credentials_encrypted: "stub",
+  };
+
+  it("preserves HTML-only table columns instead of accepting generated flat MIME text", async () => {
+    const result = await fetchEmailsInRange(account, "password", {
+      start: "2026-05-01", end: "2026-05-02",
+    });
+    expect(result.emails[0]!.body_text).toMatch(/Plan adjusted balance {2,}Remaining statement balance\n\$0\.00 {2,}\$472\.32/);
+  });
+
+  it("marks source-capped messages incomplete even when their decoded text is short", async () => {
+    const result = await fetchEmailsInRange(account, "password", {
+      start: "2026-05-01", end: "2026-05-02",
+    });
+    expect(result.emails[1]!.body_text).toBe(`Statement balance $472.32\n\n${EMAIL_EVIDENCE_TRUNCATED}`);
   });
 });
 

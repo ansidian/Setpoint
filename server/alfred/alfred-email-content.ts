@@ -1,7 +1,7 @@
 import type { AlfredSearchCandidate } from "./alfred-types.ts";
 
 // Email-content shaping for Alfred tool results: trust fencing, sender formatting,
-// quoted-chain stripping, and the compact per-candidate search row. Everything here
+// and the compact per-candidate search row. Everything here
 // renders attacker-controlled email text for the model, so the fencing rules (ADR
 // 0006) live in one place.
 
@@ -31,36 +31,6 @@ export function wrapEmailContent(uid: string, text: unknown): string {
     .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;");
   return `<email_content uid="${safeUid}">${safe}</email_content>`;
-}
-
-// htmlToPlainText collapses newlines, so the body arrives as one line — quoted
-// reply chains can't be detected by a leading ">" or a "-- " signature line.
-// Match the chain header inline instead, and cut everything from the EARLIEST
-// high-confidence marker onward. Conservative by design: the "On … wrote:"
-// attribution requires an email address in the window (a bare "he wrote:" in
-// prose is not a quote boundary), so legitimate content is never dropped — at
-// worst a chain isn't stripped and the char cap still bounds it.
-const QUOTE_MARKERS = [
-  /-{2,}\s*Original Message\s*-{2,}/i, // Outlook reply divider
-  /-{2,}\s*Forwarded message\s*-{2,}/i, // Gmail/Outlook forward divider
-  /\bBegin forwarded message:/i, // Apple Mail forward
-  /\bFrom:\s.{1,120}?\bSent:\s.{1,120}?\bTo:\s/i, // Outlook header block
-];
-
-export function stripQuotedReply(text: unknown): string {
-  const s = String(text || "");
-  let cut = -1;
-  for (const re of QUOTE_MARKERS) {
-    const m = s.match(re);
-    if (m?.index != null && (cut === -1 || m.index < cut)) cut = m.index;
-  }
-  // Gmail/Apple "On <date>, <name> <addr> wrote:" — only treat it as a boundary
-  // when an email address sits inside the matched header.
-  const onWrote = s.match(/\bOn\b[\s\S]{5,240}?\bwrote:/i);
-  if (onWrote?.index != null && /@/.test(onWrote[0]) && (cut === -1 || onWrote.index < cut)) {
-    cut = onWrote.index;
-  }
-  return (cut === -1 ? s : s.slice(0, cut)).trim();
 }
 
 // The compact per-candidate row the model reasons over. Every disambiguator the

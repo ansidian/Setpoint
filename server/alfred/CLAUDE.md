@@ -10,7 +10,7 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 - `anthropic-stream.ts` / `openai-stream.ts` — provider SSE stream parsers
 - `alfred-tools.ts` — read-only domain tools plus non-mutating calendar proposal staging; `show_items` emits cached rows by reference
 - `alfred-calendar-proposals.ts` — semantic owner intent with exact trusted-turn provenance, provider-empty field normalization, field/date/source validation, duplicate policy, and atomic run-local proposal staging
-- `alfred-email-content.ts` — email-content shaping for tool results: `<email_content>` trust fencing, sender formatting, quoted-chain stripping, the compact search-candidate row
+- `alfred-email-content.ts` — email-content shaping for tool results: `<email_content>` trust fencing, sender formatting, the compact search-candidate row
 - `alfred-email-context.ts` — whole-email preparation for deliberate reader attachments: semantic text, link/image/file shaping, metadata authority, 50k limit, and trust fencing
 - `alfred-email-context-store.ts` — bounded owner-scoped prepared-context handles with TTL and claim/release/consume lifecycle
 - `alfred-conversations.ts` — in-memory conversation store (TTL), item cache, and ephemeral proposal identity/status

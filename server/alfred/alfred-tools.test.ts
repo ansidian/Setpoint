@@ -9,6 +9,7 @@ import {
   createAlfredConversation,
 } from "./alfred-conversations.ts";
 import { htmlToPlainText } from "../email/html-to-text.ts";
+import { EMAIL_EVIDENCE_CHAR_LIMIT, EMAIL_EVIDENCE_TRUNCATED } from "../email/email-evidence.ts";
 import type { AlfredEmit, AlfredToolContext } from "./alfred-types.ts";
 import type { AlfredBreakdownEvent, AlfredRunEvent } from "../../shared/types/alfred.ts";
 
@@ -179,7 +180,7 @@ describe("get_email_body", () => {
     expect(result.body).not.toContain("<p>");
   });
 
-  it("strips the quoted reply chain before returning the body", async () => {
+  it("preserves quoted context needed to interpret the reply", async () => {
     const getEmailBody = vi.fn().mockResolvedValue({
       // Real clients render the quoted address as visible text (mailto link or
       // bare), not raw <angle> brackets — those get stripped as tags by htmlToPlainText.
@@ -190,23 +191,40 @@ describe("get_email_body", () => {
     });
     const result = await executeAlfredTool("get_email_body", { uid: "em-2" }, ctxWith({ getEmailBody, htmlToPlainText }));
     expect(result.body).toContain("Yes, Tuesday works.");
-    expect(result.body).not.toContain("are you free?");
-    expect(result.body).not.toContain("wrote:");
+    expect(result.body).toContain("are you free?");
+    expect(result.body).toContain("wrote:");
   });
 
-  it("truncates an over-long body to the (lowered) char cap", async () => {
+  it("preserves late financial evidence beyond the former prefix cap", async () => {
     const head = "H".repeat(3500);
     const getEmailBody = vi.fn().mockResolvedValue({
-      html_body: `${head} TAILMARKER`,
+      html_body: `${head}<p>Remaining statement balance: $472.32</p>`,
       subject: "Long",
       from: "A <a@b.com>",
       date: "2026-06-10T12:00:00.000Z",
     });
     const result = await executeAlfredTool("get_email_body", { uid: "em-3" }, ctxWith({ getEmailBody, htmlToPlainText }));
-    // The 6000-char cap would have kept TAILMARKER; the lowered cap drops it.
-    expect(result.body).not.toContain("TAILMARKER");
+    expect(result.body).toContain("Remaining statement balance: $472.32");
+    expect(result.truncated).not.toBe(true);
     expect(result.body).toContain("HHHH");
   });
+
+  it("preserves forwarded obligations and reports incomplete oversized evidence", async () => {
+    const getEmailBody = async () => ({
+      html_body: `<p>Please handle this.</p><p>-- Forwarded message --</p><p>Amount due: $472.32 by September 10, 2026.</p><p>${"Context ".repeat(3000)}</p><p>Late obligation</p>`,
+      subject: "Fwd: Payment due",
+      from: "owner@example.com",
+    });
+    const result = await executeAlfredTool("get_email_body", { uid: "em-4" }, ctxWith({ getEmailBody, htmlToPlainText }));
+    expect(result.body).toContain("-- Forwarded message --");
+    expect(result.body).toContain("Amount due: $472.32 by September 10, 2026.");
+    expect(result.body).toContain(EMAIL_EVIDENCE_TRUNCATED);
+    expect(result.body).not.toContain("Late obligation");
+    expect(result.body!.length).toBeLessThanOrEqual(EMAIL_EVIDENCE_CHAR_LIMIT + 50);
+    expect(result.truncated).toBe(true);
+    expect(result.body!.match(/<\/email_content>/g)).toHaveLength(1);
+  });
+
 });
 
 describe("get_calendar_events", () => {

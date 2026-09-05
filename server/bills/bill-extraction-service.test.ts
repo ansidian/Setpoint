@@ -251,15 +251,15 @@ describe("extractBill (OpenAI)", () => {
       .mockResolvedValueOnce(response({
         amount: 40,
         amount_kind: "minimum_due",
-        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+        amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
       }))
       .mockResolvedValueOnce(response({
         amount: 391.2,
         amount_kind: "statement_balance",
         amount_candidates: [
-          { kind: "minimum_due", value: 40 },
-          { kind: "other", value: 0 },
-          { kind: "statement_balance", value: 391.2 },
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" },
+          { kind: "other", value: 0, evidence: "Plan balance $0.00" },
+          { kind: "statement_balance", value: 391.2, evidence: "Remaining statement balance $391.20" },
         ],
       })) as unknown as typeof fetch;
 

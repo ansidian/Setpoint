@@ -35,7 +35,8 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `gmailReconciliation.ts` — Gmail row reconciliation: resolve mailbox account ids, find existing rows, reconcile read-state + provider-removal against the index/snapshots
 - `email-arrival-timing.ts` — pure projection of provider, durable queue, sync, and snapshot-attachment timing stages
 - `icloud.ts` — iCloud Mail (IMAP) client
-- `html-to-text.ts` — HTML → text conversion for email bodies
+- `html-to-text.ts` — HTML projection facade over the shared semantic evidence normalizer
+- `email-evidence.ts` — public pure evidence facade for AI consumers: preserves text blocks/table columns, compacts tracking URLs, marks bounded storage and rejects incomplete decision evidence
 - `mime-artifacts.ts` — heuristic detector for raw-MIME body_text rows (reindex targeting)
 - `mailparser.d.ts` — owned declaration shim for the untyped `mailparser` package boundary
 - `dev-service.ts` — dev/test helper: re-index recent emails

@@ -60,6 +60,7 @@ Composition root and cross-cutting server concerns that don't belong to a single
 - `scripts/transaction-import-equivalence-report.ts` — write-disabled Amazon/PayPal planner replay over a disposable Actual snapshot
 - `scripts/hydrate-actual-cache.ts`, `scripts/prune-actual-cache.ts` — warm and prune the local Actual Budget cache
 - `scripts/reindex-emails.ts` — additive time-windowed email re-index
+- `scripts/reindex-email-evidence.ts` — dry-run-first refetch of one exact indexed email UID; refreshes semantic body/FTS/embeddings only, leaves triage and financial plans unchanged
 - `scripts/reindex-icloud-mime.ts` — targeted re-fetch/reindex of iCloud rows with undecoded raw MIME
 - `scripts/reset-passkeys.ts` — wipes passkey/session tables for local dev reset
 - `scripts/rotate-encryption-key.ts` — dry-run-first, offline transactional root-key rotation CLI

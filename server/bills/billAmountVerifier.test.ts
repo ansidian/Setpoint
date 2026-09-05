@@ -5,6 +5,7 @@ import {
   shouldVerifyBillAmounts,
   verifyBillAmounts,
 } from "./billAmountVerifier.ts";
+import { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 
 function providerWith(fields: Record<string, unknown>): BillExtractionProvider {
   return {
@@ -13,6 +14,37 @@ function providerWith(fields: Record<string, unknown>): BillExtractionProvider {
 }
 
 describe("semantic bill amount verifier", () => {
+  it("corrects mislabeled statement evidence even when every currency value was already covered", async () => {
+    const result = await verifyBillAmounts({
+      content: "Minimum payment | $40.00\nPlan adjusted balance | $0.00\nRemaining statement balance | $472.32\nAutopay On",
+      candidate: {
+        amount: 0,
+        amount_kind: "statement_balance",
+        amount_candidates: [
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment | $40.00" },
+          { kind: "statement_balance", value: 0, evidence: "Remaining statement balance $0.00" },
+          { kind: "payment_amount", value: 472.32, evidence: "Autopay On $472.32" },
+        ],
+      },
+      provider: providerWith({
+        amount: 472.32,
+        amount_kind: "statement_balance",
+        amount_candidates: [
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment | $40.00" },
+          { kind: "other", value: 0, evidence: "Plan adjusted balance | $0.00" },
+          { kind: "statement_balance", value: 472.32, evidence: "Remaining statement balance | $472.32" },
+        ],
+      }),
+      providerId: "openai",
+      model: "test-model",
+    });
+    expect(result.candidate).toMatchObject({
+      amount: 472.32,
+      amount_kind: "statement_balance",
+      amount_verification: { status: "corrected", initial_covered_count: 3, verified_covered_count: 3 },
+    });
+  });
+
   it("audits an inconsistent selection even when candidate coverage is complete", () => {
     expect(shouldVerifyBillAmounts(
       "Minimum payment $40.00. Statement balance $391.20.",
@@ -20,8 +52,8 @@ describe("semantic bill amount verifier", () => {
         amount: 40,
         amount_kind: "payment_amount",
         amount_candidates: [
-          { kind: "minimum_due", value: 40 },
-          { kind: "statement_balance", value: 391.2 },
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" },
+          { kind: "statement_balance", value: 391.2, evidence: "Statement balance $391.20" },
         ],
       },
     )).toBe(true);
@@ -35,8 +67,8 @@ describe("semantic bill amount verifier", () => {
         amount: 40,
         amount_kind: "payment_amount",
         amount_candidates: [
-          { kind: "minimum_due", value: 40 },
-          { kind: "statement_balance", value: 391.2 },
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" },
+          { kind: "statement_balance", value: 391.2, evidence: "Statement balance $391.20" },
         ],
       },
       provider: providerWith({}),
@@ -59,8 +91,8 @@ describe("semantic bill amount verifier", () => {
         amount: 40,
         amount_kind: "payment_amount",
         amount_candidates: [
-          { kind: "payment_amount", value: 40 },
-          { kind: "statement_balance", value: 391.2 },
+          { kind: "payment_amount", value: 40, evidence: "Payment amount $40.00" },
+          { kind: "statement_balance", value: 391.2, evidence: "Statement balance $391.20" },
         ],
       },
       provider: providerWith({}),
@@ -92,7 +124,7 @@ describe("semantic bill amount verifier", () => {
     const provider = providerWith({
       amount: 19.32,
       amount_kind: "transaction_amount",
-      amount_candidates: [{ kind: "transaction_amount", value: 19.32 }],
+      amount_candidates: [{ kind: "transaction_amount", value: 19.32, evidence: "You redeemed $19.32 cash back" }],
     });
     const result = await verifyBillAmounts({
       content: "You redeemed $19.32 cash back.",
@@ -111,20 +143,20 @@ describe("semantic bill amount verifier", () => {
 
   it("accepts a verifier that recovers a missing statement balance", async () => {
     const result = await verifyBillAmounts({
-      content: "Minimum payment $40.00. Plan balance $0.00. Remaining statement balance $391.20.",
+      content: "Minimum payment $40.00. Plan balance $0.00. Statement balance $391.20.",
       candidate: {
         amount: 40,
         amount_kind: "minimum_due",
-        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+        amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
         payee_hint: "Example Bank",
       },
       provider: providerWith({
         amount: 391.2,
         amount_kind: "statement_balance",
         amount_candidates: [
-          { kind: "minimum_due", value: 40 },
-          { kind: "other", value: 0 },
-          { kind: "statement_balance", value: 391.2 },
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" },
+          { kind: "other", value: 0, evidence: "Plan balance $0.00" },
+          { kind: "statement_balance", value: 391.2, evidence: "Statement balance $391.20" },
         ],
       }),
       providerId: "openai",
@@ -150,26 +182,26 @@ describe("semantic bill amount verifier", () => {
       candidate: {
         amount: 40,
         amount_kind: "minimum_due",
-        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+        amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
       },
       provider: providerWith({
         amount: 40,
         amount_kind: "minimum_due",
-        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+        amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
       }),
       providerId: "openai",
       model: "test-model",
     });
     expect(result.candidate.amount).toBeNull();
     expect(result.candidate.amount_kind).toBeNull();
-    expect(result.candidate.amount_verification?.status).toBe("kept_initial");
+    expect(result.candidate.amount_verification?.status).toBe("failed");
   });
 
   it("fails closed instead of restoring minimum due when the verifier is unavailable", async () => {
     const provider = { extract: vi.fn(async () => { throw new Error("offline"); }) } as BillExtractionProvider;
     const result = await verifyBillAmounts({
       content: "Minimum $40.00. Balance $391.20.",
-      candidate: { amount: 40, amount_kind: "minimum_due", amount_candidates: [{ kind: "minimum_due", value: 40 }] },
+      candidate: { amount: 40, amount_kind: "minimum_due", amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }] },
       provider,
       providerId: "openai",
       model: "test-model",
@@ -188,7 +220,7 @@ describe("semantic bill amount verifier", () => {
       candidate: {
         amount: 40,
         amount_kind: "minimum_due",
-        amount_candidates: [{ kind: "minimum_due", value: 40 }],
+        amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
       },
       provider,
       providerId: "openai",
@@ -198,8 +230,82 @@ describe("semantic bill amount verifier", () => {
     expect(result.candidate).toMatchObject({
       amount: null,
       amount_kind: null,
-      amount_candidates: [{ kind: "minimum_due", value: 40 }],
+      amount_candidates: [{ kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" }],
       amount_verification: { status: "corrected" },
     });
   });
+
+  it("allows whitespace-normalized evidence and a genuine zero statement balance", async () => {
+    const result = await verifyBillAmounts({
+      content: "Statement balance |\n$0.00\nPayment amount | $472.32",
+      candidate: {
+        amount: 0,
+        amount_kind: "statement_balance",
+        amount_candidates: [
+          { kind: "statement_balance", value: 0, evidence: "Statement balance | $0.00" },
+          { kind: "payment_amount", value: 472.32, evidence: "Payment amount | $472.32" },
+        ],
+      },
+      provider: providerWith({}),
+      providerId: "openai",
+      model: "test-model",
+    });
+    expect(selectSemanticBillAmount(result.candidate)?.amount).toBe(0);
+    expect(result.candidate.amount_verification).toBeUndefined();
+  });
+
+  it.each([
+    { evidence: "Statement balance $472.32", value: 472.32 },
+    { evidence: "Remaining statement balance | $472.32", value: 472.31 },
+    { evidence: "Minimum payment | $40.00...Remaining statement balance | $472.32", value: 472.32 },
+  ])("rejects ungrounded audit corrections and retains evidence for review: $evidence / $value", async ({ evidence, value }) => {
+    const candidate = {
+      amount: 0,
+      amount_kind: "statement_balance" as const,
+      amount_candidates: [
+        { kind: "minimum_due" as const, value: 40, evidence: "Minimum payment | $40.00" },
+        { kind: "statement_balance" as const, value: 0, evidence: "Remaining statement balance $0.00" },
+        { kind: "payment_amount" as const, value: 472.32, evidence: "Autopay On $472.32" },
+      ],
+    };
+    const result = await verifyBillAmounts({
+      content: "Minimum payment | $40.00\nPlan adjusted balance | $0.00\nRemaining statement balance | $472.32",
+      candidate,
+      provider: providerWith({
+        amount: value,
+        amount_kind: "statement_balance",
+        amount_candidates: [
+          { kind: "minimum_due", value: 40, evidence: "Minimum payment | $40.00" },
+          { kind: "other", value: 0, evidence: "Plan adjusted balance | $0.00" },
+          { kind: "statement_balance", value, evidence },
+        ],
+      }),
+      providerId: "openai",
+      model: "test-model",
+    });
+    expect(result.candidate.amount_candidates).toEqual(candidate.amount_candidates);
+    expect(result.candidate.amount_verification?.status).toBe("failed");
+    expect(selectSemanticBillAmount(result.candidate)).toBeNull();
+  });
+
+  it("keeps conflicting grounded statement balances unresolved when the audit cannot resolve them", async () => {
+    const candidate = {
+      amount: 472.32,
+      amount_kind: "statement_balance" as const,
+      amount_candidates: [
+        { kind: "statement_balance" as const, value: 472.32, evidence: "Statement balance | $472.32" },
+        { kind: "statement_balance" as const, value: 501, evidence: "Statement balance | $501.00" },
+      ],
+    };
+    const result = await verifyBillAmounts({
+      content: "Statement balance | $472.32\nStatement balance | $501.00",
+      candidate,
+      provider: providerWith(candidate),
+      providerId: "openai",
+      model: "test-model",
+    });
+    expect(result.candidate.amount_verification?.status).toBe("failed");
+    expect(selectSemanticBillAmount(result.candidate)).toBeNull();
+  });
+
 });

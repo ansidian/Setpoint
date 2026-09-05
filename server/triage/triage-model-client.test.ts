@@ -93,7 +93,8 @@ describe("triage model client", () => {
     const fetchImpl = vi.fn(async (_input: string | URL | Request, _options?: RequestInit) => anthropicResponse());
     const client = createTriageModelClient({ fetchImpl });
 
-    const result = await client.classify({ tier: "strong", email, reason: "hard_risk_override" });
+    const lateEvidence = `${"Earlier context. ".repeat(300)}\nYour request was cancelled. No further action is needed.`;
+    const result = await client.classify({ tier: "strong", email: { ...email, body_text: lateEvidence }, reason: "hard_risk_override" });
 
     // test-architecture: allow-boundary-interaction -- Triage model fetch is an outbound AI-provider boundary; tier selection, retry payloads, and abort propagation are compatibility contracts.
     const [url, options] = fetchImpl.mock.calls[0]!;
@@ -115,6 +116,7 @@ describe("triage model client", () => {
     expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
     expect(body.tools[0].cache_control).toEqual({ type: "ephemeral" });
     expect(body.messages[0].content).toContain("Routing reason: hard_risk_override");
+    expect(body.messages[0].content).toContain("Your request was cancelled. No further action is needed.");
     expect(result).toMatchObject({
       provider: "anthropic",
       tier: "strong",
@@ -195,9 +197,9 @@ describe("triage model client", () => {
           amount: 391.2,
           amount_kind: "statement_balance",
           amount_candidates: [
-            { kind: "minimum_due", value: 40 },
-            { kind: "other", value: 0 },
-            { kind: "statement_balance", value: 391.2 },
+            { kind: "minimum_due", value: 40, evidence: "Minimum payment $40.00" },
+            { kind: "other", value: 0, evidence: "Plan balance $0.00" },
+            { kind: "statement_balance", value: 391.2, evidence: "Remaining statement balance $391.20" },
           ],
         },
         usage: {},

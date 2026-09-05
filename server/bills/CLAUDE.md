@@ -5,13 +5,13 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 ## Files
 
 - `bills-service.ts` — public bills API; owns Actual-metadata invalidation fan-out on writes
-- `bill-extract.ts` — trims HTML email bodies to payee/amount/date context for AI
+- `bill-extract.ts` — supplies complete bounded semantic email evidence for financial extraction; rejects incomplete source bodies
 - `bill-extraction-service.ts` — owns candidate-only LLM extraction/verification for the financial-email planner
 - `bill-semantic-prompt.ts` — public bills-domain entry that owns first-pass bill-semantic extraction instructions shared by email triage and manual extraction
 - `bill-extractors/catalog.ts` — bill-extraction defaults and validation facade over the centralized AI model catalog
 - `bill-extractors/anthropic.ts` — Claude tool-use extraction call; records provider usage before field parsing
 - `bill-extractors/openai.ts` — OpenAI structured-JSON extraction call; records provider usage before field parsing
-- `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete multi-amount candidate coverage
+- `billAmountVerifier.ts` — bounded second-pass LLM audit for incomplete amount coverage or ungrounded/conflicting monetary labels; failed audits block canonical selection
 - `billEventVerifier.ts` — bounded second-pass LLM audit for uncertain events or missing payment purpose, with source-grounded type/account evidence and persisted attempt markers
 - `bill-candidate-verification-service.ts` — public bills-domain facade for semantic amount and event verification of email candidates
 - `financial-email-planner.ts` — zero-configuration financial-email contract seam; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes or persists

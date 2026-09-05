@@ -42,6 +42,7 @@
     "email-search:eval": "node server/scripts/email-search-retrieval-eval.ts",
     "email-search:eval:seed": "node server/scripts/seed-email-search-retrieval-eval.ts",
     "email-search:date-backfill": "node server/scripts/backfill-email-date-utc.ts",
+    "email:reindex-evidence": "node server/scripts/reindex-email-evidence.ts",
     "ai-search:embedding-status": "node server/scripts/email-search-embedding-status.ts",
     "ai-search:backfill": "node server/scripts/email-search-embedding-backfill.ts",
     "actual:hydrate-cache": "node server/scripts/hydrate-actual-cache.ts",

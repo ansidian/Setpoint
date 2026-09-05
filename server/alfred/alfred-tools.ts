@@ -1,5 +1,5 @@
 import { cacheAlfredItems, readAlfredItems } from "./alfred-conversations.ts";
-import { searchEmailResultRow, stripQuotedReply, wrapEmailContent } from "./alfred-email-content.ts";
+import { searchEmailResultRow, wrapEmailContent } from "./alfred-email-content.ts";
 import type {
   AlfredBreakdownEvent,
   AlfredItem,
@@ -13,6 +13,7 @@ import type {
 import type { TransactionGroupBy } from "../../shared/types/transactions.ts";
 import type { AlfredToolContext } from "./alfred-types.ts";
 import { stageAlfredCalendarProposal } from "./alfred-calendar-proposals.ts";
+import { boundEmailEvidence, EMAIL_EVIDENCE_TRUNCATED } from "../email/email-evidence.ts";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 92;
@@ -21,13 +22,6 @@ const MAX_SEARCH_LIMIT = 20;
 // Exported because the run loop's cite-nudge cap is defined as "one default page":
 // a default search must never return a set too large for the backstop to arm (C8).
 export const DEFAULT_SEARCH_LIMIT = 12;
-// Every full body the model reads is written into context once (cache write,
-// 1.25x) and re-read on each later turn (0.1x) — the one-time write dominates,
-// so shrinking what enters context is the biggest cost lever. The decision/answer
-// signal lives in the email lede; the tail is overwhelmingly boilerplate
-// (signatures, quoted threads, unsubscribe/legal footers). stripQuotedReply
-// removes quoted chains; this cap backstops the rest. Lowered from 6000.
-const BODY_CHAR_LIMIT = 3000;
 const MAX_TXN_LIMIT = 50;
 const DEFAULT_TXN_LIMIT = 25;
 const SHOW_KINDS = new Set<AlfredItemKind>(["email", "event", "deadline", "bill", "transaction"]);
@@ -57,7 +51,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
   {
     name: "get_email_body",
-    description: "Read the full plain-text body of one email by uid (from search_email results).",
+    description: "Read structure-preserving email text, including quoted and forwarded context, by uid (from search_email results). Oversized messages return truncated: true and an explicit incompleteness marker; do not infer that missing details are absent from the full message.",
     input_schema: {
       type: "object",
       properties: {
@@ -309,16 +303,17 @@ async function runGetEmailBody(input: ToolInput, { userId, deps }: AlfredToolCon
   if (!uid) return { error: "uid is required" };
   const body = await deps.getEmailBody(userId, uid);
   if (!body) return { error: `No email found for uid ${uid}` };
-  // Strip quoted reply/forward chains before the cap so the cap bounds the
-  // owner's actual message, not thread history the model doesn't need re-fed.
+  // Quoted and forwarded context can contain the obligation or the details
+  // needed to interpret a reply. Preserve it within the shared evidence limit.
   const html = "html_body" in body ? body.html_body : body.body;
-  const text = stripQuotedReply(deps.htmlToPlainText(html || "")).slice(0, BODY_CHAR_LIMIT);
+  const text = boundEmailEvidence(deps.htmlToPlainText(html || ""));
   return {
     uid,
     subject: wrapEmailContent(uid, body.subject || ""),
     from: wrapEmailContent(uid, body.from || ""),
     date: body.date || "",
     body: wrapEmailContent(uid, text),
+    ...(text.includes(EMAIL_EVIDENCE_TRUNCATED) ? { truncated: true } : {}),
   };
 }
 

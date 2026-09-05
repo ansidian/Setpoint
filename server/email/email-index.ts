@@ -1,5 +1,6 @@
 import db from "../db/connection.ts";
 import { normalizeEmailDateUtc } from "./email-date.ts";
+import { boundEmailEvidence, EMAIL_EVIDENCE_CHAR_LIMIT } from "./email-evidence.ts";
 import { detectVerificationCode } from "./verification-code-detector.ts";
 import type { InStatement } from "@libsql/client";
 import type {
@@ -22,7 +23,7 @@ interface QueueEmailIndexBackfillOptions extends EmailIndexHealthOptions {
   now?: Date;
 }
 
-export const EMAIL_INDEX_BODY_TEXT_MAX_CHARS = 20_000;
+export const EMAIL_INDEX_BODY_TEXT_MAX_CHARS = EMAIL_EVIDENCE_CHAR_LIMIT;
 const EMAIL_INDEX_LOOKUP_CHUNK_SIZE = 500;
 
 // Loose check that a token looks like a single bare email address.
@@ -296,7 +297,7 @@ export async function indexEmails(userId: string, emails: NormalizedFetchedEmail
     const uid = email.uid;
     const subject = email.subject || "";
     const bodySnippet = email.body_preview || "";
-    const bodyText = String(email.body_text || "").slice(0, EMAIL_INDEX_BODY_TEXT_MAX_CHARS);
+    const bodyText = boundEmailEvidence(String(email.body_text || ""), EMAIL_INDEX_BODY_TEXT_MAX_CHARS);
     const emailDate = email.date || "";
     const emailDateUtc = normalizeEmailDateUtc(emailDate);
     const read = email.read ? 1 : 0;

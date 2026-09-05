@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { clearCurrentDashboardEventSubscribers, subscribeCurrentDashboardEvents } from "../dashboard/current-events.ts";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.ts";
 import { processNextEmailTriageJob } from "./triage-worker.ts";
+import { boundEmailEvidence, EMAIL_EVIDENCE_CHAR_LIMIT } from "../email/email-evidence.ts";
 import type { InStatement } from "@libsql/client";
 
 // test-architecture: allow-boundary-mock -- AI API-key resolution is a write-only secret boundary; routing tests use process-local test credentials while asserting migrated decision/usage rows.
@@ -11,6 +12,21 @@ vi.mock("../ai-credentials.ts", () => ({
 }));
 
 describe("email triage worker model routing", () => {
+  it("retains an incomplete email for review before rules or models can dismiss it", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Weekly newsletter",
+      from_name: "Newsletter",
+      from_address: "newsletter@example.com",
+      body_snippet: "Unsubscribe from weekly offers.",
+      body_text: boundEmailEvidence("Weekly offers. ".repeat(EMAIL_EVIDENCE_CHAR_LIMIT)),
+    });
+    const result = await processNextEmailTriageJob({ dbClient, now: new Date("2026-05-03T12:30:00.000Z") });
+    expect(result).toMatchObject({ processed: true, lane: "needs_attention", source: "failure_fallback", model_calls: [] });
+    const saved = await dbClient.execute("SELECT triage_status, escalation_badge, bill_candidate_json, financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
+    expect(saved.rows[0]).toMatchObject({ triage_status: "failed", escalation_badge: "Needs Review", bill_candidate_json: null, financial_email_plan_json: null });
+  });
+
   it("routes a receipt rule through semantic triage and persists its incomplete financial candidate", async () => {
     const dbClient = await createMigratedDb();
     const queued = await queueEmail(dbClient, {

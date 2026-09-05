@@ -19,6 +19,7 @@
     ],
     "email": [
       "email-service.ts",
+      "email-evidence.ts",
       "email-backfill-worker.ts",
       "gmail-pubsub.ts",
       "gmail-sync.ts",

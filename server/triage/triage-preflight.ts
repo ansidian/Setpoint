@@ -276,7 +276,7 @@ function matchesRule(email: Partial<TriageEmail>, rule: TriageRule, parts = text
   if (match.body_includes?.length && !match.allow_body_match && !match.body_match_enabled) return false;
   if (match.body_includes?.length && !includesAny(parts.body, match.body_includes)) return false;
   if (match.body_regex && !(match.allow_body_match || match.body_match_enabled)) return false;
-  if (match.body_regex && !regexMatches(parts.body.slice(0, 3500), match.body_regex)) return false;
+  if (match.body_regex && !regexMatches(parts.body, match.body_regex)) return false;
   if (match.all_includes?.length && !includesAll(parts.allText, match.all_includes)) return false;
   if (match.any_includes?.length && !includesAny(parts.allText, match.any_includes)) return false;
 
