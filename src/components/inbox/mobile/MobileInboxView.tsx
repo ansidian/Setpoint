@@ -1,3 +1,5 @@
+import { AnimatePresence } from "motion/react";
+import InboxRowTransition from "../InboxRowTransition";
 import { publicAssetUrl } from "@/publicAsset";
 import {
   Filter,
@@ -295,7 +297,7 @@ export default function MobileInboxView({
               </div>
             ) : !indexedSearchActive && liveEmailsLoading && visibleEmails.length === 0 ? (
               <MobileLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
-            ) : visibleEmails.length > 0 ? (
+            ) : (
               <>
                 {pinnedRows.length > 0 && (
                   <div
@@ -320,9 +322,10 @@ export default function MobileInboxView({
                     </span>
                   </div>
                 )}
+                <AnimatePresence initial={false}>
                 {pinnedRows.map((email) => (
+                  <InboxRowTransition key={email.id || email.uid}>
                   <MobileEmailRow
-                    key={email.id || email.uid}
                     email={email}
                     account={rowAccountsById[email.accountId || ""] || rowAccountsById[email._accountKey || ""]}
                     onOpen={guardedOpen}
@@ -330,10 +333,13 @@ export default function MobileInboxView({
                     accent={accent}
                     nowTick={nowTick}
                   />
+                  </InboxRowTransition>
                 ))}
+                </AnimatePresence>
+                <AnimatePresence initial={false}>
                 {restRows.map((email) => (
+                  <InboxRowTransition key={email.id || email.uid}>
                   <MobileEmailRow
-                    key={email.id || email.uid}
                     email={email}
                     account={rowAccountsById[email.accountId || ""] || rowAccountsById[email._accountKey || ""]}
                     onOpen={guardedOpen}
@@ -341,9 +347,10 @@ export default function MobileInboxView({
                     accent={accent}
                     nowTick={nowTick}
                   />
+                  </InboxRowTransition>
                 ))}
-              </>
-            ) : (
+                </AnimatePresence>
+                {visibleEmails.length === 0 && (
               <div
                 style={{
                   padding: "36px 18px",
@@ -354,6 +361,8 @@ export default function MobileInboxView({
               >
                 {mobileUnreadOnly ? (indexedSearchActive && indexedSearchHasMore ? "No unread messages in the loaded results." : "No unread messages in this view.") : indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
               </div>
+                )}
+              </>
             )}
             {indexedSearchActive && indexedSearchHasMore && (
               <div style={{ padding: "6px 16px 0" }}>

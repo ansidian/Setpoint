@@ -1,3 +1,5 @@
+import { AnimatePresence } from "motion/react";
+import CompletionTransition from "../CompletionTransition";
 import "./MobileComingUp.css";
 import { useState } from "react";
 import { CreditCard, CalendarClock, Circle } from "lucide-react";
@@ -121,16 +123,19 @@ export default function ComingUpCard({ items = [], isMobile = false, onJump, onC
     >
       <SectionHeader isMobile={isMobile} title="Coming up" right={<div style={{ fontSize: 10, color: "rgba(205,214,244,0.4)" }}>Next 7 days</div>} />
       <div style={{ marginTop: 6 }}>
-        {displayed.map((row, i) => (
-          <ComingUpRow
-            key={row.id}
-            row={row}
-            isLast={i === displayed.length - 1}
-            isMobile={isMobile}
-            onJump={onJump}
-            onComplete={handleComplete}
-          />
-        ))}
+        <AnimatePresence initial={false} custom={completedIds}>
+          {displayed.map((row, i) => (
+            <CompletionTransition key={row.id} itemId={row.id}>
+            <ComingUpRow
+              row={row}
+              isLast={i === displayed.length - 1}
+              isMobile={isMobile}
+              onJump={onJump}
+              onComplete={handleComplete}
+            />
+            </CompletionTransition>
+          ))}
+        </AnimatePresence>
         {isMobile && visible.length > 3 && (
           <button type="button" className="mobile-coming-toggle" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
             {expanded ? "Show less" : `View all ${visible.length} upcoming items`}

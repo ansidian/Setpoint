@@ -1,3 +1,5 @@
+import { AnimatePresence } from "motion/react";
+import CompletionTransition from "../CompletionTransition";
 import { useId, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp, Circle, Clock, CreditCard, Mail, MailOpen } from "lucide-react";
 import type { NeedsYouBandProps } from "./NeedsYouBand";
@@ -10,6 +12,7 @@ const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
 const COLLAPSED_COUNT = 3;
 
 interface MobileNeedsYouListProps {
+  handledIds: readonly string[];
   urgentCards: NeedsYouCard[];
   countN: number;
   countColor: string;
@@ -23,7 +26,7 @@ interface MobileNeedsYouListProps {
   onStartHere: (card: NeedsYouCard, anchor: HTMLButtonElement) => void;
 }
 
-export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown, actionError, onOpen, onMarkHandled, onComplete, onJump, recommendation, onStartHere }: MobileNeedsYouListProps) {
+export function MobileNeedsYouList({ handledIds, urgentCards, countN, countColor, breakdown, actionError, onOpen, onMarkHandled, onComplete, onJump, recommendation, onStartHere }: MobileNeedsYouListProps) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const headingId = useId();
@@ -53,52 +56,58 @@ export function MobileNeedsYouList({ urgentCards, countN, countColor, breakdown,
         </header>
       )}
       {actionError && <p className="mobile-needs-you__error" role="alert">{actionError}</p>}
-      {recommendation && (
-        <StartHereStrip card={recommendation} isMobile onActivate={onStartHere}
-          onMarkHandled={onMarkHandled} onComplete={onComplete} />
-      )}
-      {countN > 0 && (
-        <ul id={listId} className="mobile-needs-you__list">
-          {visibleCards.map((card) => {
-            const SourceIcon = SOURCE_ICONS[card.sourceIcon];
-            const actionLabel = card.email ? "Mark handled" : "Mark done";
-            const hasAction = card.email ? card.handleable : card.completable;
-            return (
-              <li key={card.id} className="mobile-needs-you__row">
-                <button
-                  type="button"
-                  className="mobile-needs-you__open dashboard-item-trigger sp-focus-ring"
-                  aria-label={`Open ${card.source.toLowerCase()}: ${card.title}`}
-                  onClick={(event) => {
-                    if (card.email) onOpen(card);
-                    else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, event.currentTarget);
-                  }}
-                >
-                  <SourceIcon size={16} className="mobile-needs-you__source" aria-hidden="true" />
-                  <span className="mobile-needs-you__copy">
-                    <span className="mobile-needs-you__title">{card.title}</span>
-                    <span className="mobile-needs-you__meta">
-                      <span className="mobile-needs-you__urgency">{card.pill.label}</span>
-                      {` · ${card.meta}`}
-                    </span>
-                  </span>
-                </button>
-                {hasAction && (
+      <AnimatePresence initial={false} custom={handledIds}>
+        {recommendation && (
+          <CompletionTransition key={recommendation.id} itemId={recommendation.id}>
+          <StartHereStrip card={recommendation} isMobile onActivate={onStartHere}
+            onMarkHandled={onMarkHandled} onComplete={onComplete} />
+          </CompletionTransition>
+        )}
+      </AnimatePresence>
+        <div role="list" id={listId} className="mobile-needs-you__list">
+          <AnimatePresence initial={false} custom={handledIds}>
+            {visibleCards.map((card) => {
+              const SourceIcon = SOURCE_ICONS[card.sourceIcon];
+              const actionLabel = card.email ? "Mark handled" : "Mark done";
+              const hasAction = card.email ? card.handleable : card.completable;
+              return (
+                <CompletionTransition key={card.id} itemId={card.id}>
+                <div role="listitem" className="mobile-needs-you__row">
                   <button
                     type="button"
-                    className="mobile-needs-you__action sp-focus-ring"
-                    aria-label={`${actionLabel}: ${card.title}`}
-                    onClick={() => card.email ? onMarkHandled(card) : onComplete(card)}
+                    className="mobile-needs-you__open dashboard-item-trigger sp-focus-ring"
+                    aria-label={`Open ${card.source.toLowerCase()}: ${card.title}`}
+                    onClick={(event) => {
+                      if (card.email) onOpen(card);
+                      else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, event.currentTarget);
+                    }}
                   >
-                    <Check size={14} aria-hidden="true" />
-                    <span>{actionLabel}</span>
+                    <SourceIcon size={16} className="mobile-needs-you__source" aria-hidden="true" />
+                    <span className="mobile-needs-you__copy">
+                      <span className="mobile-needs-you__title">{card.title}</span>
+                      <span className="mobile-needs-you__meta">
+                        <span className="mobile-needs-you__urgency">{card.pill.label}</span>
+                        {` · ${card.meta}`}
+                      </span>
+                    </span>
                   </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  {hasAction && (
+                    <button
+                      type="button"
+                      className="mobile-needs-you__action sp-focus-ring"
+                      aria-label={`${actionLabel}: ${card.title}`}
+                      onClick={() => card.email ? onMarkHandled(card) : onComplete(card)}
+                    >
+                      <Check size={14} aria-hidden="true" />
+                      <span>{actionLabel}</span>
+                    </button>
+                  )}
+                </div>
+                </CompletionTransition>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       {queuedCards.length > collapsedQueueCount && (
         <button
           type="button"

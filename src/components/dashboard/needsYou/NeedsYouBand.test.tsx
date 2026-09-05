@@ -14,7 +14,7 @@ describe("NeedsYouBand", () => {
     const onMarkHandled = vi.fn();
     render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} onMarkHandled={onMarkHandled} />);
     fireEvent.click(screen.getByText("Mark handled"));
-    expect(screen.queryByText("PR blocker")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Open email: PR blocker/ })).toBeNull();
   });
 
   it("clicking 'Mark done' on a deadline calls onCompleteDeadline(id, data) and removes the card", () => {
@@ -28,7 +28,7 @@ describe("NeedsYouBand", () => {
       />,
     );
     fireEvent.click(screen.getByText("Mark done"));
-    expect(screen.queryByText("Ship the thing")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Open task: Ship the thing/ })).toBeNull();
   });
 
 
@@ -77,12 +77,12 @@ describe("NeedsYouBand", () => {
       await act(async () => {
         fireEvent.click(screen.getByText("Mark handled"));
       });
-      expect(screen.queryByText("PR blocker")).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Open email: PR blocker/ })).toBeNull();
 
       // Server data still contains the item (server hasn't caught up yet) — the
       // id must NOT be pruned, so the card stays hidden.
       rerender(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} onMarkHandled={onMarkHandled} />);
-      expect(screen.queryByText("PR blocker")).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Open email: PR blocker/ })).toBeNull();
 
       // Server view no longer contains the item — prune fires, `handled` drops
       // the stale id.

@@ -4,6 +4,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ## Files
 
+- `CompletionTransition.tsx` — completion-only Done receipt and departure for Needs You and Coming Up; departing controls are inert and reduced motion is immediate.
+
 ### Shell + layout
 - `DashboardShell.tsx` — orchestrates state and tab switching; supplies mobile Inbox app actions while hiding its redundant shell header; mobile Dashboard uses a compact date/title header with shared app actions; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`; routes Alfred proposal review into the typed Calendar bridge without pre-closing the panel
 - `DashboardTabPanel.tsx` — dashboard-specific tab seam combining keep-alive/freeze behavior with the responsive `tabpanel` ID and accessible name contract

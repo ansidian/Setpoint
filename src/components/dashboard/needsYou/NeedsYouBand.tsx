@@ -1,3 +1,5 @@
+import { AnimatePresence } from "motion/react";
+import CompletionTransition from "../CompletionTransition";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel, collectNeedsYouCandidateIds } from "./needsYouModel";
@@ -154,6 +156,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   if (isMobile) {
     return (
       <MobileNeedsYouList
+        handledIds={handled}
         urgentCards={model.urgentCards}
         countN={model.countN}
         countColor={model.countColor}
@@ -181,10 +184,14 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
         {errorLine}
       </div>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch" }}>
-        {recommendation && (
-          <StartHereStrip card={recommendation} onActivate={handleStartHere}
-            onMarkHandled={handleMarkHandled} onComplete={handleComplete} />
-        )}
+        <AnimatePresence initial={false} custom={handled}>
+          {recommendation && (
+            <CompletionTransition key={recommendation.id} itemId={recommendation.id}>
+            <StartHereStrip card={recommendation} onActivate={handleStartHere}
+              onMarkHandled={handleMarkHandled} onComplete={handleComplete} />
+            </CompletionTransition>
+          )}
+        </AnimatePresence>
         <div
           ref={desktopCardRowRef}
           data-testid="needs-you-card-row"
@@ -197,16 +204,18 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
             padding: useDesktopRail ? "3px 1px 6px" : 0,
           }}
         >
-          {queuedUrgentCards.map((card) => (
-            <div key={card.id} style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
-              <PriorityCard card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
-            </div>
-          ))}
-          {model.backfillCards.map((card) => (
-            <div key={card.id} style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
-              <PriorityCard card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} onJump={onOpen} />
-            </div>
-          ))}
+          <AnimatePresence initial={false} custom={handled}>
+            {queuedUrgentCards.map((card) => (
+              <CompletionTransition key={card.id} itemId={card.id} horizontal style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
+                <PriorityCard card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
+              </CompletionTransition>
+            ))}
+            {model.backfillCards.map((card) => (
+              <CompletionTransition key={card.id} itemId={card.id} horizontal style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
+                <PriorityCard card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} onJump={onOpen} />
+              </CompletionTransition>
+            ))}
+          </AnimatePresence>
         </div>
       </div>
     </div>
