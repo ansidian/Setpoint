@@ -6,7 +6,7 @@ test("returns from the mobile inbox on browser back", async ({ page }) => {
 
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Inbox" }).click();
+  await page.getByRole("button", { name: "Inbox", exact: true }).click();
   await expect(page.getByTestId("inbox-mobile-list")).toBeVisible();
 
   await page.goBack();

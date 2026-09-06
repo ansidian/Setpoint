@@ -575,6 +575,10 @@ async function installBaseDashboardFixtures(page: Page, {
     }),
   );
 
+  await page.route("**/api/briefing/email/arrival-grace/settle", async (route) =>
+    json(route, { ok: true, settled: 0, emailIds: [] }),
+  );
+
   await page.route("**/api/calendar/deadlines", async (route) => {
     const latest = buildBriefing({ events, emailAccounts, briefing });
     return json(route, latest.deadlines);
@@ -898,6 +902,10 @@ export async function installDashboardInboxFixtures(page: Page) {
       body: liveEmail?.body_preview || "Loaded email body",
     });
   });
+
+  await page.route("**/api/briefing/email/snoozed", async (route) =>
+    json(route, []),
+  );
 
   await page.route("**/api/briefing/email/remote-content-trust", async (route) =>
     json(route, []),

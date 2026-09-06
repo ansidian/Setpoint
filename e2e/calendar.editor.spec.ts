@@ -60,7 +60,7 @@ test("opens a fresh event editor from the Calendar workspace every time", async 
   await page.getByRole("button", { name: "New event" }).click();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
   await page.getByTestId("calendar-event-title").fill("Temporary draft");
-  await page.getByTestId("calendar-event-editor-mode-create").getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByTestId("calendar-event-editor-rail").getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
 
   await page.getByRole("button", { name: "New event" }).click();
