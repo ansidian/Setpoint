@@ -1,12 +1,7 @@
 import { useRef } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { CalendarDays, Inbox, LayoutList, Newspaper, Notebook } from "lucide-react";
-import { Kbd } from "./Kbd";
 import type { DashboardTab } from "../dashboard/dashboardShellModel";
 
-const TAB_ICONS = {
-  dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays, notes: Notebook, news: Newspaper,
-};
 // Exported so DashboardShell's tabpanel wrappers can reuse the same label
 // text for their mobile aria-label fallback (ShellTabs doesn't render on
 // mobile, so the ids these labels would otherwise resolve via aria-labelledby
@@ -51,19 +46,10 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount, notesEnabled = t
     <div
       role="tablist"
       aria-label="Primary"
-      style={{
-        display: "flex",
-        gap: 2,
-        padding: 3,
-        borderRadius: 10,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.05)",
-        minWidth: 0,
-      }}
+      className="shell-primary-tabs"
     >
       {tabs.map((tabKey) => {
         const showUnread = tabKey === "inbox" && inboxUnreadSignalCount > 0;
-        const Icon = TAB_ICONS[tabKey];
         return (
           <button
             key={tabKey}
@@ -74,28 +60,12 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount, notesEnabled = t
             aria-controls={`shell-tabpanel-${tabKey}`}
             aria-selected={tab === tabKey}
             tabIndex={tab === tabKey ? 0 : -1}
-            className="shell-tab sp-focus-ring"
+            className="shell-nav-tab"
+            title={`${TAB_LABELS[tabKey]} (${tab === "notes" ? "`" : ""}${TAB_KEYS[tabKey]})`}
             onClick={() => onTab(tabKey)}
             onKeyDown={handleKeyDown}
-            style={{
-              padding: "5px 12px",
-              borderRadius: 7,
-              border: "none",
-              cursor: "pointer",
-              fontSize: 11.5,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-              fontFamily: "inherit",
-              background: tab === tabKey ? "rgba(255,255,255,0.06)" : "transparent",
-              color: tab === tabKey ? "var(--sp-text)" : "var(--color-text-faint)",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              minWidth: 0,
-            }}
           >
-            <Icon size={12} />
+            <span>{TAB_LABELS[tabKey]}</span>
             {showUnread && (
               <span
                 title={`${inboxUnreadSignalCount} unread`}
@@ -119,8 +89,6 @@ export function ShellTabs({ tab, onTab, inboxUnreadSignalCount, notesEnabled = t
                 {inboxUnreadSignalCount > 99 ? "99+" : inboxUnreadSignalCount}
               </span>
             )}
-            <span>{TAB_LABELS[tabKey]}</span>
-            <Kbd>{tab === "notes" ? `\`${TAB_KEYS[tabKey]}` : TAB_KEYS[tabKey]}</Kbd>
           </button>
         );
       })}

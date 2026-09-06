@@ -117,6 +117,7 @@ describe("OverflowMenu menu-button semantics + keyboard model", () => {
     expect(document.activeElement).toBe(items[1]);
 
     // wrap from last back to first
+    items[items.length - 1]!.focus();
     fireEvent.keyDown(items[items.length - 1]!, { key: "ArrowDown" });
     expect(document.activeElement).toBe(items[0]);
   });

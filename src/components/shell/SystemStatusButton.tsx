@@ -8,6 +8,7 @@ import {
   CircleDashed,
   Info,
   LoaderCircle,
+  RefreshCw,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 
@@ -140,12 +141,18 @@ function usePanelPosition(open: boolean, triggerRef: RefObject<HTMLButtonElement
   return position;
 }
 
-function StatusPanel({ status, onClose, panelRef, position }: {
+function StatusPanel({ status, onClose, panelRef, position, refreshing, onQuickRefresh }: {
+  refreshing?: boolean;
+  onQuickRefresh?: () => unknown;
   status: SystemStatusView;
   onClose: () => void;
   panelRef: RefObject<HTMLDivElement | null>;
   position: PanelPosition;
 }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (onQuickRefresh) closeRef.current?.focus();
+  }, [onQuickRefresh]);
   const [closeHover, setCloseHover] = useState(false);
   const [closeFocus, setCloseFocus] = useState(false);
   const [closePressed, setClosePressed] = useState(false);
@@ -211,6 +218,8 @@ function StatusPanel({ status, onClose, panelRef, position }: {
           }}
           onPointerDown={() => setClosePressed(true)}
           onPointerUp={() => setClosePressed(false)}
+          ref={closeRef}
+          className={onQuickRefresh ? "shell-health-close" : undefined}
           aria-label="Close system status"
           style={{
             border: "1px solid rgba(255,255,255,0.08)",
@@ -229,6 +238,19 @@ function StatusPanel({ status, onClose, panelRef, position }: {
         </button>
       </div>
       <SystemStatusDetails status={status} />
+      {onQuickRefresh && (
+        <button
+          type="button"
+          className="shell-health-sync"
+          disabled={refreshing}
+          aria-busy={refreshing}
+          onClick={() => { void onQuickRefresh(); }}
+        >
+          <RefreshCw size={13} aria-hidden="true" />
+          <span>{refreshing ? "Syncing…" : "Sync now"}</span>
+          <kbd aria-hidden="true">R</kbd>
+        </button>
+      )}
     </div>,
     document.body,
   );
@@ -286,7 +308,9 @@ export function SystemStatusDetails({ status }: { status: SystemStatusView }) {
   );
 }
 
-export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = false }: {
+export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = false, refreshing = false, onQuickRefresh }: {
+  refreshing?: boolean;
+  onQuickRefresh?: () => unknown;
   systemStatus?: SystemStatusView | null;
   isMobile?: boolean;
 }) {
@@ -297,12 +321,13 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
   const [focused, setFocused] = useState(false);
   const [pressed, setPressed] = useState(false);
   const status = systemStatus || FALLBACK_STATUS;
-  const state = normalizeState(status.state);
+  const sourceState = normalizeState(status.state);
+  const state = refreshing && sourceState === "current" ? "syncing" : sourceState;
   const color = STATE_COLOR[state];
   const position = usePanelPosition(open, triggerRef);
   const active = hover || open || focused;
   const attention = isAttentionState(state);
-  const busy = isBusyState(state);
+  const busy = refreshing || isBusyState(state);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -314,7 +339,10 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        if (!isMobile) triggerRef.current?.focus();
+      }
     }
 
     document.addEventListener("pointerdown", onPointerDown);
@@ -323,14 +351,17 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
       document.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
+        className={isMobile ? undefined : "shell-health-control"}
+        title={`System status: ${STATE_COPY[state]}${!isMobile ? " · Sync now: R" : ""}`}
         aria-label={`System status: ${state}`}
+        aria-busy={busy}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((value) => !value)}
@@ -354,13 +385,13 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
           // group. At rest the glyph color carries the signal; attention states
           // also tint the border + fill so urgency wins the foreground.
           border: `1px solid ${
-            attention
+            !isMobile && !attention && !active ? "transparent" : attention
               ? `${color}59`
               : active
                 ? "rgba(255,255,255,0.16)"
                 : "rgba(255,255,255,0.08)"
           }`,
-          background: attention
+          background: !isMobile && !attention && !active ? "transparent" : attention
             ? `${color}14`
             : active
               ? "rgba(255,255,255,0.06)"
@@ -376,12 +407,18 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
       >
         <HealthGlyph busy={busy} color={color} isMobile={isMobile} />
       </button>
+      {!isMobile && <span className="sr-only" role="status" aria-live="polite">{refreshing ? "Syncing…" : `System status: ${STATE_COPY[state]}`}</span>}
       {open && (
         <StatusPanel
           status={status}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false);
+            if (!isMobile) triggerRef.current?.focus();
+          }}
           panelRef={panelRef}
           position={position}
+          refreshing={refreshing}
+          onQuickRefresh={onQuickRefresh}
         />
       )}
     </>

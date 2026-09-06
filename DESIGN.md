@@ -272,9 +272,9 @@ Setpoint uses gently rounded, border-led geometry. Dense controls use 6px to 8px
 
 ### Navigation
 
-- **Style:** The shell header owns primary navigation between Dashboard and Inbox. Active states use lavender or V3 accent; inactive states use tinted neutral backgrounds.
+- **Desktop:** A slim, persistent shell prioritizes orientation across Dashboard, Inbox, Calendar, Notes, and News. Use text tabs with a restrained accent active state, quiet inactive labels, and no repeated icons or permanent shortcut badges. Keep Alfred compact with a visible open state and retain a clickable `⌘K` control. Health stays visible in a stable right-hand position, signals refresh activity and issues, and contains the clickable Sync now action. Analytics, Snapshots, and Settings live in overflow. Avoid individually boxing every resting control.
 - **Mobile:** Tabs and sheets must meet the `--sp-touch-min` (44px) canonical hit-target size and avoid reflowing labels into cramped controls. Text inputs must render at ≥16px on mobile viewports to prevent iOS auto-zoom.
-- **Keyboard:** Existing hotkeys and command palette affordances should stay visible through compact labels or key pills.
+- **Keyboard:** Preserve existing shortcuts, including `1–5`, the Notes navigation chord, Alfred, and `R` for sync. Tab and Alfred shortcut hints live in tooltips; the command palette retains its visible `⌘K` affordance.
 
 ### Reminders
 

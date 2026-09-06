@@ -1,10 +1,10 @@
 import { MessageSquare } from "lucide-react";
 import "./ShellAlfredTrigger.css";
+import "./ShellHeader.css";
 import { publicAssetUrl } from "@/publicAsset";
 import MobileShellActions from "./MobileShellActions";
 import { memo, useEffect, useRef, useState } from "react";
 import {
-  AnalyticsTriggerButton,
   OverflowMenu,
   PaletteTriggerButton,
   RefreshButton,
@@ -40,8 +40,8 @@ export interface ShellHeaderProps {
 
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.
- * Tabs are hotkey-indexed (1 = dashboard, 2 = inbox). ⌘K opens the palette.
- * Sync now refreshes current dashboard data.
+ * Tabs retain their number shortcuts; ⌘K opens the palette.
+ * Desktop health owns Sync now; mobile keeps its existing sync control.
  *
  * Wrapped in React.memo: its callback props are now referentially stable from
  * DashboardShell, so the header chrome no longer re-renders on every dashboard
@@ -54,7 +54,6 @@ function ShellHeader({
   tab,
   onTab,
   anyBlockingOverlayOpen = false,
-  analyticsOpen = false,
   onOpenAnalytics,
   onOpenPalette,
   onOpenHistory,
@@ -64,18 +63,9 @@ function ShellHeader({
   systemStatus,
 }: ShellHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const notesNavigationChordRef = useRef(false);
   const notesNavigationChordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const demoMode = isDemoMode();
-
-  useEffect(() => {
-    function onDoc(event: PointerEvent) {
-      if (!(event.target instanceof Node) || !menuRef.current?.contains(event.target)) setMenuOpen(false);
-    }
-    document.addEventListener("pointerdown", onDoc);
-    return () => document.removeEventListener("pointerdown", onDoc);
-  }, []);
 
   useEffect(() => {
     const clearNotesNavigationChord = () => {
@@ -173,8 +163,8 @@ function ShellHeader({
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: isMobile ? "10px 12px" : "12px 20px",
-        paddingTop: `calc(${isMobile ? "10px" : "12px"} + var(--sp-safe-top))`,
+        padding: isMobile ? "10px 12px" : "8px 20px",
+        paddingTop: `calc(${isMobile ? "10px" : "8px"} + var(--sp-safe-top))`,
         borderBottom: "1px solid rgba(255,255,255,0.05)",
         background: "color-mix(in srgb, var(--sp-deep) 94%, transparent)",
         position: "sticky",
@@ -227,26 +217,19 @@ function ShellHeader({
       )}
       <div style={{ flex: 1 }} />
       {!isMobile && !demoMode && onAskAlfred && (
-        <button type="button" className="shell-alfred-trigger" onClick={onAskAlfred} aria-expanded={alfredOpen} title="Ask Alfred (⌘\)">
+        <button type="button" className="shell-alfred-trigger" aria-label="Ask Alfred" onClick={onAskAlfred} aria-expanded={alfredOpen} title="Ask Alfred (⌘\)">
           <MessageSquare size={14} aria-hidden="true" />
-          <span>Ask Alfred</span>
-          <kbd aria-hidden="true">⌘\</kbd>
+          <span>Alfred</span>
         </button>
       )}
-      {!isMobile && (
-        <AnalyticsTriggerButton
-          active={analyticsOpen}
-          onOpenAnalytics={onOpenAnalytics}
-        />
-      )}
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
-      <RefreshButton
+      {isMobile && <RefreshButton
         isMobile={isMobile}
         refreshing={refreshing}
         onQuickRefresh={onQuickRefresh}
-      />
-      <SystemStatusButton isMobile={isMobile} systemStatus={systemStatus} />
-      <div ref={menuRef} style={{ position: "relative" }}>
+      />}
+      <SystemStatusButton isMobile={isMobile} systemStatus={systemStatus} refreshing={!isMobile && refreshing} onQuickRefresh={isMobile ? undefined : onQuickRefresh} />
+      <div style={{ position: "relative" }}>
         <OverflowMenu
           isMobile={isMobile}
           menuOpen={menuOpen}

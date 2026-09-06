@@ -1,4 +1,3 @@
-export { AnalyticsTriggerButton } from "./AnalyticsTriggerButton";
 export { Kbd } from "./Kbd";
 export { OverflowMenu } from "./OverflowMenu";
 export { PaletteTriggerButton } from "./PaletteTriggerButton";

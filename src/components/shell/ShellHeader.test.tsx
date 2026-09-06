@@ -85,7 +85,7 @@ describe("ShellHeader", () => {
 
     const button = screen.getByRole("button", { name: /syncing/i });
     expect(button.getAttribute("aria-busy")).toBe("true");
-    expect(within(button).getByRole("status").textContent).toBe("Syncing…");
+    expect(screen.getByRole("status").textContent).toBe("Syncing…");
   });
 
   it("routes a backtick-number chord from Notes before the canvas receives the digit", () => {

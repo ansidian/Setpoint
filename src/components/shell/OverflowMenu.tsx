@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RefObject } from "react";
 import {
   BarChart3,
@@ -26,6 +27,7 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger = false, isMobi
 
   return (
     <div
+      className={isMobile ? undefined : "shell-desktop-menu-item"}
       role="menuitem"
       tabIndex={-1}
       onClick={onClick}
@@ -72,6 +74,7 @@ function MenuLink({ icon, label, to, onClick, isMobile }: {
   return (
     <Link
       to={to}
+      className={isMobile ? undefined : "shell-desktop-menu-item"}
       role="menuitem"
       tabIndex={-1}
       onClick={onClick}
@@ -112,6 +115,8 @@ function OverflowButton({ open, onClick, isMobile, triggerRef }: {
     <button
       type="button"
       ref={triggerRef}
+      className={isMobile ? undefined : "shell-more-control"}
+      title="More actions"
       aria-label="Open more actions"
       aria-haspopup="menu"
       aria-expanded={open}
@@ -128,8 +133,8 @@ function OverflowButton({ open, onClick, isMobile, triggerRef }: {
         minWidth: isMobile ? 40 : undefined,
         minHeight: isMobile ? 40 : undefined,
         borderRadius: 8,
-        border: `1px solid ${active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
-        background: active ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
+        border: `1px solid ${!isMobile && !active ? "transparent" : active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
+        background: active ? "rgba(255,255,255,0.06)" : isMobile ? "rgba(255,255,255,0.03)" : "transparent",
         color: active ? "var(--sp-text)" : "rgba(205,214,244,0.75)",
         cursor: "pointer",
         display: "grid",
@@ -172,6 +177,32 @@ export function OverflowMenu({
   useEffect(() => {
     onCloseMenuRef.current = onCloseMenu;
   });
+
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  useLayoutEffect(() => {
+    if (!menuOpen || isMobile) return;
+    const update = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPosition({ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.right - 210, window.innerWidth - 218)) });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [menuOpen, isMobile]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (!triggerRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) onCloseMenuRef.current();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
 
   // Focus the first menuitem exactly once when the menu opens. Deliberately
   // depends only on menuOpen so it never re-fires from an unrelated re-render.
@@ -245,62 +276,69 @@ export function OverflowMenu({
     return () => menuNode.removeEventListener("keydown", handleKeyDown);
   }, [menuOpen]);
 
+  const panel = menuOpen ? (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label="More actions"
+      onWheel={(event) => {
+        const panel = event.currentTarget;
+        if ((panel.scrollTop <= 0 && event.deltaY < 0) || (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1 && event.deltaY > 0)) event.preventDefault();
+      }}
+      style={{
+        position: isMobile ? "absolute" : "fixed",
+        right: isMobile ? 0 : undefined,
+        left: isMobile ? undefined : position.left,
+        top: isMobile ? "calc(100% + 6px)" : position.top,
+        width: 210,
+        maxWidth: "calc(100vw - 16px)",
+        maxHeight: "calc(100vh - 72px)",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        isolation: "isolate",
+        minWidth: 210,
+        padding: 6,
+        borderRadius: 10,
+        background: "var(--sp-panel)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+        zIndex: 50,
+      }}
+    >
+      <MenuItem
+        icon={History}
+        label="Snapshots"
+        kbd={isMobile ? null : "Y"}
+        isMobile={isMobile}
+        onClick={() => {
+          onCloseMenu();
+          onOpenHistory?.();
+        }}
+      />
+      <MenuItem
+        icon={BarChart3}
+        label="Analytics"
+        kbd={isMobile ? null : "A"}
+        isMobile={isMobile}
+        onClick={() => {
+          onCloseMenu();
+          onOpenAnalytics?.();
+        }}
+      />
+      <MenuLink
+        icon={SettingsIcon}
+        label="Settings"
+        to="/settings"
+        isMobile={isMobile}
+        onClick={onCloseMenu}
+      />
+    </div>
+  ) : null;
+
   return (
     <>
-      <OverflowButton
-        open={menuOpen}
-        onClick={onToggleMenu}
-        isMobile={isMobile}
-        triggerRef={triggerRef}
-      />
-      {menuOpen && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label="More actions"
-          style={{
-            position: "absolute",
-            right: 0,
-            top: "calc(100% + 6px)",
-            minWidth: 210,
-            padding: 6,
-            borderRadius: 10,
-            background: "var(--sp-panel)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-            zIndex: 50,
-          }}
-        >
-          <MenuItem
-            icon={History}
-            label="Snapshots"
-            kbd={isMobile ? null : "Y"}
-            isMobile={isMobile}
-            onClick={() => {
-              onCloseMenu();
-              onOpenHistory?.();
-            }}
-          />
-          {isMobile && (
-            <MenuItem
-              icon={BarChart3}
-              label="Analytics"
-              isMobile={isMobile}
-              onClick={() => {
-                onCloseMenu();
-                onOpenAnalytics?.();
-              }}
-            />
-          )}
-          <MenuLink
-            icon={SettingsIcon}
-            label="Settings"
-            to="/settings"
-            isMobile={isMobile}
-            onClick={onCloseMenu}
-          />
-        </div>
-      )}
+      <OverflowButton open={menuOpen} onClick={onToggleMenu} isMobile={isMobile} triggerRef={triggerRef} />
+      {isMobile ? panel : createPortal(panel, document.body)}
     </>
   );
 }

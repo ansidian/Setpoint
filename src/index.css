@@ -2232,20 +2232,6 @@ body {
   outline-offset: 2px;
 }
 
-.shell-tab {
-  transition:
-    background-color var(--sp-motion-fast) var(--sp-ease-out),
-    color var(--sp-motion-fast) var(--sp-ease-out),
-    transform var(--sp-motion-fast) var(--sp-ease-out);
-}
-.shell-tab:hover:not([aria-selected="true"]) {
-  background: rgba(255,255,255,0.035) !important;
-  color: color-mix(in srgb, var(--sp-text) 76%, transparent) !important;
-  transform: translateY(-1px);
-}
-.shell-tab:active {
-  transform: translateY(0) scale(0.985);
-}
 .mobile-bottom-nav-button {
   transition:
     color var(--sp-motion-fast) var(--sp-ease-out),
@@ -2437,55 +2423,7 @@ body {
 .system-status-signal--busy {
   animation: systemStatusSignalPulse 1.35s ease-in-out infinite;
 }
-.analytics-trigger-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(205,214,244,0.6);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.2;
-  letter-spacing: 0.2px;
-  cursor: pointer;
-  transform: translateY(0);
-  transition:
-    transform 150ms ease-out,
-    background 150ms ease-out,
-    border-color 150ms ease-out,
-    color 150ms ease-out,
-    box-shadow 150ms ease-out;
-  will-change: transform;
-}
-.analytics-trigger-button:hover,
-.analytics-trigger-button:focus-visible {
-  border-color: rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.05);
-  color: rgba(205,214,244,0.9);
-  transform: translateY(-1px);
-}
-.analytics-trigger-button:active {
-  transform: translateY(0);
-}
-.analytics-trigger-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp-accent) 22%, transparent);
-}
-.analytics-trigger-button[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--sp-accent) 28%, transparent);
-  background: color-mix(in srgb, var(--sp-accent) 13%, transparent);
-  color: var(--sp-accent);
-}
-.analytics-trigger-button[aria-pressed="true"]:hover,
-.analytics-trigger-button[aria-pressed="true"]:focus-visible {
-  border-color: color-mix(in srgb, var(--sp-accent) 36%, transparent);
-  background: color-mix(in srgb, var(--sp-accent) 16%, transparent);
-  color: color-mix(in srgb, var(--sp-accent) 85%, white);
-}
+
 .inbox-mobile-triage-button {
   transition:
     transform 150ms ease-out,
@@ -2586,16 +2524,11 @@ body {
   .system-status-signal--busy {
     animation: none !important;
   }
-  .analytics-trigger-button:hover,
-  .analytics-trigger-button:focus-visible {
-    transform: translateY(0);
-  }
+
   .inbox-mobile-triage-button:hover,
   .inbox-mobile-triage-button:focus-visible {
     transform: translateY(0) !important;
   }
-  .shell-tab:hover,
-  .shell-tab:active,
   .mobile-bottom-nav-button:active,
   .bill-drawer-close:hover,
   .bill-drawer-close:active,
