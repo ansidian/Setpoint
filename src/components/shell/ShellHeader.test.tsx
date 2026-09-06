@@ -70,7 +70,7 @@ describe("ShellHeader", () => {
 
   it("opens provider status details and exposes a reachable dismissal", () => {
     renderHeader();
-    fireEvent.click(screen.getByRole("button", { name: /system status: current/i }));
+    fireEvent.click(screen.getByRole("button", { name: /system status: up to date/i }));
 
     const panel = screen.getByRole("dialog", { name: /system status/i });
     expect(within(panel).getByText("Current data")).toBeTruthy();

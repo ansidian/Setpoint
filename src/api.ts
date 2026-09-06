@@ -52,6 +52,7 @@ import type {
   TldrawBootstrapResponse,
 } from "../shared/types/tldraw.ts";
 import type {
+  CurrentDashboardCacheKey,
   CurrentDashboardHealthResponse,
   CurrentDashboardResponse,
 } from "../shared/types/dashboard.ts";
@@ -276,7 +277,10 @@ export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> =>
 export const getDashboardFinance = (): Promise<DashboardFinanceResponse> => apiFetch("/api/dashboard/finance");
 // Demo serves the same bounded pending-run projection from its in-memory imports.
 export const getDashboardFinanceReviewRuns = (offset = 0): Promise<DashboardFinanceReviewRunsResponse> => apiFetch(`/api/dashboard/finance/review-runs?offset=${offset}`);
-export const requestCurrentDashboardRefresh = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
+export const requestCurrentDashboardRefresh = (source?: CurrentDashboardCacheKey): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", {
+  method: "POST",
+  ...(source ? { body: JSON.stringify({ source }), timeoutMs: 30_000 } : {}),
+});
 export const syncCurrentDashboard = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
 export const getTriageCacheStats = (): Promise<TriageCacheStatsResponse> => apiFetch("/api/ea/triage/cache-stats");
 

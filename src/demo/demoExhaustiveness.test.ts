@@ -76,6 +76,7 @@ const ARGS: Partial<Record<ApiExportName, unknown[]>> = {
   markAllEmailsAsRead: [["demo-email-budget"]],
   reorderAccounts: [[]],
   reorderNewsTopics: [[]],
+  requestCurrentDashboardRefresh: ["calendar_current"],
   searchEmails: ["demo", 10],
   fetchSnoozedEmails: [],
   snoozeEmail: ["demo-id", "2026-05-13T15:30:00.000Z"],

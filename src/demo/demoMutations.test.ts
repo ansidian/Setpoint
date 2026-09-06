@@ -28,6 +28,26 @@ describe("demo mode in-memory mutations", () => {
     vi.resetModules();
   });
 
+  it("retries a fictional source in memory without changing other source timestamps", async () => {
+    const api = await importDemoApi();
+    const before = await api.getCurrentDashboard();
+    vi.setSystemTime(new Date("2026-05-12T15:35:00.000Z"));
+    const refreshed = await api.requestCurrentDashboardRefresh("calendar_current");
+
+    expect(refreshed.systemStatus.sources.find((source) => source.key === "calendar"))
+      .toMatchObject({ state: "current", lastSuccessAt: "2026-05-12T15:35:00.000Z", retrySource: "calendar_current" });
+    expect(refreshed.systemStatus.sources.filter((source) => source.key !== "calendar"))
+      .toEqual(before.systemStatus.sources.filter((source) => source.key !== "calendar"));
+    expect(refreshed.refresh?.scheduled).toEqual([]);
+    expect((await api.getCurrentDashboard()).systemStatus).toEqual(refreshed.systemStatus);
+    expect(networkAttempted).toBe(false);
+
+    vi.resetModules();
+    const reloaded = await import("../api");
+    expect((await reloaded.getCurrentDashboard()).systemStatus.sources.map((source) => source.lastSuccessAt))
+      .toEqual(Array(4).fill("2026-05-12T15:35:00.000Z"));
+  });
+
   it("mutates email, task, and bill state in memory without fetch", async () => {
     const api = await importDemoApi();
 

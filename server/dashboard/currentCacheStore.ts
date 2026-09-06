@@ -87,7 +87,7 @@ export async function markCacheRowRefreshFailed(userId: string, cacheKey: Curren
   const message = String(err instanceof Error ? err.message : err || "Current data refresh failed").slice(0, 500);
   const usable = hasUsablePayload(cacheKey, existingRow);
   const payload = usable ? parsePayload(existingRow, fallbackPayloadForKey(cacheKey)) : fallbackPayloadForKey(cacheKey);
-  const fetchedAt = usable ? existingRow!.fetched_at ?? null : timestamp;
+  const fetchedAt = usable ? existingRow!.fetched_at ?? null : null;
   const expiresAt = usable ? existingRow!.expires_at ?? null : expiresAtFor(cacheKey, now);
   const status = usable ? "degraded" : "unavailable";
   const failureCount = Number(existingRow?.refresh_failure_count || 0) + 1;
@@ -149,7 +149,7 @@ export async function markRowsRefreshing(
   if (!refreshKeys.length) return nextRows;
   await dbClient.batch(refreshKeys.map((key) => {
     const currentPayload = rows[key]?.payload_json || JSON.stringify(fallbackPayloadForKey(key));
-    const fetchedAt = rows[key]?.fetched_at || null;
+    const fetchedAt = hasUsablePayload(key, rows[key]) ? rows[key]?.fetched_at || null : null;
     const expiresAt = rows[key]?.expires_at || timestamp;
     // Carry refresh_failure_count / last_refresh_failed_at from rows[key] into the
     // in-memory refreshing row so a subsequent markCacheRowRefreshFailed escalates the
@@ -174,6 +174,7 @@ export async function markRowsRefreshing(
             VALUES (?, ?, ?, ?, ?, 'refreshing', NULL, ?, ?)
             ON CONFLICT(user_id, cache_key) DO UPDATE SET
               status = 'refreshing',
+              fetched_at = excluded.fetched_at,
               error_message = NULL,
               refresh_started_at = excluded.refresh_started_at,
               updated_at = excluded.updated_at`,

@@ -89,6 +89,7 @@ export interface CurrentDashboardProviderHealth extends Record<string, unknown> 
     [key: string]: unknown;
   } | null;
   reauth?: CurrentDashboardReauthHealth;
+  configured?: { weather?: boolean; calendar?: boolean };
 }
 
 export interface CurrentDashboardWeather extends Record<string, unknown> {
@@ -103,10 +104,15 @@ export interface CurrentDashboardSystemSource {
   severity: CurrentDashboardSeverity;
   lastSuccessAt: string | null;
   message: string;
+  expiresAt?: string | null;
+  action?: { label: string; href: string };
+  retrySource?: CurrentDashboardCacheKey;
+  impact?: string;
+  refreshStartedAt?: string | null;
 }
 
 export interface CurrentDashboardSystemStatus {
-  state: "current" | "needs_sync" | "degraded" | "unavailable";
+  state: "current" | "syncing" | "needs_sync" | "degraded" | "unavailable";
   sources: CurrentDashboardSystemSource[];
   generatedAt: string;
 }

@@ -11,10 +11,12 @@ const syncCurrentDashboardMock = vi.fn();
 const getCurrentDashboard = getCurrentDashboardMock;
 const requestCurrentDashboardRefresh = requestCurrentDashboardRefreshMock;
 const syncCurrentDashboard = syncCurrentDashboardMock;
+let dashboardRequests: Array<{ path: string; method: string; body: unknown }> = [];
 
 function installDashboardApiBoundary(): void {
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, options?: RequestInit) => {
     const path = String(input);
+    dashboardRequests.push({ path, method: options?.method || "GET", body: options?.body ? JSON.parse(String(options.body)) : null });
     const handler = path === "/api/briefing/snapshot/active"
       ? getActiveSnapshotMock
       : path === "/api/dashboard/current"
@@ -132,6 +134,7 @@ const currentPayload = {
 
 describe("useCurrentDashboard", () => {
   beforeEach(() => {
+    dashboardRequests = [];
     installDashboardApiBoundary();
     setDocumentHidden(false);
     FakeEventSource.instances = [];
@@ -157,6 +160,124 @@ describe("useCurrentDashboard", () => {
     vi.unstubAllGlobals();
     setDocumentHidden(false);
     vi.useRealTimers();
+  });
+
+  function calendarRetryPayload(state: "current" | "degraded" | "needs_reauth") {
+    return {
+      ...currentPayload,
+      fetchedAt: state === "current" ? "2026-05-04T12:11:00.000Z" : state === "needs_reauth" ? "2026-05-04T12:12:00.000Z" : "2026-05-04T12:10:00.000Z",
+      systemStatus: {
+        state: state === "current" ? "current" : "degraded",
+        generatedAt: "2026-05-04T12:10:00.000Z",
+        sources: [{
+          key: "calendar", label: "Calendar", state, severity: state === "current" ? "none" : "warning",
+          lastSuccessAt: currentPayload.fetchedAt,
+          message: state === "needs_reauth" ? "Reconnect your calendar account." : "Saved events remain visible.",
+          ...(state === "needs_reauth" ? {} : { retrySource: "calendar_current" }),
+        }],
+      },
+      refresh: { mode: "manual", scheduled: [], skipped: [] },
+    } as CurrentDashboardResponse;
+  }
+
+  it("retries only the selected source and applies its completed response without a follow-up read", async () => {
+    getCurrentDashboardMock.mockResolvedValueOnce(calendarRetryPayload("degraded"));
+    requestCurrentDashboardRefreshMock.mockResolvedValueOnce(calendarRetryPayload("current"));
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    await act(async () => { await result.current.retrySource("calendar_current"); });
+
+    expect(result.current.sourceRetry).toEqual({ source: "calendar_current", state: "success", message: "Calendar is up to date." });
+    expect(result.current.systemStatus?.sources[0]?.state).toBe("current");
+    expect(result.current.refreshing).toBe(false);
+    // The authenticated HTTP protocol must select one provider and avoid a GET
+    // that could schedule unrelated work after this completed targeted response.
+    expect(dashboardRequests).toEqual([
+      { path: "/api/dashboard/current", method: "GET", body: null },
+      { path: "/api/dashboard/current/refresh", method: "POST", body: { source: "calendar_current" } },
+    ]);
+    unmount();
+  });
+
+  it.each(["degraded", "needs_reauth"] as const)("reports %s as a failed recovery even when the HTTP request succeeds", async (state) => {
+    getCurrentDashboardMock.mockResolvedValueOnce(calendarRetryPayload("degraded"));
+    const response = calendarRetryPayload(state);
+    requestCurrentDashboardRefreshMock.mockResolvedValueOnce(response);
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    await act(async () => { await result.current.retrySource("calendar_current"); });
+
+    expect(result.current.sourceRetry).toEqual({ source: "calendar_current", state: "error", message: state === "needs_reauth" ? "Reconnect Calendar to try again." : "Calendar still needs attention." });
+    expect(result.current.liveData.liveCalendar).toEqual(currentPayload.calendar);
+    unmount();
+  });
+
+  it("keeps saved data and page loading state intact when a source retry fails to connect", async () => {
+    requestCurrentDashboardRefreshMock.mockRejectedValueOnce(new Error("Network unavailable"));
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    await act(async () => { await result.current.retrySource("calendar_current"); });
+
+    expect(result.current.sourceRetry).toMatchObject({ source: "calendar_current", state: "error" });
+    expect(result.current.sourceRetry?.message).toBe("Could not check for updates. Try again.");
+    expect(result.current.current).toEqual(currentPayload);
+    expect(result.current.error).toBeNull();
+    expect(result.current.briefingData.loaded).toBe(true);
+    unmount();
+  });
+
+  it("replaces a failed retry receipt on a later full health read, including identical content, but not a snapshot read", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    getCurrentDashboardMock.mockResolvedValue({ ...currentPayload, contentKey: "unchanged" });
+    requestCurrentDashboardRefreshMock.mockRejectedValueOnce(new Error("Network unavailable"));
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    await act(async () => { await result.current.retrySource("calendar_current"); });
+    expect(result.current.sourceRetry?.state).toBe("error");
+    await act(async () => { FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "email_triage" }); });
+    expect(result.current.sourceRetry?.state).toBe("error");
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.sourceRetry).toBeNull();
+    requestCurrentDashboardRefreshMock.mockRejectedValueOnce(new Error("Network unavailable"));
+    await act(async () => { await result.current.retrySource("calendar_current"); });
+    expect(result.current.sourceRetry?.state).toBe("error");
+    const previous = result.current.current;
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.current).toBe(previous);
+    expect(result.current.sourceRetry).toBeNull();
+    unmount();
+  });
+
+  it("protects the pending retry from older reads, SSE, passive reads, and repeated retries", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    let resolveRead!: (data: CurrentDashboardResponse) => void;
+    let resolveRetry!: (data: CurrentDashboardResponse) => void;
+    getCurrentDashboardMock.mockResolvedValueOnce(currentPayload)
+      .mockImplementationOnce(() => new Promise<CurrentDashboardResponse>((resolve) => { resolveRead = resolve; }));
+    requestCurrentDashboardRefreshMock.mockImplementationOnce(() => new Promise<CurrentDashboardResponse>((resolve) => { resolveRetry = resolve; }));
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    let readPromise!: Promise<CurrentDashboardResponse | null>;
+    let retryPromise!: Promise<CurrentDashboardResponse | null>;
+    act(() => { readPromise = result.current.refresh(); });
+    act(() => { retryPromise = result.current.retrySource("calendar_current"); });
+    await act(async () => {
+      await result.current.retrySource("weather_current");
+      await result.current.refresh();
+      FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "calendar" });
+      resolveRead({ ...currentPayload, weather: { temp: 1 } });
+      await readPromise;
+    });
+    expect(result.current.sourceRetry?.state).toBe("pending");
+    expect(result.current.liveData.liveWeather).toEqual(currentPayload.weather);
+    await act(async () => { resolveRetry(calendarRetryPayload("current")); await retryPromise; });
+    expect(result.current.sourceRetry?.state).toBe("success");
+    // Negative outbound requests are the contract: SSE/read/repeated-click
+    // traffic must not trigger an all-provider refresh around a source retry.
+    expect(dashboardRequests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      "GET /api/dashboard/current", "GET /api/dashboard/current", "POST /api/dashboard/current/refresh",
+    ]);
+    unmount();
   });
 
   it("dedups a refetch that returns the same contentKey even when fetchedAt advances, keeping current + liveData references stable", async () => {

@@ -123,10 +123,15 @@ export function scheduleBackgroundCurrentRefresh(
   forceKeys = new Set(),
   refreshReasons = {},
   }: CurrentRefreshRunnerOptions = {},
-): void {
+): Promise<boolean> {
+  const pending: Promise<unknown>[] = [];
   for (const cacheKey of refreshKeys) {
     const key = refreshMapKey(userId, cacheKey);
-    if (BACKGROUND_REFRESH_IN_FLIGHT.has(key)) continue;
+    const existing = BACKGROUND_REFRESH_IN_FLIGHT.get(key);
+    if (existing) {
+      pending.push(existing);
+      continue;
+    }
     const promise = Promise.resolve()
       .then(() => refreshRows(userId, rows, [cacheKey], {
         dbClient,
@@ -144,7 +149,9 @@ export function scheduleBackgroundCurrentRefresh(
         }
       });
     BACKGROUND_REFRESH_IN_FLIGHT.set(key, promise);
+    pending.push(promise);
   }
+  return Promise.all(pending).then((results) => results.every(Boolean));
 }
 
 export async function refreshMissingRows(

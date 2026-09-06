@@ -5,6 +5,7 @@ import {
   fallbackPayloadForKey,
   hasUsablePayload,
   summarizeCurrentDataHealth,
+  sourceHealthForRow,
 } from "./current-sources.ts";
 
 function baseResponse() {
@@ -141,5 +142,23 @@ describe("current dashboard source definitions", () => {
         { key: "bills_current", state: "unavailable", severity: "error" },
       ],
     });
+  });
+});
+
+
+describe("cache status freshness and recovery", () => {
+  it("does not treat failure-generated empty payloads as saved calendar data", () => {
+    const row = { status: "unavailable", payload_json: "[]", fetched_at: "2026-09-06T12:00:00.000Z" };
+    expect(hasUsablePayload("calendar_current", row)).toBe(false);
+    expect(sourceHealthForRow("calendar_current", row, new Date())).toEqual({ state: "unavailable", severity: "error" });
+  });
+  const now = new Date("2026-09-06T12:00:00.000Z");
+  const row = { payload_json: JSON.stringify({ temp: 72 }), status: "current", expires_at: "2026-09-06T11:59:00.000Z" };
+  it("marks expired usable data due without claiming a failed update", () => {
+    expect(sourceHealthForRow("weather_current", row, now)).toEqual({ state: "needs_sync", severity: "info" });
+  });
+  it.each(["degraded", "refreshing"])("preserves failed update evidence during %s until success", (status) => {
+    expect(sourceHealthForRow("weather_current", { ...row, status, refresh_failure_count: 1, refresh_started_at: now.toISOString() }, now))
+      .toEqual({ state: "degraded", severity: "warning" });
   });
 });

@@ -3,6 +3,7 @@
 // provider modules in current-providers/; this file owns cache rows, refresh
 // planning/scheduling, and response composition.
 import db from "../db/connection.ts";
+import { instanceCredentialService } from "../platform/instance-credential-service.ts";
 import { getBillsMirrorState } from "../bills/bills-service.ts";
 import { publishCurrentDashboardEvent } from "./current-events.ts";
 import { computeDeadlineStats } from "../tasks/deadline-helpers.ts";
@@ -96,24 +97,33 @@ function asBillsPayload(value: unknown): Partial<BillsMirrorPayload> & Record<st
   return asRecord(value) || {};
 }
 
+function unavailableBillsHealth(): BillsMirrorHealth {
+  return { state: "unavailable", configured: null, lastSuccessAt: null, lastError: "Bills sync health unavailable" };
+}
+
 async function loadProviderHealth(
   userId: string,
   rows: CurrentDashboardCacheRows,
-  { now = new Date(), todoistHealth = null }: {
+  { now = new Date(), dbClient = db, todoistHealth, billsHealth }: {
     now?: Date;
+    dbClient?: Client;
     todoistHealth?: TodoistMirrorHealth | null;
+    billsHealth?: BillsMirrorHealth;
   } = {},
 ): Promise<CurrentDashboardProviderHealth> {
-  const currentData = summarizeCurrentDataHealth(rows, now);
-  const todoist = todoistHealth || await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
-  const billsPayload = asBillsPayload(parsePayload(rows.bills_current, null));
-  const bills: BillsMirrorHealth = billsPayload.billsSyncHealth as BillsMirrorHealth || {
-    state: billsPayload.actualConfigured ? "current" : "unconfigured",
-    configured: !!billsPayload.actualConfigured,
-    lastSuccessAt: rows.bills_current?.fetched_at || null,
-    lastError: null,
+  const [todoist, bills, connections] = await Promise.all([
+    todoistHealth ?? getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
+    billsHealth ?? getBillsMirrorState(userId, { dbClient })
+      .then((mirror) => mirror.syncHealth).catch(() => unavailableBillsHealth()),
+    loadStatusConnections(userId, { dbClient }),
+  ]);
+  return {
+    currentData: summarizeCurrentDataHealth(rows, now), todoist,
+    bills: connections.actualConfigured ? bills : {
+      state: "unconfigured", configured: false, lastSuccessAt: null, lastError: null,
+    },
+    reauth: connections.reauth, configured: connections.configured,
   };
-  return { currentData, todoist, bills };
 }
 
 export async function applyDeadlineCurrentStatus(userId: string, taskId: unknown, occurrenceDate: string, status: string, {
@@ -285,7 +295,7 @@ async function loadRefreshContext(
   // gracefully rather than rejecting both.
   const [todoistHealth, billsMirror] = await Promise.all([
     getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
-    getBillsMirrorState(userId, { dbClient }).catch(() => null),
+    getBillsMirrorState(userId, { dbClient }).catch(() => ({ row: null, syncHealth: unavailableBillsHealth(), actualBudgetUrl: null })),
   ]);
   return { todoistHealth, billsMirror };
 }
@@ -323,7 +333,10 @@ export async function getCurrentDashboard(userId: string, {
   // afterward. This removes the last serial DB hop from the every-2s poll path.
   const [activeSnapshot, providerHealth, hydratedReminderPayloads] = await Promise.all([
     getActiveSnapshotView(userId),
-    loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+    loadProviderHealth(userId, responseRows, {
+      now, dbClient, todoistHealth: context.todoistHealth,
+      billsHealth: cacheRows.bills_current ? context.billsMirror?.syncHealth : undefined,
+    }),
     hydrateCurrentReminderState(userId, {
       calendar: usablePayloadForKey("calendar_current", rows.calendar_current, []),
       deadlines: usablePayloadForKey("deadlines_current", rows.deadlines_current, EMPTY_DEADLINES),
@@ -373,7 +386,7 @@ export async function syncCurrentDashboard(userId: string, {
   const activeSnapshot = snapshotResult.value || await getActiveSnapshotView(userId);
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot,
-    providerHealth: await loadProviderHealth(userId, rows, { now }),
+    providerHealth: await loadProviderHealth(userId, rows, { now, dbClient }),
     refresh: { mode: "force", ...refreshPlan },
     activeSnapshotHealth: {
       state: snapshotResult.state,
@@ -386,10 +399,34 @@ export async function syncCurrentDashboard(userId: string, {
   });
 }
 
+async function refreshCurrentDashboardSource(userId: string, source: CurrentDashboardCacheKey, {
+  dbClient = db, now = new Date(),
+}: { dbClient?: Client; now?: Date }): Promise<CurrentDashboardResponse> {
+  const rows = await loadCacheRows(userId, { dbClient });
+  const responseRows = await markRowsRefreshing(userId, rows, [source], { dbClient, now });
+  const completed = await scheduleBackgroundCurrentRefresh(userId, responseRows, [source], {
+    dbClient, now, force: true, refreshReasons: { [source]: "source_retry" },
+  });
+  if (!completed) throw new Error("Failed to finish the requested source refresh");
+  // Read the completed cache directly. The general dashboard read would also
+  // admit other due providers; a source retry must not trigger unrelated work.
+  const refreshedRows = await loadCacheRows(userId, { dbClient });
+  const [activeSnapshot, providerHealth] = await Promise.all([
+    getActiveSnapshotView(userId),
+    loadProviderHealth(userId, refreshedRows, { dbClient, now: new Date() }),
+  ]);
+  return composeCurrentDashboardResponse(userId, refreshedRows, {
+    activeSnapshot, providerHealth, dbClient, now,
+    refresh: { mode: "manual", scheduled: [], skipped: [] },
+  });
+}
+
 export async function requestCurrentDashboardRefresh(userId: string, {
   dbClient = db,
   now = new Date(),
-}: { dbClient?: Client; now?: Date } = {}): Promise<CurrentDashboardResponse> {
+  source,
+}: { dbClient?: Client; now?: Date; source?: CurrentDashboardCacheKey } = {}): Promise<CurrentDashboardResponse> {
+  if (source) return refreshCurrentDashboardSource(userId, source, { dbClient, now });
   const rows = await loadCacheRows(userId, { dbClient });
   const context = await loadRefreshContext(userId, { dbClient });
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, context });
@@ -426,7 +463,7 @@ export async function requestCurrentDashboardRefresh(userId: string, {
   // round-trips serially on every manual/return-to-dashboard refresh.
   const [activeSnapshot, providerHealth] = await Promise.all([
     getActiveSnapshotView(userId),
-    loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+    loadProviderHealth(userId, responseRows, { now, dbClient, todoistHealth: context.todoistHealth, billsHealth: context.billsMirror?.syncHealth }),
   ]);
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot,
@@ -464,20 +501,30 @@ export async function requestBillsCurrentMaintenanceRefresh(userId: string, {
   return { scheduled: true, due: true, refresh: refreshPlan };
 }
 
-async function loadReauthHealth(userId: string, { dbClient = db }: { dbClient?: Client } = {}) {
-  const [accountsResult, settingsResult] = await Promise.all([
+async function loadStatusConnections(userId: string, { dbClient = db }: { dbClient?: Client } = {}) {
+  const [accountsResult, settingsResult, weatherCredential] = await Promise.all([
     dbClient.execute({
-      sql: "SELECT id, email, type FROM ea_accounts WHERE user_id = ? AND needs_reauth = 1",
+      sql: "SELECT id, email, type, calendar_enabled, needs_reauth FROM ea_accounts WHERE user_id = ?",
       args: [userId],
     }),
     dbClient.execute({
-      sql: "SELECT todoist_needs_reauth FROM ea_settings WHERE user_id = ?",
+      sql: "SELECT todoist_needs_reauth, actual_budget_url FROM ea_settings WHERE user_id = ?",
       args: [userId],
     }),
+    // Redacted local metadata only. If inspection fails, keep configuration unknown.
+    instanceCredentialService.getCredentialMetadata("weather.pirate_weather_api_key").catch(() => null),
   ]);
   return {
-    accounts: accountsResult.rows.map((row) => ({ id: row.id, email: row.email, type: row.type })),
-    todoist: !!settingsResult.rows[0]?.todoist_needs_reauth,
+    actualConfigured: Boolean(settingsResult.rows[0]?.actual_budget_url),
+    reauth: {
+      accounts: accountsResult.rows.filter((row) => Boolean(row.needs_reauth))
+        .map((row) => ({ id: row.id, email: row.email, type: row.type })),
+      todoist: !!settingsResult.rows[0]?.todoist_needs_reauth,
+    },
+    configured: {
+      calendar: accountsResult.rows.some((row) => row.type === "gmail" && Boolean(row.calendar_enabled)),
+      ...(weatherCredential ? { weather: weatherCredential.activeConfigured } : {}),
+    },
   };
 }
 
@@ -486,11 +533,7 @@ export async function getDashboardSystemHealth(userId: string, {
   now = new Date(),
 }: { dbClient?: Client; now?: Date } = {}): Promise<CurrentDashboardHealthResponse> {
   const rows = await loadCacheRows(userId, { dbClient });
-  const [providerHealth, reauth] = await Promise.all([
-    loadProviderHealth(userId, rows, { now }),
-    loadReauthHealth(userId, { dbClient }),
-  ]);
-  providerHealth.reauth = reauth;
+  const providerHealth = await loadProviderHealth(userId, rows, { now, dbClient });
   return {
     providerHealth,
     systemStatus: composeSystemStatus(providerHealth),

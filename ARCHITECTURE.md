@@ -1012,6 +1012,8 @@ The `/api/briefing` namespace contains operational subroutes for inbox, snapshot
 
 The current dashboard envelope is the production runtime contract. It includes weather, calendar, deadlines, bills, `providerHealth`/`systemStatus`, and the active snapshot inbox view. Non-email boot-critical data is stored in the durable current-data cache keyed by `user_id` and cache key; email rows come from active snapshot/domain tables.
 
+System status uses the same connection and domain evidence for current reads, manual refresh, force sync, and the dedicated health endpoint. Weather, Calendar, Tasks, and Bills each expose last-success time, update-due state, impact copy, and targeted Connections links. Tasks/Bills freshness is bounded by both the delivered cache and authoritative mirror; reconnect requirements override ordinary update status, and unused integrations stay neutral. The client adds initial-check, failed-read, offline, and interrupted-stream evidence without discarding saved data, and only a successful full health read clears a failed health check. Targeted retries use the existing refresh endpoint with one validated source key, await that source alone, and return a complete read-only envelope without triggering unrelated refreshes. The status row shows progress and an evidence-based result; retry eligibility is not presented as a guaranteed automatic schedule.
+
 ### Email Search
 
 | Method | Path | Purpose |

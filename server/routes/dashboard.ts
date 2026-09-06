@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { CURRENT_DASHBOARD_CACHE_KEYS, type CurrentDashboardCacheKey } from "../../shared/types/dashboard.ts";
 import { requireCookieSession } from "../middleware/auth.ts";
 import {
   formatCurrentDashboardSse,
@@ -94,9 +95,14 @@ router.get("/health", timeRoute("/api/dashboard/health"), async (_req, res) => {
   }
 });
 
-router.post("/current/refresh", timeRoute("/api/dashboard/current/refresh"), async (_req, res) => {
+router.post("/current/refresh", timeRoute("/api/dashboard/current/refresh"), async (req, res) => {
+  const source: unknown = req.body?.source;
+  if (source !== undefined && (typeof source !== "string" || !CURRENT_DASHBOARD_CACHE_KEYS.includes(source as CurrentDashboardCacheKey))) {
+    res.status(400).json({ message: "Unknown dashboard source" });
+    return;
+  }
   try {
-    res.json(await requestCurrentDashboardRefresh(process.env.EA_USER_ID!));
+    res.json(await requestCurrentDashboardRefresh(process.env.EA_USER_ID!, { source: source as CurrentDashboardCacheKey | undefined }));
   } catch (err) {
     console.error("[Dashboard] current refresh request failed:", err);
     res.status(500).json({ message: "Failed to request current dashboard refresh" });

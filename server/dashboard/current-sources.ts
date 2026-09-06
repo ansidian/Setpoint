@@ -8,12 +8,12 @@ import type {
   CurrentDashboardCacheRow,
   CurrentDashboardCacheRows,
   CurrentDashboardDataHealth,
+  CurrentDashboardHealthState,
 } from "../../shared/types/dashboard.ts";
 
 export { EMPTY_DEADLINES } from "./current-providers/deadlines-provider.ts";
 
 const REFRESH_TIMEOUT_MS = 2 * 60 * 1000;
-const REFRESH_FAILURE_GRACE_MS = 15 * 60 * 1000;
 
 export const CURRENT_CACHE_KEYS: CurrentDashboardCacheKey[] = CURRENT_DATA_PROVIDERS.map((provider) => provider.key);
 
@@ -44,41 +44,36 @@ export function isRefreshTimedOut(row: CurrentDashboardCacheRow | null | undefin
 }
 
 export function hasUsablePayload(key: CurrentDashboardCacheKey, row: CurrentDashboardCacheRow | null | undefined): boolean {
+  // Unavailable rows contain generated fallbacks, not a successful provider read.
+  // Null fetched_at also survives the retry transition from a cold failure.
+  if (row?.status === "unavailable" || row?.fetched_at === null) return false;
   const payload = parsePayload(row, undefined);
   if (payload == null) return false;
   const provider = providerFor(key);
   return provider ? provider.hasUsablePayload(payload) : true;
 }
 
-function refreshFailureAgeMs(row: CurrentDashboardCacheRow, now: Date): number | null {
-  if (!row?.last_refresh_failed_at) return null;
-  return Math.max(0, now.getTime() - new Date(row.last_refresh_failed_at).getTime());
-}
-
 export function sourceHealthForRow(
   key: CurrentDashboardCacheKey,
   row: CurrentDashboardCacheRow | undefined,
   now: Date,
-): { state: CurrentDashboardDataHealth["state"] | "refreshing"; severity: "none" | "info" | "warning" | "error" } {
+): { state: CurrentDashboardHealthState; severity: "none" | "info" | "warning" | "error" } {
   if (!row) return { state: "unavailable", severity: "error" };
   const usable = hasUsablePayload(key, row);
   if (isRefreshTimedOut(row, now)) {
     return usable ? { state: "degraded", severity: "warning" } : { state: "unavailable", severity: "error" };
   }
+  // A retry does not erase the last failed outcome before it succeeds.
+  if (row.status === "degraded" || row.status === "unavailable" || Number(row.refresh_failure_count || 0) > 0) {
+    return usable ? { state: "degraded", severity: "warning" } : { state: "unavailable", severity: "error" };
+  }
   if (row.status === "refreshing" || row.refresh_started_at) {
     return usable ? { state: "refreshing", severity: "info" } : { state: "unavailable", severity: "error" };
   }
-  if (row.status === "unavailable") {
-    return usable ? { state: "degraded", severity: "none" } : { state: "unavailable", severity: "error" };
-  }
-  if (row.status === "degraded") {
-    const ageMs = refreshFailureAgeMs(row, now);
-    return {
-      state: "degraded",
-      severity: ageMs != null && ageMs < REFRESH_FAILURE_GRACE_MS ? "none" : "warning",
-    };
-  }
   if (!usable) return { state: "unavailable", severity: "error" };
+  if (row.expires_at && new Date(row.expires_at).getTime() <= now.getTime()) {
+    return { state: "needs_sync", severity: "info" };
+  }
   return { state: "current", severity: "none" };
 }
 
@@ -92,9 +87,6 @@ function maxIso(values: Array<string | null | undefined>): string | null {
 }
 
 export function summarizeCurrentDataHealth(rows: CurrentDashboardCacheRows, now: Date): CurrentDashboardDataHealth {
-  const sourceRows = CURRENT_CACHE_KEYS
-    .map((key) => rows[key])
-    .filter((row): row is CurrentDashboardCacheRow => Boolean(row));
   const sources = CURRENT_CACHE_KEYS.map((key) => {
     const row = rows[key];
     const health = sourceHealthForRow(key, row, now);
@@ -102,7 +94,7 @@ export function summarizeCurrentDataHealth(rows: CurrentDashboardCacheRows, now:
       key,
       state: health.state,
       severity: health.severity,
-      fetchedAt: row?.fetched_at || null,
+      fetchedAt: hasUsablePayload(key, row) ? row?.fetched_at || null : null,
       expiresAt: row?.expires_at || null,
       errorMessage: row?.last_refresh_error || row?.error_message || null,
       failedAt: row?.last_refresh_failed_at || null,
@@ -119,7 +111,7 @@ export function summarizeCurrentDataHealth(rows: CurrentDashboardCacheRows, now:
 
   return {
     state,
-    lastSuccessAt: maxIso(sourceRows.map((row) => row.fetched_at)),
+    lastSuccessAt: maxIso(sources.map((source) => source.fetchedAt)),
     sources,
   };
 }

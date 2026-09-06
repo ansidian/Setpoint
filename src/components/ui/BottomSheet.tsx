@@ -56,7 +56,8 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
 
   // move focus into the dialog on open, restore it to the trigger on close
   useEffect(() => {
-    if (!open) return;
+    // Presence mounts one render after a previously closed sheet opens.
+    if (!open || !rendered) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     sheetRef.current?.focus({ preventScroll: true });
     return () => {
@@ -69,12 +70,12 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
         }
       }
     };
-  }, [open]);
+  }, [open, rendered]);
 
   const onKeyDown = useCallback((e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
     const focusables = sheetRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      'a[href], button:not([disabled]), summary, textarea, input, select, [tabindex]:not([tabindex="-1"])',
     );
     if (!focusables || focusables.length === 0) {
       e.preventDefault();
@@ -83,7 +84,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     const first = focusables[0]!;
     const last = focusables[focusables.length - 1]!;
     if (e.shiftKey) {
-      if (document.activeElement === first) {
+      if (document.activeElement === first || document.activeElement === sheetRef.current) {
         e.preventDefault();
         last.focus();
       }

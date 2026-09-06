@@ -45,36 +45,15 @@
 .shell-desktop-menu-item:hover, .shell-desktop-menu-item:focus-visible { background: #ffffff0a !important; transform: translateX(1px); }
 .shell-desktop-menu-item:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: -2px; }
 .shell-desktop-menu-item:active { transform: translateX(0); background: #ffffff14 !important; }
-.shell-health-control:focus-visible, .shell-more-control:focus-visible,
-.shell-health-close:focus-visible, .shell-health-sync:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
-.shell-health-control:active, .shell-more-control:active { transform: translateY(0) !important; }
-.shell-health-sync {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  margin-top: 10px;
-  border: 1px solid #ffffff1a;
-  border-radius: 6px;
-  background: #ffffff07;
-  color: var(--sp-text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  transition: transform 160ms ease, background 160ms ease;
-}
-.shell-health-sync kbd { margin-left: auto; color: var(--sp-subtext); font-family: var(--font-mono); }
-.shell-health-sync:hover:not(:disabled), .shell-health-sync:focus-visible { background: #ffffff12; transform: translateY(-1px); }
-.shell-health-sync:active:not(:disabled) { transform: translateY(0); background: #ffffff1b; }
-.shell-health-sync:disabled { opacity: 0.6; cursor: wait; }
+.shell-more-control:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.shell-more-control:active { transform: translateY(0) !important; }
 @media (max-width: 1000px) {
   .shell-primary-tabs { margin-left: 0; gap: 2px; }
   .shell-nav-tab { padding: 0 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .shell-nav-tab, .shell-palette-trigger, .shell-desktop-menu-item,
-  .shell-health-control, .shell-more-control, .shell-health-close, .shell-health-sync {
+  .shell-more-control {
     transition: none !important;
     transform: none !important;
   }

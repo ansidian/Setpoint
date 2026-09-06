@@ -136,7 +136,8 @@ export async function fetchCalendar(
     endDate,
     query,
     limit,
-  }: { startDate?: Date; endDate?: Date; query?: string; limit?: number } = {},
+    requireComplete = false,
+  }: { startDate?: Date; endDate?: Date; query?: string; limit?: number; requireComplete?: boolean } = {},
 ): Promise<NormalizedCalendarEvent[]> {
   const allEvents: NormalizedCalendarEvent[] = [];
   if (!gmailAccounts?.length) return allEvents;
@@ -160,7 +161,7 @@ export async function fetchCalendar(
   const perAccountEvents = await Promise.all(gmailAccounts.map(async (account) => {
     try {
       const auth = await getAuthorizedAccount(account);
-      const calendars = await listCalendarsForAccount(account);
+      const calendars = await listCalendarsForAccount(account, { requireComplete });
 
       const perCalendarEvents = await Promise.all(calendars.map(async (calendar) => {
         const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
@@ -173,6 +174,7 @@ export async function fetchCalendar(
             maxResults: limit,
           },
         }).catch((err: unknown) => {
+          if (requireComplete) throw err;
           const error = err as CalendarServiceError;
           if (error.code === "calendar_google_forbidden" || error.code === "calendar_google_error") {
             console.warn(`[Calendar] events fetch failed for ${account.email} cal=${calendar.id}: ${error.message}`);
@@ -193,6 +195,9 @@ export async function fetchCalendar(
 
       return perCalendarEvents.flat();
     } catch (err: unknown) {
+      // Dashboard cache replacement is all-or-nothing; range callers may still
+      // opt for the healthy calendars when another provider request fails.
+      if (requireComplete) throw err;
       console.error(`Calendar error for ${account.email}:`, err instanceof Error ? err.message : String(err));
       return [];
     }

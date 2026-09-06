@@ -4,11 +4,11 @@ import type { NormalizedCalendarEvent } from "../../shared/types/calendar";
 import type {
   CurrentDashboardProviderHealth,
   CurrentDashboardResponse,
-  CurrentDashboardSystemStatus,
   CurrentDashboardWeather,
 } from "../../shared/types/dashboard";
 import type { ActiveSnapshotView } from "../../shared/types/snapshots";
 import type { DeadlineOccurrence, DeadlinePayload } from "../../shared/types/tasks";
+import type { DashboardClientSystemStatus } from "./currentDashboardHealthModel";
 
 type CalendarSignatureItem = Partial<NormalizedCalendarEvent> & {
   iCalUID?: string;
@@ -24,7 +24,7 @@ type DeadlineSignatureItem = Partial<Pick<
 
 export interface CurrentDashboardRefreshState {
   providerHealth?: {
-    currentData?: { sources?: Array<{ state?: string }> };
+    currentData?: { sources?: Array<{ state?: string; refreshStartedAt?: string | null }> };
     activeSnapshot?: { state?: string; processing?: { active?: boolean } } | null;
   } | null;
   activeSnapshot?: { processing?: { active?: boolean } } | null;
@@ -61,7 +61,7 @@ export interface CurrentDashboardLiveDataBulk {
   snoozedEntries: [];
   resurfacedEntries: [];
   providerHealth: CurrentDashboardProviderHealth | null;
-  systemStatus: CurrentDashboardSystemStatus | null;
+  systemStatus: DashboardClientSystemStatus | null;
   refreshNow: () => Promise<CurrentDashboardResponse | null>;
 }
 
@@ -135,7 +135,8 @@ export function stabilizeDeadlines<T extends DeadlineSignatureItem>(
 
 export function hasActiveRefreshWork<T extends CurrentDashboardRefreshState>(current: T | null): boolean {
   const currentSources = current?.providerHealth?.currentData?.sources || [];
-  return currentSources.some((source) => source.state === "refreshing")
+  return currentSources.some((source) => source.state === "refreshing"
+    || (source.refreshStartedAt != null && Date.now() - Date.parse(source.refreshStartedAt) < 2 * 60_000))
     || current?.providerHealth?.activeSnapshot?.state === "syncing"
     || !!current?.providerHealth?.activeSnapshot?.processing?.active
     || !!current?.activeSnapshot?.processing?.active;

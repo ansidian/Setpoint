@@ -38,6 +38,7 @@ const {
   listCalendarsForAccount,
 } = await import("./calendar.ts");
 const { getRawEvent, getAuthorizedAccount } = await import("./calendar-google-client.ts");
+const { default: calendarProvider } = await import("../dashboard/current-providers/calendar-provider.ts");
 
 const account = {
   id: "acct-1",
@@ -99,6 +100,14 @@ async function storedAccount() {
     args: [account.id],
   });
   return result.rows[0]!;
+}
+
+async function dashboardCalendarConfig() {
+  const result = await testDb.execute(`
+    SELECT id, type, email, label, color, credentials_encrypted, 1 AS calendar_enabled
+    FROM ea_accounts
+  `);
+  return { accounts: result.rows, settings: undefined };
 }
 
 describe("OAuth token refresh", () => {
@@ -325,6 +334,22 @@ describe("listCalendarsForAccount", () => {
 });
 
 describe("calendar-list caching", () => {
+  it("does not let a best-effort partial list hide a later dashboard listing failure", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({
+        items: [{ id: "primary", summary: "Primary", primary: true }],
+        nextPageToken: "page-2",
+      }))
+      .mockResolvedValueOnce(jsonResponse({ error: { code: 503 } }, 503))
+      .mockResolvedValueOnce(jsonResponse({ error: { code: 503 } }, 503));
+
+    const partial = await listCalendarsForAccount(account);
+    expect(partial.map((calendar) => calendar.id)).toEqual(["primary"]);
+
+    await expect(calendarProvider.fetchFresh("u1", await dashboardCalendarConfig()))
+      .rejects.toMatchObject({ code: "calendar_google_error" });
+  });
+
   it("serves a second call from the per-account memo without re-hitting Google", async () => {
     fetchMock.mockResolvedValue(jsonResponse({
       items: [{ id: "primary", summary: "Primary", accessRole: "owner", primary: true }],
@@ -385,6 +410,56 @@ describe("calendar-list caching", () => {
     expect(writable[0]!.writable).toBe(true);
     // test-architecture: allow-boundary-interaction -- Credential-version changes invalidate the provider cache and must issue a fresh calendar-list request.
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("dashboard calendar fetch completeness", () => {
+  it("rejects partial events when one selected calendar fails", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("calendarList")) {
+        return jsonResponse({ items: [
+          { id: "primary", summary: "Primary", primary: true },
+          { id: "broken", summary: "Broken" },
+        ] });
+      }
+      if (url.pathname.includes("/broken/")) {
+        return jsonResponse({ error: { code: 403, message: "forbidden" } }, 403);
+      }
+      return jsonResponse({ items: [{
+        id: "healthy-event",
+        summary: "Healthy event",
+        start: { dateTime: "2026-09-06T09:00:00-07:00" },
+        end: { dateTime: "2026-09-06T10:00:00-07:00" },
+      }] });
+    });
+
+    await expect(calendarProvider.fetchFresh("u1", await dashboardCalendarConfig()))
+      .rejects.toMatchObject({ code: "calendar_google_forbidden" });
+  });
+
+  it("rejects an account authorization failure instead of reporting an empty calendar", async () => {
+    const config = await dashboardCalendarConfig();
+    await expect(calendarProvider.fetchFresh("u1", {
+      ...config,
+      accounts: [{ ...config.accounts[0]!, credentials_encrypted: null }],
+    })).rejects.toMatchObject({ code: "calendar_auth_missing" });
+  });
+
+  it("accepts a successfully fetched calendar with no events", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "primary", summary: "Primary", primary: true }] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [] }));
+
+    await expect(calendarProvider.fetchFresh("u1", await dashboardCalendarConfig())).resolves.toEqual([]);
+  });
+
+  it("accepts no enabled calendar accounts as a valid empty result", async () => {
+    const config = await dashboardCalendarConfig();
+    await expect(calendarProvider.fetchFresh("u1", {
+      ...config,
+      accounts: [{ ...config.accounts[0]!, calendar_enabled: 0 }],
+    })).resolves.toEqual([]);
   });
 });
 

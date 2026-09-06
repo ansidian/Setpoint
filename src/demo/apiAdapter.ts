@@ -11,11 +11,11 @@ import { buildDemoCalendarBillsRange } from "./financeData.ts";
 import { handleDemoNewsRequest } from "./newsAdapter.ts";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.ts";
 import { handleDemoSnapshotRequest } from "./snapshotAdapter.ts";
-import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed } from "./store.ts";
+import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed, type DemoSeed } from "./store.ts";
 import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
 import { handleDemoTransactionImportRequest, NO_DEMO_TRANSACTION_IMPORT_RESPONSE } from "./transactionImports.ts";
-import type { DemoSeed } from "./store.ts";
 import type { Reminder } from "../../shared/types/reminders.ts";
+import { demoDashboardResponse } from "./dashboardAdapter.ts";
 type DemoTask = DemoSeed["deadlines"]["upcoming"][number];
 type DemoCalendarEvent = DemoSeed["calendarEvents"][number];
 type DemoRemoteContentTrustEntry = {
@@ -290,9 +290,10 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const url = route(path);
   const pathname = url.pathname;
   const method = String(options.method || "GET").toUpperCase();
-  const readOnlyPost = pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync";
-  const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
   const body = parseBody(options);
+  const targetedRefresh = pathname === "/api/dashboard/current/refresh" && method === "POST" && body.source != null;
+  const readOnlyPost = !targetedRefresh && (pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync");
+  const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
 
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
@@ -437,7 +438,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
     || pathname === "/api/dashboard/current/refresh"
     || pathname === "/api/dashboard/current/sync"
     || pathname === "/api/dashboard/health") {
-    return pathname === "/api/dashboard/health" ? clone(seed.currentDashboard.providerHealth) : clone(seed.currentDashboard);
+    return pathname === "/api/dashboard/health" ? clone(seed.currentDashboard.providerHealth) : demoDashboardResponse(seed, targetedRefresh ? body.source : undefined, method);
   }
 
   if (pathname === "/api/calendar/range") {

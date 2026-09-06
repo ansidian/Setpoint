@@ -11,7 +11,7 @@ const calendarProvider: CurrentDashboardProvider = {
     const calendarAccounts = (config.accounts || []).filter(
       (account) => account.type === "gmail" && account.calendar_enabled,
     );
-    return fetchCalendar(calendarAccounts as unknown as StoredCalendarAccount[]);
+    return fetchCalendar(calendarAccounts as unknown as StoredCalendarAccount[], { requireComplete: true });
   },
 };
 

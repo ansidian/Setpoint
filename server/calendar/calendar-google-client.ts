@@ -393,7 +393,7 @@ export function invalidateCalendarListCache(accountId?: string | null) {
   calendarListCache.delete(accountId);
 }
 
-export async function listCalendarsForAccount(account: StoredCalendarAccount, options: CalendarDbOptions = {}): Promise<GoogleCalendarSource[]> {
+export async function listCalendarsForAccount(account: StoredCalendarAccount, options: CalendarDbOptions & { requireComplete?: boolean } = {}): Promise<GoogleCalendarSource[]> {
   const cacheKey = account?.id ?? null;
   const credentialsKey = account?.credentials_encrypted ?? "";
   if (cacheKey != null) {
@@ -406,11 +406,13 @@ export async function listCalendarsForAccount(account: StoredCalendarAccount, op
   const auth = await getAuthorizedAccount(account, options);
   const rawCalendars: RawCalendarListEntry[] = [];
   let pageToken: string | null = null;
+  let complete = true;
 
   do {
     const res = await googleCalendarFetch(auth, "users/me/calendarList", {
       query: { pageToken, maxResults: 250, showHidden: false },
     }).catch((err: unknown) => {
+      if (options.requireComplete) throw err;
       const error = err as CalendarServiceError;
       if (error.code === "calendar_google_forbidden" || error.code === "calendar_google_error") {
         return null;
@@ -418,7 +420,10 @@ export async function listCalendarsForAccount(account: StoredCalendarAccount, op
       throw err;
     });
 
-    if (!res) break;
+    if (!res) {
+      complete = false;
+      break;
+    }
     const data = await res.json() as CalendarListResponse;
     rawCalendars.push(...(data.items || []));
     pageToken = data.nextPageToken || null;
@@ -439,7 +444,8 @@ export async function listCalendarsForAccount(account: StoredCalendarAccount, op
       return a.summary.localeCompare(b.summary);
     });
 
-  if (cacheKey != null) {
+  // A best-effort range read must not poison the memo used by strict reads.
+  if (cacheKey != null && complete) {
     calendarListCache.set(cacheKey, {
       value: calendars,
       expiresAt: Date.now() + CALENDAR_LIST_CACHE_TTL_MS,

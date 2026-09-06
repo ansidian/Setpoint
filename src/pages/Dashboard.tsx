@@ -68,6 +68,7 @@ export default function Dashboard() {
   const currentDashboard = useCurrentDashboard({
     onDashboardEvent: (event) => dashboardEventHandlerRef.current?.(event),
   });
+  const sourceRetryPending = currentDashboard.sourceRetry?.state === "pending";
   const liveData = currentDashboard.liveData;
   const activeSnapshot = currentDashboard.activeSnapshot;
   const calendarRange = useCalendarRange();
@@ -156,7 +157,7 @@ export default function Dashboard() {
   const runDashboardRefresh = useCallback((trigger: "timer" | "explicit") => {
     const plan = resolveDashboardRefreshPlan({
       trigger,
-      currentSyncing,
+      currentSyncing: currentSyncing || sourceRetryPending,
       calendarWorkspace: calendarWorkspaceRef.current,
     });
     if (!plan.shouldRun) return Promise.resolve();
@@ -181,7 +182,7 @@ export default function Dashboard() {
       refreshCalendarDomains(plan.refreshCalendarDomains);
     }
     return withSyncWatchdog(activeSnapshot.sync()).finally(() => setCurrentSyncing(false));
-  }, [activeSnapshot, currentSyncing, markBillRangeStale, markCalendarRangeStale, markDeadlineRangeStale, refreshCalendarDomains, refreshCalendarRangeInPlace]);
+  }, [activeSnapshot, currentSyncing, sourceRetryPending, markBillRangeStale, markCalendarRangeStale, markDeadlineRangeStale, refreshCalendarDomains, refreshCalendarRangeInPlace]);
   const handleTimerQuickRefresh = useCallback(() => {
     setLastQuickRefreshAt(Date.now());
     return refreshLiveDataNow?.() ?? Promise.resolve();
@@ -295,6 +296,8 @@ export default function Dashboard() {
           activeSnapshot={activeSnapshot}
           calendarRange={calendarRange}
           onQuickRefresh={handleExplicitQuickRefresh}
+          onRetrySource={currentDashboard.retrySource}
+          sourceRetry={currentDashboard.sourceRetry}
           historyOpen={historyOpen}
           setHistoryOpen={setHistoryOpen}
           historyTriggerRef={historyTriggerRef}

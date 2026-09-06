@@ -33,6 +33,7 @@
     "vitest.config.ts"
   ],
   "exemptions": {
+    "server/dashboard/current-service.test-utils.ts": "Shared ephemeral dashboard database and external-provider fixtures used by current-service and source-refresh behavior suites",
     "scripts/vitest-guardrails.ts": "Vitest setup module loaded by the setupFiles convention and directly tested by scripts/lib/vitest-guardrails.test.mts",
     "server/email/mailparser.d.ts": "Owned compiler declaration shim for the untyped mailparser provider boundary",
     "server/snapshots/snapshot-test-fixtures.ts": "Shared snapshot and migration test database fixtures with multiple active test consumers",

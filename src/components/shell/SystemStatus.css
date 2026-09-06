@@ -1,0 +1,81 @@
+.system-status-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--status-color);
+  cursor: pointer;
+  transition: transform 150ms, background 150ms, border-color 150ms;
+}
+.system-status-trigger > span { display: inline-grid; place-items: center; }
+.system-status-trigger[data-mobile] { width: 40px; height: 40px; }
+.system-status-trigger[data-attention] { border-color: color-mix(in srgb, var(--status-color) 35%, transparent); background: color-mix(in srgb, var(--status-color) 8%, transparent); }
+.system-status-trigger:hover, .system-status-trigger:focus-visible { transform: translateY(-1px); background: #ffffff10; border-color: #ffffff29; }
+.system-status-trigger:active { transform: translateY(0); background: #ffffff1b; }
+.system-status-trigger:focus-visible, .system-status-close:focus-visible, .system-status-repair:focus-visible, .system-status-sync:focus-visible, .system-status-retry:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.system-status-panel {
+  position: fixed;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  isolation: isolate;
+  padding: 12px;
+  border-radius: 12px;
+  background: #16161e;
+  border: 1px solid #ffffff17;
+  box-shadow: 0 20px 60px #000000b3;
+  color: var(--sp-text);
+  z-index: 80;
+}
+.system-status-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; }
+.system-status-heading > strong { font-size: 13px; font-weight: 650; }
+.system-status-close { border: 1px solid #ffffff14; background: #ffffff08; color: var(--sp-subtext); border-radius: 6px; cursor: pointer; font: inherit; font-size: 11px; padding: 4px 8px; transition: transform 150ms, background 150ms, color 150ms; }
+.system-status-close:hover, .system-status-close:focus-visible { transform: translateY(-1px); background: #ffffff12; color: var(--sp-text); }
+.system-status-close:active { transform: translateY(0); background: #ffffff1b; }
+.system-status-summary { margin: 0 0 8px; color: var(--sp-subtext); font-size: 12px; line-height: 1.5; }
+.system-status-sources { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.system-status-source { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; padding: 10px 6px; }
+.system-status-source[data-compact] { padding-block: 6px; }
+.system-status-source > svg { margin-top: 2px; color: var(--status-color); }
+.system-status-source[data-attention] { background: color-mix(in srgb, var(--status-color) 7%, transparent); border-radius: 8px; }
+.system-status-source-content { min-width: 0; }
+.system-status-source-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
+.system-status-source-title strong { font-weight: 600; overflow-wrap: anywhere; }
+.system-status-source-title > span { flex-shrink: 0; font-size: 10.5px; color: var(--status-color); }
+.system-status-source p { margin: 5px 0 0; color: var(--sp-subtext); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.system-status-time { margin-top: 4px; color: var(--sp-subtext); font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.system-status-repair { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; padding: 3px 0; border-radius: 4px; color: var(--sp-accent); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; font-weight: 550; transition: transform 150ms, color 150ms, background 150ms; }
+.system-status-repair:hover, .system-status-repair:focus-visible { transform: translateY(-1px); color: var(--sp-text); }
+.system-status-repair:active { transform: translateY(0); background: #ffffff12; }
+.system-status-checked { margin: 8px 6px 0; padding-top: 8px; border-top: 1px solid #ffffff12; color: var(--sp-subtext); font-size: 10.5px; }
+.system-status-sync { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 12px; padding: 9px 10px; border: 1px solid #ffffff1a; border-radius: 6px; background: #ffffff07; color: var(--sp-text); font: inherit; font-size: 12px; cursor: pointer; transition: transform 150ms, background 150ms; }
+.system-status-sync kbd { margin-left: auto; color: var(--sp-subtext); font-family: var(--font-mono); }
+.system-status-sync:hover:not(:disabled), .system-status-sync:focus-visible { background: #ffffff12; transform: translateY(-1px); }
+.system-status-sync:active:not(:disabled) { transform: translateY(0); background: #ffffff1b; }
+.system-status-sync:disabled { opacity: .6; cursor: wait; }
+.system-status-spinner { animation: spin .8s linear infinite; }
+@media (max-width: 767px) {
+  .system-status-repair { min-height: var(--sp-touch-min); padding-right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-status-trigger, .system-status-close, .system-status-repair, .system-status-sync { transition: none; transform: none !important; }
+  .system-status-spinner { animation: none; }
+}
+
+.system-status-source-actions { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; }
+.system-status-retry { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; padding: 5px 7px; border: 1px solid #ffffff29; border-radius: 6px; background: #ffffff08; color: var(--sp-text); font: inherit; font-size: 11px; cursor: pointer; transition: transform 150ms, background 150ms; }
+.system-status-retry:hover:not([aria-disabled="true"]), .system-status-retry:focus-visible { transform: translateY(-1px); background: #ffffff15; }
+.system-status-retry:active:not([aria-disabled="true"]) { transform: translateY(0); background: #ffffff20; }
+.system-status-retry[aria-disabled="true"] { opacity: .65; cursor: wait; }
+.system-status-source .system-status-result { color: var(--sp-text); }
+@media (max-width: 767px) {
+  .system-status-retry { min-height: var(--sp-touch-min); padding-inline: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-status-retry { transition: none; transform: none !important; }
+}

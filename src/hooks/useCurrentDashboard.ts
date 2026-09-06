@@ -10,10 +10,10 @@ import { isDemoMode } from "../demo/config.ts";
 import { invalidateActualMetadata } from "../lib/actualMetadata";
 import { logTiming } from "../../shared/timing";
 import type {
+  CurrentDashboardCacheKey,
   CurrentDashboardEventInput,
   CurrentDashboardProviderHealth,
   CurrentDashboardResponse,
-  CurrentDashboardSystemStatus,
 } from "../../shared/types/dashboard";
 import type { ActiveSnapshotView } from "../../shared/types/snapshots";
 import {
@@ -34,6 +34,8 @@ import {
   refreshScopeForDashboardEvent,
 } from "./dashboardEventRefreshModel";
 import type { DashboardRefreshScope } from "./dashboardEventRefreshModel";
+import { projectDashboardHealth } from "./currentDashboardHealthModel";
+import type { DashboardClientSystemStatus } from "./currentDashboardHealthModel";
 
 const POST_CLICK_POLL_MS = 2_000;
 const POST_CLICK_POLL_MAX_STEP_MS = 16_000;
@@ -63,10 +65,18 @@ export interface CurrentDashboardHookOptions {
   onDashboardEvent?: ((event: CurrentDashboardEventInput | null) => void) | null;
 }
 
+export interface DashboardSourceRetryState {
+  source: CurrentDashboardCacheKey;
+  state: "pending" | "success" | "error";
+  message: string;
+}
+
 export interface CurrentDashboardHookResult {
+  sourceRetry: DashboardSourceRetryState | null;
+  retrySource: (source: CurrentDashboardCacheKey) => Promise<CurrentDashboardResponse | null>;
   current: CurrentDashboardResponse | null;
   providerHealth: CurrentDashboardProviderHealth | null;
-  systemStatus: CurrentDashboardSystemStatus | null;
+  systemStatus: DashboardClientSystemStatus | null;
   briefingData: {
     briefing: DashboardBriefingProjection | null;
     setBriefing: Dispatch<SetStateAction<DashboardBriefingProjection | null>>;
@@ -145,8 +155,15 @@ export default function useCurrentDashboard(
   const [selectedBriefing, setSelectedBriefing] = useState<DashboardBriefingProjection | null>(null);
   const [loading, setLoading] = useState(!disabled);
   const [refreshing, setRefreshing] = useState(false);
+  const [sourceRetry, setSourceRetry] = useState<DashboardSourceRetryState | null>(null);
+  const sourceRetryOwnerRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [healthReadFailed, setHealthReadFailed] = useState(false);
+  const [offline, setOffline] = useState(() => !isDemoMode() && navigator.onLine === false);
+  const [liveUpdatesDisconnected, setLiveUpdatesDisconnected] = useState(false);
+  const [lastHealthCheckAt, setLastHealthCheckAt] = useState<string | null>(null);
+  const [healthNow, setHealthNow] = useState(Date.now);
   const currentRef = useRef(current);
   currentRef.current = current;
   const mountedRef = useRef(true);
@@ -160,7 +177,7 @@ export default function useCurrentDashboard(
   const runEventRefetchRef = useRef<RunEventRefetch | null>(null);
   const onDashboardEventRef = useRef(onDashboardEvent);
 
-  const applyCurrent = useCallback((data: CurrentDashboardResponse, seq: number | null): boolean => {
+  const applyCurrent = useCallback((data: CurrentDashboardResponse, seq: number | null, checkedHealth = true): boolean => {
     if (!mountedRef.current) return false;
     // Ignore a response whose request has been superseded by a newer one, so a
     // slow older fetch can't clobber fresher data (last-issued request wins).
@@ -179,7 +196,13 @@ export default function useCurrentDashboard(
       return prev && prevKey && nextKey && prevKey === nextKey ? prev : data;
     });
     setSelectedBriefing((prev) => (prev === null ? prev : null));
-    setError((prev) => (prev === null ? prev : null));
+    if (checkedHealth) {
+      setSourceRetry((previous) => previous?.state === "pending" ? previous : null);
+      setError(null);
+      setHealthReadFailed(false);
+      setLastHealthCheckAt(new Date().toISOString());
+      setHealthNow(Date.now());
+    }
     setLoaded((prev) => (prev === true ? prev : true));
     return true;
   }, []);
@@ -226,6 +249,9 @@ export default function useCurrentDashboard(
     scope = CURRENT_REFRESH_SCOPE,
   } = {}) => {
     if (disabled) return null;
+    // The awaited retry returns the full envelope. An SSE read here would
+    // supersede that result and could schedule unrelated provider work.
+    if (sourceRetryOwnerRef.current != null) return null;
     if (document.hidden && !allowHidden) {
       hiddenEventRefetchRef.current = true;
       return null;
@@ -260,7 +286,7 @@ export default function useCurrentDashboard(
       } else {
         data = await getCurrentDashboard();
       }
-      const applied = applyCurrent(data, seq);
+      const applied = applyCurrent(data, seq, selectedScope === CURRENT_REFRESH_SCOPE);
       const selectedEventContext = eventContext
         ? { ...eventContext, scope: selectedScope }
         : null;
@@ -270,6 +296,7 @@ export default function useCurrentDashboard(
       }
       return data;
     } catch {
+      if (mountedRef.current && seq === requestSeqRef.current) setHealthReadFailed(true);
       logEventRefetchTiming(
         eventContext ? { ...eventContext, scope: selectedScope } : null,
         "error",
@@ -296,7 +323,7 @@ export default function useCurrentDashboard(
   const loadCurrent = useCallback(async (
     { mode = "load" }: { mode?: DashboardLoadMode } = {},
   ): Promise<CurrentDashboardResponse | null> => {
-    if (disabled) return null;
+    if (disabled || sourceRetryOwnerRef.current != null) return null;
     const fetcher = mode === "force"
       ? syncCurrentDashboard
       : mode === "background"
@@ -318,11 +345,12 @@ export default function useCurrentDashboard(
       // Don't let a stale request's error clobber a newer request's success.
       if (mountedRef.current && seq === requestSeqRef.current) {
         setError(errorMessage(err, "Failed to load current dashboard data."));
+        setHealthReadFailed(true);
         setLoaded(false);
       }
       return null;
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && inFlightOwnerRef.current === seq) {
         setLoading(false);
         setRefreshing(false);
         completeCurrentRequest(seq);
@@ -332,6 +360,43 @@ export default function useCurrentDashboard(
     }
   }, [applyCurrent, completeCurrentRequest, disabled, pollWhileRefreshActive]);
 
+  const retrySource = useCallback(async (source: CurrentDashboardCacheKey) => {
+    if (disabled || sourceRetryOwnerRef.current != null) return null;
+    const sourceKey = currentRef.current?.systemStatus?.sources.find((item) => item.retrySource === source)?.key;
+    const seq = ++requestSeqRef.current;
+    sourceRetryOwnerRef.current = seq;
+    inFlightOwnerRef.current = seq;
+    currentRequestInFlightRef.current = true;
+    setSourceRetry({ source, state: "pending", message: "Checking for updates…" });
+    try {
+      const data = await requestCurrentDashboardRefresh(source);
+      if (!applyCurrent(data, seq)) return null;
+      const result = data.systemStatus.sources.find((item) => item.retrySource === source || (sourceKey && item.key === sourceKey));
+      setSourceRetry({
+        source,
+        state: result?.state === "current" ? "success" : "error",
+        message: result?.state === "current" ? `${result.label} is up to date.`
+          : result?.state === "needs_reauth" ? `Reconnect ${result.label} to try again.`
+            : `${result?.label || "This source"} still needs attention.`,
+      });
+      return data;
+    } catch {
+      if (mountedRef.current && seq === requestSeqRef.current) {
+        setSourceRetry({ source, state: "error", message: "Could not check for updates. Try again." });
+      }
+      return null;
+    } finally {
+      if (sourceRetryOwnerRef.current === seq) sourceRetryOwnerRef.current = null;
+      if (inFlightOwnerRef.current === seq) {
+        currentRequestInFlightRef.current = false;
+        // The returned envelope covers coalesced changes; do not flush a GET
+        // just because a targeted retry ended (GET can refresh other sources).
+        queuedEventRefetchRef.current = null;
+        if (mountedRef.current) { setLoading(false); setRefreshing(false); }
+      }
+    }
+  }, [applyCurrent, disabled]);
+
   const refreshNow = useCallback(() => loadCurrent({ mode: "load" }), [loadCurrent]);
   const sync = useCallback(() => loadCurrent({ mode: "background" }), [loadCurrent]);
   const forceSync = useCallback(() => loadCurrent({ mode: "force" }), [loadCurrent]);
@@ -339,12 +404,18 @@ export default function useCurrentDashboard(
   useEffect(() => {
     mountedRef.current = true;
     if (disabled) {
+      requestSeqRef.current += 1;
+      sourceRetryOwnerRef.current = null;
+      setSourceRetry(null);
       setCurrent(null);
       setSelectedBriefing(null);
       setLoading(false);
       setRefreshing(false);
       setError(null);
       setLoaded(false);
+      setHealthReadFailed(false);
+      setLastHealthCheckAt(null);
+      setLiveUpdatesDisconnected(false);
       return undefined;
     }
     loadCurrent();
@@ -356,6 +427,15 @@ export default function useCurrentDashboard(
   useEffect(() => {
     if (disabled || isDemoMode() || typeof EventSource === "undefined") return undefined;
     const source = new EventSource("/api/dashboard/current/events");
+    let interrupted = false;
+    const handleOpen = () => {
+      setLiveUpdatesDisconnected(false);
+      if (interrupted) {
+        setHealthReadFailed(true);
+        interrupted = false;
+        void runEventRefetch();
+      }
+    };
     const handleChanged = (event: Event) => {
       const payload = parseDashboardEvent(event instanceof MessageEvent ? String(event.data || "") : "");
       if (payload?.source === "bills") invalidateActualMetadata();
@@ -378,6 +458,8 @@ export default function useCurrentDashboard(
     // Route an expired-session SSE failure to /login instead of letting the browser
     // reconnect-loop forever.
     const handleError = () => {
+      interrupted = true;
+      setLiveUpdatesDisconnected(true);
       // A 401 (or any rejected handshake) closes the stream terminally — readyState stays CLOSED
       // and the browser will NOT auto-reconnect. Transient network blips set readyState back to
       // CONNECTING, which we ignore so a single flicker does not bounce the user to login.
@@ -390,11 +472,35 @@ export default function useCurrentDashboard(
       }
     };
     source.addEventListener("dashboard-current-changed", handleChanged);
+    source.addEventListener("open", handleOpen);
     source.onerror = handleError;
     return () => {
       source.removeEventListener?.("dashboard-current-changed", handleChanged);
+      source.removeEventListener?.("open", handleOpen);
       source.onerror = null;
       source.close();
+    };
+  }, [disabled, runEventRefetch]);
+
+  useEffect(() => {
+    if (disabled || isDemoMode()) return undefined;
+    const tick = () => { if (!document.hidden) setHealthNow(Date.now()); };
+    const onOffline = () => setOffline(true);
+    const onOnline = () => {
+      setOffline(false);
+      // Remain explicit about unverified health until the full read succeeds.
+      setHealthReadFailed(true);
+      void runEventRefetch();
+    };
+    const timer = window.setInterval(tick, 60_000);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", tick);
     };
   }, [disabled, runEventRefetch]);
 
@@ -448,13 +554,21 @@ export default function useCurrentDashboard(
     [current, refreshNow, stableCalendar],
   );
   const isPolling = loading || refreshing;
+  const systemStatus = useMemo(() => projectDashboardHealth(current?.systemStatus, {
+    readFailed: healthReadFailed,
+    offline,
+    liveUpdatesDisconnected,
+    lastCheckedAt: lastHealthCheckAt,
+    now: healthNow,
+  }), [current?.systemStatus, healthReadFailed, offline, liveUpdatesDisconnected, lastHealthCheckAt, healthNow]);
   const liveData = useMemo(
     () => ({
       ...liveDataBulk,
+      systemStatus,
       isPolling,
       billsLoading: liveDataBulk.actualConfigured && isPolling && !liveDataBulk.liveBills.length,
     }),
-    [liveDataBulk, isPolling],
+    [liveDataBulk, isPolling, systemStatus],
   );
 
   const activeSnapshot = useMemo(() => ({
@@ -466,9 +580,11 @@ export default function useCurrentDashboard(
   }), [current?.activeSnapshot, error, loading, refreshNow, sync]);
 
   return {
+    sourceRetry,
+    retrySource,
     current,
     providerHealth: current?.providerHealth || null,
-    systemStatus: current?.systemStatus || null,
+    systemStatus,
     briefingData,
     liveData,
     activeSnapshot,

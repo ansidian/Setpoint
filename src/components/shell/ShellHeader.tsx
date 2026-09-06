@@ -18,9 +18,9 @@ import {
   resolveShellTabHotkey,
 } from "../dashboard/dashboardShellModel";
 import type { DashboardTab } from "../dashboard/dashboardShellModel";
-import type { SystemStatusView } from "./SystemStatusButton";
+import type { SystemStatusView, SystemStatusRetryProps } from "./systemStatusPresentation";
 
-export interface ShellHeaderProps {
+export interface ShellHeaderProps extends SystemStatusRetryProps {
   isMobile?: boolean;
   onAskAlfred?: () => void;
   alfredOpen?: boolean;
@@ -60,7 +60,7 @@ function ShellHeader({
   inboxUnreadSignalCount = 0,
   refreshing,
   onQuickRefresh,
-  systemStatus,
+  systemStatus, onRetrySource, sourceRetry,
 }: ShellHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const notesNavigationChordRef = useRef(false);
@@ -151,7 +151,7 @@ function ShellHeader({
         <time dateTime={new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(date)}>
           {new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Los_Angeles" }).format(date)}
         </time>
-        <MobileShellActions refreshing={refreshing} onQuickRefresh={onQuickRefresh} systemStatus={systemStatus} onOpenHistory={onOpenHistory} onOpenAnalytics={onOpenAnalytics} />
+        <MobileShellActions onRetrySource={onRetrySource} sourceRetry={sourceRetry} refreshing={refreshing} onQuickRefresh={onQuickRefresh} systemStatus={systemStatus} onOpenHistory={onOpenHistory} onOpenAnalytics={onOpenAnalytics} />
       </header>
     );
   }
@@ -228,7 +228,7 @@ function ShellHeader({
         refreshing={refreshing}
         onQuickRefresh={onQuickRefresh}
       />}
-      <SystemStatusButton isMobile={isMobile} systemStatus={systemStatus} refreshing={!isMobile && refreshing} onQuickRefresh={isMobile ? undefined : onQuickRefresh} />
+      <SystemStatusButton onRetrySource={onRetrySource} sourceRetry={sourceRetry} isMobile={isMobile} systemStatus={systemStatus} refreshing={refreshing} onQuickRefresh={isMobile ? undefined : onQuickRefresh} />
       <div style={{ position: "relative" }}>
         <OverflowMenu
           isMobile={isMobile}

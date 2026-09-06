@@ -168,6 +168,13 @@ describe("current dashboard model", () => {
   });
 
   it("detects active current refresh work across source and snapshot health", () => {
+    const now = Date.now();
+    expect(hasActiveRefreshWork({ providerHealth: { currentData: { sources: [
+      { state: "degraded", refreshStartedAt: new Date(now - 1_000).toISOString() },
+    ] } } })).toBe(true);
+    expect(hasActiveRefreshWork({ providerHealth: { currentData: { sources: [
+      { state: "degraded", refreshStartedAt: new Date(now - 121_000).toISOString() },
+    ] } } })).toBe(false);
     expect(hasActiveRefreshWork({
       providerHealth: {
         currentData: {

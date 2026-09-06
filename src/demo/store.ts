@@ -332,7 +332,13 @@ function makeDemoSeed(now = new Date()) {
       providerHealth,
       systemStatus: {
         state: "current",
-        sources: providerHealth.currentData.sources,
+        generatedAt: fetchedAt,
+        sources: [
+          { key: "weather", label: "Weather", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo weather." },
+          { key: "calendar", label: "Calendar", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo events." },
+          { key: "todoist", label: "Tasks", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo tasks." },
+          { key: "bills", label: "Bills", state: "current", lastSuccessAt: fetchedAt, message: "Fictional demo bills." },
+        ],
       },
       fetchedAt,
     },

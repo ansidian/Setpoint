@@ -38,9 +38,9 @@ import type { DashboardCalendarWorkspaceState } from "./useCalendarWorkspaceStat
 import type { DashboardActiveSnapshotController } from "./useLiveReadOverrides";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { ActualBillOccurrence } from "../../../shared/types/actual";
+import type { SystemStatusRetryProps } from "../shell/systemStatusPresentation";
 import type { InboxViewProps } from "../inbox/InboxView";
 export { DashboardBody };
-
 export type DashboardShellLiveData = Omit<Partial<CurrentDashboardHookResult["liveData"]>,
   "liveBills" | "liveEmails" | "snoozedEntries" | "resurfacedEntries"
 > & {
@@ -73,7 +73,7 @@ const SHELL_PREFS = Object.freeze({
   showPreview: true,
 });
 
-export interface DashboardShellProps {
+export interface DashboardShellProps extends SystemStatusRetryProps {
   bd: Partial<CurrentDashboardHookResult["briefingData"]> & { briefing: CurrentDashboardHookResult["briefingData"]["briefing"]; refreshing: boolean };
   liveData: DashboardShellLiveData;
   calendarRange: ReturnType<typeof useCalendarRange> | Record<string, never>;
@@ -97,7 +97,7 @@ export interface DashboardShellProps {
 export function DashboardShell({
   bd: bdInput, liveData: liveDataInput, calendarRange: calendarRangeInput,
   activeSnapshot = { snapshot: null, loading: false, error: null, refresh: async () => null, sync: async () => null },
-  onQuickRefresh,
+  onQuickRefresh, onRetrySource, sourceRetry,
   historyOpen, setHistoryOpen, historyTriggerRef, calendarDeadlines, calendarDeadlinesLoading = false,
   calendarDeadlinesError = false, loadCalendarDeadlines = () => {}, calendarBillsData, calendarBillRange,
   calendarDeadlineRange, domainRefreshing = false, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
@@ -441,7 +441,7 @@ export function DashboardShell({
         inboxUnreadSignalCount={inboxUnreadSignalCount}
         refreshing={bd.refreshing}
         onQuickRefresh={onQuickRefresh}
-        systemStatus={liveData.systemStatus}
+        systemStatus={liveData.systemStatus} onRetrySource={onRetrySource} sourceRetry={sourceRetry}
       />}
 
       <div
@@ -499,7 +499,7 @@ export function DashboardShell({
                 <MobileShellActions
                   refreshing={bd.refreshing}
                   onQuickRefresh={onQuickRefresh}
-                  systemStatus={liveData.systemStatus}
+                  systemStatus={liveData.systemStatus} onRetrySource={onRetrySource} sourceRetry={sourceRetry}
                   onOpenHistory={handleHeaderToggleHistory}
                   onOpenAnalytics={openAnalytics}
                 />
@@ -521,7 +521,7 @@ export function DashboardShell({
           {calendarMounted ? (
             <Suspense fallback={null}>
               <DashboardCalendarModalMount {...calendarMountProps}
-                mobileShellActions={isMobile ? <MobileShellActions refreshing={bd.refreshing} onQuickRefresh={onQuickRefresh} systemStatus={liveData.systemStatus} onOpenHistory={handleHeaderToggleHistory} onOpenAnalytics={openAnalytics} /> : undefined}
+                mobileShellActions={isMobile ? <MobileShellActions onRetrySource={onRetrySource} sourceRetry={sourceRetry} refreshing={bd.refreshing} onQuickRefresh={onQuickRefresh} systemStatus={liveData.systemStatus} onOpenHistory={handleHeaderToggleHistory} onOpenAnalytics={openAnalytics} /> : undefined}
               />
             </Suspense>
           ) : null}

@@ -39,6 +39,7 @@ const { saveCacheRow } = await import("../dashboard/currentCacheStore.ts");
 function makeApp(): Express {
   const app = express();
   app.use(cookieParser());
+  app.use(express.json());
   app.use("/api/dashboard", router);
   return app;
 }
@@ -82,6 +83,13 @@ describe("dashboard routes", () => {
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ message: "Not authenticated" });
+  });
+
+  it.each(["email", "weather", null, ["weather_current"], { source: "weather_current" }])("rejects an invalid source retry target %j", async (source) => {
+    const res = await request(makeApp()).post("/api/dashboard/current/refresh")
+      .set("Cookie", ["ea_session=cookie-session"]).send({ source });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Unknown dashboard source" });
   });
 
   it("returns the cached current-dashboard envelope through the real service", async () => {

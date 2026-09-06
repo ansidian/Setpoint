@@ -180,6 +180,89 @@ describe("useCurrentDashboard", () => {
     vi.useRealTimers();
   });
 
+  it("never reports healthy before a successful dashboard health read", async () => {
+    getCurrentDashboardMock.mockRejectedValue(new Error("offline"));
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    expect(result.current.systemStatus?.state).toBe("checking");
+    await act(async () => {});
+    expect(result.current.systemStatus?.state).toBe("unavailable");
+    expect(result.current.liveData.systemStatus?.sources[0]?.key).toBe("dashboard_connection");
+    unmount();
+  });
+
+  it("retains saved data but reports a failed background health read until a full read succeeds", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    getCurrentDashboardMock.mockRejectedValue(new Error("unreachable"));
+    await act(async () => { FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "calendar" }); });
+    expect(result.current.liveData.liveWeather).toEqual(currentPayload.weather);
+    expect(result.current.systemStatus?.state).toBe("degraded");
+    await act(async () => { FakeEventSource.instances[0]!.emit("dashboard-current-changed", { source: "email_triage" }); });
+    expect(result.current.systemStatus?.state).toBe("degraded");
+    getCurrentDashboardMock.mockResolvedValue(currentPayload);
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.systemStatus?.state).toBe("current");
+    unmount();
+  });
+
+  it("reports interrupted live updates and revalidates health when the stream reconnects", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    const source = FakeEventSource.instances[0]!;
+    await act(async () => { source.emitError(FakeEventSource.CONNECTING); });
+    expect(result.current.systemStatus?.sources[0]).toMatchObject({ key: "dashboard_connection", state: "degraded" });
+    let finishReconnect!: (value: unknown) => void;
+    getCurrentDashboardMock.mockImplementation(() => new Promise((resolve) => { finishReconnect = resolve; }));
+    await act(async () => { source.emit("open"); });
+    expect(result.current.systemStatus?.state).toBe("degraded");
+    await act(async () => { finishReconnect({
+      ...currentPayload,
+      systemStatus: { ...currentPayload.systemStatus, state: "needs_sync" },
+      contentKey: "reconnected-health",
+    }); });
+    expect(result.current.systemStatus?.state).toBe("needs_sync");
+    expect(result.current.systemStatus?.sources.some((entry) => entry.key === "dashboard_connection")).toBe(false);
+    unmount();
+  });
+
+  it("reports browser offline without dropping saved data and rechecks on returning online", async () => {
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    await act(async () => { window.dispatchEvent(new Event("offline")); });
+    expect(result.current.systemStatus?.sources[0]?.message).toContain("offline");
+    expect(result.current.liveData.liveWeather).toEqual(currentPayload.weather);
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    expect(result.current.systemStatus?.state).toBe("current");
+    unmount();
+  });
+
+  it("ages source freshness in an idle tab while recording successful checks of identical content", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-06T12:00:00Z"));
+    getCurrentDashboardMock.mockResolvedValue({
+      ...currentPayload,
+      contentKey: "unchanged-content",
+      systemStatus: {
+        state: "current", generatedAt: "2026-09-06T12:00:00Z",
+        sources: [{ key: "weather", label: "Weather", state: "current", severity: "none", lastSuccessAt: "2026-09-06T12:00:00Z", expiresAt: "2026-09-06T12:01:00Z", impact: "Conditions and forecast may be out of date." }],
+      },
+    });
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    const envelope = result.current.current;
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); await result.current.refresh(); });
+    expect(result.current.current).toBe(envelope);
+    expect(result.current.systemStatus?.generatedAt).toBe("2026-09-06T12:00:30.000Z");
+    expect(result.current.systemStatus?.state).toBe("current");
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(result.current.systemStatus?.state).toBe("needs_sync");
+    expect(result.current.systemStatus?.sources[0]?.message).toBe("Conditions and forecast may be out of date.");
+    expect(result.current.liveData.systemStatus?.sources[0]?.lastSuccessAt).toBe("2026-09-06T12:00:00Z");
+    unmount();
+  });
+
   it("invalidates the shared Actual metadata cache when bills change over SSE", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     expect((await loadActualMetadata()).payees).toEqual([{ id: "payee-old", name: "Old Payee" }]);

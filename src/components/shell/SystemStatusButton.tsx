@@ -1,134 +1,39 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { createPortal } from "react-dom";
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  CircleDashed,
-  Info,
-  LoaderCircle,
-  RefreshCw,
-} from "lucide-react";
+import { Link } from "react-router";
+import { Activity, AlertTriangle, ArrowUpRight, CheckCircle2, CircleDashed, LoaderCircle, RefreshCw } from "lucide-react";
 import type { LucideProps } from "lucide-react";
+import AnimatedHeight from "../shared/AnimatedHeight";
+import {
+  isAttentionState, isBusyState, normalizeState, relativeTimestamp,
+  STATE_COLOR, STATE_COPY, sourceRefreshActive, statusSummary, systemState, UNKNOWN_STATUS,
+} from "./systemStatusPresentation";
+import type { StatusState, SystemStatusView, SystemStatusRetryProps, SystemStatusSourceView } from "./systemStatusPresentation";
+import "./SystemStatus.css";
 
-type NormalizedStatusState = keyof typeof STATE_COPY;
+export type { SystemStatusView, SystemStatusSourceView } from "./systemStatusPresentation";
 
-export interface SystemStatusSourceView {
-  key?: string;
-  label?: string;
-  state?: string;
-  message?: string;
-  lastSuccessAt?: string | null;
-}
-
-export interface SystemStatusView {
-  state?: string;
-  sources?: SystemStatusSourceView[];
-}
-
-const FALLBACK_STATUS: SystemStatusView = {
-  state: "current",
-  sources: [],
-};
-
-const STATE_COPY = {
-  current: "Current",
-  refreshing: "Refreshing",
-  syncing: "Syncing",
-  needs_sync: "Needs sync",
-  degraded: "Degraded",
-  unavailable: "Unavailable",
-  unconfigured: "Unconfigured",
-};
-
-const STATE_COLOR = {
-  current: "#a6e3a1",
-  refreshing: "#89b4fa",
-  syncing: "#89b4fa",
-  needs_sync: "#f9e2af",
-  degraded: "#f9e2af",
-  unavailable: "#f38ba8",
-  unconfigured: "#a6adc8",
-};
-
-function normalizeState(state: string | null | undefined): NormalizedStatusState {
-  if (state === "stale") return "needs_sync";
-  return typeof state === "string" && state in STATE_COPY
-    ? state as NormalizedStatusState
-    : "unavailable";
-}
-
-function isAttentionState(state: NormalizedStatusState): boolean {
-  return state === "needs_sync" || state === "degraded" || state === "unavailable";
-}
-
-function isBusyState(state: NormalizedStatusState): boolean {
-  return state === "refreshing" || state === "syncing";
-}
-
-function StatusIcon({ state, ...props }: LucideProps & { state: NormalizedStatusState }) {
+function StatusIcon({ state, ...props }: LucideProps & { state: StatusState }) {
   if (state === "current") return <CheckCircle2 {...props} />;
-  if (state === "refreshing" || state === "syncing") return <LoaderCircle {...props} />;
-  if (state === "needs_sync" || state === "degraded" || state === "unavailable") return <AlertTriangle {...props} />;
-  if (state === "unconfigured") return <CircleDashed {...props} />;
-  return <Info {...props} />;
+  if (state === "checking" || state === "unconfigured") return <CircleDashed {...props} />;
+  if (isBusyState(state)) return <LoaderCircle {...props} className="system-status-spinner" />;
+  return <AlertTriangle {...props} />;
 }
 
-function HealthGlyph({ busy, color, isMobile }: { busy: boolean; color: string; isMobile: boolean }) {
-  // lucide Activity (heartbeat / pulse line) per the design handoff. The glyph
-  // color IS the status (Source Color Rule). Busy states (refreshing/syncing)
-  // get a soft drop-shadow pulse, gated behind prefers-reduced-motion in CSS.
-  return (
-    <span
-      aria-hidden="true"
-      data-testid="system-status-signal"
-      className={busy ? "system-status-signal--busy" : undefined}
-      style={{
-        "--system-status-signal-color": color,
-        display: "inline-grid",
-        placeItems: "center",
-      } as CSSProperties}
-    >
-      <Activity size={isMobile ? 15 : 13} strokeWidth={2} color={color} />
-    </span>
-  );
-}
-
-function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return "No recent success";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No recent success";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-interface PanelPosition {
-  top: number;
-  left: number;
-}
+interface PanelPosition { top: number; left: number; maxHeight: number }
 
 function usePanelPosition(open: boolean, triggerRef: RefObject<HTMLButtonElement | null>): PanelPosition {
-  const [position, setPosition] = useState<PanelPosition>({ top: 52, left: 12 });
-
+  const [position, setPosition] = useState<PanelPosition>({ top: 52, left: 8, maxHeight: 420 });
   useLayoutEffect(() => {
     if (!open) return undefined;
-
-    function update() {
+    const update = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const width = 300;
-      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
-      setPosition({
-        top: rect.bottom + 8,
-        left,
-      });
-    }
-
+      const width = Math.min(340, window.innerWidth - 16);
+      const top = rect.bottom + 8;
+      setPosition({ top, left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)), maxHeight: Math.max(100, window.innerHeight - top - 8) });
+    };
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
@@ -137,290 +42,142 @@ function usePanelPosition(open: boolean, triggerRef: RefObject<HTMLButtonElement
       window.removeEventListener("scroll", update, true);
     };
   }, [open, triggerRef]);
-
   return position;
 }
 
-function StatusPanel({ status, onClose, panelRef, position, refreshing, onQuickRefresh }: {
-  refreshing?: boolean;
-  onQuickRefresh?: () => unknown;
+function StatusPanel({ status, onClose, panelRef, position, refreshing, onQuickRefresh, onRetrySource, sourceRetry }: {
   status: SystemStatusView;
   onClose: () => void;
   panelRef: RefObject<HTMLDivElement | null>;
   position: PanelPosition;
-}) {
+  refreshing: boolean;
+  onQuickRefresh?: () => unknown;
+} & SystemStatusRetryProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (onQuickRefresh) closeRef.current?.focus();
-  }, [onQuickRefresh]);
-  const [closeHover, setCloseHover] = useState(false);
-  const [closeFocus, setCloseFocus] = useState(false);
-  const [closePressed, setClosePressed] = useState(false);
-  const closeActive = (closeHover || closeFocus) && !closePressed;
-
+  useEffect(() => { closeRef.current?.focus(); }, []);
   return createPortal(
-    <div
-      ref={panelRef}
-      role="dialog"
-      aria-label="System status"
-      style={{
-        position: "fixed",
-        top: position.top,
-        left: position.left,
-        width: 300,
-        maxWidth: "calc(100vw - 16px)",
-        maxHeight: "min(420px, calc(100vh - 72px))",
-        overflowY: "auto",
-        overscrollBehavior: "contain",
-        isolation: "isolate",
-        padding: 10,
-        borderRadius: 12,
-        background: "var(--sp-panel)",
-        border: "1px solid rgba(255,255,255,0.09)",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-        color: "var(--sp-text)",
-        zIndex: 80,
-      }}
+    <div ref={panelRef} role="dialog" aria-label="System status" className="system-status-panel"
+      style={position}
       onWheel={(event) => {
         const target = event.currentTarget;
         const atTop = target.scrollTop <= 0;
         const atBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 1;
-        if ((atTop && event.deltaY < 0) || (atBottom && event.deltaY > 0)) {
-          event.preventDefault();
-        }
+        if ((atTop && event.deltaY < 0) || (atBottom && event.deltaY > 0)) event.preventDefault();
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          padding: "2px 2px 8px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-        }}
-      >
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" }}>
-          System status
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          onMouseEnter={() => setCloseHover(true)}
-          onMouseLeave={() => {
-            setCloseHover(false);
-            setClosePressed(false);
-          }}
-          onFocus={() => setCloseFocus(true)}
-          onBlur={() => {
-            setCloseFocus(false);
-            setClosePressed(false);
-          }}
-          onPointerDown={() => setClosePressed(true)}
-          onPointerUp={() => setClosePressed(false)}
-          ref={closeRef}
-          className={onQuickRefresh ? "shell-health-close" : undefined}
-          aria-label="Close system status"
-          style={{
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: closeActive ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
-            color: closeActive ? "var(--sp-text)" : "rgba(205,214,244,0.74)",
-            borderRadius: 7,
-            cursor: "pointer",
-            fontSize: 11,
-            padding: "3px 7px",
-            transform: closeActive ? "translateY(-1px)" : "translateY(0)",
-            boxShadow: closeFocus ? "0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
-            transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms, box-shadow 150ms",
-          }}
-        >
-          Close
-        </button>
+      <div className="system-status-heading">
+        <strong>System status</strong>
+        <button ref={closeRef} type="button" className="system-status-close" aria-label="Close system status" onClick={onClose}>Close</button>
       </div>
-      <SystemStatusDetails status={status} />
-      {onQuickRefresh && (
-        <button
-          type="button"
-          className="shell-health-sync"
-          disabled={refreshing}
-          aria-busy={refreshing}
-          onClick={() => { void onQuickRefresh(); }}
-        >
-          <RefreshCw size={13} aria-hidden="true" />
-          <span>{refreshing ? "Syncing…" : "Sync now"}</span>
-          <kbd aria-hidden="true">R</kbd>
-        </button>
-      )}
-    </div>,
-    document.body,
+      <AnimatedHeight><SystemStatusDetails status={status} onNavigate={onClose} onRetrySource={onRetrySource} sourceRetry={sourceRetry} refreshing={refreshing} /></AnimatedHeight>
+      {onQuickRefresh && <button type="button" className="system-status-sync" disabled={refreshing || sourceRetry?.state === "pending"} aria-busy={refreshing} onClick={() => { void onQuickRefresh(); }}>
+        <RefreshCw size={13} aria-hidden="true" className={refreshing ? "system-status-spinner" : undefined} />
+        <span>{refreshing ? "Syncing…" : "Sync now"}</span><kbd aria-hidden="true">R</kbd>
+      </button>}
+    </div>, document.body,
   );
 }
 
-export function SystemStatusDetails({ status }: { status: SystemStatusView }) {
-  const sources = status.sources?.length
-    ? status.sources
-    : [{ key: "system", label: "System", state: status.state, message: "System status is current." }];
-
-  return (
-      <div style={{ display: "grid", gap: 6, paddingTop: 8 }}>
-        {sources.map((source) => {
-          const state = normalizeState(source.state);
-          const color = STATE_COLOR[state];
-          return (
-            <div
-              key={source.key || source.label}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "16px minmax(0, 1fr)",
-                gap: 9,
-                padding: "8px 6px",
-                borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.06)",
-                background: isAttentionState(state) ? `${color}10` : "rgba(255,255,255,0.025)",
-              }}
-            >
-              <StatusIcon
-                state={state}
-                size={14}
-                color={color}
-                style={{ marginTop: 1, animation: isBusyState(state) ? "spin 0.8s linear infinite" : "none" }}
-              />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 650, color: "var(--sp-text)" }}>
-                    {source.label || source.key}
-                  </div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                    {STATE_COPY[state]}
-                  </div>
-                </div>
-                <div style={{ marginTop: 3, fontSize: 11, lineHeight: 1.35, color: "rgba(205,214,244,0.72)" }}>
-                  {source.message || "Status details are unavailable."}
-                </div>
-                <div style={{ marginTop: 5, fontSize: 10.5, color: "rgba(166,173,200,0.75)" }}>
-                  Last success: {formatTimestamp(source.lastSuccessAt)}
-                </div>
-              </div>
+export function SystemStatusDetails({ status, onNavigate, onRetrySource, sourceRetry, refreshing = false }: { status: SystemStatusView; onNavigate?: () => void; refreshing?: boolean } & SystemStatusRetryProps) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const retryFocusRef = useRef<{ button: HTMLButtonElement; sourceKey?: string } | null>(null);
+  useLayoutEffect(() => {
+    const previous = retryFocusRef.current;
+    if (!previous || previous.button.isConnected) return;
+    if (document.activeElement === document.body) {
+      const row = Array.from(listRef.current?.children || []).find((element) => (element as HTMLElement).dataset.sourceKey === previous.sourceKey) as HTMLElement | undefined;
+      row?.focus();
+    }
+    retryFocusRef.current = null;
+  });
+  const sources: SystemStatusSourceView[] = status.sources?.length ? status.sources : [{ key: "system", label: "System", state: status.state, message: "Status details are unavailable. Try syncing again." }];
+  const ordered = [...sources].sort((left, right) => Number(isAttentionState(normalizeState(right.state)) || (sourceRetry && right.retrySource === sourceRetry.source)) - Number(isAttentionState(normalizeState(left.state)) || (sourceRetry && left.retrySource === sourceRetry.source)));
+  return <div className="system-status-details">
+    <p className="system-status-summary" role="status">{statusSummary(status)}</p>
+    <ul ref={listRef} className="system-status-sources">
+      {ordered.map((source) => {
+        const state = normalizeState(source.state);
+        const attention = isAttentionState(state);
+        const retry = source.retrySource === sourceRetry?.source && (sourceRetry?.state !== "success" || state === "current") ? sourceRetry : null;
+        const updating = retry?.state === "pending" || sourceRefreshActive(source);
+        const compact = (state === "current" || state === "unconfigured") && !retry && !updating;
+        const showRetry = source.retrySource && onRetrySource && (attention || updating || retry) && state !== "needs_reauth" && state !== "unconfigured";
+        const timestamp = source.lastSuccessAt && Number.isFinite(Date.parse(source.lastSuccessAt)) ? source.lastSuccessAt : null;
+        return <li key={source.key || source.label} className="system-status-source sp-focus-ring" tabIndex={-1} data-source-key={source.key} data-attention={attention || undefined} data-compact={compact || undefined}
+          style={{ "--status-color": STATE_COLOR[state] } as CSSProperties}>
+          <StatusIcon state={updating ? "refreshing" : state} size={14} aria-hidden="true" />
+          <div className="system-status-source-content">
+            <div className="system-status-source-title"><strong>{source.label || source.key}</strong><span>{STATE_COPY[state]}</span></div>
+            {!compact && !retry && <p>{source.message || "Status details are unavailable. Try syncing again."}</p>}
+            {retry && retry.state !== "success" && <p>{source.message}</p>}
+            {(retry || updating) && <p className="system-status-result" role="status">{updating ? `Updating ${source.label?.toLowerCase() || "this source"}…` : retry?.message || (retry?.state === "success" ? `${source.label} is up to date.` : "The update did not complete. Try again.")}</p>}
+            {state !== "unconfigured" && <div className="system-status-time">
+              {timestamp ? <>{source.key === "dashboard_connection" ? "Last checked " : "Updated "}<time dateTime={timestamp} title={new Date(timestamp).toLocaleString()}>{relativeTimestamp(timestamp)}</time></> : state === "checking" ? "Waiting for a status check" : "Last update unknown"}
+            </div>}
+            <div className="system-status-source-actions">
+            {showRetry && <button type="button" className="system-status-retry" aria-disabled={refreshing || sourceRetry?.state === "pending" || updating} aria-busy={updating}
+              onFocus={(event) => { retryFocusRef.current = { button: event.currentTarget, sourceKey: source.key }; }}
+              onBlur={(event) => { if (event.relatedTarget) retryFocusRef.current = null; }}
+              onClick={() => { if (source.retrySource && !refreshing && sourceRetry?.state !== "pending" && !updating) void onRetrySource?.(source.retrySource); }}>
+              <RefreshCw size={12} aria-hidden="true" className={updating ? "system-status-spinner" : undefined} />
+              {updating ? `Updating ${source.label}…` : `Retry ${source.label}`}
+            </button>}
+            {source.action && state !== "current" && <Link className="system-status-repair" to={source.action.href} onClick={onNavigate}>
+              {source.action.label}<ArrowUpRight size={12} aria-hidden="true" />
+            </Link>}
             </div>
-          );
-        })}
-      </div>
-  );
+          </div>
+        </li>;
+      })}
+    </ul>
+    {status.generatedAt && Number.isFinite(Date.parse(status.generatedAt)) && <p className="system-status-checked">Status checked <time dateTime={status.generatedAt} title={new Date(status.generatedAt).toLocaleString()}>{relativeTimestamp(status.generatedAt)}</time></p>}
+  </div>;
 }
 
-export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = false, refreshing = false, onQuickRefresh }: {
+export function SystemStatusButton({ systemStatus, isMobile = false, refreshing = false, onQuickRefresh, onRetrySource, sourceRetry }: {
   refreshing?: boolean;
   onQuickRefresh?: () => unknown;
   systemStatus?: SystemStatusView | null;
   isMobile?: boolean;
-}) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
+} & SystemStatusRetryProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [hover, setHover] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const [pressed, setPressed] = useState(false);
-  const status = systemStatus || FALLBACK_STATUS;
-  const sourceState = normalizeState(status.state);
+  const status = systemStatus || UNKNOWN_STATUS;
+  const sourceState = systemState(status);
   const state = refreshing && sourceState === "current" ? "syncing" : sourceState;
-  const color = STATE_COLOR[state];
-  const position = usePanelPosition(open, triggerRef);
-  const active = hover || open || focused;
   const attention = isAttentionState(state);
-  const busy = refreshing || isBusyState(state);
-
+  const busy = refreshing || sourceRetry?.state === "pending" || isBusyState(state);
+  const position = usePanelPosition(open, triggerRef);
   useEffect(() => {
     if (!open) return undefined;
-
-    function onPointerDown(event: PointerEvent) {
-      if (event.target instanceof Node && triggerRef.current?.contains(event.target)) return;
-      if (event.target instanceof Node && panelRef.current?.contains(event.target)) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && (triggerRef.current?.contains(event.target) || panelRef.current?.contains(event.target))) return;
       setOpen(false);
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-        if (!isMobile) triggerRef.current?.focus();
-      }
-    }
-
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setOpen(false); triggerRef.current?.focus(); }
+    };
     document.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, isMobile]);
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={isMobile ? undefined : "shell-health-control"}
-        title={`System status: ${STATE_COPY[state]}${!isMobile ? " · Sync now: R" : ""}`}
-        aria-label={`System status: ${state}`}
-        aria-busy={busy}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => setOpen((value) => !value)}
-        onPointerDown={() => setPressed(true)}
-        onPointerUp={() => setPressed(false)}
-        onPointerLeave={() => {
-          setPressed(false);
-          setHover(false);
-        }}
-        onMouseEnter={() => setHover(true)}
-        // Only light the focus ring for keyboard focus, not a mouse click:
-        // :focus-visible is the browser's own keyboard-vs-pointer heuristic.
-        onFocus={(event) => setFocused(event.currentTarget.matches(":focus-visible"))}
-        onBlur={() => setFocused(false)}
-        style={{
-          width: isMobile ? 40 : 28,
-          height: isMobile ? 40 : 28,
-          flexShrink: 0,
-          borderRadius: 8,
-          // Match the sibling "More" tool button so the cluster reads as one
-          // group. At rest the glyph color carries the signal; attention states
-          // also tint the border + fill so urgency wins the foreground.
-          border: `1px solid ${
-            !isMobile && !attention && !active ? "transparent" : attention
-              ? `${color}59`
-              : active
-                ? "rgba(255,255,255,0.16)"
-                : "rgba(255,255,255,0.08)"
-          }`,
-          background: !isMobile && !attention && !active ? "transparent" : attention
-            ? `${color}14`
-            : active
-              ? "rgba(255,255,255,0.06)"
-              : "rgba(255,255,255,0.03)",
-          boxShadow: focused ? "0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
-          cursor: "pointer",
-          display: "inline-grid",
-          placeItems: "center",
-          transform: hover && !pressed ? "translateY(-1px)" : "translateY(0)",
-          transition:
-            "transform 150ms, background 150ms, border-color 150ms, box-shadow 150ms",
-        }}
-      >
-        <HealthGlyph busy={busy} color={color} isMobile={isMobile} />
-      </button>
-      {!isMobile && <span className="sr-only" role="status" aria-live="polite">{refreshing ? "Syncing…" : `System status: ${STATE_COPY[state]}`}</span>}
-      {open && (
-        <StatusPanel
-          status={status}
-          onClose={() => {
-            setOpen(false);
-            if (!isMobile) triggerRef.current?.focus();
-          }}
-          panelRef={panelRef}
-          position={position}
-          refreshing={refreshing}
-          onQuickRefresh={onQuickRefresh}
-        />
-      )}
-    </>
-  );
+  }, [open]);
+  const close = () => { setOpen(false); triggerRef.current?.focus(); };
+  const Glyph = attention ? AlertTriangle : state === "checking" ? CircleDashed : Activity;
+  return <>
+    <button ref={triggerRef} type="button" className="system-status-trigger" data-mobile={isMobile || undefined} data-attention={attention || undefined}
+      style={{ "--status-color": STATE_COLOR[state] } as CSSProperties}
+      title={`System status: ${STATE_COPY[state]}${!isMobile ? " · Sync now: R" : ""}`}
+      aria-label={`System status: ${STATE_COPY[state]}`} aria-busy={busy} aria-expanded={open} aria-haspopup="dialog"
+      onClick={() => setOpen((value) => !value)}>
+      <span aria-hidden="true" data-testid="system-status-signal" className={busy ? "system-status-signal--busy" : undefined} style={{ "--system-status-signal-color": STATE_COLOR[state] } as CSSProperties}>
+        <Glyph size={isMobile ? 15 : 13} strokeWidth={2} />
+      </span>
+    </button>
+    <span className="sr-only" role="status" aria-live="polite">{refreshing ? "Syncing…" : `System status: ${STATE_COPY[state]}`}</span>
+    {open && <StatusPanel status={status} onClose={close} panelRef={panelRef} position={position} refreshing={refreshing} onQuickRefresh={onQuickRefresh} onRetrySource={onRetrySource} sourceRetry={sourceRetry} />}
+  </>;
 }
