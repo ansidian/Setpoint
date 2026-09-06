@@ -196,6 +196,23 @@ function TimelineRow({
     : item.data.status === "complete" ? { label: "Completed", tone: "completed", Icon: CheckCircle2 }
     : overdueText ? { label: overdueText, tone: "overdue", Icon: ClockAlert } : null;
 
+  const liveBadge = isLive && (
+    <span
+      style={{
+        padding: "1px 6px",
+        borderRadius: 99,
+        fontSize: 9,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        fontWeight: 600,
+        background: `${effectiveRailDotColor}18`,
+        color: effectiveRailDotColor,
+      }}
+    >
+      Live now
+    </span>
+  );
+
   return (
     <div
       data-testid={isMobile ? "timeline-row-mobile" : "timeline-row-desktop"}
@@ -346,22 +363,7 @@ function TimelineRow({
               Needs You
             </span>
           )}
-          {isLive && (
-            <span
-              style={{
-                padding: "1px 6px",
-                borderRadius: 99,
-                fontSize: 9,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-                fontWeight: 600,
-                background: `${effectiveRailDotColor}18`,
-                color: effectiveRailDotColor,
-              }}
-            >
-              Live now
-            </span>
-          )}
+          {isMobile && liveBadge}
           {!showNeedsYouReference && priorityLevel && <PriorityFlag level={priorityLevel} />}
           {!showNeedsYouReference && reminderSummary && (
             <span
@@ -401,19 +403,23 @@ function TimelineRow({
         )}
       </div>
 
-      {!isMobile && meta && !showNeedsYouReference && (
-        <div
-          style={{
-            fontSize: 10.5,
-            color: secondaryColor,
-            fontVariantNumeric: "tabular-nums",
-            padding: "2px 8px",
-            borderRadius: 6,
-            background: "rgba(255,255,255,0.03)",
-            alignSelf: item.kind === "deadline" ? "start" : undefined,
-          }}
-        >
-          {meta}
+      {!isMobile && (meta || isLive) && !showNeedsYouReference && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", alignSelf: item.kind === "deadline" ? "start" : undefined }}>
+          {liveBadge}
+          {meta && (
+            <div
+              style={{
+                fontSize: 10.5,
+                color: secondaryColor,
+                fontVariantNumeric: "tabular-nums",
+                padding: "2px 8px",
+                borderRadius: 6,
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              {meta}
+            </div>
+          )}
         </div>
       )}
       {liveMarker && (() => {
