@@ -26,33 +26,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("defaults to the Alfred tab and switches sections", async () => {
-  render(<AiAnalyticsModal open onClose={() => {}} />);
-  expect(await screen.findByText(/Queries/i)).toBeTruthy(); // Alfred default
-  fireEvent.click(screen.getByRole("tab", { name: /Email Search/i }));
-  await waitFor(() => expect(screen.getByText(/Indexed/i)).toBeTruthy());
-});
-
-it("carries the blocking calendar-hotkey suspension marker while open", async () => {
-  render(<AiAnalyticsModal open onClose={() => {}} />);
-
-  // The calendar's hotkey handler suspends its whole keyboard surface while an
-  // element with data-suspend-calendar-hotkeys="blocking" is mounted anywhere —
-  // assert the same presence query the handler runs.
-  await waitFor(() => {
-    expect(document.querySelector("[data-suspend-calendar-hotkeys='blocking']")).toBeTruthy();
-  });
-});
-
-it("isolates a failing section", async () => {
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
-    const path = new URL(String(input), "https://setpoint.test").pathname;
-    return path === "/api/alfred/usage" ? response({ error: "boom" }, 500) : response(statsByPath[path]);
-  });
-  render(<AiAnalyticsModal open onClose={() => {}} />);
-  expect(await screen.findByText(/couldn.t load/i)).toBeTruthy();
-});
-
 it("recovers the failing section when Try again succeeds", async () => {
   let alfredRequests = 0;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {

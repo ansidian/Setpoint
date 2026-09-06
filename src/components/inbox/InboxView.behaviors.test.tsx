@@ -299,7 +299,10 @@ describe("InboxView action workflows", () => {
     // test-architecture: allow-boundary-interaction -- the rejected provider mutation is the failure boundary under test.
     await waitFor(() => expect(api.markEmailAsUnread).toHaveBeenCalledWith("read-failure"));
     expect(await screen.findByTestId("inbox-mobile-list")).toBeTruthy();
-    expect(screen.getByText("Read failure row")).toBeTruthy();
+    await waitFor(() => {
+      const row = screen.getByRole("button", { name: /Read failure row/ });
+      expect(within(row).queryByText("Unread")).toBeNull();
+    });
   });
 });
 

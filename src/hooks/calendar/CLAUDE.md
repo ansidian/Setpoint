@@ -22,7 +22,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarDomainRangeDataModel.ts` — pure deadline/bill month slicing, range projection/deduplication, stats recalculation, and represented-month discovery for `useCalendarDomainRange`
 
 ### Controller + view model
-- `calendarShellLoaders.tsx` — production lazy boundaries for the desktop shell and mobile agenda; Vitest resolves the same module paths eagerly to preserve synchronous behavior-test contracts
+- `calendarShellLoaders.tsx` — shared lazy boundaries for the desktop shell and mobile agenda; tests await visible UI through the same Suspense path as production
 - `useCalendarModalController.tsx` — main orchestrator wiring sub-hooks and editors
 - `useCalendarControllerViewData.ts` — memoized events-window and per-domain view-data projection behind the controller's data seam
 - `useCalendarAgendaScroll.ts` — agenda rail ref, imperative scroll command lifecycle, and entry-target release state

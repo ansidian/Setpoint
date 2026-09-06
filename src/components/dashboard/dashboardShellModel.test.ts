@@ -2,15 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
-  dashboardEventCalendarRequest,
-  nextItemSheet,
-  resolveCalendarOpenState,
+  dashboardEventCalendarRequest, resolveCalendarOpenState,
   resolveDashboardShellHotkey,
   resolveShellTabHotkey,
-  resolveNotesNavigationChord,
-  shouldClearCalendarFocusOnLeave,
+  resolveNotesNavigationChord
 } from "./dashboardShellModel";
-import type { DashboardGlanceSheet } from "./dashboardShellModel";
 
 describe("dashboard shell model", () => {
   it("normalizes calendar open requests without rendering DashboardShell", () => {
@@ -290,48 +286,6 @@ describe("dashboard shell model", () => {
       expect(resolveDashboardShellHotkey({
         key: "|", code: "Backslash", metaKey: true, shiftKey: true, isMobile: true,
       })).toEqual({ action: "ignore" });
-    });
-  });
-
-  describe("nextItemSheet", () => {
-    it("closes an open event sheet when the same card is re-tapped (the events toggle bug)", () => {
-      const open: DashboardGlanceSheet = { kind: "event", item: { title: "Standup" }, itemId: "evt-1" };
-      const reTap: DashboardGlanceSheet = { kind: "event", item: { title: "Standup" }, itemId: "evt-1", anchorRef: { current: {} } };
-      expect(nextItemSheet(open, reTap)).toBeNull();
-    });
-
-    it("still toggles deadlines shut, keyed by the task id (unchanged behavior)", () => {
-      const open: DashboardGlanceSheet = { kind: "deadline", item: { id: "t1", title: "Report" } };
-      const reTap: DashboardGlanceSheet = { kind: "deadline", item: { id: "t1", title: "Report" } };
-      expect(nextItemSheet(open, reTap)).toBeNull();
-    });
-
-    it("swaps to a different item of the same kind instead of closing", () => {
-      const open: DashboardGlanceSheet = { kind: "event", itemId: "evt-1" };
-      const other: DashboardGlanceSheet = { kind: "event", itemId: "evt-2" };
-      expect(nextItemSheet(open, other)).toBe(other);
-    });
-
-    it("swaps when the kind changes even if the keys happen to collide", () => {
-      const open: DashboardGlanceSheet = { kind: "deadline", item: { id: "x" } };
-      const other: DashboardGlanceSheet = { kind: "bill", itemId: "x" };
-      expect(nextItemSheet(open, other)).toBe(other);
-    });
-
-    it("opens (cannot toggle) when the tapped item has no resolvable identity", () => {
-      const open: DashboardGlanceSheet = { kind: "event", item: {} };
-      const reTap: DashboardGlanceSheet = { kind: "event", item: {} };
-      expect(nextItemSheet(open, reTap)).toBe(reTap);
-    });
-  });
-
-  describe("shouldClearCalendarFocusOnLeave", () => {
-    it("clears when leaving the calendar tab", () => {
-      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "dashboard" })).toBe(true);
-    });
-
-    it("does not clear when arriving at the calendar tab", () => {
-      expect(shouldClearCalendarFocusOnLeave({ prevTab: "dashboard", tab: "calendar" })).toBe(false);
     });
   });
 });

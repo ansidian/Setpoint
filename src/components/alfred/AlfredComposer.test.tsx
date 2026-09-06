@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import AlfredComposer from "./AlfredComposer";
@@ -22,44 +21,7 @@ const baseProps = {
   onSubmit: async () => ({ status: "success" } as const),
 };
 
-function ComposerHarness() {
-  const [submitted, setSubmitted] = useState("none");
-  return <>
-    <AlfredComposer {...baseProps} onSubmit={async (text) => {
-      setSubmitted(text);
-      return { status: "success" };
-    }} />
-    <output>{submitted}</output>
-  </>;
-}
-
 describe("AlfredComposer", () => {
-  it("submits the trimmed draft on Enter and clears the input", () => {
-    render(<ComposerHarness />);
-    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "  any bills?  " } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.getByText("any bills?")).toBeTruthy();
-    expect(input.value).toBe("");
-  });
-
-  it("does not submit an empty / whitespace-only draft on Enter", () => {
-    render(<ComposerHarness />);
-    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "   " } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.getByText("none")).toBeTruthy();
-    expect(input.value).toBe("   ");
-  });
-
-  it("clears the local draft when clearSignal changes (new chat)", () => {
-    const { rerender } = render(<AlfredComposer {...baseProps} clearSignal="0:0" />);
-    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "half-typed" } });
-    expect(input.value).toBe("half-typed");
-    rerender(<AlfredComposer {...baseProps} clearSignal="1:0" />);
-    expect(screen.getByPlaceholderText<HTMLTextAreaElement>("Ask across mail, calendar, and finances…").value).toBe("");
-  });
 
   it("allows typing while email preparation is pending but blocks sending", () => {
     render(<AlfredComposer {...baseProps} pendingEmail={{

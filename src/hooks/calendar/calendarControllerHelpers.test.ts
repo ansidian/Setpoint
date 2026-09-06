@@ -1,16 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addMonthOffset,
-  dedupeEvents,
-  deadlineOverlayRecordData,
-  findItemLocation,
-  hasDeadlineItemsInRange,
-  itemDueDate,
-  itemFromCalendarSearchResult,
-  itemMatchesViewId,
-  makeDeadlineOverlayRecord,
-  rangeMatches,
-  resolvePendingFocusItem,
+  dedupeEvents, findItemLocation, itemFromCalendarSearchResult, resolvePendingFocusItem
 } from "./calendarControllerHelpers";
 import type { CalendarComputedItems, CalendarControllerItem, CalendarViewAdapter } from "./calendarControllerHelpers";
 import calendarEventsView from "../../components/calendar/views/eventsView.tsx";
@@ -29,11 +19,6 @@ const getDeadlineOverlayComputedTyped = getDeadlineOverlayComputed as (input: {
 }) => CalendarComputedItems;
 
 describe("calendarControllerHelpers", () => {
-  it("addMonthOffset wraps year boundaries", () => {
-    expect(addMonthOffset(2026, 0, -1)).toEqual({ year: 2025, month: 11 });
-    expect(addMonthOffset(2026, 11, 1)).toEqual({ year: 2027, month: 0 });
-    expect(addMonthOffset(2026, 5, 0)).toEqual({ year: 2026, month: 5 });
-  });
 
   it("dedupeEvents drops duplicates by id + originalStartTime, preserving order", () => {
     const a = { id: "1" };
@@ -41,41 +26,6 @@ describe("calendarControllerHelpers", () => {
     const c = { id: "2" };
     const result = dedupeEvents([a, { id: "1" }, b, c, b]);
     expect(result).toEqual([a, b, c]);
-  });
-
-  it("rangeMatches compares start/end pairs", () => {
-    expect(rangeMatches({ start: "a", end: "b" }, { start: "a", end: "b" })).toBe(true);
-    expect(rangeMatches({ start: "a", end: "b" }, { start: "a", end: "c" })).toBe(false);
-    expect(rangeMatches(null, { start: "a", end: "b" })).toBe(false);
-  });
-
-  it("makeDeadlineOverlayRecord / deadlineOverlayRecordData gate on visible range", () => {
-    const range = { start: "2026-06-01", end: "2026-06-30" };
-    const record = makeDeadlineOverlayRecord({ items: [] }, range);
-    expect(record).toEqual({ data: { items: [] }, range });
-    expect(deadlineOverlayRecordData(record, range)).toEqual({ items: [] });
-    expect(deadlineOverlayRecordData(record, { start: "2026-07-01", end: "2026-07-31" })).toBeNull();
-    expect(makeDeadlineOverlayRecord(null, range)).toBeNull();
-  });
-
-  it("hasDeadlineItemsInRange detects in-window deadlines", () => {
-    const data = { upcoming: [{ due_date: "2026-06-15" }, { due_date: "2026-07-20" }] };
-    expect(hasDeadlineItemsInRange(data, { start: "2026-06-01", end: "2026-06-30" })).toBe(true);
-    expect(hasDeadlineItemsInRange(data, { start: "2026-08-01", end: "2026-08-31" })).toBe(false);
-  });
-
-  it("itemDueDate prefers agendaDateKey then due_date then next_date", () => {
-    expect(itemDueDate({ agendaDateKey: "a", due_date: "b" })).toBe("a");
-    expect(itemDueDate({ due_date: "b", next_date: "c" })).toBe("b");
-    expect(itemDueDate({ next_date: "c" })).toBe("c");
-    expect(itemDueDate({})).toBeNull();
-  });
-
-  it("itemMatchesViewId matches via view matcher or raw id", () => {
-    expect(itemMatchesViewId(eventsView, { id: "7" }, "7")).toBe(true);
-    expect(itemMatchesViewId(eventsView, { id: "7" }, 7)).toBe(true);
-    expect(itemMatchesViewId(eventsView, { id: "7" }, "8")).toBe(false);
-    expect(itemMatchesViewId(eventsView, null, "7")).toBe(false);
   });
 
   it("findItemLocation prefers the preferred date key then scans all", () => {

@@ -285,7 +285,6 @@ in an existing checkout, run `npx simple-git-hooks` to refresh it. Commits keep 
 lightweight architecture-regeneration hook; the pre-push hook owns full verification.
 Push from the verified checkout without uncommitted fixes: local verification
 tests the working tree, while CI tests the pushed commit after a clean `npm ci`.
-CI also supplies its base revision for the harness's historical comparison.
 Playwright remains opt-in through the `test:e2e*` commands.
 Filesystem fixtures are contained under the `setpoint-tests` child of the OS
 temp directory. Windows-locked residue is retained for a 24-hour safety window,

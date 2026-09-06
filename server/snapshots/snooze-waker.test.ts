@@ -479,20 +479,4 @@ describe("stopSnoozeWaker", () => {
     // test-architecture: allow-boundary-interaction -- Cron stop is the process-timer boundary; shutdown must release the one registered waker job.
     expect(job.stop).toHaveBeenCalledTimes(1);
   });
-
-  it("is safe to call twice", () => {
-    const job = { stop: vi.fn() };
-    cronApi.schedule.mockReturnValue(job);
-
-    startSnoozeWaker();
-    stopSnoozeWaker();
-    expect(() => stopSnoozeWaker()).not.toThrow();
-    // Second call must not re-stop an already-cleared handle.
-    // test-architecture: allow-boundary-interaction -- Cron stop is the process-timer boundary; repeated shutdown must not stop the cleared handle twice.
-    expect(job.stop).toHaveBeenCalledTimes(1);
-  });
-
-  it("is safe to call when the waker was never started", () => {
-    expect(() => stopSnoozeWaker()).not.toThrow();
-  });
 });

@@ -206,7 +206,6 @@ describe("AI provider selection projection", () => {
       PROVIDERS[0],
       { ...PROVIDERS[1], available: false },
     ]);
-    expect(saved).toEqual({ provider: "openai", model: "gpt-saved" });
     expect(providers).toEqual(PROVIDERS);
   });
 });

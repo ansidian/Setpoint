@@ -183,7 +183,7 @@ export function getChecklistMinHeight(
   );
 }
 
-export function getChecklistItemLineCount(
+function getChecklistItemLineCount(
   text: string,
   width: number,
   size: TLDefaultSizeStyle = "m",

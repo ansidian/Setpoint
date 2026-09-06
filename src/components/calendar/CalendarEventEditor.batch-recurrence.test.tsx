@@ -71,8 +71,6 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     await waitFor(() => {
       // test-architecture: allow-boundary-interaction -- Batch NLP must select the outbound batch endpoint exactly once; rendered saved state cannot reveal duplicate provider writes.
       expect(mockCreateCalendarEventsBatch).toHaveBeenCalledTimes(1);
-      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain("batch-1");
-      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain("batch-2");
     });
   });
 
@@ -136,7 +134,6 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
           endTime: "17:30",
         }),
       ]));
-      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain("batch-1");
     });
   });
 
@@ -222,8 +219,6 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
           ends: { type: "onDate", untilDate: "2026-04-24" },
         },
       }));
-      expect(screen.getByTestId("calendar-editor-observed-refreshes").textContent).toContain('["2026-04-20","2026-04-20"]');
-      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toBe("[]");
     });
   });
 

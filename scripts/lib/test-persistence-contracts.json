@@ -1,0 +1,16 @@
+{
+  "server/actual/actualMetadataSync.test.ts": {
+    "signals": [
+      "positional-db-args-assertion",
+      "sql-shape-assertion"
+    ],
+    "reason": "Actual provider-owned CRDT storage requires the asserted messages_crdt statement and positional wire tuple."
+  },
+  "server/actual/actualWriteDb.test.ts": {
+    "signals": [
+      "positional-db-args-assertion",
+      "sql-shape-assertion"
+    ],
+    "reason": "Actual provider-owned SQLite compatibility requires allowlisted quoted identifiers and stable placeholder ordering."
+  }
+}

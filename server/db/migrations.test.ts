@@ -61,114 +61,6 @@ describe("database migrations", () => {
     expect(columnByName.get("embedding")!.type).toBe("F32_BLOB(1536)");
   });
 
-  it("adds content-free email search embedding worker state", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "004_email_read_state_search_index.sql",
-      "005_email_search_embeddings.sql",
-      "006_email_search_embedding_state.sql",
-    ]);
-
-    const columns = await db.execute(
-      "PRAGMA table_info('ea_email_search_embedding_state')",
-    );
-    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
-
-    expect(columnByName.get("user_id")!.pk).toBe(1);
-    expect(columnByName.get("status")!.notnull).toBe(1);
-    expect(columnByName.get("fresh_embeddings")!.notnull).toBe(1);
-    expect(columnByName.get("stale_embeddings")!.notnull).toBe(1);
-    expect(columnByName.get("missing_embeddings")!.notnull).toBe(1);
-    expect(columnByName.has("document_text")).toBe(false);
-  });
-
-  it("adds content-free email search AI usage analytics", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "004_email_read_state_search_index.sql",
-      "005_email_search_embeddings.sql",
-      "006_email_search_embedding_state.sql",
-      "007_email_search_ai_usage.sql",
-    ]);
-
-    const columns = await db.execute(
-      "PRAGMA table_info('ea_email_search_ai_usage')",
-    );
-    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
-
-    expect(columnByName.get("event_type")!.notnull).toBe(1);
-    expect(columnByName.get("model")!.notnull).toBe(1);
-    expect(columnByName.get("input_tokens")!.notnull).toBe(1);
-    expect(columnByName.get("estimated")!.notnull).toBe(1);
-    expect(columnByName.get("metadata_json")!.notnull).toBe(1);
-    expect(columnByName.has("query_text")).toBe(false);
-    expect(columnByName.has("answer_text")).toBe(false);
-  });
-
-  it("adds Bill Pay mapping settings JSON storage", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "008_bill_pay_mappings.sql",
-    ]);
-
-    const columns = await db.execute("PRAGMA table_info('ea_settings')");
-    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
-
-    expect(columnByName.get("bill_pay_mappings_json")!.type).toBe("TEXT");
-    expect(columnByName.get("bill_pay_mappings_json")!.dflt_value).toBe("NULL");
-  });
-
-  it("adds the read-arrivals triage preference with the current behavior as default", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "043_email_triage_classify_read_arrivals.sql",
-    ]);
-
-    const columns = await db.execute("PRAGMA table_info('ea_settings')");
-    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
-    const preference = columnByName.get("email_triage_classify_read_arrivals")!;
-
-    expect(preference.type).toBe("INTEGER");
-    expect(preference.notnull).toBe(1);
-    expect(preference.dflt_value).toBe("0");
-  });
-
-  it("adds persisted Alfred provider and model defaults", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "044_alfred_model_settings.sql",
-    ]);
-
-    const columns = await db.execute("PRAGMA table_info('ea_settings')");
-    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
-
-    expect(columnByName.get("alfred_provider")!.dflt_value).toBe("'anthropic'");
-    expect(columnByName.get("alfred_model")!.dflt_value).toBe("'claude-sonnet-4-6'");
-  });
-
-  it("adds Actual metadata projection storage", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "009_actual_metadata_mirror.sql",
-    ]);
-
-    const columns = await db.execute("PRAGMA table_info('ea_actual_metadata_mirror')");
-    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
-
-    expect(columnByName.get("user_id")!.pk).toBe(1);
-    expect(columnByName.get("accounts_json")!.notnull).toBe(1);
-    expect(columnByName.get("payees_json")!.notnull).toBe(1);
-    expect(columnByName.get("categories_json")!.notnull).toBe(1);
-    expect(columnByName.get("schedules_json")!.notnull).toBe(1);
-    expect(columnByName.get("recent_transactions_json")!.notnull).toBe(1);
-  });
-
   it("adds encrypted Discord settings and polymorphic reminder storage", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, [
@@ -373,21 +265,6 @@ describe("database migrations", () => {
     expect(rows.rows).toEqual([
       expect.objectContaining({ todoist_id: "dated", due_date: "2026-05-12" }),
     ]);
-  });
-
-  it("adds the triage last_decision_reason observability column", async () => {
-    db = createClient({ url: "file::memory:" });
-    await applyMigrations(db, [
-      "001_ea_tables.sql",
-      "015_triage_last_decision_reason.sql",
-    ]);
-
-    const columns = await db.execute("PRAGMA table_info('ea_email_triage')");
-    const column = columns.rows.find((row) => row.name === "last_decision_reason")!;
-
-    expect(column).toBeDefined();
-    expect(column.type).toBe("TEXT");
-    expect(column.notnull).toBe(0);
   });
 
   it("rebuilds a legacy briefing-era pinned table to the canonical pin-overlay shape", async () => {

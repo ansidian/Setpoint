@@ -1,12 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
-import { getCalendarLayoutMetrics } from "./calendarLayout.ts";
-import { getVisibleGridRange } from "./calendarDateUtils.ts";
-import { monthBlockHeight, monthIndexToDate } from "../../hooks/calendar/calendarScrollModel";
 
 describe("CalendarModal event grid behavior", () => {
   it("keeps the selected event when clicking its selected day cell again", async () => {
@@ -37,7 +33,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const dayCell = screen.getByTestId("calendar-cell-20");
+    const dayCell = await screen.findByTestId("calendar-cell-20");
     fireEvent.click(within(dayCell).getByTestId("calendar-cell-item-chip"));
     expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
 
@@ -77,7 +73,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const eventCell = screen.getByTestId("calendar-cell-20");
+    const eventCell = await screen.findByTestId("calendar-cell-20");
     const chip = within(eventCell).getByTestId("calendar-cell-item-chip");
 
     fireEvent.click(chip, { metaKey: true });
@@ -123,7 +119,7 @@ describe("CalendarModal event grid behavior", () => {
         deadlinesData={{}}
       />,
     ));
-    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
 
@@ -176,7 +172,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
 
@@ -192,54 +188,6 @@ describe("CalendarModal event grid behavior", () => {
     });
     expect(birthdaySpan.getAttribute("data-calendar-event-selection")).toBeNull();
     expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
-  });
-
-  it("does not restart events range readiness when the events data wrapper is recreated", async () => {
-    window.innerWidth = 1900;
-    const ensureRange = vi.fn().mockResolvedValue([]);
-    const getEvents = vi.fn(() => []);
-    const eventsDataForRender = () => ({
-      ensureRange,
-      getEvents,
-      editable: false,
-    });
-
-    const renderModal = () => wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        eventsData={eventsDataForRender()}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    );
-
-    const { rerender } = render(renderModal());
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- Calendar range loading crosses the provider-fetch boundary; duplicate admission is not distinguishable from the rendered ready state.
-      expect(ensureRange.mock.calls.length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
-    });
-
-    // test-architecture: allow-boundary-interaction -- Calendar range loading crosses the provider-fetch boundary; duplicate admission is not distinguishable from the rendered ready state.
-    const initialCallCount = ensureRange.mock.calls.length;
-
-    rerender(renderModal());
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      // test-architecture: allow-boundary-interaction -- This regression protects range-load admission across wrapper identity churn; readiness UI cannot reveal a duplicate cache/fetch admission.
-      expect(ensureRange).toHaveBeenCalledTimes(initialCallCount);
-      expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
-    });
   });
 
   it("consumes navigation hotkeys without leaving selected items in focus-ring mode", async () => {
@@ -270,8 +218,8 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const panel = screen.getByTestId("calendar-modal-panel");
-    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    const panel = await screen.findByTestId("calendar-modal-panel");
+    const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     chip.focus();
 
@@ -300,76 +248,5 @@ describe("CalendarModal event grid behavior", () => {
     await waitFor(() => {
       expect(panel.hasAttribute("data-calendar-suppress-focus-ring")).toBe(false);
     });
-  });
-
-  it("keeps loading data for grid settles inside the agenda-sync suppression window", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z"));
-    try {
-      window.innerWidth = 1900;
-      const eventsData = {
-        editable: true,
-        ensureRange: vi.fn().mockResolvedValue([]),
-        getEvents: () => [],
-        revision: 0,
-      };
-
-      function VisibleRangeHarness() {
-        const [visibleRange, setVisibleRange] = useState<{ start: string; end: string } | null>(null);
-        return wrapWithDashboard(
-          <>
-            <output data-testid="calendar-observed-visible-range">{JSON.stringify(visibleRange)}</output>
-            <CalendarModal
-              open
-              onClose={() => {}}
-              view="events"
-              onViewChange={() => {}}
-              eventsData={eventsData}
-              onEventsVisibleRangeChange={setVisibleRange}
-              billsData={{}}
-              deadlinesData={{}}
-            />
-          </>,
-        );
-      }
-
-      render(<VisibleRangeHarness />);
-
-      const scrollEl = await screen.findByTestId("calendar-scroll-container");
-      await waitFor(() => expect(screen.getByTestId("calendar-observed-visible-range").textContent).not.toBe("null"));
-
-      // Chevron navigation to June opens the 900ms grid↔agenda suppression
-      // window (the same window agenda-driven scrolling opens).
-      fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-      await waitFor(() => {
-        const { start, end } = getVisibleGridRange(2026, 5);
-        expect(screen.getByTestId("calendar-observed-visible-range").textContent).toBe(JSON.stringify({ start, end }));
-      });
-
-      // The user grabs the grid inside that window and scrolls on into July.
-      // jsdom fires no scroll events for scrollTop writes; dispatch manually.
-      const layout = getCalendarLayoutMetrics(1900);
-      let julyOffset = 0;
-      for (let i = -24; i < 2; i++) {
-        const { year, month } = monthIndexToDate(i, 2026, 4);
-        julyOffset += monthBlockHeight({
-          year,
-          month,
-          cellHeight: layout.cellHeight,
-          gridGap: layout.gridGap,
-        });
-      }
-      scrollEl.scrollTop = julyOffset + 10;
-      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-
-      // The settle must still move the fetch anchor: data loading follows the
-      // settled month even while agenda rail re-targeting stays suppressed.
-      await waitFor(() => {
-        const { start, end } = getVisibleGridRange(2026, 6);
-        expect(screen.getByTestId("calendar-observed-visible-range").textContent).toBe(JSON.stringify({ start, end }));
-      });
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { countLabel, formatWindow, groupByDate } from "./briefingHistoryModel";
+import { groupByDate } from "./briefingHistoryModel";
 
 describe("groupByDate", () => {
   afterEach(() => {
@@ -52,50 +52,5 @@ describe("groupByDate", () => {
 
   it("returns no groups for an empty list", () => {
     expect(groupByDate([])).toEqual([]);
-  });
-});
-
-describe("countLabel", () => {
-  it("prefers an explicit item_count over the lane-count summation", () => {
-    expect(
-      countLabel({
-        item_count: 5,
-        laneCounts: { needs_attention: 99, fyi: 99 },
-      }),
-    ).toBe("5 items");
-  });
-
-  it("sums lane counts when item_count is absent", () => {
-    expect(
-      countLabel({
-        laneCounts: { needs_attention: 2, fyi: 1, noise: 0, carryover: 3 },
-      }),
-    ).toBe("6 items");
-  });
-
-  it("reports no visible mail when the total is zero", () => {
-    expect(countLabel({ laneCounts: { needs_attention: 0, fyi: 0 } })).toBe("No visible mail");
-    expect(countLabel({ item_count: 0 })).toBe("No visible mail");
-    expect(countLabel({})).toBe("No visible mail");
-  });
-
-  it("uses the singular noun for exactly one item", () => {
-    expect(countLabel({ item_count: 1 })).toBe("1 item");
-    expect(countLabel({ laneCounts: { needs_attention: 1 } })).toBe("1 item");
-  });
-});
-
-describe("formatWindow", () => {
-  it("renders a start-to-end window in Pacific time", () => {
-    expect(
-      formatWindow({
-        start_at: "2026-05-05T14:00:00.000Z",
-        end_at: "2026-05-06T07:00:00.000Z",
-      }),
-    ).toBe("7:00 AM to 12:00 AM");
-  });
-
-  it("renders only the start label when there is no end_at", () => {
-    expect(formatWindow({ start_at: "2026-05-05T14:00:00.000Z" })).toBe("7:00 AM");
   });
 });

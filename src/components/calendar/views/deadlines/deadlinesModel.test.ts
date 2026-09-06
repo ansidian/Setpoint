@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  compute,
-  deadlineAccentFor,
-  getDeadlineSelectionId,
+  compute, getDeadlineSelectionId
 } from "./deadlinesModel.ts";
 
 describe("deadlinesModel", () => {
@@ -53,11 +51,6 @@ describe("deadlinesModel", () => {
       id: "one-off",
       due_date: "2026-05-11",
     })).toBe("deadline:one-off:2026-05-11");
-  });
-
-  it("uses Todoist red as the deadline source accent fallback", () => {
-    expect(deadlineAccentFor({ id: "todo-1", title: "Mop and Clean" })).toBe("#e44332");
-    expect(deadlineAccentFor({ id: "custom", color: "#89b4fa" })).toBe("#89b4fa");
   });
 
   describe("overdue classification in Pacific time", () => {

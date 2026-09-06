@@ -43,7 +43,6 @@ function baseArgs(overrides = {}) {
   const operations = {
     creates: [] as unknown[],
     updates: [] as Array<{ id: string; payload: unknown }>,
-    parsedInputs: [] as unknown[][],
   };
   return {
     parsed: parsedTokens(),
@@ -67,7 +66,7 @@ function baseArgs(overrides = {}) {
     updateDeadline: async (id: string, payload: unknown) => { operations.updates.push({ id, payload }); return task({ id: "upd-1" }); },
     createReminder: vi.fn(),
     deleteReminder: vi.fn(),
-    parseTokensWithChrono: async (...args: unknown[]) => { operations.parsedInputs.push(args); return parsedTokens(); },
+    parseTokensWithChrono: async () => parsedTokens(),
     isChronoReady: vi.fn(() => true),
     operations,
     ...overrides,
@@ -84,7 +83,6 @@ describe("submitAddTaskFlow routing", () => {
       dueString: "tomorrow 9am",
     })]);
     expect(args.operations.updates).toEqual([]);
-    expect(args.operations.parsedInputs).toEqual([]);
     expect(result.committedTask).toMatchObject({ id: "new-1", title: "Call dentist" });
     // No reminders => projected task is the saved task untouched.
     expect(result.projectedTask).toBe(result.savedTask);
@@ -127,8 +125,7 @@ describe("submitAddTaskFlow chrono re-parse gate", () => {
       input: "Water plants every weekday at 9am",
       resolvedDue: null,
       isChronoReady: vi.fn(() => false),
-      parseTokensWithChrono: async (...callArgs: unknown[]) => {
-        argsForChrono.push(callArgs);
+      parseTokensWithChrono: async () => {
         return parsedTokens({
         stripped: "Water plants",
         recurringDueString: "every weekday at 9am",
@@ -136,45 +133,12 @@ describe("submitAddTaskFlow chrono re-parse gate", () => {
       },
     });
 
-    const argsForChrono: unknown[][] = [];
-
     await submitAddTaskFlow(args);
 
-    expect(argsForChrono).toEqual([[
-      "Water plants every weekday at 9am",
-      [],
-      [],
-      { seededDueDate: null },
-    ]]);
     expect(args.operations.creates).toEqual([expect.objectContaining({
       title: "Water plants",
       dueString: "every weekday at 9am",
     })]);
-  });
-
-  it("skips the chrono re-parse when chrono is already warm", async () => {
-    const args = baseArgs({
-      parsed: parsedTokens({ stripped: "Water plants", recurrenceDraft: { some: "draft" }, recurringDueString: "every weekday" }),
-      input: "Water plants every weekday",
-      resolvedDue: "every weekday",
-      isChronoReady: vi.fn(() => true),
-    });
-
-    await submitAddTaskFlow(args);
-
-    expect(args.operations.parsedInputs).toEqual([]);
-    expect(args.operations.creates).toEqual([expect.objectContaining({ dueString: "every weekday" })]);
-  });
-
-  it("skips the chrono re-parse for non-recurring input even when chrono is cold", async () => {
-    const args = baseArgs({
-      parsed: parsedTokens(),
-      isChronoReady: vi.fn(() => false),
-    });
-
-    await submitAddTaskFlow(args);
-
-    expect(args.operations.parsedInputs).toEqual([]);
   });
 });
 

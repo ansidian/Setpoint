@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
-  checkTestArchitectureApprovalsEmpty,
-  checkTestArchitectureBaseline,
+  checkTestArchitectureMetrics,
   checkTestArchitectureBaselineEmpty,
-  checkTestArchitectureBaselineGrowth,
   checkTestArchitectureMockMetadataObservations,
   collectPersistenceHeuristicSignals,
   collectTestArchitectureMetrics,
@@ -135,18 +133,15 @@ describe("collectTestArchitectureMetrics", () => {
   })
 })
 
-describe("checkTestArchitectureBaseline", () => {
+describe("checkTestArchitectureMetrics", () => {
   it("reports interaction assertions for review without blocking CI", () => {
-    const result = checkTestArchitectureBaseline({
-      files: {
-        "src/component.test.tsx": {
-          localModuleMocks: {},
-          interactionAssertions: 2,
-          interactionAssertionLines: [14, 27],
-          mockMetadataObservations: 0,
-        },
+    const result = checkTestArchitectureMetrics({
+      "src/component.test.tsx": {
+        localModuleMocks: {},
+        interactionAssertions: 2,
+        interactionAssertionLines: [14, 27],
+        mockMetadataObservations: 0,
       },
-      baseline: { localModuleMocks: {}, interactionAssertions: {} },
     })
 
     expect(result.failures).toEqual([])
@@ -155,42 +150,17 @@ describe("checkTestArchitectureBaseline", () => {
     ])
   })
 
-  it("rejects new debt and warns when existing debt falls", () => {
-    const result = checkTestArchitectureBaseline({
-      files: {
-        "src/new.test.ts": { localModuleMocks: { "../new.ts": 1 }, interactionAssertions: 0, mockMetadataObservations: 0 },
-        "src/legacy.test.ts": { localModuleMocks: { "../old.ts": 1 }, interactionAssertions: 2, mockMetadataObservations: 0 },
-      },
-      baseline: {
-        localModuleMocks: { "src/legacy.test.ts": { "../old.ts": 2 } },
-        interactionAssertions: { "src/legacy.test.ts": 3 },
-      },
+  it("rejects internal mocks and invalid boundary exemptions", () => {
+    const result = checkTestArchitectureMetrics({
+      "src/feature.test.ts": collectTestArchitectureMetrics([
+        '// test-architecture: allow-boundary-mock --',
+        'vi.mock("./internal.ts", () => ({}))',
+      ].join("\n")),
     })
     expect(result.failures).toEqual([
-      "src/new.test.ts mocks ../new.ts 1 time(s), above the test-architecture baseline allowance 0",
+      "src/feature.test.ts: line 1 has an empty test-architecture boundary rationale",
+      "src/feature.test.ts mocks local module ./internal.ts 1 time(s); mock external boundaries instead",
     ])
-    expect(result.warnings).toEqual(expect.arrayContaining([
-      "src/legacy.test.ts reduced mocks of ../old.ts from 2 to 1; ratchet the test-architecture baseline down",
-      "src/legacy.test.ts reduced interactionAssertions from 3 to 2; ratchet the test-architecture baseline down",
-    ]))
-  })
-
-  it("rejects swapping an allowed local mock for a new internal edge", () => {
-    const result = checkTestArchitectureBaseline({
-      files: {
-        "src/legacy.test.ts": { localModuleMocks: { "../replacement.ts": 1 }, interactionAssertions: 0, mockMetadataObservations: 0 },
-      },
-      baseline: {
-        localModuleMocks: { "src/legacy.test.ts": { "../old.ts": 1 } },
-        interactionAssertions: {},
-      },
-    })
-    expect(result.failures).toEqual([
-      "src/legacy.test.ts mocks ../replacement.ts 1 time(s), above the test-architecture baseline allowance 0",
-    ])
-    expect(result.warnings).toContain(
-      "src/legacy.test.ts reduced mocks of ../old.ts from 1 to 0; ratchet the test-architecture baseline down",
-    )
   })
 
   it("normalizes Windows paths", () => {
@@ -253,56 +223,7 @@ describe("collectPersistenceHeuristicSignals", () => {
   })
 })
 
-describe("checkTestArchitectureBaselineGrowth", () => {
-  const previousBaseline = {
-    localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 1 } },
-    interactionAssertions: { "src/legacy.test.ts": 2 },
-  }
-
-  it("rejects raised allowances without an exact owner approval", () => {
-    expect(checkTestArchitectureBaselineGrowth({
-      previousBaseline,
-      baseline: {
-        localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 2 } },
-        interactionAssertions: { "src/legacy.test.ts": 3 },
-      },
-    })).toEqual([
-      "src/legacy.test.ts raises the interactionAssertions baseline from 2 to 3; the debt-elimination campaign is shrink-only",
-      "src/legacy.test.ts raises the local mock baseline for ../provider.ts from 1 to 2; the debt-elimination campaign is shrink-only",
-    ])
-  })
-
-  it("does not let a former exact approval authorize growth", () => {
-    const approval = {
-      from: 1,
-      to: 2,
-      approvedBy: "repository owner",
-      reason: "provider adapter became the reviewed module boundary",
-    }
-    expect(checkTestArchitectureApprovalsEmpty({
-      localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": approval } },
-      interactionAssertions: {},
-    })).toEqual([
-      "test-architecture baseline approvals must remain empty; use construct-local boundary rationales",
-    ])
-    expect(checkTestArchitectureBaselineGrowth({
-      previousBaseline,
-      baseline: {
-        localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 2 } },
-        interactionAssertions: { "src/legacy.test.ts": 2 },
-      },
-    })).toEqual([
-      "src/legacy.test.ts raises the local mock baseline for ../provider.ts from 1 to 2; the debt-elimination campaign is shrink-only",
-    ])
-  })
-
-  it("accepts an empty frozen approval ledger", () => {
-    expect(checkTestArchitectureApprovalsEmpty({
-      localModuleMocks: {},
-      interactionAssertions: {},
-    })).toEqual([])
-  })
-
+describe("checkTestArchitectureBaselineEmpty", () => {
   it("permanently rejects aggregate baseline entries", () => {
     expect(checkTestArchitectureBaselineEmpty({
       localModuleMocks: { "src/legacy.test.ts": { "../provider.ts": 1 } },

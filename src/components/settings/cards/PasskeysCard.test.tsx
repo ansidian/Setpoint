@@ -158,9 +158,16 @@ describe("PasskeysCard", () => {
     render(<PasskeysCard />);
 
     await unlockSecurityChanges();
-    fireEvent.click(screen.getByRole("radio", { name: /Password \+ passkey/i }));
+    const strictMode = screen.getByRole<HTMLInputElement>("radio", { name: /Password \+ passkey/i });
+    expect(strictMode.checked).toBe(false);
+    // test-architecture: allow-boundary-interaction -- unlocking must not change the owner's authentication requirement before an explicit mode request.
+    expect(mockSecurityApi.updateOwnerAuthMode).not.toHaveBeenCalled();
 
-    expect(screen.getByText("Password + passkey")).toBeTruthy();
+    fireEvent.click(strictMode);
+
+    // test-architecture: allow-boundary-interaction -- the exact stronger authentication mode is the security HTTP mutation contract; the mocked response alone cannot prove the requested mode.
+    await waitFor(() => expect(mockSecurityApi.updateOwnerAuthMode).toHaveBeenCalledWith("password_plus_passkey"));
+    await waitFor(() => expect(strictMode.checked).toBe(true));
   });
 
   it("unlocks sensitive controls with a recent password confirmation", async () => {

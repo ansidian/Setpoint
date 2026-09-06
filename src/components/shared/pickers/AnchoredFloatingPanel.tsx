@@ -379,7 +379,6 @@ function AnchoredPanelDesktop({
 
   const dragHandle = draggable ? (
     <div
-      data-testid="anchored-floating-panel-drag-handle"
       onPointerDown={handleDragPointerDown}
       onPointerMove={handleDragPointerMove}
       onPointerUp={finishDrag}
@@ -424,9 +423,6 @@ function AnchoredPanelDesktop({
         aria-hidden={!present || undefined}
         inert={!present || undefined}
         data-calendar-popover-panel="true"
-        data-floating-position-source={activeManualPos ? "drag" : "anchor"}
-        data-floating-left={displayPos.left}
-        data-floating-top={displayPos.top}
         data-floating-dragging={dragging ? "true" : undefined}
         initial={reducedMotion ? false : animateDisclosure
           ? {

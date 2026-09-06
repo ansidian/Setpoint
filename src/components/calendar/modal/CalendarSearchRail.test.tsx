@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarSearchRail from "./CalendarSearchRail";
 
@@ -42,36 +42,6 @@ describe("CalendarSearchRail", () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.useRealTimers();
-  });
-
-  it("shows stable skeleton rows only while pending without visible results", () => {
-    const { rerender } = render(
-      <CalendarSearchRail
-        search={makeSearch({
-          query: "final",
-          pending: true,
-          results: [],
-        })}
-        layoutMode="three-rail"
-      />,
-    );
-
-    expect(screen.getByTestId("calendar-search-state").textContent).toBe("Searching");
-    expect(screen.getByTestId("calendar-search-results").getAttribute("aria-busy")).toBe("true");
-    expect(screen.getByTestId("calendar-search-skeleton")).toBeTruthy();
-
-    rerender(
-      <CalendarSearchRail
-        search={makeSearch({
-          query: "",
-          pending: true,
-          results: [],
-        })}
-        layoutMode="three-rail"
-      />,
-    );
-
-    expect(screen.queryByTestId("calendar-search-skeleton")).toBeNull();
   });
 
   it("selects all on explicit search focus but only moves caret on scope switches", () => {

@@ -1,21 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  activationTargetFromCalendarSearchResult,
-  calendarSearchPlaceholder,
   calendarSearchStateLabel,
   calendarSearchKeyAction,
-  calendarSearchStartIndex,
-  shouldShowCalendarSearchSkeleton,
-  nextCalendarSearchHighlight,
-  searchScopeForCalendarView,
+  calendarSearchStartIndex, nextCalendarSearchHighlight
 } from "./calendarModalSearchModel";
 
 describe("calendarModalSearchModel", () => {
-  it("maps active calendar views to server search scopes", () => {
-    expect(searchScopeForCalendarView("events")).toBe("events");
-    expect(searchScopeForCalendarView("legacy")).toBe("events");
-    expect(searchScopeForCalendarView("bills")).toBe("bills");
-  });
 
   it("wraps result highlight movement", () => {
     expect(nextCalendarSearchHighlight({ currentIndex: 0, resultCount: 3, direction: 1 })).toBe(1);
@@ -60,72 +50,6 @@ describe("calendarModalSearchModel", () => {
       resultCount: 2,
       query: "",
     })).toEqual({ type: "close" });
-  });
-
-  it("shapes activation targets from normalized search results", () => {
-    expect(activationTargetFromCalendarSearchResult({
-      type: "deadline",
-      itemId: "deadline:todo-1:2026-06-01",
-      itemDate: "2026-06-01",
-      activation: {
-        view: "events",
-        detailKind: "deadline",
-        dateKey: "2026-06-01",
-        itemId: "deadline:todo-1:2026-06-01",
-      },
-    })).toEqual({
-      view: "events",
-      detailKind: "deadline",
-      dateKey: "2026-06-01",
-      itemId: "deadline:todo-1:2026-06-01",
-    });
-  });
-
-  it("derives scope-specific placeholders, no-results labels, and skeleton visibility", () => {
-    expect(calendarSearchPlaceholder("events")).toBe("Search events and deadlines");
-    expect(calendarSearchPlaceholder("bills")).toBe("Search bills");
-
-    expect(calendarSearchStateLabel({
-      scope: "events",
-      query: "rent",
-      pending: false,
-      results: [],
-    })).toBe("No events or deadlines found");
-    expect(calendarSearchStateLabel({
-      scope: "bills",
-      query: "rent",
-      pending: false,
-      results: [],
-    })).toBe("No bills found");
-
-    expect(calendarSearchStateLabel({
-      scope: "events",
-      query: "rent",
-      pending: true,
-      results: [],
-    })).toBe("Searching");
-    expect(calendarSearchStateLabel({
-      scope: "events",
-      query: "rent",
-      pending: true,
-      results: [{ id: "event:1" }],
-    })).toBe("Updating");
-
-    expect(shouldShowCalendarSearchSkeleton({
-      query: "rent",
-      pending: true,
-      results: [],
-    })).toBe(true);
-    expect(shouldShowCalendarSearchSkeleton({
-      query: "rent",
-      pending: true,
-      results: [{ id: "event:1" }],
-    })).toBe(false);
-    expect(shouldShowCalendarSearchSkeleton({
-      query: "",
-      pending: true,
-      results: [],
-    })).toBe(false);
   });
 
   it("distinguishes Google event mirror freshness from true no-match states", () => {

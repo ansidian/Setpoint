@@ -1,4 +1,4 @@
-export const BREAKPOINTS = {
+const BREAKPOINTS = {
   uhd: 2560,
   xl: 1800,
   lg: 1400,

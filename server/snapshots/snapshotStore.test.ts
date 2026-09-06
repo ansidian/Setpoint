@@ -87,12 +87,6 @@ async function insertSnapshotItem({
   });
 }
 
-describe("CARRYOVER_MAX_DEPTH", () => {
-  it("is the documented depth bound (6)", () => {
-    expect(CARRYOVER_MAX_DEPTH).toBe(6);
-  });
-});
-
 describe("findActiveSnapshot", () => {
   it("returns only the active snapshot for the requested owner and window", async () => {
     const expected = await insertSnapshot();

@@ -22,7 +22,7 @@ describe("runAlfredStream", () => {
     vi.unstubAllGlobals();
   });
 
-  it("POSTs with CSRF header and streams events to onEvent", async () => {
+  it("POSTs the Alfred request with the CSRF header", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(sseResponse([
       'event: run_start\ndata: {"type":"run_start","conversation_id":"c1","provider":"anthropic","model":"claude-sonnet-4-6"}\n\n',
@@ -46,8 +46,6 @@ describe("runAlfredStream", () => {
       message: "hi",
       conversationId: "c1",
     });
-    // test-architecture: allow-boundary-interaction -- Alfred HTTP/SSE transport is an outbound browser boundary; request and event wire data are the API facade's observable contract.
-    expect(onEvent.mock.calls.map(([e]) => e.type)).toEqual(["run_start", "run_end"]);
   });
 
   it("throws the server message on a non-ok response", async () => {

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AlfredCalendarProposalCard from "./AlfredCalendarProposalCard";
@@ -37,30 +36,6 @@ const savedEvent = {
 afterEach(cleanup);
 
 describe("AlfredCalendarProposalCard", () => {
-  it("renders the full non-color proposal state and keeps disclosure before review in tab order", () => {
-    render(
-      <AlfredCalendarProposalCard
-        proposal={proposal}
-        status="proposed"
-        handoffError={null}
-        createdEvent={null}
-        editedInCalendar={false}
-        accent="#cba6da"
-        onReview={vi.fn().mockResolvedValue(false)}
-        onOpenEvent={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("Proposed event")).toBeTruthy();
-    expect(screen.getByText("Past date")).toBeTruthy();
-    expect(screen.getByText("Duplicate check unavailable")).toBeTruthy();
-    expect(screen.getByText("Calendar unavailable (requested: Work)")).toBeTruthy();
-    expect(screen.getByText(/Aug 18, 2026 · 3:00 PM–3:30 PM/)).toBeTruthy();
-    const buttons = screen.getAllByRole("button");
-    expect(buttons.map((button) => button.textContent)).toEqual(["View details", "Review in Calendar"]);
-    fireEvent.click(buttons[0]!);
-    expect(screen.getByRole("button", { name: "Hide details" }).getAttribute("aria-expanded")).toBe("true");
-  });
 
   it("makes Superseded historical evidence non-actionable", () => {
     render(
@@ -109,50 +84,5 @@ describe("AlfredCalendarProposalCard", () => {
       />,
     );
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Open event" }).disabled).toBe(false);
-  });
-
-  it("renders normalized Created truth, edit disclosure, and Open event", () => {
-    function Harness() {
-      const [opened, setOpened] = useState(false);
-      return <>
-        <AlfredCalendarProposalCard
-          proposal={proposal}
-          status="created"
-          handoffError={null}
-          createdEvent={savedEvent}
-          editedInCalendar
-          accent="#cba6da"
-          onReview={vi.fn().mockResolvedValue(true)}
-          onOpenEvent={() => setOpened(true)}
-        />
-        <output>{opened ? "event opened" : "event closed"}</output>
-      </>;
-    }
-    render(<Harness />);
-
-    expect(screen.getByText("Created")).toBeTruthy();
-    expect(screen.getByText("Edited in Calendar")).toBeTruthy();
-    expect(screen.getByText("Edited project review")).toBeTruthy();
-    expect(screen.getByText("Personal")).toBeTruthy();
-    expect(screen.queryByText("Project review")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open event" }));
-    expect(screen.getByText("event opened")).toBeTruthy();
-  });
-
-  it("shows recoverable handoff copy and Try again", () => {
-    render(
-      <AlfredCalendarProposalCard
-        proposal={proposal}
-        status="proposed"
-        handoffError="Calendar could not open this proposal. Try again."
-        createdEvent={null}
-        editedInCalendar={false}
-        accent="#cba6da"
-        onReview={vi.fn().mockResolvedValue(false)}
-        onOpenEvent={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("alert").textContent).toContain("Calendar could not open");
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });

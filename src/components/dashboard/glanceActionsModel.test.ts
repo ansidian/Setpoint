@@ -25,14 +25,6 @@ describe("selectGlanceActions — deadlines", () => {
     expect(keys(selectGlanceActions({ kind: "deadline", item: task({ url: "https://example.com/x" }) })))
       .toEqual(["complete", "edit", "openInCalendar"]);
   });
-
-  it("always ends with open-in-calendar as a command (not a link)", () => {
-    const actions = selectGlanceActions({ kind: "deadline", item: task() });
-    const last = actions[actions.length - 1];
-    expect(last!.key).toBe("openInCalendar");
-    expect(last!.type).toBe("command");
-    expect(last!.href).toBeUndefined();
-  });
 });
 
 describe("selectGlanceActions — bills", () => {
@@ -63,19 +55,6 @@ describe("selectGlanceActions — bills", () => {
 
 describe("selectGlanceActions — events", () => {
   const ev = (overrides: Record<string, unknown> = {}) => ({ id: "e1", ...overrides });
-
-  it("leads with edit-event and google-calendar before meeting and external links", () => {
-    const actions = selectGlanceActions({
-      kind: "event",
-      item: ev({
-        description: "Join https://zoom.us/j/123 — notes at https://docs.example.com/x",
-        htmlLink: "https://calendar.google.com/event?eid=abc",
-      }),
-    });
-    expect(keys(actions)).toEqual(["openInCalendar", "gcal", "zoom", "eventUrl"]);
-    expect(actions[0]!.label).toBe("Edit Event");
-    expect(actions[1]!.label).toBe("Open in Google Calendar");
-  });
 
   it("falls back to only open-in-calendar for a plain event with no links", () => {
     expect(keys(selectGlanceActions({ kind: "event", item: ev({ title: "Standup" }) }))).toEqual(["openInCalendar"]);

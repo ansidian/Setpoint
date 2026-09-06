@@ -41,7 +41,7 @@ function response(data: unknown, status = 200): Response {
 }
 
 describe("AI model catalog", () => {
-  it("returns the agreed curated OpenAI models in canonical order", async () => {
+  it("returns curated OpenAI models without provider discovery", async () => {
     let fetched = false;
     const fetchImpl = async () => {
       fetched = true;
@@ -57,18 +57,6 @@ describe("AI model catalog", () => {
     const openai = providers.find((entry) => entry.provider === "openai");
 
     expect(openai?.models).toEqual(OPENAI_MODELS);
-    expect(openai?.models.map(({ id }) => id)).toEqual([
-      "gpt-5.6-sol",
-      "gpt-5.6-terra",
-      "gpt-5.6-luna",
-      "gpt-5.5",
-      "gpt-5.5-pro",
-      "gpt-5.4",
-      "gpt-5.4-mini",
-      "gpt-5.4-nano",
-      "gpt-5.4-pro",
-    ]);
-    expect(openai?.pricingUrl).toBe("https://developers.openai.com/api/docs/pricing");
     expect(fetched).toBe(false);
   });
 

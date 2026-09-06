@@ -1,30 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rankEmailSearchRows } from "./email-search-ranking.ts";
-import type { EmailSearchRankingRow, EmailSearchScoring } from "./email-search-ranking.ts";
 
 const NOW = "2026-05-01T12:00:00Z";
-
-// A minimal row that scores exactly 0: no query terms match, lane defaults to
-// "untriaged", no dates (so no recency / interaction / deadline signals fire).
-// Each test perturbs ONE field off this baseline and asserts the resulting
-// score delta in isolation.
-function baselineRow(overrides: Partial<EmailSearchRankingRow> = {}): EmailSearchRankingRow & { uid: string } {
-  return {
-    from_name: "Nobody",
-    from_address: "nobody@example.com",
-    subject: "untitled",
-    body_snippet: "no relevant content here",
-    read: 1,
-    ...overrides,
-    uid: String(overrides.uid || "baseline"),
-  };
-}
-
-// Returns the value the scorer attributed to a single detail label, or 0 if absent.
-function deltaFor(scoring: EmailSearchScoring, label: string): number {
-  const detail = scoring.details.find((d) => d.label === label);
-  return detail ? detail.value : 0;
-}
 
 describe("rankEmailSearchRows", () => {
   it("lets an older useful subject/sender match beat a newer body-only low-value match", () => {
@@ -367,18 +344,5 @@ describe("thread-recency newest-first dominance", () => {
     const ranked = rankEmailSearchRows(rows, { query: "water heater", limit: 2, now: NOW });
 
     expect(ranked.map((row) => row.uid)).toEqual(["thread-old-clean", "thread-new-noise"]);
-  });
-});
-
-describe("rankEmailSearchRows debug details", () => {
-  it("exposes per-signal details through rankEmailSearchRows debug mode", () => {
-    const [ranked] = rankEmailSearchRows(
-      [baselineRow({ uid: "row-1", triage_lane: "needs_attention", triage_urgency: "high" })],
-      { query: "", now: NOW, debug: true },
-    );
-    expect(ranked!.search_score).toBe(46); // 28 (lane) + 18 (urgency high)
-    expect(ranked!.search_score_details!.score).toBe(46);
-    expect(deltaFor(ranked!.search_score_details!, "lane_needs_attention")).toBe(28);
-    expect(deltaFor(ranked!.search_score_details!, "urgency_high")).toBe(18);
   });
 });

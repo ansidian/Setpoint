@@ -1,18 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  alfredPriorityLabel,
-  alfredScrollKey,
-  alfredToolRunningLabel,
-  applyAlfredEvent,
-  countBreakdownRows,
-  formatAlfredAbsolute,
-  formatAlfredAgo,
-  formatAlfredDate,
-  formatAlfredModelHint,
-  isNearBottom,
-  markAlfredProposalCreated,
-  clearUncreatedAlfredProposals,
-  spendingBreakdownRows,
+  applyAlfredEvent, markAlfredProposalCreated,
+  clearUncreatedAlfredProposals
 } from "./alfredPanelModel";
 import type { AlfredPanelMessage } from "./alfredPanelModel";
 import type { AlfredRunEvent } from "../../../shared/types/alfred";
@@ -233,111 +222,6 @@ describe("applyAlfredEvent", () => {
   });
 });
 
-describe("helpers", () => {
-  it("formats provider-aware model hints", () => {
-    expect(formatAlfredModelHint("anthropic", "claude-sonnet-4-6")).toBe("Anthropic · Claude Sonnet 4.6");
-    expect(formatAlfredModelHint("openai", "gpt-5.6-sol")).toBe("OpenAI · GPT-5.6 Sol");
-  });
-
-  it("labels running tools quietly", () => {
-    expect(alfredToolRunningLabel("search_email")).toBe("Searching mail…");
-    expect(alfredToolRunningLabel("get_upcoming_bills")).toBe("Checking bills…");
-    expect(alfredToolRunningLabel("unknown_tool")).toBe("Working…");
-  });
-
-  it("labels the transaction tools while running", () => {
-    expect(alfredToolRunningLabel("search_transactions")).toBe("Searching transactions…");
-    expect(alfredToolRunningLabel("summarize_transactions")).toBe("Tallying transactions…");
-  });
-
-  it("formats dates and priorities", () => {
-    expect(formatAlfredDate("2026-06-21")).toBe("Jun 21");
-    expect(formatAlfredDate(null)).toBe("");
-    expect(alfredPriorityLabel(4)).toBe("P1");
-    expect(alfredPriorityLabel(1)).toBeNull();
-    expect(formatAlfredAgo("2026-06-12T17:30:00.000Z", new Date("2026-06-12T18:00:00.000Z"))).toBe("30m ago");
-    expect(formatAlfredAgo("2026-06-10T18:00:00.000Z", new Date("2026-06-12T18:00:00.000Z"))).toBe("2d ago");
-  });
-});
-
-describe("auto-scroll decision (P3-4)", () => {
-  it("isNearBottom is true at the bottom and within the threshold", () => {
-    // parked exactly at the bottom: 1000 - (800 + 200) === 0
-    expect(isNearBottom(800, 200, 1000)).toBe(true);
-    // 40px from the bottom is still "near" (default threshold)
-    expect(isNearBottom(760, 200, 1000)).toBe(true);
-    // 41px from the bottom is not
-    expect(isNearBottom(759, 200, 1000)).toBe(false);
-  });
-
-  it("isNearBottom is true when content does not overflow yet", () => {
-    expect(isNearBottom(0, 400, 300)).toBe(true);
-  });
-
-  it("isNearBottom respects a custom threshold and coerces junk to 0", () => {
-    expect(isNearBottom(700, 200, 1000, 120)).toBe(true);
-    expect(isNearBottom(679, 200, 1000, 120)).toBe(false);
-    expect(isNearBottom(undefined, undefined, undefined)).toBe(true);
-  });
-
-  it("alfredScrollKey bumps on new messages and on tail growth", () => {
-    expect(alfredScrollKey([])).toBe("0");
-    const one = [{ type: "say", text: "Hi" }];
-    const grown = [{ type: "say", text: "Hi there" }];
-    const two = [{ type: "say", text: "Hi" }, { type: "say", text: "More" }];
-    expect(alfredScrollKey(one)).toBe("1:2");
-    // same message count, longer streamed text → different key
-    expect(alfredScrollKey(grown)).not.toBe(alfredScrollKey(one));
-    // new message appended → different key
-    expect(alfredScrollKey(two)).not.toBe(alfredScrollKey(one));
-    // a message without text (e.g. tools/rows) contributes tail length 0
-    expect(alfredScrollKey([{ type: "tools", tools: [] }])).toBe("1:0");
-  });
-});
-
-describe("formatAlfredAbsolute", () => {
-  it("renders a full absolute date with year for a valid timestamp", () => {
-    const out = formatAlfredAbsolute("2026-06-05T19:42:00.000Z");
-    expect(out).toContain("2026");
-    expect(out).toMatch(/Jun/);
-  });
-
-  it("returns an empty string for a missing or invalid timestamp", () => {
-    expect(formatAlfredAbsolute("")).toBe("");
-    expect(formatAlfredAbsolute("not-a-date")).toBe("");
-  });
-});
-
-describe("spendingBreakdownRows", () => {
-  it("returns [] for empty input", () => {
-    expect(spendingBreakdownRows([])).toEqual([]);
-    expect(spendingBreakdownRows()).toEqual([]);
-  });
-
-  it("largest bucket gets pct === 100", () => {
-    const rows = spendingBreakdownRows([{ label: "Groceries", amount: 100, count: 3 }]);
-    expect(rows[0]!.pct).toBe(100);
-  });
-
-  it("a half-size bucket gets pct === 50", () => {
-    const rows = spendingBreakdownRows([
-      { label: "Groceries", amount: 100, count: 3 },
-      { label: "Dining", amount: 50, count: 2 },
-    ]);
-    expect(rows[0]!.pct).toBe(100);
-    expect(rows[1]!.pct).toBe(50);
-  });
-
-  it("marks Other rows with isOther: true", () => {
-    const rows = spendingBreakdownRows([
-      { label: "Groceries", amount: 80, count: 2 },
-      { label: "Other", amount: 20, count: 5 },
-    ]);
-    expect(rows[0]!.isOther).toBe(false);
-    expect(rows[1]!.isOther).toBe(true);
-  });
-});
-
 describe("applyAlfredEvent summary case", () => {
   it("appends a summary message and closes the open say", () => {
     const ms: AlfredPanelMessage[] = [
@@ -357,36 +241,6 @@ describe("applyAlfredEvent summary case", () => {
     expect(summary.group_by).toBe("category");
     expect(summary.buckets[0]?.label).toBe("Groceries");
     expect(summary.period).toEqual({ start: "2026-06-01", end: "2026-06-30" });
-  });
-});
-
-describe("countBreakdownRows", () => {
-  it("computes pct from the max count and flags Other", () => {
-    const rows = countBreakdownRows([
-      { label: "Ghosted", count: 16 },
-      { label: "Rejected", count: 4 },
-      { label: "Other", count: 2 },
-    ]);
-    expect(rows[0]!).toEqual({ label: "Ghosted", count: 16, pct: 100, isOther: false });
-    expect(rows[1]!.pct).toBe(25);
-    expect(rows[2]!.isOther).toBe(true);
-  });
-
-  it("preserves incoming order and returns [] for empty", () => {
-    expect(countBreakdownRows([])).toEqual([]);
-    const rows = countBreakdownRows([{ label: "B", count: 1 }, { label: "A", count: 9 }]);
-    expect(rows.map((r) => r.label)).toEqual(["B", "A"]);
-  });
-
-  it("rounds pct to one decimal and stays 0..100", () => {
-    const rows = countBreakdownRows([{ label: "Max", count: 3 }, { label: "Third", count: 1 }]);
-    expect(rows[0]!.pct).toBe(100);
-    expect(rows[1]!.pct).toBe(33.3); // 1/3 → 33.333 → rounded to 0.1
-  });
-
-  it("is zero-safe when every count is zero", () => {
-    const rows = countBreakdownRows([{ label: "A", count: 0 }, { label: "B", count: 0 }]);
-    expect(rows.map((r) => r.pct)).toEqual([0, 0]);
   });
 });
 

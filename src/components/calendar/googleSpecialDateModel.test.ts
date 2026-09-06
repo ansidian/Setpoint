@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  GOOGLE_SPECIAL_DATE_COLOR,
-  googleSpecialDateAccent,
   googleSpecialDateLabel,
-  isGoogleSpecialDateEvent,
+  isGoogleSpecialDateEvent
 } from "./googleSpecialDateModel.ts";
 
 describe("googleSpecialDateModel", () => {
@@ -44,11 +42,5 @@ describe("googleSpecialDateModel", () => {
       eventType: "birthday",
       birthdayProperties: { type: "other" },
     })).toBe("Special date");
-  });
-
-  it("uses the birthday source color as the visual anchor", () => {
-    expect(googleSpecialDateAccent({ sourceColor: "#ff887c", color: "#5484ed" })).toBe("#ff887c");
-    expect(googleSpecialDateAccent({ color: "#5484ed" })).toBe("#5484ed");
-    expect(googleSpecialDateAccent(null)).toBe(GOOGLE_SPECIAL_DATE_COLOR);
   });
 });

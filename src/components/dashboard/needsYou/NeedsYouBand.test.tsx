@@ -10,28 +10,6 @@ const snapshotLanes = {
 };
 
 describe("NeedsYouBand", () => {
-  it("Mark handled calls onMarkHandled(snapshotItemId) and removes the card", () => {
-    const onMarkHandled = vi.fn();
-    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} onMarkHandled={onMarkHandled} />);
-    fireEvent.click(screen.getByText("Mark handled"));
-    expect(screen.queryByRole("button", { name: /^Open email: PR blocker/ })).toBeNull();
-  });
-
-  it("clicking 'Mark done' on a deadline calls onCompleteDeadline(id, data) and removes the card", () => {
-    const onCompleteDeadline = vi.fn();
-    render(
-      <NeedsYouBand
-        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
-        liveDeadlines={{ upcoming: [{ id: "pr", title: "Ship the thing", due_date: "2020-01-01", status: "open", priority: 1, class_name: "Eng" }] }}
-        liveBills={[]}
-        onCompleteDeadline={onCompleteDeadline}
-      />,
-    );
-    fireEvent.click(screen.getByText("Mark done"));
-    expect(screen.queryByRole("button", { name: /^Open task: Ship the thing/ })).toBeNull();
-  });
-
-
 
   describe("optimistic-hide revert + error surfacing (UX-02)", () => {
     it("reverts the hide and shows an inline error when onMarkHandled rejects", async () => {

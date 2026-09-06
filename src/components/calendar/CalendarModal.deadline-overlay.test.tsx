@@ -5,7 +5,7 @@ import CalendarModal from "./CalendarModal.tsx";
 import { wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
 
 describe("CalendarModal deadline overlay behavior", () => {
-  it("shows cached events immediately while deadline overlay is still loading", () => {
+  it("shows cached events immediately while deadline overlay is still loading", async () => {
     window.innerWidth = 1900;
     const ensureDeadlines = vi.fn(() => new Promise(() => {}));
 
@@ -43,7 +43,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(screen.getByText("Design review")).toBeTruthy();
+    expect(await screen.findByText("Design review")).toBeTruthy();
   });
 
   it("shows deadline overlay items in Events by default and persists the header toggle", async () => {
@@ -69,7 +69,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
+    expect(within(await screen.findByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
 
     const eventToggle = screen.getByRole("button", { name: /hide events in events/i });
     const deadlineToggle = screen.getByRole("button", { name: /hide deadlines in events/i });
@@ -121,7 +121,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    const monthCell = screen.getByRole("gridcell", { name: /Monday, August 31/i });
+    const monthCell = await screen.findByRole("gridcell", { name: /Monday, August 31/i });
     const agendaRail = await screen.findByTestId("events-agenda-rail");
     await waitFor(() => {
       expect(within(monthCell).getByText("Design review")).toBeTruthy();
@@ -176,7 +176,7 @@ describe("CalendarModal deadline overlay behavior", () => {
     expect(screen.getByText(/Calendar Workspace/).textContent).toContain("Events");
   });
 
-  it("renders seeded deadline overlay data before the range refresh resolves", () => {
+  it("renders seeded deadline overlay data before the range refresh resolves", async () => {
     window.innerWidth = 1900;
     const ensureDeadlines = vi.fn(() => new Promise(() => {}));
 
@@ -207,7 +207,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Seeded task")).toBeTruthy();
+    expect(within(await screen.findByTestId("calendar-cell-20")).getByText("Seeded task")).toBeTruthy();
   });
 
   it("replaces dashboard deadline overlay seeds when the matching range payload arrives", async () => {
@@ -249,7 +249,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Current dashboard task")).toBeTruthy();
+    expect(within(await screen.findByTestId("calendar-cell-20")).getByText("Current dashboard task")).toBeTruthy();
 
     rerender(wrapWithDashboard(
       <CalendarModal
@@ -279,7 +279,7 @@ describe("CalendarModal deadline overlay behavior", () => {
   });
 
   // The slow/degraded/late transitions themselves are owned by
-  // calendarPlanningSessionModel.test.js. Here we only assert that the modal
+  // calendarPlanningSessionModel.test.ts. Here we only assert that the modal
   // surfaces a status line while loading and exposes a working Apply control
   // that mounts late-arriving deadlines on demand.
   it("surfaces a deadline overlay status while loading and applies late data on demand", async () => {
@@ -287,9 +287,10 @@ describe("CalendarModal deadline overlay behavior", () => {
     try {
       window.innerWidth = 1900;
       let resolveDeadlines: ((value: unknown) => void) | undefined;
-      const ensureDeadlines = vi.fn(() => new Promise((resolve) => {
+      const deadlinesResponse = new Promise((resolve) => {
         resolveDeadlines = resolve;
-      }));
+      });
+      const ensureDeadlines = vi.fn(() => deadlinesResponse);
 
       render(wrapWithDashboard(
         <CalendarModal
@@ -314,6 +315,9 @@ describe("CalendarModal deadline overlay behavior", () => {
         />,
       ));
 
+      await vi.waitFor(() => {
+        expect(screen.getByTestId("calendar-modal-panel")).toBeTruthy();
+      }, { timeout: 5000 });
       await act(async () => {
         await Promise.resolve();
         vi.advanceTimersByTime(3000);

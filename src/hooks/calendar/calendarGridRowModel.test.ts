@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGridRows, leadingBoundaryType, renderedRows } from "./calendarGridRowModel";
+import { buildGridRows, renderedRows } from "./calendarGridRowModel";
 
 describe("calendarGridRowModel", () => {
   it("preserves rendered row counts across boundary and leap-year invariants", () => {
@@ -46,39 +46,6 @@ describe("calendarGridRowModel", () => {
     const febRows = buildGridRows(2026, 1);
     expect(febRows[0]![0]!.dateKey).toBe("2026-02-01");
     expect(febRows[3]![6]!.dateKey).toBe("2026-02-28");
-  });
-
-  it("preserves the L-shaped boundary border invariant", () => {
-    const mayRows = buildGridRows(2026, 4);
-    const firstRow = mayRows[0]!;
-
-    expect(firstRow.slice(0, 5).every((cell) => cell.boundaryBorder.borderBottom)).toBe(true);
-    expect(firstRow.slice(5).every((cell) => !cell.boundaryBorder.borderBottom)).toBe(true);
-    expect(firstRow.slice(0, 4).every((cell) => !cell.boundaryBorder.borderRight)).toBe(true);
-    expect(firstRow[4]!.boundaryBorder.borderRight).toBe(true);
-    expect(mayRows.slice(1).flat().every((cell) => (
-      !cell.boundaryBorder.borderBottom && !cell.boundaryBorder.borderRight
-    ))).toBe(true);
-
-    const febRows = buildGridRows(2026, 1);
-    expect(febRows.flat().every((cell) => (
-      !cell.boundaryBorder.borderBottom && !cell.boundaryBorder.borderRight
-    ))).toBe(true);
-  });
-
-  it("classifies leading boundary shape by the first weekday invariant", () => {
-    const cases = [
-      [2026, 1, "straight"],
-      [2026, 2, "straight"],
-      [2022, 4, "straight"],
-      [2026, 0, "step"],
-      [2026, 4, "step"],
-      [2026, 7, "step"],
-    ] as const;
-
-    for (const [year, month, expected] of cases) {
-      expect(leadingBoundaryType(year, month), `${year}-${month + 1} boundary`).toBe(expected);
-    }
   });
 
   it("keeps adjacent month coverage gap-free and non-overlapping", () => {

@@ -36,18 +36,6 @@ export function hasPersistenceContractSignals(signals: PersistenceHeuristicSigna
   return signals.some((signal) => PERSISTENCE_CONTRACT_SIGNALS.has(signal))
 }
 
-export interface TestArchitectureApproval {
-  from: number
-  to: number
-  approvedBy: string
-  reason: string
-}
-
-export interface TestArchitectureApprovals {
-  localModuleMocks: Record<string, Record<string, TestArchitectureApproval>>
-  interactionAssertions: Record<string, TestArchitectureApproval>
-}
-
 const LOCAL_MODULE_RE = /^(?:\.{1,2}\/|@\/)/
 const INTERACTION_NAME_RE = /^toHaveBeen(?:Nth|Last)?Called(?:With|Times|Once|Before|After)?$/
 const MOCK_METADATA_MEMBERS = new Set([
@@ -315,73 +303,27 @@ export function collectPersistenceHeuristicSignals(source: string): PersistenceH
   return [...signals].sort()
 }
 
-function checkInteractionAssertions(
+export function checkTestArchitectureMetrics(
   files: Record<string, TestArchitectureMetrics>,
-  baseline: Record<string, number>,
-  warnings: string[],
-): void {
-  for (const [file, metrics] of Object.entries(files)) {
-    const actual = metrics.interactionAssertions
-    const allowed = baseline[file] ?? 0
-    if (actual > allowed) {
-      const lineDetail = metrics.interactionAssertionLines?.length
-        ? ` at line${metrics.interactionAssertionLines.length === 1 ? "" : "s"} ${metrics.interactionAssertionLines.join(", ")}`
-        : ""
-      warnings.push(
-        `${file} has ${actual} reviewable interaction assertion(s)${lineDetail}; prefer observable results, or add an exact test-architecture boundary rationale when the interaction is the unavoidable contract`,
-      )
-    } else if (actual < allowed) {
-      warnings.push(`${file} reduced interactionAssertions from ${allowed} to ${actual}; ratchet the test-architecture baseline down`)
-    }
-  }
-
-  for (const file of Object.keys(baseline)) {
-    if (!files[file]) warnings.push(`${file} is stale in the interactionAssertions test-architecture baseline`)
-  }
-}
-
-function checkLocalModuleMocks(
-  files: Record<string, TestArchitectureMetrics>,
-  baseline: Record<string, Record<string, number>>,
-  failures: string[],
-  warnings: string[],
-): void {
-  for (const [file, metrics] of Object.entries(files)) {
-    const allowedTargets = baseline[file] ?? {}
-    for (const [target, actual] of Object.entries(metrics.localModuleMocks)) {
-      const allowed = allowedTargets[target] ?? 0
-      if (actual > allowed) {
-        failures.push(`${file} mocks ${target} ${actual} time(s), above the test-architecture baseline allowance ${allowed}`)
-      }
-    }
-  }
-
-  for (const [file, targets] of Object.entries(baseline)) {
-    for (const [target, allowed] of Object.entries(targets)) {
-      const actual = files[file]?.localModuleMocks[target] ?? 0
-      if (actual < allowed) {
-        warnings.push(`${file} reduced mocks of ${target} from ${allowed} to ${actual}; ratchet the test-architecture baseline down`)
-      }
-    }
-  }
-}
-
-export function checkTestArchitectureBaseline({
-  files,
-  baseline,
-}: {
-  files: Record<string, TestArchitectureMetrics>
-  baseline: TestArchitectureBaseline
-}): TestArchitectureCheckResult {
+): TestArchitectureCheckResult {
   const failures: string[] = []
   const warnings: string[] = []
   for (const [file, metrics] of Object.entries(files)) {
     for (const violation of metrics.exemptionViolations ?? []) {
       failures.push(`${file}: ${violation}`)
     }
+    for (const [target, count] of Object.entries(metrics.localModuleMocks)) {
+      failures.push(`${file} mocks local module ${target} ${count} time(s); mock external boundaries instead`)
+    }
+    if (metrics.interactionAssertions > 0) {
+      const lineDetail = metrics.interactionAssertionLines?.length
+        ? ` at line${metrics.interactionAssertionLines.length === 1 ? "" : "s"} ${metrics.interactionAssertionLines.join(", ")}`
+        : ""
+      warnings.push(
+        `${file} has ${metrics.interactionAssertions} reviewable interaction assertion(s)${lineDetail}; prefer observable results, or add an exact test-architecture boundary rationale when the interaction is the unavoidable contract`,
+      )
+    }
   }
-  checkLocalModuleMocks(files, baseline.localModuleMocks, failures, warnings)
-  checkInteractionAssertions(files, baseline.interactionAssertions, warnings)
   return { failures, warnings }
 }
 
@@ -395,16 +337,6 @@ export function checkTestArchitectureMockMetadataObservations(
   ))
 }
 
-export function checkTestArchitectureApprovalsEmpty(approvals: TestArchitectureApprovals): string[] {
-  const entries = [
-    ...Object.keys(approvals.interactionAssertions),
-    ...Object.keys(approvals.localModuleMocks),
-  ]
-  return entries.length === 0
-    ? []
-    : ["test-architecture baseline approvals must remain empty; use construct-local boundary rationales"]
-}
-
 export function checkTestArchitectureBaselineEmpty(baseline: TestArchitectureBaseline): string[] {
   const entries = [
     ...Object.keys(baseline.interactionAssertions),
@@ -413,38 +345,6 @@ export function checkTestArchitectureBaselineEmpty(baseline: TestArchitectureBas
   return entries.length === 0
     ? []
     : ["test-architecture baseline must remain empty; aggregate grandfathered allowances are forbidden"]
-}
-
-export function checkTestArchitectureBaselineGrowth({
-  previousBaseline,
-  baseline,
-}: {
-  previousBaseline: TestArchitectureBaseline
-  baseline: TestArchitectureBaseline
-}): string[] {
-  const failures: string[] = []
-
-  for (const [file, current] of Object.entries(baseline.interactionAssertions)) {
-    const previous = previousBaseline.interactionAssertions[file] ?? 0
-    if (current > previous) {
-      failures.push(
-        `${file} raises the interactionAssertions baseline from ${previous} to ${current}; the debt-elimination campaign is shrink-only`,
-      )
-    }
-  }
-
-  for (const [file, targets] of Object.entries(baseline.localModuleMocks)) {
-    for (const [target, current] of Object.entries(targets)) {
-      const previous = previousBaseline.localModuleMocks[file]?.[target] ?? 0
-      if (current > previous) {
-        failures.push(
-          `${file} raises the local mock baseline for ${target} from ${previous} to ${current}; the debt-elimination campaign is shrink-only`,
-        )
-      }
-    }
-  }
-
-  return failures
 }
 
 export function normalizeTestArchitecturePath(filePath: string): string {

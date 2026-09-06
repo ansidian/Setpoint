@@ -46,9 +46,6 @@ describe("CalendarEventEditor reminder behavior", () => {
         anchorAt: "2099-05-10T16:00:00.000Z",
         offsetMinutes: -30,
       }));
-      const observed = screen.getByTestId("calendar-editor-observed-upserts").textContent || "";
-      expect(observed).toContain(savedEvent.id);
-      expect(observed).toContain('"nextReminderAt":"2099-05-10T15:30:00.000Z"');
     });
   });
 

@@ -3,9 +3,8 @@ import { getSettings } from "@/api";
 
 export type UtilityPayLinksByScheduleId = Record<string, string>;
 
-// Pure: settings.utility_pay_links -> { [scheduleId]: url }, dropping incomplete
-// rows. Exported separately so it can be unit-tested without rendering.
-export function buildPayLinksByScheduleId(utilityPayLinks: unknown): UtilityPayLinksByScheduleId {
+// settings.utility_pay_links -> { [scheduleId]: url }, dropping incomplete rows.
+function buildPayLinksByScheduleId(utilityPayLinks: unknown): UtilityPayLinksByScheduleId {
   const map: UtilityPayLinksByScheduleId = {};
   const list = Array.isArray(utilityPayLinks) ? utilityPayLinks : [];
   for (const entry of list) {

@@ -39,7 +39,7 @@ describe("CalendarModal floating event edit workspace behavior", () => {
       />,
     ));
 
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    fireEvent.click(within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
     expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => {
@@ -72,7 +72,7 @@ describe("CalendarModal floating event edit workspace behavior", () => {
       />,
     ));
 
-    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(await screen.findByTestId("calendar-cell-20"));
     fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
@@ -133,7 +133,7 @@ describe("CalendarModal floating event edit workspace behavior", () => {
       />,
     ));
 
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    fireEvent.click(within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
 

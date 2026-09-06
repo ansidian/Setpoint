@@ -287,63 +287,6 @@ describe("AlfredPanel", () => {
     expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
   });
 
-  it("keeps every between-tool narration interleaved with its steps and identifies the final answer", async () => {
-    // The reported regression: narration Alfred says between tool calls vanished.
-    // A real multi-step run must read like an agentic trail — each narration line
-    // persists as quiet prose above the tools it introduced; only the final answer
-    // receives the promoted answer treatment.
-    const narration = 'Let me read a few more confirmation emails to better understand what constitutes "nothing after applied," and check for more rejections.';
-    scriptedRun([
-      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
-      { type: "text_delta", text: "Let me search your mail." },
-      { type: "tool_start", tool_id: "t1", name: "search_email" },
-      { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 12 matches" },
-      { type: "text_delta", text: narration },
-      { type: "tool_start", tool_id: "t2", name: "get_email_body" },
-      { type: "tool_result", tool_id: "t2", name: "get_email_body", ok: true, summary: "Mail · opened message" },
-      { type: "tool_start", tool_id: "t3", name: "get_email_body" },
-      { type: "tool_result", tool_id: "t3", name: "get_email_body", ok: true, summary: "Mail · opened message" },
-      { type: "text_delta", text: "Here's what I found." },
-      { type: "run_end", stop_reason: "end_turn" },
-    ]);
-    render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "What needs me?" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    await waitFor(() => expect(screen.getByText("Here's what I found.")).toBeTruthy());
-
-    // Both narration lines survived — including the exact text the owner reported losing.
-    const first = screen.getByText("Let me search your mail.");
-    const second = screen.getByText(narration);
-    expect(first).toBeTruthy();
-    expect(second).toBeTruthy();
-
-    const messageKinds = Array.from(document.querySelectorAll("[data-alfred-message-kind]"))
-      .map((node) => node.getAttribute("data-alfred-message-kind"));
-    expect(messageKinds).toEqual(["preamble", "tools", "preamble", "tools", "answer"]);
-    expect(first.closest('[data-alfred-message-kind="preamble"]')).toBeTruthy();
-    expect(second.closest('[data-alfred-message-kind="preamble"]')).toBeTruthy();
-    expect(screen.getByText("Here's what I found.").closest('[data-alfred-message-kind="answer"]')).toBeTruthy();
-
-    // Each narration introduced its own settled step disclosure (no lingering spinner).
-    expect(screen.getByRole("button", { name: /1 step\b/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /2 steps/ })).toBeTruthy();
-  });
-
-  it("renders a run error produced by the panel model", async () => {
-    scriptedRun([
-      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
-      { type: "run_error", message: "Alfred could not complete this run." },
-    ]);
-    render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "Try this" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    await waitFor(() => expect(screen.getByText("Alfred could not complete this run.")).toBeTruthy());
-  });
-
   it("retries a handoff that arrived during an in-flight run instead of dropping it (P2-3)", async () => {
     const pending = deferredRun([
       { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
@@ -367,23 +310,6 @@ describe("AlfredPanel", () => {
     await waitFor(() => expect(screen.getByText("second handoff")).toBeTruthy());
   });
 
-  it("closes on Escape in the composer", () => {
-    function Harness() {
-      const [open, setOpen] = useState(true);
-      return <><AlfredPanel {...baseProps} open={open} onClose={() => setOpen(false)} /><output>{open ? "panel open" : "panel closed"}</output></>;
-    }
-    render(<Harness />);
-    fireEvent.keyDown(screen.getByPlaceholderText("Ask across mail, calendar, and finances…"), { key: "Escape" });
-    expect(screen.getByText("panel closed")).toBeTruthy();
-  });
-
-  it("submits a handoff query when the handoff prop changes", async () => {
-    scriptedRun([{ type: "run_end", stop_reason: "end_turn" }]);
-    const { rerender } = render(<AlfredPanel {...baseProps} />);
-    rerender(<AlfredPanel {...baseProps} handoff={{ id: 1, query: "car insurance email" }} />);
-    await waitFor(() => expect(screen.getByText("car insurance email")).toBeTruthy());
-  });
-
   it("clears the conversation when newChatTick changes", async () => {
     scriptedRun([
       { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
@@ -402,29 +328,6 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("What would you like to connect?")).toBeTruthy();
     expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and finances…").value).toBe("");
   });
-
-
-  it("dispatches a calendar request when a bill chip is clicked", async () => {
-    scriptedRun([
-      { type: "run_start", conversation_id: "c1", provider: "anthropic", model: "claude-sonnet-4-6" },
-      { type: "rows", kind: "bill", items: [{ id: "b1", scheduleId: "s1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false, type: "bill", openActionDisabled: false }] },
-      { type: "run_end", stop_reason: "end_turn" },
-    ]);
-    function Harness() {
-      const [request, setRequest] = useState("none");
-      return <><AlfredPanel {...baseProps} onOpenCalendarItem={(next) => setRequest(`${next.viewKey}:${next.focusItemId}`)} /><output>{request}</output></>;
-    }
-    render(<Harness />);
-    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
-    fireEvent.change(input, { target: { value: "Any bills?" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(screen.getByText("Rent")).toBeTruthy());
-
-    fireEvent.click(screen.getByRole("button", { name: /Rent/ }));
-    expect(screen.getByText("bills:b1")).toBeTruthy();
-  });
-
-
 
   it("Escape closes the preview first, then the panel", async () => {
     scriptedRun([

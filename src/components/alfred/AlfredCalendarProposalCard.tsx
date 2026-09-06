@@ -115,7 +115,6 @@ function AlfredCalendarProposalCard({
   return (
     <section
       aria-label={`${statusLabel}: ${display.title}`}
-      data-alfred-message-kind="calendar-proposal"
       data-proposal-status={status}
       style={{
         display: "flex",

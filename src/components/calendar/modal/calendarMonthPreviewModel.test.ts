@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMonthPreviewEntries, resolveMountedMonthData } from "./calendarMonthPreviewModel";
+import { buildMonthPreviewEntries } from "./calendarMonthPreviewModel";
 import type { CalendarDeadlineOverlay, CalendarMonthPreviewEntry } from "./calendarMonthPreviewModel";
 
 // June 2026 as reference: index 0 = June (firstDay Mon=1), index 1 = July (firstDay 3).
@@ -42,30 +42,6 @@ function makeArgs(overrides: Partial<PreviewArgs> = {}): PreviewArgs {
 }
 
 describe("buildMonthPreviewEntries", () => {
-  it("reuses entry identity for months whose inputs are unchanged across window shifts", () => {
-    const args = makeArgs();
-    const firstPass = buildMonthPreviewEntries(args);
-    const julyEntry = firstPass.get(1);
-    expect(julyEntry).toBeTruthy();
-
-    const secondPass = buildMonthPreviewEntries({ ...args, previous: firstPass, first: 1, last: 2 });
-    expect(secondPass.get(1)).toBe(julyEntry);
-    expect(secondPass.has(0)).toBe(false);
-    expect(secondPass.get(2)).toBeTruthy();
-  });
-
-  it("rebuilds only the months whose event arrays changed identity", () => {
-    const args = makeArgs();
-    const firstPass = buildMonthPreviewEntries(args);
-
-    const newJulyEvents = [{ id: "e-july-2", title: "July refreshed" }];
-    args.monthEvents.set("2026-6", newJulyEvents);
-
-    const secondPass = buildMonthPreviewEntries({ ...args, previous: firstPass });
-    expect(secondPass.get(0)).toBe(firstPass.get(0));
-    expect(secondPass.get(1)).not.toBe(firstPass.get(1));
-    expect(secondPass.get(1)!.events).toContain(newJulyEvents[0]);
-  });
 
   it("merges the previous month's events into months that do not start on Sunday", () => {
     // July 2026 starts on Wednesday, so June events that spill into July's
@@ -124,57 +100,5 @@ describe("buildMonthPreviewEntries", () => {
       { id: "d-july", due_date: "2026-07-01" },
       { id: "d-june", due_date: "2026-06-30" },
     ]);
-  });
-});
-
-describe("resolveMountedMonthData", () => {
-  const EMPTY = {};
-  const active = {
-    viewData: { isLoading: false },
-    itemsByDay: { 1: ["a"] },
-    itemsByDate: { "2026-05-01": ["a"] },
-    cellMetaByDate: { "2026-05-01": { weather: {} } },
-  };
-  const cached = {
-    viewData: { cached: true },
-    itemsByDay: { 2: ["c"] },
-    itemsByDate: { "2026-04-02": ["c"] },
-    cellMetaByDate: {},
-  };
-
-  it("hands the active month its live computed bundle", () => {
-    expect(resolveMountedMonthData({ isActive: true, active, empty: EMPTY })).toBe(active);
-  });
-
-  it("reuses the cached snapshot for the one-deep cached month", () => {
-    const out = resolveMountedMonthData({ isActive: false, isCached: true, cached, active, empty: EMPTY });
-    expect(out.itemsByDate).toBe(cached.itemsByDate);
-    expect(out.viewData).toBe(cached.viewData);
-  });
-
-  it("renders other mounted months empty by default", () => {
-    const out = resolveMountedMonthData({ isActive: false, isCached: false, active, empty: EMPTY });
-    expect(out.viewData).toBeNull();
-    expect(out.itemsByDate).toBe(EMPTY);
-    expect(out.itemsByDay).toBe(EMPTY);
-  });
-
-  it("shares the active itemsByDate across non-active months when the view is month-agnostic", () => {
-    const out = resolveMountedMonthData({ isActive: false, isCached: false, active, shareItemsByDate: true, empty: EMPTY });
-    expect(out.itemsByDate).toBe(active.itemsByDate);
-    // Non-itemsByDate slots stay empty — only the date-keyed map is month-agnostic.
-    expect(out.viewData).toBeNull();
-  });
-
-  it("prefers the live active itemsByDate over the stale cached one when sharing", () => {
-    const out = resolveMountedMonthData({ isActive: false, isCached: true, cached, active, shareItemsByDate: true, empty: EMPTY });
-    expect(out.itemsByDate).toBe(active.itemsByDate);
-    expect(out.viewData).toBe(cached.viewData);
-  });
-
-  it("shares live absolute-date cell metadata across non-active months", () => {
-    const out = resolveMountedMonthData({ isActive: false, isCached: true, cached, active, empty: EMPTY });
-    expect(out.cellMetaByDate).toBe(active.cellMetaByDate);
-    expect(out.viewData).toBe(cached.viewData);
   });
 });

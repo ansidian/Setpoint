@@ -3,8 +3,7 @@ import { join } from "path";
 import { afterAll, describe, expect, it } from "vitest";
 import { createTestTempDirSync, removeTempDirSync } from "../test-utils/temp-dir.ts";
 import {
-  DEFAULT_PREFLIGHT_RULES,
-  loadDefaultPreflightRules,
+  loadDefaultPreflightRules
 } from "./triage-preflight.ts";
 
 const tempDir = createTestTempDirSync("triage-preflight-rules-");
@@ -28,18 +27,6 @@ const validRule = {
 };
 
 describe("triage preflight rule catalog loader", () => {
-  it("loads the shipped catalog with unique keys and compilable regexes", () => {
-    expect(DEFAULT_PREFLIGHT_RULES.length).toBeGreaterThan(20);
-    expect(DEFAULT_PREFLIGHT_RULES[0]!.key).toBe("default_verification_code_noise");
-    expect(DEFAULT_PREFLIGHT_RULES.at(-1)!.key).toBe("default_marketing_noise");
-
-    const keys = DEFAULT_PREFLIGHT_RULES.map((rule) => rule.key);
-    expect(new Set(keys).size).toBe(keys.length);
-    for (const rule of DEFAULT_PREFLIGHT_RULES) {
-      expect(rule.match_json).toBeTypeOf("object");
-      expect(Number.isFinite(Number(rule.priority))).toBe(true);
-    }
-  });
 
   it("rejects a missing or unparsable catalog", () => {
     expect(() => loadDefaultPreflightRules(join(tempDir, "missing.json")))

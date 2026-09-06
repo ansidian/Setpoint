@@ -8,7 +8,6 @@ const CLOCK_FORMATTER = new Intl.DateTimeFormat("en-US", {
 export function TimelineClock({ now }: { now: number }) {
   return (
     <span
-      data-testid="timeline-clock"
       style={{
         display: "inline-flex", alignItems: "center", gap: 7,
         fontSize: 11, fontWeight: 500,

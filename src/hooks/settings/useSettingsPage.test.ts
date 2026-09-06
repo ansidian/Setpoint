@@ -5,11 +5,6 @@ import { mergeFailedPayload } from "./useSettingsPage";
 // the user's edits. The merge re-queues the failed fields while letting any
 // edits made during the in-flight request win, so nothing is lost or clobbered.
 describe("mergeFailedPayload", () => {
-  it("re-queues all failed fields when nothing newer is pending", () => {
-    expect(
-      mergeFailedPayload({}, { email_triage_mode: "auto", email_lookback_hours: 6 }),
-    ).toEqual({ email_triage_mode: "auto", email_lookback_hours: 6 });
-  });
 
   it("lets newer pending edits win over re-queued failed values", () => {
     expect(

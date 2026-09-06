@@ -1,5 +1,4 @@
 import { act, fireEvent, screen } from "@testing-library/react";
-import { vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext";
 import type { ComponentType, ReactNode } from "react";
 
@@ -30,18 +29,4 @@ export async function flushAnimationFrame() {
 export function pointerClick(element: Element) {
   fireEvent.pointerDown(element);
   fireEvent.click(element);
-}
-
-export function stubRect(element: HTMLElement, rect: Partial<DOMRect> = {}) {
-  element.getBoundingClientRect = vi.fn(() => ({
-    width: 100,
-    height: 24,
-    left: 0,
-    right: 100,
-    bottom: 124,
-    ...rect,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  } as DOMRect));
 }

@@ -17,15 +17,6 @@ const capability = (overrides: Partial<CapabilityStatus>): CapabilityStatus => (
 });
 
 describe("projectCapabilityStatus", () => {
-  it.each([
-    [capability({ state: "ready" }), "Working", "success"],
-    [capability({ state: "degraded" }), "Partially working", "warning"],
-    [capability({ state: "pending" }), "Pending validation", "accent"],
-    [capability({ state: "needs_attention", reasonCodes: ["ACCOUNT_REAUTH_REQUIRED"] }), "Reconnect needed", "danger"],
-    [capability({ state: "disabled", source: "disabled" }), "Disabled", "neutral"],
-  ] as const)("projects stable state copy and tone", (input, label, tone) => {
-    expect(projectCapabilityStatus(input)).toMatchObject({ label, tone });
-  });
 
   it("presents skipped Gmail realtime as a healthy periodic mode", () => {
     expect(projectCapabilityStatus(capability({

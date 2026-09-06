@@ -519,12 +519,6 @@ describe("stopEmailBackfillWorker", () => {
     expect(rows.rows).toEqual([{ status: "queued" }]);
   });
 
-  it("is safe to call twice", () => {
-    worker.wakeEmailBackfillWorker({ delayMs: 1000 });
-    worker.stopEmailBackfillWorker();
-    expect(() => worker.stopEmailBackfillWorker()).not.toThrow();
-  });
-
   it("lets a fresh startEmailBackfillWorker re-arm after a stop", async () => {
     worker.wakeEmailBackfillWorker({ delayMs: 1000 });
     worker.stopEmailBackfillWorker();

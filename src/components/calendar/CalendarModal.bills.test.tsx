@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.ts";
 import CalendarModal from "./CalendarModal.tsx";
 import { wrapWithDashboard } from "./CalendarModal.test-utils.tsx";
@@ -48,56 +48,6 @@ describe("CalendarModal bills behavior", () => {
     }
   });
 
-  describe("utility statement status", () => {
-    beforeEach(() => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      vi.setSystemTime(new Date("2026-05-20T12:00:00.000-07:00"));
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("matches utility statement status against mirrored bill payees", () => {
-      window.innerWidth = 1900;
-
-      render(wrapWithDashboard(
-        <CalendarModal
-          open
-          onClose={() => {}}
-          view="bills"
-          onViewChange={() => {}}
-          focusDate="2026-05-26"
-          eventsData={{ getEvents: () => [] }}
-          billsData={{
-            schedules: [
-              {
-                id: "water:2026-05-26",
-                scheduleId: "water",
-                name: "Water Bill",
-                payee: "SGV Water",
-                next_date: "2026-05-26",
-                amount: 50.67,
-                paid: false,
-                type: "bill",
-              },
-            ],
-            payeeMap: {},
-          }}
-          deadlinesData={{}}
-        />,
-      ));
-
-      fireEvent.click(screen.getByLabelText("Utility statement status"));
-
-      // Behavioral guard: opening the control surfaces the tracked-utility
-      // popover with the matched Water row. The status/date-text derivation
-      // itself is covered by utilityStatusModel.test.ts.
-      expect(screen.getByText("Water")).toBeTruthy();
-      expect(screen.getByText("next May 26")).toBeTruthy();
-    });
-  });
-
   it("opens floating bill detail from a bills agenda row", async () => {
     window.innerWidth = 1900;
 
@@ -131,7 +81,7 @@ describe("CalendarModal bills behavior", () => {
       />,
     ));
 
-    const agendaRail = screen.getByTestId("bills-agenda-rail");
+    const agendaRail = await screen.findByTestId("bills-agenda-rail");
     fireEvent.click(within(agendaRail).getByTestId("calendar-agenda-bill-row"));
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");

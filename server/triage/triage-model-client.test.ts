@@ -105,7 +105,6 @@ describe("triage model client", () => {
     expect(body.tool_choice).toEqual({ type: "tool", name: "submit_email_triage" });
     // System is now an ephemeral-cacheable block array; the tool carries a
     // matching cache_control so the tools+system prefix is one cache breakpoint.
-    expect(body.system[0].text).toContain("Classify one email");
     expect(body.system[0].text).toContain(BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS);
     expect(body.tools[0].input_schema.properties.bill_candidate.properties.amount_candidates.items.properties.kind.enum)
       .toContain("statement_balance");

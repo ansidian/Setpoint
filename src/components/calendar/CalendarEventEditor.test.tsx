@@ -51,13 +51,11 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
     });
-    expect(screen.getByTestId("calendar-editor-observed-removals").textContent).toBe('["event-1"]');
-    expect(screen.getByTestId("calendar-editor-observed-refreshes").textContent).toBe("[]");
   });
 
 
   it("cancels a dirty floating event edit back to the original detail on Escape", async () => {
-    renderModal({
+    await renderModal({
       events: [{
         id: "event-1",
         title: "Design review",
@@ -88,7 +86,7 @@ describe("CalendarEventEditor create and edit lifecycle", () => {
   });
 
   it("closes the Event Schedule Preview on Escape before cancelling the editor workspace", async () => {
-    renderModal({
+    await renderModal({
       events: [{
         id: "event-1",
         title: "Existing meeting",

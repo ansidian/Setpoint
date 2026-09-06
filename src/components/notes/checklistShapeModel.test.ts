@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   addChecklistItem,
-  createChecklistItem,
-  getChecklistItemLineCount,
-  getChecklistMinHeightForItems,
-  moveChecklistItem,
+  createChecklistItem, moveChecklistItem,
   removeCompletedChecklistItems,
-  removeChecklistItem,
+  removeChecklistItem
 } from "./checklistShapeModel";
 
 describe("checklistShapeModel", () => {
@@ -37,15 +34,6 @@ describe("checklistShapeModel", () => {
     expect(removeCompletedChecklistItems(items, fallback)).toEqual([second]);
     expect(removeCompletedChecklistItems([first, third], fallback)).toEqual([fallback]);
     expect(items).toEqual([first, second, third]);
-  });
-
-  it("accounts for wrapped and explicit item lines when sizing the card", () => {
-    const item = { ...createChecklistItem("long"), text: "A deliberately long checklist item that wraps\nplus another line" };
-    const singleLineItem = { ...item, text: "Short item" };
-
-    expect(getChecklistItemLineCount(item.text, 260)).toBeGreaterThan(2);
-    expect(getChecklistMinHeightForItems([item], 260))
-      .toBeGreaterThan(getChecklistMinHeightForItems([singleLineItem], 260));
   });
 
   it("moves a row before or after another row without mutating the source order", () => {

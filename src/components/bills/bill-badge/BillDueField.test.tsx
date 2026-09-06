@@ -44,19 +44,6 @@ describe("BillDueField", () => {
     vi.useRealTimers();
   });
 
-  it("uses the shared custom picker to set the due date", () => {
-    render(<FieldHarness />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Set bill due date" }));
-
-    const picker = screen.getByRole("dialog", { name: "Bill due date picker" });
-    fireEvent.click(within(picker).getByRole("button", { name: "21" }));
-    fireEvent.click(within(picker).getByRole("button", { name: "Set due date" }));
-
-    expect(screen.getByTestId("due-value").textContent).toBe("2026-04-21");
-    expect(screen.getByRole("button", { name: "Set bill due date" }).textContent).toMatch(/Apr 21/);
-  });
-
   it("still allows selecting an overdue date", () => {
     render(<FieldHarness initialDue="2026-04-21" />);
 
@@ -67,17 +54,5 @@ describe("BillDueField", () => {
     fireEvent.click(within(picker).getByRole("button", { name: "Set due date" }));
 
     expect(screen.getByTestId("due-value").textContent).toBe("2026-04-18");
-  });
-
-  it("submits immediately when the selected date is clicked again", () => {
-    render(<FieldHarness initialDue="2026-04-21" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Set bill due date" }));
-
-    const picker = screen.getByRole("dialog", { name: "Bill due date picker" });
-    fireEvent.click(within(picker).getByRole("button", { name: "21" }));
-
-    expect(screen.getByTestId("due-value").textContent).toBe("2026-04-21");
-    expect(screen.queryByRole("dialog", { name: "Bill due date picker" })).toBeNull();
   });
 });

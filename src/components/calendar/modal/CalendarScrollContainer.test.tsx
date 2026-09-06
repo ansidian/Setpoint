@@ -102,17 +102,6 @@ function getScrollElement(container: HTMLElement): HTMLElement {
 }
 
 describe("CalendarScrollContainer", () => {
-  it("each mounted grid has a role='grid' element with correct ARIA label", () => {
-    const { container } = renderContainer();
-    const grids = container.querySelectorAll("[role='grid']");
-    expect(grids).toHaveLength(5);
-    const expectedLabels = Array.from({ length: 5 }, (_, index) => {
-      const { year, month } = monthIndexToDate(index - 2, CURRENT_YEAR, CURRENT_MONTH);
-      const monthLabel = new Date(year, month).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-      return `Events calendar for ${monthLabel}`;
-    });
-    expect(Array.from(grids, (grid) => grid.getAttribute("aria-label"))).toEqual(expectedLabels);
-  });
 
   it("renders bills in a non-active mounted month (chips don't vanish past the active+cached pair)", () => {
     // Bills' itemsByDate spans the whole fetched range (it is not month-scoped

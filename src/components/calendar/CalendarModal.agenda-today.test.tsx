@@ -85,9 +85,23 @@ describe("CalendarModal today agenda behavior", () => {
   });
 
   it("lands the agenda rail on today's date header when opened without a focus date", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
 
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.testid === "events-agenda-rail") {
+        return { top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 } as DOMRect;
+      }
+      if (this.dataset.agendaDateHeader === "true") {
+        const top = this.dataset.dateKey === "2026-04-20" ? 620 : 0;
+        return { top, bottom: top + 34, left: 0, right: 280, width: 280, height: 34 } as DOMRect;
+      }
+      return originalRect.call(this);
+    });
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollTo").mockImplementation(function (this: HTMLElement, options: ScrollToOptions | number) {
+      this.scrollTop = typeof options === "number" ? options : options?.top ?? 0;
+    });
     try {
       window.innerWidth = 1900;
 
@@ -103,30 +117,18 @@ describe("CalendarModal today agenda behavior", () => {
         />,
       ));
 
-      const agendaRail = screen.getByTestId("events-agenda-rail");
-      const firstHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-01']")!;
-      const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']")!;
-      agendaRail.scrollTop = 0;
-      agendaRail.scrollTo = (options) => {
-        agendaRail.scrollTop = typeof options === "number" ? options : options?.top ?? 0;
-      };
-      agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 } as DOMRect);
-      firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
-      todayHeader.getBoundingClientRect = () => ({ top: 620, bottom: 654, left: 0, right: 280, width: 280, height: 34 } as DOMRect);
-
-      await act(async () => {
-        vi.runOnlyPendingTimers();
-      });
-
+      const agendaRail = await screen.findByTestId("events-agenda-rail");
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
-      expect(agendaRail.scrollTop).toBe(620);
+      await waitFor(() => expect(agendaRail.scrollTop).toBe(620));
     } finally {
+      rect.mockRestore();
+      scroll.mockRestore();
       vi.useRealTimers();
     }
   });
 
   it("scrolls the visible events agenda to today even while adjacent month data is loading", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
 
     try {
@@ -159,7 +161,7 @@ describe("CalendarModal today agenda behavior", () => {
         />,
       ));
 
-      const agendaRail = screen.getByTestId("events-agenda-rail");
+      const agendaRail = await screen.findByTestId("events-agenda-rail");
       const todayRow = within(agendaRail).getByTestId("calendar-agenda-event-row");
       const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']")!;
       const todayContent = todayRow.parentElement!;
@@ -176,12 +178,8 @@ describe("CalendarModal today agenda behavior", () => {
       await act(async () => {
         await Promise.resolve();
       });
-      await act(async () => {
-        vi.runOnlyPendingTimers();
-      });
-
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
-      expect(agendaRail.scrollTop).toBeGreaterThan(0);
+      await waitFor(() => expect(agendaRail.scrollTop).toBeGreaterThan(0));
     } finally {
       vi.useRealTimers();
     }

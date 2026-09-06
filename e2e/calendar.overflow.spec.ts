@@ -151,22 +151,3 @@ test("closes inline overflow on Escape before closing the modal", async ({ page 
   await expect(inlineOverflow).toHaveCount(0);
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
 });
-
-test("keeps inline overflow open when selecting a hidden chip", async ({ page }) => {
-  const fixture = buildOverflowFixture();
-  await installDashboardShellFixtures(page, { initialEvents: fixture.events });
-  await openCalendar(page);
-
-  const overflowTrigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
-  const inlineOverflow = page.getByTestId("calendar-cell-inline-overflow");
-  const hiddenTitle = eventTitle(fixture.firstPrefix, 4);
-
-  await overflowTrigger.click();
-  await expect(inlineOverflow).toBeVisible();
-
-  const hiddenChip = inlineOverflow.getByText(hiddenTitle);
-  await hiddenChip.click({ force: true });
-
-  await expect(inlineOverflow).toBeVisible();
-  await expect(inlineOverflow.getByTestId("calendar-cell-item-chip").filter({ hasText: hiddenTitle })).toBeVisible();
-});

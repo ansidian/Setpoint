@@ -18,9 +18,9 @@ import {
 } from "./calendarPlanningSessionModel";
 import type { CalendarScrollDirection } from "./calendarScrollModel";
 
-export const PLANNING_SLOW_TIMEOUT_MS = 2000;
-export const PLANNING_DEGRADED_TIMEOUT_MS = 3000;
-export const PLANNING_EDITOR_OPEN_DELAY_MS = 260;
+const PLANNING_SLOW_TIMEOUT_MS = 2000;
+const PLANNING_DEGRADED_TIMEOUT_MS = 3000;
+const PLANNING_EDITOR_OPEN_DELAY_MS = 260;
 
 export interface CalendarDateRange { start: string; end: string }
 export interface DeadlineOverlayRecord<T = unknown> { data: T; range: CalendarDateRange }

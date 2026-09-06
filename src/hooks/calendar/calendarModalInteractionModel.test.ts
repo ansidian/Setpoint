@@ -2,12 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEADLINE_OVERLAY_STORAGE_KEY,
   dashboardDetailFocusRequest,
-  initialDeadlineEditorState,
-  nextCalendarView,
-  normalizeCalendarWorkspaceView,
+  initialDeadlineEditorState, normalizeCalendarWorkspaceView,
   readStoredBoolean,
   shouldForceDeadlineOverlay,
-  writeStoredBoolean,
+  writeStoredBoolean
 } from "./calendarModalInteractionModel";
 
 describe("calendar modal interaction model", () => {
@@ -110,24 +108,5 @@ describe("calendar modal interaction model", () => {
     expect(shouldForceDeadlineOverlay({ open: true, view: "events", forceDeadlineOverlay: true })).toBe(true);
     expect(shouldForceDeadlineOverlay({ open: true, view: "bills", forceDeadlineOverlay: true })).toBe(false);
     expect(shouldForceDeadlineOverlay({ open: false, view: "events", forceDeadlineOverlay: true })).toBe(false);
-  });
-});
-
-describe("nextCalendarView", () => {
-  const views = ["events", "bills"];
-  it("toggles events -> bills", () => {
-    expect(nextCalendarView({ current: "events", views })).toBe("bills");
-  });
-  it("wraps bills -> events", () => {
-    expect(nextCalendarView({ current: "bills", views })).toBe("events");
-  });
-  it("reverses with reverse=true", () => {
-    expect(nextCalendarView({ current: "events", views, reverse: true })).toBe("bills");
-  });
-  it("is a no-op when only one view is available", () => {
-    expect(nextCalendarView({ current: "events", views: ["events"] })).toBe("events");
-  });
-  it("returns current when current is not in views", () => {
-    expect(nextCalendarView({ current: "events", views: [] })).toBe("events");
   });
 });

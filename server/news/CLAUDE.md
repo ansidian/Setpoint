@@ -25,7 +25,6 @@ summarization — metadata only, read-at-source. HTTP surface is
   are persisted; a six-hour host cooldown is the fallback when absent.
 - `news-preview.ts` — add-source validation: fetch the pasted URL, sample it
   directly if it's a feed, else follow one advertised autodiscovery link
-- `migration.test.ts` — permanent guard for `026_news.sql`'s schema shape,
   `027_news_mute_terms.sql`'s topic filter column, and
   `029_news_retry_after.sql`'s persisted source cooldown (lives here, not with
   the migration files)

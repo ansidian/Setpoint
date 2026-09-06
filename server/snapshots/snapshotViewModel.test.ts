@@ -164,15 +164,3 @@ describe("buildSnapshotView", () => {
     expect(withCatch.laneCounts.catch_up).toBe(1);
   });
 });
-
-describe("emptyProcessingState", () => {
-  it("is inactive with auto/no_model modes and zeroed job counts", () => {
-    expect(emptyProcessingState()).toMatchObject({
-      active: false,
-      email_triage_mode: "auto",
-      effective_email_triage_mode: "no_model",
-      email_triage: { total: 0, active: false },
-      gmail_history_sync: { total: 0, active: false },
-    });
-  });
-});

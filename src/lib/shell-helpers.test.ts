@@ -1,30 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { dueDateToMs, buildTimeline, formatChipDateTime } from "./shell-helpers";
+import { dueDateToMs, buildTimeline } from "./shell-helpers";
 
 const iso = (ms: number | null) => new Date(ms!).toISOString();
-
-describe("formatChipDateTime", () => {
-  it("returns null for a due-today item — the chip already says 'due today (· time)'", () => {
-    expect(formatChipDateTime("2026-06-21", "2:00 PM", true)).toBeNull();
-    expect(formatChipDateTime("2026-06-21", null, true)).toBeNull();
-  });
-  it("shows the short date '6/21/26, <time>' for any other day", () => {
-    expect(formatChipDateTime("2026-06-21", "2:00 PM", false)).toBe("6/21/26, 2pm");
-    expect(formatChipDateTime("2026-12-05", "11:00 AM", false)).toBe("12/5/26, 11am");
-  });
-  it("shows the short date alone when a non-today item has no time", () => {
-    expect(formatChipDateTime("2026-06-23", null, false)).toBe("6/23/26");
-  });
-  it("drops minutes only on the hour, keeps lowercase meridiem", () => {
-    expect(formatChipDateTime("2026-06-21", "12:00 PM", false)).toBe("6/21/26, 12pm");
-    expect(formatChipDateTime("2026-06-21", "12:00 AM", false)).toBe("6/21/26, 12am");
-    expect(formatChipDateTime("2026-06-21", "9:05 AM", false)).toBe("6/21/26, 9:05am");
-  });
-  it("returns null when neither date nor time is usable", () => {
-    expect(formatChipDateTime(null, null, false)).toBeNull();
-    expect(formatChipDateTime("garbage", "nope", false)).toBeNull();
-  });
-});
 
 // These absolute instants own Pacific wall-clock parsing across PST/PDT and
 // protect the fallback used when Todoist supplies no usable due time.

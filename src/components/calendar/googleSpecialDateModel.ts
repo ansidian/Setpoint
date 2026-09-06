@@ -1,5 +1,5 @@
-export const GOOGLE_SPECIAL_DATE_SOURCE_LABEL = "Birthdays";
-export const GOOGLE_SPECIAL_DATE_COLOR = "#ff887c";
+const GOOGLE_SPECIAL_DATE_SOURCE_LABEL = "Birthdays";
+const GOOGLE_SPECIAL_DATE_COLOR = "#ff887c";
 
 interface SpecialDateItem {
   type?: string; source?: string; sourceLabel?: string; calendarName?: string; meta?: string;

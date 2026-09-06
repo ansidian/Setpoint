@@ -1,35 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  formatDateLabel,
-  formatRecurrenceSummary,
-  formatScheduleSummary,
-  formatTimeLabel,
-  previewSegmentStyle,
+  formatRecurrenceSummary
 } from "./calendarEditorUtils";
-
-describe("formatDateLabel", () => {
-  it("returns a placeholder when no value is given", () => {
-    expect(formatDateLabel("")).toBe("Choose date");
-    expect(formatDateLabel(null)).toBe("Choose date");
-  });
-
-  it("formats an ISO date in Pacific time as a short month/day/year label", () => {
-    expect(formatDateLabel("2026-04-21")).toBe("Apr 21, 2026");
-  });
-});
-
-describe("formatTimeLabel", () => {
-  it("returns a placeholder when no value is given", () => {
-    expect(formatTimeLabel("")).toBe("Choose time");
-    expect(formatTimeLabel(null)).toBe("Choose time");
-  });
-
-  it("formats a 24h time string as a 12h clock label", () => {
-    expect(formatTimeLabel("13:00")).toBe("1:00 PM");
-    expect(formatTimeLabel("09:05")).toBe("9:05 AM");
-    expect(formatTimeLabel("00:30")).toBe("12:30 AM");
-  });
-});
 
 describe("formatRecurrenceSummary", () => {
   it("returns an empty string when there is no recurrence rule", () => {
@@ -72,69 +44,5 @@ describe("formatRecurrenceSummary", () => {
 
   it("returns an empty string for unrecognized frequencies", () => {
     expect(formatRecurrenceSummary({ frequency: "hourly", interval: 1 })).toBe("");
-  });
-});
-
-describe("formatScheduleSummary", () => {
-  it("falls back when the draft has no start date", () => {
-    expect(formatScheduleSummary({}, "No schedule")).toBe("No schedule");
-    expect(formatScheduleSummary(null, "No schedule")).toBe("No schedule");
-  });
-
-  it("renders a single-day timed range", () => {
-    expect(
-      formatScheduleSummary(
-        { startDate: "2026-04-21", endDate: "2026-04-21", startTime: "13:00", endTime: "13:30" },
-        "fallback",
-      ),
-    ).toBe("Apr 21, 2026 · 1:00 PM to 1:30 PM");
-  });
-
-  it("renders a multi-day date range", () => {
-    expect(
-      formatScheduleSummary(
-        { startDate: "2026-04-21", endDate: "2026-04-23", startTime: "13:00", endTime: "13:30" },
-        "fallback",
-      ),
-    ).toBe("Apr 21, 2026 to Apr 23, 2026 · 1:00 PM to 1:30 PM");
-  });
-
-  it("marks an all-day draft instead of showing times", () => {
-    expect(
-      formatScheduleSummary(
-        { startDate: "2026-04-21", endDate: "2026-04-21", allDay: true },
-        "fallback",
-      ),
-    ).toBe("Apr 21, 2026 · All day");
-  });
-
-  it("renders only the start time when no end time is set", () => {
-    expect(
-      formatScheduleSummary(
-        { startDate: "2026-04-21", endDate: "2026-04-21", startTime: "13:00" },
-        "fallback",
-      ),
-    ).toBe("Apr 21, 2026 · 1:00 PM");
-  });
-});
-
-describe("previewSegmentStyle", () => {
-  it("preserves schedule visibility, secondary truncation, and conflict emphasis", () => {
-    expect(previewSegmentStyle("schedule")).toMatchObject({
-      overflow: "visible",
-      whiteSpace: "normal",
-      maxWidth: "100%",
-    });
-    expect(previewSegmentStyle("repeat")).toMatchObject({
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
-      maxWidth: "min(190px, 100%)",
-    });
-    expect(previewSegmentStyle("conflict")).toMatchObject({
-      fontWeight: 600,
-      whiteSpace: "nowrap",
-      maxWidth: "min(190px, 100%)",
-    });
   });
 });

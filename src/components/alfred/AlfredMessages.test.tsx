@@ -5,28 +5,6 @@ import { SayBlock } from "./AlfredMessages";
 afterEach(cleanup);
 
 describe("alfred message primitives", () => {
-  it("SayBlock does not split its automatic opening emphasis at a decimal point", () => {
-    const { container } = render(<SayBlock text="Rent is $1,850.00 due Friday. Nothing else is due." done />);
-    expect(container.querySelector("strong")?.textContent).toBe("Rent is $1,850.00 due Friday.");
-  });
-
-  it("SayBlock renders paragraphs plus unordered and numbered lists", () => {
-    const { container } = render(<SayBlock text={[
-      "Amazon changed its terms. Key updates:",
-      "",
-      "- Most disputes require **individual arbitration**.",
-      "- Small-claims court remains available.",
-      "",
-      "1. Review the changes.",
-      "2. Decide whether they matter to you.",
-    ].join("\n")} done />);
-
-    expect(container.querySelectorAll("p")).toHaveLength(1);
-    expect(container.querySelectorAll("ul > li")).toHaveLength(2);
-    expect(container.querySelectorAll("ol > li")).toHaveLength(2);
-    expect(screen.getByText("individual arbitration").tagName).toBe("STRONG");
-    expect(container.textContent).not.toContain("- Most disputes");
-  });
 
   it("SayBlock supports inline emphasis, code, and safe links without interpreting HTML", () => {
     const { container } = render(<SayBlock

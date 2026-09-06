@@ -92,7 +92,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const agendaRail = screen.getByTestId("events-agenda-rail");
+    const agendaRail = await screen.findByTestId("events-agenda-rail");
     const agendaHeader = agendaRail.querySelector("[data-agenda-date-header='true']")!;
     const agendaRow = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
     agendaRail.scrollTo = (options) => {

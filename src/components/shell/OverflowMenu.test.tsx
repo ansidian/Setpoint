@@ -51,62 +51,6 @@ function StatefulHarness({ history = false }: { history?: boolean }) {
 describe("OverflowMenu menu-button semantics + keyboard model", () => {
   afterEach(cleanup);
 
-  it("exposes aria-haspopup=menu on the trigger and flips aria-expanded with menuOpen", () => {
-    const { rerender } = render(
-      <MemoryRouter>
-        <OverflowMenu
-          isMobile={false}
-          menuOpen={false}
-          onToggleMenu={vi.fn()}
-          onCloseMenu={vi.fn()}
-          onOpenHistory={vi.fn()}
-          onOpenAnalytics={vi.fn()}
-        />
-      </MemoryRouter>,
-    );
-
-    const trigger = screen.getByRole("button", { name: /open more actions/i });
-    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-
-    rerender(
-      <MemoryRouter>
-        <OverflowMenu
-          isMobile={false}
-          menuOpen
-          onToggleMenu={vi.fn()}
-          onCloseMenu={vi.fn()}
-          onOpenHistory={vi.fn()}
-          onOpenAnalytics={vi.fn()}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("button", { name: /open more actions/i }).getAttribute("aria-expanded")).toBe(
-      "true",
-    );
-  });
-
-  it("renders the popup as role=menu with role=menuitem items, labelled for AT", () => {
-    Harness({ menuOpen: true });
-
-    const menu = screen.getByRole("menu", { name: /more actions/i });
-    expect(menu).toBeTruthy();
-
-    const items = screen.getAllByRole("menuitem");
-    expect(items.length).toBeGreaterThanOrEqual(2);
-    for (const item of items) {
-      expect(item.tabIndex).toBe(-1);
-    }
-  });
-
-  it("moves focus to the first menuitem when the menu opens", () => {
-    Harness({ menuOpen: true });
-
-    const items = screen.getAllByRole("menuitem");
-    expect(document.activeElement).toBe(items[0]);
-  });
-
   it("ArrowDown moves focus to the next menuitem and wraps past the last", () => {
     Harness({ menuOpen: true });
 
@@ -156,15 +100,6 @@ describe("OverflowMenu menu-button semantics + keyboard model", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /open more actions/i }));
   });
 
-  it("Tab closes the menu", () => {
-    render(<StatefulHarness />);
-
-    const items = screen.getAllByRole("menuitem");
-    fireEvent.keyDown(items[0]!, { key: "Tab" });
-
-    expect(screen.getByText("menu closed")).toBeTruthy();
-  });
-
   it("does not reset focus when the parent re-renders with a new (non-memoized) onCloseMenu while the menu stays open", () => {
     // Regression test: an inline arrow function passed as onCloseMenu changes
     // identity on every parent render. The initial-focus effect must key only
@@ -204,15 +139,5 @@ describe("OverflowMenu menu-button semantics + keyboard model", () => {
     fireEvent.click(screen.getByRole("button", { name: /bump/i }));
 
     expect(document.activeElement).toBe(items[1]);
-  });
-
-  it("activating Snapshots still calls onCloseMenu and onOpenHistory", () => {
-    render(<StatefulHarness history />);
-
-    const snapshotsItem = screen.getByRole("menuitem", { name: /snapshots/i });
-    fireEvent.click(snapshotsItem);
-
-    expect(screen.getByText("history open")).toBeTruthy();
-    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

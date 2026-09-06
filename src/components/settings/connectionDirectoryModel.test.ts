@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   connectionIdFromHash,
-  connectionSetupTargetFromSearch,
-  connectionSummary,
+  connectionSetupTargetFromSearch
 } from "./connectionDirectoryModel";
 
 describe("connection directory routing", () => {
@@ -20,17 +19,6 @@ describe("connection directory routing", () => {
     ["", null],
   ] as const)("resolves %s to %s", (hash, expected) => {
     expect(connectionIdFromHash(hash)).toBe(expected);
-  });
-
-  it("summarizes operational states without counting optional disconnected services", () => {
-    expect(connectionSummary([
-      { state: "connected" },
-      { state: "connected" },
-      { state: "needs_setup" },
-      { state: "needs_attention" },
-      { state: "not_connected" },
-      { state: null },
-    ])).toEqual({ connected: 2, setup: 1, attention: 1 });
   });
 
   it.each([

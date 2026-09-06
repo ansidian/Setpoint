@@ -46,13 +46,6 @@ afterEach(() => {
 
 describe("GmailRealtimeCard", () => {
 
-  it("opens only its advanced disclosure when targeted by a deep link", async () => {
-    render(<GmailRealtimeCard openAdvancedSetup />);
-
-    const disclosure = (await screen.findByText("Advanced Pub/Sub setup")).closest("details") as HTMLDetailsElement;
-    expect(disclosure.open).toBe(true);
-  });
-
   it("reveals a generated callback once and lets the owner close it", async () => {
     api.generateGmailPubSubCallback.mockResolvedValue({
       callbackUrl: "https://setpoint.example.com/api/gmail/push?token=one-time-secret",

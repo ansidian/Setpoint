@@ -29,7 +29,7 @@ describe("CalendarEventEditor quick action behavior", () => {
         endMs: new Date("2026-04-21T17:30:00.000Z").getTime(),
       },
     });
-    renderModal({ events: [event] });
+    await renderModal({ events: [event] });
     const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(screen.getByTestId("calendar-cell-item-chip"), { dataTransfer });
@@ -56,7 +56,7 @@ describe("CalendarEventEditor quick action behavior", () => {
       allDay: false,
     };
     mockDeleteCalendarEvent.mockResolvedValue(undefined);
-    renderModal({ events: [event] });
+    await renderModal({ events: [event] });
 
     fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
       clientX: 140,
@@ -107,7 +107,7 @@ describe("CalendarEventEditor quick action behavior", () => {
     };
     const deferred = createDeferred();
     mockCreateCalendarEvent.mockReturnValue(deferred.promise);
-    renderModal({ events: [event] });
+    await renderModal({ events: [event] });
 
     fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
       clientX: 140,
@@ -147,7 +147,7 @@ describe("CalendarEventEditor quick action behavior", () => {
     mockUpdateCalendarEvent.mockResolvedValue({
       event: { ...event, colorId: "11", color: "#dc2127" },
     });
-    renderModal({ events: [event] });
+    await renderModal({ events: [event] });
 
     fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
       clientX: 140,
@@ -190,7 +190,7 @@ describe("CalendarEventEditor quick action behavior", () => {
       isRecurring: false,
       allDay: false,
     };
-    renderModal({ events: [later, early] });
+    await renderModal({ events: [later, early] });
 
     const earlyChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     const laterChip = within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip");
@@ -246,7 +246,7 @@ describe("CalendarEventEditor quick action behavior", () => {
       allDay: false,
     };
     mockDeleteCalendarEvent.mockResolvedValue({});
-    renderModal({ events: [recurring, oneOff] });
+    await renderModal({ events: [recurring, oneOff] });
 
     const recurringChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     const oneOffChip = within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip");
@@ -301,7 +301,7 @@ describe("CalendarEventEditor quick action behavior", () => {
       isRecurring: false,
       allDay: false,
     };
-    renderModal({ events: [first, second] });
+    await renderModal({ events: [first, second] });
 
     fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"), { metaKey: true });
     fireEvent.click(within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip"), { metaKey: true });
@@ -325,7 +325,7 @@ describe("CalendarEventEditor quick action behavior", () => {
       originalStartTime: "2026-04-20T16:00:00.000Z",
       allDay: false,
     };
-    renderModal({ events: [recurring] });
+    await renderModal({ events: [recurring] });
 
     fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), { clientX: 140, clientY: 180 });
     fireEvent.click(await screen.findByTestId("calendar-event-context-delete"));

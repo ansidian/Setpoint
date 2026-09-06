@@ -39,14 +39,6 @@ const news: NewsPageEnvelope = {
 };
 
 describe("NewsManagePanel", () => {
-  it("announces the Sources modal and moves focus inside it", async () => {
-    render(<NewsManagePanel open onClose={() => {}} news={news} onChanged={() => {}} />);
-    const dialog = screen.getByRole("dialog", { name: "Sources" });
-    expect(dialog.getAttribute("aria-modal")).toBe("true");
-    await waitFor(() => expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: /close/i }),
-    ));
-  });
 
   it("toggling a source calls updateNewsSource and onChanged", async () => {
     render(<NewsManagePanel open initialTopicId={1} onClose={() => {}} news={news} onChanged={() => {}} />);

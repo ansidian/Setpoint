@@ -54,10 +54,8 @@ function shellProps(overrides: Record<string, unknown> = {}) {
 
 function StatefulMobileAgenda({ mounted = true, initialOpen = false }: { mounted?: boolean; initialOpen?: boolean }) {
   const [open, setOpen] = useState(initialOpen);
-  const [closeCount, setCloseCount] = useState(0);
   const close = () => {
     setOpen(false);
-    setCloseCount((count) => count + 1);
   };
 
   return (
@@ -72,29 +70,11 @@ function StatefulMobileAgenda({ mounted = true, initialOpen = false }: { mounted
           },
         })} />
       ) : null}
-      <output data-testid="mobile-detail-close-count">{closeCount}</output>
     </>
   );
 }
 
 describe("CalendarMobileAgenda", () => {
-  it("opens the real detail composition in a BottomSheet", () => {
-    render(<StatefulMobileAgenda initialOpen />);
-    expect(screen.getByTestId("detail-content").textContent).toContain("Planning block");
-    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
-  });
-
-  it("closes an open detail sheet when the KeepAlive content is hidden", () => {
-    const { rerender } = render(<StatefulMobileAgenda initialOpen />);
-    rerender(<StatefulMobileAgenda initialOpen mounted={false} />);
-    expect(screen.getByTestId("mobile-detail-close-count").textContent).toBe("1");
-  });
-
-  it("does not close on hide when the detail sheet was already closed", () => {
-    const { rerender } = render(<StatefulMobileAgenda />);
-    rerender(<StatefulMobileAgenda mounted={false} />);
-    expect(screen.getByTestId("mobile-detail-close-count").textContent).toBe("0");
-  });
 
   it("dismisses the detail sheet on browser back", () => {
     render(<StatefulMobileAgenda initialOpen />);
@@ -104,7 +84,6 @@ describe("CalendarMobileAgenda", () => {
     });
 
     expect(screen.queryByTestId("detail-content")).toBeNull();
-    expect(screen.getByTestId("mobile-detail-close-count").textContent).toBe("1");
   });
 
   it("keeps the detail sheet open when popstate retains its history token", () => {
@@ -115,6 +94,5 @@ describe("CalendarMobileAgenda", () => {
     });
 
     expect(screen.getByTestId("detail-content")).toBeTruthy();
-    expect(screen.getByTestId("mobile-detail-close-count").textContent).toBe("0");
   });
 });

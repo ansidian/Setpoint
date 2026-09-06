@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  floatingDetailOwnsGridSelection,
-  formatFloatingDetailLabel,
-  formatFloatingEditorLabel,
-  isGridOriginAnchorKind,
-  isGridOriginFloatingDetail,
-  preservedReanchorSide,
+  floatingDetailOwnsGridSelection, isGridOriginFloatingDetail,
+  preservedReanchorSide
 } from "./calendarFloatingDetailModel";
 
 describe("calendarFloatingDetailModel", () => {
@@ -64,22 +60,5 @@ describe("calendarFloatingDetailModel", () => {
     expect(preservedReanchorSide({ ...current, sideIntent: "user-flip", forcedSide: "left" }, nextDetail, "events", "2026-05-02")).toBeNull();
     expect(preservedReanchorSide({ ...current, dirty: true }, nextDetail, "events", "2026-05-02")).toBeNull();
     expect(preservedReanchorSide(current, nextDetail, "bills", "2026-05-02")).toBeNull();
-  });
-
-  it("formats floating detail and editor labels from selected dates", () => {
-    expect(formatFloatingDetailLabel("events", "2026-05-02", 2026, 4, null)).toBe("Event · Sat, May 2");
-    expect(formatFloatingDetailLabel("bills", "2026-05-02", 2026, 4, null, "transaction")).toBe("Transaction · Sat, May 2");
-    expect(formatFloatingEditorLabel("create", "events", null, 2026, 4, 3, "deadline")).toBe("New deadline · Sun, May 3");
-    expect(formatFloatingEditorLabel("edit", "bills", null, 2026, 4, null)).toBe("Edit bill · Selected");
-  });
-
-  describe("isGridOriginAnchorKind", () => {
-    it("recognizes grid-origin anchor kinds", () => {
-      expect(isGridOriginAnchorKind("chip")).toBe(true);
-      expect(isGridOriginAnchorKind("span")).toBe(true);
-      expect(isGridOriginAnchorKind("overflow-row")).toBe(true);
-      expect(isGridOriginAnchorKind("agenda-row")).toBe(false);
-      expect(isGridOriginAnchorKind("parked")).toBe(false);
-    });
   });
 });

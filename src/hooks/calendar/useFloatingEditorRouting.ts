@@ -163,12 +163,12 @@ function resolveSeededEventCreateAnchor(
   });
 }
 
-export function resolveFloatingDeadlineItemId(activeView: FloatingEditorRoutingOptions["activeView"] | null | undefined, task: FloatingEditorItem | null | undefined) {
+function resolveFloatingDeadlineItemId(activeView: FloatingEditorRoutingOptions["activeView"] | null | undefined, task: FloatingEditorItem | null | undefined) {
   const itemId = activeView?.getItemId && task ? activeView.getItemId(task) : task?.id;
   return itemId != null ? String(itemId) : null;
 }
 
-export function resolveFloatingEventItemId(activeView: FloatingEditorRoutingOptions["activeView"] | null | undefined, savedEvent: FloatingEditorItem | null | undefined, currentDetail: FloatingEditorDetail | null = null) {
+function resolveFloatingEventItemId(activeView: FloatingEditorRoutingOptions["activeView"] | null | undefined, savedEvent: FloatingEditorItem | null | undefined, currentDetail: FloatingEditorDetail | null = null) {
   const itemId = activeView?.getItemId && savedEvent ? activeView.getItemId(savedEvent) : savedEvent?.id;
   if (itemId != null) return String(itemId);
   return currentDetail?.itemId != null ? String(currentDetail.itemId) : null;

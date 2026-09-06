@@ -201,7 +201,7 @@ describe("CalendarModal search workflow", () => {
     setMatchMedia(false);
     render(wrapWithDashboard(<ControlledViewSearchCalendar />));
 
-    fireEvent.click(screen.getByTestId("calendar-search-header-button"));
+    fireEvent.click(await screen.findByTestId("calendar-search-header-button"));
     await screen.findByRole("textbox", { name: "Calendar search" });
     fireEvent.keyDown(document, { key: "3" });
 

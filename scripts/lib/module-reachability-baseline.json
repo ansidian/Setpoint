@@ -49,7 +49,6 @@
     "src/components/calendar/CalendarModal.test-utils.tsx": "Shared calendar DashboardProvider, interaction, and animation-frame helpers with multiple active consumers",
     "src/components/inbox/test-utils/inboxFixtures.ts": "Shared inbox email and snapshot factories with multiple active model and component consumers",
     "src/components/inbox/test-utils/mobileInboxActions.test-utils.ts": "Shared mobile action-sheet and search drivers used by both rendered Inbox behavior suites",
-    "src/components/settings/shared/selectMock.test-utils.tsx": "Shared native select test double for settings cards that otherwise depend on Radix Select browser behavior",
     "server/transaction-imports/parsers/fixtures.ts": "Sanitized parser fixtures are test-only support data"
   }
 }

@@ -93,8 +93,6 @@ function buildFallbackDayState(rawItems: unknown): CalendarDayState {
   };
 }
 
-export { buildFallbackDayState };
-
 export default function useCalendarModalViewModel({
   open,
   view,

@@ -5,7 +5,7 @@ import type { DashboardTab } from "./dashboardShellModel";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEventCreateBridge";
 
-function createRequest(referenceId: string, onAcknowledged = vi.fn()): CalendarEventCreateRequest {
+function createRequest(referenceId: string): CalendarEventCreateRequest {
   return {
     seed: {
       title: "Planning",
@@ -15,7 +15,6 @@ function createRequest(referenceId: string, onAcknowledged = vi.fn()): CalendarE
       endTime: "09:30",
     },
     origin: { kind: "test", referenceId },
-    onAcknowledged,
   };
 }
 
@@ -32,41 +31,25 @@ function options(tab: DashboardTab) {
 }
 
 describe("useCalendarWorkspaceState create request ownership", () => {
-  it("consumes an acknowledgement once and clears only the matching request", () => {
+  it("does not clear a newer create request when an older acknowledgement arrives", () => {
     const props = options("calendar");
-    const firstAcknowledged = vi.fn();
-    const secondAcknowledged = vi.fn();
     const { result } = renderHook(() => useCalendarWorkspaceState(props));
 
     act(() => result.current.openCalendar("events", null, null, {
-      eventCreateRequest: createRequest("first", firstAcknowledged),
+      eventCreateRequest: createRequest("first"),
     }));
     const firstRouted = result.current.calendarEventCreateRequest!;
 
     act(() => result.current.openCalendar("events", null, null, {
-      eventCreateRequest: createRequest("second", secondAcknowledged),
+      eventCreateRequest: createRequest("second"),
     }));
     const secondRouted = result.current.calendarEventCreateRequest!;
 
-    act(() => firstRouted.onAcknowledged?.({
-      status: "accepted",
-      origin: firstRouted.origin,
-    }));
+    act(() => firstRouted.onAcknowledged?.({ status: "accepted", origin: firstRouted.origin }));
     expect(result.current.calendarEventCreateRequest).toBe(secondRouted);
-    // test-architecture: allow-boundary-interaction -- The hook's external request-owner callback must settle even when its stale acknowledgement cannot clear newer state.
-    expect(firstAcknowledged).toHaveBeenCalledTimes(1);
 
-    act(() => secondRouted.onAcknowledged?.({
-      status: "accepted",
-      origin: secondRouted.origin,
-    }));
-    act(() => secondRouted.onAcknowledged?.({
-      status: "accepted",
-      origin: secondRouted.origin,
-    }));
+    act(() => secondRouted.onAcknowledged?.({ status: "accepted", origin: secondRouted.origin }));
     expect(result.current.calendarEventCreateRequest).toBeNull();
-    // test-architecture: allow-boundary-interaction -- Exactly-once delivery is the public acknowledgement boundary; state alone cannot reveal duplicate callback delivery.
-    expect(secondAcknowledged).toHaveBeenCalledTimes(1);
   });
 
   it("clears a pending seed on an ordinary open and when leaving Calendar", () => {

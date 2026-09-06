@@ -50,6 +50,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
         eventCreateRequest={request}
       />,
     ));
+    await screen.findByTestId("calendar-modal-panel", {}, { timeout: 5000 });
     await flushAnimationFrame();
 
     await waitFor(() => {
@@ -226,7 +227,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
       />,
     ));
 
-    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    expect((await screen.findByTestId("calendar-month-title")).textContent).toMatch(/May\s+2026/i);
 
     rerender(wrapWithDashboard(
       <CalendarModal
@@ -266,7 +267,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
       />,
     ));
 
-    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(await screen.findByTestId("calendar-cell-20"));
     fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     fireEvent.input(screen.getByTestId("calendar-event-title"), {

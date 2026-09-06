@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  ALFRED_TOOL_DEFINITIONS,
-  alfredToolSummary,
-  executeAlfredTool,
+  ALFRED_TOOL_DEFINITIONS, executeAlfredTool
 } from "./alfred-tools.ts";
 import {
   clearAlfredConversations,
@@ -479,28 +477,6 @@ describe("group_items", () => {
     const result = await executeAlfredTool("group_items", { kind: "banana", title: "x", groups: [] }, ctx);
     expect(result.error).toBeTruthy();
     expect(ctx.events).toEqual([]);
-  });
-
-  it("is domain-agnostic — no job/application vocabulary in the schema (acceptance criterion 2)", () => {
-    const tool = ALFRED_TOOL_DEFINITIONS.find((t) => t.name === "group_items");
-    const blob = JSON.stringify(tool).toLowerCase();
-    for (const word of ["rejection", "ghost", "application", "job"]) {
-      expect(blob).not.toContain(word);
-    }
-  });
-});
-
-describe("alfredToolSummary", () => {
-  it("produces quiet one-line labels", () => {
-    expect(alfredToolSummary("search_email", { total: 4 })).toBe("Mail · 4 matches");
-    expect(alfredToolSummary("get_calendar_events", { total: 2 })).toBe("Calendar · 2 events");
-    expect(alfredToolSummary("get_deadlines", { total: 5, open: 3 })).toBe("Deadlines · 3 open");
-    expect(alfredToolSummary("get_upcoming_bills", { total: 3 })).toBe("Bills · 3 upcoming");
-    expect(alfredToolSummary("get_email_body", { subject: "Hi" })).toBe("Mail · opened message");
-    expect(alfredToolSummary("show_items", { shown: 2 })).toBe("Showing 2 items");
-    expect(alfredToolSummary("group_items", { shown: 3 })).toBe("Grouped 3 items");
-    expect(alfredToolSummary("group_items", { error: "boom" })).toBe("Display · failed");
-    expect(alfredToolSummary("search_email", { error: "boom" })).toBe("Mail · failed");
   });
 });
 

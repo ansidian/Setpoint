@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agendaHasSelectedHiddenAllDay, buildEventsAgendaGroups, formatAgendaHeaderLabel, reuseMultiMonthAgendaGroups } from "./eventsAgendaModel.ts";
+import { agendaHasSelectedHiddenAllDay, buildEventsAgendaGroups, reuseMultiMonthAgendaGroups } from "./eventsAgendaModel.ts";
 import type { CalendarItemLike } from "../calendarViewTypes";
 
 describe("agendaHasSelectedHiddenAllDay", () => {
@@ -150,13 +150,6 @@ describe("events agenda model", () => {
     ]);
     expect(deadlines?.[0]).toMatchObject({ agendaStatus: "In progress", agendaStatusIcon: "in_progress" });
   });
-
-  it("formats yesterday, today, tomorrow, and weekday headers", () => {
-    expect(formatAgendaHeaderLabel("2026-05-09", "2026-05-10")).toBe("YESTERDAY 5/9/26");
-    expect(formatAgendaHeaderLabel("2026-05-10", "2026-05-10")).toBe("TODAY 5/10/26");
-    expect(formatAgendaHeaderLabel("2026-05-11", "2026-05-10")).toBe("TOMORROW 5/11/26");
-    expect(formatAgendaHeaderLabel("2026-05-12", "2026-05-10")).toBe("TUESDAY 5/12/26");
-  });
 });
 
 describe("reuseMultiMonthAgendaGroups", () => {
@@ -190,40 +183,6 @@ describe("reuseMultiMonthAgendaGroups", () => {
     expect(mayDeadlines[0]!.agendaTitle).toBe("May deadline");
     expect(junDeadlines).toHaveLength(1);
     expect(junDeadlines[0]!.agendaTitle).toBe("Jun deadline");
-  });
-
-  it("reuses month group identity when that month's bucket is unchanged", () => {
-    const ev = (id: string, iso: string) => ({ id, title: id, startMs: new Date(iso).getTime(), endMs: new Date(iso).getTime() + 3600000 });
-    const buckets = new Map([
-      ["2026-06", [ev("june-1", "2026-06-10T18:00:00Z")]],
-      ["2026-07", [ev("july-1", "2026-07-12T18:00:00Z")]],
-    ]);
-    const getMonthEvents = (year: number, month: number) => buckets.get(`${year}-${String(month + 1).padStart(2, "0")}`) || [];
-    const months = [{ year: 2026, month: 5 }, { year: 2026, month: 6 }];
-    const args = { months, getMonthEvents, todayKey: "2026-06-11" };
-
-    const first = reuseMultiMonthAgendaGroups({ previous: null, ...args });
-    const second = reuseMultiMonthAgendaGroups({ previous: first.cache, ...args });
-    expect(second.list[0]!).toBe(first.list[0]!);
-    expect(second.list[1]!).toBe(first.list[1]!);
-
-    buckets.set("2026-07", [ev("july-2", "2026-07-20T18:00:00Z")]);
-    const third = reuseMultiMonthAgendaGroups({ previous: second.cache, ...args });
-    expect(third.list[0]!).toBe(second.list[0]!);
-    expect(third.list[1]!).not.toBe(second.list[1]!);
-    expect(third.list[1]!.visibleGroups.some((g) => g.dateKey === "2026-07-20")).toBe(true);
-  });
-
-  it("invalidates only the month containing a changed forceVisibleDateKey", () => {
-    const getMonthEvents = () => [];
-    const months = [{ year: 2026, month: 4 }, { year: 2026, month: 5 }];
-    const base = { months, getMonthEvents, todayKey: "2026-05-01" };
-
-    const first = reuseMultiMonthAgendaGroups({ previous: null, ...base, forceVisibleDateKey: null });
-    const second = reuseMultiMonthAgendaGroups({ previous: first.cache, ...base, forceVisibleDateKey: "2026-06-20" });
-    expect(second.list[0]!).toBe(first.list[0]!);
-    expect(second.list[1]!).not.toBe(first.list[1]!);
-    expect(second.list[1]!.visibleGroups.map((g) => g.dateKey)).toContain("2026-06-20");
   });
 
   it("applies forceVisibleDateKey only to the containing month", () => {

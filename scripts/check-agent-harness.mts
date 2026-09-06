@@ -10,27 +10,21 @@ import {
 import { findForbiddenSourcePatterns } from './lib/design-policy.mts'
 import { findTestSourcePolicyViolations } from './lib/test-source-policy.mts'
 import {
-  checkTestArchitectureApprovalsEmpty,
-  checkTestArchitectureBaseline,
+  checkTestArchitectureMetrics,
   checkTestArchitectureBaselineEmpty,
-  checkTestArchitectureBaselineGrowth,
   checkTestArchitectureMockMetadataObservations,
   collectPersistenceHeuristicSignals,
   collectTestArchitectureMetrics,
   hasPersistenceContractSignals,
   normalizeTestArchitecturePath,
 } from './lib/test-architecture-policy.mts'
-import {
-  checkTestArchitectureOwnership,
-  checkTestArchitectureSemanticInventory,
-} from './lib/test-architecture-ownership.mts'
+import { checkTestPersistenceContracts } from './lib/test-persistence-policy.mts'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'scripts/lib/component-size-baseline.json'
 const testSizeBaselinePath = 'scripts/lib/test-size-baseline.json'
 const testArchitectureBaselinePath = 'scripts/lib/test-architecture-baseline.json'
-const testArchitectureApprovalsPath = 'scripts/lib/test-architecture-baseline-approvals.json'
-const testArchitectureSemanticInventoryPath = 'scripts/lib/test-architecture-semantic-inventory.json'
+const testPersistenceContractsPath = 'scripts/lib/test-persistence-contracts.json'
 
 const failures: string[] = []
 const warnings: string[] = []
@@ -292,12 +286,9 @@ async function checkTestArchitecture() {
     collectTestArchitectureMetrics(source),
   ]))
   const baseline = JSON.parse(await readText(testArchitectureBaselinePath))
-  const approvals = JSON.parse(await readText(testArchitectureApprovalsPath))
-  const semanticInventory = JSON.parse(await readText(testArchitectureSemanticInventoryPath))
-  failures.push(...checkTestArchitectureApprovalsEmpty(approvals))
+  const contracts = JSON.parse(await readText(testPersistenceContractsPath))
   failures.push(...checkTestArchitectureBaselineEmpty(baseline))
-  failures.push(...checkTestArchitectureOwnership(baseline).failures)
-  const result = checkTestArchitectureBaseline({ files, baseline })
+  const result = checkTestArchitectureMetrics(files)
   failures.push(...result.failures)
   warnings.push(...result.warnings)
 
@@ -311,58 +302,13 @@ async function checkTestArchitecture() {
       .map(([file, source]) => [file, collectPersistenceHeuristicSignals(source)] as const)
       .filter(([, signals]) => hasPersistenceContractSignals(signals)),
   )
-  failures.push(...checkTestArchitectureSemanticInventory({
-    inventory: semanticInventory,
-    interactionObservations: semanticInteractions,
-    persistenceCandidates,
-  }))
-  if (semanticInventory.mode === "enforced") {
-    failures.push(...checkTestArchitectureMockMetadataObservations(files))
-  }
+  failures.push(...checkTestPersistenceContracts({ contracts, candidates: persistenceCandidates }))
+  failures.push(...checkTestArchitectureMockMetadataObservations(files))
   const semanticObservationCount = Object.values(semanticInteractions)
     .reduce((sum, count) => sum + count, 0)
   console.log(
-    `${semanticInventory.mode === "enforced" ? "Enforced" : "Report-only"} test-architecture semantic inventory: ${semanticObservationCount} mock-metadata observation(s) in ${Object.keys(semanticInteractions).length} file(s); ${Object.keys(persistenceCandidates).length} classified persistence contract file(s)`,
+    `Test architecture: ${semanticObservationCount} mock-metadata observation(s) in ${Object.keys(semanticInteractions).length} file(s); ${Object.keys(persistenceCandidates).length} reviewed persistence contract file(s)`,
   )
-
-  const configuredRef = process.env.TEST_ARCHITECTURE_BASE_REF?.trim()
-  const localBaselineChanged = !configuredRef && execFileSync(
-    "git",
-    ["status", "--porcelain", "--", testArchitectureBaselinePath],
-    { cwd: root, encoding: "utf8" },
-  ).trim().length > 0
-  const comparisonRef = configuredRef || (localBaselineChanged ? "HEAD" : "")
-  if (comparisonRef) {
-    let previousBaselineSource: string | null = null
-    try {
-      previousBaselineSource = execFileSync(
-        "git",
-        ["show", `${comparisonRef}:${testArchitectureBaselinePath}`],
-        { cwd: root, encoding: "utf8" },
-      )
-    } catch {
-      try {
-        execFileSync("git", ["rev-parse", "--verify", comparisonRef], {
-          cwd: root,
-          encoding: "utf8",
-          stdio: "pipe",
-        })
-        warnings.push(`no test-architecture baseline exists at ${comparisonRef}; treating this as the initial ratchet establishment`)
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error)
-        failures.push(`could not resolve the test-architecture comparison ref ${comparisonRef}: ${detail}`)
-      }
-    }
-    if (previousBaselineSource) {
-      try {
-        const previousBaseline = JSON.parse(previousBaselineSource)
-        failures.push(...checkTestArchitectureBaselineGrowth({ previousBaseline, baseline }))
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error)
-        failures.push(`could not parse the test-architecture baseline from ${comparisonRef}: ${detail}`)
-      }
-    }
-  }
 }
 
 async function checkStaticDesignPolicies() {

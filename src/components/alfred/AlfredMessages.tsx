@@ -120,13 +120,12 @@ export const SayBlock = memo(function SayBlock({ text: body, done, preamble }: {
   if (!done || preamble) {
     return (
       <div
-        data-alfred-message-kind={preamble ? "preamble" : "streaming-answer"}
         style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.6)" }}
       >{body}</div>
     );
   }
   return (
-    <div data-alfred-message-kind="answer" style={{
+    <div style={{
       fontFamily: "var(--font-sans)",
       fontSize: 12.5,
       fontWeight: 400,
@@ -155,7 +154,7 @@ export const ToolSteps = memo(function ToolSteps({ tools, done, accent }: { tool
   const n = tools.length;
   const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
-    <div data-alfred-message-kind="tools" style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", flexDirection: "column" }}>
       <button
         type="button"
         className={done ? "transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none" : undefined}

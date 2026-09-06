@@ -8,10 +8,7 @@ import {
   isBillsMirrorMaintenanceDue,
   mirrorStateFromRow,
   normalizeMirrorOccurrence,
-  occurrenceFromRow,
-  occurrenceMirrorArgs,
-  scheduleMirrorArgs,
-  todayYmd,
+  occurrenceFromRow, todayYmd
 } from "./billsMirrorModel.ts";
 import type { ActualBillOccurrence } from "../../shared/types/actual.ts";
 
@@ -135,32 +132,6 @@ describe("normalizeMirrorOccurrence", () => {
   it("synthesizes scheduleId:date from id/schedule_id and next_date/occurrence_date", () => {
     expect(normalizeMirrorOccurrence({ scheduleId: "s1", next_date: "2026-05-20" }).id).toBe("s1:2026-05-20");
     expect(normalizeMirrorOccurrence({ schedule_id: "s2", occurrence_date: "2026-06-01" }).id).toBe("s2:2026-06-01");
-  });
-});
-
-describe("mirror arg builders", () => {
-  const occurrence: ActualBillOccurrence = {
-    id: "s1:2026-05-20",
-    scheduleId: "s1",
-    name: "Power",
-    payee: "Power Co",
-    amount: 1234,
-    type: "bill",
-    next_date: "2026-05-20",
-    paid: true,
-    openActionDisabled: false,
-  };
-
-  it("scheduleMirrorArgs emits the schedule-mirror column order with paid as 1/0", () => {
-    expect(scheduleMirrorArgs("u1", occurrence, "ts")).toEqual([
-      "u1", "s1", "Power", "Power Co", 1234, "bill", "2026-05-20", 1, JSON.stringify(occurrence), "ts",
-    ]);
-  });
-
-  it("occurrenceMirrorArgs emits the occurrence-mirror column order with paid/openActionDisabled as 1/0", () => {
-    expect(occurrenceMirrorArgs("u1", occurrence, "ts")).toEqual([
-      "u1", "s1:2026-05-20", "s1", "2026-05-20", "Power", "Power Co", 1234, "bill", 1, 0, JSON.stringify(occurrence), "ts",
-    ]);
   });
 });
 

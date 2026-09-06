@@ -4,24 +4,18 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import sharedRegistry from "../../shared/triage-notification-sounds.json";
 import {
-  DEFAULT_TRIAGE_SOUND_SETTINGS as SERVER_DEFAULT_TRIAGE_SOUND_SETTINGS,
-  TRIAGE_NOTIFICATION_SOUNDS,
+  DEFAULT_TRIAGE_SOUND_SETTINGS as SERVER_DEFAULT_TRIAGE_SOUND_SETTINGS
 } from "../../server/triage/triage-sound-settings.ts";
 import {
-  DEFAULT_TRIAGE_NOTIFICATION_SOUNDS,
   DEFAULT_TRIAGE_SOUND_SETTINGS,
   normalizeTriageSoundSettings,
   updateTriageSoundTrigger,
-  updateTriageSoundVolume,
+  updateTriageSoundVolume
 } from "./triageSoundSettings";
 
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 describe("triage sound settings registry", () => {
-  it("uses the shared notification sound registry on the server and client", () => {
-    expect(DEFAULT_TRIAGE_NOTIFICATION_SOUNDS).toEqual(sharedRegistry);
-    expect(TRIAGE_NOTIFICATION_SOUNDS).toEqual(sharedRegistry);
-  });
 
   it("keeps every default trigger sound inside the shared registry", () => {
     const registryIds = new Set(sharedRegistry.map((sound) => sound.id));

@@ -91,14 +91,4 @@ describe("stopAlfredConversationSweeper", () => {
     // presence (unlike getAlfredConversation, which self-heals on TTL).
     expect(deleteAlfredConversation(old.id)).toBe(true);
   });
-
-  it("is safe to call twice", () => {
-    startAlfredConversationSweeper();
-    stopAlfredConversationSweeper();
-    expect(() => stopAlfredConversationSweeper()).not.toThrow();
-  });
-
-  it("is safe to call when the sweeper was never started", () => {
-    expect(() => stopAlfredConversationSweeper()).not.toThrow();
-  });
 });

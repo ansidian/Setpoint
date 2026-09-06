@@ -42,7 +42,7 @@ describe("CalendarModal floating detail behavior", () => {
       />,
     ));
 
-    const dayCell = screen.getByTestId("calendar-cell-20");
+    const dayCell = await screen.findByTestId("calendar-cell-20");
     const chips = within(dayCell).getAllByTestId("calendar-cell-item-chip");
 
     fireEvent.click(chips[0]!);
@@ -154,7 +154,7 @@ describe("CalendarModal floating detail behavior", () => {
       />,
     ));
 
-    const modalPanel = screen.getByTestId("calendar-modal-panel");
+    const modalPanel = await screen.findByTestId("calendar-modal-panel");
     modalPanel.getBoundingClientRect = () => ({ top: 0, bottom: 900, left: 0, right: 1200, width: 1200, height: 900 } as DOMRect);
     const overflowTrigger = await screen.findByTestId("calendar-cell-overflow-trigger-20");
     overflowTrigger.getBoundingClientRect = () => ({ top: 120, bottom: 148, left: 240, right: 380, width: 140, height: 28 } as DOMRect);

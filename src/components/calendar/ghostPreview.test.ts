@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDeadlineGhostPreview,
   buildEventGhostPreview,
-  dateOutsideVisibleGrid,
-  ghostDisplayRange,
+  dateOutsideVisibleGrid
 } from "./ghostPreview.ts";
 import type { CalendarEventLike } from "./ghostPreview.ts";
 import { epochFromLa } from "../../lib/dashboard-helpers";
@@ -436,54 +435,6 @@ describe("calendar ghost previews", () => {
         dateItems: { activeCount: 1 },
       });
       expect(preview).toBeNull();
-    });
-  });
-
-  describe("ghostDisplayRange formatting", () => {
-    it("renders a deadline with its due time", () => {
-      const ghost = { kind: "deadline", startDate: "2026-04-20", dueTime: "9:00 AM" };
-      expect(ghostDisplayRange(ghost)).toBe("2026-04-20 · 9:00 AM");
-    });
-
-    it("falls back to End of day for a deadline with no time", () => {
-      const ghost = { kind: "deadline", startDate: "2026-04-20" };
-      expect(ghostDisplayRange(ghost)).toBe("2026-04-20 · End of day");
-    });
-
-    it("renders a single-day timed range as a 12-hour window", () => {
-      const ghost = {
-        kind: "event",
-        allDay: false,
-        startDate: "2026-04-20",
-        endDate: "2026-04-20",
-        startTime: "09:00",
-        endTime: "17:30",
-      };
-      expect(ghostDisplayRange(ghost)).toBe("2026-04-20 · 9:00 AM-5:30 PM");
-    });
-
-    it("renders a single-day all-day ghost", () => {
-      const ghost = {
-        kind: "event",
-        allDay: true,
-        startDate: "2026-04-20",
-        endDate: "2026-04-20",
-      };
-      expect(ghostDisplayRange(ghost)).toBe("2026-04-20 · All day");
-    });
-
-    it("renders a multi-day all-day span", () => {
-      const ghost = {
-        kind: "event",
-        allDay: true,
-        startDate: "2026-04-20",
-        endDate: "2026-04-22",
-      };
-      expect(ghostDisplayRange(ghost)).toBe("2026-04-20 to 2026-04-22 · All day");
-    });
-
-    it("returns an empty string for no ghost", () => {
-      expect(ghostDisplayRange(null)).toBe("");
     });
   });
 

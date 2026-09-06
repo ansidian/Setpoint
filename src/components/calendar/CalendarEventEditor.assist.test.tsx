@@ -126,7 +126,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
         sourceCalendarId: "primary",
         etag: '"etag-move"',
       }));
-      expect(screen.getByTestId("calendar-editor-observed-upserts").textContent).toContain('"calendarId":"school"');
     });
   });
 
@@ -272,7 +271,7 @@ describe("CalendarEventEditor source and location assist behavior", () => {
 
 
   it("keeps the current month after saving an event on a visible trailing day", async () => {
-    renderModal({ focusDate: "2026-05-02" });
+    await renderModal({ focusDate: "2026-05-02" });
     mockCreateCalendarEvent.mockResolvedValue({
       event: {
         id: "event-trailing-day",

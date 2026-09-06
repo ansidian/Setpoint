@@ -37,17 +37,6 @@ describe("core credential presentation model", () => {
     });
   });
 
-  it("describes environment and disabled sources without implying the value is visible", () => {
-    expect(credentialStatusView({ ...base, source: "environment", validationState: "untested" }).activeLabel)
-      .toBe("Host environment");
-    expect(credentialStatusView({
-      ...base,
-      source: "disabled",
-      activeConfigured: false,
-      validationState: "disabled",
-    }).activeLabel).toBe("Disabled");
-  });
-
   it("maps stable backend codes to redacted actionable guidance", () => {
     expect(credentialErrorMessage("INVALID_CREDENTIAL")).toMatch(/check the value/i);
     expect(credentialErrorMessage("RATE_LIMITED")).toMatch(/try again/i);

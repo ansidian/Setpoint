@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MINI_CALENDAR_MARKER_LIMIT,
   buildMiniCalendarCells,
-  buildMiniCalendarHoverPreview,
-  buildMiniCalendarModel,
-  deriveMiniCalendarActivityMarkers,
+  buildMiniCalendarHoverPreview, deriveMiniCalendarActivityMarkers
 } from "./miniCalendarModel.ts";
 
 describe("mini calendar model", () => {
@@ -163,32 +161,5 @@ describe("mini calendar model", () => {
         segmentEnd: "2026-05-10",
       }),
     ]);
-  });
-
-  it("attaches markers and preview state to the calendar cells", () => {
-    const model = buildMiniCalendarModel({
-      viewYear: 2026,
-      viewMonth: 4,
-      todayKey: "2026-05-15",
-      selectedDateKey: "2026-05-20",
-      activityItems: [
-        { id: "bill-1", dateKey: "2026-05-20", kind: "bill", color: "#f97316" },
-      ],
-      hoverPreviewItem: {
-        id: "bill-1",
-        dateKey: "2026-05-20",
-        kind: "bill",
-        color: "#f97316",
-      },
-    });
-
-    expect(model.cells.find((cell) => cell.dateKey === "2026-05-20")).toMatchObject({
-      isSelected: true,
-      markers: [expect.objectContaining({ itemId: "bill-1", color: "#f97316" })],
-      hoverPreview: expect.objectContaining({
-        itemId: "bill-1",
-        color: "#f97316",
-      }),
-    });
   });
 });

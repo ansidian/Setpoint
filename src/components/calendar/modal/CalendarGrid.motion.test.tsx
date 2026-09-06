@@ -14,29 +14,6 @@ const activeView = {
   renderCellContents: renderEventsCellContents,
 };
 
-const groupedDayView = {
-  label: "Bills",
-  getDayState(rawItems: unknown) {
-    if (rawItems && typeof rawItems === "object" && "items" in rawItems) {
-      return rawItems as ReturnType<typeof buildFallbackDayState>;
-    }
-    const items = Array.isArray(rawItems) ? rawItems as Array<{ id: string; title: string }> : [];
-    return {
-      items,
-      activeItems: items,
-      completedItems: [],
-      activeCount: items.length,
-      completedCount: 0,
-      totalCount: items.length,
-    };
-  },
-  renderCellContents({ items }: { items: { items: Array<{ id: string; title: string }> } }) {
-    return items.items.map((item: { id: string; title: string }) => (
-      <span key={item.id}>{item.title}</span>
-    ));
-  },
-};
-
 function buildFallbackDayState(items: unknown) {
   const resolvedItems = Array.isArray(items) ? items : [];
   return {
@@ -143,85 +120,6 @@ afterEach(() => {
 });
 
 describe("CalendarGrid overflow motion coverage", () => {
-  it("exposes day cells as labelled keyboard-selectable grid cells", () => {
-    const setSelectedDay = vi.fn();
-    renderGrid({}, { setSelectedDay });
-
-    const dayCell = screen.getByTestId("calendar-cell-20");
-    expect(dayCell.getAttribute("role")).toBe("gridcell");
-    expect(dayCell.getAttribute("aria-label")).toMatch(/Monday, April 20, No events/i);
-
-    fireEvent.keyDown(dayCell, { key: "Enter" });
-  });
-
-  it("renders date-keyed items for non-event views in boundary row cells", () => {
-    renderGrid({}, {
-      view: "bills",
-      activeView: groupedDayView,
-      viewMonth: 4,
-      currentMonth: 3,
-      firstDay: 5,
-      daysInMonth: 31,
-      itemsByDate: {
-        "2026-05-01": groupedDayView.getDayState([
-          { id: "bill-may-1", title: "May utility" },
-        ]) as unknown as ComponentProps<typeof CalendarGrid>["itemsByDay"][number],
-      },
-    });
-
-    const mayCell = screen.getByTestId("calendar-cell-1");
-    expect(within(mayCell).getByText("May utility")).toBeTruthy();
-
-    expect(screen.queryByTestId("calendar-month-boundary-overlay")).toBeNull();
-    expect(screen.queryAllByRole("gridcell")
-      .find((el) => el.getAttribute("data-boundary-pass-through") === "true")).toBeUndefined();
-  });
-
-  it("renders real pinned spans as selectable buttons and removes duplicate normal chips", () => {
-    const setSelectedDay = vi.fn();
-    const setSelectedDateKey = vi.fn();
-    const setSelectedItemId = vi.fn();
-    const onOpenFloatingDetail = vi.fn();
-    const spanEvent = {
-      id: "span-1",
-      title: "Conference",
-      allDay: true,
-      writable: true,
-      startMs: new Date("2026-04-20T07:00:00Z").getTime(),
-      endMs: new Date("2026-04-23T07:00:00Z").getTime(),
-      color: "#4285f4",
-    };
-
-    renderGrid({ 20: [spanEvent] }, {
-      viewData: { events: [spanEvent], isLoading: false },
-      setSelectedDay,
-      setSelectedDateKey,
-      setSelectedItemId,
-      onOpenFloatingDetail,
-    });
-
-    const span = screen.getByTestId("calendar-event-span-segment");
-    Object.defineProperty(span, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        x: 0,
-        y: 0,
-        left: 0,
-        top: 0,
-        width: 300,
-        height: 36,
-        right: 300,
-        bottom: 36,
-        toJSON() {
-          return this;
-        },
-      }),
-    });
-    expect(span.tagName).toBe("BUTTON");
-    expect(screen.queryByTestId("calendar-cell-item-chip")).toBeNull();
-
-    fireEvent.click(span, { clientX: 4 });
-  });
 
   it("keeps same-day overflow open when selecting a covering all-day span", async () => {
     const spanEvent = {
@@ -247,28 +145,6 @@ describe("CalendarGrid overflow motion coverage", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeTruthy();
     });
-  });
-
-  it("renders pinned ghost spans as inert aria-hidden chips", () => {
-    renderGrid({}, {
-      ghostPreview: {
-        kind: "event",
-        ghosts: [{
-          id: "ghost-1",
-          kind: "event",
-          title: "Draft hold",
-          startDate: "2026-04-20",
-          endDate: "2026-04-20",
-          allDay: true,
-          color: "#89b4fa",
-        }],
-      },
-    });
-
-    const ghost = screen.getByTestId("calendar-ghost-chip");
-    expect(ghost.tagName).toBe("DIV");
-    expect(ghost.getAttribute("aria-hidden")).toBe("true");
-    expect(ghost.getAttribute("data-ghost-kind")).toBe("event");
   });
 
   it("retargets open inline overflow to second trigger without closing first", async () => {

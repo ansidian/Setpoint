@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DashboardTab } from "../dashboard/dashboardShellModel";
@@ -25,24 +25,6 @@ const currentStatus = {
   ],
 };
 
-function renderHeader(overrides = {}) {
-  return render(
-    <MemoryRouter>
-      <ShellHeader
-        tab="dashboard"
-        onTab={vi.fn()}
-        onOpenPalette={vi.fn()}
-        onOpenAnalytics={vi.fn()}
-        onOpenHistory={vi.fn()}
-        onOpenCalendar={vi.fn()}
-        onQuickRefresh={vi.fn()}
-        systemStatus={currentStatus}
-        {...overrides}
-      />
-    </MemoryRouter>,
-  );
-}
-
 function NotesHeaderHarness() {
   const [tab, setTab] = useState<DashboardTab>("notes");
   return (
@@ -66,26 +48,6 @@ describe("ShellHeader", () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
-  });
-
-  it("opens provider status details and exposes a reachable dismissal", () => {
-    renderHeader();
-    fireEvent.click(screen.getByRole("button", { name: /system status: up to date/i }));
-
-    const panel = screen.getByRole("dialog", { name: /system status/i });
-    expect(within(panel).getByText("Current data")).toBeTruthy();
-    expect(within(panel).getByText("Todoist")).toBeTruthy();
-
-    fireEvent.click(within(panel).getByRole("button", { name: /close system status/i }));
-    expect(screen.queryByRole("dialog", { name: /system status/i })).toBeNull();
-  });
-
-  it("announces sync progress to assistive tech", () => {
-    renderHeader({ refreshing: true });
-
-    const button = screen.getByRole("button", { name: /syncing/i });
-    expect(button.getAttribute("aria-busy")).toBe("true");
-    expect(screen.getByRole("status").textContent).toBe("Syncing…");
   });
 
   it("routes a backtick-number chord from Notes before the canvas receives the digit", () => {

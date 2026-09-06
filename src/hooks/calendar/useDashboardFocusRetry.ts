@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
-export const DASHBOARD_DETAIL_FOCUS_RETRY_MS = 250;
-export const DASHBOARD_DETAIL_FOCUS_MAX_ATTEMPTS = 120;
+const DASHBOARD_DETAIL_FOCUS_RETRY_MS = 250;
+const DASHBOARD_DETAIL_FOCUS_MAX_ATTEMPTS = 120;
 
 export type DashboardFocusRetryStatus = "done" | "abort" | "retry";
 

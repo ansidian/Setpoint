@@ -105,7 +105,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
         />,
       ));
 
-      fireEvent.click(within(screen.getByTestId("calendar-cell-14")).getByTestId("calendar-cell-item-chip"));
+      fireEvent.click(within(await screen.findByTestId("calendar-cell-14")).getByTestId("calendar-cell-item-chip"));
       await flushAnimationFrame();
 
       rerender(wrapWithDashboard(
@@ -369,7 +369,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       />,
     ));
 
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    fireEvent.click(within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
     await waitFor(() => {

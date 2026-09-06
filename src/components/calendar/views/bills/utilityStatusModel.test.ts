@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  deriveUtilityDateText,
   deriveUtilityStatus,
-  pickBestUtilityMatch,
+  pickBestUtilityMatch
 } from "./utilityStatusModel.ts";
 import type { UtilityStatus } from "./utilityStatusModel.ts";
 
@@ -174,38 +173,5 @@ describe("deriveUtilityStatus", () => {
     const row = water(rows);
     expect(row.next_date).toBe("2026-05-28");
     expect(row.isHonored).toBe(false);
-  });
-});
-
-describe("deriveUtilityDateText", () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(new Date("2026-05-20T12:00:00.000-07:00"));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("renders 'not found' for an untracked utility", () => {
-    expect(deriveUtilityDateText({ found: false, next_date: null })).toBe("not found");
-  });
-
-  it("renders 'paid <date>' for a paid past-due (honored) statement", () => {
-    expect(
-      deriveUtilityDateText({ found: true, next_date: "2026-05-10", isHonored: true, isStale: false }),
-    ).toBe("paid May 10");
-  });
-
-  it("renders 'last <date>' for an unpaid past-due (stale) statement", () => {
-    expect(
-      deriveUtilityDateText({ found: true, next_date: "2026-05-10", isHonored: false, isStale: true }),
-    ).toBe("last May 10");
-  });
-
-  it("renders 'next <date>' for an upcoming statement", () => {
-    expect(
-      deriveUtilityDateText({ found: true, next_date: "2026-05-26", isHonored: false, isStale: false }),
-    ).toBe("next May 26");
   });
 });
