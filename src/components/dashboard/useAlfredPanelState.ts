@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { AlfredEmailContextSource } from "../../../shared/types/alfred";
 
 // Owns the Alfred panel's mount/open/handoff state. `alfredMounted` lazy-mounts
 // the panel on first use and keeps it mounted thereafter; `askAlfred` opens it
 // with a query handoff. Callbacks are stable so the memoized AlfredPanel's
 // Esc-listener effect stops re-binding on every dashboard SSE/refresh re-render.
-export default function useAlfredPanelState() {
+export default function useAlfredPanelState(enabled = true) {
+  const [alfredDockTarget, setAlfredDockTarget] = useState<HTMLDivElement | null>(null);
   const [alfredOpen, setAlfredOpen] = useState(false);
   const [alfredMounted, setAlfredMounted] = useState(false);
   const [alfredNewChatTick, setAlfredNewChatTick] = useState(0);
@@ -39,7 +40,13 @@ export default function useAlfredPanelState() {
     setAlfredEmailHandoff({ id: alfredHandoffSeq.current, source });
   }, []);
 
+  const alfredWorkspace = useMemo(() => ({
+    open: alfredOpen && enabled, close: closeAlfred, setDockTarget: setAlfredDockTarget,
+  }), [alfredOpen, closeAlfred, enabled]);
+
   return {
+    alfredDockTarget,
+    alfredWorkspace,
     alfredOpen,
     alfredMounted,
     alfredNewChatTick,

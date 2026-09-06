@@ -1,0 +1,116 @@
+.alfred-evidence-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--sp-surface) 30%, transparent);
+  border: 1px solid transparent;
+}
+
+.alfred-evidence-row--interactive,
+.alfred-sent-attachment {
+  background: color-mix(in srgb, var(--sp-mauve) 6%, var(--sp-panel));
+  border: 1px solid color-mix(in srgb, var(--sp-mauve) 24%, transparent);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.alfred-evidence-row--interactive:hover,
+.alfred-sent-attachment:hover {
+  background: color-mix(in srgb, var(--sp-mauve) 11%, var(--sp-panel));
+  border-color: color-mix(in srgb, var(--sp-mauve) 42%, transparent);
+  transform: translateY(-1px);
+}
+
+.alfred-evidence-row--interactive:active,
+.alfred-sent-attachment:active {
+  transform: translateY(0);
+  background: color-mix(in srgb, var(--sp-mauve) 15%, var(--sp-panel));
+}
+
+.alfred-evidence-action {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  color: var(--sp-mauve);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.alfred-attachment-preview {
+  background: transparent;
+  transition: background-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.alfred-attachment-preview:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--sp-mauve) 7%, transparent);
+}
+
+.alfred-attachment-preview:active {
+  transform: translateY(0);
+  background: color-mix(in srgb, var(--sp-mauve) 13%, transparent);
+}
+
+.alfred-attachment-remove,
+.alfred-attachment-retry {
+  border: 1px solid color-mix(in srgb, var(--sp-text) 20%, transparent);
+  background: color-mix(in srgb, var(--sp-text) 5%, transparent);
+  color: var(--sp-text);
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, transform 150ms ease-out;
+}
+
+.alfred-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.alfred-attachment-remove:hover,
+.alfred-attachment-retry:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--sp-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--sp-text) 35%, transparent);
+}
+
+.alfred-attachment-remove:active,
+.alfred-attachment-retry:active {
+  transform: translateY(0);
+  background: color-mix(in srgb, var(--sp-text) 15%, transparent);
+}
+
+.alfred-evidence-row--interactive:focus-visible,
+.alfred-sent-attachment:focus-visible,
+.alfred-attachment-preview:focus-visible,
+.alfred-attachment-remove:focus-visible,
+.alfred-attachment-retry:focus-visible {
+  outline: 2px solid var(--sp-mauve);
+  outline-offset: -2px;
+}
+
+.alfred-sent-attachment[data-failed] {
+  border-color: color-mix(in srgb, var(--sp-rose) 35%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alfred-evidence-row--interactive,
+  .alfred-sent-attachment,
+  .alfred-attachment-preview,
+  .alfred-attachment-remove,
+  .alfred-attachment-retry,
+  .alfred-evidence-row--interactive:is(:hover, :active),
+  .alfred-sent-attachment:is(:hover, :active),
+  .alfred-attachment-preview:is(:hover, :active),
+  .alfred-attachment-remove:is(:hover, :active),
+  .alfred-attachment-retry:is(:hover, :active) {
+    transition: none;
+    transform: none;
+  }
+}

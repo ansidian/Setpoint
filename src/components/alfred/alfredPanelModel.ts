@@ -93,25 +93,17 @@ export function alfredToolRunningLabel(name: string): string {
 
 // Coverage-correct suggestions (CONTEXT.md: mail, calendar, deadlines, bills).
 export const ALFRED_SUGGESTIONS: AlfredSuggestion[] = [
-  { icon: "sun", label: "What's left today?" },
-  { icon: "bills", label: "What bills are due in the next two weeks?" },
-  { icon: "inbox", label: "Anything in mail that needs me?" },
-  { icon: "deadlines", label: "What deadlines are coming up this month?" },
-  { icon: "calendar", label: "What's on my calendar tomorrow?" },
-  { icon: "search", label: "Find the car insurance renewal email" },
-  { icon: "bills", label: "How much did I spend on groceries this month?" },
+  { icon: "search", label: "Find recent insurance payments and the related renewal email" },
+  { icon: "bills", label: "Compare my spending this month with the same period last month" },
+  { icon: "calendar", label: "What is coming up on my calendar, and are there related emails I should read?" },
 ];
 
-// Common next moves for a deliberately attached email. Alfred may prepare an
-// event proposal for the existing Calendar editor, but still cannot save it.
+// Suggestions are editable drafts, including explicit Calendar review requests.
 export const ALFRED_EMAIL_SUGGESTIONS: AlfredSuggestion[] = [
   { icon: "summary", label: "Summarize this email" },
-  { icon: "inbox", label: "What needs my attention in this email?" },
-  { icon: "reply", label: "Draft a reply to this email" },
-  { icon: "actions", label: "Pull out action items and deadlines" },
-  { icon: "calendar", label: "Schedule this in my calendar" },
-  { icon: "calendar", label: "Check this email against my calendar" },
   { icon: "search", label: "Find related messages in my inbox" },
+  { icon: "calendar", label: "Check this email against my calendar" },
+  { icon: "bills", label: "Find transactions that might relate to this email" },
 ];
 
 function closeOpenSay(messages: AlfredPanelMessage[]): AlfredPanelMessage[] {

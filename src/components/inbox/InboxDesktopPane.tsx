@@ -1,3 +1,5 @@
+import { ArrowLeft } from "lucide-react";
+import { useAlfredWorkspace } from "../dashboard/AlfredWorkspaceContext";
 import { memo, useState } from "react";
 import "./InboxDesktop.css";
 import InboxDesktopHeader from "./InboxDesktopHeader";
@@ -62,6 +64,8 @@ function InboxDesktopPane({
   onUndo,
   announcement,
 }: InboxPaneProps) {
+  const alfredWorkspace = useAlfredWorkspace();
+  const discussing = !!alfredWorkspace?.open;
   const [workspaceDirty, setWorkspaceDirty] = useState(false);
   const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
   const guardedOpen: typeof onOpen = (...args) => {
@@ -115,6 +119,8 @@ function InboxDesktopPane({
     <div
       data-testid="inbox-desktop-view"
       className="inbox-a-desktop"
+      data-alfred-open={discussing}
+      data-reading={!!selectedEmail && layout !== "list-only"}
       style={{
         position: "relative",
         display: "flex",
@@ -147,6 +153,13 @@ function InboxDesktopPane({
         />
       )}
 
+      {discussing && selectedEmail && layout !== "list-only" && (
+        <div className="inbox-a-discussion-toolbar">
+          <button type="button" className="inbox-a-control" onClick={alfredWorkspace?.close}>
+            <ArrowLeft size={14} aria-hidden="true" /> Back to mail list
+          </button>
+        </div>
+      )}
       <div className="inbox-a-workspace">
         <Sidebar
           accounts={emailAccounts}
@@ -218,6 +231,7 @@ function InboxDesktopPane({
             />
           )}
         </div>
+        <div ref={alfredWorkspace?.setDockTarget} className="inbox-a-alfred-dock" aria-hidden="true" />
       </div>
       <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
       <span role="status" aria-live="polite" className="sr-only">{announcement}</span>

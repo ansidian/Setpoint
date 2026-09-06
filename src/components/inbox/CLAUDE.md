@@ -1,6 +1,6 @@
 # Inbox Map
 
-The email triage and reading surface, desktop and mobile: active snapshots (triage windows), an initial-load live fallback, indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. On desktop, AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface). Mobile exposes no Alfred entry point.
+The email triage and reading surface, desktop and mobile: active snapshots (triage windows), an initial-load live fallback, indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.tsx` (orchestrator) and `useInboxController.ts` (central state machine); `reader/Reader.tsx` routes the detail pane. On desktop, AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — in-layout Alfred conversation alongside the reader or list). Mobile exposes no Alfred entry point.
 
 ## Sub-maps
 
@@ -12,7 +12,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 ### Views + orchestration
 - `InboxView.tsx` — composes active/historical snapshot modes and the initial-load live fallback, session state, undo coordination
-- `InboxDesktopPane.tsx` — desktop layout: digest, sidebar, list, reader, undo toast
+- `InboxDesktopPane.tsx` — desktop layout: digest, sidebar, list, reader, undo toast; reserves Alfred’s dock and preserves hidden navigation/list state during narrow-desktop discussions
 - `InboxDesktopHeader.tsx` — list-aligned search, history and processing context
 - `InboxDesktop.css` — scoped desktop queue/rail hierarchy, responsive sizing and interaction states
 - `inboxViewTypes.ts` — shared top-level desktop/mobile pane composition contract

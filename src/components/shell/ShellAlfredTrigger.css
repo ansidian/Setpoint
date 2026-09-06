@@ -1,0 +1,8 @@
+.shell-alfred-trigger { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 7px 10px; border: 1px solid #ffffff29; border-radius: 7px; background: #ffffff07; color: var(--sp-text); font: inherit; font-size: 12px; cursor: pointer; transition: transform 160ms ease, background 160ms ease, border-color 160ms ease; }
+.shell-alfred-trigger kbd { margin-left: 4px; color: #a6adc8; font: inherit; font-size: 10px; }
+.shell-alfred-trigger:hover, .shell-alfred-trigger:focus-visible { transform: translateY(-1px); background: #ffffff12; border-color: #cba6da70; }
+.shell-alfred-trigger:focus-visible { outline: 2px solid var(--ea-accent, #cba6da); outline-offset: 3px; }
+.shell-alfred-trigger:active { transform: translateY(0); background: #ffffff1b; }
+.shell-alfred-trigger[aria-expanded="true"] { border-color: #cba6da70; }
+@media (max-width: 1000px) { .shell-alfred-trigger kbd { display: none; } }
+@media (prefers-reduced-motion: reduce) { .shell-alfred-trigger { transition: none; } .shell-alfred-trigger:hover, .shell-alfred-trigger:focus-visible, .shell-alfred-trigger:active { transform: none; } }

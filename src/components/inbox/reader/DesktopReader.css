@@ -83,3 +83,18 @@
 .inbox-a-reader .email-attachment-shelf-summary { margin-bottom: 10px; font-weight: 500; }
 .inbox-a-reader .email-attachment-item { background: #ffffff03; border-color: #ffffff18; border-radius: 8px; }
 .inbox-a-reader .email-attachment-item-previewable:hover { background: #ffffff08; border-color: #ffffff30; }
+
+/* Discussion reserves the supporting column for Alfred; the email remains a
+   single reading flow even on the widest desktop. */
+.inbox-a-reader[data-discussing="true"] .inbox-a-reader-content[data-has-context="true"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: none;
+  column-gap: 0;
+}
+.inbox-a-reader[data-discussing="true"] .inbox-a-reader-content > .inbox-a-reader-message,
+.inbox-a-reader[data-discussing="true"] .inbox-a-reader-context { grid-area: auto; }
+.inbox-a-reader[data-discussing="true"] .inbox-a-reader-context .reader-triage-context {
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid #ffffff1c;
+}

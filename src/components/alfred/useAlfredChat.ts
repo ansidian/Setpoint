@@ -85,7 +85,7 @@ export default function useAlfredChat() {
         createdProposalIds: [...pendingCreatedAckRef.current],
         signal: controller.signal,
         onEvent: (event) => {
-          if (runSeqRef.current !== run) return; // superseded by new chat
+          if (runSeqRef.current !== run || controller.signal.aborted) return; // superseded or stopped
           if (event.type === "run_start") {
             const expired = Boolean(requestedConversationId && requestedConversationId !== event.conversation_id);
             conversationRef.current = event.conversation_id;
@@ -108,6 +108,7 @@ export default function useAlfredChat() {
         },
       });
       if (runSeqRef.current !== run) return { status: "cancelled" };
+      controller.signal.throwIfAborted();
       const completedFailure = runFailure as { message: string; code?: string } | null;
       if (completedFailure) {
         setMessages((ms) => markAlfredUserMessageFailed(ms, userMessage.id));
@@ -123,6 +124,11 @@ export default function useAlfredChat() {
       }
       return { status: "success" };
     } catch (err) {
+      if (runSeqRef.current === run && controller.signal.aborted) {
+        const message = "Response stopped. You can edit your question and try again.";
+        setMessages((ms) => applyAlfredEvent(markAlfredUserMessageFailed(ms, userMessage.id), { type: "run_error", message }));
+        return { status: "error", message };
+      }
       if (runSeqRef.current === run && (!(err instanceof Error) || err.name !== "AbortError")) {
         const messageText = err instanceof Error ? err.message : "Alfred could not complete this run.";
         const code = err && typeof err === "object" && "code" in err && err.code ? String(err.code) : undefined;
@@ -142,6 +148,8 @@ export default function useAlfredChat() {
       }
     }
   }, [scheduleExpiry]);
+
+  const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
   const setProposalHandoffError = useCallback((proposalId: string, error: string | null) => {
     setMessages((current) => setAlfredProposalHandoffError(current, proposalId, error));
@@ -179,7 +187,7 @@ export default function useAlfredChat() {
     setBusy(false);
   }, []);
 
-  return { messages, busy, activeModel, draft, setDraft, submit, newChat, setProposalHandoffError, completeProposal } satisfies {
+  return { messages, busy, activeModel, draft, setDraft, submit, newChat, stop, setProposalHandoffError, completeProposal } satisfies {
     messages: AlfredPanelMessage[];
     busy: boolean;
     activeModel: { provider: AlfredProvider; model: string } | null;
@@ -187,6 +195,7 @@ export default function useAlfredChat() {
     setDraft: Dispatch<SetStateAction<string>>;
     submit: (text: string, emailContext?: AlfredPreparedEmailContext | null) => Promise<AlfredSubmitResult>;
     newChat: () => void;
+    stop: () => void;
     setProposalHandoffError: (proposalId: string, error: string | null) => void;
     completeProposal: (proposalId: string, event: NormalizedCalendarEvent) => void;
   };

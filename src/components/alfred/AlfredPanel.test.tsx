@@ -93,7 +93,7 @@ describe("AlfredPanel", () => {
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "Any bills?" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -134,7 +134,7 @@ describe("AlfredPanel", () => {
       </>;
     }
     render(<Harness />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "Schedule a project review" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await screen.findByRole("button", { name: "Review in Calendar" });
@@ -238,7 +238,7 @@ describe("AlfredPanel", () => {
     expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
   });
 
-  it("offers attached-email prompts and sends the selected prompt with its context", async () => {
+  it("prefills an attached-email suggestion without a model call until the owner sends the edited draft", async () => {
     render(<AlfredPanel {...baseProps} emailHandoff={{
       id: "suggestions",
       source: {
@@ -251,9 +251,6 @@ describe("AlfredPanel", () => {
     }} />);
 
     await waitFor(() => expect(screen.getByText("Summarize this email")).toBeTruthy());
-    expect(screen.getByText("Draft a reply to this email")).toBeTruthy();
-    expect(screen.getByText("Pull out action items and deadlines")).toBeTruthy();
-    expect(screen.getByText("Schedule this in my calendar")).toBeTruthy();
     expect(screen.getByText("Find related messages in my inbox")).toBeTruthy();
     expect(screen.queryByText("What's left today?")).toBeNull();
 
@@ -262,10 +259,15 @@ describe("AlfredPanel", () => {
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     fireEvent.click(screen.getByText("Summarize this email"));
+    const draft = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Message to Alfred" });
+    expect(draft.value).toBe("Summarize this email");
+    expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
+    fireEvent.change(draft, { target: { value: "Summarize this email in two sentences" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message to Alfred" }));
 
     await waitFor(() => expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(1));
     expect(requests.find((request) => request.path === "/api/alfred/run")?.body).toEqual({
-      message: "Summarize this email",
+      message: "Summarize this email in two sentences",
       emailContextId: "ctx-mail-suggestions",
     });
   });
@@ -281,7 +283,7 @@ describe("AlfredPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove attached email: Email A" }));
 
     expect(screen.queryByTestId("alfred-pending-email-context")).toBeNull();
-    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…").value).toBe("Keep this draft");
+    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and finances…").value).toBe("Keep this draft");
     expect(requests.filter((request) => request.path === "/api/alfred/run")).toHaveLength(0);
   });
 
@@ -305,7 +307,7 @@ describe("AlfredPanel", () => {
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "What needs me?" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -335,7 +337,7 @@ describe("AlfredPanel", () => {
       { type: "run_error", message: "Alfred could not complete this run." },
     ]);
     render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "Try this" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -371,7 +373,7 @@ describe("AlfredPanel", () => {
       return <><AlfredPanel {...baseProps} open={open} onClose={() => setOpen(false)} /><output>{open ? "panel open" : "panel closed"}</output></>;
     }
     render(<Harness />);
-    fireEvent.keyDown(screen.getByPlaceholderText("Ask about your day…"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByPlaceholderText("Ask across mail, calendar, and finances…"), { key: "Escape" });
     expect(screen.getByText("panel closed")).toBeTruthy();
   });
 
@@ -389,7 +391,7 @@ describe("AlfredPanel", () => {
       { type: "run_end", stop_reason: "end_turn" },
     ]);
     const { rerender } = render(<AlfredPanel {...baseProps} />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "hi" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Hello.")).toBeTruthy());
@@ -397,8 +399,8 @@ describe("AlfredPanel", () => {
 
     rerender(<AlfredPanel {...baseProps} newChatTick={1} />);
     await waitFor(() => expect(screen.queryByText("Hello.")).toBeNull());
-    expect(screen.getByText("What do you need?")).toBeTruthy();
-    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask about your day…").value).toBe("");
+    expect(screen.getByText("What would you like to connect?")).toBeTruthy();
+    expect(screen.getByPlaceholderText<HTMLInputElement>("Ask across mail, calendar, and finances…").value).toBe("");
   });
 
 
@@ -413,7 +415,7 @@ describe("AlfredPanel", () => {
       return <><AlfredPanel {...baseProps} onOpenCalendarItem={(next) => setRequest(`${next.viewKey}:${next.focusItemId}`)} /><output>{request}</output></>;
     }
     render(<Harness />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "Any bills?" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Rent")).toBeTruthy());
@@ -435,7 +437,7 @@ describe("AlfredPanel", () => {
       return <><AlfredPanel {...baseProps} open={open} onClose={() => setOpen(false)} /><output>{open ? "panel open" : "panel closed"}</output></>;
     }
     render(<Harness />);
-    const input = screen.getByPlaceholderText("Ask about your day…");
+    const input = screen.getByPlaceholderText("Ask across mail, calendar, and finances…");
     fireEvent.change(input, { target: { value: "find it" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());

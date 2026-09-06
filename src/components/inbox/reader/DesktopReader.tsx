@@ -1,5 +1,6 @@
 import { formatSnoozeTime } from "../inboxSnoozedModel";
 import "./DesktopReader.css";
+import { useAlfredWorkspace } from "../../dashboard/AlfredWorkspaceContext";
 import { useRef } from "react";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import {
@@ -212,6 +213,8 @@ export default function DesktopReader({
   taskOpen = false,
   setDraftDirty,
 }: ReaderSurfaceProps & { billMounted: boolean }) {
+  const alfredWorkspace = useAlfredWorkspace();
+  const alfredOpen = alfredWorkspace?.open ?? false;
   const resolvedBillResolution = billResolution || IDLE_BILL_RESOLUTION;
   const internalSnoozeBtnRef = useRef<HTMLButtonElement>(null);
   const resolvedSnoozeBtnRef = snoozeBtnRef || internalSnoozeBtnRef;
@@ -250,7 +253,7 @@ export default function DesktopReader({
   </>;
 
   return (
-    <div className="inbox-a-reader">
+    <div className="inbox-a-reader" data-discussing={alfredOpen}>
       <DesktopReaderActionBar
         accent={accent}
         moveDestinations={moveDestinations}
@@ -285,7 +288,7 @@ export default function DesktopReader({
             </div>
             <div className="inbox-a-reader-utilities" role="group" aria-label="Email tools">
               {onRemind && <ToolbarButton icon={BellPlus} label={taskOpen ? "Hide reminder" : "Remind me"} expanded={taskOpen} onClick={onRemind} />}
-              {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" onClick={onAskAlfred} />}
+              {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" expanded={alfredOpen} onClick={() => { if (alfredWorkspace?.open) alfredWorkspace.close(); else onAskAlfred(); }} />}
               {gmailUrl && <span className="inbox-a-reader-external"><ToolbarButton icon={ExternalLink} label="Open in Gmail" onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")} /></span>}
             </div>
           </header>

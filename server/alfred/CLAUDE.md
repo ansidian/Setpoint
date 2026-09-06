@@ -4,7 +4,7 @@ Alfred: the tool-calling assistant run loop behind the Alfred Panel. Domain tool
 
 ## Files
 
-- `alfred-run.ts` — provider-neutral tool orchestration loop; emits the SSE run-event contract
+- `alfred-run.ts` — provider-neutral tool orchestration loop; emits the SSE run-event contract, rejects late results after cancellation, and restores the pre-run transcript
 - `alfred-provider.ts` — selects the conversation-bound provider adapter
 - `anthropic-adapter.ts` / `openai-adapter.ts` — provider request, transcript, tool-result, and usage translation
 - `anthropic-stream.ts` / `openai-stream.ts` — provider SSE stream parsers

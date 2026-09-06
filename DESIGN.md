@@ -346,3 +346,10 @@ Keep the mini calendar on a stable six-row grid so month changes do not resize t
 - **Don't** add shadows to ordinary cards or rows. Reserve shadows for portaled overlays.
 - **Don't** make every feed equally loud. Urgency and next action need the strongest visual priority.
 - **Don't** wrap tldraw in a dashboard card, reskin its native chrome, or recreate the retired list-and-editor Notes UI.
+
+
+### Alfred
+
+Desktop Alfred uses one continuous temporary conversation. The shell's Ask Alfred control opens a centered, bounded workbench; Inbox reserves adjacent reading space for the same conversation, collapsing navigation and message list at compact desktop widths. A stable body portal tracks the reserved space so switching pages does not remount the composer. Mobile and demo do not expose Alfred.
+
+The header contains Alfred, bordered New chat and Close buttons with icons. No contextual subtitle. Suggestions fill and focus an editable multiline draft; they never submit. Source references use bordered interactive surfaces and View chevrons only when an existing action is available. Pending email context is a labeled attachment with a separate bordered remove control. While discussing an email, its existing summary becomes a compact disclosure so the source remains easy to reach. Buttons retain hover/focus/active states and respect reduced motion.

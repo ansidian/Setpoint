@@ -1,3 +1,5 @@
+import { MessageSquare } from "lucide-react";
+import "./ShellAlfredTrigger.css";
 import { publicAssetUrl } from "@/publicAsset";
 import MobileShellActions from "./MobileShellActions";
 import { memo, useEffect, useRef, useState } from "react";
@@ -20,6 +22,8 @@ import type { SystemStatusView } from "./SystemStatusButton";
 
 export interface ShellHeaderProps {
   isMobile?: boolean;
+  onAskAlfred?: () => void;
+  alfredOpen?: boolean;
   tab: DashboardTab;
   onTab: (tab: DashboardTab) => void;
   anyBlockingOverlayOpen?: boolean;
@@ -45,6 +49,8 @@ export interface ShellHeaderProps {
  */
 function ShellHeader({
   isMobile = false,
+  onAskAlfred,
+  alfredOpen = false,
   tab,
   onTab,
   anyBlockingOverlayOpen = false,
@@ -220,6 +226,13 @@ function ShellHeader({
         />
       )}
       <div style={{ flex: 1 }} />
+      {!isMobile && !demoMode && onAskAlfred && (
+        <button type="button" className="shell-alfred-trigger" onClick={onAskAlfred} aria-expanded={alfredOpen} title="Ask Alfred (⌘\)">
+          <MessageSquare size={14} aria-hidden="true" />
+          <span>Ask Alfred</span>
+          <kbd aria-hidden="true">⌘\</kbd>
+        </button>
+      )}
       {!isMobile && (
         <AnalyticsTriggerButton
           active={analyticsOpen}

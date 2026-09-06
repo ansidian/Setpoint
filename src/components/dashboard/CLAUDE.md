@@ -23,7 +23,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `useMobileDashboardScrollRestoration.ts` — captures the mobile dashboard's shared-scroll offset and restores it immediately plus on the next frame after returning to the tab
 - `useSnapshotNavigation.ts` — loads ordered snapshot history while Inbox is active, resolves adjacent frozen/current transitions, and cancels pending navigation when returning directly to Current
 - `snapshotNavigationModel.ts` — pure older/newer adjacency resolver over newest-first snapshot history
-- `useAlfredPanelState.ts` — Alfred panel mount/open/new-chat/handoff state and its stable actions
+- `AlfredWorkspaceContext.tsx` — shares desktop Alfred open/close state and the Inbox dock measurement target; the shell keeps the conversation mounted across tabs.
+- `useAlfredPanelState.ts` — Alfred panel mount/open/new-chat/handoff and Inbox placement state and its stable actions
 - `useLiveReadOverrides.ts` — live read-override map + derived inbox unread-signal count; prunes overrides whose emails left the active snapshot
 - `layout/DashboardScenePrimitives.tsx` — motion-wrapped frame, scene regions, and the `ThreeTierLayout` band/timeline/context wiring
 - `layout/dashboard-scene-tokens.ts` — transition timings and stagger delays

@@ -1,9 +1,9 @@
 // Embedded data rows for Alfred answers. Items are VERBATIM domain rows from
 // the server's `rows` event (ADR 0006: cite-by-reference — never reshape or
 // recompute amounts/dates beyond display formatting).
-import { Fragment, memo, useMemo, useState } from "react";
+import { Fragment, memo, useMemo } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Check, CheckCircle2, Circle, Clock, CreditCard, Flag, MapPin, Receipt, Video } from "lucide-react";
+import { Check, CheckCircle2, ChevronRight, Circle, Clock, CreditCard, Flag, MapPin, Receipt, Video } from "lucide-react";
 import {
   alfredPriorityLabel,
   formatAlfredAbsolute,
@@ -26,6 +26,8 @@ import type { AlfredChipAction } from "./alfredChipActionModel";
 import type { AlfredItemKind } from "../../../shared/types/alfred";
 import type { AlfredRow } from "./alfredRowOrdering";
 
+import "./AlfredEvidence.css";
+
 const overdueColor = "var(--sp-rose)";
 
 const dimmer = "rgba(205,214,244,0.4)";
@@ -37,11 +39,11 @@ function RowShell({ onActivate, title, dim, children }: {
   dim?: boolean;
   children: ReactNode;
 }) {
-  const [hover, setHover] = useState(false);
   const interactive = typeof onActivate === "function";
   return (
     <div
       title={title}
+      className={`alfred-evidence-row${interactive ? " alfred-evidence-row--interactive" : ""}`}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       onClick={interactive ? onActivate : undefined}
@@ -51,18 +53,15 @@ function RowShell({ onActivate, title, dim, children }: {
           onActivate();
         }
       } : undefined}
-      onMouseEnter={interactive ? () => setHover(true) : undefined}
-      onMouseLeave={interactive ? () => setHover(false) : undefined}
-      style={{
-        display: "flex", alignItems: "center", gap: 9, minHeight: 36,
-        padding: "5px 10px", borderRadius: 9,
-        background: hover ? "rgba(46,46,72,0.55)" : "color-mix(in srgb, var(--sp-surface) 40%, transparent)",
-        border: `1px solid ${hover ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)"}`,
-        cursor: interactive ? "pointer" : undefined,
-        opacity: dim ? 0.5 : 1,
-        transition: "background 150ms ease-out, border-color 150ms ease-out, opacity 150ms ease-out",
-      }}
-    >{children}</div>
+      style={{ opacity: dim ? 0.65 : 1 }}
+    >
+      {children}
+      {interactive ? (
+        <span className="alfred-evidence-action" aria-hidden="true">
+          View <ChevronRight size={13} />
+        </span>
+      ) : null}
+    </div>
   );
 }
 

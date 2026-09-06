@@ -4,7 +4,8 @@ import type { Client, InStatement } from "@libsql/client";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import express from "express";
-import request from "../test-utils/supertest.ts";
+import request, { fetchApp } from "../test-utils/supertest.ts";
+import { runAlfred } from "../alfred/alfred-run.ts";
 import type { Test } from "../test-utils/supertest.ts";
 import type { RunAlfredOptions } from "../alfred/alfred-types.ts";
 import type { EmailBody } from "../../shared/types/email.ts";
@@ -62,12 +63,12 @@ async function createMigratedDb(): Promise<Client> {
   return db;
 }
 
-function buildApp(): express.Express {
+function buildApp(run: typeof runAlfred = testState.run): express.Express {
   const app = express();
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/alfred", createAlfredRouter({
-    run: testState.run,
+    run,
     credentialResolver: async (provider) => (
       provider === "openai" ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY
     ) || null,
@@ -172,6 +173,58 @@ describe("alfred routes", () => {
     const retried = await auth(request(app).post("/api/alfred/run")).send({
       message: "Try again",
       emailContextId: prepared.body.contextId,
+    });
+    expect(retried.status).toBe(200);
+    expect(retried.text).toContain("event: run_end");
+  });
+
+  it("cancels provider work when the response disconnects and releases its email attachment for retry", async () => {
+    let providerCancelled = false;
+    let finishRun!: () => void;
+    const runFinished = new Promise<void>((resolve) => { finishRun = resolve; });
+    // Exercise the real runner and adapter; only the remote provider fetch is held
+    // open. The observable contract is cancellation and attachment reuse over HTTP.
+    const app = buildApp(async (options) => {
+      try {
+        await runAlfred({
+          ...options,
+          fetchImpl: async (_url, init) => new Promise<Response>((_resolve, reject) => {
+            const cancel = () => {
+              providerCancelled = true;
+              reject(new DOMException("Client disconnected", "AbortError"));
+            };
+            if (init?.signal?.aborted) cancel();
+            else init?.signal?.addEventListener("abort", cancel, { once: true });
+          }),
+        });
+      } finally {
+        finishRun();
+      }
+    });
+    const prepared = await auth(request(app).post("/api/alfred/email-context")).send({ uid: "mail-stop" });
+    const controller = new AbortController();
+    try {
+      const response = await fetchApp(app, "/api/alfred/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: "ea_session=cookie-session" },
+        body: JSON.stringify({ message: "Read this email", emailContextId: prepared.body.contextId }),
+        signal: controller.signal,
+      });
+      const first = await response.body!.getReader().read();
+      expect(new TextDecoder().decode(first.value)).toContain("event: run_start");
+      expect(providerCancelled).toBe(false);
+      controller.abort();
+      await runFinished;
+      expect(providerCancelled).toBe(true);
+    } finally {
+      controller.abort();
+    }
+
+    testState.run.mockImplementationOnce(async ({ emit }) => {
+      emit({ type: "run_end", stop_reason: "end_turn" });
+    });
+    const retried = await auth(request(buildApp()).post("/api/alfred/run")).send({
+      message: "Try again", emailContextId: prepared.body.contextId,
     });
     expect(retried.status).toBe(200);
     expect(retried.text).toContain("event: run_end");

@@ -1,11 +1,8 @@
-// The Alfred Panel (CONTEXT.md): right-docked dashboard chat surface, toggled
-// with Cmd/Ctrl+\. Overlays the dashboard without reflowing it. Stays mounted
-// while closed so the Alfred Conversation survives close/reopen; cleared only
-// by new chat (Cmd/Ctrl+Shift+\ → newChatTick).
+// One conversation across the centered workbench and the Inbox reading layout.
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { UIEvent } from "react";
-import { createPortal } from "react-dom";
-import { RotateCcw, X } from "lucide-react";
+import AlfredSurface from "./AlfredSurface";
+import { Plus, X } from "lucide-react";
 import { prepareAlfredEmailContext, releaseAlfredEmailContext } from "../../api";
 import useAlfredChat from "./useAlfredChat";
 import {
@@ -50,11 +47,11 @@ import {
   type AlfredPendingEmailContext,
 } from "./alfredEmailContextModel";
 
-const dim = "rgba(205,214,244,0.55)";
 const text = "var(--sp-text)";
 
 export interface AlfredPanelProps {
   open: boolean;
+  dockTarget?: HTMLElement | null;
   onClose: () => void;
   accent: string;
   handoff: { id: string | number; query: string } | null;
@@ -64,16 +61,20 @@ export interface AlfredPanelProps {
   onReviewCalendarProposal?: (request: CalendarOpenRequest) => void;
 }
 
-function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
+function AlfredPanel({ dockTarget = null, open, onClose, accent, handoff, emailHandoff = null, newChatTick, onOpenCalendarItem, onReviewCalendarProposal }: AlfredPanelProps) {
   const {
     messages,
     busy,
     activeModel,
     submit,
     newChat,
+    stop,
     setProposalHandoffError,
     completeProposal,
   } = useAlfredChat();
+  const [draftRequest, setDraftRequest] = useState<{ id: number; text: string } | null>(null);
+  const draftRequestSeq = useRef(0);
+  const conversationGeneration = useRef(0);
   const [previewItem, setPreviewItem] = useState<AlfredEmailItem | null>(null);
   const [pendingEmail, setPendingEmailState] = useState<AlfredPendingEmailContext | null>(null);
   const [overflowRecovery, setOverflowRecovery] = useState(false);
@@ -197,12 +198,14 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
   // reset and bump headerClearTick so the composer drops its local draft. The
   // ⌘⇧\ path clears the composer via newChatTick flowing into composerClearSignal.
   const handleHeaderNewChat = useCallback(() => {
+    conversationGeneration.current += 1;
     newChat();
     setOverflowRecovery(false);
     setHeaderClearTick((t) => t + 1);
   }, [newChat]);
 
   const handleRecoveryNewChat = useCallback(() => {
+    conversationGeneration.current += 1;
     newChat();
     setOverflowRecovery(false);
   }, [newChat]);
@@ -215,6 +218,7 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
   useEffect(() => {
     if (newChatSeen.current !== newChatTick) {
       newChatSeen.current = newChatTick;
+      conversationGeneration.current += 1;
       newChat();
     }
   }, [newChatTick, newChat]);
@@ -310,28 +314,27 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
   }, []);
 
   const handleComposerSubmit = useCallback(async (message: string) => {
+    const generation = conversationGeneration.current;
     const captured = pendingEmailRef.current;
     if (captured && (captured.status !== "ready" || !captured.prepared)) return { status: "ignored" as const };
     const prepared = captured?.prepared || null;
     if (prepared) setPendingEmail(null);
     setOverflowRecovery(false);
     const result = await submit(message, prepared);
-    if (result.status !== "error" || !captured || !prepared) return result;
+    if (generation !== conversationGeneration.current || (result.status !== "error" && result.status !== "cancelled") || !captured || !prepared) return result;
 
+    // A deliberate handoff during this run belongs to the owner's next draft.
+    if (pendingEmailRef.current) return { status: "cancelled" as const };
     prepareAbortRef.current?.abort();
-    const stagedDuringRun = pendingEmailRef.current;
-    if (stagedDuringRun?.prepared?.contextId) {
-      releaseAlfredEmailContext(stagedDuringRun.prepared.contextId).catch(() => {});
-    }
-    const expired = result.code === "email_context_expired";
+    const expired = result.status === "error" && result.code === "email_context_expired";
     setPendingEmail({
       ...captured,
       key: `restored:${prepared.contextId}`,
       status: expired ? "error" : "ready",
       prepared: expired ? null : prepared,
-      error: expired ? result.message : null,
+      error: expired && result.status === "error" ? result.message : null,
     });
-    setOverflowRecovery(result.code === "context_window_exceeded");
+    setOverflowRecovery(result.status === "error" && result.code === "context_window_exceeded");
     return result;
   }, [setPendingEmail, submit]);
 
@@ -346,24 +349,8 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
     ),
   );
 
-  return createPortal(
-    <aside
-      aria-hidden={!open}
-      inert={!open ? true : undefined}
-      aria-label="Alfred panel"
-      data-suspend-calendar-hotkeys="all"
-      style={{
-        position: "fixed", top: 0, right: 0, bottom: 0,
-        width: "min(420px, calc(100vw - 24px))",
-        zIndex: 60, display: "flex", flexDirection: "column",
-        background: "var(--sp-panel)",
-        borderLeft: "1px solid rgba(255,255,255,0.1)",
-        boxShadow: open ? "-24px 0 60px rgba(0,0,0,0.55)" : "none",
-        transform: open ? "translateX(0)" : "translateX(calc(100% + 40px))",
-        transition: "transform 240ms cubic-bezier(0.16,1,0.3,1), box-shadow 240ms ease-out",
-        pointerEvents: open ? "auto" : "none",
-      }}
-    >
+  return (
+    <AlfredSurface open={open} dockTarget={dockTarget} onClose={onClose}>
       <style>{`
         @keyframes alfred-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes alfred-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
@@ -377,52 +364,35 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
         }
       `}</style>
 
-      {/* header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 9, padding: "12px 14px 10px",
-        borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0,
-      }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: 999, background: accent, flexShrink: 0,
-          boxShadow: busy ? `0 0 6px ${accent}` : "none",
-          animation: busy ? "alfred-pulse 1.4s ease-in-out infinite" : "none",
-        }} />
-        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
-          Alfred
-        </span>
-        <span style={{ flex: 1 }} />
+      <div className="alfred-header">
+        <span className="alfred-header-title">Alfred</span>
         <button type="button" title="New chat (⌘⇧\)" onClick={handleHeaderNewChat}
-          aria-label="Start a new Alfred chat"
-          className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 active:bg-white/[0.07] motion-reduce:transition-none motion-reduce:transform-none"
-          style={{ display: "inline-flex", padding: "4px 7px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
-          <RotateCcw size={11} />
+          aria-label="Start a new Alfred chat" className="alfred-header-button">
+          <Plus size={14} /> New chat
         </button>
-        <button type="button" title="Close (esc)" onClick={onClose}
-          aria-label="Close Alfred"
-          className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 active:bg-white/[0.07] motion-reduce:transition-none motion-reduce:transform-none"
-          style={{ display: "inline-flex", padding: "4px 7px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
-          <X size={12} />
+        <button type="button" title="Close (Esc)" onClick={onClose}
+          aria-label="Close Alfred" className="alfred-header-button">
+          <X size={14} /> Close
         </button>
       </div>
 
-      {/* thread */}
-      <div ref={scrollerRef} onScroll={onThreadScroll} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 14px 6px" }}>
+      <div ref={scrollerRef} onScroll={onThreadScroll} className="alfred-thread">
         {empty ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 26 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, paddingTop: 8 }}>
             <div>
               <div style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.1, letterSpacing: -0.25, color: text }}>
-                What do you need?
+                {pendingEmail ? "Start with this email." : "What would you like to connect?"}
               </div>
               <div style={{ fontSize: 11.5, color: "var(--color-text-faint)", marginTop: 6, lineHeight: 1.55 }}>
-                I can read your calendar, deadlines, bills, and mail, and prepare events for Calendar review.
+                {pendingEmail ? "Bring in related mail, calendar events, or payments as you need them." : "Find the thread between your mail, calendar, and finances. Calendar events are prepared for your review."}
               </div>
             </div>
             {suggestions ? <div>
-              <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase", color: "var(--color-text-faint)", marginBottom: 6 }}>Try</div>
+              <div style={{ fontSize: 11, color: "var(--sp-text-muted)", marginBottom: 10 }}>Choose a starting point, then edit your question.</div>
               <SuggestionList
                 suggestions={suggestions}
                 accent={accent}
-                onPick={(label: string) => { void handleComposerSubmit(label); }}
+                onPick={(label: string) => { setDraftRequest({ id: ++draftRequestSeq.current, text: label }); }}
               />
             </div> : null}
           </div>
@@ -464,6 +434,8 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
       <AlfredComposer
         open={open}
         busy={busy}
+        draftRequest={draftRequest}
+        onStop={stop}
         accent={accent}
         modelHint={activeModel
           ? formatAlfredModelHint(activeModel.provider, activeModel.model)
@@ -484,8 +456,7 @@ function AlfredPanel({ open, onClose, accent, handoff, emailHandoff = null, newC
       {previewItem ? (
         <AlfredEmailPreview item={previewItem} onClose={() => setPreviewItem(null)} />
       ) : null}
-    </aside>,
-    document.body,
+    </AlfredSurface>
   );
 }
 

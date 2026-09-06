@@ -160,6 +160,45 @@ describe("useAlfredChat", () => {
     await act(async () => { pending.finish(); });
   });
 
+  it("stops a streaming response, settles progress, and ignores buffered content while preserving retry", async () => {
+    const encoder = new TextEncoder();
+    const encode = (event: AlfredRunEvent) => encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({ start(controller) { stream = controller; } });
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+      init.signal?.addEventListener("abort", () => {
+        // Model a provider frame already queued when the fetch cancellation arrives.
+        stream.enqueue(encode({ type: "text_delta", text: "Late content must not appear" }));
+        queueMicrotask(() => stream.error(new DOMException("Aborted", "AbortError")));
+      }, { once: true });
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    });
+    const { result } = renderHook(() => useAlfredChat());
+    let submission!: ReturnType<typeof result.current.submit>;
+    act(() => { submission = result.current.submit("Find the related email"); });
+    await act(async () => {
+      stream.enqueue(encode({ type: "run_start", conversation_id: "stopped-chat", provider: "anthropic", model: "claude-sonnet-4-6" }));
+      stream.enqueue(encode({ type: "tool_start", tool_id: "search-1", name: "search_email" }));
+    });
+    expect(result.current.busy).toBe(true);
+    expect(result.current.messages).toContainEqual(expect.objectContaining({ type: "tools", done: false }));
+    let outcome: Awaited<typeof submission> | undefined;
+    await act(async () => { result.current.stop(); outcome = await submission; });
+    expect(outcome).toEqual({ status: "error", message: "Response stopped. You can edit your question and try again." });
+    expect(result.current.busy).toBe(false);
+    expect(result.current.messages).toContainEqual(expect.objectContaining({ type: "tools", done: true }));
+    expect(result.current.messages).toContainEqual(expect.objectContaining({ type: "user", text: "Find the related email", failed: true }));
+    expect(result.current.messages.some((message) => message.type === "say")).toBe(false);
+
+    vi.stubGlobal("fetch", async () => sseResponse([
+      { type: "text_delta", text: "Here is the related email." },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]));
+    await act(async () => { outcome = await result.current.submit("Find the related email"); });
+    expect(outcome).toEqual({ status: "success" });
+    expect(result.current.messages).toContainEqual(expect.objectContaining({ type: "say", text: "Here is the related email.", done: true }));
+  });
+
   it("new chat deletes the server conversation and clears local state", async () => {
     scriptedRun([
       { type: "run_start", conversation_id: "c9", provider: "openai", model: "gpt-5.6-sol" },

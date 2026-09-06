@@ -1,17 +1,19 @@
 # Alfred Panel Map
 
-The desktop-only Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfred/run`. Domain tools are read-only; explicit owner requests may produce a non-mutating calendar proposal reviewed and committed through Calendar's existing editor. Trust rules live in `docs/adr/0006-alfred-trust-architecture.md`. Desktop entry points: ⌘\ toggle, ⌘⇧\ new chat, inbox query handoff (⌘Enter / Sparkles), and the reader's model-free email-context handoff. Mobile exposes no Alfred entry point or panel. No launcher pill by design.
+The desktop-only Alfred Panel (CONTEXT.md): a centered workbench or an Inbox-integrated conversation over `POST /api/alfred/run`. Domain tools are read-only; explicit owner requests may produce a non-mutating calendar proposal reviewed and committed through Calendar's existing editor. Trust rules live in `docs/adr/0006-alfred-trust-architecture.md`. Desktop entry points: ⌘\ toggle, ⌘⇧\ new chat, inbox query handoff (⌘Enter / Sparkles), and the reader's model-free email-context handoff. Mobile exposes no Alfred entry point or panel. The desktop shell has a visible Ask Alfred button; demo omits Alfred.
 
 ## Files
 
+- `AlfredSurface.tsx` / `AlfredSurface.css` — stable body portal, centered workbench or measured Inbox layout slot, focus return and responsive/reduced-motion chrome
+- `AlfredEvidence.css` — source/attachment affordances for genuine actions only
 - `AlfredPanel.tsx` — panel chrome: header/thread/composer, empty state, query/email handoffs, pending-context lifecycle, and new-chat effects
-- `useAlfredChat.ts` — run lifecycle: streaming submit, abort, new chat, conversation id, proposal expiry, and identity-only Created acknowledgement retry
+- `useAlfredChat.ts` — run lifecycle: streaming submit, explicit Stop/abort, new chat, conversation id, proposal expiry, and identity-only Created acknowledgement retry
 - `alfredPanelModel.ts` — pure SSE-event → message-list reducer, proposal lifecycle, active-model formatter, copy, and row formatters. Say model: a say closed by a `tool_start` is a between-tool **preamble** (kept, tagged `preamble`, rendered as quiet prose so the narration persists); only a say still open at `run_end` is the **answer** (a structured Setpoint sans-serif block with a semibold opening sentence). A fresh narration settles the live tools block before it; `finishTools` settles all live blocks at run_end as a backstop (a run interleaves one tools block per narration segment). Empty/whitespace-only opening deltas are ignored, not kept as blank preambles.
 - `AlfredCalendarProposalCard.tsx` — compact Proposed/Superseded/Created card with duplicate/source/past states, detail disclosure, Review/Try again, and saved-event truth
 - `alfredCalendarProposalModel.ts` — validated proposal → typed Calendar seed/request projection and normalized saved-event display projection
 - `AlfredMessages.tsx` — UserLine, ToolRows, SayBlock (`preamble`/streaming → quiet prose; `done && !preamble` → safe structured rich text), ErrorLine, SuggestionList (message leaves are React.memo'd: untouched messages stay referentially stable so token streaming only re-renders the active say block)
 - `AlfredRichText.tsx` — completed-answer Markdown subset: paragraphs, automatic semibold opening sentence, bold/italic/code, unordered/numbered lists, and http(s)-only links (suppressed in demo). Raw HTML is always escaped; headings are intentionally unsupported.
-- `AlfredComposer.tsx` — input + send button + shortcut/model footer; owns and restores the local draft, renders pending email context, and gates send until preparation is ready
+- `AlfredComposer.tsx` — editable suggestion-prefilled multiline composer + Send/Stop + shortcut/model footer; owns and restores the local draft, renders pending email context, and gates send until preparation is ready
 - `AlfredEmailContext.tsx` — pending/sent email reference cards and the conditional earlier-email/context-overflow notice
 - `alfredEmailContextModel.ts` — pure pending-context projection into display references and preview items
 - `AlfredRows.tsx` — verbatim domain rows: bill/event/deadline/email/transaction (cite-by-reference; never reshape values)
@@ -26,7 +28,7 @@ The desktop-only Alfred Panel (CONTEXT.md): right-docked dashboard chat over `PO
 ## Local patterns
 
 - All message-list logic is pure in `alfredPanelModel.ts`; components stay presentational.
-- The panel stays mounted while closed (translateX off-screen) so the conversation survives close/reopen; only new chat clears it.
+- The panel stays mounted while closed (hidden/inert) so conversation and draft survive close/reopen and page switches; only new chat clears them. Suggestions prefill and focus the composer; only explicit Send invokes the model.
 - SSE consumption is fetch + `src/lib/sseStream.ts` (EventSource can't POST).
 - Email handoff preparation is model-free. The browser keeps display metadata plus an opaque context ID; successful `run_end` is the server-side consumption boundary.
 - Calendar proposal Review sends a typed seed through the dashboard bridge and performs no write. The panel closes only after editor acceptance; Calendar completion updates the mounted card from the normalized saved event.

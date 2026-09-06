@@ -154,10 +154,15 @@ export function createAlfredRouter({
     res.flushHeaders?.();
 
     const abort = new AbortController();
-    req.on("close", () => abort.abort());
+    // The POST body can finish long before its streamed response. Only the
+    // response connection lifetime represents the client leaving or pressing Stop.
+    const onDisconnect = () => { if (!res.writableEnded) abort.abort(); };
+    res.on("close", onDisconnect);
+    if (res.destroyed) abort.abort();
 
     let completed = false;
     const emit = (event: AlfredRunEvent): void => {
+      if (abort.signal.aborted || res.destroyed || res.writableEnded) return;
       if (event.type === "run_end") completed = true;
       res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     };
@@ -203,10 +208,11 @@ export function createAlfredRouter({
       }
     } finally {
       if (emailContext) {
-        if (completed) consumeAlfredEmailContext(emailContext.contextId, userId);
+        if (completed && !abort.signal.aborted) consumeAlfredEmailContext(emailContext.contextId, userId);
         else releaseAlfredEmailContext(emailContext.contextId, userId);
       }
-      res.end();
+      res.off("close", onDisconnect);
+      if (!res.destroyed && !res.writableEnded) res.end();
     }
     return undefined;
   });

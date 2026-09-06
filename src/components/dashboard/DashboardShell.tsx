@@ -20,6 +20,7 @@ import { buildDashboardEventsData } from "./dashboardShellModel";
 import useDashboardShellHotkeys from "./useDashboardShellHotkeys";
 import useCalendarWorkspaceState from "./useCalendarWorkspaceState";
 import useAlfredPanelState from "./useAlfredPanelState";
+import { AlfredWorkspaceContext } from "./AlfredWorkspaceContext";
 import useLiveReadOverrides from "./useLiveReadOverrides";
 import useDashboardItemSheet from "./useDashboardItemSheet";
 import useMobileDashboardScrollRestoration from "./useMobileDashboardScrollRestoration";
@@ -180,6 +181,8 @@ export function DashboardShell({
 
   const {
     alfredOpen,
+    alfredDockTarget,
+    alfredWorkspace,
     alfredMounted,
     alfredNewChatTick,
     alfredHandoff,
@@ -189,7 +192,7 @@ export function DashboardShell({
     alfredNewChat,
     askAlfred,
     attachEmailToAlfred,
-  } = useAlfredPanelState();
+  } = useAlfredPanelState(!isMobile && !demoMode);
 
   const { liveReadOverrides, handleLiveReadOverrideChange, inboxUnreadSignalCount } =
     useLiveReadOverrides({ activeSnapshot, liveData });
@@ -240,9 +243,7 @@ export function DashboardShell({
     }
     openCalendar("events", null, "new", { source: "dashboard", forceDeadlineOverlay: true });
   }, [isMobile, openCalendar]);
-  // Stable handler for AlfredPanel chip deep-links — depends only on the now-stable
-  // closeAlfred + openCalendar, so the memoized panel can bail on unrelated parent
-  // re-renders.
+  // Stable source navigation keeps unrelated dashboard refreshes out of Alfred.
   const handleAlfredOpenCalendarItem = useCallback((request: CalendarOpenRequest) => {
     closeAlfred();
     openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
@@ -411,6 +412,7 @@ export function DashboardShell({
   } as DashboardCalendarModalMountProps;
 
   return (
+    <AlfredWorkspaceContext value={alfredWorkspace}>
     <div
       style={{
         position: "fixed", inset: 0,
@@ -429,6 +431,8 @@ export function DashboardShell({
         isMobile={isMobile}
         tab={tab}
         onTab={setShellTab}
+        onAskAlfred={toggleAlfred}
+        alfredOpen={alfredOpen}
         anyBlockingOverlayOpen={anyBlockingOverlayOpen}
         analyticsOpen={analyticsOpen}
         onOpenAnalytics={openAnalytics}
@@ -575,10 +579,11 @@ export function DashboardShell({
         setHistoryOpen={setHistoryOpen}
       />
 
-      {!isMobile && alfredMounted && (
+      {!isMobile && !demoMode && alfredMounted && (
         <Suspense fallback={null}>
           <AlfredPanel
             open={alfredOpen}
+            dockTarget={tab === "inbox" ? alfredDockTarget : null}
             onClose={closeAlfred}
             accent={accent}
             handoff={alfredHandoff}
@@ -590,5 +595,6 @@ export function DashboardShell({
         </Suspense>
       )}
     </div>
+    </AlfredWorkspaceContext>
   );
 }

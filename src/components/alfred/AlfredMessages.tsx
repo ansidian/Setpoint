@@ -221,7 +221,7 @@ export function SuggestionList({
   accent: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {suggestions.map((s) => (
         <SuggestionRow key={s.label} suggestion={s} onPick={onPick} accent={accent} />
       ))}
@@ -240,10 +240,10 @@ function SuggestionRow({ suggestion, onPick, accent }: { suggestion: AlfredSugge
       onMouseLeave={() => setHover(false)}
       onFocus={() => setHover(true)}
       onBlur={() => setHover(false)}
-      className="transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
+      className="alfred-suggestion transition-transform duration-150 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-reduce:transition-none motion-reduce:transform-none"
       style={{
         display: "flex", alignItems: "center", gap: 9, width: "100%", minHeight: 32,
-        padding: "6px 10px", borderRadius: 9, cursor: "pointer", textAlign: "left",
+        padding: "10px 12px", borderRadius: 9, cursor: "pointer", textAlign: "left",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
         border: `1px solid ${hover ? "rgba(255,255,255,0.1)" : "transparent"}`,
         color: hover ? text : "rgba(205,214,244,0.7)",

@@ -96,7 +96,9 @@ describe("runAlfred calendar proposal commit boundary", () => {
     expect(JSON.stringify(usageRows)).not.toContain(String(proposalEvent.proposal.id));
   });
 
-  it("drops staging and preserves proposal state when the provider fails", async () => {
+  it.each(["provider failure", "cancelled provider response", "cancelled calendar lookup"])(
+    "drops staging and preserves proposal state after %s", async (failure) => {
+    const controller = new AbortController();
     let call = 0;
     const fetchImpl = vi.fn<AlfredFetch>(async () => {
       call += 1;
@@ -109,22 +111,31 @@ describe("runAlfred calendar proposal commit boundary", () => {
           })),
         };
       }
+      if (failure === "cancelled provider response") {
+        controller.abort();
+        return { ok: true, status: 200, text: async () => "", body: sseBody(textTurn("Late answer")) };
+      }
       return { ok: false, status: 529, text: async () => "overloaded" };
     });
     const conversation = createAlfredConversation({ now: 0 });
     const deps = dependencies({
-      loadUserConfig: vi.fn().mockResolvedValue({ accounts: [] }),
+      loadUserConfig: async () => {
+        if (failure === "cancelled calendar lookup") controller.abort();
+        return { accounts: [] };
+      },
       getCalendarSourceGroups: vi.fn().mockResolvedValue([]),
     });
 
     await expect(runAlfred({
       userId: "user-1", conversation, message: "Schedule a project review on August 18",
       emit: (event) => { events.push(event); },
-      fetchImpl, apiKey: "key", deps, recordUsage,
+      fetchImpl, apiKey: "key", deps, recordUsage, signal: controller.signal,
       now: () => new Date("2026-08-15T19:00:00.000Z"),
-    })).rejects.toThrow("Anthropic API error (529)");
+    })).rejects.toThrow(failure === "provider failure" ? "Anthropic API error (529)" : "abort");
 
-    expect(events.some((event) => event.type === "calendar_proposal")).toBe(false);
+    expect(events.some((event) => event.type === "calendar_proposal" || event.type === "run_end")).toBe(false);
+    expect(events.some((event) => event.type === "text_delta")).toBe(false);
+    expect(conversation.messages).toEqual([]);
     expect(conversation.calendarProposalState.activeProposalId).toBeNull();
     expect(conversation.calendarProposalState.proposals.size).toBe(0);
     expect(conversation.trustedOwnerTurns).toEqual([]);

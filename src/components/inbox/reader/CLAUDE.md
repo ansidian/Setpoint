@@ -6,7 +6,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 
 ### Entry + surfaces
 - `Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
-- `DesktopReader.tsx` — shared header and utility actions, original-first reading with a responsive supporting AI column, and bounded bill/task workspaces
+- `DesktopReader.tsx` — shared header and utility actions, original-first reading with a responsive supporting AI column, a compact single-column source view while discussing with Alfred, and bounded bill/task workspaces
 - `DesktopReader.css` — reader measure, container-responsive source/context columns and large-display reading width, scrolling and narrow workspace overlay composition
 - `MobileReader.tsx` — focused mobile reading screen with one top bar and actions sheet
 - `ReaderShared.tsx` — reader empty state using the shared Inbox presentation
@@ -32,7 +32,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `EmailPdfPreview.tsx` — lazy PDF.js canvas renderer with continuous inline page scrolling
 - `emailAttachmentDownload.ts` — checked browser object-URL download handoff with delayed byte cleanup
 - `emailAttachmentModel.ts` — attachment filtering, naming, size, and preview policy
-- `TriagePanel.tsx` / `TriagePanel.css` — What needs you / At a glance summary, desktop suggested-action lead, contextual actions, and disclosed classification details
+- `TriagePanel.tsx` / `TriagePanel.css` — What needs you / At a glance summary, desktop suggested-action lead, contextual actions, disclosed classification details; summary stays expanded during Alfred discussions
 - `DraftReply.tsx` — AI-drafted reply with send/discard
 - `VerificationCodeCallout.tsx` — shared desktop/mobile fresh-code display and copy-before-trash action
 - `verificationCodeModel.ts` — pure freshness, expiry, and trash-eligibility projection for verification codes

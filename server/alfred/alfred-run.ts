@@ -79,6 +79,7 @@ async function runAlfredInner({
   const currentApiKey = apiKey === undefined
     ? await credentialResolver(conversation.provider)
     : apiKey;
+  signal?.throwIfAborted();
   if (!currentApiKey) {
     const label = conversation.provider === "openai" ? "OpenAI" : "Anthropic";
     throw Object.assign(new Error(`${label} API key is not configured`), { status: 503 });
@@ -98,6 +99,7 @@ async function runAlfredInner({
   };
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
+    signal?.throwIfAborted();
     // Deterministic grouping backstop: after the group nudge, pin the breakdown
     // tool for one turn so a split question can't end as prose again when Haiku
     // ignores the soft reminder. tool_choice is request-only (outside the cached
@@ -115,6 +117,7 @@ async function runAlfredInner({
       onTextDelta: (text: string) => emit({ type: "text_delta", text }),
     });
 
+    signal?.throwIfAborted();
     recordUsage(userId, {
       eventType: "alfred_run_turn",
       model: turn.model || conversation.model,
@@ -153,6 +156,7 @@ async function runAlfredInner({
         adapter.appendUserText(conversation, SHOW_ITEMS_NUDGE);
         continue;
       }
+      signal?.throwIfAborted();
       if (proposalStage.proposal) {
         emit(commitStagedAlfredCalendarProposal(
           conversation,
@@ -166,6 +170,7 @@ async function runAlfredInner({
 
     const toolResults: AlfredProviderToolResult[] = [];
     for (const toolUse of toolUses) {
+      signal?.throwIfAborted();
       const toolName = toolUse.name as AlfredToolName;
       emit({ type: "tool_start", tool_id: toolUse.id, name: toolName });
       const toolStartedAt = now().getTime();
@@ -183,6 +188,7 @@ async function runAlfredInner({
       } catch (err) {
         result = { error: errorMessage(err) };
       }
+      signal?.throwIfAborted();
       recordUsage(userId, {
         eventType: "alfred_tool_call",
         model: turn.model || conversation.model,
@@ -218,6 +224,7 @@ async function runAlfredInner({
       });
       toolResults.push({ toolId: toolUse.id, name: toolName, result });
     }
+    signal?.throwIfAborted();
     adapter.appendToolResults(conversation, toolResults);
   }
 
@@ -232,6 +239,7 @@ async function runAlfredInner({
 }
 
 export async function runAlfred(opts: RunAlfredOptions): Promise<void> {
+  opts.signal?.throwIfAborted();
   const transcriptCheckpoint = opts.conversation.messages.length;
   const trustedOwnerTurnsCheckpoint = opts.conversation.trustedOwnerTurns.length;
   opts.conversation.trustedOwnerTurns.push({
@@ -240,7 +248,17 @@ export async function runAlfred(opts: RunAlfredOptions): Promise<void> {
     consumed: false,
   });
   try {
-    return await runAlfredInner({ ...opts, transcriptCheckpoint, trustedOwnerTurnsCheckpoint });
+    return await runAlfredInner({
+      ...opts,
+      // Slow tools and provider streams may finish after Stop; never publish
+      // their late output, and let the failure path restore the transcript.
+      emit: (event) => {
+        opts.signal?.throwIfAborted();
+        opts.emit(event);
+      },
+      transcriptCheckpoint,
+      trustedOwnerTurnsCheckpoint,
+    });
   } catch (err) {
     // A mid-run failure (overload/network/abort) leaves the transcript ending on
     // a user turn; revert to the pre-run boundary so the conversation stays usable.

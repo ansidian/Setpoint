@@ -340,12 +340,12 @@ Selection path:
 
 **Trigger:** the owner clicks `Ask Alfred` on the currently open desktop-reader email.
 
-1. `InboxDesktopPane` sends provider UID plus display metadata through the dedicated email handoff and opens the already-mounted Alfred Panel. Alfred is desktop-only, so mobile exposes neither this action nor the panel; demo surfaces also omit the action.
+1. `InboxDesktopPane` sends provider UID plus display metadata through the dedicated email handoff and opens the already-mounted Alfred conversation alongside the reader. The same conversation uses a centered workbench on other desktop pages. Alfred is desktop-only, so mobile exposes neither this action nor the panel; demo surfaces also omit the action.
 2. `POST /api/alfred/email-context` fetches the authoritative provider body, converts it to bounded semantic text, preserves quoted/forwarded history and visible footer text, represents omitted image/file content with markers, and fences every email-controlled field as untrusted data.
 3. The server stores that snapshot in the bounded owner-scoped in-memory context store and returns only an opaque context ID plus display metadata. No model/provider call occurs.
-4. The composer shows a removable pending card and permits drafting while preparation runs; Send remains gated until the handle is ready. A later reader handoff replaces only the pending attachment and preserves the draft and current conversation.
+4. The composer shows a removable pending card and permits drafting while preparation runs; Send remains gated until the handle is ready. A later reader handoff replaces only the pending attachment and preserves the draft and current conversation. Suggestion buttons prefill an editable draft without a model call; only explicit Send submits it.
 5. Send posts the owner prompt and context ID to `POST /api/alfred/run`. The route claims the handle and `alfred-run.ts` appends the fenced email plus owner prompt as one user turn.
-6. `run_end` consumes the handle and leaves an immutable email reference above the sent prompt. Failure releases the handle, marks the attempt failed, and restores the prompt and attachment for retry.
+6. `run_end` consumes the handle and leaves an immutable email reference above the sent prompt. Failure releases the handle, marks the attempt failed, and restores the prompt and attachment for retry unless the owner has already supplied a newer draft or attachment. Stop cancels the fetch stream and propagates response disconnect to the provider run.
 
 **Caches/state:** one pending attachment in mounted panel state; short-lived server context handles (4-hour TTL, bounded per owner and process); the full body remains only in that in-memory handle and then the ephemeral provider-replayed Alfred conversation.
 

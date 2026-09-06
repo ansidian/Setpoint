@@ -1,18 +1,21 @@
-import { AlertCircle, Mail, RefreshCw, X } from "lucide-react";
+import { AlertCircle, ChevronRight, Mail, RefreshCw, X } from "lucide-react";
 import type {
   AlfredEmailAttachmentRef,
 } from "../../../shared/types/alfred";
 import { formatAlfredAbsolute, formatAlfredAgo } from "./alfredPanelModel";
 import { pendingEmailAttachment, type AlfredPendingEmailContext } from "./alfredEmailContextModel";
 
+import "./AlfredEvidence.css";
+
 const muted = "rgba(205,214,244,0.58)";
 const faint = "var(--color-text-faint)";
 
-function EmailIdentity({ attachment }: { attachment: AlfredEmailAttachmentRef }) {
+function EmailIdentity({ attachment, label }: { attachment: AlfredEmailAttachmentRef; label: string }) {
   const time = formatAlfredAgo(attachment.timestamp);
   const absolute = formatAlfredAbsolute(attachment.timestamp);
   return (
     <span style={{ display: "flex", flexDirection: "column", minWidth: 0, gap: 2, textAlign: "left" }}>
+      <span style={{ color: "var(--sp-subtext)", fontSize: 10 }}>{label}</span>
       <span style={{ color: "var(--sp-text)", fontSize: 11.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {attachment.subject}
       </span>
@@ -60,7 +63,7 @@ export function AlfredPendingEmailContextCard({
         type="button"
         onClick={onPreview}
         aria-label={`Preview attached email: ${attachment.subject}`}
-        className="transition-[background-color,color] duration-150 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--ea-accent)]/60 active:bg-white/[0.055] motion-reduce:transition-none"
+        className="alfred-attachment-preview"
         style={{
           minWidth: 0,
           display: "grid",
@@ -68,7 +71,6 @@ export function AlfredPendingEmailContextCard({
           alignItems: "center",
           columnGap: 9,
           padding: "9px 8px 8px 10px",
-          background: "transparent",
           border: 0,
           color: "inherit",
           cursor: "pointer",
@@ -78,7 +80,7 @@ export function AlfredPendingEmailContextCard({
         <span style={{ width: 28, height: 28, borderRadius: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", background: `${accent}17`, color: accent }}>
           <Mail size={13} />
         </span>
-        <EmailIdentity attachment={attachment} />
+        <EmailIdentity attachment={attachment} label="Email attached" />
         <span style={{ gridColumn: "2", display: "inline-flex", alignItems: "center", gap: 5, color: statusColor, fontSize: 9.5, marginTop: 3, textAlign: "left" }}>
           {preparing ? <RefreshCw className="alfred-context-spinner" size={9} /> : failed ? <AlertCircle size={9} /> : null}
           {status}
@@ -89,10 +91,10 @@ export function AlfredPendingEmailContextCard({
         onClick={onRemove}
         aria-label={`Remove attached email: ${attachment.subject}`}
         title="Remove email"
-        className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 active:bg-white/[0.07] motion-reduce:transition-none motion-reduce:transform-none"
-        style={{ alignSelf: "start", margin: 6, padding: 5, border: 0, borderRadius: 6, background: "transparent", color: muted, cursor: "pointer", display: "inline-flex" }}
+        className="alfred-attachment-remove"
+        style={{ alignSelf: "start", margin: 8 }}
       >
-        <X size={11} />
+        <X size={14} />
       </button>
       {failed ? (
         <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, padding: "0 8px 8px 47px", minWidth: 0 }}>
@@ -102,8 +104,8 @@ export function AlfredPendingEmailContextCard({
           <button
             type="button"
             onClick={onRetry}
-            className="transition-[background-color,color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 motion-reduce:transition-none motion-reduce:transform-none"
-            style={{ padding: "4px 7px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.025)", color: "var(--sp-text)", cursor: "pointer", fontFamily: "inherit", fontSize: 9.5, whiteSpace: "nowrap" }}
+            className="alfred-attachment-retry"
+            style={{ padding: "4px 7px", borderRadius: 6, color: "var(--sp-text)", cursor: "pointer", fontFamily: "inherit", fontSize: 9.5, whiteSpace: "nowrap" }}
           >
             Retry
           </button>
@@ -144,8 +146,8 @@ export function AlfredEmailHistoryNotice({
       <button
         type="button"
         onClick={onStartNewChat}
-        className="transition-[background-color,color] duration-150 hover:bg-white/[0.045] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--ea-accent)]/60 active:bg-white/[0.065] motion-reduce:transition-none"
-        style={{ border: 0, borderLeft: "1px solid rgba(255,255,255,0.06)", background: "transparent", color: "var(--sp-text)", padding: "7px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 9.5, fontWeight: 600, whiteSpace: "nowrap" }}
+        className="alfred-attachment-preview"
+        style={{ border: 0, borderLeft: "1px solid rgba(255,255,255,0.06)", color: "var(--sp-text)", padding: "7px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 9.5, fontWeight: 600, whiteSpace: "nowrap" }}
       >
         Start new chat
       </button>
@@ -167,7 +169,8 @@ export function AlfredSentEmailReference({
       type="button"
       onClick={onPreview}
       aria-label={`Preview ${failed ? "failed " : ""}email attachment: ${attachment.subject}`}
-      className="transition-[background-color,border-color,transform] duration-150 hover:-translate-y-px hover:bg-white/[0.045] hover:border-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60 active:translate-y-0 active:bg-white/[0.065] motion-reduce:transition-none motion-reduce:transform-none"
+      className="alfred-sent-attachment"
+      data-failed={failed || undefined}
       style={{
         width: "min(92%, 320px)",
         display: "grid",
@@ -176,8 +179,6 @@ export function AlfredSentEmailReference({
         gap: 8,
         padding: "7px 8px",
         borderRadius: 9,
-        border: `1px solid ${failed ? "color-mix(in srgb, var(--sp-rose) 28%, transparent)" : "rgba(255,255,255,0.07)"}`,
-        background: failed ? "color-mix(in srgb, var(--sp-rose) 4%, transparent)" : "rgba(255,255,255,0.018)",
         color: "inherit",
         cursor: "pointer",
         fontFamily: "inherit",
@@ -186,8 +187,8 @@ export function AlfredSentEmailReference({
       <span style={{ width: 24, height: 24, borderRadius: 7, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.035)", color: failed ? "var(--sp-rose)" : "var(--sp-blue)" }}>
         <Mail size={11} />
       </span>
-      <EmailIdentity attachment={attachment} />
-      {failed ? <span style={{ color: "var(--sp-rose)", fontSize: 9, fontWeight: 600 }}>Failed</span> : null}
+      <EmailIdentity attachment={attachment} label={failed ? "Email attachment · failed" : "Email attached"} />
+      <span className="alfred-evidence-action" aria-hidden="true">View <ChevronRight size={13} /></span>
     </button>
   );
 }
