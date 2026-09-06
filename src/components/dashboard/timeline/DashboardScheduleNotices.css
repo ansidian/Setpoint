@@ -1,0 +1,39 @@
+.dashboard-schedule-notices {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px 0;
+}
+
+.dashboard-schedule-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sp-text) 12%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sp-text) 3%, transparent);
+  color: var(--sp-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.dashboard-schedule-notice > svg { flex-shrink: 0; margin-top: 2px; }
+.dashboard-schedule-notice > svg:last-child { margin-left: auto; color: var(--sp-muted, #a6adc8); }
+.dashboard-schedule-notice--conflict > svg:first-child { color: var(--sp-cream); }
+.dashboard-schedule-notice__copy { display: grid; gap: 3px; min-width: 0; }
+.dashboard-schedule-notice__heading { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11.5px; font-weight: 600; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.dashboard-schedule-notice__event { color: var(--sp-muted, #a6adc8); font-weight: 500; overflow-wrap: anywhere; }
+.dashboard-schedule-notice__detail { color: var(--sp-muted, #a6adc8); font-size: 10.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.dashboard-schedule-notice__unavailable { margin: 0; padding: 4px 10px; color: var(--sp-muted, #a6adc8); font-size: 11px; }
+.dashboard-schedule-notice:hover, .dashboard-schedule-notice:focus-visible { background: color-mix(in srgb, var(--sp-text) 7%, transparent); border-color: color-mix(in srgb, var(--ea-accent) 45%, transparent); transform: translateY(-1px); }
+.dashboard-schedule-notice:focus-visible { outline: 2px solid var(--ea-accent); outline-offset: 1px; }
+.dashboard-schedule-notice:active { transform: translateY(0) scale(.995); background: color-mix(in srgb, var(--sp-text) 10%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-schedule-notice { transition: none; }
+  .dashboard-schedule-notice:hover, .dashboard-schedule-notice:focus-visible, .dashboard-schedule-notice:active { transform: none; }
+}

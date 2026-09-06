@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dueDateToMs, buildTimeline, deriveLane, formatChipDateTime } from "./shell-helpers";
+import { dueDateToMs, buildTimeline, formatChipDateTime } from "./shell-helpers";
 
 const iso = (ms: number | null) => new Date(ms!).toISOString();
 
@@ -83,25 +83,5 @@ describe("buildTimeline bill anchor (Pacific DST-correct)", () => {
     const items = buildTimeline({ bills: [{ id: "b1", next_date: "2026-01-15", amount: 10 }] });
     const bill = items.find((i) => i.kind === "bill");
     expect(iso(bill!.dueAtMs)).toBe("2026-01-15T23:00:00.000Z");
-  });
-});
-
-// deriveLane must understand the coarse `triage` field that DashboardBody's
-// snapshot emails carry ("action"/"fyi") — without it, every dashboard inbox-peek
-// email collapsed to "fyi" and the "needs you" badge stayed 0.
-describe("deriveLane (snapshot triage signal)", () => {
-  it("classifies a snapshot email's triage='action' as needs_attention", () => {
-    expect(deriveLane({ triage: "action" })).toBe("needs_attention");
-  });
-  it("classifies triage='fyi' as fyi", () => {
-    expect(deriveLane({ triage: "fyi" })).toBe("fyi");
-  });
-  it("lets an explicit lane/urgency signal win over triage", () => {
-    expect(deriveLane({ lane: "noise", triage: "action" })).toBe("noise");
-    expect(deriveLane({ urgency: "high", triage: "fyi" })).toBe("needs_attention");
-  });
-  it("falls back to fyi when nothing is set", () => {
-    expect(deriveLane({})).toBe("fyi");
-    expect(deriveLane(null)).toBe("fyi");
   });
 });

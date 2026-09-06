@@ -39,15 +39,6 @@ interface LaneMetadata {
   icon: string;
 }
 
-interface LaneEmail {
-  lane?: string | null;
-  _lane?: string | null;
-  urgency?: string | null;
-  urgentFlag?: unknown;
-  noise?: unknown;
-  triage?: string | null;
-}
-
 export const URGENCY_COLORS = {
   high: "#f38ba8",
   medium: "#f9e2af",
@@ -278,16 +269,3 @@ export const LANE: Record<string, LaneMetadata> = {
   noise:  { key: "noise",  label: "Noise", color: "#6c7086", soft: "rgba(108,112,134,0.10)", border: "rgba(255,255,255,0.05)", icon: "BellOff" },
 };
 LANE.action = LANE.needs_attention!;
-
-// Derive a lane from an email's existing fields (briefing already triages into
-// important[] vs noise[], and urgency lives on each email).
-export function deriveLane(email: LaneEmail | null | undefined): string {
-  if (!email) return "fyi";
-  if (email.lane) return email.lane;
-  if (email._lane) return email._lane;
-  if (email.urgency === "high" || email.urgentFlag) return "needs_attention";
-  if (email.noise) return "noise";
-  // Snapshot emails (DashboardBody) only carry a coarse `triage` lane.
-  if (email.triage === "action") return "needs_attention";
-  return "fyi";
-}

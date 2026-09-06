@@ -84,6 +84,74 @@ describe("transaction import store", () => {
     expect(next).toMatchObject({ created: true, run: { id: "run-2" } });
   });
 
+  it("projects bounded owner-wide review and automatic history without evidence or misleading counts", async () => {
+    await createRun();
+    const subject = store();
+    await subject.createRun({ id: "run-2", userId: "owner-1", trigger: "arrival", optionsKey: "arrival-2", gmailAccountIds: ["gmail-1"], sources: ["amazon"] });
+    const rows: Array<Partial<InsertItemInput>> = [
+      { id: "review", status: "needs_review", runId: "run-1" },
+      { id: "failed", status: "failed" },
+      { id: "paused", status: "paused" },
+      { id: "observe-ready", status: "ready", automationMode: "observe" },
+      { id: "unsafe-ready", status: "ready", automaticSafe: false },
+      { id: "automatic-ready", status: "ready" },
+      { id: "dismissed", status: "dismissed" },
+      { id: "added", status: "added" },
+      { id: "updated", status: "updated" },
+      { id: "present", status: "already_present" },
+      { id: "latest-added", status: "added" },
+      { id: "observe-added", status: "added", automationMode: "observe" },
+      { id: "confirmed-added", status: "added" },
+    ];
+    for (const row of rows) {
+      now += 100;
+      await subject.insertItem(itemInput({
+        runId: "run-2", ...row, candidateKey: row.id, gmailMessageId: row.id,
+        evidence: [{ private: "must not appear" }], notes: "private notes",
+      }));
+    }
+    await db.execute("UPDATE ea_transaction_import_items SET confirmed_at = 2300 WHERE id = 'confirmed-added'");
+
+    const result = await subject.readDashboardActivity("owner-1");
+    expect(result.reviewCount).toBe(5);
+    expect(result.review.map((item) => item.id)).toEqual(["unsafe-ready", "observe-ready", "paused"]);
+    expect(result.recent.map((item) => item.id)).toEqual(["latest-added", "present", "updated"]);
+    expect(result.recent[0]).toEqual({
+      id: "latest-added", runId: "run-2", emailUid: "gmail-gmail-1-message-1",
+      payee: "Amazon", amountCents: -2599, currency: "USD", status: "added",
+      description: "Recorded in Actual", updatedAt: 2100,
+    });
+    expect(await subject.readDashboardActivity("different-owner")).toEqual({
+      status: "ready", reviewCount: 0, review: [], recent: [], error: null,
+    });
+  });
+
+  it("pages every pending-review run with an owner-scoped total and no automatic-ready work", async () => {
+    const subject = store();
+    for (let index = 0; index < 16; index++) {
+      now += 100;
+      const runId = `pending-${index}`;
+      await subject.createRun({ id: runId, userId: "owner-1", trigger: "arrival", optionsKey: runId, gmailAccountIds: ["gmail-1"], sources: ["amazon"] });
+      await subject.insertItem(itemInput({
+        id: `candidate-${index}`, runId, status: index < 14 ? "needs_review" : "ready",
+      }));
+    }
+    const first = await subject.listReviewRuns("owner-1");
+    expect(first.total).toBe(14);
+    expect(first.offset).toBe(0);
+    expect(first.runs.map((run) => run.id)).toEqual(Array.from({ length: 12 }, (_, index) => `pending-${13 - index}`));
+    const next = await subject.listReviewRuns("owner-1", 12, 12);
+    expect(next.total).toBe(14);
+    expect(next.offset).toBe(12);
+    expect(next.runs.map((run) => run.id)).toEqual(["pending-1", "pending-0"]);
+    expect(await subject.listReviewRuns("different-owner")).toEqual({ runs: [], total: 0, offset: 0 });
+    expect((await subject.listReviewRuns("owner-1", 100, -1)).runs).toHaveLength(14);
+    await subject.dismissItem("owner-1", "candidate-13");
+    const afterDismiss = await subject.listReviewRuns("owner-1");
+    expect(afterDismiss.total).toBe(13);
+    expect(afterDismiss.runs[0]?.id).toBe("pending-12");
+  });
+
   it("persists cursors and item evidence without raw message bodies", async () => {
     await createRun();
     const subject = store();

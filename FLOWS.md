@@ -383,3 +383,12 @@ Selection path:
 **Network boundary:** no polling, SSE, WebSocket, realtime presence, or per-keystroke writes. A second device sees the latest canvas after refresh. tldraw's hobby-license telemetry is governed by tldraw and is the only expected vendor traffic from the canvas itself.
 
 **Persistence:** confirmed document BLOB/revision in Turso; current unsaved recovery envelope in device-local IndexedDB; content-addressed media on the private persistent disk; session/camera in localStorage. Legacy note rows, APIs, demo data, and UI do not exist.
+
+
+## Dashboard financial context
+
+`DashboardFinance` independently reads `GET /api/dashboard/finance`. The server joins local Actual expense transactions (transfers excluded, Pacific matching calendar-date periods) with persisted import review counts and recent automatic outcomes. A failed source stays unavailable independently; truncated transaction ranges never become plausible totals. Existing scheduled bill occurrences supply Money Ahead. No provider refresh or import admission happens on these reads.
+
+Review previews deep-link to Finance Settings by run ID; the general review link uses `reviewPending=1`. Its `GET /api/dashboard/finance/review-runs?offset=…` pages twelve pending runs using the same eligibility predicate as the dashboard count. Existing import detail/confirmation/retry/dismiss endpoints remain the write owners. Source email previews use the existing body-fetch and safe iframe seam. Demo endpoints project the same in-memory transaction seed as Calendar, and confirmed demo imports update that seed.
+
+Today notices read persisted calendar-event reminders and match account, calendar, event and occurrence before displaying a Time-to-Leave estimate. Overlap detection uses remaining timed events today. Opening either notice reuses the calendar event detail route; dashboard never creates routes or enrolls reminders.

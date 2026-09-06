@@ -306,6 +306,7 @@ function makeDemoSeed(now = new Date()) {
     discord_webhook_configured: true,
     actual_budget_url: "https://actual.example.invalid/demo",
     actual_configured: true,
+    actual_budget_configured: true,
     home_location_label: null,
     home_location_address: null,
     home_location_place_id: null,

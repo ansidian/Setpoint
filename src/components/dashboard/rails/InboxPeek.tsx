@@ -1,158 +1,61 @@
 import { memo, useMemo } from "react";
-import { Inbox } from "lucide-react";
-import { deriveLane } from "../../../lib/shell-helpers";
-import {
-  EmptyRow,
-  OpenInboxButton,
-  SectionHeader,
-} from "./railPrimitives";
+import { ArrowRight, Inbox } from "lucide-react";
+import { EmptyRow, SectionHeader } from "./railPrimitives";
 import { timeAgo } from "./railModel";
-import type { SnapshotItem } from "../../../../shared/types/snapshots";
+import { buildInboxPeek } from "./inboxPeekModel";
+import type { InboxPeekLane } from "./inboxPeekModel";
+import type { ActiveSnapshotView, SnapshotItem } from "../../../../shared/types/snapshots";
+import "./InboxPeek.css";
 
-interface InboxPeekAccount {
-  account_id?: string;
-  important?: Array<Partial<SnapshotItem> & { id: string | number; date?: string | null }>;
-}
-
-interface InboxPeekEmail extends Omit<Partial<SnapshotItem>, "id"> {
-  id: string | number;
-  date?: string | null;
-  _account: InboxPeekAccount;
-  _lane: string;
-}
-
+type InboxPeekEmail = Omit<SnapshotItem, "id"> & { id: string | number };
 interface InboxPeekProps {
   accent?: string;
-  emailAccounts?: InboxPeekAccount[];
+  activeSnapshot?: ActiveSnapshotView | null;
+  excludedEmailIds?: readonly string[];
   onJump?: (payload: { kind: "email"; id: string | number; email: InboxPeekEmail }) => void;
-  onOpenInbox?: () => void;
+  onOpenInbox?: (lane?: InboxPeekLane) => void;
   isMobile?: boolean;
 }
 
-const MAX_VISIBLE_EMAILS = 4;
-const INBOX_ROW_MIN_HEIGHT = 46;
-
-function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox, isMobile = false }: InboxPeekProps) {
-  const flat = useMemo(() => {
-    const all: InboxPeekEmail[] = [];
-    for (const acc of emailAccounts) {
-      for (const e of acc.important || []) {
-        all.push({ ...e, _account: acc, _lane: deriveLane(e) });
-      }
-    }
-    return all
-      .sort((a, b) => (a.read === b.read ? new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime() : (a.read ? 1 : 0) - (b.read ? 1 : 0)))
-      .slice(0, MAX_VISIBLE_EMAILS);
-  }, [emailAccounts]);
-
-  const needsYou = flat.filter((e) => e._lane === "needs_attention" && !e.read).length;
+function InboxPeek({ activeSnapshot, excludedEmailIds, onJump, onOpenInbox, isMobile = false }: InboxPeekProps) {
+  const model = useMemo(() => buildInboxPeek(activeSnapshot, excludedEmailIds), [activeSnapshot, excludedEmailIds]);
+  const counts: Array<{ lane: InboxPeekLane; label: string; count: number }> = [
+    { lane: "needs_attention", label: "Need action", count: model.counts.needs_attention },
+    { lane: "carryover", label: "Carryover", count: model.counts.carryover },
+    { lane: "fyi", label: "FYI", count: model.counts.fyi },
+    { lane: "queued", label: "Queued", count: model.counts.queued },
+  ];
+  const emptyLabel = !model.available ? "Inbox hasn't loaded yet"
+    : model.processing ? "Mail is being processed"
+    : model.counts.needs_attention + model.counts.carryover > 0 ? "Urgent mail is in Needs You"
+    : "No action or FYI mail in this snapshot";
 
   return (
-    <div>
-      <SectionHeader
-        title="Inbox peek"
-        isMobile={isMobile}
-        right={
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {needsYou > 0 && (
-              <span
-                style={{
-                  fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 99,
-                  background: "color-mix(in srgb, var(--sp-rose) 15%, transparent)", color: "var(--sp-rose)",
-                }}
-              >
-                {needsYou} needs you
-              </span>
-            )}
-            <OpenInboxButton isMobile={isMobile} accent={accent} onClick={onOpenInbox} />
-          </div>
-        }
-      />
-      <div
-        style={{
-          marginTop: 10,
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: isMobile ? undefined : INBOX_ROW_MIN_HEIGHT * MAX_VISIBLE_EMAILS,
-          overflow: "hidden",
-        }}
-      >
-        {flat.map((e) => (
-          <div
-            key={e.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => onJump?.({ kind: "email", id: e.id, email: e })}
-            onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") onJump?.({ kind: "email", id: e.id, email: e }); }}
-            style={{
-              display: "grid", gridTemplateColumns: isMobile ? "18px minmax(0, 1fr)" : "18px 1fr auto", gap: 10, alignItems: isMobile ? "start" : "center",
-              minHeight: isMobile ? undefined : INBOX_ROW_MIN_HEIGHT,
-              padding: isMobile ? "10px 2px" : "9px 2px", borderBottom: "1px solid rgba(255,255,255,0.04)",
-              cursor: "pointer",
-            }}
-            onMouseEnter={(ev) => { ev.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
-            onMouseLeave={(ev) => { ev.currentTarget.style.background = "transparent"; }}
-          >
-            <div
-              style={{
-                width: 6, height: 6, borderRadius: 99,
-                background:
-                  e._lane === "needs_attention" ? "var(--sp-rose)"
-                  : e._lane === "fyi" ? "var(--sp-cyan)"
-                  : "rgba(205,214,244,0.25)",
-                margin: "0 auto",
-                opacity: e.read ? 0.35 : 1,
-              }}
-            />
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 12, color: e.read ? "rgba(205,214,244,0.65)" : "var(--sp-text)",
-                  fontWeight: e.read ? 400 : 600,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isMobile ? "normal" : "nowrap",
-                  marginBottom: 2,
-                }}
-              >
-                {e.subject}
-              </div>
-              <div
-                style={{
-                  fontSize: 10.5, color: "var(--color-text-faint)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isMobile ? "normal" : "nowrap",
-                }}
-              >
-                {e.from}
-              </div>
-              {isMobile && (
-                <div
-                  style={{
-                    fontSize: 9.5, color: "var(--color-text-faint)",
-                    fontVariantNumeric: "tabular-nums",
-                    marginTop: 6,
-                  }}
-                >
-                  {timeAgo(e.date)}
-                </div>
-              )}
-            </div>
-            {!isMobile && (
-              <div
-                style={{
-                  fontSize: 9.5, color: "var(--color-text-faint)",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {timeAgo(e.date)}
-              </div>
-            )}
-          </div>
-        ))}
-        {flat.length === 0 && <EmptyRow icon={Inbox} label="Nothing new — inbox is calm" />}
+    <section className={`dashboard-inbox-peek${isMobile ? " dashboard-inbox-peek--mobile" : ""}`}>
+      <SectionHeader title="Inbox peek" isMobile={isMobile} right={<button type="button" className="inbox-peek-open" onClick={() => onOpenInbox?.()}>Open inbox<ArrowRight size={12} aria-hidden="true" /></button>} />
+      {model.available && <div className="inbox-peek-counts" aria-label="Current snapshot mail">
+        {counts.map(({ lane, label, count }) => <button type="button" key={lane} className="inbox-peek-count" onClick={() => onOpenInbox?.(lane)} aria-label={`${count} ${label.toLowerCase()} emails`}>
+          <span>{label}</span><strong>{count}</strong>
+        </button>)}
+      </div>}
+      <div className="inbox-peek-rows">
+        {model.rows.map(({ key, lane, email }) => {
+          const id = email.uid || email.email_id || email.id;
+          const action = email.action?.trim();
+          const text = lane !== "fyi" && action && !/^(none|no action|n\/a|review|reply|read|respond|follow up)[.!]?$/i.test(action)
+            ? action : email.summary || email.subject;
+          return <button type="button" key={key} className="inbox-peek-row" data-read={email.read || undefined} onClick={() => onJump?.({ kind: "email", id, email: { ...email, id } })}>
+            <span className="inbox-peek-sender">{email.from_name || email.from_address || email.from || "Unknown sender"}</span>
+            <span className="inbox-peek-age">{timeAgo(email.email_date || email.date)}</span>
+            <span className="inbox-peek-summary">{text}</span>
+            <span className="inbox-peek-row-meta">{lane === "carryover" ? "Carried over" : lane === "needs_attention" ? "Needs action" : "FYI"}{email.read ? " · Read" : " · Unread"}</span>
+          </button>;
+        })}
+        {model.rows.length === 0 && <EmptyRow icon={Inbox} label={emptyLabel} />}
       </div>
-    </div>
+      {model.processing && model.rows.length > 0 && <p className="inbox-peek-processing" role="status">More mail is being processed</p>}
+    </section>
   );
 }
 
-// Memoized so dashboard poll/refresh ticks that leave emailAccounts/onJump/onOpenInbox
-// untouched do not re-render this rail.
 export default memo(InboxPeek);

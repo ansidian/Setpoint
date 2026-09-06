@@ -1,5 +1,6 @@
 import { isDemoMode } from "./demo/config.ts";
 import { apiFetch } from "./lib/apiFetch";
+import type { DashboardFinanceResponse, DashboardFinanceReviewRunsResponse } from "../shared/types/dashboard-finance.ts";
 import type { EmailAiUsageStats } from "../shared/types/ai-usage.ts";
 import type {
   AuthenticationResponseJSON,
@@ -270,6 +271,10 @@ export const getCurrentDashboard = (): Promise<CurrentDashboardResponse> => {
   return apiFetch("/api/dashboard/current");
 };
 export const getDashboardHealth = (): Promise<CurrentDashboardHealthResponse> => apiFetch("/api/dashboard/health");
+// The demo adapter explicitly serves a fictional, refresh-reset financial projection.
+export const getDashboardFinance = (): Promise<DashboardFinanceResponse> => apiFetch("/api/dashboard/finance");
+// Demo serves the same bounded pending-run projection from its in-memory imports.
+export const getDashboardFinanceReviewRuns = (offset = 0): Promise<DashboardFinanceReviewRunsResponse> => apiFetch(`/api/dashboard/finance/review-runs?offset=${offset}`);
 export const requestCurrentDashboardRefresh = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = (): Promise<CurrentDashboardResponse> => apiFetch("/api/dashboard/current/sync", { method: "POST" });
 export const getTriageCacheStats = (): Promise<TriageCacheStatsResponse> => apiFetch("/api/ea/triage/cache-stats");

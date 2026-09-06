@@ -83,6 +83,7 @@ src/
 │   │   └── views/
 │   ├── dashboard/
 │   │   ├── context/
+│   │   ├── finance/
 │   │   ├── layout/
 │   │   ├── needsYou/
 │   │   ├── rails/
@@ -228,6 +229,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useFloatingDetailPlacement` | `src/components/calendar/modal/useFloatingDetailPlacement.ts` |
 | `useCalendarGhostPreview` | `src/components/calendar/useCalendarGhostPreview.ts` |
 | `useDeadlineQuickActions` | `src/components/calendar/views/deadlines/useDeadlineQuickActions.ts` |
+| `useDashboardFinance` | `src/components/dashboard/finance/useDashboardFinance.ts` |
 | `useAlfredPanelState` | `src/components/dashboard/useAlfredPanelState.ts` |
 | `useCalendarWorkspaceState` | `src/components/dashboard/useCalendarWorkspaceState.ts` |
 | `useDashboardItemSheet` | `src/components/dashboard/useDashboardItemSheet.ts` |
@@ -905,6 +907,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/dashboard/current/events` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/refresh` | `server/routes/dashboard.ts` |
 | POST | `/api/dashboard/current/sync` | `server/routes/dashboard.ts` |
+| GET | `/api/dashboard/finance` | `server/routes/dashboard.ts` |
+| GET | `/api/dashboard/finance/review-runs` | `server/routes/dashboard.ts` |
 | GET | `/api/dashboard/health` | `server/routes/dashboard.ts` |
 | GET | `/api/ea/accounts/todoist/auth` | `server/routes/todoist-oauth.ts` |
 | GET | `/api/ea/accounts/todoist/callback` | `server/routes/todoist-oauth.ts` |

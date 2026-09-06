@@ -5,8 +5,8 @@ import {
   dashboardStageDelays,
 } from "./dashboard-scene-tokens";
 
-const dashboardSurfaceBackground = "linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0.008) 100%)";
-const dashboardSurfaceBorder = "1px solid rgba(255,255,255,0.05)";
+const dashboardSurfaceBackground = "var(--sp-card, rgba(36,36,58,0.4))";
+const dashboardSurfaceBorder = "1px solid var(--color-border, rgba(255,255,255,0.08))";
 
 interface DashboardLayoutFrameProps {
   layoutMode: string;
@@ -64,11 +64,11 @@ function DashboardSceneRegion({
   );
 }
 
-export function DashboardSurface({ children, isMobile = false, style }: { children: ReactNode; isMobile?: boolean; style?: CSSProperties }) {
+export function DashboardSurface({ children, isMobile: _isMobile = false, style }: { children: ReactNode; isMobile?: boolean; style?: CSSProperties }) {
   return (
     <div
       style={{
-        borderRadius: isMobile ? 18 : 24,
+        borderRadius: 16,
         border: dashboardSurfaceBorder,
         background: dashboardSurfaceBackground,
         overflow: "hidden",
@@ -99,7 +99,7 @@ export function ThreeTierLayout({ isMobile = false, band, timelinePanel, context
       <DashboardSceneRegion delay={dashboardStageDelays.hero} style={{ flex: "none" }}>{band}</DashboardSceneRegion>
       <DashboardSceneRegion delay={dashboardStageDelays.primary} initial={{ opacity: 0, y: 16, scale: 0.994 }}
         style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 344px", gap: 14, overflow: "hidden" }}>
-        <DashboardSceneRegion delay={dashboardStageDelays.primary} initial={{ opacity: 0, x: -12, y: 8, scale: 0.996 }} style={{ minHeight: 0, height: "100%" }}>{timelinePanel}</DashboardSceneRegion>
+        <DashboardSceneRegion delay={dashboardStageDelays.primary} initial={{ opacity: 0, x: -12, y: 8, scale: 0.996 }} style={{ minHeight: 0, height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", padding: "2px 3px 8px" }}>{timelinePanel}</DashboardSceneRegion>
         <DashboardSceneRegion delay={dashboardStageDelays.secondary} initial={{ opacity: 0, x: 14, y: 10, scale: 0.996 }} style={{ minHeight: 0, height: "100%", overflow: "hidden" }}>{contextColumn}</DashboardSceneRegion>
       </DashboardSceneRegion>
     </DashboardLayoutFrame>

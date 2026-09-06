@@ -51,7 +51,7 @@ const PACIFIC_DAY_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
  */
 function TodayTimeline({
   accent = "#cba6da",
-  density = "comfortable",
+  density: _density = "comfortable",
   isMobile = false,
   events = [],
   deadlines = [],
@@ -126,7 +126,7 @@ function TodayTimeline({
     <div
       data-testid={isMobile ? "today-timeline-mobile" : "today-timeline"}
       style={{
-        padding: isMobile ? "18px 16px 20px" : density === "compact" ? "22px 24px 24px" : "26px 28px 28px",
+        padding: isMobile ? "16px" : "18px 20px",
         ...(containScroll ? {
           height: "100%",
           minHeight: 0,
@@ -186,12 +186,12 @@ function TodayTimeline({
             />}
             <div
               style={{
-                marginTop: 16,
+                marginTop: 12,
                 fontSize: 10,
                 fontWeight: 600,
-                letterSpacing: 2.2,
+                letterSpacing: 0.8,
                 textTransform: "uppercase",
-                color: "rgba(205,214,244,0.4)",
+                color: "var(--color-text-secondary, #a6adc8)",
                 padding: "0 6px 4px",
               }}
             >
@@ -267,7 +267,7 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
 
   return (
     <div>
-      <button type="button" className={isMobile ? "timeline-mobile-control" : undefined} aria-expanded={open} onClick={onToggle}
+      <button type="button" className={`timeline-disclosure${isMobile ? " timeline-mobile-control" : ""}`} aria-expanded={open} onClick={onToggle}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onPointerDown={() => setPressed(true)} onPointerUp={() => setPressed(false)}
@@ -282,10 +282,10 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
           >
             <ChevronRight size={14} color="rgba(205,214,244,0.5)" />
           </Motion.span>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sp-text)" }}>Tomorrow</span>
-          {!isMobile && <span style={{ fontSize: 11, color: "rgba(205,214,244,0.4)" }}>{label}</span>}
+          <span style={{ fontSize: 12, fontWeight: 500, color: "var(--sp-text)" }}>Tomorrow</span>
+          {!isMobile && <span style={{ fontSize: 11, color: "var(--color-text-secondary, #a6adc8)" }}>{label}</span>}
         </span>
-        <span style={{ flexShrink: 0, fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{summary}</span>
+        <span style={{ flexShrink: 0, fontSize: 11, color: "var(--color-text-secondary, #a6adc8)" }}>{summary}</span>
       </button>
       {contentRendered && (
         <Motion.div
@@ -339,7 +339,7 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
 
   return (
     <div>
-      <button type="button" className={isMobile ? "timeline-mobile-control" : undefined} aria-expanded={open} onClick={onToggle}
+      <button type="button" className={`timeline-disclosure${isMobile ? " timeline-mobile-control" : ""}`} aria-expanded={open} onClick={onToggle}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onPointerDown={() => setPressed(true)} onPointerUp={() => setPressed(false)}
@@ -354,9 +354,9 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
           >
             <ChevronRight size={14} color="rgba(205,214,244,0.5)" />
           </Motion.span>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sp-text)" }}>Rest of this week</span>
+          <span style={{ fontSize: 12, fontWeight: 500, color: "var(--sp-text)" }}>Rest of this week</span>
         </span>
-        <span style={{ flexShrink: 0, fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{count} {count === 1 ? "item" : "items"}</span>
+        <span style={{ flexShrink: 0, fontSize: 11, color: "var(--color-text-secondary, #a6adc8)" }}>{count} {count === 1 ? "item" : "items"}</span>
       </button>
       {contentRendered && (
         <Motion.div

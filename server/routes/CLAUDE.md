@@ -24,7 +24,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `alfred.ts` — Alfred model-free email-context prepare/discard, assistant run stream, identity-only proposal Created acknowledgement, and conversation reset; wires read-only domain deps
 - `calendar.ts` — calendar CRUD validation/provider orchestration, deadline reads, event search, and reminder hydration; successful event-write effects delegate to the calendar domain
 - `calendar-bills-range.ts` — composes bill occurrences with read-only Actual transactions and independent degradation
-- `dashboard.ts` — dashboard state, current-data SSE stream, health checks
+- `dashboard.ts` — dashboard state, current-data SSE stream, health checks, and read-only finance cards
 - `tldraw.ts` — authenticated Notes bootstrap, revisioned document saves, and private content-addressed media
 - `news.ts` — News tab: topics/sources CRUD, starter-catalog import, add-source preview, seen-marker, manual refresh
 - `reminders.ts` — Discord reminder testing and configuration

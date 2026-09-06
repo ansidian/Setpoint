@@ -18,6 +18,9 @@ export type ComingUpRow = {
   kind: "deadline" | "bill";
   title: string;
   meta: string;
+  date?: string | null;
+  time?: string | null;
+  occurrenceKey?: string;
   sortDays?: number;
   chipTooltip?: string | null;
   chipLabel: string;
@@ -57,6 +60,7 @@ export function buildComingUp({
     if (n == null || n < (includeToday ? 0 : 1) || n > days) continue;
     rows.push({
       id: `deadline:${d.id}`, kind: "deadline", title: d.title || "",
+      date: d.due_date, time: d.due_time, occurrenceKey: `deadline:${d.id}:${d.due_date}`,
       meta: d.class_name || d.project_name || "Deadline", sortDays: n,
       chipTooltip: formatChipDateTime(d.due_date, d.due_time, n === 0, "long"), ...chipFor(n),
     });
@@ -69,6 +73,7 @@ export function buildComingUp({
     const amount = `$${Number(b.amount || 0).toFixed(2)}`;
     rows.push({
       id: `bill:${b.id}`, kind: "bill", title: b.name || "",
+      date: b.next_date, occurrenceKey: `bill:${b.id}:${b.next_date}`,
       meta: b.payee ? `${amount} · ${b.payee}` : amount, sortDays: n,
       chipTooltip: formatChipDateTime(b.next_date, null, n === 0, "long"), ...chipFor(n),
     });

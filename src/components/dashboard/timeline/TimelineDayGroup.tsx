@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { dayBucketLabel } from "../../../lib/shell-helpers";
 import Tooltip from "../../shared/Tooltip";
+import CompletionTransition from "../CompletionTransition";
 import TimelineRow from "./TimelineRow";
 import TimelineNowMarker from "./TimelineNowMarker";
 import {
@@ -62,7 +63,7 @@ export default function TimelineDayGroup({
   );
 
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 12 }}>
       {!hideHeader && (
         <div
           style={{
@@ -127,9 +128,8 @@ export default function TimelineDayGroup({
             background: "rgba(255,255,255,0.06)",
           }}
         />
-        {items.map((item, index) => (
-          <Fragment key={`${item.kind}-${index}`}>
-            {nowMarkerIndex === index && <TimelineNowMarker now={now} accent={accent} />}
+        {items.map((item, index) => {
+          const row = (
             <TimelineRow
               item={item as TimelineRowItem}
               accent={accent}
@@ -142,8 +142,18 @@ export default function TimelineDayGroup({
               liveMarker={rowStates[index]!.liveMarker}
               isNeedsYouReference={item.kind === "deadline" && promotedDeadlineIds.includes(String(item.data?.id))}
             />
-          </Fragment>
-        ))}
+          );
+          return (
+            <Fragment key={`${item.kind}-${index}`}>
+              {nowMarkerIndex === index && <TimelineNowMarker now={now} accent={accent} />}
+              {item.kind === "deadline" ? (
+                <CompletionTransition itemId={String(item.data?.id)} completing={!!item.data?._completing}>
+                  {row}
+                </CompletionTransition>
+              ) : row}
+            </Fragment>
+          );
+        })}
         {isToday && items.length === 0 && showEmptyState ? (
           <div
             data-testid="timeline-today-empty"

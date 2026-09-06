@@ -296,7 +296,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
 
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
-  const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body });
+  const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body, seed });
   if (transactionImportResponse !== NO_DEMO_TRANSACTION_IMPORT_RESPONSE) return transactionImportResponse;
   const request: DemoApiRequest = { path, url, pathname, method, seed, body };
   if (pathname === "/api/briefing/email/remote-content-trust" && method === "GET") {

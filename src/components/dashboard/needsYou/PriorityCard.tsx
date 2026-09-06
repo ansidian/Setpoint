@@ -12,8 +12,8 @@ const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
 
 const baseCardStyle: CSSProperties = {
   position: "relative", textAlign: "left", display: "flex", flexDirection: "column",
-  minWidth: 0, flex: "1 1 0", padding: "13px 14px", borderRadius: 12,
-  transition: "transform 150ms cubic-bezier(0.22,1,0.36,1), box-shadow 150ms, opacity 150ms",
+  minWidth: 0, flex: "1 1 0", padding: "12px", borderRadius: 12,
+  transition: "transform 160ms ease, background-color 160ms ease, border-color 160ms ease, opacity 160ms ease",
 };
 
 // The card body has its own hover lift; this action button owns a distinct
@@ -24,17 +24,17 @@ function CardActionButton({ tone, label, onClick }: { tone: string; label: strin
   return (
     <button
       type="button"
-      className="sp-focus-ring"
+      className="needs-you-card-action sp-focus-ring"
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       onMouseEnter={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
       onFocus={() => setActive(true)}
       onBlur={() => setActive(false)}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px", borderRadius: 7,
-        border: `1px solid color-mix(in srgb, ${tone} ${active ? 46 : 24}%, transparent)`,
-        background: `color-mix(in srgb, ${tone} ${active ? 18 : 9}%, transparent)`,
-        color: tone, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+        display: "inline-flex", alignItems: "center", gap: 5, minHeight: 30, padding: "5px 8px", borderRadius: 6,
+        border: `1px solid ${active ? `color-mix(in srgb, ${tone} 30%, transparent)` : "rgba(255,255,255,0.09)"}`,
+        background: active ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.025)",
+        color: "var(--sp-text)", fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
         whiteSpace: "nowrap",
         transform: active ? "translateY(-1px)" : "none",
         transition: "background 130ms ease, border-color 130ms ease, transform 130ms ease",
@@ -66,12 +66,8 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
     if (card.email) onOpen?.(card);
     else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, e?.currentTarget);
   };
-  const style = variant === "backfill"
-    ? { ...baseCardStyle, background: "color-mix(in srgb, var(--sp-surface) 50%, transparent)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.94, cursor: bodyClickable ? "pointer" : "default" }
-    : { ...baseCardStyle,
-        background: `color-mix(in srgb, ${cardTone} 7%, color-mix(in srgb, var(--sp-surface) 50%, transparent))`,
-        border: `1px solid color-mix(in srgb, ${cardTone} 26%, transparent)`,
-        cursor: bodyClickable ? "pointer" : "default" };
+  const style = { ...baseCardStyle, background: "rgba(255,255,255,0.015)",
+    border: "1px solid rgba(255,255,255,0.07)", cursor: bodyClickable ? "pointer" : "default" };
 
   // Footer action: emails get "Mark handled", deadlines get a real "Mark done",
   // bills get none (they aren't completable here — body click opens the calendar).
@@ -83,8 +79,8 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   // `!isMobile` guard) and the action is always-visible in flow, not absolute.
   const footer = variant === "backfill" ? (
     <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: isMobile ? "space-between" : "flex-start", minHeight: 16 }}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(205,214,244,0.42)", opacity: !isMobile && card.completable && hover ? 0 : 1, transition: "opacity 130ms ease", pointerEvents: "none" }}>
-        <Calendar size={11} color="rgba(205,214,244,0.42)" />{card.foot}
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--color-text-secondary, #a6adc8)", opacity: !isMobile && card.completable && hover ? 0 : 1, transition: "opacity 130ms ease", pointerEvents: "none" }}>
+        <Calendar size={11} color="var(--color-text-secondary, #a6adc8)" />{card.foot}
       </span>
       {card.completable && (
         <MarkDoneAction
@@ -104,22 +100,11 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
 
   return (
     <div
-      className={bodyClickable ? "dashboard-item-trigger sp-focus-ring" : undefined}
+      className={bodyClickable ? "needs-you-priority-card dashboard-item-trigger sp-focus-ring" : "needs-you-priority-card"}
       style={
         !hover
           ? style
-          : variant === "urgent"
-            ? {
-                ...style,
-                background: `color-mix(in srgb, ${cardTone} 11%, color-mix(in srgb, var(--sp-surface) 50%, transparent))`,
-                border: `1px solid color-mix(in srgb, ${cardTone} 34%, transparent)`,
-              }
-            : {
-                ...style,
-                background: "color-mix(in srgb, var(--sp-surface) 66%, transparent)",
-                border: "1px solid rgba(255,255,255,0.11)",
-                opacity: 1,
-              }
+          : { ...style, background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.12)" }
       }
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       onFocus={() => setHover(true)} onBlur={() => setHover(false)}
@@ -136,17 +121,17 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
         : {})}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(205,214,244,0.6)" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary, #a6adc8)" }}>
           <SourceIcon size={12} color={tone} strokeWidth={2.2} />{card.source}
         </span>
         <Tooltip text={card.chipTooltip}>
           <StatusChip label={card.pill.label} tone={card.pill.tone} />
         </Tooltip>
       </div>
-      <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.28, color: "#dfe5f7", margin: "9px 0 6px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{card.title}</div>
-      <div style={{ fontSize: 11, color: "rgba(205,214,244,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.meta}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "var(--sp-text)", margin: "8px 0 4px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{card.title}</div>
+      <div style={{ fontSize: 11, lineHeight: 1.5, color: "var(--color-text-secondary, #a6adc8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.meta}</div>
       {footer && (
-        <div style={{ marginTop: 11, paddingTop: 9, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           {footer}
         </div>
       )}

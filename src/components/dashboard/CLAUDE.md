@@ -4,12 +4,12 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ## Files
 
-- `CompletionTransition.tsx` — completion-only Done receipt and departure for Needs You and Coming Up; departing controls are inert and reduced motion is immediate.
+- `CompletionTransition.tsx` — shared Done receipt: departure for Needs You and Coming Up, in-place feedback for Today before its completed row dims; completing/departing controls are inert and reduced motion is immediate.
 
 ### Shell + layout
 - `DashboardShell.tsx` — orchestrates state and tab switching; supplies mobile Inbox app actions while hiding its redundant shell header; mobile Dashboard uses a compact date/title header with shared app actions; mounts dashboard, inbox, calendar, notes, and news through `DashboardTabPanel`; routes Alfred proposal review into the typed Calendar bridge without pre-closing the panel
 - `DashboardTabPanel.tsx` — dashboard-specific tab seam combining keep-alive/freeze behavior with the responsive `tabpanel` ID and accessible name contract
-- `DashboardBody.tsx` — renders the three tiers (NeedsYouBand / TodayTimeline / ContextColumn) through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
+- `DashboardBody.tsx` — renders NeedsYouBand / TodayTimeline with financial context / ContextColumn through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
 - `dashboard-interactions.css` — shared lift/press feedback for primary dashboard item triggers; Inbox Peek intentionally does not opt in
 - `DashboardShellOverlays.tsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.tsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
@@ -30,7 +30,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ### Tier 1 — Needs-you band
 - `needsYou/NeedsYouBand.tsx` — the band: a needs-you count with expandable urgent rows on mobile and priority cards on desktop; desktop switches to a wheel-scroll horizontal rail above five cards
-- `needsYou/needsYouModel.ts` — classifies deadlines/bills/emails into urgent cards plus up to two quiet upcoming backfill cards (overdue/due-today only; bills admit `days===0`)
+- `needsYou/needsYouModel.ts` — classifies deadlines/bills/emails into urgent cards (dashboard disables future backfill; bills admit `days===0`), with snapshot identity deduplication
 - `needsYou/NeedsYouCountBlock.tsx` — the leading count + breakdown block
 - `needsYou/StartHereStrip.tsx` / `needsYou/StartHereStrip.css` — compact ranked recommendation command that reuses the first urgent card and routes through its existing open behavior
 - `needsYou/PriorityCard.tsx` — a single priority card; deadline/bill bodies are click-to-open, emails open via their button
@@ -40,25 +40,37 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `TodayTimeline.tsx` — merges events and deadlines chronologically with live now marker
 - `timeline/TimelineClock.tsx` — ticking current-time source for the now marker
 - `timeline/TimelineDayGroup.tsx` — day grouping and the spine; injects the focus-window now marker into the today rail
-- `timeline/TimelineHeader.tsx` — section title, live clock, and refresh status
+- `timeline/TimelineHeader.tsx` / `timeline/timeline-presentation.css` — compact title, live clock, filter controls, refresh status and shared timeline presentation
 - `timeline/MobileTodayTimeline.tsx` / `timeline/timeline-mobile.css` — mobile primary timeline and Earlier today disclosure for ended timed events; touch targets and row states
-- `timeline/TimelineRow.tsx` — event/deadline row; the live row renders the bounded in-card now-marker (NOW H:MM · N% elapsed)
+- `timeline/TimelineRow.tsx` — event/deadline row; legibly dimmed past events/completed deadlines and explicit Completed/overdue badges, including Needs You reference rows; the live row renders a thin progress track and fixed readable elapsed label (NOW H:MM · N% elapsed)
 - `timeline/TimelineNowMarker.tsx` — standalone "NOW · H:MM" marker for a focus-window gap (no live event); mutually exclusive with TimelineRow's in-card line
 - `timeline/TimelineSkeleton.tsx` — loading placeholders
 - `timeline/timeline-helpers.ts` — day grouping, layout constants, now-marker progress math (percentElapsed / formatNowMarkerLabel / formatNowMarkerClock), and the focus-window marker slot (resolveTodayNowMarkerIndex)
 
 ### Tier 3 — Context column
-- `context/ContextColumn.tsx` — the right column: weather, coming-up, and the inbox peek
+- `context/ContextColumn.tsx` — the right column: weather, Ahead, and Inbox Peek; occurrence-qualified deadline actions
 - `context/WeatherCard.tsx` — weather card that expands on hover/focus/tap to reveal the rest-of-today hourly strip and a next-3-days forecast
 - `context/weatherCardModel.ts` — pure transforms shaping the live feed into the hover card's hour/day view-models (now-accent, rain chip, condition labels)
-- `context/ComingUpCard.tsx` — upcoming deadlines/bills list; mobile starts tomorrow with three rows and View all
+- `context/ComingUpCard.tsx` — Ahead: future deadlines grouped by day, bounded preview with day/week disclosures
 - `context/MobileComingUp.css` — mobile upcoming-row layout, completion/open controls, and preview disclosure states
 - `context/comingUpModel.ts` — builds the coming-up rows from live deadlines/bills; mobile excludes today through includeToday
 
 ### Rails (context-column building blocks)
-- `rails/InboxPeek.tsx` — important-email preview with needs-you count (used by `ContextColumn`)
+- `rails/InboxPeek.tsx` — full snapshot lane counts and three useful summaries excluding urgent-band emails; filtered Inbox handoffs
 - `rails/railModel.ts` — `timeAgo` relative-time formatting for the inbox peek
-- `rails/railPrimitives.tsx` — shared `SectionHeader`/`OpenInboxButton`/`EmptyRow` used by the inbox peek and Coming-up card
+- `rails/railPrimitives.tsx` — shared `SectionHeader`/`EmptyRow` used by the inbox peek and Coming-up card
+
+### Financial context and schedule notices
+- `finance/DashboardFinance.tsx` — Money Ahead / Spending Snapshot pair and Finance Review / Recent Automation activity with Settings and Calendar handoffs
+- `finance/useDashboardFinance.ts` — independent local financial read, refresh/focus handling, and last-success retention
+- `finance/MoneyAheadCard.tsx` — future unpaid scheduled bills, seven-day total and bounded expandable rows
+- `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
+- `finance/FinancialActivityCard.tsx` — pending review count and latest automatic outcomes with review and source actions
+- `finance/FinancialEmailPreview.tsx` — anchored/mobile source preview through the existing safe email body reader
+- `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states
+- `timeline/DashboardScheduleNotices.tsx` / `.css` — conditional stored departure estimate and overlap notices, reusing calendar reminders
+- `timeline/dashboardScheduleModel.ts` — exact occurrence reminder matching and remaining-today overlap policy
+- `rails/inboxPeekModel.ts` / `rails/InboxPeek.css` — snapshot deduplication, lane counts, bounded selection and compact presentation
 
 ### Data + details
 - `calendarBillsData.ts` — transforms live data into calendar-compatible bill shape
@@ -72,8 +84,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ## Local patterns
 
-- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, timeline + 344px context column below); mobile stacks the same three tiers. There are no per-user layout modes.
-- Overdue/due-today deadlines and due-today bills live only in the Needs-you band (the single home for "open this now"); the context column shows future items. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
+- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.tsx`): desktop is a no-page-scroll column (band on top, scrolling Today/finance stack + 344px scrolling context column below); mobile stacks the same three tiers. There are no per-user layout modes.
+- Overdue/due-today deadlines and due-today bills live only in the Needs-you band (the single home for "open this now"); Ahead shows future deadlines and Money Ahead shows future bills. Today retains deadline context but future deadlines do not repeat in its later groups. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
 - Motion uses scene tokens for staggered entry; respect reduced motion.
 
 ## Related

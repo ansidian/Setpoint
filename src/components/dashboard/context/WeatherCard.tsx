@@ -12,8 +12,8 @@ import type { DashboardWeather } from "./weatherCardModel";
 // doesn't trip react-hooks/static-components.
 const ACCENT = "var(--sp-accent)"; // lavender — reserved for the current hour only
 const PRIMARY = "#dfe5f7";
-const FAINT = "rgba(205,214,244,0.4)";
-const MICRO_LABEL: CSSProperties = { fontSize: 9.5, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "rgba(205,214,244,0.42)" };
+const FAINT = "var(--color-text-secondary, #a6adc8)";
+const MICRO_LABEL: CSSProperties = { fontSize: 9.5, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--color-text-secondary, #a6adc8)" };
 
 export default function WeatherCard({ weather }: { weather?: DashboardWeather | null }) {
   const [open, setOpen] = useState(false);
@@ -55,10 +55,10 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
       {...interaction}
       style={{
         flex: "none",
-        padding: "15px 17px",
-        background: "linear-gradient(180deg, rgba(255,255,255,0.022), rgba(255,255,255,0.005))",
+        padding: "18px 20px",
+        background: "var(--sp-card, rgba(36,36,58,0.4))",
         border: `1px solid rgba(255,255,255,${open ? 0.12 : 0.06})`,
-        borderRadius: 14,
+        borderRadius: 16,
         cursor: hasForecast && coarse ? "pointer" : "default",
         outline: "none",
         transition: `border-color ${reduce ? 0 : 200}ms ease`,
@@ -69,10 +69,10 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 30, fontWeight: 600, color: PRIMARY, lineHeight: 1 }}>{temp}</span>
-            {condition && <span style={{ fontSize: 12, color: "rgba(205,214,244,0.6)" }}>{condition}</span>}
+            {condition && <span style={{ fontSize: 12, color: "var(--color-text-secondary, #a6adc8)" }}>{condition}</span>}
           </div>
           {meta && (
-            <div style={{ fontSize: 11, color: "rgba(205,214,244,0.45)", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{meta}</div>
+            <div style={{ fontSize: 11, color: "var(--color-text-secondary, #a6adc8)", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{meta}</div>
           )}
         </div>
         <Icon name={weather?.icon || "Sun"} size={30} strokeWidth={1.8} color="var(--sp-cream, #f9e2af)" style={{ flexShrink: 0 }} />
@@ -119,7 +119,7 @@ export default function WeatherCard({ weather }: { weather?: DashboardWeather | 
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 500, color: "rgba(205,214,244,0.7)" }}>{d.name}</span>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                         <Icon name={d.iconName} size={15} strokeWidth={2} color={d.color} style={{ flexShrink: 0 }} />
-                        <span style={{ fontSize: 11.5, color: "rgba(205,214,244,0.6)", whiteSpace: "nowrap" }}>{d.cond}</span>
+                        <span style={{ fontSize: 11.5, color: "var(--color-text-secondary, #a6adc8)", whiteSpace: "nowrap" }}>{d.cond}</span>
                         {d.rain && (
                           <span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--sp-blue)", fontVariantNumeric: "tabular-nums" }}>{d.rain}</span>
                         )}

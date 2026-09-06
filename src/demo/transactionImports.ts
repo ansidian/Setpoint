@@ -2,6 +2,9 @@ import type {
   TransactionImportItem,
   TransactionImportRunDetail,
 } from "../../shared/types/transaction-imports";
+import type { DashboardFinanceActivity, DashboardFinanceActivityItem } from "../../shared/types/dashboard-finance";
+import type { DemoSeed } from "./store.ts";
+import { recordDemoImportedTransaction } from "./financeData.ts";
 
 export const NO_DEMO_TRANSACTION_IMPORT_RESPONSE = Symbol("NO_DEMO_TRANSACTION_IMPORT_RESPONSE");
 
@@ -20,7 +23,7 @@ const item: TransactionImportItem = {
   parserVersion: "paypal-v1",
   externalId: "DEMO123456789012345",
   importedId: "paypal-DEMO123456789012345",
-  date: new Date().toISOString().slice(0, 10),
+  date: new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }),
   amountCents: -1800,
   currency: "USD",
   payee: "Fictional Cloud Tools",
@@ -51,25 +54,59 @@ let runs: TransactionImportRunDetail[] = [{
   startDate: new Date(now - 30 * 86_400_000).toISOString().slice(0, 10),
   endDate: new Date(now).toISOString().slice(0, 10),
   cursor: { complete: true },
-  counts: { discovered: 8, parsed: 3, review: 1, queued: 0, added: 0, updated: 0, duplicate: 2, failed: 0 },
+  counts: { discovered: 2, parsed: 2, review: 1, queued: 0, added: 1, updated: 0, duplicate: 0, failed: 0 },
   attempts: 1,
   lastError: null,
   createdAt: now,
   updatedAt: now,
-  items: [item],
+  items: [item, { ...item, id: "demo-transaction-item-automatic", emailUid: "demo-email-cloud-receipt", emailSubject: "You paid Cloud Sandbox $38.47", gmailMessageId: "demo-cloud-message", internetMessageId: "<demo-cloud@example.invalid>", externalId: "DEMO_CLOUD_3847", importedId: "paypal-DEMO_CLOUD_3847", payee: "Cloud Sandbox", amountCents: -3847, automationMode: "automatic", status: "added", reconciliationStatus: "added", updatedAt: now - 600_000 }],
 }];
+
+function needsReview(entry: TransactionImportItem) {
+  return ["needs_review", "failed", "paused"].includes(entry.status)
+    || (entry.status === "ready" && !entry.confirmedAt && (entry.automationMode === "observe" || !entry.automaticSafe));
+}
+
+export function getDemoFinanceActivity(): DashboardFinanceActivity {
+  const items = runs.flatMap((run) => run.items);
+  const review = items.filter(needsReview);
+  const recent = items.filter((entry) => entry.automationMode === "automatic" && !entry.confirmedAt && ["added", "updated", "already_present"].includes(entry.status));
+  const project = (entry: TransactionImportItem): DashboardFinanceActivityItem => ({
+    id: entry.id, runId: entry.runId, emailUid: entry.emailUid, payee: entry.payee, amountCents: entry.amountCents, currency: entry.currency,
+    status: entry.status as DashboardFinanceActivityItem["status"], updatedAt: entry.updatedAt,
+    description: entry.status === "added" ? "Imported into Actual" : entry.status === "already_present" ? "Already recorded in Actual" : entry.status === "updated" ? "Updated in Actual" : entry.status === "ready" ? "Ready for your confirmation" : entry.status === "failed" ? "Import needs a retry" : "Review the source evidence",
+  });
+  return { status: "ready", reviewCount: review.length, review: review.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), recent: recent.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), error: null };
+}
 
 export function handleDemoTransactionImportRequest({
   pathname,
   method,
   url,
   body,
+  seed,
 }: {
   pathname: string;
   method: string;
   url: URL;
   body: Record<string, unknown>;
+  seed: DemoSeed;
 }): unknown {
+  if (pathname === "/api/dashboard/finance/review-runs" && method === "GET") {
+    const requestedOffset = Number(url.searchParams.get("offset") || 0);
+    const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+    const pending = runs.filter((run) => run.items.some(needsReview))
+      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
+    return { runs: clone(pending.slice(offset, offset + 12).map(({ items: _items, ...run }) => run)), total: pending.length, offset };
+  }
+  if (method === "GET" && (pathname === "/api/briefing/email/demo-email-paypal-receipt" || pathname === "/api/briefing/email/demo-email-cloud-receipt")) {
+    const automatic = pathname.endsWith("demo-email-cloud-receipt");
+    return {
+      uid: automatic ? "demo-email-cloud-receipt" : "demo-email-paypal-receipt",
+      body: `Fictional PayPal demo receipt. You paid ${automatic ? "Cloud Sandbox $38.47" : "Fictional Cloud Tools $18.00"}. Paid from Demo Checking. This is sample receipt evidence only; no real payment or provider connection exists.`,
+      attachments: [],
+    };
+  }
   if (!pathname.startsWith("/api/briefing/transaction-imports/")) {
     return NO_DEMO_TRANSACTION_IMPORT_RESPONSE;
   }
@@ -113,13 +150,22 @@ export function handleDemoTransactionImportRequest({
     let accepted = 0;
     runs = runs.map((run) => {
       if (run.id !== runId) return run;
-      const ids = new Set(confirmations.map((entry) => String(
-        entry && typeof entry === "object" && "itemId" in entry ? entry.itemId || "" : "",
-      )));
+      const choices = new Map(confirmations.flatMap((entry) => entry && typeof entry === "object" && "itemId" in entry
+        ? [[String(entry.itemId || ""), entry as Record<string, unknown>] as const] : []));
       const items = run.items.map((candidate) => {
-        if (!ids.has(candidate.id)) return candidate;
+        const choice = choices.get(candidate.id);
+        if (!choice || !needsReview(candidate) || candidate.confirmedAt != null) return candidate;
         accepted++;
-        return { ...candidate, status: "added" as const, reconciliationStatus: "added" as const, confirmedAt: Date.now(), updatedAt: Date.now() };
+        const confirmed = { ...candidate,
+          date: typeof choice.date === "string" ? choice.date : candidate.date,
+          amountCents: typeof choice.amountCents === "number" && Number.isFinite(choice.amountCents) ? choice.amountCents : candidate.amountCents,
+          payee: typeof choice.payee === "string" ? choice.payee : candidate.payee,
+          notes: typeof choice.notes === "string" ? choice.notes : candidate.notes,
+          actualAccountId: typeof choice.actualAccountId === "string" ? choice.actualAccountId : candidate.actualAccountId,
+          actualCategoryId: typeof choice.actualCategoryId === "string" || choice.actualCategoryId === null ? choice.actualCategoryId : candidate.actualCategoryId,
+          status: "added" as const, reconciliationStatus: "added" as const, confirmedAt: Date.now(), updatedAt: Date.now() };
+        recordDemoImportedTransaction(seed, confirmed);
+        return confirmed;
       });
       return { ...run, items, counts: { ...run.counts, added: run.counts.added + accepted, review: Math.max(0, run.counts.review - accepted) }, updatedAt: Date.now() };
     });

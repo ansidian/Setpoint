@@ -14,15 +14,14 @@ export default function TimelineNowMarker({ accent, now }: { accent: string; now
     >
       <span
         style={{
-          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+          fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums",
           color: accent, background: `color-mix(in srgb, ${accent} 14%, transparent)`,
           borderRadius: 5, padding: "2px 6px", whiteSpace: "nowrap",
         }}
       >
         NOW · {formatNowMarkerClock(now)}
       </span>
-      <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${accent}, color-mix(in srgb, ${accent} 10%, transparent))` }} />
-      <span style={{ width: 7, height: 7, borderRadius: 99, background: accent, boxShadow: `0 0 8px ${accent}` }} />
+      <span style={{ flex: 1, height: 1, background: `color-mix(in srgb, ${accent} 25%, transparent)` }} />
     </div>
   );
 }

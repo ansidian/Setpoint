@@ -57,11 +57,17 @@ const TONE = { rose: "var(--sp-rose)", cream: "var(--sp-cream)", cyan: "var(--sp
 
 function laneRows(snapshotLanes?: NeedsYouLanes | null): NeedsYouEmail[] {
   const s = snapshotLanes || {};
+  const seen = new Set<string>();
   return [
     ...(s.carryover || []).map((r) => ({ ...r, lane: "needs_attention" })),
     ...(s.needs_attention || []),
     ...(s.fyi || []),
-  ];
+  ].filter((row) => {
+    const key = `${row.account_id}:${row.uid || row.email_id || row.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function isUrgentEmail(row: NeedsYouEmail) {
@@ -101,7 +107,7 @@ function classifyBill(b: NeedsYouBill): RankedNeedsYouCard | null {
     // Click-to-open dispatch payload (Blocking Fix 2).
     jumpKind: "bill", jumpId: b.id, date: b.next_date || null, data: b,
     chipTooltip: formatChipDateTime(b.next_date, null, true),
-    title: b.name || b.payee || "Bill", meta: `${formatAmount(b.amount)} · Autopay off`,
+    title: b.name || b.payee || "Bill", meta: `${formatAmount(b.amount)} · No matching payment in Actual`,
     pill: { label: "Due today", tone: TONE.rose },
     _overdue: false, _dueToday: true, _rank: 1,
   };
@@ -122,8 +128,8 @@ function classifyEmailCard(row: NeedsYouEmail, opened: string[]): RankedNeedsYou
     jumpKind: "email", jumpId: uid, date: null, data: row,
     uid,
     title: row.subject || "(no subject)",
-    meta: `${row.from || "Unknown"}${isOpen ? " · opened, no reply yet" : " · awaiting reply"}`,
-    pill: { label: "Needs reply", tone: TONE.rose },
+    meta: `${row.from || row.from_name || row.from_address || "Unknown sender"}${row.action ? ` · ${row.action}` : isOpen ? " · Opened" : ""}`,
+    pill: { label: "Needs attention", tone: TONE.rose },
     _overdue: false, _dueToday: false, _rank: 3,
   };
 }

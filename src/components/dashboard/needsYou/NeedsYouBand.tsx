@@ -30,7 +30,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   const [actionError, setActionError] = useState<string | null>(null);
   const desktopCardRowRef = useRef<HTMLDivElement | null>(null);
   const model = useMemo(
-    () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, opened, handled, maxCards: Infinity }),
+    () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, opened, handled, maxCards: Infinity, backfillLimit: 0 }),
     [snapshotLanes, liveDeadlines, liveBills, opened, handled],
   );
   const recommendation = model.urgentCards[0] ?? null;
@@ -175,9 +175,9 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   return (
     <div
       data-testid="needs-you-band"
-      style={{ flex: "none", display: "flex", gap: 20, alignItems: "stretch", padding: "15px 18px", borderRadius: 16,
-        background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-rose) 5%, rgba(255,255,255,0.018)) 0%, rgba(255,255,255,0.005) 100%)",
-        border: "1px solid color-mix(in srgb, var(--sp-rose) 15%, rgba(255,255,255,0.06))" }}
+      style={{ flex: "none", display: "flex", gap: 20, alignItems: "stretch", padding: "18px 20px", borderRadius: 16,
+        background: "var(--sp-card, rgba(36,36,58,0.4))",
+        border: "1px solid var(--color-border, rgba(255,255,255,0.08))" }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "none" }}>
         {header}

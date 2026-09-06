@@ -6,7 +6,7 @@ import { buildComingUp } from "./comingUpModel";
 import type { ActualBillOccurrence } from "../../../../shared/types/actual";
 import type { DashboardWeather } from "./weatherCardModel";
 import type { ComingUpRow } from "./comingUpModel";
-import type { SnapshotItem } from "../../../../shared/types/snapshots";
+import type { ActiveSnapshotView } from "../../../../shared/types/snapshots";
 import type { DashboardDeadline } from "../../../context/dashboardTaskProjection";
 
 type ContextDeadline = DashboardDeadline;
@@ -16,33 +16,36 @@ interface ContextColumnProps {
   liveWeather?: DashboardWeather | null;
   liveDeadlines?: { upcoming?: ContextDeadline[] } | ContextDeadline[] | null;
   liveBills?: ContextBill[] | null;
-  snapshotLanes?: unknown;
-  emailAccounts?: Array<{ important?: Array<Partial<SnapshotItem> & { id: string | number; date?: string | null }> }>;
+  activeSnapshot?: ActiveSnapshotView | null;
+  excludedEmailIds?: readonly string[];
   accent?: string;
   isMobile?: boolean;
   showInboxPeek?: boolean;
   onJump?: (payload: { kind?: string | null; id?: string | number | null; data?: unknown; date?: string | null; email?: unknown }, anchor?: HTMLElement) => void;
-  onOpenInbox?: () => void;
+  onOpenInbox?: (lane?: "needs_attention" | "carryover" | "fyi" | "queued") => void;
   onCompleteDeadline?: (id: string, record: ContextDeadline) => unknown | Promise<unknown>;
 }
 
 export default function ContextColumn({
-  liveWeather, liveDeadlines, liveBills, snapshotLanes: _snapshotLanes,
-  emailAccounts = [], accent = "#cba6da", isMobile = false,
+  liveWeather, liveDeadlines, liveBills, activeSnapshot,
+  excludedEmailIds = [], accent = "#cba6da", isMobile = false,
   showInboxPeek = true, onJump, onOpenInbox, onCompleteDeadline,
 }: ContextColumnProps) {
-  const comingUp = useMemo(() => buildComingUp({ liveDeadlines, liveBills, days: 7, includeToday: !isMobile }), [liveDeadlines, liveBills, isMobile]);
+  const comingUp = buildComingUp({ liveDeadlines, days: 7, includeToday: false });
 
   const recordsById = useMemo(() => {
     const map = new Map<string, ContextRecord>();
     const deadlineList = Array.isArray(liveDeadlines) ? liveDeadlines : liveDeadlines?.upcoming || [];
-    for (const d of deadlineList) map.set(`deadline:${d.id}`, d);
+    for (const d of deadlineList) {
+      map.set(`deadline:${d.id}:${d.due_date}`, d);
+      if (!map.has(`deadline:${d.id}`)) map.set(`deadline:${d.id}`, d);
+    }
     for (const b of liveBills || []) map.set(`bill:${b.id}`, b);
     return map;
   }, [liveDeadlines, liveBills]);
 
   const handleComingUpJump = (row: ComingUpRow, anchor: HTMLElement) => {
-    const record = recordsById.get(row.id);
+    const record = recordsById.get(row.occurrenceKey || row.id);
     if (!record) return;
     if (row.kind === "deadline") onJump?.({ kind: "deadline", id: record.id, data: record }, anchor);
     else onJump?.({
@@ -56,7 +59,7 @@ export default function ContextColumn({
   // Coming-up deadlines complete through the same canonical completer the band
   // uses: (taskId, record) → completeDeadlineOccurrence(id, due_date).
   const handleComingUpComplete = (row: ComingUpRow) => {
-    const record = recordsById.get(row.id);
+    const record = recordsById.get(row.occurrenceKey || row.id);
     if (!record) return;
     return onCompleteDeadline?.(record.id, record as ContextDeadline);
   };
@@ -72,7 +75,7 @@ export default function ContextColumn({
       <WeatherCard weather={liveWeather} />
       <ComingUpCard items={comingUp} isMobile={isMobile} onJump={handleComingUpJump} onComplete={onCompleteDeadline ? handleComingUpComplete : undefined} />
       {showInboxPeek && (
-        <InboxPeek accent={accent} emailAccounts={emailAccounts} onJump={onJump} onOpenInbox={onOpenInbox} isMobile={isMobile} />
+        <InboxPeek accent={accent} activeSnapshot={activeSnapshot} excludedEmailIds={excludedEmailIds} onJump={onJump} onOpenInbox={onOpenInbox} isMobile={isMobile} />
       )}
     </div>
   );

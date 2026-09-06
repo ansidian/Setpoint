@@ -288,6 +288,13 @@ export function DashboardShell({
     setShellTab("inbox");
   }, [prepareEmailOpen, setShellTab]);
 
+  const openInboxLane = useCallback((lane?: "needs_attention" | "carryover" | "fyi" | "queued") => {
+    setHistoricalSnapshotView(null);
+    prepareEmailOpen(null);
+    resetInboxSession({ lane: lane || "__all" });
+    setShellTab("inbox");
+  }, [prepareEmailOpen, setShellTab]);
+
 
 
   const inboxActiveSnapshot = useMemo(() => {
@@ -464,6 +471,7 @@ export function DashboardShell({
             calendarDeadlinesError={!!calendarDeadlinesError}
             domainRefreshing={domainRefreshing}
             onOpenEmail={openEmailInInbox}
+            onOpenInbox={openInboxLane}
             onOpenDeadline={openDashboardDeadline}
             onOpenBillsCalendar={openDashboardBill}
             onOpenEventsCalendar={openDashboardEvent}

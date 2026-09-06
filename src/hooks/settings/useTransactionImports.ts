@@ -3,6 +3,7 @@ import {
   commitTransactionImportItems,
   dismissTransactionImportItem,
   getTransactionImportRun,
+  getDashboardFinanceReviewRuns,
   listTransactionImportRuns,
   retryTransactionImportItem,
   startTransactionImportScan,
@@ -29,13 +30,16 @@ export function isTransactionImportWorkActive(
     || Boolean(detail?.items.some((item) => ACTIVE_ITEM_STATUSES.has(item.status)));
 }
 
-export default function useTransactionImports({ enabled = true }: { enabled?: boolean } = {}) {
+export default function useTransactionImports({ enabled = true, requestedRunId = null, pendingOnly = false }: { enabled?: boolean; requestedRunId?: string | null; pendingOnly?: boolean } = {}) {
   const [runs, setRuns] = useState<TransactionImportRunSummary[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<TransactionImportRunDetail | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [pageOffset, setPageOffset] = useState(0);
+  const [totalRuns, setTotalRuns] = useState(0);
+  const pageOffsetRef = useRef(0);
   const mountedRef = useRef(false);
   const requestRef = useRef(0);
   const selectedRunIdRef = useRef<string | null>(null);
@@ -54,20 +58,29 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
     return detail;
   }, []);
 
-  const refresh = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
+  const refresh = useCallback(async ({ quiet = false, offset = pageOffsetRef.current }: { quiet?: boolean; offset?: number } = {}) => {
     if (!enabled) return;
     const requestId = ++requestRef.current;
     if (!quiet) setLoading(true);
     try {
-      const response = await listTransactionImportRuns();
+      let response = pendingOnly ? await getDashboardFinanceReviewRuns(offset)
+        : await listTransactionImportRuns().then(({ runs }) => ({ runs, total: runs.length, offset: 0 }));
+      if (pendingOnly && offset > 0 && offset >= response.total) {
+        offset = Math.max(0, Math.floor((response.total - 1) / 12) * 12);
+        response = await getDashboardFinanceReviewRuns(offset);
+      }
       if (!mountedRef.current || requestId !== requestRef.current) return;
       setRuns(response.runs);
+      setTotalRuns(response.total);
+      setPageOffset(offset);
+      pageOffsetRef.current = offset;
       const currentId = selectedRunIdRef.current;
-      const nextId = currentId && response.runs.some((run) => run.id === currentId)
+      const nextId = currentId && (currentId === requestedRunId || response.runs.some((run) => run.id === currentId))
         ? currentId
         : response.runs[0]?.id || null;
       setSelectedRunId(nextId);
       selectedRunIdRef.current = nextId;
+      setSelectedRun((current) => current?.id === nextId ? current : null);
       await loadRun(nextId, requestId);
       if (mountedRef.current && requestId === requestRef.current) setError("");
     } catch (nextError) {
@@ -75,14 +88,23 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
     } finally {
       if (mountedRef.current && requestId === requestRef.current) setLoading(false);
     }
-  }, [enabled, loadRun]);
+  }, [enabled, loadRun, pendingOnly, requestedRunId]);
 
   useEffect(() => {
     mountedRef.current = true;
+    selectedRunIdRef.current = requestedRunId;
+    pageOffsetRef.current = 0;
     void refresh();
     return () => {
       mountedRef.current = false;
     };
+  }, [refresh, requestedRunId]);
+
+  const changePage = useCallback((offset: number) => {
+    selectedRunIdRef.current = null;
+    setSelectedRunId(null);
+    setSelectedRun(null);
+    return refresh({ offset: Math.max(0, offset) });
   }, [refresh]);
 
   const active = useMemo(() => isTransactionImportWorkActive(runs, selectedRun), [runs, selectedRun]);
@@ -107,6 +129,7 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
     const requestId = ++requestRef.current;
     selectedRunIdRef.current = runId;
     setSelectedRunId(runId);
+    setSelectedRun(null);
     setLoading(true);
     try {
       await loadRun(runId, requestId);
@@ -176,6 +199,9 @@ export default function useTransactionImports({ enabled = true }: { enabled?: bo
 
   return {
     runs,
+    totalRuns,
+    pageOffset,
+    changePage,
     selectedRun,
     selectedRunId,
     loading,

@@ -53,6 +53,8 @@ export interface ActualQuickTransactionResult {
 }
 
 export { isSchedulePaid } from "./actual-bill-occurrences.ts";
+// Read-only transaction consumers use the same domain facade without starting the SDK.
+export { readTransactionsRange } from "./actual-transactions-read.ts";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;
 const FORCE_METADATA_WORKER_TIMEOUT_MS = 30_000;

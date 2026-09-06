@@ -4,7 +4,7 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 
 ## Files
 
-- `current-service.ts` — the five public entrypoints + response composition; wires store/model/runner together
+- `current-service.ts` — public current-dashboard entrypoints + response composition; wires store/model/runner together and exposes the read-only finance projection
 - `current-types.ts` — server-only provider, context, dependency, and payload contracts
 - `current-sources.ts` — cache-key registry + pure row/health helpers (TTL, usable-payload, content key)
 - `current-events.ts` — SSE event fan-out for current-dashboard changes
@@ -12,6 +12,8 @@ Engine for the `/api/dashboard/current` envelope: cache rows, refresh planning/s
 - `currentRefreshPlanModel.ts` — pure refresh planning: `(rows, opts) → { scheduled, skipped }`
 - `currentCacheStore.ts` — all `ea_current_data_cache` reads/writes (load, save, mark-failed, mark-refreshing)
 - `currentRefreshRunner.ts` — async orchestration: fetch-timeout race, refreshRows, background dedup map
+- `dashboard-finance.ts` — read-only finance card facade: bounded local Actual spending, freshness, and independently degraded import activity
+- `dashboard-finance-model.ts` — Pacific month-to-date comparison ranges and expense/category aggregation
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 

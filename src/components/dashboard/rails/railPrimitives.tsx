@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { ArrowRight } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { LucideProps } from "lucide-react";
 
@@ -28,53 +26,6 @@ export function SectionHeader({ title, subtitle, right, isMobile = false }: Sect
       </div>
       {right}
     </div>
-  );
-}
-
-export function OpenInboxButton({ accent, onClick, isMobile = false }: { accent: string; onClick?: () => void; isMobile?: boolean }) {
-  const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
-  const active = hover || focus;
-
-  return (
-    <button
-      type="button"
-      className={isMobile ? "mobile-dashboard-open-inbox" : undefined}
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onFocus={() => setFocus(true)}
-      onBlur={() => setFocus(false)}
-      style={{
-        minHeight: isMobile ? 44 : undefined,
-        minWidth: isMobile ? 44 : undefined,
-        padding: "3px 8px",
-        borderRadius: 6,
-        border: `1px solid ${active ? `${accent}3f` : "rgba(255,255,255,0.08)"}`,
-        background: active ? `${accent}14` : "rgba(255,255,255,0.015)",
-        color: active ? accent : "rgba(205,214,244,0.7)",
-        fontSize: 10,
-        fontFamily: "inherit",
-        fontWeight: 600,
-        cursor: "pointer",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
-      }}
-    >
-      <span>Open</span>
-      <span
-        aria-hidden="true"
-        style={{
-          display: "inline-flex",
-          transform: active ? "translateX(1.5px)" : "translateX(0)",
-          transition: "transform 140ms cubic-bezier(0.22, 1, 0.36, 1)",
-        }}
-      >
-        <ArrowRight size={9} />
-      </span>
-    </button>
   );
 }
 

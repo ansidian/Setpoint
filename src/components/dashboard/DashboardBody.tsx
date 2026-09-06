@@ -11,10 +11,14 @@ import { calendarContentSignature, stabilizeDeadlines } from "../../hooks/curren
 import { markSnapshotItemHandled } from "../../api";
 import { useDashboard } from "../../context/DashboardContext";
 import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
-import type { ActiveSnapshotView, SnapshotItem } from "../../../shared/types/snapshots";
+import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
 import type { NeedsYouBill } from "./needsYou/needsYouModel";
+import { buildNeedsYouModel } from "./needsYou/needsYouModel";
+import { DashboardScheduleNotices } from "./timeline/DashboardScheduleNotices";
+import DashboardFinance from "./finance/DashboardFinance";
+import "./finance/finance-cards.css";
 import "./dashboard-interactions.css";
 
 interface DashboardBodyCalendarRange {
@@ -54,41 +58,31 @@ interface DashboardBodyProps {
   calendarDeadlinesError?: boolean;
   domainRefreshing?: boolean;
   onOpenEmail: (id: string | number | null) => void;
+  onOpenInbox?: (lane?: "needs_attention" | "carryover" | "fyi" | "queued") => void;
   onOpenDeadline: (task: DashboardDeadline, anchor?: HTMLElement) => void;
   onOpenBillsCalendar: (date: string | null, itemId: string | number | null, item?: Record<string, unknown>, anchor?: HTMLElement) => void;
   onOpenEventsCalendar: (date: string | null, itemId: string | number | null, item?: Record<string, unknown>, anchor?: HTMLElement) => void;
 }
-
-interface DashboardEmailAccount {
-  id: string;
-  name: string;
-  email: string;
-  color: string;
-  icon: string;
-  unread: number;
-  important: Array<Partial<SnapshotItem> & { id: string; uid: string; date?: string | null }>;
-  noise: [];
-}
-type SnapshotEmailRow = Omit<SnapshotItem, "lane"> & { lane: string };
-
-const EMPTY_EMAIL_ACCOUNTS: DashboardEmailAccount[] = [];
 
 function DashboardBodyInner({
   liveData: liveDataInput, activeSnapshot = null, calendarRange, accent,
   isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false,
   calendarDeadlinesError = false,
   domainRefreshing = false,
-  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
+  onOpenEmail, onOpenInbox, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
 }: DashboardBodyProps) {
   const liveData = liveDataInput as unknown as CurrentDashboardLiveData;
   const { handleCompleteTask } = useDashboard();
   const seededEvents = useMemo(() => liveData.liveCalendar || [], [liveData.liveCalendar]);
   const [events, setEvents] = useState<DashboardCalendarEvent[]>([]);
   const [liveEventsReady, setLiveEventsReady] = useState(false);
-  const today = useMemo(
-    () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date()),
-    [],
-  );
+  const [today, setToday] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }));
+  useEffect(() => {
+    const refreshDay = () => setToday(new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }));
+    refreshDay();
+    const timer = window.setInterval(refreshDay, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const ensureCalendarRange = calendarRange.ensureRange;
   const calendarRevision = calendarRange.revision ?? 0;
 
@@ -156,63 +150,16 @@ function DashboardBodyInner({
     [allowCurrentDeadlineFallback, calendarDeadlines?.upcoming, calendarDeadlinesReady, liveUpcoming],
   );
   const bills = liveData.liveBills || [];
-  const activeSnapshotEmailAccounts = useMemo<DashboardEmailAccount[] | null>(() => {
-    if (!activeSnapshot?.snapshot) return null;
-    const accounts = new Map<string, DashboardEmailAccount>((activeSnapshot.filters?.accounts || []).map((account) => [
-      account.account_id,
-      {
-        id: account.account_id,
-        name: account.label || account.email || account.account_id,
-        email: account.email || "",
-        color: account.color || accent,
-        icon: account.icon || "Mail",
-        unread: 0,
-        important: [],
-        noise: [],
-      },
-    ]));
-    const ensureAccount = (item: SnapshotEmailRow): DashboardEmailAccount => {
-      const key = item.account_id || "snapshot";
-      if (!accounts.has(key)) {
-        accounts.set(key, {
-          id: key,
-          name: item.account_label || item.account_email || "Snapshot",
-          email: item.account_email || "",
-          color: item.account_color || accent,
-          icon: item.account_icon || "Mail",
-          unread: 0,
-          important: [],
-          noise: [],
-        });
-      }
-      return accounts.get(key)!;
-    };
-    const rows = [
-      ...(activeSnapshot.carryover || []).map((item) => ({ ...item, lane: "needs_attention" })),
-      ...(activeSnapshot.lanes?.needs_attention || []),
-      ...(activeSnapshot.lanes?.fyi || []),
-    ];
-    for (const item of rows) {
-      const account = ensureAccount(item);
-      const lane = item.lane === "fyi" ? "fyi" : "action";
-      const email = {
-        id: String(item.uid || item.email_id || item.id),
-        uid: String(item.uid || item.email_id || item.id),
-        subject: item.subject || "",
-        from: item.from || item.from_name || item.from_address || "Unknown",
-        date: item.date || item.email_date || null,
-        read: !!item.read,
-        triage: lane,
-      };
-      account.important.push(email as DashboardEmailAccount["important"][number]);
-      if (!email.read) account.unread += 1;
-    }
-    return Array.from(accounts.values());
-  }, [accent, activeSnapshot]);
-  const emailAccounts = activeSnapshotEmailAccounts || EMPTY_EMAIL_ACCOUNTS;
+  const bandLanes = useMemo(() => activeSnapshot ? Object.fromEntries(
+    Object.entries({ ...activeSnapshot.lanes, carryover: activeSnapshot.carryover }).map(([lane, items]) => [
+      lane, items.map((item) => ({ ...item, snapshot_item_id: item.id })),
+    ]),
+  ) : undefined, [activeSnapshot]);
+  const excludedEmailIds = useMemo(() => buildNeedsYouModel({ snapshotLanes: bandLanes, maxCards: Infinity, backfillLimit: 0 }).urgentCards.flatMap((card) => card.uid == null ? [] : [String(card.uid)]), [bandLanes]);
   // NeedsYouBand reads liveDeadlines.upcoming (object form); `deadlines` is the
   // flattened array, so wrap it (memoized to keep the band's model cache stable).
   const bandDeadlines = useMemo(() => ({ upcoming: deadlines }), [deadlines]);
+  const todayDeadlines = useMemo(() => deadlines.filter((deadline) => deadline.due_date && deadline.due_date.slice(0, 10) <= today), [deadlines, today]);
   const [promotedDeadlineIds, setPromotedDeadlineIds] = useState<readonly string[]>([]);
   const handlePromotedDeadlineIdsChange = useCallback((nextIds: readonly string[]) => {
     setPromotedDeadlineIds((previousIds) => (
@@ -255,7 +202,10 @@ function DashboardBodyInner({
 
   // Stable inbox-open handler shared by the band and the context column, so a
   // pure poll/refresh re-render does not hand them a fresh arrow identity.
-  const handleOpenInbox = useCallback(() => onOpenEmail(null), [onOpenEmail]);
+  const handleOpenInbox = useCallback((lane?: "needs_attention" | "carryover" | "fyi" | "queued") => {
+    if (onOpenInbox) onOpenInbox(lane);
+    else onOpenEmail(null);
+  }, [onOpenEmail, onOpenInbox]);
 
   // Wire the band's "handled" action straight to the snapshot endpoint; it emits
   // the SSE the dashboard refetches on, so no extra dispatch hook is needed here.
@@ -276,7 +226,7 @@ function DashboardBodyInner({
 
   const band = (
     <NeedsYouBand
-      snapshotLanes={activeSnapshot?.lanes}
+      snapshotLanes={bandLanes}
       liveDeadlines={bandDeadlines}
       liveBills={bills}
       railThreshold={5}
@@ -290,24 +240,30 @@ function DashboardBodyInner({
   );
 
   const timeline = (
-    <TodayTimeline accent={accent} isMobile={isMobile} events={displayEvents} deadlines={deadlines}
+    <TodayTimeline accent={accent} isMobile={isMobile} events={displayEvents} deadlines={todayDeadlines}
       promotedDeadlineIds={promotedDeadlineIds}
       onJump={handleRailJump} eventLoadingState={eventLoadingState}
       domainRefreshing={domainRefreshing} deadlinesLoading={calendarDeadlinesLoading}
-      scrollContained={!isMobile} />
+      scrollContained={false} />
   );
 
   const timelinePanel = (
-    <DashboardSurface isMobile={isMobile}
-      style={{ minHeight: 0, height: !isMobile ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
-      {timeline}
-    </DashboardSurface>
+    <div className="dashboard-main-stack">
+      <DashboardSurface isMobile={isMobile}>
+        <DashboardScheduleNotices events={displayEvents} refreshKey={String(domainRefreshing)}
+          onOpenEvent={(event, anchor) => handleRailJump({ kind: "event", id: event.id, data: event }, anchor)} />
+        {timeline}
+      </DashboardSurface>
+      <DashboardFinance bills={bills} billsLoading={liveData.billsLoading} configured={liveData.actualConfigured}
+        health={liveData.billsSyncHealth} refreshing={domainRefreshing}
+        onOpenBill={(bill, anchor) => handleRailJump({ kind: "bill", id: bill.id, date: bill.next_date, data: bill }, anchor)}
+        onOpenTransactions={(date) => onOpenBillsCalendar(date, null)} />
+    </div>
   );
 
   const contextColumn = (
     <ContextColumn accent={accent} isMobile={isMobile} liveWeather={liveData.liveWeather}
-      liveDeadlines={deadlines} liveBills={bills} snapshotLanes={activeSnapshot?.lanes}
-      emailAccounts={emailAccounts}
+      liveDeadlines={deadlines} activeSnapshot={activeSnapshot} excludedEmailIds={excludedEmailIds}
       onJump={handleRailJump} onOpenInbox={handleOpenInbox} onCompleteDeadline={handleCompleteDeadline} />
   );
 

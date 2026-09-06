@@ -55,6 +55,7 @@ import {
 export {
   clearCurrentDashboardRefreshState,
 } from "./currentRefreshRunner.ts";
+export { getDashboardFinance } from "./dashboard-finance.ts";
 
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
 

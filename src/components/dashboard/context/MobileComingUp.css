@@ -18,3 +18,25 @@
 .mobile-dashboard-open-inbox:active { transform: scale(.98); }
 .mobile-dashboard-open-inbox:focus-visible { outline: 2px solid var(--ea-accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mobile-dashboard-open-inbox, .mobile-dashboard-open-inbox span { transform: none !important; transition: none !important; } }
+
+.dashboard-ahead { min-width: 0; }
+.dashboard-ahead-horizon { font-size: 11px; color: var(--sp-subtext, #a6adc8); }
+.dashboard-ahead-days { padding-top: 9px; }
+.dashboard-ahead-day { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 9px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+.dashboard-ahead-date { padding-top: 5px; font-size: 11px; line-height: 1.5; font-weight: 550; color: var(--sp-subtext, #a6adc8); }
+.dashboard-ahead-content { min-width: 0; }
+.dashboard-ahead-row { display: flex; align-items: center; gap: 4px; }
+.dashboard-ahead-open { flex: 1; min-width: 0; padding: 4px; border: 0; border-radius: 6px; background: transparent; color: var(--sp-text, #cdd6f4); text-align: left; font: inherit; cursor: pointer; }
+.dashboard-ahead-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 1.5; }
+.dashboard-ahead-meta { display: block; margin-top: 2px; color: var(--sp-subtext, #a6adc8); font-size: 11px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-ahead-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 5px 4px; min-height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--ea-accent, #cba6da); font: inherit; font-size: 11px; cursor: pointer; }
+.dashboard-ahead-week { margin-top: 5px; }
+.dashboard-ahead-error { color: var(--sp-rose); font-size: 12px; }
+.dashboard-ahead button { transition: color 150ms ease, background-color 150ms ease, transform 150ms cubic-bezier(.22,1,.36,1) !important; }
+.dashboard-ahead button:hover, .dashboard-ahead button:focus-visible { background-color: rgba(255,255,255,.045); transform: translateY(-1px); }
+.dashboard-ahead button:focus-visible { outline: 2px solid var(--ea-accent, #cba6da); outline-offset: 1px; }
+.dashboard-ahead button:active { transform: scale(.98); background-color: rgba(255,255,255,.07); }
+.dashboard-ahead--mobile .dashboard-ahead-day { grid-template-columns: 76px minmax(0, 1fr); }
+.dashboard-ahead--mobile .dashboard-ahead-open, .dashboard-ahead--mobile .dashboard-ahead-toggle { min-height: 44px; }
+.dashboard-ahead--mobile .dashboard-ahead-title { white-space: normal; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .dashboard-ahead button { transition: none !important; transform: none !important; } }

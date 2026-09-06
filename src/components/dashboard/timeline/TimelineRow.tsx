@@ -1,7 +1,9 @@
 import { memo } from "react";
 import "./timeline-mobile.css";
+import "./timeline-presentation.css";
 import {
   Calendar,
+  ClockAlert,
   Bell,
   CheckCircle2,
   Circle,
@@ -176,7 +178,8 @@ function TimelineRow({
   const effectiveRailDotColor = railDotColor || dotColor;
   const isSpecialDateEvent = item.kind === "event" && isGoogleSpecialDateEvent(item.data);
   const showNeedsYouReference = isNeedsYouReference && item.kind === "deadline";
-  const opacity = isPast ? 0.38 : showNeedsYouReference ? 0.64 : 1;
+  const secondaryColor = isPast ? "var(--color-text-faint)" : "var(--color-text-secondary, #a6adc8)";
+  const titleColor = isPast ? "var(--color-text-faint)" : "var(--sp-text)";
   const railBorderColor = railDotColor
     ? `${effectiveRailDotColor}${isLive ? "" : "55"}`
     : isLive
@@ -187,13 +190,17 @@ function TimelineRow({
     : railDotColor
       ? `0 0 0 1px ${effectiveRailDotColor}18`
       : "none";
-  const timeColumnWidth = 54;
+  const timeColumnWidth = 68;
+  const status = item.kind === "event"
+    ? null
+    : item.data.status === "complete" ? { label: "Completed", tone: "completed", Icon: CheckCircle2 }
+    : overdueText ? { label: overdueText, tone: "overdue", Icon: ClockAlert } : null;
 
   return (
     <div
       data-testid={isMobile ? "timeline-row-mobile" : "timeline-row-desktop"}
       data-needs-you-reference={showNeedsYouReference ? "true" : undefined}
-      className={`${isMobile ? "timeline-mobile-row " : ""}dashboard-item-trigger sp-focus-ring`}
+      className={`${isPast ? "timeline-row--past " : ""}${isMobile ? "timeline-mobile-row " : ""}dashboard-item-trigger sp-focus-ring`}
       role="button"
       tabIndex={0}
       onClick={(e) => onJump?.(jumpPayload, e.currentTarget)}
@@ -205,17 +212,16 @@ function TimelineRow({
       }}
       style={{
         position: "relative",
-        overflow: isLive ? "hidden" : "visible",
-        padding: showNeedsYouReference ? (isMobile ? "9px 8px" : "7px 12px") : isMobile ? "12px 8px" : "11px 12px",
-        marginBottom: 4,
-        borderRadius: 10,
+        overflow: "visible",
+        padding: showNeedsYouReference ? "10px" : "12px 10px",
+        marginBottom: 2,
+        borderRadius: 8,
         cursor: "pointer",
-        opacity,
         border: isLive ? `1px solid ${accent}24` : "1px solid transparent",
         transition: "transform 150ms cubic-bezier(0.22, 1, 0.36, 1), background 150ms ease, border-color 150ms ease",
         display: "grid",
         gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : showNeedsYouReference ? `${timeColumnWidth}px minmax(0, 1fr)` : `${timeColumnWidth}px 1fr auto`,
-        gap: isMobile ? 10 : 14,
+        gap: isMobile ? 8 : 12,
         alignItems: isMobile ? "start" : "center",
         background: isLive ? `${accent}08` : "transparent",
       }}
@@ -245,6 +251,7 @@ function TimelineRow({
           placeItems: "center",
           border: `1px solid ${railBorderColor}`,
           boxShadow: railGlow,
+          opacity: isPast ? 0.45 : 1,
         }}
       >
         <div
@@ -264,8 +271,9 @@ function TimelineRow({
           fontSize: 11.5,
           fontWeight: 500,
           fontVariantNumeric: "tabular-nums",
-          color: isLive ? dotColor : "rgba(205,214,244,0.7)",
-          letterSpacing: 0.2,
+          color: isLive ? effectiveRailDotColor : secondaryColor,
+          letterSpacing: 0,
+          whiteSpace: "nowrap",
           paddingTop: isMobile ? 1 : 0,
         }}
       >
@@ -283,10 +291,10 @@ function TimelineRow({
           }}
         >
           {isMobile && leftLabel && (
-            <span style={{ fontSize: 11.5, color: "rgba(205,214,244,0.7)", fontVariantNumeric: "tabular-nums" }}>{leftLabel}</span>
+            <span style={{ fontSize: 11.5, color: secondaryColor, fontVariantNumeric: "tabular-nums" }}>{leftLabel}</span>
           )}
           {isMobile && meta && !showNeedsYouReference && (
-            <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{meta}</span>
+            <span style={{ fontSize: 11, color: secondaryColor }}>{meta}</span>
           )}
           {!showNeedsYouReference && (isSpecialDateEvent ? (
             <GoogleSpecialDateBadge
@@ -295,26 +303,26 @@ function TimelineRow({
               variant="chip"
             />
           ) : Icon ? (
-            <Icon size={isMobile ? 10 : 11} color={iconColor || "rgba(205,214,244,0.55)"} />
+            <Icon size={isMobile ? 10 : 11} color={isPast ? "var(--color-text-faint)" : iconColor || "rgba(205,214,244,0.55)"} />
           ) : null)}
           <div
             data-dashboard-timeline-title="true"
             style={{
               fontSize: showNeedsYouReference ? (isMobile ? 12.5 : 12) : isMobile ? 14 : 13,
               fontWeight: 500,
-              color: "var(--sp-text)",
+              color: titleColor,
               overflow: "hidden",
               textOverflow: isSpecialDateEvent ? "clip" : "ellipsis",
-              whiteSpace: showNeedsYouReference ? "nowrap" : isMobile || isSpecialDateEvent ? "normal" : "nowrap",
+              whiteSpace: isMobile || isSpecialDateEvent ? "normal" : "nowrap",
               lineHeight: showNeedsYouReference ? 1.3 : isMobile || isSpecialDateEvent ? 1.32 : "normal",
-              display: isSpecialDateEvent && !showNeedsYouReference ? "-webkit-box" : "block",
-              WebkitLineClamp: isSpecialDateEvent ? 2 : undefined,
-              WebkitBoxOrient: isSpecialDateEvent ? "vertical" : undefined,
+              display: isSpecialDateEvent || (isMobile && showNeedsYouReference) ? "-webkit-box" : "block",
+              WebkitLineClamp: isSpecialDateEvent || (isMobile && showNeedsYouReference) ? 2 : undefined,
+              WebkitBoxOrient: isSpecialDateEvent || (isMobile && showNeedsYouReference) ? "vertical" : undefined,
               flex: showNeedsYouReference ? 1 : isMobile ? "0 0 100%" : 1,
               order: isMobile && !showNeedsYouReference ? -1 : undefined,
               overflowWrap: isMobile && !showNeedsYouReference ? "anywhere" : undefined,
               minWidth: 0,
-              textDecorationLine: isPast ? "line-through" : "none",
+              textDecorationLine: item.kind === "deadline" && item.data.status === "complete" ? "line-through" : "none",
               textDecorationColor: "rgba(205,214,244,0.25)",
             }}
           >
@@ -347,31 +355,14 @@ function TimelineRow({
                 letterSpacing: 0.5,
                 textTransform: "uppercase",
                 fontWeight: 600,
-                background: `${dotColor}20`,
-                color: dotColor,
+                background: `${effectiveRailDotColor}18`,
+                color: effectiveRailDotColor,
               }}
             >
               Live now
             </span>
           )}
           {!showNeedsYouReference && priorityLevel && <PriorityFlag level={priorityLevel} />}
-          {!showNeedsYouReference && overdueText && (
-            <span
-              style={{
-                padding: "1px 6px",
-                borderRadius: 99,
-                fontSize: 9,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-                fontWeight: 600,
-                background: "color-mix(in srgb, var(--sp-rose) 13%, transparent)",
-                color: "var(--sp-rose)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {overdueText}
-            </span>
-          )}
           {!showNeedsYouReference && reminderSummary && (
             <span
               data-testid="dashboard-reminder-indicator"
@@ -400,18 +391,12 @@ function TimelineRow({
             </span>
           )}
         </div>
-        {sub && !showNeedsYouReference && (
-          <div
-            style={{
-              fontSize: isMobile ? 10.5 : 11,
-              color: "var(--color-text-faint)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: isMobile ? "normal" : "nowrap",
-              lineHeight: isMobile ? 1.35 : "normal",
-            }}
-          >
-            {sub}
+        {(status || (sub && !showNeedsYouReference)) && (
+          <div className="timeline-row-metadata">
+            {status && <span className={`timeline-row-status timeline-row-status--${status.tone}`}>
+              <status.Icon size={11} aria-hidden="true" />{status.label}
+            </span>}
+            {sub && !showNeedsYouReference && <span className="timeline-row-description">{sub}</span>}
           </div>
         )}
       </div>
@@ -420,7 +405,7 @@ function TimelineRow({
         <div
           style={{
             fontSize: 10.5,
-            color: "var(--color-text-faint)",
+            color: secondaryColor,
             fontVariantNumeric: "tabular-nums",
             padding: "2px 8px",
             borderRadius: 6,
@@ -434,12 +419,9 @@ function TimelineRow({
       {liveMarker && (() => {
         const pctStr = `${liveMarker.pct * 100}%`;
         return (
-          <div data-testid="timeline-now-marker" style={{ gridColumn: "1 / -1", position: "relative", height: 22, marginTop: 8, borderTop: `1px solid ${accent}2e`, pointerEvents: "none" }}>
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pctStr, background: `linear-gradient(90deg, ${accent}29, ${accent}0d)` }} />
-            <div style={{ position: "absolute", left: pctStr, top: 0, bottom: 0, width: 1.5, background: accent, boxShadow: `0 0 8px ${accent}` }} />
-            <div style={{ position: "absolute", left: pctStr, top: "50%", transform: "translate(8px, -50%)", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700, color: accent, whiteSpace: "nowrap" }}>
-              {liveMarker.label}
-            </div>
+          <div data-testid="timeline-now-marker" className="timeline-progress">
+            <div className="timeline-progress-track"><span className="timeline-progress-fill" style={{ width: pctStr, background: effectiveRailDotColor }} /></div>
+            <span className="timeline-progress-label">{liveMarker.label}</span>
           </div>
         );
       })()}

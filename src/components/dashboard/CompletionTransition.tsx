@@ -5,15 +5,17 @@ import useMediaQuery from "../../hooks/useMediaQuery";
 import { heightTransition } from "../../lib/motion";
 
 /** Keep a visual receipt while the existing completion action proceeds immediately. */
-export default function CompletionTransition({ children, itemId, horizontal = false, style }: {
+export default function CompletionTransition({ children, itemId, completing: completingInPlace = false, horizontal = false, style }: {
   children: ReactNode;
   itemId: string;
+  /** Show the same receipt for rows that remain visible after completion. */
+  completing?: boolean;
   horizontal?: boolean;
   style?: CSSProperties;
 }) {
   const present = useIsPresent();
   const completedIds = usePresenceData() as readonly string[] | undefined;
-  const completing = !present && !!completedIds?.includes(itemId);
+  const completing = completingInPlace || (!present && !!completedIds?.includes(itemId));
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   const transition = heightTransition(reduced || !completing);
 
@@ -22,7 +24,7 @@ export default function CompletionTransition({ children, itemId, horizontal = fa
       initial={false}
       animate={{ opacity: 1, height: "auto", scale: 1 }}
       exit={{ opacity: 0, ...(horizontal ? { scale: 0.96 } : { height: 0 }), transition: { ...transition, delay: completing && !reduced ? 0.18 : 0 } }}
-      inert={!present || undefined}
+      inert={!present || completing || undefined}
       aria-hidden={!present || undefined}
       style={{ position: "relative", minWidth: 0, overflow: present ? "visible" : "clip", ...style }}
     >

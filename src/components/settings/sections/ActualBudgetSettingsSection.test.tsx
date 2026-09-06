@@ -1,4 +1,5 @@
 import { StrictMode, useState } from "react";
+import { MemoryRouter } from "react-router";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
@@ -73,7 +74,7 @@ function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict
 
   return {
     patch,
-    ...render(strict ? <StrictMode><Harness /></StrictMode> : <Harness />),
+    ...render(<MemoryRouter initialEntries={["/settings?tab=finance"]}>{strict ? <StrictMode><Harness /></StrictMode> : <Harness />}</MemoryRouter>),
   };
 }
 

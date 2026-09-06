@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { History, Landmark, Loader2, RefreshCw, ScanSearch } from "lucide-react";
 import { SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import {
@@ -61,7 +62,9 @@ export default function EmailTransactionImportCard({
   gmailAccounts: AccountSummary[];
   liveOperationsAvailable: boolean;
 }) {
-  const imports = useTransactionImports();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingOnly = searchParams.get("reviewPending") === "1";
+  const imports = useTransactionImports({ requestedRunId: searchParams.get("importRun"), pendingOnly });
   const initialDates = useMemo(() => defaultDates(), []);
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
@@ -93,6 +96,8 @@ export default function EmailTransactionImportCard({
   }
 
   const selectedRun = imports.selectedRun;
+  const runOptions = selectedRun && !imports.runs.some((run) => run.id === selectedRun.id)
+    ? [selectedRun, ...imports.runs] : imports.runs;
   const error = localError || imports.error;
   const hasReviewableItems = Boolean(selectedRun?.items.some((item) => item.status === "ready" || item.status === "needs_review"));
 
@@ -123,7 +128,7 @@ export default function EmailTransactionImportCard({
           </div>
         ) : null}
 
-        <section aria-labelledby="transaction-scan-title">
+        {!pendingOnly && <section aria-labelledby="transaction-scan-title">
           <div className="flex items-center gap-2">
             <ScanSearch size={14} className="text-primary/75" aria-hidden="true" />
             <h3 id="transaction-scan-title" className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">Manual backfill</h3>
@@ -209,13 +214,13 @@ export default function EmailTransactionImportCard({
               {imports.busyKey === "scan" ? "Starting…" : "Start backfill"}
             </button>
           </div>
-        </section>
+        </section>}
 
         <section id="transaction-import-review" aria-labelledby="transaction-results-title" className="scroll-mt-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <History size={14} className="text-primary/75" aria-hidden="true" />
-              <h3 id="transaction-results-title" className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">Recent results</h3>
+              <h3 id="transaction-results-title" className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">{pendingOnly ? "Pending review" : "Recent results"}</h3>
             </div>
             <button
               type="button"
@@ -227,10 +232,28 @@ export default function EmailTransactionImportCard({
             </button>
           </div>
 
-          {imports.runs.length ? (
+          {pendingOnly && <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground" role="status">
+              {imports.totalRuns === 0 ? "No runs need review." : `Runs ${imports.pageOffset + 1}–${Math.min(imports.pageOffset + 12, imports.totalRuns)} of ${imports.totalRuns} needing review`}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
+                disabled={imports.loading || !!imports.busyKey || imports.pageOffset === 0}
+                onClick={() => void imports.changePage(imports.pageOffset - 12)}>Previous page</button>
+              <button type="button" className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
+                disabled={imports.loading || !!imports.busyKey || imports.pageOffset + 12 >= imports.totalRuns}
+                onClick={() => void imports.changePage(imports.pageOffset + 12)}>Next page</button>
+              <button type="button" className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
+                disabled={imports.loading || !!imports.busyKey}
+                onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.delete("reviewPending"); next.delete("importRun"); return next; })}>Show recent activity</button>
+            </div>
+          </div>}
+
+          {runOptions.length ? (
             <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <Select
                 value={imports.selectedRunId || ""}
+                disabled={imports.loading || !!imports.busyKey}
                 onValueChange={(value) => {
                   if (value) void imports.selectRun(value);
                 }}
@@ -239,7 +262,7 @@ export default function EmailTransactionImportCard({
                   <SelectValue className="truncate">{selectedRun ? runLabel(selectedRun) : "Choose a run"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent align="start" alignItemWithTrigger={false} className={SELECT_CONTENT_CLASS}>
-                  {imports.runs.map((run) => (
+                  {runOptions.map((run) => (
                     <SelectItem key={run.id} value={run.id} className={SELECT_ITEM_CLASS}>
                       {runLabel(run)}
                     </SelectItem>
@@ -275,7 +298,7 @@ export default function EmailTransactionImportCard({
             </>
           ) : (
             <div className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-4 py-5 text-[12px] text-muted-foreground/70">
-              No transaction import activity yet.
+              {imports.loading ? "Loading transaction imports…" : pendingOnly ? "No pending review items on this page." : "No transaction import activity yet."}
             </div>
           )}
         </section>
