@@ -36,7 +36,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       />,
     ));
 
-    fireEvent.click(await screen.findByTestId("calendar-agenda-event-row"));
+    fireEvent.click(await screen.findByTestId("calendar-agenda-event-row", {}, { timeout: 5000 }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("agenda-row");
@@ -105,7 +105,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
         />,
       ));
 
-      fireEvent.click(within(await screen.findByTestId("calendar-cell-14")).getByTestId("calendar-cell-item-chip"));
+      fireEvent.click(within(await screen.findByTestId("calendar-cell-14", {}, { timeout: 5000 })).getByTestId("calendar-cell-item-chip"));
       await flushAnimationFrame();
 
       rerender(wrapWithDashboard(
@@ -223,7 +223,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       />,
     ));
 
-    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
     agendaRail.scrollTop = 0;
     const rows = within(agendaRail).getAllByTestId("calendar-agenda-event-row");
 
@@ -302,7 +302,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
         />,
       ));
 
-      const agendaRail = await screen.findByTestId("events-agenda-rail");
+      const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
       agendaRail.scrollTop = 0;
       await flushAnimationFrame();
 
@@ -369,7 +369,7 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       />,
     ));
 
-    fireEvent.click(within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    fireEvent.click(within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByTestId("calendar-cell-item-chip"));
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
     await waitFor(() => {

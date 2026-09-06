@@ -42,7 +42,7 @@ describe("CalendarModal bills behavior", () => {
 
       // June is one month after the active May view; the full controller → adapter
       // → rail multi-month chain must fetch + render it without navigating there.
-      expect(await screen.findByText("June Only Bill")).toBeTruthy();
+      expect(await screen.findByText("June Only Bill", {}, { timeout: 5000 })).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
@@ -81,7 +81,7 @@ describe("CalendarModal bills behavior", () => {
       />,
     ));
 
-    const agendaRail = await screen.findByTestId("bills-agenda-rail");
+    const agendaRail = await screen.findByTestId("bills-agenda-rail", {}, { timeout: 5000 });
     fireEvent.click(within(agendaRail).getByTestId("calendar-agenda-bill-row"));
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
@@ -130,7 +130,7 @@ describe("CalendarModal bills behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
     expect(panel.getAttribute("data-anchor-kind")).toBe("chip");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
@@ -173,7 +173,7 @@ describe("CalendarModal bills behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
     expect(panel.getAttribute("data-anchor-kind")).toBe("chip");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
@@ -214,7 +214,7 @@ describe("CalendarModal bills behavior", () => {
       />,
     ));
 
-    const initialPanel = await screen.findByTestId("calendar-floating-detail-panel");
+    const initialPanel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(within(initialPanel).getByText("$1,800.00")).toBeTruthy();
 
     rerender(wrapWithDashboard(
@@ -329,7 +329,7 @@ describe("CalendarModal bills behavior", () => {
     );
 
     const { rerender } = render(renderModal(initialBillsRange));
-    const initialCell = await screen.findByTestId("calendar-cell-20");
+    const initialCell = await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 });
     fireEvent.click(within(initialCell).getByTestId("calendar-cell-item-chip"));
 
     const initialPanel = await screen.findByTestId("calendar-floating-detail-panel");

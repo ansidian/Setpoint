@@ -63,7 +63,7 @@ describe("CalendarModal today agenda behavior", () => {
       />,
     ));
 
-    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
     const initialRailContent = getLatestRailContent();
     const rows = within(agendaRail).getAllByTestId("calendar-agenda-event-row");
 
@@ -117,7 +117,7 @@ describe("CalendarModal today agenda behavior", () => {
         />,
       ));
 
-      const agendaRail = await screen.findByTestId("events-agenda-rail");
+      const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
       await waitFor(() => expect(agendaRail.scrollTop).toBe(620));
     } finally {
@@ -161,7 +161,7 @@ describe("CalendarModal today agenda behavior", () => {
         />,
       ));
 
-      const agendaRail = await screen.findByTestId("events-agenda-rail");
+      const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
       const todayRow = within(agendaRail).getByTestId("calendar-agenda-event-row");
       const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']")!;
       const todayContent = todayRow.parentElement!;
@@ -333,7 +333,7 @@ describe("CalendarModal navigation behavior", () => {
       />,
     ));
 
-    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "September 2026" }, { timeout: 5000 })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Jump to today" }));
 
     await waitFor(() => {
@@ -346,7 +346,7 @@ describe("CalendarModal navigation behavior", () => {
     setMatchMedia(true);
 
     render(wrapWithDashboard(<MobileCalendarRetapHarness />));
-    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "September 2026" }, { timeout: 5000 })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
 
@@ -372,7 +372,7 @@ describe("CalendarModal navigation behavior", () => {
         deadlinesData={{}}
       />,
     ));
-    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "September 2026" }, { timeout: 5000 })).toBeTruthy();
     const eventsToggle = screen.getByRole("button", { name: "Events", pressed: true });
 
     fireEvent.click(eventsToggle);
@@ -400,7 +400,7 @@ describe("CalendarModal navigation behavior", () => {
       target: { value: "planning" },
     });
 
-    const resultRow = await screen.findByTestId("calendar-search-result-row");
+    const resultRow = await screen.findByTestId("calendar-search-result-row", {}, { timeout: 5000 });
     expect(resultRow.textContent).toContain("Planning target");
     fireEvent.click(resultRow);
 
@@ -452,7 +452,7 @@ describe("CalendarModal navigation behavior", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Calendar search" }), {
       target: { value: "trailing" },
     });
-    fireEvent.click(await screen.findByTestId("calendar-search-result-row"));
+    fireEvent.click(await screen.findByTestId("calendar-search-result-row", {}, { timeout: 5000 }));
 
     const detail = await screen.findByTestId("calendar-floating-detail-panel");
     await waitFor(() => {

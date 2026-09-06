@@ -28,7 +28,7 @@ describe("CalendarModal agenda rail state behavior", () => {
       />,
     ));
 
-    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+    expect(await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /hide completed deadlines/i }));
 

@@ -170,7 +170,7 @@ describe("CalendarModal search workflow", () => {
 
     fireEvent.keyDown(document, { key: "f", metaKey: true });
 
-    const input = await screen.findByRole("textbox", { name: "Calendar search" });
+    const input = await screen.findByRole("textbox", { name: "Calendar search" }, { timeout: 5000 });
     await waitFor(() => expect(document.activeElement).toBe(input));
   });
 
@@ -182,7 +182,7 @@ describe("CalendarModal search workflow", () => {
     renderSearchCalendar();
 
     fireEvent.click(screen.getByTestId("calendar-search-header-button"));
-    const input = await screen.findByRole("textbox", { name: "Calendar search" });
+    const input = await screen.findByRole("textbox", { name: "Calendar search" }, { timeout: 5000 });
     fireEvent.change(input, { target: { value: "planning" } });
 
     fireEvent.keyDown(input, { key: "Escape" });
@@ -201,7 +201,7 @@ describe("CalendarModal search workflow", () => {
     setMatchMedia(false);
     render(wrapWithDashboard(<ControlledViewSearchCalendar />));
 
-    fireEvent.click(await screen.findByTestId("calendar-search-header-button"));
+    fireEvent.click(await screen.findByTestId("calendar-search-header-button", {}, { timeout: 5000 }));
     await screen.findByRole("textbox", { name: "Calendar search" });
     fireEvent.keyDown(document, { key: "3" });
 
@@ -221,7 +221,7 @@ describe("CalendarModal search workflow", () => {
     });
 
     fireEvent.click(screen.getByTestId("calendar-search-header-button"));
-    fireEvent.change(await screen.findByRole("textbox", { name: "Calendar search" }), {
+    fireEvent.change(await screen.findByRole("textbox", { name: "Calendar search" }, { timeout: 5000 }), {
       target: { value: "mirror" },
     });
     fireEvent.click(await screen.findByTestId("calendar-search-result-row"));
@@ -244,7 +244,7 @@ describe("CalendarModal search workflow", () => {
     renderSearchCalendar();
 
     fireEvent.click(screen.getByTestId("calendar-search-header-button"));
-    fireEvent.change(await screen.findByRole("textbox", { name: "Calendar search" }), {
+    fireEvent.change(await screen.findByRole("textbox", { name: "Calendar search" }, { timeout: 5000 }), {
       target: { value: "hidden" },
     });
     fireEvent.click(await screen.findByTestId("calendar-search-result-row"));

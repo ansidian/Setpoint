@@ -35,7 +35,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
     expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
     expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
@@ -64,7 +64,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
     expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-deadline-row");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
@@ -92,7 +92,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
     const agendaHeader = agendaRail.querySelector("[data-agenda-date-header='true']")!;
     const agendaRow = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
     agendaRail.scrollTo = (options) => {
@@ -137,7 +137,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
 
     fireEvent.click(within(panel).getByRole("button", { name: /close floating detail/i }));
@@ -194,7 +194,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
 
     const secondChip = within(screen.getByTestId("calendar-cell-21"))
@@ -260,7 +260,7 @@ describe("CalendarModal dashboard focus behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
   });
 });

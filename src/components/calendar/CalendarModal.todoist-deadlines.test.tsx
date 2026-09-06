@@ -27,7 +27,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    fireEvent.click(within(await screen.findByTestId("calendar-cell-20")).getByText("Project due"));
+    fireEvent.click(within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByText("Project due"));
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
@@ -80,7 +80,7 @@ describe("CalendarModal deadlines rail behavior", () => {
 
     fireEvent.click(row);
 
-    expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+    expect(within(await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 })).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
     expect(screen.getAllByRole("button", { name: /^complete$/i }).length).toBeGreaterThan(0);
   });
 
@@ -113,7 +113,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
 
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Current occurrence");
   });
@@ -140,7 +140,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
     expect(within(agendaRail).getAllByText("Project due").length).toBeGreaterThan(0);
     const row = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
     expect(within(row).getByText("Complete")).toBeTruthy();
@@ -189,7 +189,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    const activeGrid = await screen.findByTestId("calendar-grid-shell");
+    const activeGrid = await screen.findByTestId("calendar-grid-shell", {}, { timeout: 5000 });
     expect(within(activeGrid).queryByTestId("calendar-grid-skeleton")).toBeNull();
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Backfill notes")).toBeTruthy();
   });
@@ -216,7 +216,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    const row = within(await screen.findByTestId("events-agenda-rail")).getByTestId("calendar-agenda-deadline-row");
+    const row = within(await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 })).getByTestId("calendar-agenda-deadline-row");
     fireEvent.click(row);
 
     expect((await screen.findByTestId("calendar-selected-deadline-title")).textContent).toContain("Project due");

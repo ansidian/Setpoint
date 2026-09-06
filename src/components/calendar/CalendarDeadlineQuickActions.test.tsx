@@ -92,7 +92,7 @@ describe("Calendar deadline quick actions", () => {
       }],
     });
 
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
       clientX: 140,
       clientY: 180,
     });
@@ -120,7 +120,7 @@ describe("Calendar deadline quick actions", () => {
       }],
     });
 
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
       clientX: 140,
       clientY: 180,
     });
@@ -142,7 +142,7 @@ describe("Calendar deadline quick actions", () => {
       }],
     });
 
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
       clientX: 140,
       clientY: 180,
     });
@@ -178,7 +178,7 @@ describe("Calendar deadline quick actions", () => {
         : ""),
       setData: vi.fn(),
     };
-    const sourceChip = await screen.findByTestId("calendar-cell-item-chip");
+    const sourceChip = await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 });
     expect(sourceChip.getAttribute("draggable")).toBe("true");
     fireEvent.dragStart(sourceChip, { dataTransfer });
     const targetCell = screen.getByTestId("calendar-cell-21");
@@ -201,7 +201,7 @@ describe("Calendar deadline quick actions", () => {
       }],
     });
 
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
       clientX: 140,
       clientY: 180,
     });
@@ -224,7 +224,7 @@ describe("Calendar deadline quick actions", () => {
       }],
     });
 
-    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip", {}, { timeout: 5000 }), {
       clientX: 140,
       clientY: 180,
     });

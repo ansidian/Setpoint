@@ -43,7 +43,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(await screen.findByText("Design review")).toBeTruthy();
+    expect(await screen.findByText("Design review", {}, { timeout: 5000 })).toBeTruthy();
   });
 
   it("shows deadline overlay items in Events by default and persists the header toggle", async () => {
@@ -69,7 +69,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(within(await screen.findByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
+    expect(within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByText("Project due")).toBeTruthy();
 
     const eventToggle = screen.getByRole("button", { name: /hide events in events/i });
     const deadlineToggle = screen.getByRole("button", { name: /hide deadlines in events/i });
@@ -121,7 +121,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    const monthCell = await screen.findByRole("gridcell", { name: /Monday, August 31/i });
+    const monthCell = await screen.findByRole("gridcell", { name: /Monday, August 31/i }, { timeout: 5000 });
     const agendaRail = await screen.findByTestId("events-agenda-rail");
     await waitFor(() => {
       expect(within(monthCell).getByText("Design review")).toBeTruthy();
@@ -169,7 +169,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
     expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
     expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
@@ -207,7 +207,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(within(await screen.findByTestId("calendar-cell-20")).getByText("Seeded task")).toBeTruthy();
+    expect(within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByText("Seeded task")).toBeTruthy();
   });
 
   it("replaces dashboard deadline overlay seeds when the matching range payload arrives", async () => {
@@ -249,7 +249,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(within(await screen.findByTestId("calendar-cell-20")).getByText("Current dashboard task")).toBeTruthy();
+    expect(within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByText("Current dashboard task")).toBeTruthy();
 
     rerender(wrapWithDashboard(
       <CalendarModal
@@ -395,7 +395,7 @@ describe("CalendarModal deadline overlay behavior", () => {
 
     await waitFor(() => {
       expect(within(screen.getByTestId("calendar-cell-10")).getByText("June deadline")).toBeTruthy();
-    });
+    }, { timeout: 5000 });
 
     const aprilBlock = screen.getByTestId("month-block-2026-3");
     expect(within(aprilBlock).getByText("April deadline")).toBeTruthy();

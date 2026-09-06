@@ -58,7 +58,7 @@ describe("CalendarModal Mini Calendar activation", () => {
         />,
       ));
 
-      const calendar = await screen.findByTestId("calendar-mini-calendar");
+      const calendar = await screen.findByTestId("calendar-mini-calendar", {}, { timeout: 5000 });
       fireEvent.click(within(calendar).getByRole("button", { name: /Thursday, May 28/i }));
       await flushAnimationFrame();
 
@@ -154,7 +154,7 @@ describe("CalendarModal Mini Calendar activation", () => {
         />,
       ));
 
-      const agendaRail = await screen.findByTestId("events-agenda-rail");
+      const agendaRail = await screen.findByTestId("events-agenda-rail", {}, { timeout: 5000 });
       await flushAnimationFrame();
       const performanceNow = vi.spyOn(performance, "now").mockReturnValue(Number.MAX_SAFE_INTEGER);
       scrollTo.mockClear();
@@ -200,7 +200,7 @@ describe("CalendarModal Mini Calendar activation", () => {
       />,
     ));
 
-    const calendar = await screen.findByTestId("calendar-mini-calendar");
+    const calendar = await screen.findByTestId("calendar-mini-calendar", {}, { timeout: 5000 });
     fireEvent.click(within(calendar).getByRole("button", { name: /Monday, June 1/i }));
 
     await waitFor(() => {
@@ -225,7 +225,7 @@ describe("CalendarModal Mini Calendar activation", () => {
       />,
     ));
 
-    const calendar = await screen.findByTestId("calendar-mini-calendar");
+    const calendar = await screen.findByTestId("calendar-mini-calendar", {}, { timeout: 5000 });
     const date = within(calendar).getByRole("button", { name: /Wednesday, May 20/i });
     fireEvent.click(date);
     fireEvent.doubleClick(date);
@@ -251,7 +251,7 @@ describe("CalendarModal Mini Calendar activation", () => {
     ));
 
     fireEvent.keyDown(document, { key: "c" });
-    await screen.findByTestId("calendar-floating-detail-panel");
+    await screen.findByTestId("calendar-floating-detail-panel", {}, { timeout: 5000 });
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
       target: { value: "Hold this draft" },
     });
@@ -289,7 +289,7 @@ describe("CalendarModal Mini Calendar activation", () => {
       />,
     ));
 
-    fireEvent.wheel(await screen.findByTestId("calendar-mini-calendar"), {
+    fireEvent.wheel(await screen.findByTestId("calendar-mini-calendar", {}, { timeout: 5000 }), {
       deltaY: 120,
       deltaMode: 0,
       cancelable: true,

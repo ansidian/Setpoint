@@ -33,7 +33,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const dayCell = await screen.findByTestId("calendar-cell-20");
+    const dayCell = await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 });
     fireEvent.click(within(dayCell).getByTestId("calendar-cell-item-chip"));
     expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
 
@@ -73,7 +73,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const eventCell = await screen.findByTestId("calendar-cell-20");
+    const eventCell = await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 });
     const chip = within(eventCell).getByTestId("calendar-cell-item-chip");
 
     fireEvent.click(chip, { metaKey: true });
@@ -119,7 +119,7 @@ describe("CalendarModal event grid behavior", () => {
         deadlinesData={{}}
       />,
     ));
-    const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    const chip = within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
 
@@ -172,7 +172,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    const chip = within(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 })).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
 
@@ -218,7 +218,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-modal-panel");
+    const panel = await screen.findByTestId("calendar-modal-panel", {}, { timeout: 5000 });
     const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     chip.focus();

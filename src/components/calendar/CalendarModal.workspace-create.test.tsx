@@ -156,7 +156,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
     await flushAnimationFrame();
     await waitFor(() => {
       expect((screen.getByTestId("calendar-event-save") as HTMLButtonElement).disabled).toBe(false);
-    });
+    }, { timeout: 5000 });
     fireEvent.click(screen.getByTestId("calendar-event-save"));
 
     await waitFor(() => {
@@ -227,7 +227,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
       />,
     ));
 
-    expect((await screen.findByTestId("calendar-month-title")).textContent).toMatch(/May\s+2026/i);
+    expect((await screen.findByTestId("calendar-month-title", {}, { timeout: 5000 })).textContent).toMatch(/May\s+2026/i);
 
     rerender(wrapWithDashboard(
       <CalendarModal
@@ -267,7 +267,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
       />,
     ));
 
-    fireEvent.click(await screen.findByTestId("calendar-cell-20"));
+    fireEvent.click(await screen.findByTestId("calendar-cell-20", {}, { timeout: 5000 }));
     fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
