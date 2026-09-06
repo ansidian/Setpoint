@@ -12,14 +12,13 @@
 .inbox-a-reader-inner { box-sizing: border-box; width: 100%; max-width: 860px; padding: 32px 38px 48px; margin: 0 auto; }
 .inbox-a-reader-header h1 { margin: 0 0 22px; font-size: 23px; font-weight: 600; line-height: 1.45; letter-spacing: -0.025em; color: #edeef9; overflow-wrap: anywhere; }
 .inbox-a-reader-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #a6adc8; font-size: 10px; }
-.inbox-a-reader-status { margin-left: auto; padding: 3px 6px; border-radius: 4px; background: #ffffff06; }
+.inbox-a-reader-status { padding: 3px 6px; border-radius: 4px; background: #ffffff06; }
 .inbox-a-reader-carry { padding: 3px 6px; border-radius: 4px; color: #f9e2af; background: #f9e2af0c; }
-.inbox-a-reader-identity { display: flex; gap: 12px; align-items: center; margin-bottom: 26px; }
+.inbox-a-reader-identity { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .inbox-a-reader-avatar { width: 34px; height: 34px; border: 1px solid #ffffff1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #cec1de; background: #cba6da0c; flex-shrink: 0; }
 .inbox-a-reader-sender { min-width: 0; overflow-wrap: anywhere; }
 .inbox-a-reader-sender strong { font-size: 12px; font-weight: 500; color: #e3e6f5; }
 .inbox-a-reader-sender small { display: block; margin-top: 3px; color: #a6adc8; font-size: 10px; line-height: 1.7; }
-.inbox-a-reader-identity time { margin-left: auto; align-self: flex-start; padding-top: 2px; font-size: 10px; color: #a6adc8; white-space: nowrap; }
 .inbox-a-original-label { margin: 0 0 16px; color: #a6adc8; font-size: 11px; font-weight: 500; }
 .inbox-a-reader-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .inbox-a-reader-context-actions:has(button) { margin: 14px 0 4px; }
@@ -29,10 +28,64 @@
 /* Provider HTML keeps its own scroll viewport; plain text flows at content height. */
 .inbox-a-reader-body iframe { min-height: 360px; }
 .inbox-a-reader-snooze-note { margin: 0 0 20px; color: #cba6f7; font-size: 12px; line-height: 1.7; }
-.inbox-a-reader-footer { border-top: 1px solid #ffffff0d; margin-top: 30px; padding-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
-.inbox-a-reader-footer .desktop-reader-action-button { border-color: transparent; background: transparent; color: #a6adc8; padding: 0 7px; }
-.inbox-a-reader-footer .desktop-reader-action-button:hover { background: #ffffff0c; color: #e3e6f5; }
-.inbox-a-reader-footer .desktop-reader-action-button:active { background: #ffffff16; }
+/* Utilities belong to the shared message header, above both reading columns. */
+.inbox-a-reader-header { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #ffffff12; }
+.inbox-a-reader-utilities { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.inbox-a-reader-utilities .desktop-reader-action-button { border-color: transparent; background: transparent; color: #cdd6f4; padding: 0 7px; }
+.inbox-a-reader-external { margin-left: auto; }
+.inbox-a-reader-external .desktop-reader-action-button { color: #a6adc8; }
+.inbox-a-reader-utilities .desktop-reader-action-button:hover,
+.inbox-a-reader-utilities .desktop-reader-action-button:focus-visible { background: #ffffff0c; color: #e3e6f5; }
+.inbox-a-reader-utilities .desktop-reader-action-button:active { background: #ffffff16; }
+.inbox-a-reader-utilities .desktop-reader-action-button[aria-expanded="true"] { background: #cba6da12; color: var(--sp-accent); }
+.inbox-a-reader-content { display: grid; grid-template-columns: minmax(0, 1fr); }
+.inbox-a-reader-message, .inbox-a-reader-context { min-width: 0; }
+.inbox-a-reader-context .reader-triage-context { border-top: 0; padding-top: 0; }
+.inbox-a-reader-message > .inbox-a-reader-context-actions:has(button) { margin: 0 0 20px; }
+.inbox-a-reader-message .inbox-original-heading { flex-wrap: wrap; }
+/* Keep the source measure; spend the additional space on supporting context.
+   This responds to the reader, including the room left by the inbox queue. */
+@container inbox-reader (min-width: 1000px) {
+  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1200px; }
+  .inbox-a-reader-content[data-has-context="true"] {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-areas: "message context";
+    column-gap: 32px;
+    align-items: start;
+  }
+  .inbox-a-reader-content[data-has-context="true"] > .inbox-a-reader-message { grid-area: message; }
+  .inbox-a-reader-context { grid-area: context; }
+  .inbox-a-reader-context .reader-triage-context { margin: 0; padding: 0 0 4px 24px; border-block: 0; border-left: 1px solid #ffffff12; }
+  .inbox-a-reader-context .reader-triage-title { min-height: 30px; }
+  .inbox-a-reader-context .reader-triage-details dl > div { display: block; }
+}
+/* Large workspaces grow the reading surface as a unit, including provider
+   iframes, rather than turning fixed-size prose into monitor-wide lines.
+   Container width follows browser/OS scaling; pixel density alone does not
+   enlarge a laptop reader. Keep the app toolbar and overlay drawers at their
+   normal scale outside this inner reading surface. */
+@container inbox-reader (min-width: 1400px) {
+  .inbox-a-reader-inner { width: auto; zoom: 1.1; }
+  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1280px; }
+  .inbox-a-reader-content[data-has-context="true"] { grid-template-columns: minmax(0, 1fr) 300px; }
+}
+@container inbox-reader (min-width: 1800px) {
+  .inbox-a-reader-inner { zoom: 1.25; }
+  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1360px; }
+  .inbox-a-reader-content[data-has-context="true"] { grid-template-columns: minmax(0, 1fr) 320px; }
+}
+@container inbox-reader (min-width: 2200px) {
+  .inbox-a-reader-inner { zoom: 1.5; }
+  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1440px; }
+}
+@container inbox-reader (min-width: 2800px) {
+  .inbox-a-reader-inner { zoom: 1.75; }
+  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1480px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .inbox-a-reader-content .desktop-reader-action-button:focus-visible,
+  .inbox-a-reader-utilities .desktop-reader-action-button:focus-visible { transform: translateY(-1px); }
+}
 .inbox-a-reader .inbox-reader-workspace { position: absolute; inset: 69px 0 0 auto; z-index: 3; max-width: 100%; background: #16161e; isolation: isolate; }
 .inbox-a-reader .inbox-reader-workspace[data-open="true"] > aside { width: min(360px, 100%) !important; }
 @media (min-width: 1700px) { .inbox-a-reader-inner { padding-top: 40px; } }

@@ -29,7 +29,7 @@ function EmailRow({ email, account = null, selected = false, onOpen, density,
     ? `Due ${deadline.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : null;
   const carryover = email._carryover || email._snapshotCarryover || !!email.is_carryover;
   const pending = !!email._optimisticSnapshotPending;
-  const showStatus = actionHint || dueLabel || carryover || email._resurfaced || (showLaneTag && lane) || email._snoozedUntil;
+  const showStatus = actionHint || dueLabel || email._resurfaced || email._snoozedUntil;
   return (
     <button
       type="button"
@@ -48,15 +48,17 @@ function EmailRow({ email, account = null, selected = false, onOpen, density,
         {email._pinned && <Pin size={11} data-testid="email-row-pin" aria-label="Pinned" />}
         <time>{timeAgo(email.date)}</time>
       </span>
-      <span className="inbox-a-row-subject">{email.subject || "(No subject)"}</span>
+      <span className="inbox-a-row-heading">
+        <span className="inbox-a-row-subject">{email.subject || "(No subject)"}</span>
+        {showLaneTag && lane && <span className="inbox-a-row-lane"><LaneIcon laneKey={String(email._lane)} />{lane.label}</span>}
+        {carryover && <span className="inbox-a-row-carry">Carried over</span>}
+      </span>
       {showPreview && density !== "compact" && email.preview && <span className="inbox-a-row-preview">{email.preview}</span>}
       {showStatus && <span className="inbox-a-row-bottom">
-        {showLaneTag && lane && <span className="inbox-a-row-lane"><LaneIcon laneKey={String(email._lane)} />{lane.label}</span>}
         {actionHint && <span className="inbox-a-action-hint">{freshCode ? <KeyRound size={12} /> : <ArrowRight size={12} />}{actionHint}</span>}
         {dueLabel && <span>{dueLabel}</span>}
         {email._snoozedUntil && <span className="inbox-a-return-time">Returns {formatSnoozeTime(email._snoozedUntil)}</span>}
         {email._resurfaced && !email._snoozed && <span className="inbox-a-return-time"><Clock size={12} />Returned from snooze</span>}
-        {carryover && <span className="inbox-a-row-carry">Carried over</span>}
       </span>}
       {account?.name && showLaneTag && <span className="inbox-a-row-account">{account.name}</span>}
     </button>

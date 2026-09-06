@@ -1,3 +1,4 @@
+import "./SnoozePicker.css";
 import { useState, useRef, useEffect } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 import { CalendarClock } from "lucide-react";
@@ -35,7 +36,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose, forceMobile
 
   useEffect(() => {
     window.queueMicrotask(() => {
-      panelRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus();
+      panelRef.current?.querySelector<HTMLButtonElement>(view === "presets" ? "[role='menuitem']" : "button:not(:disabled)")?.focus();
     });
   }, [view]);
 
@@ -62,10 +63,13 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose, forceMobile
       onClose={onClose}
       width={panelW}
       height={panelH}
-      role="menu"
+      role={view === "custom" ? "dialog" : "menu"}
       ariaLabel="Snooze"
       forceMobileSheet={forceMobileSheet}
-      mobileHeight={forceMobileSheet && view === "presets" ? null : undefined}
+      mobileHeight={null}
+      scrollable={false}
+      animateSize
+      animateDisclosure
       style={{
         padding: view === "custom" ? 8 : 6,
         borderRadius: 8,
@@ -135,12 +139,14 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose, forceMobile
           </button>
         </div>
       ) : (
-        <CalendarDateTimeView
-          nowTick={nowTick}
-          onSelect={handlePick}
-          onBack={() => setView("presets")}
-          confirmLabel="Snooze"
-        />
+        <div className="inbox-snooze-custom">
+          <CalendarDateTimeView
+            nowTick={nowTick}
+            onSelect={handlePick}
+            onBack={() => setView("presets")}
+            confirmLabel="Snooze"
+          />
+        </div>
       )}
     </AnchoredFloatingPanel>
   );

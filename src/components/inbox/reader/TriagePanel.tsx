@@ -5,7 +5,7 @@ import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import type { InboxEmailLike } from "../inboxTypes";
 import "./TriagePanel.css";
 
-export default function TriagePanel({ email, accent, children }: { email: InboxEmailLike; accent: string; children?: ReactNode }) {
+export default function TriagePanel({ email, accent, children, actionFirst = false }: { email: InboxEmailLike; accent: string; children?: ReactNode; actionFirst?: boolean }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   if (!email?.claude && !email?.aiSummary && !email?.summary) return null;
   const summary = email.claude?.summary || email.aiSummary || email.summary;
@@ -13,14 +13,17 @@ export default function TriagePanel({ email, accent, children }: { email: InboxE
   const why = email.claude?.why;
   const laneKey = email._lane;
   const lane = laneKey ? LANE[laneKey] : undefined;
-  const hasDetails = !!(points.length || why || email.category || email.urgency || email.action);
+  const needsYou = laneKey === "needs_attention" || laneKey === "carryover" || laneKey === "action";
+  const leadingAction = actionFirst && needsYou ? email.action : null;
+  const hasDetails = !!(points.length || why || email.category || email.urgency || (!leadingAction && email.action));
 
   return (
     <section className="reader-triage-context" aria-label="Email context" style={{ borderTopColor: `${lane?.color || accent}38` }}>
       <div className="reader-triage-title" style={{ color: lane?.color || accent }}>
         <Sparkles size={15} aria-hidden="true" />
-        <span>{laneKey === "needs_attention" || laneKey === "carryover" || laneKey === "action" ? "What needs you" : "At a glance"}</span>
+        <span>{needsYou ? "What needs you" : "At a glance"}</span>
       </div>
+      {leadingAction && <p className="reader-triage-action">{leadingAction}</p>}
       {summary && <p className="reader-triage-summary">{summary}</p>}
       {children && <div className="inbox-a-reader-context-actions">{children}</div>}
       {hasDetails && <>
@@ -30,7 +33,7 @@ export default function TriagePanel({ email, accent, children }: { email: InboxE
         <AnimatedCollapse open={detailsOpen}>
           <div className="reader-triage-details">
             <dl>
-              {email.action && <div><dt>Suggested action</dt><dd>{email.action}</dd></div>}
+              {email.action && !leadingAction && <div><dt>Suggested action</dt><dd>{email.action}</dd></div>}
               {email.category && <div><dt>Category</dt><dd>{email.category}</dd></div>}
               {email.urgency && <div><dt>Urgency</dt><dd>{email.urgency}</dd></div>}
             </dl>

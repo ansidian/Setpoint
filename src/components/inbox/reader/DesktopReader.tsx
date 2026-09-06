@@ -240,6 +240,7 @@ export default function DesktopReader({
   const carriedOver = email._carryover || email._snapshotCarryover;
   const showBillAction = (showDestructiveActions || (email._snoozed && !email._snoozedUnavailable)) && showBillToggle;
   const billActionLabel = actualCalendarTarget ? "View bill" : actualActioned ? (billOpen ? "Hide details" : "View bill") : (billOpen ? "Hide bill" : "Review bill");
+  const hasTriage = !!(showTriage && (email.claude || email.aiSummary || email.summary));
   const contextualActions = <>
     {showBillAction && <ToolbarButton icon={actualActioned ? CheckCircle2 : CreditCard} label={billActionLabel} expanded={billOpen} onClick={() => {
       if (actualCalendarTarget && onOpenRecordedBill) { onOpenRecordedBill(actualCalendarTarget); return; }
@@ -265,12 +266,12 @@ export default function DesktopReader({
         setSnoozeOpen={setSnoozeOpen}
       />
       <div className="inbox-a-reader-scroll">
-        <div className="inbox-a-reader-inner">
+        <div className="inbox-a-reader-inner" data-has-context={hasTriage}>
           <header className="inbox-a-reader-header">
             <div className="inbox-a-reader-meta">
-              {(account?.name || email.account_label) && <span>{account?.name || email.account_label}</span>}
-              {(account?.name || email.account_label) && dateLabel && <span aria-hidden="true">·</span>}
               {dateLabel && <span>{dateLabel}</span>}
+              {dateLabel && <span aria-hidden="true">·</span>}
+              {dateLabel && <time dateTime={email.date || undefined}>{timeClock(email.date)}</time>}
               {carriedOver && <span className="inbox-a-reader-carry">Carried over</span>}
               {status && <span className="inbox-a-reader-status" style={{ color: lane?.color }}>{status}</span>}
             </div>
@@ -281,25 +282,28 @@ export default function DesktopReader({
                 <strong>{sender}</strong>
                 <small>{address && <>{address}<br /></>}{recipient ? `to ${recipient}` : "to me"}</small>
               </div>
-              <time dateTime={email.date || undefined}>{timeClock(email.date)}</time>
+            </div>
+            <div className="inbox-a-reader-utilities" role="group" aria-label="Email tools">
+              {onRemind && <ToolbarButton icon={BellPlus} label={taskOpen ? "Hide reminder" : "Remind me"} expanded={taskOpen} onClick={onRemind} />}
+              {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" onClick={onAskAlfred} />}
+              {gmailUrl && <span className="inbox-a-reader-external"><ToolbarButton icon={ExternalLink} label="Open in Gmail" onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")} /></span>}
             </div>
           </header>
-          <VerificationCodeCallout key={String(email.uid || email.id || "verification-code")} email={email} readOnly={readOnly} onTrash={() => onAction("trash")} />
-          <AnimatedCollapse open={!!(showTriage && (email.claude || email.aiSummary || email.summary))}>
-            <TriagePanel email={email} accent={accent}>{contextualActions}</TriagePanel>
-          </AnimatedCollapse>
-          {!(showTriage && (email.claude || email.aiSummary || email.summary)) && <div className="inbox-a-reader-context-actions">{contextualActions}</div>}
-          <EmailActualStatus emailUid={String(email.uid || email.email_id || "")} billResolution={billResolution} style={{ margin: "0 0 18px" }} />
-          <AnimatedCollapse open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}>
-            <DraftReply key={email.id} email={email} accent={accent} onDiscard={() => setDrafting(false)} onDirtyChange={setDraftDirty} />
-          </AnimatedCollapse>
-          {email._snoozedUntil && <p className="inbox-a-reader-snooze-note">Snoozed · returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
-          <OriginalEmailSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} />
-          <footer className="inbox-a-reader-footer">
-            {onRemind && <ToolbarButton icon={BellPlus} label={taskOpen ? "Hide reminder" : "Remind me"} expanded={taskOpen} onClick={onRemind} />}
-            {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" onClick={onAskAlfred} />}
-            {gmailUrl && <ToolbarButton icon={ExternalLink} label="Open in Gmail" onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")} />}
-          </footer>
+          <div className="inbox-a-reader-content" data-has-context={hasTriage}>
+            <AnimatedCollapse open={hasTriage} className="inbox-a-reader-context">
+              <TriagePanel key={String(email.uid || email.email_id || email.id || "")} email={email} accent={accent} actionFirst>{contextualActions}</TriagePanel>
+            </AnimatedCollapse>
+            <div className="inbox-a-reader-message">
+              <VerificationCodeCallout key={String(email.uid || email.id || "verification-code")} email={email} readOnly={readOnly} onTrash={() => onAction("trash")} />
+              {!hasTriage && <div className="inbox-a-reader-context-actions">{contextualActions}</div>}
+              <EmailActualStatus emailUid={String(email.uid || email.email_id || "")} billResolution={billResolution} style={{ margin: "0 0 18px" }} />
+              <AnimatedCollapse open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}>
+                <DraftReply key={email.id} email={email} accent={accent} onDiscard={() => setDrafting(false)} onDirtyChange={setDraftDirty} />
+              </AnimatedCollapse>
+              {email._snoozedUntil && <p className="inbox-a-reader-snooze-note">Snoozed · returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
+              <OriginalEmailSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} />
+            </div>
+          </div>
         </div>
       </div>
       <BillDrawer billOpen={billOpen} billMounted={billMounted} setBillOpen={setBillOpen} email={email} bodyState={bodyState} billResolution={resolvedBillResolution} />

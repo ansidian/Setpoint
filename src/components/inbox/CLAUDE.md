@@ -30,7 +30,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `EmailRow.tsx` — sender/subject/preview row, optional concise action hint and carryover provenance
 - `InboxRowTransition.tsx` — desktop/mobile row and desktop lane motion shell; source and destination space animate together; departing content is immediately inert
 - `DigestStrip.tsx` — header strip: snapshot status, lane counts, processing activity
-- `DesktopSnapshotNavigator.tsx` — desktop list-local snapshot context, adjacent navigation, and active update status
+- `DesktopSnapshotNavigator.tsx` — compact header history group with adjacent navigation, snapshot context, and direct return to current
 - `SnapshotNavigationControls.tsx` — shared desktop/mobile adjacent-snapshot controls with boundary, loading, and error states
 - `Sidebar.tsx` — account scope, fixed desktop lane navigation, secondary views and compact shortcuts
 - `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
@@ -58,7 +58,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `mobile/MobileInbox.css` — mobile list, controls, and filter-sheet layout and interaction states
 
 ### Snooze, undo, hotkeys
-- `SnoozePicker.tsx` — floating date/time picker anchored to the snooze button
+- `SnoozePicker.tsx` / `SnoozePicker.css` — content-sized floating date/time picker anchored to the snooze button; mobile uses a content-sized sheet
 - `InboxUndoToast.tsx` — bottom-center undo toast
 - `inboxHotkeys.ts` — key → action resolution per workflow (snapshot vs live fallback)
 - `useInboxKeyboardCommands.ts` — window hotkeys: undo, search focus, j/k nav, actions

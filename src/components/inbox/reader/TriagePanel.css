@@ -1,6 +1,7 @@
 .reader-triage-context { margin: 20px 24px; padding: 18px 0 22px; border-top: 1px solid #ffffff1c; border-bottom: 1px solid #ffffff1c; overflow-wrap: anywhere; }
 .inbox-a-reader .reader-triage-context { margin: 0 0 26px; }
 .reader-triage-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; margin-bottom: 10px; }
+.reader-triage-action { margin: 0 0 8px; color: #e3e6f5; font-size: 13px; font-weight: 500; line-height: 1.65; }
 .reader-triage-summary { margin: 0; max-width: 68ch; color: #bcc2d9; font-size: 12px; line-height: 1.85; }
 .reader-triage-disclosure { display: inline-flex; align-items: center; gap: 6px; margin: 12px 0 0; padding: 5px 0; border: 0; border-radius: 3px; background: transparent; color: #a6adc8; cursor: pointer; font-family: inherit; font-size: 10px; font-weight: 400; line-height: 1.5; transition: color 160ms ease-out, background 160ms ease-out, transform 160ms ease-out; }
 .reader-triage-disclosure svg { transition: transform 160ms ease-out; }
