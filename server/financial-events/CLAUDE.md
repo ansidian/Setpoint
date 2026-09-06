@@ -10,6 +10,7 @@ Durable autonomous accounting for new email arrivals. Documents supply authentic
 - `financial-event-evidence.ts` — source hashes and grounded reference keys, conservative complementary receipt matching, compatible fact bundles and conflict detection
 - `financial-event-operation.ts` — maps a plan to existing SDK facades, binds the previewed budget and schedule fingerprint, and projects verified operation outcomes
 - `financial-event-status.ts` — public read-only ownership and live status facade; managed-email reads never trigger the historical planner or another write path
+- `financial-event-review.ts` — public owner-scoped exception queue and cursor-based attention changes; groups related receipts and keeps automatic retries silent without reading source bodies
 - `financial-event-completion.ts` — public owner-confirmation use case; validates current managed-source revisions and queues the same event without writing to Actual
 - `financial-event-completion-model.ts` — confirmed-entry validation, immutable source snapshots, compatible later-evidence checks and exact operation construction
 
@@ -21,6 +22,7 @@ Durable autonomous accounting for new email arrivals. Documents supply authentic
 - Missing source facts/authentication retry automatically. Conflicting current Actual identity requires attention. Before first dispatch, the exact budget-bound payload and attempt are stored atomically. Every later claim is recovery-only, including after new evidence or a crash.
 - Production access goes through `server/actual/actual.ts`. Tests write only to disposable databases/budgets. New managed messages cannot also enter legacy parser or generic preflight paths.
 - Status exposes pending, waiting, settled and needs-review states plus related-email count and retry time. The legacy import tables and historical observe modes remain unchanged.
+- The global review queue lists waiting/review events once and known financial documents awaiting association. Queue reads never wake workers; attention keys use the source, required action and latest owner confirmation, so reopening after a new confirmation can alert once while repeated checks stay quiet. Transient retries and unknown assessment failures do not notify.
 - Owner completion supplies missing facts explicitly and can run while email AI is paused. It preserves original source evidence, invalidates stale automation claims and retains the same capture/coalescing and immutable Actual admission/recovery path. Fresh revisions permit corrections only before admission while waiting or needing review; an attempted entry cannot be resubmitted. Later related receipts use a separate owner-confirmed identity projection and must have compatible account evidence. Source changes remain visible across restarts and authentication refreshes.
 
 Tests follow the stable-owner policy in `AGENTS.md`; full worker replays keep the store, evidence, planner and operation adapter together while replacing external AI/Actual boundaries.

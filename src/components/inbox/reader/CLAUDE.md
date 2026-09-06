@@ -47,7 +47,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `emailActualStatusModel.ts` — pure precedence policy across transaction-import and statement reconciliation evidence
 - `TransactionImportStatus.tsx` — shared Amazon/PayPal import status with focused Finance review routing
 - `transactionImportStatusModel.ts` — pure durable item-to-reader status projection
-- `useTransactionImportStatus.ts` — owner-scoped financial-event/import status with stale guards, pending polling and slower waiting-state refresh; accepted owner completions refresh status and restart polling
+- `useTransactionImportStatus.ts` — owner-scoped financial-event/import status with stale guards, pending polling and slower waiting-state refresh; Finance can opt into all-state polling for late evidence; accepted owner completions refresh status and restart polling
 - `billExtractionBody.ts` — source body state for Actual record resolution and retained extraction
 - `billSeedModel.ts` — pure historical form seed derivation for the Actual record workspace
 - `remindMeTaskSeedModel.ts` — pure email-to-Todoist seed derivation with Pacific due-date handling and bounded provenance

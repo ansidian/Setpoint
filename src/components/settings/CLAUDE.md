@@ -46,6 +46,9 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/HomeLocationCard.tsx` — Places-backed atomic Home selection/removal for driving Time-to-Leave estimates
 - `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration
 - `cards/EmailTransactionImportCard.tsx` — bounded Amazon/PayPal historical scans, durable import progress, and financial-email review with dashboard run deep links and pending-run pagination; no source mappings or mode controls
+- `cards/FinancialEventReviewCard.tsx` — paginated exceptions for new financial arrivals, available even while Actual is disconnected; direct record URLs retain the shared managed completion owner
+- `cards/financial-review/FinancialRecordReview.tsx` — inline managed status/completion and safe source-email disclosure; no independent writer or historical fallback
+- `cards/financial-review/FinancialReviewNotificationsControl.tsx` — explicit browser permission control and delivery availability; demo is inert
 - `cards/transaction-import/TransactionImportReviewList.tsx` — Amazon, PayPal, and generic financial-email candidate labeling, corrections, confirmation, retry, and dismiss
 - `cards/transaction-import/TransactionImportDateField.tsx` — shared-calendar date trigger for bounded manual backfill dates
 - `cards/transaction-import/transactionImportReviewModel.ts` — pure candidate eligibility, source labels, total, confirmation, amount, and run-phase projection

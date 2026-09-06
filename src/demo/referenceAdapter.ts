@@ -6,6 +6,8 @@ import { getDemoTodoistSetupResponse, NO_DEMO_TODOIST_SETUP_RESPONSE } from "./t
 export const NO_DEMO_REFERENCE_RESPONSE = Symbol("NO_DEMO_REFERENCE_RESPONSE");
 
 export function getDemoReferenceResponse({ pathname, method, seed }: { pathname: string; method: string; seed: DemoSeed }): unknown {
+  if (pathname === "/api/briefing/financial-events/review" && method === "GET") return { items: [], total: 0, offset: 0, limit: 20 };
+  if (pathname === "/api/briefing/financial-events/review-changes" && method === "GET") return { items: [], cursor: null, hasMore: false };
   if (pathname === "/api/dashboard/finance" && method === "GET") return buildDemoDashboardFinance(seed);
   if (pathname === "/api/ea/triage/cache-stats") return demoLegacyTriageStats();
   if (pathname === "/api/ea/email-ai/usage") return structuredClone(demoEmailAiUsageStats());

@@ -15,6 +15,7 @@ import {
   type AppRoutePath,
 } from "./appRouteModel";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
+import useFinancialReviewNotifications from "./hooks/useFinancialReviewNotifications";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
 import RecoverableErrorBoundary from "./components/layout/RecoverableErrorBoundary";
 // Single import factory so we can both lazy-mount the Dashboard and warm its
@@ -58,6 +59,11 @@ function SettingsShortcut({ enabled }: SettingsShortcutProps): null {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [enabled, navigate]);
 
+  return null;
+}
+
+function FinancialReviewNotifications({ enabled }: { enabled: boolean }): null {
+  useFinancialReviewNotifications(enabled);
   return null;
 }
 
@@ -105,6 +111,7 @@ export default function App(): ReactElement {
       <MouseSpotlightCanvas />
       <BrowserRouter basename={resolveRouterBasename()}>
         <SettingsShortcut enabled={authenticated === true} />
+        <FinancialReviewNotifications enabled={authenticated === true && bootstrap.onboardingFinished && !demoMode} />
         <Routes>
           <Route path="/setup" element={
             redirectElement("/setup", bootstrap, (

@@ -14,6 +14,8 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `email-links.ts` — builds a Gmail web URL from an email's uid + account
 - `emailAttachmentApi.ts` — demo-safe authenticated URL/blob transport for lazy email attachment downloads and previews
 - `financialEmailApi.ts` — financial extraction, planning, retained bill writes and revision-bound owner completion; completion refreshes reader status and is intentionally unavailable in demo
+- `financialReviewApi.ts` — demo-safe managed financial queue/change reads and direct Finance record URLs
+- `financialReviewNotifications.ts` — browser delivery owner: bounded change-feed draining, overlap cursor recovery, stable per-record/action deduplication, and clickable Finance alerts; no demo or server delivery
 - `gmailPubSubSetupApi.ts` — authenticated Gmail Pub/Sub setup/status client calls through the demo-safe API boundary
 - `instanceCredentialPendingApi.ts` — version-bound pending-credential discard calls shared by Settings and the central API export surface
 - `motion.ts` — shared Motion React durations, ease-out curve, and reduced-motion-aware transition builders; height changes use the event notes field's 160ms CSS-ease curve

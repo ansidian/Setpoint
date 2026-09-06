@@ -144,6 +144,22 @@ describe("useBillPayResolver", () => {
     });
   });
 
+  it("reloads a managed record completed in Finance while its Inbox reader is unmounted", async () => {
+    const waiting = { ...plan({ payee: "Power" }), workflow: {
+      id: "event-1", state: "needs_review" as const, reason: "Choose an account.", relatedEmails: 1, nextAttemptAt: null,
+    } };
+    const recorded = { ...plan({ payee: "Power" }, "already_recorded"), workflow: { ...waiting.workflow, state: "settled" as const, reason: "Recorded." } };
+    vi.mocked(resolveFinancialEmailPlan).mockResolvedValueOnce(waiting).mockResolvedValueOnce(recorded);
+    const useRecord = () => useBillPayResolver({ email, billOpen: true, bodyState: { loading: false, body: "Statement balance" } });
+    const first = renderHook(useRecord);
+    await waitFor(() => expect(first.result.current.plan?.workflow?.state).toBe("needs_review"));
+    first.unmount();
+    act(() => window.dispatchEvent(new CustomEvent("ea-financial-event-changed", { detail: { emailUid: "related-receipt" } })));
+    const reopened = renderHook(useRecord);
+    await waitFor(() => expect(reopened.result.current.plan?.workflow?.state).toBe("settled"));
+    expect(reopened.result.current.actualStatus?.status).toBe("already_recorded");
+  });
+
   it("invalidates the cached seed when Actual data changes", async () => {
     vi.mocked(resolveFinancialEmailPlan)
       .mockResolvedValueOnce(plan({ payee: "Power" }))

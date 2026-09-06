@@ -28,6 +28,8 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 
 ### Preferences + notifications
 - `useNotifications.ts` — browser notifications for events, bills, important senders
+- `useFinancialEventReview.ts` — paginated financial queue reads, stale-response guards, retained data on refresh failure, and coalesced SSE/completion/focus refreshes
+- `useFinancialReviewNotifications.ts` — authenticated app-wide polling and event triggers for actionable financial browser alerts
 - `useRemoteContentTrust.ts` — shared cached registry for exact-sender + receiving-account remote-image trust
 - `useTriageNotificationSounds.ts` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`

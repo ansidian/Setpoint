@@ -439,6 +439,7 @@ export default function useCurrentDashboard(
     const handleChanged = (event: Event) => {
       const payload = parseDashboardEvent(event instanceof MessageEvent ? String(event.data || "") : "");
       if (payload?.source === "bills") invalidateActualMetadata();
+      if (payload?.reason === "financial_event_changed") window.dispatchEvent(new CustomEvent("ea-financial-event-changed"));
       if (typeof onDashboardEventRef.current === "function") {
         onDashboardEventRef.current(payload);
       }

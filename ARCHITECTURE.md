@@ -296,6 +296,8 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.ts` |
 | `useCurrentDashboard` | `src/hooks/useCurrentDashboard.ts` |
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
+| `useFinancialEventReview` | `src/hooks/useFinancialEventReview.ts` |
+| `useFinancialReviewNotifications` | `src/hooks/useFinancialReviewNotifications.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
 | `useMotionPresence` | `src/hooks/useMotionPresence.ts` |
@@ -878,6 +880,8 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | DELETE | `/api/briefing/email/remote-content-trust/:id` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
+| GET | `/api/briefing/financial-events/review` | `server/routes/briefing/transaction-imports.ts` |
+| GET | `/api/briefing/financial-events/review-changes` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/history` | `server/routes/briefing/snapshot.ts` |

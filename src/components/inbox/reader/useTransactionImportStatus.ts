@@ -4,7 +4,7 @@ import { hasActiveTransactionImport } from "./transactionImportStatusModel";
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 import type { FinancialEmailPlan } from "../../../../shared/types/bills";
 
-export default function useTransactionImportStatus(emailUid: string) {
+export default function useTransactionImportStatus(emailUid: string, { pollAllStates = false }: { pollAllStates?: boolean } = {}) {
   const [result, setResult] = useState<{ emailUid: string; items: TransactionImportItem[]; financialEvent: FinancialEmailPlan | null; error: boolean }>({
     emailUid: "",
     items: [],
@@ -62,8 +62,8 @@ export default function useTransactionImportStatus(emailUid: string) {
   useEffect(() => {
     const onFinancialChange = (event: Event) => {
       const detail = (event as CustomEvent<{ emailUid: string; plan?: FinancialEmailPlan }>).detail;
-      if (detail?.emailUid !== emailUid) return;
-      if (detail.plan) {
+      if (detail?.emailUid && detail.emailUid !== emailUid) return;
+      if (detail?.plan) {
         ++requestRef.current;
         setResult((current) => ({ emailUid, items: current.emailUid === emailUid ? current.items : [], financialEvent: detail.plan!, error: false }));
       } else void refresh();
@@ -77,15 +77,15 @@ export default function useTransactionImportStatus(emailUid: string) {
       if (document.visibilityState === "visible") void refresh();
     };
     document.addEventListener("visibilitychange", onVisible);
-    if (!active && !["pending", "waiting"].includes(financialState || "")) return () => document.removeEventListener("visibilitychange", onVisible);
+    if (!pollAllStates && !active && !["pending", "waiting"].includes(financialState || "")) return () => document.removeEventListener("visibilitychange", onVisible);
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
-    }, financialState === "waiting" ? 30_000 : 3_000);
+    }, !active && financialState !== "pending" ? 30_000 : 3_000);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [active, financialState, refresh]);
+  }, [active, financialState, pollAllStates, refresh]);
 
   return { items, financialEvent, error, loading: !emailUid || result.emailUid !== emailUid, refresh };
 }

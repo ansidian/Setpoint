@@ -23,8 +23,8 @@ export default function FinancialActivityCard({ activity, loading, onOpenReview 
     <span className="dashboard-finance-amount">{amountLabel(item)}</span>
   </button><button type="button" className="dashboard-finance-button" aria-label={`View source email for ${item.payee || "financial import"}`} onClick={(event) => setSource({ item, anchor: event.currentTarget })}>Source email</button></div>;
   return <><div className="dashboard-finance-card dashboard-finance-activity">
-    <section aria-label="Finance review">
-      <div className="dashboard-finance-heading"><h3><CircleAlert size={15} />Finance Review{activity?.status === "ready" && activity.reviewCount > 0 ? ` · ${activity.reviewCount}` : ""}</h3><button type="button" className="dashboard-finance-button" onClick={() => onOpenReview()}>Open review</button></div>
+    <section aria-label="Historical import review">
+      <div className="dashboard-finance-heading"><h3><CircleAlert size={15} />Historical imports{activity?.status === "ready" && activity.reviewCount > 0 ? ` · ${activity.reviewCount}` : ""}</h3><button type="button" className="dashboard-finance-button" onClick={() => onOpenReview()}>Open review</button></div>
       {!activity && loading ? <p className="dashboard-finance-note">Loading financial activity…</p>
         : activity?.status !== "ready" ? <p className="dashboard-finance-note">Financial review is temporarily unavailable.</p>
         : activity.reviewCount === 0 ? <p className="dashboard-finance-note">No imports need your review.</p>

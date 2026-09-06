@@ -67,6 +67,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `finance/MoneyAheadCard.tsx` — future unpaid scheduled bills, seven-day total and bounded expandable rows
 - `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
 - `finance/FinancialActivityCard.tsx` — pending review count and latest automatic outcomes with review and source actions
+- `finance/FinancialEventReviewPreview.tsx` — independently refreshed managed financial exception count and three direct Finance completion links
 - `finance/FinancialEmailPreview.tsx` — anchored/mobile source preview through the existing safe email body reader
 - `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states
 - `timeline/DashboardScheduleNotices.tsx` / `.css` — conditional stored departure estimate and overlap notices, reusing calendar reminders

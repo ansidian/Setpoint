@@ -54,6 +54,7 @@
       "financial-event-service.ts",
       "financial-event-intake.ts",
       "financial-event-completion.ts",
+      "financial-event-review.ts",
       "financial-event-status.ts"
     ]
   },

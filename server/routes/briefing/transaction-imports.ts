@@ -3,6 +3,7 @@ import { transactionImportService } from "../../transaction-imports/transaction-
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
 import { resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
 import { financialEventCompletion } from "../../financial-events/financial-event-completion.ts";
+import { listFinancialEventReview, readFinancialReviewChanges } from "../../financial-events/financial-event-review.ts";
 import type { TransactionImportParserSource } from "../../../shared/types/transaction-imports.ts";
 
 type HttpError = Error & { status?: number };
@@ -15,6 +16,12 @@ function sourceParam(value: unknown): TransactionImportParserSource | null {
   return typeof value === "string" && SOURCES.has(value as TransactionImportParserSource) ? value as TransactionImportParserSource : null;
 }
 
+function nonnegativeInteger(value: unknown): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : null;
+}
+
 function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: unknown): void {
   const err = error as HttpError;
   res.status(err.status || 500).json({ message: err.message || "Transaction import request failed" });
@@ -25,13 +32,43 @@ export function createTransactionImportRouter({
   wake = requestTransactionImportDrain,
   financialStatus = resolveManagedFinancialPlan,
   financialCompletion = financialEventCompletion,
+  financialReview = listFinancialEventReview,
+  financialReviewChanges = readFinancialReviewChanges,
 }: {
   service?: Service;
   wake?: () => void;
   financialStatus?: typeof resolveManagedFinancialPlan;
   financialCompletion?: typeof financialEventCompletion;
+  financialReview?: typeof listFinancialEventReview;
+  financialReviewChanges?: typeof readFinancialReviewChanges;
 } = {}): Router {
   const router = Router();
+
+  router.get("/financial-events/review", async (req, res) => {
+    const offset = req.query.offset === undefined ? 0 : nonnegativeInteger(req.query.offset);
+    if (offset === null) return res.status(400).json({ message: "Financial review offset must be a nonnegative integer" });
+    try {
+      res.json(await financialReview(ownerUserId(), { offset }));
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
+
+  router.get("/financial-events/review-changes", async (req, res) => {
+    const hasCursor = req.query.afterAt !== undefined || req.query.afterId !== undefined;
+    const updatedAt = hasCursor ? nonnegativeInteger(req.query.afterAt) : null;
+    const id = req.query.afterId;
+    if (hasCursor && (updatedAt === null || typeof id !== "string" || id.length > 600)) {
+      return res.status(400).json({ message: "Financial review cursor is invalid" });
+    }
+    try {
+      res.json(await financialReviewChanges(ownerUserId(), {
+        ...(hasCursor ? { after: { updatedAt: updatedAt!, id: id as string } } : {}),
+      }));
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
 
   router.post("/financial-events/complete", async (req, res) => {
     try {

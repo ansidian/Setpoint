@@ -227,7 +227,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
         </header>
 
         <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="md:sticky md:top-6 md:self-start">
+          <nav className="min-w-0 md:sticky md:top-6 md:self-start">
             <div className="border-t border-white/[0.06] pt-3 md:border-t-0 md:border-l md:pl-3 md:pt-0">
               <div className="px-2 pb-2 text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 Sections

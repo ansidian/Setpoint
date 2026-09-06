@@ -82,6 +82,7 @@ function loadBillResolution(key: string, payload: BillPaySeedRequest): SharedCac
 if (typeof window !== "undefined") {
   window.addEventListener("ea-settings-changed", clearBillResolutionCache);
   window.addEventListener("ea-actual-metadata-invalidated", clearBillResolutionCache);
+  window.addEventListener("ea-financial-event-changed", clearBillResolutionCache);
   window.addEventListener("storage", (event: StorageEvent) => {
     if (event.key === "ea_settings_changed") clearBillResolutionCache();
   });
@@ -159,9 +160,9 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
   useEffect(() => {
     const onFinancialChange = (event: Event) => {
       const detail = (event as CustomEvent<{ emailUid: string; plan?: FinancialEmailPlan }>).detail;
-      if (!key || detail?.emailUid !== emailId) return;
+      if (!key || (detail?.emailUid ? detail.emailUid !== emailId : !cacheRef.current.value?.plan?.workflow)) return;
       billResolutionCache.delete(key);
-      const value = detail.plan ? resolvedValue(detail.plan) : null;
+      const value = detail?.plan ? resolvedValue(detail.plan) : null;
       cacheRef.current = { key, value, promise: null };
       if (value) setState({ key, status: "resolved", ...value, error: null });
       setSettingsVersion((version) => version + 1);

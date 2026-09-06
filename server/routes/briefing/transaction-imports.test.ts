@@ -3,7 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import request, { type Test } from "../../test-utils/supertest.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "node:fs";
 
 const mockDb = { execute: vi.fn() };
@@ -16,6 +16,7 @@ const { requireCookieSession } = await import("../../middleware/auth.ts");
 const { createTransactionImportRouter } = await import("./transaction-imports.ts");
 const { createFinancialEventStore } = await import("../../financial-events/financial-event-store.ts");
 const { createFinancialEventCompletion } = await import("../../financial-events/financial-event-completion.ts");
+const { listFinancialEventReview, readFinancialReviewChanges } = await import("../../financial-events/financial-event-review.ts");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("session-token").digest("hex")}`;
 
 function serviceMock() {
@@ -37,7 +38,7 @@ function serviceMock() {
   };
 }
 
-function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeof createFinancialEventCompletion>) {
+function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeof createFinancialEventCompletion>, financialDb?: Client) {
   let wakeCount = 0;
   const app = express();
   app.use(express.json());
@@ -46,6 +47,8 @@ function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeo
     service: service as never,
     financialStatus: async () => null,
     financialCompletion,
+    financialReview: financialDb ? (userId, options) => listFinancialEventReview(userId, { ...options, dbClient: financialDb }) : undefined,
+    financialReviewChanges: financialDb ? (userId, options) => readFinancialReviewChanges(userId, { ...options, dbClient: financialDb }) : undefined,
     wake: () => { wakeCount += 1; },
   }));
   return { app, service, wakeCount: () => wakeCount };
@@ -53,6 +56,21 @@ function makeApp(service = serviceMock(), financialCompletion?: ReturnType<typeo
 
 function authenticated(requestBuilder: Test): Test {
   return requestBuilder.set("Cookie", ["ea_session=session-token"]);
+}
+
+async function managedDb(): Promise<Client> {
+  const db = createClient({ url: "file::memory:" });
+  for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql"]) {
+    await db.executeMultiple(readFileSync(new URL(`../../db/migrations/${file}`, import.meta.url), "utf8"));
+  }
+  await db.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2026-01-01T00:00:00Z'");
+  for (const [uid, owner] of [["managed", "owner-1"], ["another-owner", "other"]]) {
+    await db.execute({ sql: `INSERT INTO ea_email_index (uid, user_id, account_id, account_label, account_email,
+      from_name, from_address, subject, body_text, email_date, email_date_utc, indexed_at)
+      VALUES (?, ?, 'gmail', 'Mail', 'owner@example.test', 'Example Market', 'receipt@example.test', 'Receipt',
+        'Total $12.00', '2026-09-06T12:00:00Z', '2026-09-06T12:00:00Z', '2026-09-06T12:00:00Z')`, args: [uid!, owner!] });
+  }
+  return db;
 }
 
 beforeEach(() => {
@@ -67,18 +85,8 @@ beforeEach(() => {
 
 describe("transaction import routes", () => {
   it("queues owner completion in the existing managed workflow and rejects unauthenticated, stale and cross-owner requests", async () => {
-    const db = createClient({ url: "file::memory:" });
+    const db = await managedDb();
     try {
-      for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql"]) {
-        await db.executeMultiple(readFileSync(new URL(`../../db/migrations/${file}`, import.meta.url), "utf8"));
-      }
-      await db.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2026-01-01T00:00:00Z'");
-      for (const [uid, owner] of [["managed", "owner-1"], ["another-owner", "other"]]) {
-        await db.execute({ sql: `INSERT INTO ea_email_index (uid, user_id, account_id, account_label, account_email,
-          from_name, from_address, subject, body_text, email_date, email_date_utc, indexed_at)
-          VALUES (?, ?, 'gmail', 'Mail', 'owner@example.test', 'Example Market', 'receipt@example.test', 'Receipt',
-            'Total $12.00', '2026-09-06T12:00:00Z', '2026-09-06T12:00:00Z', '2026-09-06T12:00:00Z')`, args: [uid!, owner!] });
-      }
       const store = createFinancialEventStore(db);
       const { app } = makeApp(serviceMock(), createFinancialEventCompletion({ store }));
       const path = "/api/briefing/financial-events/complete";
@@ -96,6 +104,42 @@ describe("transaction import routes", () => {
       expect(await store.getEventForEmail("other", "another-owner")).toBeNull();
       expect((await authenticated(request(app).post(path)).send(input)).status).toBe(409);
     } finally { db.close(); }
+  });
+
+  it("serves owner-scoped financial exceptions and notification changes without changing their durable state", async () => {
+    const db = await managedDb();
+    try {
+      await db.execute({ sql: `UPDATE ea_financial_documents SET status = 'retry', candidate_json = ?,
+        last_error = 'Waiting for evidence that distinguishes similar purchases.', updated_at = 1000`,
+      args: [JSON.stringify({ type: "expense", event_kind: "purchase", amount: 12, amount_kind: "transaction_amount", currency: "USD" })] });
+      const { app } = makeApp(serviceMock(), undefined, db);
+      const reviewPath = "/api/briefing/financial-events/review";
+      const changesPath = "/api/briefing/financial-events/review-changes";
+      expect((await request(app).get(reviewPath)).status).toBe(401);
+      expect((await request(app).get(changesPath)).status).toBe(401);
+      const response = await authenticated(request(app).get(`${reviewPath}?userId=other`));
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ total: 1, offset: 0, limit: 20,
+        items: [{ emailUid: "managed", state: "waiting", amount: 12, canComplete: true, attention: "complete_details" }] });
+      const changes = await authenticated(request(app).get(`${changesPath}?afterAt=0&afterId=&userId=other`));
+      expect(changes.status).toBe(200);
+      expect(changes.body).toEqual({ items: [{ key: expect.stringMatching(/^financial-review:/), emailUid: "managed" }],
+        cursor: { updatedAt: 1000, id: response.body.items[0].id }, hasMore: false });
+      const second = await authenticated(request(app).get(changesPath).query({ afterAt: changes.body.cursor.updatedAt, afterId: changes.body.cursor.id }));
+      expect(second.body).toEqual({ items: [], cursor: changes.body.cursor, hasMore: false });
+      expect((await authenticated(request(app).get(`${reviewPath}?offset=20`))).body).toEqual({ items: [], total: 1, offset: 20, limit: 20 });
+      expect(await createFinancialEventStore(db).getDocumentForEmail("owner-1", "managed")).toMatchObject({ status: "retry", attempts: 0, eventId: null });
+    } finally { db.close(); }
+  });
+
+  it("rejects malformed financial review pagination and incomplete cursors", async () => {
+    const { app } = makeApp();
+    for (const query of ["offset=-1", "offset=1.5", "offset=", "offset=Infinity", "offset=9007199254740992", "offset=0&offset=1"]) {
+      expect((await authenticated(request(app).get(`/api/briefing/financial-events/review?${query}`))).status).toBe(400);
+    }
+    for (const query of ["afterAt=1", "afterId=event:x", "afterAt=-1&afterId=x", "afterAt=1.5&afterId=x", "afterAt=0&afterId=a&afterId=b", `afterAt=0&afterId=${"a".repeat(601)}`]) {
+      expect((await authenticated(request(app).get(`/api/briefing/financial-events/review-changes?${query}`))).status).toBe(400);
+    }
   });
 
   it("requires briefing authentication and derives the owner server-side", async () => {

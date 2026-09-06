@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getActualMetadata } from "@/api";
 import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
 import EmailTransactionImportCard from "@/components/settings/cards/EmailTransactionImportCard";
+import FinancialEventReviewCard from "@/components/settings/cards/FinancialEventReviewCard";
 import ConnectionDependencyPrompt from "@/components/settings/ConnectionDependencyPrompt";
 import { projectFeatureDependencies } from "@/components/settings/featureDependencyModel";
 import type { SettingsCardStateProps } from "../settingsTypes";
@@ -60,16 +61,20 @@ export default function ActualBudgetSettingsSection({
 
   if (!dependency.showSettings) {
     return (
-      <ConnectionDependencyPrompt
-        title="Connect Actual Budget"
-        description="Finance tools become available after Actual Budget is connected. Existing pay links remain saved while disconnected."
-        actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
-      />
+      <>
+        <FinancialEventReviewCard liveOperationsAvailable={false} />
+        <ConnectionDependencyPrompt
+          title="Connect Actual Budget"
+          description="Finance tools become available after Actual Budget is connected. Existing pay links remain saved while disconnected."
+          actions={[{ connectionId: "actual-budget", label: "Set up Actual Budget" }]}
+        />
+      </>
     );
   }
 
   return (
     <>
+      <FinancialEventReviewCard liveOperationsAvailable={dependency.allowLiveMetadata} />
       {dependency.actual === "needs_attention" ? (
         <ConnectionDependencyPrompt
           title="Actual Budget needs attention"

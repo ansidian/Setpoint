@@ -69,6 +69,7 @@ const happyDomTypescriptTests = [
   "src/hooks/useMotionPresence.test.ts",
   "src/hooks/useWarmImport.test.ts",
   "src/lib/scrollLock.test.ts",
+  "src/lib/financialReviewNotifications.test.ts",
   "src/lib/triageSoundGate.test.ts",
 ]
 

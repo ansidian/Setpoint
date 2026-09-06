@@ -55,7 +55,7 @@ export function parseFinancialEventCompletion(value: unknown): FinancialEventCom
   return { emailUid, documentRevision: Number(request.documentRevision), eventRevision: request.eventRevision as number | null, entry };
 }
 
-export function completionBlocker(event: FinancialEvent | null): string | null {
+export function completionBlocker(event: Pick<FinancialEvent, "attemptedAt" | "operation" | "outcome" | "plan" | "ownerCompletion" | "status"> | null): string | null {
   if (event?.attemptedAt != null || event?.operation) return "This entry has already been submitted to Actual and cannot be submitted again.";
   if (["added", "updated", "already_present"].includes(String((event?.outcome as { outcome?: unknown } | null)?.outcome))
     || ["already_recorded", "already_scheduled"].includes(String(event?.plan?.reconciliation.status))) return "This event is already recorded in Actual.";
