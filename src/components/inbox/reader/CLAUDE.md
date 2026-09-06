@@ -7,7 +7,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 ### Entry + surfaces
 - `Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
 - `DesktopReader.tsx` — shared header and utility actions, original-first reading with a responsive supporting AI column, and bounded bill/task workspaces
-- `DesktopReader.css` — reader measure, container-responsive source/context columns and large-display reading scale, scrolling and narrow workspace overlay composition
+- `DesktopReader.css` — reader measure, container-responsive source/context columns and large-display reading width, scrolling and narrow workspace overlay composition
 - `MobileReader.tsx` — focused mobile reading screen with one top bar and actions sheet
 - `ReaderShared.tsx` — reader empty state using the shared Inbox presentation
 - `readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
@@ -24,7 +24,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `MobileReaderControls.tsx` — mobile status badges
 
 ### Body + triage
-- `OriginalEmailSection.tsx` / `OriginalEmailSection.css` — full-source reading/original formatting control and message attachments/body
+- `EmailContentSection.tsx` — message attachments and source body at full content height
 - `EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
 - `EmailAttachmentShelf.tsx` / `EmailAttachmentPreview.tsx` — compact file shelf plus safe PDF/raster preview overlay
 - `EmailCsvPreview.tsx` — bounded read-only CSV table preview with sticky headers and truncation limits

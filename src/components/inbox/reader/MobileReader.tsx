@@ -20,7 +20,7 @@ import {
 import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
 import SnoozePicker from "../SnoozePicker";
 import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
-import OriginalEmailSection from "./OriginalEmailSection";
+import EmailContentSection from "./EmailContentSection";
 import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import MobileActionRow from "./MobileActionRow";
@@ -183,7 +183,7 @@ export default function MobileReader({
           </div>
         </AnimatedCollapse>
 
-        <OriginalEmailSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} isMobile />
+        <EmailContentSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} isMobile />
       </div>
 
       {billMounted && (

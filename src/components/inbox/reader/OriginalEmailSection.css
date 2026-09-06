@@ -1,9 +1,0 @@
-.inbox-original-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.inbox-original-heading h2 { margin: 0; color: #a6adc8; font-size: 11px; font-weight: 500; line-height: 1.6; }
-.inbox-original-heading button { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; min-height: 30px; padding: 5px 7px; border: 0; border-radius: 5px; background: transparent; color: #a6adc8; font: inherit; font-size: 10px; cursor: pointer; transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
-.inbox-original-heading button:hover { color: #edeef9; background: #ffffff0b; transform: translateY(-1px); }
-.inbox-original-heading button:focus-visible { transform: translateY(-1px); outline: 2px solid #cba6da; outline-offset: 3px; }
-.inbox-original-heading button:active { background: #ffffff14; transform: translateY(0); }
-.inbox-original-section[data-mobile="true"] .inbox-original-heading { margin: 14px 16px 8px; }
-.inbox-original-section[data-mobile="true"] .inbox-original-heading button { min-height: 44px; }
-@media (prefers-reduced-motion: reduce) { .inbox-original-heading button { transition: none; } .inbox-original-heading button:hover, .inbox-original-heading button:focus-visible, .inbox-original-heading button:active { transform: none; } }

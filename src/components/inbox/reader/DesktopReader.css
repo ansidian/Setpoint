@@ -19,14 +19,12 @@
 .inbox-a-reader-sender { min-width: 0; overflow-wrap: anywhere; }
 .inbox-a-reader-sender strong { font-size: 12px; font-weight: 500; color: #e3e6f5; }
 .inbox-a-reader-sender small { display: block; margin-top: 3px; color: #a6adc8; font-size: 10px; line-height: 1.7; }
-.inbox-a-original-label { margin: 0 0 16px; color: #a6adc8; font-size: 11px; font-weight: 500; }
 .inbox-a-reader-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .inbox-a-reader-context-actions:has(button) { margin: 14px 0 4px; }
 .inbox-a-reader-header + .inbox-a-reader-context-actions:has(button) { margin-bottom: 24px; }
 .inbox-a-reader-body { display: flex; min-width: 0; overflow-wrap: anywhere; }
 .inbox-a-reader-body > div { padding: 0 !important; min-width: 0; }
-/* Provider HTML keeps its own scroll viewport; plain text flows at content height. */
-.inbox-a-reader-body iframe { min-height: 360px; }
+/* Email content flows at full height in the outer reader scroll. */
 .inbox-a-reader-snooze-note { margin: 0 0 20px; color: #cba6f7; font-size: 12px; line-height: 1.7; }
 /* Utilities belong to the shared message header, above both reading columns. */
 .inbox-a-reader-header { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #ffffff12; }
@@ -42,7 +40,6 @@
 .inbox-a-reader-message, .inbox-a-reader-context { min-width: 0; }
 .inbox-a-reader-context .reader-triage-context { border-top: 0; padding-top: 0; }
 .inbox-a-reader-message > .inbox-a-reader-context-actions:has(button) { margin: 0 0 20px; }
-.inbox-a-reader-message .inbox-original-heading { flex-wrap: wrap; }
 /* Keep the source measure; spend the additional space on supporting context.
    This responds to the reader, including the room left by the inbox queue. */
 @container inbox-reader (min-width: 1000px) {
@@ -59,28 +56,15 @@
   .inbox-a-reader-context .reader-triage-title { min-height: 30px; }
   .inbox-a-reader-context .reader-triage-details dl > div { display: block; }
 }
-/* Large workspaces grow the reading surface as a unit, including provider
-   iframes, rather than turning fixed-size prose into monitor-wide lines.
-   Container width follows browser/OS scaling; pixel density alone does not
-   enlarge a laptop reader. Keep the app toolbar and overlay drawers at their
-   normal scale outside this inner reading surface. */
+/* Wide readers use the available pane width without scaling text, controls,
+   or provider iframes. Keep supporting context bounded as the message grows. */
 @container inbox-reader (min-width: 1400px) {
-  .inbox-a-reader-inner { width: auto; zoom: 1.1; }
-  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1280px; }
+  .inbox-a-reader-inner,
+  .inbox-a-reader-inner[data-has-context="true"] { max-width: none; }
   .inbox-a-reader-content[data-has-context="true"] { grid-template-columns: minmax(0, 1fr) 300px; }
 }
 @container inbox-reader (min-width: 1800px) {
-  .inbox-a-reader-inner { zoom: 1.25; }
-  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1360px; }
   .inbox-a-reader-content[data-has-context="true"] { grid-template-columns: minmax(0, 1fr) 320px; }
-}
-@container inbox-reader (min-width: 2200px) {
-  .inbox-a-reader-inner { zoom: 1.5; }
-  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1440px; }
-}
-@container inbox-reader (min-width: 2800px) {
-  .inbox-a-reader-inner { zoom: 1.75; }
-  .inbox-a-reader-inner[data-has-context="true"] { max-width: 1480px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .inbox-a-reader-content .desktop-reader-action-button:focus-visible,

@@ -3,11 +3,10 @@ import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
 import type { InboxEmailLike } from "../inboxTypes";
 import type { EmailBodyState } from "./readerTypes";
 
-export default function EmailBodyPane({ state, fallback, isMobile = false, presentation = "original", email }: {
+export default function EmailBodyPane({ state, fallback, isMobile = false, email }: {
   state: EmailBodyState;
   fallback?: string | null;
   isMobile?: boolean;
-  presentation?: "reading" | "original";
   email?: InboxEmailLike | null;
 }) {
   const accountId = email?.account_id || email?.accountId || email?._account?.account_id || email?._account?.id;
@@ -45,7 +44,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, prese
   }
   const isHtml = /<[a-z!/]/i.test(text);
   if (isHtml) {
-    // Mobile expands into the reader scroll; desktop retains its own iframe scroll.
+    // Email content flows into the outer reader scroll.
     return (
       <div
         data-testid={isMobile ? "inbox-mobile-reader-body" : undefined}
@@ -69,7 +68,6 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, prese
         >
           <EmailIframe
             html={text}
-            presentation={state.source === "loaded" ? presentation : "original"}
             isMobile={isMobile}
             messageKey={messageKey != null ? String(messageKey) : null}
             remoteContentTrust={{
@@ -94,7 +92,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, prese
     >
       <div
         style={{
-          fontSize: 13.5, lineHeight: presentation === "reading" ? 1.95 : 1.7, color: "rgba(205,214,244,0.88)",
+          fontSize: 13.5, lineHeight: 1.7, color: "rgba(205,214,244,0.88)",
           whiteSpace: "pre-wrap",
         }}
       >

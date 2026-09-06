@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
-import { applyEmailReadingPresentation } from "./emailReadingPresentation";
 import { shouldRelayReaderKey } from "./readerHotkeyRelay";
 import { hasRemoteImageRefs } from "./remoteContentDetection";
 import {
@@ -16,19 +15,15 @@ export interface EmailIframeRemoteContentTrust {
   onTrustSender?: (() => Promise<void>) | null;
 }
 
-// Original desktop formatting scrolls inside the frame. Reading view and
-// mobile measure content so the message shares the reader scroll container.
-export default function EmailIframe({ html, isMobile = false, presentation = "original", messageKey, remoteContentTrust }: {
+// Measure content so the email shares the outer reader scroll container.
+export default function EmailIframe({ html, isMobile = false, messageKey, remoteContentTrust }: {
   html: string;
   isMobile?: boolean;
-  presentation?: "reading" | "original";
   messageKey?: string | null;
   remoteContentTrust?: EmailIframeRemoteContentTrust;
 }) {
-  const expandToContent = isMobile || presentation === "reading";
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const sizingCleanupRef = useRef<(() => void) | null>(null);
-  const readingCleanupRef = useRef<(() => void) | null>(null);
   const hotkeyDocumentRef = useRef<Document | null>(null);
 
   // Sanitize then wrap in a full document so the email's own styles apply.
@@ -66,8 +61,6 @@ export default function EmailIframe({ html, isMobile = false, presentation = "or
   const showTrustConfirmation = hasRemoteContent && shownOnce && savedContentKey !== contentKey && canTrustSender;
 
   const policy = remoteContentAllowed ? REMOTE_IMAGES_ALLOWED_EMAIL_CSP_POLICY : STRICT_EMAIL_CSP_POLICY;
-  // Presentation deliberately stays out of srcDoc: toggling styles must keep
-  // the loaded document and its already-fetched images alive.
   const srcDoc = useMemo(
     () => withEmailContentSecurityPolicy(isMobile ? withMobileViewport(sanitized) : sanitized, policy),
     [isMobile, sanitized, policy],
@@ -123,12 +116,9 @@ export default function EmailIframe({ html, isMobile = false, presentation = "or
       if (!doc) return;
       sizingCleanupRef.current?.();
       sizingCleanupRef.current = null;
-      readingCleanupRef.current?.();
-      readingCleanupRef.current = presentation === "reading" ? applyEmailReadingPresentation(doc) : null;
-      if (!expandToContent) iframeRef.current?.style.removeProperty("height");
-      if (expandToContent && doc.body) {
+      if (doc.body) {
         const frame = iframeRef.current!;
-        // Keep exact source inline styles so leaving Reading view reverses all
+        // Keep exact source inline styles so reinstalling the observer reverses all
         // sizing changes, including properties that originally were absent.
         const sourceStyles = new Map<HTMLElement, string | null>([
           [doc.documentElement, doc.documentElement.getAttribute("style")],
@@ -171,13 +161,13 @@ export default function EmailIframe({ html, isMobile = false, presentation = "or
             if (height > 0) doc.documentElement.style.setProperty("overflow-y", "hidden", "important");
           });
         };
-        const observer = new ResizeObserver(measure);
-        observer.observe(doc.body);
+        const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+        observer?.observe(doc.body);
         doc.addEventListener("load", measure, true);
         window.addEventListener("resize", measure);
         measure();
         sizingCleanupRef.current = () => {
-          observer.disconnect();
+          observer?.disconnect();
           cancelAnimationFrame(pendingFrame);
           doc.removeEventListener("load", measure, true);
           window.removeEventListener("resize", measure);
@@ -200,7 +190,7 @@ export default function EmailIframe({ html, isMobile = false, presentation = "or
     } catch {
       // contentDocument may be inaccessible in edge cases; silently skip
     }
-  }, [expandToContent, isMobile, presentation, relayReaderHotkey]);
+  }, [isMobile, relayReaderHotkey]);
 
   useEffect(() => {
     // React Activity disconnects effects while a keep-alive tab is hidden and
@@ -211,14 +201,12 @@ export default function EmailIframe({ html, isMobile = false, presentation = "or
     return () => {
       sizingCleanupRef.current?.();
       sizingCleanupRef.current = null;
-      readingCleanupRef.current?.();
-      readingCleanupRef.current = null;
       hotkeyDocumentRef.current?.removeEventListener("keydown", relayReaderHotkey);
     };
   }, [handleLoad, relayReaderHotkey]);
 
   return (
-    <div className={expandToContent ? "w-full" : "w-full h-full flex flex-col min-h-0"}>
+    <div className="w-full">
       {isMobile && showBlockedBanner && (
         <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 text-xs text-slate-600">
           <span>Images blocked</span>
@@ -306,8 +294,8 @@ export default function EmailIframe({ html, isMobile = false, presentation = "or
       )}
       <iframe
         ref={iframeRef}
-        className={expandToContent ? "block w-full border-none bg-white" : "w-full flex-1 border-none rounded-default bg-white"}
-        style={expandToContent ? { minHeight: 1 } : undefined}
+        className="block w-full border-none bg-white"
+        style={{ minHeight: 1 }}
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         srcDoc={srcDoc}
         title="Email content"

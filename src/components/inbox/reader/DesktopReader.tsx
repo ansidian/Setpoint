@@ -16,7 +16,7 @@ import { timeClock } from "../helpers";
 import { LANE } from "../../../lib/shell-helpers";
 import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
-import OriginalEmailSection from "./OriginalEmailSection";
+import EmailContentSection from "./EmailContentSection";
 import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import EmailActualStatus from "./EmailActualStatus";
@@ -301,7 +301,7 @@ export default function DesktopReader({
                 <DraftReply key={email.id} email={email} accent={accent} onDiscard={() => setDrafting(false)} onDirtyChange={setDraftDirty} />
               </AnimatedCollapse>
               {email._snoozedUntil && <p className="inbox-a-reader-snooze-note">Snoozed · returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
-              <OriginalEmailSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} />
+              <EmailContentSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} />
             </div>
           </div>
         </div>
