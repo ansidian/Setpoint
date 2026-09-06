@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { shouldVerifyBillEvent, verifyBillEvent } from "./billEventVerifier.ts";
+import { classifyFinancialEmail, hasFinancialSemanticConflict, shouldVerifyFinancialEmailType } from "./financialEmailClassificationPolicy.ts";
+import type { BillCandidate } from "../../shared/types/bills.ts";
 
 describe("bill event verifier", () => {
   it("audits other and low-confidence events but leaves confident events alone", () => {
@@ -125,6 +127,39 @@ describe("bill event verifier", () => {
     expect(result.candidate.due_date).toBeNull();
   });
 
+  it("grounds an audited date in a separate source row without joining event excerpts", async () => {
+    const result = await verifyBillEvent({
+      content: "Purchase Confirmation\nTransaction number: RECEIPT-123\nTransaction date: 09/06/2026\nMerchant: Example Checkout Store\nTotal $30.00",
+      candidate: { event_kind: "purchase", event_confidence: 0.99, event_evidence: "Purchase Confirmation",
+        type: "expense", type_confidence: 0.99, type_evidence: "Purchase Confirmation", due_date: null,
+        document_role: "merchant_receipt" },
+      provider: { extract: async () => ({ fields: {
+        event_kind: "purchase", event_confidence: 0.99, event_evidence: "Purchase Confirmation",
+        type: "expense", type_confidence: 0.99, type_evidence: "Purchase Confirmation",
+        due_date: "2026-09-06", document_role: "merchant_receipt",
+      }, usage: {} }) },
+      providerId: "openai", model: "test-model",
+    });
+
+    expect(result.candidate).toMatchObject({ event_kind: "purchase", event_evidence: "Purchase Confirmation",
+      document_role: "merchant_receipt", due_date: "2026-09-06", event_verification: { status: "corrected" } });
+  });
+
+  it("does not invent an operation year from a copyright footer", async () => {
+    const result = await verifyBillEvent({
+      content: "Your credit card statement is ready. Payment is due on 09/05. Copyright 2024 Example Bank.",
+      candidate: { event_kind: "statement_issued", event_confidence: 0.99, event_evidence: "Your credit card statement is ready",
+        type: "transfer", type_confidence: 0.99, type_evidence: "credit card statement", due_date: null },
+      provider: { extract: async () => ({ fields: {
+        event_kind: "statement_issued", event_confidence: 0.99, event_evidence: "Your credit card statement is ready",
+        type: "transfer", type_confidence: 0.99, type_evidence: "credit card statement", due_date: "2024-09-05",
+      }, usage: {} }) },
+      providerId: "openai", model: "test-model",
+    });
+
+    expect(result.candidate).toMatchObject({ event_kind: "statement_issued", due_date: null });
+  });
+
   it("keeps grounded source and destination evidence when correcting an account transfer", async () => {
     const content = "Your transfer request is processing from PayPal balance to EXAMPLE BANK x-0001. Transaction ID: TEST-TRANSFER-REF-0001.";
     const result = await verifyBillEvent({
@@ -164,5 +199,106 @@ describe("bill event verifier", () => {
       settlement_kind: "balance_to_bank",
       provider_reference: "TEST-TRANSFER-REF-0001",
     });
+  });
+
+  it("repairs a confident card-funded purchase misclassified as a card repayment", async () => {
+    const content = "You paid Example Shop $30.00 on September 6, 2026. Payment method: Example Rewards Mastercard.";
+    const result = await verifyBillEvent({
+      content,
+      candidate: {
+        event_kind: "card_payment_completed", event_confidence: 0.99,
+        event_evidence: "You paid Example Shop $30.00 on September 6, 2026",
+        type: "expense", type_confidence: 0.99, type_evidence: "You paid Example Shop $30.00",
+        due_date: "2026-09-10", amount: 30, amount_kind: "transaction_amount",
+      },
+      provider: { extract: async () => ({ fields: {
+        event_kind: "purchase", event_confidence: 0.99,
+        event_evidence: "You paid Example Shop $30.00 on September 6, 2026",
+        type: "expense", type_confidence: 0.99, type_evidence: "You paid Example Shop $30.00",
+        document_role: "processor_receipt", due_date: "2026-09-06",
+        account_hint: "Example Rewards Mastercard", account_hint_confidence: 0.99,
+      }, usage: {} }) },
+      providerId: "openai", model: "test-model",
+    });
+
+    expect(result.candidate).toMatchObject({
+      event_kind: "purchase", type: "expense", amount: 30, due_date: "2026-09-06",
+      account_hint: "Example Rewards Mastercard", document_role: "processor_receipt",
+      type_verification: { status: "corrected", attempts: 1 },
+    });
+    expect(classifyFinancialEmail(result.candidate).intended).toBe("create_transaction");
+  });
+
+  it.each([false, true])("blocks an unrepaired semantic contradiction when the audit fails: %s", async (unavailable) => {
+    const candidate: BillCandidate = {
+      event_kind: "card_payment_completed", event_confidence: 0.99, event_evidence: "Payment to Example Shop",
+      type: "expense", type_confidence: 0.99, type_evidence: "Payment to Example Shop", due_date: "2026-09-06",
+    };
+    const result = await verifyBillEvent({
+      content: "Payment to Example Shop",
+      candidate,
+      provider: { extract: async () => {
+        if (unavailable) throw new Error("provider unavailable");
+        return { fields: candidate, usage: {} };
+      } },
+      providerId: "openai", model: "test-model",
+    });
+
+    expect(result.candidate.type_verification?.status).toBe(unavailable ? "failed" : "kept_initial");
+    expect(classifyFinancialEmail(result.candidate)).toMatchObject({
+      classification: { reasons: ["semantic_event_ambiguous"] }, intended: null,
+    });
+  });
+
+  it("clears the prior event's date when a corrected event has no grounded operation date", async () => {
+    const result = await verifyBillEvent({
+      content: "Your scheduled payment is now complete. The payment was applied to your credit card balance.",
+      candidate: { event_kind: "payment_scheduled", event_confidence: 0.6, due_date: "2026-09-10", type: "transfer" },
+      provider: { extract: async () => ({ fields: {
+        event_kind: "card_payment_completed", event_confidence: 0.99,
+        event_evidence: "The payment was applied to your credit card balance",
+        type: "transfer", type_confidence: 0.99, type_evidence: "applied to your credit card balance",
+        due_date: "2026-09-06",
+      }, usage: {} }) },
+      providerId: "openai", model: "test-model",
+    });
+
+    expect(result.candidate).toMatchObject({ event_kind: "card_payment_completed", due_date: null });
+  });
+});
+
+describe("financial event and ledger meaning", () => {
+  it.each([0.1, 0.99])("rejects explicit contradictions independently of confidence %s", (confidence) => {
+    for (const [event_kind, type] of [
+      ["card_payment_completed", "expense"], ["purchase", "transfer"], ["refund", "expense"], ["payment_due", "income"],
+    ] as const) {
+      const candidate = { event_kind, type, event_confidence: confidence, type_confidence: confidence, type_evidence: "source evidence", due_date: "2026-09-06" };
+      expect(hasFinancialSemanticConflict(candidate)).toBe(true);
+      expect(shouldVerifyFinancialEmailType(candidate)).toBe(true);
+      expect(shouldVerifyBillEvent(candidate)).toBe(true);
+      expect(classifyFinancialEmail(candidate).intended).toBeNull();
+    }
+  });
+
+  it.each(["card_payment_completed", "account_transfer_completed"] as const)("plans %s as a transfer only with supported type semantics", (event_kind) => {
+    expect(classifyFinancialEmail({ event_kind, type: "transfer", type_confidence: 0.99, type_evidence: "Transfer completed" }).intended).toBe("create_transfer");
+    for (const type of [null, "transfer"]) {
+      const candidate = { event_kind, type };
+      expect(classifyFinancialEmail(candidate).intended).toBeNull();
+      expect(shouldVerifyFinancialEmailType(candidate)).toBe(true);
+      expect(candidate.type).toBe(type);
+    }
+  });
+
+  it("keeps pending movements unwritten apart from the approved external balance income policy", () => {
+    expect(classifyFinancialEmail({ event_kind: "account_transfer_pending", type: "transfer" }).intended).toBe("no_write");
+    expect(classifyFinancialEmail({ event_kind: "account_transfer_pending", type: "income" }).intended).toBe("no_write");
+    for (const payee of ["Cashback", "/r/hardwareswap"]) {
+      expect(classifyFinancialEmail({
+        event_kind: "account_transfer_pending", type: "income", payee,
+        from_account_hint: "PayPal balance", from_account_hint_confidence: 0.99,
+        to_account_hint: "Example Bank x-0001", to_account_hint_confidence: 0.99,
+      }).intended).toBe("create_transaction");
+    }
   });
 });

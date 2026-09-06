@@ -76,8 +76,8 @@ describe("financial email income automation", () => {
   it("plans a grounded PayPal balance movement as automatic Cashback income", async () => {
     const plan = await planner()("u1", input());
     expect(plan).toMatchObject({
-      candidateSemanticsVersion: 2,
-      targetInferenceVersion: 4,
+      candidateSemanticsVersion: 3,
+      targetInferenceVersion: 6,
       candidate: {
         type: "income",
         payee: "Cashback",

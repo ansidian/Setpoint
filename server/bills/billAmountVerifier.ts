@@ -4,6 +4,7 @@ import type {
   BillExtractionProvider,
   BillAmountVerification,
 } from "../../shared/types/bills.ts";
+import { hasAmbiguousSemanticBillAmount, selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 
 const MIN_VERIFY_VALUES = 1;
 const MAX_VERIFY_VALUES = 8;
@@ -63,63 +64,19 @@ function withoutMinimumDueSelection(candidate: BillCandidate): BillCandidate {
 }
 
 function selectionIsValid(candidate: BillCandidate): boolean {
-  const hasStatementBalance = (candidate.amount_candidates || []).some((item) => item.kind === "statement_balance");
-  if (candidate.amount == null && candidate.amount_kind == null) {
-    return !(candidate.amount_candidates || []).some((item) => [
-      "statement_balance",
-      "total_due",
-      "payment_amount",
-      "transaction_amount",
-      "refund_amount",
-      "order_total",
-    ].includes(item.kind));
-  }
+  const unverified = { ...candidate, amount_verification: undefined };
+  if (hasAmbiguousSemanticBillAmount(unverified)) return false;
+  const canonical = selectSemanticBillAmount(unverified);
+  if (!canonical) return candidate.amount == null && candidate.amount_kind == null;
   const selected = selectedCandidate(candidate);
-  if (!selected) return false;
-  if (hasStatementBalance) return candidate.amount_kind === "statement_balance";
-  return candidate.amount_kind !== "minimum_due";
+  return Boolean(selected && selected.kind === canonical.kind
+    && amountKey(selected.value) === amountKey(canonical.amount));
 }
 
 function repairSelectionFromSemanticCandidates(candidate: BillCandidate): BillCandidate | null {
-  const candidates = candidate.amount_candidates || [];
-  const statementBalance = candidates
-    .filter((entry) => entry.kind === "statement_balance")
-    .sort((left, right) => Number(right.confidence ?? -1) - Number(left.confidence ?? -1))[0];
-  if (statementBalance) {
-    return { ...candidate, amount: statementBalance.value, amount_kind: "statement_balance" };
-  }
-  const selectedAmount = amountKey(candidate.amount);
-  if (selectedAmount) {
-    for (const item of candidates.filter((entry) => amountKey(entry.value) === selectedAmount)) {
-      const repaired = { ...candidate, amount: item.value, amount_kind: item.kind };
-      if (selectionIsValid(repaired)) return repaired;
-    }
-  }
-  const preferencesByEvent: Record<string, BillAmountCandidate["kind"][]> = {
-    statement_issued: ["statement_balance", "total_due"],
-    payment_due: ["statement_balance", "total_due", "payment_amount"],
-    payment_scheduled: ["statement_balance", "total_due", "payment_amount"],
-    card_payment_completed: ["payment_amount"],
-    payment_completed: ["payment_amount", "total_due"],
-    purchase: ["transaction_amount", "order_total", "total_due"],
-    refund: ["refund_amount"],
-    bill_issued: ["total_due", "statement_balance"],
-  };
-  const preferences = preferencesByEvent[String(candidate.event_kind || "")] || [
-    "statement_balance",
-    "total_due",
-    "payment_amount",
-    "transaction_amount",
-    "refund_amount",
-    "order_total",
-  ];
-  for (const kind of preferences) {
-    const item = candidates.find((entry) => entry.kind === kind);
-    if (!item) continue;
-    const repaired = { ...candidate, amount: item.value, amount_kind: item.kind };
-    if (selectionIsValid(repaired)) return repaired;
-  }
-  return null;
+  const selected = selectSemanticBillAmount({ ...candidate, amount: null, amount_verification: undefined });
+  const repaired = { ...candidate, amount: selected?.amount ?? null, amount_kind: selected?.kind ?? null };
+  return selectionIsValid(repaired) ? repaired : null;
 }
 
 function hasGroundedAmountEvidence(content: string, candidate: BillCandidate): boolean {
@@ -140,7 +97,8 @@ function hasConflictingStatementBalances(candidate: BillCandidate): boolean {
 }
 
 function amountEvidenceNeedsAudit(content: string, candidate: BillCandidate): boolean {
-  return !hasGroundedAmountEvidence(content, candidate) || hasConflictingStatementBalances(candidate);
+  return !hasGroundedAmountEvidence(content, candidate) || hasConflictingStatementBalances(candidate)
+    || hasAmbiguousSemanticBillAmount({ ...candidate, amount_verification: undefined });
 }
 
 export function shouldVerifyBillAmounts(content: string, candidate: BillCandidate): boolean {
@@ -232,14 +190,15 @@ Return a corrected extraction using the required schema. Focus on amount, amount
 - Audit each semantic label as well as each numeric value. Complete numeric coverage does not establish correct label/value associations.
 - Preserve source rows and table relationships. When several labels precede several values, use explicit structural or repeated source evidence to resolve their association; do not guess from proximity.
 - For each amount_candidate, copy one short contiguous verbatim evidence excerpt (at most 320 characters) containing its currency value and supporting label. Do not paraphrase, add ellipses, or join separate source excerpts. An informational zero balance is not a statement balance unless the source explicitly labels it as such.
-- When conflicting statement balances cannot be resolved from the source, preserve the conflict rather than inventing a canonical selection.
+- When several amounts share the same role, select one only if original labels, dates, or account relationships identify it as the relevant amount. Confidence does not distinguish two payments. If the source cannot resolve the conflict, preserve the candidates and return null amount and null amount_kind.
 - Keep minimum_due separate from statement_balance and total_due.
-- Select the canonical amount actually charged, paid, refunded, or billed. A statement balance is canonical whenever present. Preserve minimum_due only as an informational candidate and never select it. If no non-minimum canonical amount exists, return null amount and null amount_kind.
+- Select the canonical amount for the first-pass event. For scheduled or completed payments/transfers, an explicit payment_amount takes precedence over a statement_balance. Statement balance is canonical for statements and repayment obligations; a completed transaction must not borrow an informational statement balance as its paid amount. Preserve minimum_due only as an informational candidate and never select it. If no non-minimum canonical amount exists, return null amount and null amount_kind.
 - Use null amount and null amount_kind when values are informational, promotional, projected, or otherwise not payable.
 - Do not invent values or infer a numeric amount from phrases such as "full statement balance."
 
 First-pass extraction:
 ${JSON.stringify({
+    event_kind: canonicalCandidate.event_kind ?? null,
     amount: canonicalCandidate.amount ?? null,
     amount_kind: canonicalCandidate.amount_kind ?? null,
     amount_candidates: canonicalCandidate.amount_candidates || [],
@@ -247,7 +206,7 @@ ${JSON.stringify({
 
   try {
     const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
-    const verifiedCandidate = withoutMinimumDueSelection(verified.fields);
+    const verifiedCandidate = withoutMinimumDueSelection({ ...verified.fields, event_kind: canonicalCandidate.event_kind });
     const verifiedCovered = coveredCurrencyValueCount(sourceValues, verifiedCandidate);
     const accepted = verifiedCovered === sourceValues.length
       && selectionIsValid(verifiedCandidate)

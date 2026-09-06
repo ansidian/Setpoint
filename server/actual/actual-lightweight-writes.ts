@@ -203,7 +203,8 @@ function updateScheduleRows(existing: ActualSchedule & { rule?: string; next_dat
   if (!scheduleId) throw unsupported("Existing Actual schedule is missing an id");
   let ruleId = existing.rule;
   if (ruleId) {
-    rows.push(updateRowQuery("rules", ruleId, ruleFields(scheduleId, conditions), columns.rules));
+    // Updating amount/date does not replace owner-authored category actions.
+    rows.push(updateRowQuery("rules", ruleId, { ...ruleFields(scheduleId, conditions), actions: undefined }, columns.rules));
   } else {
     ruleId = crypto.randomUUID();
     rows.push(insertRowQuery("rules", ruleId, ruleFields(scheduleId, conditions), columns.rules));
@@ -346,8 +347,8 @@ async function sendBillLightweightInner(userId: string, billData: LightweightBil
       tableColumns(client, "schedules"),
       tableColumns(client, "schedules_next_date"),
     ]);
-    if (billData.category_id && !(await categoryExists(client, billData.category_id))) {
-      throw Object.assign(new Error("Selected Actual category was not found in the local cache"), { status: 400 });
+    if (billData.category_id && !(await categoryExists(client, billData.category_id).catch(() => false))) {
+      billData = { ...billData, category_id: undefined };
     }
 
     let rows: WriteQuery[] = [];

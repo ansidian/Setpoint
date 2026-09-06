@@ -133,6 +133,7 @@ server/
 │   ├── search/
 │   │   └── evals/
 │   └── test-utils/
+├── financial-events/
 ├── middleware/
 ├── news/
 ├── platform/
@@ -717,6 +718,11 @@ erDiagram
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql` |
+| `ea_financial_documents` | `062_financial_events.sql` |
+| `ea_financial_event_references` | `062_financial_events.sql` |
+| `ea_financial_events` | `062_financial_events.sql` |
+| `ea_financial_intake_state` | `062_financial_events.sql` |
+| `ea_financial_workflow_state` | `062_financial_events.sql` |
 | `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
 | `ea_instance_credentials` | `033_instance_credentials.sql`, `040_pending_credential_lifecycle.sql` |
@@ -871,6 +877,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
 | DELETE | `/api/briefing/email/remote-content-trust/:id` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
+| POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/history` | `server/routes/briefing/snapshot.ts` |

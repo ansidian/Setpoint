@@ -17,13 +17,15 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 - `financial-email-planner.ts` — zero-configuration financial-email contract seam; classifies purpose, preserves intended versus final operation, derives stable identity, adapts reconciliation, and never writes or persists
 - `financial-email-adoption-service.ts` — live read/persistence facade; refreshes historical plans once for newer target inference, stronger authentication, or bounded missing-purpose verification, compare-and-swap persists the winner, and stages exact expense preflight without promoting stored observe-only plans
 - `financial-email-evaluator.ts` — write-disabled redacted comparison of the planner result with a supplied legacy resolution
-- `financial-email-observe-report.ts` — bounded, read-only aggregation of persisted planner outcomes by automation operation class; never executes writes
+- `financial-email-observe-report.ts` — read-only legacy planner sample plus owner/window aggregates of all new financial documents, unplanned failures, event states and verified Actual outcomes; writes are counted by event
 - `financialEmailClassificationPolicy.ts` — validates source-grounded semantic identity and classifies document/intent independently of resolved Actual targets; ambiguous payment purposes stay review
-- `financialEmailAutomationPolicy.ts` — fail-closed automation gates and operation-class rollout policy; one-time expenses, income transactions, and transfer schedules are enabled; utility schedules remain observe-only
+- `financialEmailAutomationPolicy.ts` — semantic consistency, amount/date, authentication and Actual gates; the new event worker enables expenses, income, obligation schedules and completed transfers
 - `financialEmailIdentity.ts` — one-way, versioned stable identity derived from owner, provider account, provider message, and optional candidate hint
 - `financialEmailSourceIdentity.ts` — validates normalized email authentication projections and adapts them into planner source identity
 - `financialEmailTargetInference.ts` — Package 2 deterministic Actual target inference from metadata, schedules, and bounded direction-aware history; returns provenance and competing candidates
 - `financialEmailAccountEvidence.ts` — exact card-product identity, constrained existing-account ranking, and signed schedule topology for transfer targets; never guesses a funding account
+- `financialEmailHistoryEvidence.ts` — bounded account/payee history bundles, repeated compatible target evidence and constrained history ranking; categories never split identity bundles
+- `financialEmailPlanningEvidence.ts` — pure required semantic, canonical amount and operation-date reasons for the planner
 - `financialEmailImportedHistory.ts` — exact imported-ID target evidence projected from Actual transaction history
 - `financialEmailMerchantCandidates.ts` — bounded generic merchant similarity retrieval over real Actual payees plus repeated direction/account-compatible history; discovery never selects a target
 - `financialEmailRewardEvidence.ts` — owner-approved Cashback interpretation plus evidence-gated payee/category and settlement-account discovery; ambiguous Actual evidence remains unresolved
@@ -39,6 +41,7 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 ## Local patterns
 
 - Bills write through `server/actual/actual.ts`; this domain decides *what* to write, the actual domain decides *how*.
+- Categories are optional for all planning sources. Only deterministic evidence may prefill a category; missing or conflicting category evidence never blocks a resolved account/payee, and old category-only blockers refresh once on read.
 - Extraction providers are registered in `bill-extractors/catalog.ts`; add new providers there, not inline.
 - Provider adapters record actual extraction/verification/matching attempts. Scoped AI usage context preserves the triggering origin and evaluation status through planning; deterministic repairs and cached plan reuse create no usage events.
 

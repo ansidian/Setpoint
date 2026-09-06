@@ -6,6 +6,7 @@ import { shouldAttemptFinancialEmailTypeVerification } from "./financialEmailCla
 import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
 import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
 import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
+import { resolveManagedFinancialPlan } from "../financial-events/financial-event-status.ts";
 import type { InStatement } from "@libsql/client";
 import type {
   BillCandidate,
@@ -76,9 +77,12 @@ function shouldRefreshAuthentication(
 
 function shouldRefreshTargetInference(plan: FinancialEmailPlan): boolean {
   return plan.targetInferenceVersion !== FINANCIAL_TARGET_INFERENCE_VERSION
-    && plan.operation.intended === "create_transaction"
-    && plan.targets.payee?.status === "unresolved"
-    && Boolean(plan.candidate?.payee || plan.candidate?.payee_hint || plan.candidate?.payee_label);
+    && ((plan.operation.intended === "create_transaction"
+      && plan.targets.payee?.status === "unresolved"
+      && Boolean(plan.candidate?.payee || plan.candidate?.payee_hint || plan.candidate?.payee_label))
+      || (plan.operation.kind === "review"
+        && ["create_transaction", "create_schedule"].includes(String(plan.operation.intended))
+        && plan.targets.category?.status === "unresolved"));
 }
 
 const SEMANTIC_REFRESH_REASON_CODES = new Set([
@@ -202,6 +206,10 @@ export async function resolveFinancialEmailSeed(
     userId, origin: "reader_adoption", accountId: payload.accountId, emailId: payload.emailId,
   }, async () => {
     const dbClient = payload.dbClient || db;
+    if (payload.emailId) {
+      const managed = await resolveManagedFinancialPlan(userId, payload.emailId, { dbClient });
+      if (managed) return managed;
+    }
     const stored = await loadStoredFinancialContext(userId, payload, dbClient);
     const stage = async (plan: FinancialEmailPlan): Promise<void> => {
       if (!stored) return;

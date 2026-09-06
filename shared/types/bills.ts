@@ -20,6 +20,7 @@ export const FINANCIAL_OPERATION_KINDS = [
   "create_transaction",
   "create_schedule",
   "create_transfer_schedule",
+  "create_transfer",
   "no_write",
   "review",
 ] as const;
@@ -108,6 +109,7 @@ export interface BillTransactionImportEvidence {
 }
 
 export interface BillCandidate {
+  document_role?: "merchant_receipt" | "processor_receipt" | "bank_notification" | "statement" | "payment_notice" | "other" | null;
   currency?: string | null;
   payee?: string;
   payee_hint?: string;
@@ -348,14 +350,89 @@ export type FinancialAutomationOperationClass =
   | "income"
   | "utility_schedule"
   | "transfer_schedule"
+  | "completed_transfer"
   | "no_write"
   | "unsupported";
+
+export interface FinancialEmailObserveCounts {
+  attempted: number;
+  eligible: number;
+  reviewed: number;
+  noWrite: number;
+  added: 0;
+  updated: 0;
+  duplicate: 0;
+  failed: 0;
+  unsafe: number;
+}
+
+export interface FinancialWorkflowObserveSummary {
+  /** Cohort creation time, inclusive start and exclusive end. */
+  window: { start: string; end: string };
+  documents: {
+    indexed: number;
+    /** Documents with any persisted successful assessment, including negatives. */
+    assessed: number;
+    financial: number;
+    ignored: number;
+    pending: number;
+    processing: number;
+    retry: number;
+    /** Documents with a current processing error, including unresolved correlation. */
+    failed: number;
+    unplannedFailures: number;
+  };
+  /** Each event is counted once, regardless of its number of supporting emails. */
+  events: {
+    total: number;
+    pending: number;
+    processing: number;
+    waiting: number;
+    needsReview: number;
+    settled: number;
+    planned: number;
+    unplanned: number;
+    unplannedFailures: number;
+    attempted: number;
+    added: number;
+    updated: number;
+    alreadyPresent: number;
+    /** Verified successful outcomes with an Actual transaction or schedule ID. */
+    recorded: number;
+    scheduled: number;
+    noWrite: number;
+  };
+}
+
+export interface FinancialEmailObserveReport {
+  /** Existing planner-only observation fields; these never claim executed writes. */
+  writesEnabled: false;
+  sampled: number;
+  invalid: number;
+  truncated: boolean;
+  byOperationClass: Record<FinancialAutomationOperationClass, FinancialEmailObserveCounts>;
+  workflow?: FinancialWorkflowObserveSummary;
+}
 
 export interface FinancialEmailPlan {
   version: 1;
   candidateSemanticsVersion?: number;
   targetInferenceVersion?: number;
   transferExecution?: { budgetId: string; attemptedAt?: string };
+  workflow?: {
+    id: string;
+    state: "pending" | "waiting" | "settled" | "needs_review";
+    relatedEmails: number;
+    reason: string | null;
+    nextAttemptAt: number | null;
+    completion?: {
+      emailUid: string;
+      documentRevision: number;
+      eventRevision: number | null;
+      canComplete: boolean;
+      blockedReason?: string;
+    };
+  };
   identity: FinancialEmailIdentity;
   candidate: BillCandidate;
   classification: FinancialEmailClassification;

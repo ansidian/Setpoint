@@ -20,6 +20,7 @@
     "email": [
       "email-service.ts",
       "email-evidence.ts",
+      "financial-email-intake.ts",
       "email-backfill-worker.ts",
       "gmail-pubsub.ts",
       "gmail-sync.ts",
@@ -46,7 +47,14 @@
       "todoist-webhook.ts"
     ],
     "triage": [
-      "triage-worker.ts"
+      "triage-worker.ts",
+      "financial-document-classifier.ts"
+    ],
+    "financial-events": [
+      "financial-event-service.ts",
+      "financial-event-intake.ts",
+      "financial-event-completion.ts",
+      "financial-event-status.ts"
     ]
   },
   "edges": [

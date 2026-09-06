@@ -2,12 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { createMigratedDb, queueEmail } from "../triage/triage-worker.test-utils.ts";
 import { resolveFinancialEmailSeed } from "./financial-email-adoption-service.ts";
 import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills.ts";
+import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
+import { FINANCIAL_TARGET_INFERENCE_VERSION } from "./financialEmailTargetInference.ts";
+import { createFinancialEmailPlanner } from "./financial-email-planner.ts";
+import { createTransactionImportStore } from "../transaction-imports/transaction-import-store.ts";
+import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
 
 function reviewPlan(candidate: BillCandidate): FinancialEmailPlan {
   return {
     version: 1,
-    candidateSemanticsVersion: 2,
-    targetInferenceVersion: 4,
+    candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
+    targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
     identity: { version: 1, status: "resolved", key: "financial-email:v1:test" },
     candidate: { ...candidate, payee: "Costco" },
     classification: { documentKind: "one_time_transaction", eventKind: "purchase", confidence: 0.99, reasons: [] },
@@ -136,6 +141,69 @@ describe("resolveFinancialEmailSeed", () => {
     expect(second).toEqual(refreshed);
     // test-architecture: allow-boundary-interaction -- the planner is the outbound AI/Actual read boundary; one-time persisted upgrade behavior cannot be proven from the equal plan value alone.
     expect(planner).toHaveBeenCalledTimes(1);
+    await dbClient.close();
+  });
+
+  it("refreshes and persists an old category-only utility blocker once", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Your Power Co bill", from_address: "bills@power.example",
+      body_text: "Your Power Co bill total is $42.25, due September 10, 2026.",
+    });
+    const candidate: BillCandidate = {
+      type: "bill", payee: "Power Co", amount: 42.25, amount_kind: "total_due",
+      amount_candidates: [{ kind: "total_due", value: 42.25, confidence: 0.99 }],
+      event_kind: "bill_issued", event_confidence: 0.99, event_evidence: "Your Power Co bill",
+      event_verification: { status: "kept_initial", provider: "openai", model: "fixture" },
+      due_date: "2026-09-10", currency: "USD",
+      semantic_enrichment: { status: "complete", provider: "openai", model: "fixture" },
+    };
+    const stale = reviewPlan(candidate);
+    stale.candidate = candidate;
+    stale.targetInferenceVersion = 5;
+    stale.operation = { intended: "create_schedule", kind: "review", reasons: ["category_target_unresolved"] };
+    stale.targets.category = { kind: "category", status: "unresolved", provenance: [] };
+    stale.reviewReasons = [{ code: "category_target_unresolved", message: "Choose a category.", field: "category", blocking: true }];
+    await dbClient.execute({
+      sql: "UPDATE ea_email_triage SET bill_candidate_json = ?, financial_email_plan_json = ? WHERE email_id = ?",
+      args: [JSON.stringify(candidate), JSON.stringify(stale), "msg-1"],
+    });
+    let metadataUnavailable = false;
+    const planner = createFinancialEmailPlanner({
+      metadataReader: async () => {
+        if (metadataUnavailable) throw new Error("Actual metadata is temporarily unavailable");
+        return {
+          accounts: [{ id: "checking", name: "Checking", type: "checking" }],
+          payees: [{ id: "power", name: "Power Co" }], payeeMap: { power: "Power Co" },
+          categories: [], schedules: [], recentTransactions: [], syncHealth: { state: "current" },
+        };
+      },
+      transactionReader: async () => ({ transactions: [7, 8].map((month) => ({
+        id: `power-${month}`, date: `2026-0${month}-10`, amount: 42.25, direction: "expense" as const,
+        payee: "Power Co", payeeId: "power", category: "", account: "Checking", accountId: "checking", notes: "",
+      })) }),
+      occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current" } }),
+      now: () => new Date("2026-09-01T12:00:00.000Z"),
+    });
+    const store = createTransactionImportStore(dbClient);
+    const dependencies = {
+      planner,
+      stagePreflight: (userId: string, context: Parameters<typeof stageFinancialEmailPreflight>[1], plan: FinancialEmailPlan) =>
+        stageFinancialEmailPreflight(userId, context, plan, store),
+    };
+    const payload = { emailId: "msg-1", accountId: "gmail-work", dbClient };
+    const first = await resolveFinancialEmailSeed("user-1", payload, dependencies);
+    expect(first.targetInferenceVersion).toBe(FINANCIAL_TARGET_INFERENCE_VERSION);
+    expect(first.targets).toMatchObject({
+      account: { status: "resolved", id: "checking" }, payee: { status: "resolved", id: "power" },
+      category: { status: "unresolved" },
+    });
+    expect(first.automation.gates.find((gate) => gate.gate === "targets")?.status).toBe("pass");
+    expect(first.reviewReasons.map((reason) => reason.code)).not.toContain("category_target_unresolved");
+    metadataUnavailable = true;
+    expect(await resolveFinancialEmailSeed("user-1", payload, dependencies)).toEqual(first);
+    const stored = await dbClient.execute("SELECT financial_email_plan_json FROM ea_email_triage WHERE email_id = 'msg-1'");
+    expect(JSON.parse(String(stored.rows[0]!.financial_email_plan_json))).toEqual(first);
     await dbClient.close();
   });
 

@@ -77,6 +77,7 @@ export const slowIntegrationTests = [
   "server/actual/actual-lightweight-writes.test.ts",
   "server/actual/actual-local-metadata.test.ts",
   "server/actual/actual-transactions-read.test.ts",
+  "server/actual/actualFinancialOperations.sdk.test.ts",
   "server/actual/actualMetadataCacheStore.test.ts",
   "server/db/migrate.test.ts",
   "server/google-oauth-credentials.test.ts",

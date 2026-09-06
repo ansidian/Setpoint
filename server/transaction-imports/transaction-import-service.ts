@@ -173,8 +173,11 @@ export function createTransactionImportService({
 
   async function ingestArrivals(userId: string, emails: TransactionEmailInput[]): Promise<{ queued: number; review: number; runId: string | null }> {
     if (!emails.length) return { queued: 0, review: 0, runId: null };
+    const managed = new Set(await store.listManagedEmailUids(userId, emails.map((email) => email.uid)));
+    const legacyEmails = emails.filter((email) => !managed.has(email.uid));
+    if (!legacyEmails.length) return { queued: 0, review: 0, runId: null };
     const runId = createId();
-    const prepared = prepareTransactionImportItems(userId, runId, emails, createId);
+    const prepared = prepareTransactionImportItems(userId, runId, legacyEmails, createId);
     if (!prepared.items.length) return { queued: 0, review: 0, runId: null };
     const plannedItems = await planItems(userId, prepared.items);
     await store.createRun({
@@ -182,7 +185,7 @@ export function createTransactionImportService({
       userId,
       trigger: "arrival",
       optionsKey: `arrival:${runId}`,
-      gmailAccountIds: normalizedUnique(emails.map((email) => email.gmailAccountId)),
+      gmailAccountIds: normalizedUnique(legacyEmails.map((email) => email.gmailAccountId)),
       sources: normalizedUnique(prepared.items.map((item) => item.source)) as TransactionImportSource[],
       startDate: null,
       endDate: null,
@@ -200,7 +203,7 @@ export function createTransactionImportService({
     await store.updateRunProgress(userId, runId, {
       cursor: { complete: true },
       status: "completed",
-      discovered: emails.length,
+      discovered: legacyEmails.length,
       parsed: prepared.parsed,
       review,
       queued,

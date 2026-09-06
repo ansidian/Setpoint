@@ -7,11 +7,11 @@ import {
   extractBillCandidate,
   loadBillExtractChoice,
 } from "./bill-extraction-service.ts";
+import { evidenceReasons } from "./financialEmailPlanningEvidence.ts";
 import { shouldVerifyBillEvent } from "./billEventVerifier.ts";
 import { shouldVerifyBillAmounts } from "./billAmountVerifier.ts";
 import { trimBillBody } from "./bill-extract.ts";
 import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "./bill-semantic-prompt.ts";
-import { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 import { financialEmailAutomationEligibility } from "./financialEmailAutomationPolicy.ts";
 import { financialEmailIdentity, withFinancialEmailProviderTransactionIdentity } from "./financialEmailIdentity.ts";
 import { applyOwnerFinancialEmailPolicy } from "./financialEmailRewardEvidence.ts";
@@ -44,6 +44,9 @@ import type { TransactionQueryResult, TransactionRecord } from "../../shared/typ
 export { financialEmailSourceIdentity } from "./financialEmailSourceIdentity.ts";
 export { selectSemanticBillAmount } from "./billSemanticAmountPolicy.ts";
 export { financialEmailAutomationEnabled } from "./financialEmailAutomationPolicy.ts";
+export { hasFinancialSemanticConflict, hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
+export { namedAccountEvidence, trustedAccountSuffix, accountSuffix } from "./financialEmailAccountEvidence.ts";
+export { hasExplicitDateForYmd } from "./billEventVerifier.ts";
 
 interface ProjectedActualMetadata extends ActualMetadata {
   syncHealth: BillsMirrorHealth;
@@ -108,71 +111,10 @@ function uniqueReasonCodes(reasons: FinancialPlanReason[]): FinancialPlanReasonC
   return [...new Set(reasons.map((item) => item.code))];
 }
 
-function minimumDueOnly(candidate: BillCandidate): boolean {
-  const candidates = candidate.amount_candidates || [];
-  return candidate.amount_kind === "minimum_due"
-    && !candidates.some((item) => item.kind !== "minimum_due" && Number.isFinite(Number(item.value)));
-}
-
-function usableSemanticEvent(candidate: BillCandidate): boolean {
-  return Boolean(
-    candidate.event_kind
-    && candidate.event_kind !== "other"
-    && Number(candidate.event_confidence) >= 0.7
-    && String(candidate.event_evidence || "").trim(),
-  );
-}
-
-function validYmd(value: unknown): boolean {
-  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day;
-}
-
-function evidenceReasons(
-  candidate: BillCandidate,
-  policy: FinancialEmailPolicyResult,
-  providerUnavailable: boolean,
-): FinancialPlanReason[] {
-  const reasons: FinancialPlanReason[] = [];
-  if (providerUnavailable) {
-    reasons.push(reason("provider_unavailable", "Semantic verification is currently unavailable."));
-  }
-  if (policy.classification.reasons.includes("credit_account_evidence_missing")) {
-    reasons.push(reason("semantic_event_ambiguous", "The email does not establish whether this is a card payment or a bill.", "type"));
-  }
-  if (!candidate.event_kind) {
-    reasons.push(reason("semantic_event_missing", "The financial event could not be established.", "event_kind"));
-  } else if (!usableSemanticEvent(candidate)) {
-    reasons.push(reason("semantic_event_ambiguous", "The financial event remains ambiguous.", "event_kind"));
-  }
-  if (policy.intended && policy.intended !== "no_write") {
-    const semanticAmount = selectSemanticBillAmount(candidate);
-    if (minimumDueOnly(candidate)) {
-      reasons.push(reason("minimum_due_only", "A minimum due amount is informational and cannot be used for a write.", "amount"));
-    } else if (!semanticAmount || semanticAmount.amount <= 0) {
-      reasons.push(reason("canonical_amount_missing", "A non-minimum canonical amount is required.", "amount"));
-    }
-    if (!candidate.due_date) {
-      reasons.push(reason("due_date_missing", "A valid transaction or schedule date is required.", "due_date"));
-    } else if (!validYmd(candidate.due_date)) {
-      reasons.push(reason("due_date_invalid", "The transaction or schedule date is not a valid YYYY-MM-DD date.", "due_date"));
-    }
-  }
-  return reasons;
-}
-
 function targetReasons(
   targets: FinancialPlanTargets,
   inferenceReasons: FinancialPlanReasonCode[],
   metadataAvailable: boolean,
-  intended: FinancialEmailPolicyResult["intended"],
 ): FinancialPlanReason[] {
   const reasons: FinancialPlanReason[] = [];
   const unresolved: Array<[
@@ -183,14 +125,11 @@ function targetReasons(
   ]> = [
     ["account", "account_target_unresolved", "The Actual account could not be inferred.", "account"],
     ["payee", "payee_target_unresolved", "The Actual payee could not be inferred.", "payee"],
-    ["category", "category_target_unresolved", "The Actual category could not be inferred.", "category"],
     ["fromAccount", "from_account_target_unresolved", "The funding Actual account could not be inferred.", "from_account"],
     ["toAccount", "to_account_target_unresolved", "The destination Actual account could not be inferred.", "to_account"],
     ["schedule", "schedule_target_unresolved", "The Actual schedule could not be inferred.", "schedule"],
   ];
   for (const [field, code, message, reasonField] of unresolved) {
-    // Actual transactions can be categorized by the owner after import.
-    if (field === "category" && intended === "create_transaction") continue;
     if (targets[field].status === "unresolved") reasons.push(reason(code, message, reasonField));
   }
   if (!metadataAvailable) {
@@ -246,7 +185,14 @@ async function reconcileCandidate(
   history: TransactionRecord[],
   historyAvailable: boolean,
   dependencies: Required<Pick<FinancialEmailPlannerDependencies, "occurrenceReader" | "now">>,
+  liveOperationPreview = false,
 ): Promise<FinancialEmailReconciliation> {
+  // The event executor checks the current SDK budget immediately before dispatch.
+  // A cached obligation schedule must never stand in for a completed payment.
+  if (liveOperationPreview || (candidate.type === "transfer"
+    && ["card_payment_completed", "account_transfer_completed"].includes(String(candidate.event_kind)))) {
+    return { status: "not_checked", disposition: "review", reason: "live_operation_preview_required", checkedAt: null, evidence: null };
+  }
   const importedId = candidate.transaction_import?.importedId;
   const importedTransaction = importedId
     ? history.find((transaction) => transaction.importedId === importedId)
@@ -476,7 +422,7 @@ export function createFinancialEmailPlanner({
   ): Promise<FinancialEmailPlan> {
     return withAiUsageContext({
       userId,
-      origin: input.source === "transaction_import" ? "transaction_import"
+      origin: input.source === "transaction_import" || input.source === "financial_event" ? "transaction_import"
         : input.source === "extract" ? "manual_extraction" : "reader_adoption",
       accountId: input.sourceIdentity?.accountId,
       emailId: input.providerMessageId,
@@ -531,14 +477,16 @@ export function createFinancialEmailPlanner({
         metadata: metadataAvailable ? metadata : unavailableMetadata(),
         history,
         rankBundles: targetRanker || defaultRanker,
+        evidenceText: String(input.email?.body || input.email?.body_snippet || ""),
+        allowNewPayee: input.source === "financial_event",
       });
       const targets = inference.targets;
       const evidence = evidenceReasons(inference.candidate, policy, resolved.providerUnavailable);
-      const unresolved = targetReasons(targets, inference.reasons, metadataAvailable, policy.intended);
+      const unresolved = targetReasons(targets, inference.reasons, metadataAvailable);
       const reconciled = await reconcileCandidate(userId, inference.candidate, metadata, history, historyAvailable, {
         occurrenceReader,
         now,
-      });
+      }, input.source === "financial_event" && Boolean(policy.intended && policy.intended !== "no_write"));
       const reconciliation = reconcileUpdateDisposition(reconciled, targets);
       const reconciliationReview = reconciliationReasons(reconciliation)
         .filter((item) => item.code === "reconciliation_conflict" || item.code === "reconciliation_unavailable");

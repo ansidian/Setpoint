@@ -55,6 +55,17 @@ export interface ActualSdkSchedulePort {
 }
 
 export function createActualSdkScheduleWrites(sdk: ActualSdkSchedulePort) {
+  async function availableCategoryId(categoryId: string | null | undefined): Promise<string | undefined> {
+    if (typeof categoryId !== "string" || !categoryId.trim()) return undefined;
+    try {
+      const rows = (await sdk.runQuery(sdk.q("categories").filter({ id: categoryId }).select(["id"]))).data;
+      return rows.some((row) => row && typeof row === "object" && "id" in row && row.id === categoryId)
+        ? categoryId : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   async function readSchedules({ includeCompleted = false }: { includeCompleted?: boolean } = {}): Promise<ActualSchedule[]> {
     const rows = (await sdk.runQuery(
       sdk.q("schedules").select(["id", "name", "rule", "next_date", "completed"]),
@@ -151,7 +162,8 @@ export function createActualSdkScheduleWrites(sdk: ActualSdkSchedulePort) {
       const transaction: SdkTransactionInput = { date: billData.due_date, amount: signedAmount, cleared: false };
       const payeeId = await resolvePayee(billData.payee);
       if (payeeId) transaction.payee = payeeId;
-      if (billData.category_id) transaction.category = billData.category_id;
+      const categoryId = await availableCategoryId(billData.category_id);
+      if (categoryId) transaction.category = categoryId;
       await sdk.addTransactions(targetAccountId, [transaction]);
       return { success: true, message: `Transaction "${name}" created (date is today or past)` };
     }
@@ -252,7 +264,8 @@ export function createActualSdkScheduleWrites(sdk: ActualSdkSchedulePort) {
       payee_name: billData.payee,
       notes: billData.notes == null || String(billData.notes).trim() === "" ? "" : String(billData.notes),
     };
-    if (billData.category_id) transaction.category = billData.category_id;
+    const categoryId = await availableCategoryId(billData.category_id);
+    if (categoryId) transaction.category = categoryId;
     await sdk.addTransactions(resolvedAccount.id, [transaction]);
     return { success: true, message: `Sent ${billData.payee} $${billData.amount} to Actual Budget` };
   }

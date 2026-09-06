@@ -1,5 +1,5 @@
 import { BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS } from "./bill-semantic-prompt.ts";
-import { hasStrongFinancialType, hasVerbatimFinancialEvidence, shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
+import { hasFinancialSemanticConflict, hasStrongFinancialType, hasVerbatimFinancialEvidence, shouldAttemptFinancialEmailTypeVerification } from "./financialEmailClassificationPolicy.ts";
 import {
   BILL_EVENT_KINDS,
   type BillCandidate,
@@ -44,7 +44,7 @@ function validYmd(value: unknown): boolean {
     && date.getUTCDate() === day;
 }
 
-function hasExplicitDateForYmd(evidence: unknown, value: unknown): boolean {
+export function hasExplicitDateForYmd(evidence: unknown, value: unknown): boolean {
   if (!validYmd(value)) return false;
   const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/)!;
   const year = Number(match[1]);
@@ -122,7 +122,8 @@ export async function verifyBillEvent({
 
   const prompt = `Audit the semantic event classification for this bill or financial email.
 
-Return a corrected extraction using the required schema. Focus on event_kind, event_confidence, event_evidence, due_date, type, type_confidence, type_evidence, account_hint, from_account_hint, to_account_hint, settlement_kind, and provider_reference with their evidence/confidences. Preserve the original amount; this audit does not select Actual IDs. Repair due_date when the email contains an explicit date for the classified event.
+Return a corrected extraction using the required schema. Focus on document_role, event_kind, event_confidence, event_evidence, due_date, type, type_confidence, type_evidence, account_hint, from_account_hint, to_account_hint, settlement_kind, and provider_reference with their evidence/confidences. Check event/type consistency independently of the first-pass confidence. Preserve the original monetary evidence; this audit does not select Actual IDs. Repair due_date when the email contains an explicit date for the classified event, including when correcting an event whose existing date belongs to a different event.
+Preserve a supported merchant_receipt role when the sender is the seller or merchant of record, even if it also offers checkout or payment services. Change it to processor_receipt only when the document records funding or payment to a separate seller. Repairing a date does not itself justify changing the document role.
 ${BILL_SEMANTIC_EXTRACTION_INSTRUCTIONS}
 
 Event definitions:
@@ -145,6 +146,7 @@ The absence of a numeric amount does not make an event "other". Use the subject 
 
 First-pass event:
 ${JSON.stringify({
+    document_role: candidate.document_role ?? null,
     event_kind: candidate.event_kind ?? null,
     event_confidence: candidate.event_confidence ?? null,
     event_evidence: candidate.event_evidence ?? null,
@@ -163,31 +165,41 @@ ${JSON.stringify({
 
   try {
     const verified = await provider.extract({ model, systemPrompt: prompt, content, usagePurpose: "verification" });
-    const eventAccepted = usableEvent(verified.fields, content);
-    const dateAccepted = eventAccepted
-      && hasExplicitDateForYmd(verified.fields.event_evidence, verified.fields.due_date);
-    const typeAccepted = hasStrongFinancialType(verified.fields)
+    let eventAccepted = usableEvent(verified.fields, content);
+    let typeAccepted = hasStrongFinancialType(verified.fields)
       && hasVerbatimFinancialEvidence(content, verified.fields.type_evidence);
-    const accountAccepted = Number(verified.fields.account_hint_confidence) >= 0.8
+    const semanticsAccepted = !hasFinancialSemanticConflict({
+      ...candidate,
+      ...(eventAccepted ? { event_kind: verified.fields.event_kind } : {}),
+      ...(typeAccepted ? { type: verified.fields.type } : {}),
+    });
+    eventAccepted = eventAccepted && semanticsAccepted;
+    typeAccepted = typeAccepted && semanticsAccepted;
+    const dateAccepted = eventAccepted
+      && hasExplicitDateForYmd(content, verified.fields.due_date);
+    const eventChanged = eventAccepted && verified.fields.event_kind !== candidate.event_kind;
+    const roleAccepted = semanticsAccepted && ["merchant_receipt", "processor_receipt", "bank_notification", "statement", "payment_notice", "other"].includes(String(verified.fields.document_role));
+    const accountAccepted = semanticsAccepted && Number(verified.fields.account_hint_confidence) >= 0.8
       && Number(verified.fields.account_hint_confidence) <= 1
       && hasVerbatimFinancialEvidence(content, verified.fields.account_hint);
-    const fromAccountAccepted = Number(verified.fields.from_account_hint_confidence) >= 0.8
+    const fromAccountAccepted = semanticsAccepted && Number(verified.fields.from_account_hint_confidence) >= 0.8
       && Number(verified.fields.from_account_hint_confidence) <= 1
       && hasVerbatimFinancialEvidence(content, verified.fields.from_account_hint);
-    const toAccountAccepted = Number(verified.fields.to_account_hint_confidence) >= 0.8
+    const toAccountAccepted = semanticsAccepted && Number(verified.fields.to_account_hint_confidence) >= 0.8
       && Number(verified.fields.to_account_hint_confidence) <= 1
       && hasVerbatimFinancialEvidence(content, verified.fields.to_account_hint);
-    const settlementAccepted = Number(verified.fields.settlement_confidence) >= 0.8
+    const settlementAccepted = semanticsAccepted && Number(verified.fields.settlement_confidence) >= 0.8
       && Number(verified.fields.settlement_confidence) <= 1
       && Boolean(verified.fields.settlement_kind)
       && hasVerbatimFinancialEvidence(content, verified.fields.settlement_evidence);
-    const providerReferenceAccepted = Number(verified.fields.provider_reference_confidence) >= 0.8
+    const providerReferenceAccepted = semanticsAccepted && Number(verified.fields.provider_reference_confidence) >= 0.8
       && Number(verified.fields.provider_reference_confidence) <= 1
       && hasVerbatimFinancialEvidence(content, verified.fields.provider_reference)
       && hasVerbatimFinancialEvidence(content, verified.fields.provider_reference_evidence);
     return {
       candidate: {
         ...candidate,
+        ...(roleAccepted ? { document_role: verified.fields.document_role } : {}),
         ...(verifyType ? { type_verification: typeAttempt(typeAccepted ? "corrected" : "kept_initial") } : {}),
         ...(typeAccepted
           ? {
@@ -233,7 +245,7 @@ ${JSON.stringify({
           event_confidence: verified.fields.event_confidence,
           event_evidence: verified.fields.event_evidence,
         } : {}),
-        ...(repairDate && dateAccepted ? { due_date: verified.fields.due_date } : {}),
+        ...(repairDate || eventChanged ? { due_date: dateAccepted ? verified.fields.due_date : null } : {}),
         event_verification: metadata(eventAccepted ? "corrected" : "kept_initial", providerId, model),
       },
       usage: verified.usage || {},

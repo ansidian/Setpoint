@@ -1,4 +1,6 @@
 import { reconcileActualTransferSchedule } from "./actualTransferSchedules.ts";
+import { reconcileActualFinancialOperation } from "./actualFinancialOperations.ts";
+import type { ActualFinancialOperationInput, ActualFinancialOperationMode } from "../../shared/types/financial-operations.ts";
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode } from "../../shared/types/transaction-imports.ts";
 import actualApi from "@actual-app/api";
 import { decrypt } from "../platform/encryption.ts";
@@ -77,6 +79,7 @@ interface SdkTransactionInput {
   category?: string;
   notes?: string;
   cleared?: boolean;
+  imported_id?: string;
 }
 interface QueryBuilder {
   filter(value: unknown): QueryBuilder;
@@ -94,7 +97,7 @@ interface ActualSdk extends ActualSdkSchedulePort {
   getCategoryGroups(): Promise<ActualCategoryGroup[]>;
   q(dataset: string): QueryBuilder;
   runQuery(query: QueryBuilder): Promise<{ data: unknown[] }>;
-  addTransactions(accountId: string, transactions: SdkTransactionInput[]): Promise<void>;
+  addTransactions(accountId: string, transactions: SdkTransactionInput[], options?: { runTransfers: boolean; learnCategories: boolean }): Promise<void>;
   importTransactions(accountId: string, transactions: SdkImportTransactionInput[], options: { dryRun: boolean }): Promise<SdkImportResult>;
   sync(): Promise<void>;
   internal: { send(operation: string, payload: unknown): Promise<unknown> };
@@ -481,6 +484,14 @@ export function importTransactionGroups(
 export function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode) {
   return withLock(() => withActualBudget(userId, async (config) => {
     const result = await reconcileActualTransferSchedule(sdk, config.syncId, input, mode);
+    clearMetadataCache();
+    return result;
+  }));
+}
+
+export function reconcileFinancialOperation(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode) {
+  return withLock(() => withActualBudget(userId, async (config) => {
+    const result = await reconcileActualFinancialOperation(sdk, config.syncId, input, mode);
     clearMetadataCache();
     return result;
   }));

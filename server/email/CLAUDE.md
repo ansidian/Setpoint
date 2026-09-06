@@ -4,6 +4,8 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 
 ## Files
 
+- `financial-email-intake.ts` — public bounded received-Gmail capture across Inbox and archived labels; strict message fetch, explicit vanished-source counts and indexing facade without snapshot/triage insertion
+
 - `snoozed-emails.ts` — owner-scoped deferred collection hydration from the index and captured snapshot; no provider fetches.
 
 - `email-service.ts` — public email API: search, fetch, read/trash mutations, backfill

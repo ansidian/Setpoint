@@ -1,4 +1,5 @@
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
+import type { ActualFinancialOperationInput, ActualFinancialOperationMode, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import { runActualWorkerOperation } from "./actual-worker.ts";
 import { testActualConnectionHttp } from "./actual-connection-test.ts";
 import { readLocalActualMetadata } from "./actual-local-metadata.ts";
@@ -196,6 +197,12 @@ export async function importTransactionGroups(
 
 export async function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode): Promise<ActualTransferScheduleResult> {
   const result = await callActual<ActualTransferScheduleResult>("reconcileTransferSchedule", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
+  clearMetadataCache();
+  return result;
+}
+
+export async function reconcileFinancialOperation(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode): Promise<ActualFinancialOperationResult> {
+  const result = await callActual<ActualFinancialOperationResult>("reconcileFinancialOperation", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
 }

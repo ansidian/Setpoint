@@ -1,5 +1,6 @@
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
+import { isManagedEmail, listManagedEmailUids } from "../financial-events/financial-event-status.ts";
 import type {
   TransactionImportItem, TransactionImportItemStatus,
   TransactionImportPlanShadow, TransactionImportReconciliationStatus,
@@ -590,6 +591,8 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
     recoverStaleClaims,
     recoverAbandonedHistoricalRuns,
     getNextWakeAt,
+    isManagedEmail: (userId: string, uid: string) => isManagedEmail(userId, uid, { dbClient }),
+    listManagedEmailUids: (userId: string, uids: string[]) => listManagedEmailUids(userId, uids, { dbClient }),
   };
 }
 

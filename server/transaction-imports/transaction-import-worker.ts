@@ -117,7 +117,9 @@ export function createTransactionImportWorker({
         pageSize: 50,
         pageToken: typeof run.cursor.pageToken === "string" ? run.cursor.pageToken : undefined,
       });
-      const prepared = prepareTransactionImportItems(run.userId, run.id, page.emails, createId);
+      const managed = new Set(await store.listManagedEmailUids(run.userId, page.emails.map((email) => email.uid)));
+      const legacyEmails = page.emails.filter((email) => !managed.has(email.uid));
+      const prepared = prepareTransactionImportItems(run.userId, run.id, legacyEmails, createId);
       const plannedItems = await planItems(run.userId, prepared.items);
       let insertedQueued = 0;
       let insertedReview = 0;

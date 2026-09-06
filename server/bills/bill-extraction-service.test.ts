@@ -97,6 +97,7 @@ describe("extractBillCandidate", () => {
     } });
     const extract = vi.fn().mockResolvedValue({
       fields: {
+        document_role: "merchant_receipt",
         payee: "Costco",
         amount: 84.12,
         amount_kind: "order_total",
@@ -121,6 +122,7 @@ describe("extractBillCandidate", () => {
 
     expect(result).toMatchObject({
       candidate: {
+        document_role: "merchant_receipt",
         payee: "Costco",
         amount: 84.12,
         amount_kind: "order_total",

@@ -26,25 +26,20 @@ import {
 } from "./financialEmailImportedHistory.ts";
 import {
   accountSuffix, creditCompatible, namedCreditAccountEvidence, rankedCreditAccountEvidence,
+  namedAccountEvidence, rankedAccountEvidence,
   trustedAccountSuffix, scheduleAccountId, transferScheduleTopology,
   financialScheduleEvidence as scheduleEvidence,
 } from "./financialEmailAccountEvidence.ts";
 import { discoverCorroboratedMerchantHistory } from "./financialEmailMerchantCandidates.ts";
 import { cashbackSettlementAccountEvidence, isCashbackIncome, semanticRewardCategoryEvidence, semanticRewardPayeeEvidence } from "./financialEmailRewardEvidence.ts";
-interface HistoryBundle {
-  key: string;
-  account: TargetValue;
-  payee: TargetValue;
-  category: TargetValue | null;
-  count: number;
-  latestDate: string;
-}
+import { historyBundles, stableHistoryEvidence, rankHistoryBundles, modelEvidence } from "./financialEmailHistoryEvidence.ts";
+import { hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
 export type FinancialTargetBundleRanker = (input: {
   candidate: BillCandidate;
   options: FinancialTargetRankingOption[];
 }) => Promise<FinancialTargetRankingResult>;
 
-export const FINANCIAL_TARGET_INFERENCE_VERSION = 4;
+export const FINANCIAL_TARGET_INFERENCE_VERSION = 6;
 
 export interface FinancialTargetInferenceResult {
   candidate: BillCandidate;
@@ -58,6 +53,9 @@ export interface FinancialTargetInferenceInput {
   metadata: ActualMetadata;
   history?: TransactionRecord[];
   rankBundles?: FinancialTargetBundleRanker;
+  /** Complete, already assessed source excerpts used only to ground new payees. */
+  evidenceText?: string;
+  allowNewPayee?: boolean;
 }
 
 function normalizeIdentity(value: unknown): string {
@@ -120,6 +118,7 @@ function selectEvidence(
   const best = selectable.filter((entry) => entry.tier === bestTier);
   const decisiveConflicts = selectable.filter((entry) => (
     entry.decisive && !best.some((selected) => selected.id === entry.id)
+      && !(["account", "from_account", "to_account"].includes(kind) && bestTier <= 2 && entry.provenance.source === "actual_history")
   ));
   if (best.length !== 1 || decisiveConflicts.length) {
     return { target: target(kind, "unresolved", null, [], candidates), conflict: true };
@@ -159,12 +158,6 @@ function metadataProvenance(
   };
 }
 
-function historyProvenance(
-  confidence: FinancialTargetConfidence,
-  reason: string,
-): FinancialTargetProvenance {
-  return { source: "actual_history", confidence, reason };
-}
 function schedulePayeeId(schedule: ActualSchedule): string | null {
   const value = schedule.conditions?.find((condition) => (
     condition.field === "payee" || condition.field === "description"
@@ -215,73 +208,6 @@ function matchingHistory(
   ));
 }
 
-function historyBundles(
-  rows: TransactionRecord[],
-  categories: Map<string, TargetValue[]>,
-  { includeCategory = true }: { includeCategory?: boolean } = {},
-): HistoryBundle[] {
-  const bundles = new Map<string, HistoryBundle>();
-  for (const row of rows) {
-    if (!row.accountId || !row.payeeId) continue;
-    const categoryMatches = includeCategory
-      ? categories.get(normalizeIdentity(row.category)) || []
-      : [];
-    const category = categoryMatches.length === 1 ? categoryMatches[0]! : null;
-    const key = [row.accountId, row.payeeId, category?.id || "none"].join(":");
-    const existing = bundles.get(key);
-    if (existing) {
-      existing.count += 1;
-      if (row.date > existing.latestDate) existing.latestDate = row.date;
-      continue;
-    }
-    bundles.set(key, {
-      key,
-      account: { id: row.accountId, label: row.account },
-      payee: { id: row.payeeId, label: row.payee },
-      category,
-      count: 1,
-      latestDate: row.date,
-    });
-  }
-  return [...bundles.values()].sort((left, right) => right.latestDate.localeCompare(left.latestDate));
-}
-
-function stableHistoryEvidence(
-  kind: FinancialTargetKind,
-  values: TargetValue[],
-  totalRows: number,
-): TargetEvidence[] {
-  if (totalRows < 2 || values.length !== totalRows) {
-    return [...new Map(values.map((value) => [value.id || value.label, value])).values()]
-      .map((value) => ({
-        ...value,
-        tier: 3,
-        decisive: false,
-        selectable: false,
-        provenance: historyProvenance(
-          "medium",
-          totalRows < 2 ? "single_matching_transaction" : `incomplete_${kind}_history`,
-        ),
-      }));
-  }
-  const unique = new Map(values.map((value) => [value.id || value.label, value]));
-  if (unique.size === 1 && values.length === totalRows) {
-    return [{
-      ...values[0]!,
-      tier: 3,
-      decisive: true,
-      provenance: historyProvenance("high", `stable_${kind}_history`),
-    }];
-  }
-  return [...unique.values()].map((value) => ({
-    ...value,
-    tier: 3,
-    decisive: false,
-    selectable: false,
-    provenance: historyProvenance("medium", `mixed_${kind}_history`),
-  }));
-}
-
 function exactPayeeEvidence(candidate: BillCandidate, metadata: ActualMetadata): TargetEvidence[] {
   const identities = identityValues(candidate);
   return metadata.payees
@@ -326,41 +252,6 @@ function targetValue(planTarget: FinancialPlanTarget): TargetValue | null {
     : null;
 }
 
-async function rankHistoryBundles(
-  candidate: BillCandidate,
-  bundles: HistoryBundle[],
-  rankBundles: FinancialTargetBundleRanker | undefined,
-  { allowSingle = false }: { allowSingle?: boolean } = {},
-): Promise<{ bundle: HistoryBundle; ranking: FinancialTargetRankingResult } | null> {
-  if (!rankBundles || bundles.length < (allowSingle ? 1 : 2) || bundles.length > 8) return null;
-  const keyed = bundles.map((bundle, index) => ({
-    bundle,
-    option: {
-      key: `option_${index + 1}`,
-      description: [bundle.account.label, bundle.payee.label, bundle.category?.label]
-        .filter(Boolean)
-        .join(" · "),
-    },
-  }));
-  const ranked = await rankBundles({ candidate, options: keyed.map((entry) => entry.option) });
-  if (ranked.status !== "selected" || !ranked.key) return null;
-  const selected = keyed.find((entry) => entry.option.key === ranked.key)?.bundle || null;
-  return selected ? { bundle: selected, ranking: ranked } : null;
-}
-
-function modelEvidence(value: TargetValue, evidence: string | null): TargetEvidence {
-  return {
-    ...value,
-    tier: 5,
-    decisive: false,
-    provenance: {
-      source: "model_ranking",
-      confidence: "high",
-      reason: "constrained_history_bundle_ranking",
-      evidence,
-    },
-  };
-}
 function blankTargets(): FinancialPlanTargets {
   return {
     account: target("account", "not_applicable"),
@@ -400,10 +291,12 @@ export async function inferFinancialEmailTargets({
   metadata,
   history = [],
   rankBundles,
+  evidenceText = "",
+  allowNewPayee = false,
 }: FinancialTargetInferenceInput): Promise<FinancialTargetInferenceResult> {
   const targets = blankTargets();
   const reasons = new Set<FinancialPlanReasonCode>();
-  const transfer = classification.documentKind === "credit_card_statement";
+  const transfer = classification.documentKind === "credit_card_statement" || intended === "create_transfer";
   const actionable = intended && intended !== "no_write";
   const reconciliationTransfer = transfer && candidate.event_kind === "card_payment_completed";
   if (!actionable && !reconciliationTransfer) {
@@ -414,12 +307,17 @@ export async function inferFinancialEmailTargets({
   const categories = categoryValues(metadata);
   if (transfer) {
     let toSelection = selectEvidence("to_account", [
-      ...suffixAccountEvidence(candidate, metadata, true),
-      ...namedCreditAccountEvidence(candidate, metadata),
+      ...namedAccountEvidence(candidate, metadata, "to_account", evidenceText),
+      ...(candidate.event_kind === "account_transfer_completed" ? [] : [
+        ...suffixAccountEvidence(candidate, metadata, true),
+        ...namedCreditAccountEvidence(candidate, metadata),
+      ]),
       ...scheduleEvidence(schedules, metadata, "to_account"),
     ]);
     if (toSelection.target.status === "unresolved" && !toSelection.conflict && rankBundles) {
-      toSelection = selectEvidence("to_account", await rankedCreditAccountEvidence(candidate, metadata, rankBundles));
+      const explicit = await rankedAccountEvidence(candidate, metadata, "to_account", evidenceText, rankBundles);
+      toSelection = selectEvidence("to_account", explicit.length || candidate.event_kind === "account_transfer_completed"
+        ? explicit : await rankedCreditAccountEvidence(candidate, metadata, rankBundles));
     }
     targets.toAccount = toSelection.target;
     if (toSelection.conflict) reasons.add("target_evidence_conflict");
@@ -449,18 +347,25 @@ export async function inferFinancialEmailTargets({
       const account = metadata.accounts.find((item) => item.id === sourceId);
       return account ? [{ id: account.id, label: account.name }] : [];
     });
-    const sourceSelection = selectEvidence("from_account", [
+    let sourceSelection = selectEvidence("from_account", [
+      ...namedAccountEvidence(candidate, metadata, "from_account", evidenceText),
       ...scheduleEvidence(transferSchedules, metadata, "from_account"),
       ...stableHistoryEvidence("from_account", historySources, transferRows.length),
     ]);
+    if (sourceSelection.target.status === "unresolved" && !sourceSelection.conflict) {
+      const ranked = await rankedAccountEvidence(candidate, metadata, "from_account", evidenceText, rankBundles);
+      if (ranked.length) sourceSelection = selectEvidence("from_account", ranked);
+    }
     targets.fromAccount = sourceSelection.target;
     if (sourceSelection.conflict) reasons.add("target_evidence_conflict");
 
-    const scheduleSelection = selectEvidence("schedule", scheduleEvidence(transferSchedules, metadata, "schedule"));
-    targets.schedule = scheduleSelection.target;
-    if (scheduleSelection.conflict) reasons.add("target_evidence_conflict");
-    if (targets.schedule.status === "unresolved" && targets.toAccount.status === "resolved" && !transferSchedules.length) {
-      targets.schedule = derivedScheduleTarget(`${targets.toAccount.label} Payment`);
+    if (intended !== "create_transfer") {
+      const scheduleSelection = selectEvidence("schedule", scheduleEvidence(transferSchedules, metadata, "schedule"));
+      targets.schedule = scheduleSelection.target;
+      if (scheduleSelection.conflict) reasons.add("target_evidence_conflict");
+      if (targets.schedule.status === "unresolved" && targets.toAccount.status === "resolved" && !transferSchedules.length) {
+        targets.schedule = derivedScheduleTarget(`${targets.toAccount.label} Payment`);
+      }
     }
     return {
       candidate: inferredCandidate(candidate, targets),
@@ -493,7 +398,8 @@ export async function inferFinancialEmailTargets({
   const semanticSelectionRequired = exactRows.length === 0 && semanticRows.length > 0;
   const rows = exactRows.length ? exactRows : semanticRows;
   const completeRows = rows.filter((row) => row.accountId && row.payeeId);
-  const bundles = historyBundles(completeRows, categories, { includeCategory: !semanticSelectionRequired });
+  // Optional categories cannot split evidence for the money's account/payee.
+  const bundles = historyBundles(completeRows);
   const stableBundle = !semanticSelectionRequired
     && rows.length >= 2 && completeRows.length === rows.length && bundles.length === 1
     ? bundles[0]!
@@ -513,14 +419,10 @@ export async function inferFinancialEmailTargets({
       ? {
           account: modelEvidence(bundle.account, rankedBundle.ranking.evidence),
           payee: modelEvidence(bundle.payee, rankedBundle.ranking.evidence),
-          category: bundle.category ? modelEvidence(bundle.category, rankedBundle.ranking.evidence) : null,
         }
       : {
           account: stableHistoryEvidence("account", completeRows.map((row) => ({ id: row.accountId!, label: row.account })), rows.length)[0] || null,
           payee: stableHistoryEvidence("payee", completeRows.map((row) => ({ id: row.payeeId!, label: row.payee })), rows.length)[0] || null,
-          category: bundle.category
-            ? stableHistoryEvidence("category", rows.map(() => bundle.category!), rows.length)[0] || null
-            : null,
         }
     : null;
   const accountHistoryEvidence = bundleEvidence?.account
@@ -542,11 +444,17 @@ export async function inferFinancialEmailTargets({
     ...exactImport.account,
     ...settlementAccounts,
     ...suffixAccounts,
+    ...namedAccountEvidence(candidate, metadata, "account", evidenceText),
+    ...namedCreditAccountEvidence(candidate, metadata),
     ...scheduleEvidence(schedules, metadata, "account"),
     ...accountHistoryEvidence,
   ]);
   targets.account = accountSelection.target;
   if (accountSelection.conflict) reasons.add("target_evidence_conflict");
+  if (targets.account.status === "unresolved" && !accountSelection.conflict) {
+    const ranked = await rankedAccountEvidence(candidate, metadata, "account", evidenceText, rankBundles);
+    if (ranked.length) targets.account = selectEvidence("account", ranked).target;
+  }
 
   const payeeSelection = selectEvidence("payee", [
     ...exactImport.payee,
@@ -557,6 +465,14 @@ export async function inferFinancialEmailTargets({
   ]);
   targets.payee = payeeSelection.target;
   if (payeeSelection.conflict) reasons.add("target_evidence_conflict");
+  const newPayee = String(candidate.payee_hint || candidate.payee || "").trim();
+  if (allowNewPayee && targets.payee.status === "unresolved" && !payeeSelection.conflict
+    && !targets.payee.competingCandidates?.length && newPayee.length > 1 && newPayee.length <= 200
+    && hasVerbatimFinancialEvidence(evidenceText, newPayee)) {
+    targets.payee = target("payee", "resolved", { id: null, label: newPayee }, [{
+      source: "source_adapter", confidence: "exact", reason: "grounded_new_payee", evidence: newPayee,
+    }]);
+  }
 
   if (targets.account.status === "resolved" && targets.payee.status === "resolved") {
     const conditionalRows = rows.filter((row) => (
@@ -572,15 +488,11 @@ export async function inferFinancialEmailTargets({
     );
     categoryEvidence.push(...exactImport.category);
     categoryEvidence.push(...semanticRewardCategoryEvidence(candidate, metadata));
-    if (bundleEvidence?.category?.provenance.source === "model_ranking") {
-      categoryEvidence.push(bundleEvidence.category);
-    }
     const categorySelection = selectEvidence("category", categoryEvidence);
     targets.category = categorySelection.target;
-    if (categorySelection.conflict && intended !== "create_transaction") reasons.add("target_evidence_conflict");
-    // With the account and payee resolved, remaining bundle ambiguity only
-    // affects optional categorization for a transaction.
-    if (intended === "create_transaction") reasons.delete("target_ranking_unresolved");
+    // Independently grounded required targets satisfy history ranking. A missing
+    // or conflicting category remains optional for every operation and source.
+    reasons.delete("target_ranking_unresolved");
   }
 
   if (intended === "create_schedule") {

@@ -133,6 +133,7 @@ export async function stageFinancialEmailPreflight(
   store: TransactionImportStore = transactionImportStore,
 ): Promise<{ staged: boolean; runId: string | null }> {
   if (!plan.identity.key) return { staged: false, runId: null };
+  if (await store.isManagedEmail(userId, context.emailId)) return { staged: false, runId: null };
   const executionId = plan.automation.operationClass === "transfer_schedule"
     ? transferPaymentIdentity(userId, plan)
     : plan.candidate.transaction_import?.importedId || plan.identity.key;

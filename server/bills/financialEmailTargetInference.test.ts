@@ -472,11 +472,11 @@ describe("inferFinancialEmailTargets", () => {
     expect(result.targets.payee).toMatchObject({ status: "resolved", id: "acme" });
   });
 
-  it("allows constrained ranking to resolve competing category bundles", async () => {
+  it.each(["create_transaction", "create_schedule"] as const)("keeps mixed categories optional for %s without model category selection", async (intended) => {
     const result = await inferFinancialEmailTargets({
       candidate: candidate(),
       classification: classification(),
-      intended: "create_transaction",
+      intended,
       metadata: metadata({
         categories: [{
           group_name: "Spending",
@@ -490,17 +490,14 @@ describe("inferFinancialEmailTargets", () => {
         transaction(),
         transaction({ id: "txn-2", category: "Travel" }),
       ],
-      rankBundles: async ({ options }) => ({
-        status: "selected",
-        key: options.find((option) => option.description.endsWith("Travel"))!.key,
-        confidence: 0.92,
-        evidence: "travel purchase",
-      }),
+      rankBundles: async () => { throw new Error("Category differences must not require a model selection"); },
     });
 
     expect(result.targets.account).toMatchObject({ status: "resolved", id: "checking" });
     expect(result.targets.payee).toMatchObject({ status: "resolved", id: "acme" });
-    expect(result.targets.category).toMatchObject({ status: "resolved", id: "travel" });
+    expect(result.targets.category).toMatchObject({ status: "unresolved" });
+    expect(result.candidate.category_id).toBeNull();
+    expect(result.reasons).toEqual([]);
   });
 
   it("keeps competing history bundles unresolved when ranking fails", async () => {

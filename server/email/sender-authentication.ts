@@ -22,8 +22,12 @@ function normalizedDomain(value: unknown): string | null {
 }
 
 function addressDomain(value: unknown): string | null {
-  const match = String(value || "").match(/<?[^<>\s@]+@([^<>\s]+)>?/);
-  return normalizedDomain(match?.[1]);
+  const from = String(value || "").trim();
+  // Match one whole mailbox. A quoted display name can itself contain an email
+  // address; only the angle-bracket address supplies the authenticated identity.
+  const bracketed = from.match(/^(?:(?:"(?:[^"\\\r\n]|\\[^\r\n])*"|[^"<>@,;:\\\r\n]+)\s*)?<[^<>\s@,;:"\\()]+@([a-z0-9.-]+)>$/i);
+  const bare = from.match(/^[^<>\s@,;:"\\()]+@([a-z0-9.-]+)$/i);
+  return normalizedDomain(bracketed?.[1] || bare?.[1]);
 }
 
 function propertyDomain(segment: string, names: string[]): string | null {
@@ -71,9 +75,11 @@ export function evaluateGmailSenderAuthentication(
   now: Date = new Date(),
 ): EmailAuthenticationProjection {
   const claimedDomain = addressDomain(claimedFrom);
+  const fromHeaders = headers.filter((header) => header.name.toLowerCase() === "from");
+  const fromDomain = fromHeaders.length === 1 ? addressDomain(fromHeaders[0]?.value) : null;
   const authenticationHeaders = headers.filter((header) => header.name.toLowerCase() === "authentication-results");
   const first = authenticationHeaders[0]?.value?.trim() || "";
-  if (!claimedDomain || !/^mx\.google\.com\s*;/i.test(first)) {
+  if (!claimedDomain || fromDomain !== claimedDomain || !/^mx\.google\.com\s*;/i.test(first)) {
     return unavailableEmailAuthentication("gmail", claimedFrom, now);
   }
 
@@ -204,7 +210,6 @@ export function evaluateICloudSenderAuthentication(
   if (!/^dmarc=(?:pass|fail|none|temperror|permerror)\s+header\.from=[a-z0-9.-]+\s*$/i.test((cleanResults[2]?.split(";")[1] || "").trim())) return unavailable();
   const fromHeaders = normalized.filter((header) => header.name === "from");
   const from = fromHeaders[0]?.value || "";
-  const singleMailbox = /^(?:(?:"[^"]*"|[^"<>,;]+)\s*)?<[^<>\s@,;:"]+@[a-z0-9.-]+>$|^[^<>\s@,;:"]+@[a-z0-9.-]+$/i;
-  if (fromHeaders.length !== 1 || !singleMailbox.test(from) || (from.match(/@/g) || []).length !== 1 || addressDomain(from) !== claimedDomain) return unavailable();
+  if (fromHeaders.length !== 1 || addressDomain(from) !== claimedDomain) return unavailable();
   return evaluateAuthenticationResults("icloud", `icloud;${cleanResults.slice(2).map((value) => value!.slice(value!.indexOf(";") + 1)).join(";")}`, claimedDomain, now);
 }

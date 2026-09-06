@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { transactionImportService } from "../../transaction-imports/transaction-import-service.ts";
 import { requestTransactionImportDrain } from "../../transaction-imports/transaction-import-runtime.ts";
+import { resolveManagedFinancialPlan } from "../../financial-events/financial-event-status.ts";
+import { financialEventCompletion } from "../../financial-events/financial-event-completion.ts";
 import type { TransactionImportParserSource } from "../../../shared/types/transaction-imports.ts";
 
 type HttpError = Error & { status?: number };
@@ -21,11 +23,25 @@ function errorResponse(res: Parameters<Parameters<Router["get"]>[1]>[1], error: 
 export function createTransactionImportRouter({
   service = transactionImportService,
   wake = requestTransactionImportDrain,
+  financialStatus = resolveManagedFinancialPlan,
+  financialCompletion = financialEventCompletion,
 }: {
   service?: Service;
   wake?: () => void;
+  financialStatus?: typeof resolveManagedFinancialPlan;
+  financialCompletion?: typeof financialEventCompletion;
 } = {}): Router {
   const router = Router();
+
+  router.post("/financial-events/complete", async (req, res) => {
+    try {
+      const plan = await financialCompletion.complete(ownerUserId(), req.body);
+      wake();
+      res.status(202).json(plan);
+    } catch (error) {
+      errorResponse(res, error);
+    }
+  });
 
   router.post("/transaction-imports/runs", async (req, res) => {
     const { gmailAccountIds, sources, startDate, endDate } = req.body || {};
@@ -61,7 +77,11 @@ export function createTransactionImportRouter({
       return res.status(400).json({ message: "A valid email UID is required" });
     }
     try {
-      res.json({ emailUid, items: await service.listItemsForEmail(ownerUserId(), emailUid) });
+      const [items, plan] = await Promise.all([
+        service.listItemsForEmail(ownerUserId(), emailUid), financialStatus(ownerUserId(), emailUid),
+      ]);
+      const financialEvent = plan?.workflow?.state === "settled" && !plan.candidate.event_kind ? null : plan;
+      res.json({ emailUid, items, financialEvent });
     } catch (error) {
       errorResponse(res, error);
     }

@@ -117,6 +117,7 @@ export interface TransactionImportRunListResponse {
 export interface TransactionImportEmailStatusResponse {
   emailUid: string;
   items: TransactionImportItem[];
+  financialEvent?: FinancialEmailPlan | null;
 }
 
 export interface TransactionImportHistoricalScanRequest {

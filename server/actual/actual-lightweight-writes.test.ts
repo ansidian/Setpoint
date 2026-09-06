@@ -365,6 +365,10 @@ describe("sendBillLightweight", () => {
     }, options);
     const intermediateClient = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
     await intermediateClient.execute("UPDATE schedules SET posts_transaction = 1, active = 1");
+    await intermediateClient.execute({
+      sql: "UPDATE rules SET actions = json_insert(actions, '$[#]', json(?))",
+      args: [JSON.stringify({ op: "set", field: "category", value: "cat-1" })],
+    });
     await intermediateClient.close();
     const result = await sendBillLightweight("u1", {
       type: "bill",
@@ -372,11 +376,12 @@ describe("sendBillLightweight", () => {
       amount: 15,
       due_date: "2026-05-25",
       account_id: "acct-1",
+      category_id: "removed-category",
     }, options);
 
     const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
     const schedules = await client.execute("SELECT id, name, rule, posts_transaction, active FROM schedules");
-    const rules = await client.execute("SELECT conditions FROM rules");
+    const rules = await client.execute("SELECT conditions, actions FROM rules");
     const nextDates = await client.execute("SELECT local_next_date, base_next_date FROM schedules_next_date");
     await client.close();
 
@@ -388,6 +393,9 @@ describe("sendBillLightweight", () => {
     expect(JSON.parse(String(rules.rows[0]!.conditions))).toEqual(expect.arrayContaining([
       { op: "is", field: "date", value: "2026-05-25" },
       { op: "is", field: "amount", value: -1500 },
+    ]));
+    expect(JSON.parse(String(rules.rows[0]!.actions))).toEqual(expect.arrayContaining([
+      { op: "set", field: "category", value: "cat-1" },
     ]));
     expect(nextDates.rows).toEqual([expect.objectContaining({
       local_next_date: 20260525,
@@ -437,6 +445,21 @@ describe("sendBillLightweight", () => {
     expect(metadata.lastSyncedTimestamp).toBeUndefined();
   });
 
+  it.each(["expense", "bill"])("drops a stale category when recording a manual %s", async (type) => {
+    const budgetDir = await createBudgetDb();
+    const result = await sendBillLightweight("u1", {
+      type, payee: "Power Co", amount: 12.34, due_date: "2026-05-10",
+      account_id: "acct-1", category_id: "missing-category",
+    }, {
+      dbClient: settingsDbClient(), now: new Date("2026-05-15T12:00:00.000Z"),
+    });
+    expect(result).toMatchObject({ success: true, lightweight: true });
+    const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
+    const rows = await client.execute("SELECT acct, amount, category FROM transactions");
+    expect(rows.rows).toEqual([expect.objectContaining({ acct: "acct-1", amount: -1234, category: null })]);
+    await client.close();
+  });
+
   it("does not flag pre-write failures as locally applied", async () => {
     await createBudgetDb();
 
@@ -445,7 +468,7 @@ describe("sendBillLightweight", () => {
       payee: "Power Co",
       amount: 12.34,
       due_date: "2026-05-20",
-      account_id: "acct-1",
+      account_id: "missing-account",
       category_id: "missing-category",
     }, {
       dbClient: settingsDbClient(),

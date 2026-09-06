@@ -4,6 +4,7 @@ import type {
   FinancialIntendedOperationKind,
 } from "../../shared/types/bills.ts";
 import { FINANCIAL_SETTLEMENT_KINDS } from "../../shared/types/bills.ts";
+import { applyOwnerFinancialEmailPolicy } from "./financialEmailRewardEvidence.ts";
 
 export interface FinancialEmailPolicyResult {
   classification: FinancialEmailClassification;
@@ -91,10 +92,32 @@ export function hasStrongFinancialType(candidate: BillCandidate): boolean {
     && Boolean(String(candidate.type_evidence || "").trim());
 }
 
+export function hasFinancialSemanticConflict(candidate: BillCandidate): boolean {
+  if (candidate.type == null || !candidate.event_kind) return false;
+  const compatibleTypes: Partial<Record<NonNullable<BillCandidate["event_kind"]>, string[]>> = {
+    purchase: ["expense"],
+    refund: ["income"],
+    reward: ["income"],
+    bill_issued: ["bill", "expense"],
+    statement_issued: ["transfer", "bill"],
+    payment_due: ["transfer", "bill"],
+    payment_scheduled: ["transfer", "bill"],
+    card_payment_completed: ["transfer"],
+    payment_completed: ["bill", "expense"],
+    account_transfer_pending: ["transfer", "income"],
+    account_transfer_completed: ["transfer", "income"],
+  };
+  const allowed = compatibleTypes[candidate.event_kind];
+  return Boolean(allowed && !allowed.includes(candidate.type));
+}
+
 export function shouldVerifyFinancialEmailType(candidate: BillCandidate): boolean {
-  return ["statement_issued", "payment_due", "payment_scheduled"].includes(String(candidate.event_kind))
-    && !hasStrongFinancialType(candidate)
-    && !hasCreditAccountEvidence(candidate);
+  return hasFinancialSemanticConflict(candidate)
+    || (["card_payment_completed", "account_transfer_completed"].includes(String(candidate.event_kind))
+      && !hasStrongFinancialType(candidate))
+    || (["statement_issued", "payment_due", "payment_scheduled"].includes(String(candidate.event_kind))
+      && !hasStrongFinancialType(candidate)
+      && !hasCreditAccountEvidence(candidate));
 }
 
 export function shouldAttemptFinancialEmailTypeVerification(candidate: BillCandidate, now = Date.now()): boolean {
@@ -111,6 +134,11 @@ function hasRecurringEvidence(candidate: BillCandidate): boolean {
     || (candidate.type === "bill" && Boolean(candidate.due_date));
 }
 
+function hasApprovedExternalIncome(candidate: BillCandidate): boolean {
+  return candidate.type === "income"
+    && applyOwnerFinancialEmailPolicy({ ...candidate, type: null }).type === "income";
+}
+
 export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmailPolicyResult {
   const eventKind = candidate.event_kind || null;
   const base = {
@@ -120,6 +148,12 @@ export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmail
       : null,
     ...(candidate.event_evidence ? { evidence: candidate.event_evidence } : {}),
   };
+  if (hasFinancialSemanticConflict(candidate)) {
+    return {
+      classification: { ...base, documentKind: "informational", reasons: ["semantic_event_ambiguous"] },
+      intended: null,
+    };
+  }
   switch (eventKind) {
     case "purchase":
       return { classification: { ...base, documentKind: "one_time_transaction", reasons: [] }, intended: "create_transaction" };
@@ -146,7 +180,9 @@ export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmail
               intended: null,
             };
     case "card_payment_completed":
-      return { classification: { ...base, documentKind: "credit_card_statement", reasons: [] }, intended: "no_write" };
+      return candidate.type === "transfer" && hasStrongFinancialType(candidate)
+        ? { classification: { ...base, documentKind: "credit_card_statement", reasons: [] }, intended: "create_transfer" }
+        : { classification: { ...base, documentKind: "credit_card_statement", reasons: ["semantic_event_ambiguous"] }, intended: null };
     case "payment_completed":
       return { classification: { ...base, documentKind: "utility_statement", reasons: [] }, intended: "create_transaction" };
     case "payment_cancelled":
@@ -155,14 +191,17 @@ export function classifyFinancialEmail(candidate: BillCandidate): FinancialEmail
         classification: { ...base, documentKind: "informational", reasons: ["informational_event"] },
         intended: "no_write",
       };
-    case "account_transfer_pending":
     case "account_transfer_completed":
-      return candidate.type === "income"
+      if (candidate.type === "transfer" && hasStrongFinancialType(candidate)) {
+        return { classification: { ...base, documentKind: "one_time_transaction", reasons: [] }, intended: "create_transfer" };
+      }
+      return hasApprovedExternalIncome(candidate)
         ? { classification: { ...base, documentKind: "income", reasons: [] }, intended: "create_transaction" }
-        : {
-            classification: { ...base, documentKind: "informational", reasons: ["informational_event"] },
-            intended: "no_write",
-          };
+        : { classification: { ...base, documentKind: "informational", reasons: ["semantic_event_ambiguous"] }, intended: null };
+    case "account_transfer_pending":
+      return hasApprovedExternalIncome(candidate)
+        ? { classification: { ...base, documentKind: "income", reasons: [] }, intended: "create_transaction" }
+        : { classification: { ...base, documentKind: "informational", reasons: ["informational_event"] }, intended: "no_write" };
     case "other":
     default:
       return {

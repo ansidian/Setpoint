@@ -6,6 +6,7 @@ import type { EmailBody, EmailRangeResult, NormalizedFetchedEmail } from "../../
 import type { ConfiguredEmailAccount, EmailAttachmentContent } from "./email-provider-types.ts";
 import { getAccessToken } from "./gmail-credentials.ts";
 import { evaluateGmailSenderAuthentication } from "./sender-authentication.ts";
+import { fetchWithTimeout } from "../platform/fetch-with-timeout.ts";
 export { getAccessToken, handleCallback } from "./gmail-credentials.ts";
 export { getAuthUrl } from "./gmail-oauth-url.ts";
 
@@ -24,6 +25,7 @@ interface GmailMessagePart {
 
 interface GmailMessage {
   id: string;
+  internalDate?: string;
   threadId?: string;
   snippet?: string;
   labelIds?: string[];
@@ -108,6 +110,10 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
   const bodyText = extractBodyText(msg.payload);
   const amounts = extractAmounts(bodyText);
   const from = getHeaderValue(headers, "From");
+  const receivedAt = new Date(Number(msg.internalDate));
+  const date = msg.internalDate && Number.isFinite(receivedAt.getTime())
+    ? receivedAt.toISOString()
+    : getHeaderValue(headers, "Date");
 
   return {
     uid: `gmail-${account.id}-${msg.id}`,
@@ -120,7 +126,7 @@ function normalizeMessage(account: ConfiguredEmailAccount, msg: GmailMessage): N
     subject: getHeaderValue(headers, "Subject"),
     body_preview: snippet + amounts,
     body_text: bodyText,
-    date: getHeaderValue(headers, "Date"),
+    date,
     read: !msg.labelIds?.includes("UNREAD"),
     message_id: getHeaderValue(headers, "Message-ID"),
     thread_id: msg.threadId || null,
@@ -209,10 +215,10 @@ export async function fetchEmailsInRange(account: ConfiguredEmailAccount, {
   };
 }
 
-export async function fetchEmailsByIds(account: ConfiguredEmailAccount, messageIds: string[]): Promise<NormalizedFetchedEmail[]> {
+export async function fetchEmailsByIds(account: ConfiguredEmailAccount, messageIds: string[], { strict = false }: { strict?: boolean } = {}): Promise<NormalizedFetchedEmail[]> {
   if (!messageIds?.length) return [];
   const token = await getAccessToken(account);
-  const messages = await fetchMessages(token, messageIds);
+  const messages = await fetchMessages(token, messageIds, { strict });
   return messages.map((msg) => normalizeMessage(account, msg));
 }
 
@@ -225,22 +231,29 @@ export function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 // Fetch Gmail messages in parallel chunks. Drops are logged, not silent.
-export async function fetchMessages(token: string, messageIds: string[]): Promise<GmailMessage[]> {
+export async function fetchMessages(token: string, messageIds: string[], { strict = false }: { strict?: boolean } = {}): Promise<GmailMessage[]> {
   const chunks = chunkArray(messageIds, 15);
   const results: GmailMessage[] = [];
   let dropped = 0;
   for (const chunk of chunks) {
     const settled = await Promise.allSettled(
-      chunk.map((id) =>
-        fetch(
-          `https://www.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        ).then((res) => (res.ok ? res.json() : Promise.reject(new Error(`${id}: HTTP ${res.status}`)))),
-      ),
+      chunk.map(async (id) => {
+        const url = `https://www.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`;
+        const options = { headers: { Authorization: `Bearer ${token}` } };
+        const res = strict ? await fetchWithTimeout(url, options, { timeoutMs: 30_000 }) : await fetch(url, options);
+        // A deleted source cannot be captured. Other failures must leave a
+        // durable acquisition page unadvanced so the missing receipt retries.
+        if (strict && res.status === 404) return null;
+        if (!res.ok) throw Object.assign(new Error(`${id}: HTTP ${res.status}`), { status: res.status });
+        return res.json();
+      }),
     );
     for (const s of settled) {
-      if (s.status === "fulfilled") results.push(s.value as GmailMessage);
+      if (s.status === "fulfilled") {
+        if (s.value) results.push(s.value as GmailMessage);
+      }
       else {
+        if (strict) throw s.reason;
         dropped++;
         console.warn(`[Gmail] dropped message: ${s.reason?.message || s.reason}`);
       }

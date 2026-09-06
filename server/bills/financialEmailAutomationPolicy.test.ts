@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { financialEmailAutomationEligibility } from "./financialEmailAutomationPolicy.ts";
-import type { BillCandidate, FinancialEmailInput } from "../../shared/types/bills.ts";
+import type { BillCandidate, FinancialEmailInput, FinancialIntendedOperationKind } from "../../shared/types/bills.ts";
 
 function eligibility(
   input: FinancialEmailInput = {},
   candidate: BillCandidate = { type: "expense", event_kind: "purchase", currency: "USD" },
+  intended: FinancialIntendedOperationKind = "create_transaction",
 ) {
   return financialEmailAutomationEligibility({
     input: {
@@ -17,7 +18,7 @@ function eligibility(
     evidence: [],
     targets: [],
     reconciliation: { status: "not_scheduled", disposition: "create" },
-    intended: "create_transaction",
+    intended,
   });
 }
 
@@ -54,6 +55,18 @@ describe("financial email automation policy", () => {
     });
   });
 
+  it.each([
+    { intended: "create_transfer" as const, operationClass: "completed_transfer", type: "transfer", event_kind: "card_payment_completed" as const },
+    { intended: "create_schedule" as const, operationClass: "utility_schedule", type: "bill", event_kind: "bill_issued" as const },
+  ])("enables $operationClass after all runtime gates pass", ({ intended, operationClass, ...candidate }) => {
+    expect(eligibility({}, { ...candidate, currency: "USD" }, intended)).toMatchObject({
+      eligible: true, operationClass, rollout: "enabled",
+    });
+    expect(eligibility({}, { ...candidate, currency: null }, intended)).toMatchObject({
+      eligible: false, reasons: expect.arrayContaining(["blocking_warning"]),
+    });
+  });
+
   it("never lets a blocking warning pass through an otherwise complete plan", () => {
     const result = eligibility({}, {
       type: "expense",
@@ -61,6 +74,12 @@ describe("financial email automation policy", () => {
       blocking_warnings: [{ code: "unsupported_currency", blocking: true }],
     });
     expect(result.gates).toContainEqual({ gate: "warnings", status: "fail", reasons: ["blocking_warning"] });
+  });
+
+  it("blocks contradictory event/type semantics even when upstream evidence gates are empty", () => {
+    const result = eligibility({}, { type: "expense", event_kind: "card_payment_completed", event_confidence: 0.99, type_confidence: 0.99, currency: "USD" }, "create_transfer");
+    expect(result.eligible).toBe(false);
+    expect(result.gates).toContainEqual({ gate: "semantic", status: "fail", reasons: ["semantic_event_ambiguous"] });
   });
 
   it.each([null, "EUR", "CAD"])("keeps %s currency out of unattended USD imports", (currency) => {

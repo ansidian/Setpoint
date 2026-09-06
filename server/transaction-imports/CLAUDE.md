@@ -20,7 +20,7 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `transaction-import-service.ts` — arrival preparation and historical-run admission
 - `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains
 - `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
-- `transaction-import-runtime.ts` — bounded drain admission, startup stale recovery, and graceful shutdown
+- `transaction-import-runtime.ts` — shared bounded financial-document/event and legacy-import drains, startup stale recovery, and graceful shutdown
 
 ## Local patterns
 
@@ -28,7 +28,7 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - Amounts are signed integer cents and dates are `YYYY-MM-DD`.
 - Parser warnings carry an explicit `blocking` flag; automatic safety is projected centrally.
 - New source-specific items use planner-inferred Actual targets and rollout eligibility; `candidate.transaction_import.executionOwner = "planner"` distinguishes them from historical items whose captured targets and modes remain intact. Provider references supply lifecycle-stable imported identities when grounded; provider-message identity is the fallback. No live path reads legacy mapping configuration.
-- Deterministic Amazon/PayPal receipts belong only to the source importer; generic staging checks that ownership first to avoid dual imported identities for one receipt.
+- Post-cutoff managed emails belong only to `server/financial-events/`; triage planning, generic staging, parser arrivals and historical scans check that ownership. Older deterministic Amazon/PayPal receipts remain with the source importer and are excluded from generic staging.
 - Transfer jobs share a stable identity for owner, source, destination, cents and date across reminder messages. Preview binds the Actual budget; a conditional persisted attempt marker admits one create call. Every later claim with that marker only reconciles, including manual retry and stale-claim recovery. Today/past notices without a match stay review. Transfers never enter expense import groups.
 - Generic financial-email items never consult mappings. New enabled USD expenses and income transactions enter automatic mode with `automatic_safe = 0`; only a would-add preview plus a previously passed current-Actual duplicate check and all plan gates can promote them to ready/automatic-safe. Income cents stay positive and the Actual import Adapter writes every imported transaction uncleared. Existing observe-only items still require confirmation, and updates remain review-only.
 - Planner no-write outcomes never enter generic preflight, including duplicates matched to existing Actual activity without a generic imported ID.

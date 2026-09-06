@@ -4,19 +4,12 @@ import type { BillCandidate } from "../../shared/types/bills.ts";
 
 const fixedNow = () => new Date("2026-09-01T12:00:00.000Z");
 
-function candidate(
-  event_kind: BillCandidate["event_kind"],
-  overrides: BillCandidate = {},
-): BillCandidate {
+function candidate(event_kind: BillCandidate["event_kind"], overrides: BillCandidate = {}): BillCandidate {
   return {
     payee: "Example Merchant",
     amount: 42.25,
     amount_kind: event_kind === "refund" ? "refund_amount" : "total_due",
-    amount_candidates: [{
-      kind: event_kind === "refund" ? "refund_amount" : "total_due",
-      value: 42.25,
-      confidence: 0.99,
-    }],
+    amount_candidates: [{ kind: event_kind === "refund" ? "refund_amount" : "total_due", value: 42.25, confidence: 0.99 }],
     event_kind,
     event_confidence: 0.99,
     event_evidence: `${event_kind} evidence`,
@@ -374,16 +367,16 @@ describe("financial email planner contract", () => {
     expect(result.reviewReasons).toEqual([]);
   });
 
-  it("keeps an unreconciled completed card payment in review", async () => {
+  it("keeps a completed card payment without grounded type evidence in review", async () => {
     const result = await planner()("u1", {
       candidate: candidate("card_payment_completed", { type: "transfer" }),
     });
 
     expect(result).toMatchObject({
       classification: { documentKind: "credit_card_statement" },
-      operation: { intended: "no_write", kind: "review", reasons: ["reconciliation_unavailable"] },
+      operation: { intended: null, kind: "review" },
     });
-    expect(result.reviewReasons.map((item) => item.code)).toContain("reconciliation_unavailable");
+    expect(result.reviewReasons.map((item) => item.code)).toContain("semantic_event_ambiguous");
   });
 
   it("creates a utility schedule from Actual metadata and stable history", async () => {

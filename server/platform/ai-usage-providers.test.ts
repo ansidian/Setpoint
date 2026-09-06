@@ -12,6 +12,8 @@ import { createOpenAiProvider } from "../bills/bill-extractors/openai.ts";
 import { createAnthropicProvider } from "../bills/bill-extractors/anthropic.ts";
 import { createBillCandidateVerificationService } from "../bills/bill-candidate-verification-service.ts";
 import { resolveFinancialEmailSeed } from "../bills/financial-email-adoption-service.ts";
+import { FINANCIAL_CANDIDATE_SEMANTICS_VERSION } from "../bills/bill-semantic-prompt.ts";
+import { FINANCIAL_TARGET_INFERENCE_VERSION } from "../bills/financialEmailTargetInference.ts";
 
 // This integration seam owns the consequential contract: actual provider
 // attempts survive as durable ledger rows, regardless of downstream decisions.
@@ -226,14 +228,19 @@ describe("provider attempts to durable AI accounting", () => {
   });
 
   it("reuses a stored financial plan without creating a provider event", async () => {
+    await migrate("013_email_index_normalized_date.sql");
+    await migrate("025_email_thread_identity.sql");
     await migrate("052_financial_email_plans.sql");
     await migrate("054_email_sender_authentication.sql");
+    await migrate("062_financial_events.sql");
     const candidate = {
       amount: 20, type: "expense", type_confidence: 0.99, type_evidence: "purchase",
       event_kind: "purchase", event_confidence: 0.99,
     };
     const plan = {
       version: 1, identity: { version: 1, status: "resolved", key: "financial-email:test" },
+      candidateSemanticsVersion: FINANCIAL_CANDIDATE_SEMANTICS_VERSION,
+      targetInferenceVersion: FINANCIAL_TARGET_INFERENCE_VERSION,
       candidate, classification: { documentKind: "one_time_transaction" },
       operation: { intended: "create_transaction", kind: "review" }, targets: {},
       reconciliation: { status: "not_checked", disposition: "review" },

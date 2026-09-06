@@ -27,6 +27,8 @@ export async function ingestGmailTransactionArrivals(
 ): Promise<{ queued: number }> {
   const projected = emails.map((email) => projectGmailArrivalEmail(accountId, email));
   const result = await transactionImportService.ingestArrivals(userId, projected);
-  if (result.queued) requestTransactionImportDrain();
+  // Indexed arrivals may now belong to the financial-event queue even when the
+  // legacy parser correctly produces no import item.
+  if (projected.length) requestTransactionImportDrain();
   return { queued: result.queued };
 }

@@ -22,7 +22,7 @@ describe("transaction import planner ownership", () => {
     sequence = 0;
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "052_financial_email_plans.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute(`INSERT INTO ea_owner (singleton_id, user_id, password_hash, claimed_at)

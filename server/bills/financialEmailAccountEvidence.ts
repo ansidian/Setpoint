@@ -2,6 +2,44 @@ import type { ActualAccount, ActualMetadata, ActualSchedule, ActualScheduleCondi
 import type { BillCandidate } from "../../shared/types/bills.ts";
 import type { TargetEvidence, TargetValue } from "./financialEmailImportedHistory.ts";
 import type { FinancialTargetBundleRanker } from "./financialEmailTargetInference.ts";
+import { hasVerbatimFinancialEvidence } from "./financialEmailClassificationPolicy.ts";
+
+type AccountRole = "account" | "from_account" | "to_account";
+
+function groundedAccountHint(candidate: BillCandidate, role: AccountRole, content: string): string | null {
+  const hint = candidate[`${role}_hint`];
+  return typeof hint === "string" && Number(candidate[`${role}_hint_confidence`]) >= 0.8
+    && hasVerbatimFinancialEvidence(content, hint) ? hint.trim() : null;
+}
+
+/** An explicit funding/destination fact can identify any represented account. */
+export function namedAccountEvidence(candidate: BillCandidate, metadata: ActualMetadata, role: AccountRole, content: string): TargetEvidence[] {
+  const hint = groundedAccountHint(candidate, role, content);
+  if (!hint) return [];
+  const product = accountProduct(hint);
+  const suffix = accountSuffix(hint);
+  return metadata.accounts.filter((account) => !account.closed
+    && (accountProduct(account.name) === product || (suffix && accountSuffix(account.name) === suffix)))
+    .map((account) => ({ id: account.id, label: account.name, tier: 1, decisive: true,
+      provenance: { source: "actual_metadata", confidence: "exact", reason: `explicit_${role}_identity`, evidence: hint } }));
+}
+
+export async function rankedAccountEvidence(candidate: BillCandidate, metadata: ActualMetadata, role: AccountRole,
+  content: string, rank?: FinancialTargetBundleRanker): Promise<TargetEvidence[]> {
+  if (!rank || !groundedAccountHint(candidate, role, content)) return [];
+  const accounts = metadata.accounts.filter((account) => !account.closed);
+  if (!accounts.length || accounts.length > 32) return [];
+  const meaning = role === "from_account" ? "Account the completed payment left"
+    : role === "to_account" ? "Account the completed payment entered" : "Account used for this transaction";
+  const options = accounts.map((account, index) => ({ key: `${role}_${index + 1}`, description: `${meaning}: ${account.name}` }));
+  const ranking = await rank({ candidate, options }).catch(() => null);
+  const index = options.findIndex((option) => option.key === ranking?.key);
+  if (ranking?.status !== "selected" || Number(ranking.confidence) < 0.8 || index < 0
+    || !hasVerbatimFinancialEvidence(content, ranking.evidence)) return [];
+  const account = accounts[index]!;
+  return [{ id: account.id, label: account.name, tier: 2, decisive: true,
+    provenance: { source: "model_ranking", confidence: "high", reason: `explicit_${role}_ranking`, evidence: ranking.evidence } }];
+}
 
 function accountProduct(value: string): string {
   return value.replace(/[®™]/g, "")

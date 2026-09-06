@@ -9,8 +9,9 @@ import type {
   FinancialPlanReason,
   FinancialPlanReasonCode,
 } from "../../shared/types/bills.ts";
+import { hasFinancialSemanticConflict } from "./financialEmailClassificationPolicy.ts";
 
-const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "income", "transfer_schedule"]);
+const ENABLED_OPERATION_CLASSES = new Set<FinancialAutomationOperationClass>(["one_time_expense", "income", "transfer_schedule", "completed_transfer", "utility_schedule"]);
 
 export function financialEmailAutomationEnabled(operation: FinancialAutomationOperationClass): boolean {
   return ENABLED_OPERATION_CLASSES.has(operation);
@@ -22,6 +23,7 @@ function operationClass(
 ): FinancialAutomationOperationClass {
   if (intended === "no_write") return "no_write";
   if (intended === "create_transfer_schedule") return "transfer_schedule";
+  if (intended === "create_transfer") return "completed_transfer";
   if (intended === "create_schedule") return "utility_schedule";
   if (intended === "create_transaction") {
     return candidate.type === "income" || ["refund", "reward"].includes(String(candidate.event_kind || ""))
@@ -61,6 +63,9 @@ export function financialEmailAutomationEligibility({
   const semanticReasons = evidence
     .filter((item) => ["semantic_event_missing", "semantic_event_ambiguous", "provider_unavailable"].includes(item.code))
     .map((item) => item.code);
+  if (hasFinancialSemanticConflict(candidate) && !semanticReasons.includes("semantic_event_ambiguous")) {
+    semanticReasons.push("semantic_event_ambiguous");
+  }
   const amountReasons = evidence
     .filter((item) => item.code === "canonical_amount_missing" || item.code === "minimum_due_only")
     .map((item) => item.code);
@@ -80,7 +85,7 @@ export function financialEmailAutomationEligibility({
       : gate("reconciliation", "pass");
   const hasBlockingWarnings = (Array.isArray(candidate.blocking_warnings)
     && candidate.blocking_warnings.length > 0)
-    || (["create_transaction", "create_transfer_schedule"].includes(String(intended))
+    || (["create_transaction", "create_transfer_schedule", "create_transfer", "create_schedule"].includes(String(intended))
       && (candidate.transaction_import?.currency || candidate.currency) !== "USD");
   const preflight = input.actualPreflight?.status || "not_run";
   const preflightReasons = input.actualPreflight?.reasons || [];

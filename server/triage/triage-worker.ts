@@ -49,6 +49,7 @@ import type {
 } from "./triage-types.ts";
 import { triageError } from "./triage-types.ts";
 import { stageFinancialEmailPreflight } from "../transaction-imports/financial-email-preflight.ts";
+import { isManagedEmail } from "../financial-events/financial-event-status.ts";
 export {
   getNextEmailTriageWakeAt,
   recoverStaleRunningTriageJobs,
@@ -380,7 +381,7 @@ export async function processNextEmailTriageJob({
     if (!decision) throw new Error("Triage route returned no decision");
 
     let financialEmailPlan: FinancialEmailPlan | null = null;
-    if (decision.bill_candidate) {
+    if (decision.bill_candidate && !await isManagedEmail(email.user_id, email.email_id, { dbClient })) {
       financialEmailPlan = await financialEmailPlanner(email.user_id, {
         email: {
           from: [email.from_name, email.from_address].filter(Boolean).join(" "),

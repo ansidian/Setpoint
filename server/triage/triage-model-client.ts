@@ -362,8 +362,9 @@ export function createTriageModelClient({
   const verifyDecision = (
     decision: Record<string, unknown>,
     email: Partial<TriageEmail>,
+    tier: TriageModelTier,
   ) => {
-    const choice = config.cheap;
+    const choice = config[tier];
     const providerId = choice.provider === "openai" ? "openai" : "anthropic";
     return verifyTriageBillAmounts({
       decision,
@@ -447,7 +448,7 @@ export function createTriageModelClient({
             cacheKey,
           });
           return {
-            decision: await verifyDecision(decision, email),
+            decision: await verifyDecision(decision, email, tier),
             usage,
             provider: "openai",
             model: responseModel,
@@ -514,7 +515,7 @@ export function createTriageModelClient({
           usage,
         });
         return {
-          decision: await verifyDecision(decision, email),
+          decision: await verifyDecision(decision, email, tier),
           usage,
           provider: "anthropic",
           model: responseModel,
