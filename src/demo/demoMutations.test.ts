@@ -158,8 +158,12 @@ describe("demo mode in-memory mutations", () => {
     await api.snoozeEmail("demo-email-budget", new Date("2026-05-12T18:00:00.000Z").getTime());
     expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-budget")).toBe(false);
 
+    expect(await api.fetchSnoozedEmails()).toEqual([
+      expect.objectContaining({ uid: "demo-email-budget", until_ts: Date.parse("2026-05-12T18:00:00.000Z"), missing_source: false }),
+    ]);
     // Undo (unsnooze) restores it to its lane, so the undo toast is truthful.
     await api.unsnoozeEmail("demo-email-budget");
+    expect(await api.fetchSnoozedEmails()).toEqual([]);
     expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-budget")).toBe(true);
 
     expect(networkAttempted).toBe(false);

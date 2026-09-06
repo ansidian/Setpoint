@@ -214,6 +214,23 @@ export interface PinnedEmailEntry {
   provider_state: string | null;
 }
 
+export interface SnoozedEmailEntry extends Omit<PinnedEmailEntry, "pinned_at"> {
+  until_ts: number;
+  pinned?: boolean;
+  account_unavailable?: boolean;
+  triage_status?: string | null;
+  hasBill?: boolean;
+  bill_candidate?: Record<string, unknown> | null;
+  claude?: { summary?: string; draftReply?: string; points?: string[]; bulletPoints?: string[]; why?: string } | null;
+  aiSummary?: string | null;
+  verification_code?: { code: string; kind: VerificationCodeKind; active_until: string; label: "Verification code" } | null;
+  deadline_at?: string | null;
+  escalation_badge?: string | null;
+  summary: string | null;
+  action: string | null;
+  missing_source: boolean;
+}
+
 export interface EmailIndexBackfillState {
   mailbox_scope: unknown;
   status: unknown;

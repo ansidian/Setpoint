@@ -4,6 +4,8 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 
 ## Files
 
+- `snoozed-emails.ts` — owner-scoped deferred collection hydration from the index and captured snapshot; no provider fetches.
+
 - `email-service.ts` — public email API: search, fetch, read/trash mutations, backfill
 - `email-index-search.ts` — indexed-search query, ranking, pagination, and result projection behind the `email-service.ts` facade
 - `pinned-emails.ts` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)

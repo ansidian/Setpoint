@@ -9,7 +9,7 @@ import {
   requeueArrivalGraceTriageForEmail,
   requeueEmailTriageForEmail,
 } from "./snapshot-service.ts";
-import { ARRIVAL_GRACE_SOURCE } from "./arrival-grace.ts";
+import { restoreSnoozedEmail } from "./snooze-restoration.ts";
 import type { SnapshotEmailSource, SnapshotWriteDb } from "./snapshot-types.ts";
 import { errorMessage } from "./snapshot-types.ts";
 
@@ -50,10 +50,6 @@ interface WakeDependencies {
   attachArrivalGraceEmailToActiveSnapshotFn?: typeof attachArrivalGraceEmailToActiveSnapshot;
   requeueArrivalGraceTriageForEmailFn?: typeof requeueArrivalGraceTriageForEmail;
   requeueEmailTriageForEmailFn?: typeof requeueEmailTriageForEmail;
-}
-
-interface SnoozedPendingMetadata extends Record<string, unknown> {
-  snoozedPending?: { previousTriageSource?: string };
 }
 
 const CRON_EXPR = "*/5 * * * *"; // every 5 minutes
@@ -203,53 +199,15 @@ async function runWakeDueSnoozes({
   // a successful reattach (a failure leaves the row 'snoozed' for the next tick).
   for (const { uid, snap, accountId } of items) {
     try {
-      if (snap) {
-        // P3-61: a triage row that already settled (status 'complete', stamped
-        // last_triaged_at) carries the owner's real lane/summary/category. The
-        // cron path must NOT re-derive those from the stale email_snapshot JSON
-        // or it demotes a 'fyi'/'noise' item back toward needs_attention.
-        const triageRow = accountId ? triageByKey.get(snoozeTriageKey(accountId, uid)) : null;
-        const pendingTriage = triageRow?.triage_status === "pending";
-        const completedTriage = triageRow?.triage_status === "complete"
-          && Boolean(triageRow?.last_triaged_at);
-        let metadata: SnoozedPendingMetadata = {};
-        try {
-          metadata = triageRow?.decision_metadata_json
-            ? JSON.parse(triageRow.decision_metadata_json) as SnoozedPendingMetadata
-            : {};
-        } catch {
-          metadata = {};
-        }
-        const pendingArrivalGrace = pendingTriage
-          && (
-            triageRow?.triage_source === ARRIVAL_GRACE_SOURCE
-            || metadata?.snoozedPending?.previousTriageSource === ARRIVAL_GRACE_SOURCE
-          );
-        if (pendingArrivalGrace && accountId) {
-          await requeueArrivalGraceTriageForEmailFn(userId, accountId, uid, { dbClient, now });
-          await attachArrivalGraceEmailToActiveSnapshotFn(userId, accountId, {
-            ...snap,
-            uid,
-            email_id: uid,
-          }, { dbClient, now });
-        } else if (completedTriage && accountId
-          && await unhideCompletedSnoozeItem(dbClient, userId, accountId, uid)) {
-          // P3-61: mirrored the manual-wake path — the live triaged item already
-          // exists, so we cleared dismissed_from_today_at to un-hide it in place
-          // rather than re-deriving lane/summary from the snapshot JSON. Nothing
-          // else to do; the existing triage fields stay untouched.
-        } else {
-          await attachResurfacedSnoozeToActiveSnapshotFn(userId, snap, {
-            dbClient,
-            now,
-            resurfacedAt,
-            pendingTriage,
-          });
-          if (pendingTriage && accountId) {
-            await requeueEmailTriageForEmailFn(userId, accountId, uid, { dbClient });
-          }
-        }
-      }
+      if (!snap) throw new Error("Stored snoozed message unavailable; deferred state retained");
+      await restoreSnoozedEmail(userId, uid, snap, {
+        dbClient, now,
+        triageRow: accountId ? triageByKey.get(snoozeTriageKey(accountId, uid)) ?? null : null,
+        attachResurfacedSnoozeToActiveSnapshotFn,
+        attachArrivalGraceEmailToActiveSnapshotFn,
+        requeueArrivalGraceTriageForEmailFn,
+        requeueEmailTriageForEmailFn,
+      });
       // Flip to 'resurfaced' only AFTER a successful reattach. If the reattach
       // throws, the row stays 'snoozed' so the next tick retries it — otherwise
       // the email would be silently dropped from the briefing.
@@ -263,35 +221,6 @@ async function runWakeDueSnoozes({
   }
 
   return { woke: result.rows.length };
-}
-
-// P3-61: un-hide the live snapshot item for a completed-triage snooze, mirroring
-// restorePendingTriageEligibilityForEmail's item update (manual-wake path). Clears
-// dismissed_from_today_at on the active-snapshot row without touching any triage
-// field, so a 'fyi'/'noise' item resurfaces in its real lane. Returns true when an
-// existing live item was restored; false (no row) means none exists and the caller
-// should fall back to attachResurfacedSnoozeToActiveSnapshot.
-async function unhideCompletedSnoozeItem(
-  dbClient: SnapshotWriteDb,
-  userId: string,
-  accountId: string,
-  emailId: string,
-): Promise<boolean> {
-  const itemResult = await dbClient.execute({
-    sql: `UPDATE ea_briefing_snapshot_items
-          SET dismissed_from_today_at = NULL,
-              updated_at = datetime('now')
-          WHERE user_id = ?
-            AND account_id = ?
-            AND email_id = ?
-            AND provider_removed_at IS NULL
-            AND snapshot_id IN (
-              SELECT id FROM ea_briefing_snapshots
-              WHERE user_id = ? AND status = 'active'
-            )`,
-    args: [userId, accountId, emailId, userId],
-  });
-  return Number(itemResult.rowsAffected || 0) > 0;
 }
 
 async function cleanupResurfaced({

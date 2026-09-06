@@ -1,3 +1,4 @@
+import { loadSnoozedEntries } from "./snoozed-emails.ts";
 import db from "../db/connection.ts";
 import { decrypt } from "../platform/encryption.ts";
 import { accountCredentialContext } from "../platform/credential-encryption-context.ts";
@@ -14,6 +15,7 @@ import {
   markPendingTriageDismissed,
   markProviderRemovedFromActiveSnapshots,
   restorePendingTriageEligibilityForEmail,
+  restoreSnoozedEmail,
   settleReadArrivalGraceRows,
 } from "../snapshots/snapshot-service.ts";
 import { loadUserConfig } from "../platform/config-service.ts";
@@ -319,7 +321,8 @@ export async function snooze(userId: string, uid: string, untilTs: number, snaps
     sql: `INSERT INTO ea_snoozed_emails (user_id, email_id, until_ts, email_snapshot)
           VALUES (?, ?, ?, ?)
           ON CONFLICT(user_id, email_id) DO UPDATE
-            SET until_ts = excluded.until_ts, email_snapshot = excluded.email_snapshot`,
+            SET until_ts = excluded.until_ts, email_snapshot = excluded.email_snapshot,
+                status = 'snoozed', resurfaced_at = NULL`,
     args: [userId, uid, untilTs, snapshotJson],
   });
 
@@ -367,25 +370,30 @@ export async function snooze(userId: string, uid: string, untilTs: number, snaps
 }
 
 export async function wake(userId: string, uid: string): Promise<void> {
-  const existing = await db.execute({
-    sql: "SELECT email_snapshot FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
-    args: [userId, uid],
-  });
-  let snap: PinnedEmailSnapshot | null = null;
-  if (existing.rows[0]?.email_snapshot) {
-    try {
-      const parsed: unknown = JSON.parse(String(existing.rows[0].email_snapshot));
-      snap = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed as PinnedEmailSnapshot
-        : null;
-    } catch {
-      /* ignore */
-    }
+  const entry = (await loadSnoozedEntries(userId)).find((entry) => entry.uid === uid);
+  if (!entry) return;
+  if (!entry.account_id || entry.account_unavailable || entry.missing_source) {
+    const error = new Error("The snoozed message is unavailable. Its deferred state has been kept.") as EmailHttpError;
+    error.status = 409;
+    throw error;
   }
-
+  const snap = {
+    uid, email_id: uid, account_id: entry.account_id,
+    account_email: entry.account_email ?? undefined,
+    account_label: entry.account_label ?? undefined,
+    account_color: entry.account_color ?? undefined,
+    account_icon: entry.account_icon ?? undefined,
+    subject: entry.subject, preview: entry.preview, read: entry.read,
+    date: entry.date ?? undefined, summary: entry.summary ?? undefined,
+    deadline_at: entry.deadline_at, escalation_badge: entry.escalation_badge,
+    action: entry.action ?? undefined, urgency: entry.urgency ?? undefined,
+    category: entry.category ?? undefined, lane: entry.lane ?? undefined,
+    from: entry.from_name, from_email: entry.from_address,
+  };
+  await restoreSnoozedEmail(userId, uid, snap);
   await db.execute({
-    sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
-    args: [userId, uid],
+    sql: "UPDATE ea_snoozed_emails SET status = 'resurfaced', resurfaced_at = ? WHERE user_id = ? AND email_id = ?",
+    args: [Date.now(), userId, uid],
   });
 
   if (snap?.account_id) {
@@ -399,7 +407,6 @@ export async function wake(userId: string, uid: string): Promise<void> {
       console.error("[EA Snooze] Gmail wake-modify failed:", errorMessage(unarchiveErr));
       // Non-fatal; DB state is correct.
     }
-    await restorePendingTriageEligibilityForEmail(userId, snap.account_id, uid);
   }
 }
 
@@ -421,3 +428,5 @@ export {
   removeRemoteContentTrust,
   trustRemoteContentSender,
 } from "./remote-content-trust.ts";
+
+export { loadSnoozedEntries } from "./snoozed-emails.ts";

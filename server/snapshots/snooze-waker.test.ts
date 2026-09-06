@@ -7,6 +7,17 @@ const cronApi = vi.hoisted(() => ({ schedule: vi.fn() }));
 vi.mock("node-cron", () => ({ default: cronApi }));
 
 describe("snooze waker", () => {
+  it("retains an unavailable due message instead of settling it without restoration", async () => {
+    const dbClient = await createMigratedDb();
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await dbClient.execute({ sql: "INSERT INTO ea_snoozed_emails (user_id,email_id,until_ts,status) VALUES ('user-1','missing',1,'snoozed')", args: [] });
+      await wakeDueSnoozes({ userId: "user-1", dbClient, loadUserConfigFn: async () => ({ accounts: [] }) });
+      const rows = await dbClient.execute({ sql: "SELECT status FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?", args: ["user-1", "missing"] });
+      expect(rows.rows).toEqual([{ status: "snoozed" }]);
+    } finally { logError.mockRestore(); await dbClient.close(); }
+  });
+
   it("reattaches woken snoozes to the active snapshot with resurfaced source metadata", async () => {
     const dbClient = await createMigratedDb();
     const now = new Date("2026-05-04T17:30:00.000Z");

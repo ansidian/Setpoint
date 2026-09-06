@@ -1,4 +1,5 @@
 import db from "../db/connection.ts";
+export { restoreSnoozedEmail } from "./snooze-restoration.ts";
 import type { Client } from "@libsql/client";
 import { loadUserConfig, type UserConfig } from "../platform/config-service.ts";
 import { fetchAllEmails } from "../email/email-fetch.ts";

@@ -1,3 +1,4 @@
+import type { SnoozedEmailEntry } from "../shared/types/email";
 import { isDemoMode } from "./demo/config.ts";
 import { apiFetch } from "./lib/apiFetch";
 import type { DashboardFinanceResponse, DashboardFinanceReviewRunsResponse } from "../shared/types/dashboard-finance.ts";
@@ -591,3 +592,5 @@ export const updateNewsSource = (id: ApiId, data: UpdateNewsSourceRequest): Prom
   apiFetch(`/api/news/sources/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteNewsSource = (id: ApiId): Promise<NewsMutationResponse> =>
   apiFetch(`/api/news/sources/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+export const fetchSnoozedEmails = (): Promise<SnoozedEmailEntry[]> => apiFetch("/api/briefing/email/snoozed");

@@ -72,6 +72,14 @@ router.delete("/email/remote-content-trust/:id", async (req, res) => {
   }
 });
 
+router.get("/email/snoozed", async (_req, res) => {
+  try {
+    res.json(await emailService.loadSnoozedEntries(ownerUserId()));
+  } catch (err) {
+    res.status(errorStatus(err)).json({ message: errorMessage(err) });
+  }
+});
+
 router.get("/email/:uid", async (req, res) => {
   try {
     res.json(await emailService.getEmailBody(ownerUserId(), req.params.uid!));

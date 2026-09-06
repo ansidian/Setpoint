@@ -74,8 +74,19 @@ function moveSnapshotRow(snapshot: DemoSnapshot, itemId: string, lane: DemoLane)
 }
 
 export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }: DemoApiRequest): unknown {
+  if (pathname === "/api/briefing/email/snoozed" && method === "GET") {
+    return Object.entries(seed.snoozedEmails || {}).map(([uid, { row, until_ts, lane }]) => ({
+      uid, until_ts, lane, pinned: !!(row as DemoSnapshotRow & { pinned?: boolean }).pinned, subject: row.subject, from_name: row.from_name || "", from_address: row.from_address || "",
+      preview: row.summary || "", summary: row.summary || null, action: row.action || null,
+      date: row.date || null, read: !!row.read, account_id: row.account_id, verification_code: row.verification_code,
+      account_label: seed.activeSnapshot.filters.accounts.find((account) => account.account_id === row.account_id)?.label || null,
+      account_email: null, account_color: null, account_icon: "Mail",
+      urgency: row.urgency || null, category: row.category || null, handled_at: null, provider_state: null, missing_source: false,
+    })).sort((a, b) => a.until_ts - b.until_ts || a.uid.localeCompare(b.uid));
+  }
   if (pathname === "/api/briefing/email/mark-all-read" && method === "POST") {
     for (const uid of Array.isArray(body.uids) ? body.uids : []) {
+      if (seed.snoozedEmails?.[uid]) seed.snoozedEmails[uid].row.read = true;
       mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = true; });
     }
     return { ok: true };
@@ -83,18 +94,21 @@ export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }
 
   if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/mark-read$/) && method === "POST") {
     const uid = decodeURIComponent(demoPathSegment(pathname, 2));
+    if (seed.snoozedEmails?.[uid]) seed.snoozedEmails[uid].row.read = true;
     mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = true; });
     return { ok: true };
   }
 
   if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/mark-unread$/) && method === "POST") {
     const uid = decodeURIComponent(demoPathSegment(pathname, 2));
+    if (seed.snoozedEmails?.[uid]) seed.snoozedEmails[uid].row.read = false;
     mutateSnapshotRows(seed.activeSnapshot, uid, (row) => { row.read = false; });
     return { ok: true };
   }
 
   if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/pin$/) && (method === "POST" || method === "DELETE")) {
     const uid = decodeURIComponent(demoPathSegment(pathname, 2));
+    if (seed.snoozedEmails?.[uid]) (seed.snoozedEmails[uid].row as DemoSnapshotRow & { pinned?: boolean }).pinned = method === "POST";
     mutateSnapshotRows(seed.activeSnapshot, uid, (row) => {
       (row as DemoSnapshotRow & { pinned?: boolean }).pinned = method === "POST";
     });
@@ -111,7 +125,7 @@ export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }
     const row = findSnapshotRow(seed.activeSnapshot, uid);
     if (row) {
       seed.snoozedEmails = seed.snoozedEmails || {};
-      seed.snoozedEmails[uid] = { row: clone(row), lane: findSnapshotRowLane(seed.activeSnapshot, uid) };
+      seed.snoozedEmails[uid] = { row: clone(row), until_ts: Number(body.until_ts), lane: findSnapshotRowLane(seed.activeSnapshot, uid) };
       removeSnapshotRow(seed.activeSnapshot, uid);
     }
     return { ok: true };
@@ -184,4 +198,3 @@ export function handleDemoSnapshotRequest({ path, pathname, method, seed, body }
 
   return NO_DEMO_API_RESPONSE;
 }
-

@@ -109,7 +109,6 @@ src/
 │   └── ui/
 ├── context/
 ├── demo/
-├── dev/
 ├── hooks/
 │   ├── calendar/
 │   ├── email/
@@ -127,8 +126,7 @@ server/
 ├── dashboard/
 │   └── current-providers/
 ├── db/
-│   ├── migrations/
-│   └── tldraw-assets/
+│   └── migrations/
 ├── email/
 │   ├── search/
 │   │   └── evals/
@@ -248,6 +246,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.ts` |
 | `useIndexedSearch` | `src/components/inbox/useIndexedSearch.ts` |
 | `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.ts` |
+| `useSnoozedEmails` | `src/components/inbox/useSnoozedEmails.ts` |
 | `useTldrawAutosave` | `src/components/notes/useTldrawAutosave.ts` |
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.ts` |
 | `useAddTaskPanelPlacement` | `src/components/todoist/add-task-panel/useAddTaskPanelPlacement.ts` |
@@ -803,6 +802,8 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 
 ### Snooze
 
+The Inbox has a separate Snoozed collection, with account filtering and return-time ordering. GET /api/briefing/email/snoozed hydrates stored message metadata without per-row provider reads. Early return and scheduled wake share durable snapshot restoration; successful restoration precedes the deferred-status change.
+
 `ea_snoozed_emails` holds `(user_id, email_id, until_ts, email_snapshot)`. `server/snapshots/snooze-waker.ts` runs periodically; when `until_ts` has passed it re-injects the email into the live feed using the stored snapshot (so the email stays visible even if it's already been fetched-and-filed in the underlying mailbox).
 
 ## API Reference
@@ -867,6 +868,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
 | POST | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
 | DELETE | `/api/briefing/email/remote-content-trust/:id` | `server/routes/briefing/email.ts` |
+| GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/snapshot/:id` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/active` | `server/routes/briefing/snapshot.ts` |
 | GET | `/api/briefing/snapshot/history` | `server/routes/briefing/snapshot.ts` |

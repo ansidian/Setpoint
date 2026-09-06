@@ -1,3 +1,4 @@
+import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Client, InStatement, ResultSet } from "@libsql/client";
 import type * as EmailProviderAdapters from "./email-provider-adapters.ts";
@@ -26,6 +27,7 @@ function executeCurrent(statement: string | InStatement): Promise<ResultSet> {
 vi.mock("../db/connection.ts", () => ({
   default: {
     execute: (statement: string | InStatement) => mockDb.execute(statement),
+    batch: (statements: InStatement[]) => currentDb().batch(statements),
   },
 }));
 // test-architecture: allow-boundary-mock -- Credential decryption is the cryptographic boundary; service routing cases use deterministic plaintext provider credentials.
@@ -80,6 +82,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await testState.db.current?.close?.();
   testState.db.current = null;
 });
@@ -214,7 +217,9 @@ describe("pending triage action semantics", () => {
   });
 
   it("snooze hides active pending rows and defers queued triage until wake", async () => {
-    testState.db.current = await createEmailIndexTestDb();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-03T18:00:00Z"));
+    testState.db.current = await createMigratedDb();
     await seedEmailAccount(currentDb(), {
       id: "gmail-work",
       email: "work@example.com",
@@ -336,9 +341,9 @@ describe("pending triage action semantics", () => {
     });
     expect(restoredRows.rows).toEqual([
       expect.objectContaining({
-        snooze_status: null,
+        snooze_status: "resurfaced",
         triage_status: "pending",
-        triage_source: "undo_restored_pending",
+        triage_source: "snooze_resurface_pending",
         dismissed_from_today_at: null,
         job_status: "queued",
         scheduled_for: null,
@@ -528,5 +533,57 @@ describe("trash post-provider cleanup (P3-74)", () => {
       "gmail-work-msg-1",
     );
     expect(snoozeDeleteAttempted).toBe(true);
+  });
+});
+
+
+describe("deferred email collection and early return", () => {
+  it("hydrates owner-scoped rows, preserves overdue membership, and keeps missing sources visible", async () => {
+    testState.db.current = await createMigratedDb();
+    await seedEmailAccount(currentDb());
+    await seedIndexedEmail(currentDb(), { uid: "indexed", subject: "Current subject", read: 1 });
+    for (const [owner, uid, until, snapshot, status] of [
+      ["user-1", "indexed", 1, { account_id: "gmail-work", subject: "Stale" }, "snoozed"],
+      ["user-1", "fallback", 2, { account_id: "gmail-work", subject: "Stored only" }, "snoozed"],
+      ["user-1", "missing", 3, null, "snoozed"],
+      ["user-2", "private", 1, { subject: "Other owner" }, "snoozed"],
+      ["user-1", "returned", 1, { subject: "Returned" }, "resurfaced"],
+    ] as const) {
+      await currentDb().execute({
+        sql: "INSERT INTO ea_snoozed_emails (user_id,email_id,until_ts,email_snapshot,status) VALUES (?,?,?,?,?)",
+        args: [owner, uid, until, JSON.stringify(snapshot), status],
+      });
+    }
+    await currentDb().execute({
+      sql: "INSERT INTO ea_email_triage (user_id,account_id,email_id,lane,summary) VALUES ('user-1','wrong-account','indexed','noise','Wrong account')",
+      args: [],
+    });
+    const entries = await emailService.loadSnoozedEntries("user-1");
+    expect(entries.map((entry) => entry.uid)).toEqual(["indexed", "fallback", "missing"]);
+    expect(entries[0]).toMatchObject({ subject: "Current subject", read: true, lane: null, summary: null, missing_source: false });
+    expect(entries[1]).toMatchObject({ subject: "Stored only", missing_source: false });
+    expect(entries[2]).toMatchObject({ missing_source: true, account_unavailable: true });
+    await expect(emailService.wake("user-1", "missing")).rejects.toMatchObject({ status: 409 });
+    expect((await emailService.loadSnoozedEntries("user-1")).map((entry) => entry.uid)).toContain("missing");
+  });
+
+  it("returns an absent message durably before clearing deferred membership and permits snoozing it again", async () => {
+    testState.db.current = await createMigratedDb();
+    await seedEmailAccount(currentDb());
+    configService.loadUserConfig.mockResolvedValue({ accounts: [], settings: undefined });
+    const snapshot = { account_id: "gmail-work", subject: "Older message", from: "Casey", preview: "Follow up", deadline_at: "2026-09-10T18:00:00Z", escalation_badge: "Due soon" };
+    await emailService.snooze("user-1", "older", Date.now() + 60_000, snapshot);
+    await emailService.wake("user-1", "older");
+    expect(await emailService.loadSnoozedEntries("user-1")).toEqual([]);
+    const restored = await currentDb().execute({
+      sql: "SELECT subject_at_snapshot, dismissed_from_today_at, deadline_at_snapshot, escalation_badge_at_snapshot FROM ea_briefing_snapshot_items WHERE user_id = ? AND email_id = ?",
+      args: ["user-1", "older"],
+    });
+    expect(restored.rows).toEqual([expect.objectContaining({ subject_at_snapshot: "Older message", dismissed_from_today_at: null, deadline_at_snapshot: "2026-09-10T18:00:00Z", escalation_badge_at_snapshot: "Due soon" })]);
+    await emailService.snooze("user-1", "older", Date.now() + 120_000, snapshot);
+    expect((await emailService.loadSnoozedEntries("user-1")).map((entry) => entry.uid)).toEqual(["older"]);
+    await currentDb().execute({ sql: "DELETE FROM ea_accounts WHERE user_id = ? AND id = ?", args: ["user-1", "gmail-work"] });
+    await expect(emailService.wake("user-1", "older")).rejects.toMatchObject({ status: 409 });
+    expect((await emailService.loadSnoozedEntries("user-1"))[0]).toMatchObject({ uid: "older", account_unavailable: true });
   });
 });

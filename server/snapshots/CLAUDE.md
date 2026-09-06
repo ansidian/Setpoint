@@ -4,6 +4,8 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 
 ## Files
 
+- `snooze-restoration.ts` — shared durable active-snapshot restoration for early return and scheduled wake.
+
 - `snapshot-service.ts` — snapshot orchestration API: build, fetch, sync, triage attach, provider-removal; thin orchestrator over snapshotStore.ts + snapshotViewModel.ts
 - `snapshot-types.ts` — local database, provider-like input, and error-boundary types shared within the snapshot backend
 - `snapshotStore.ts` — snapshot persistence: ea_briefing_snapshots/_items reads + lifecycle writes (find/freeze/carryover), item loads (including joined email-index verification metadata), processing-state counts, history rows/counts
