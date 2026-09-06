@@ -28,9 +28,9 @@ export function resolveReaderActions(
 
   const showMutableActions = !readOnly && !email?._snoozedUnavailable;
   const showDestructiveActions = showMutableActions && !catchUp && !email?._snoozed;
-  const billToggleEligible = !!(
-    email?._untriaged || email?.hasBill || isQueuedSnapshot || isUntriagedReadSnapshot
-  );
+  // Actual records belong to the source email, independently of its triage or
+  // snapshot lifecycle. The workspace resolves ownership before allowing edits.
+  const canOpenActualRecord = !!email;
 
   // Eligible for the full triage workflow (move/handle), used to size the mobile
   // actions menu. Dismiss-only rows (e.g. queued) are intentionally excluded, matching
@@ -51,7 +51,7 @@ export function resolveReaderActions(
     isUntriagedReadSnapshot,
     showMutableActions,
     showDestructiveActions,
-    billToggleEligible,
+    canOpenActualRecord,
     showSnapshotWorkflowActions,
     canReopen: snapshotEligible && canReopenSnapshotEmail(email, readOnly),
     canHandle: snapshotEligible && canHandleSnapshotEmail(email, readOnly),

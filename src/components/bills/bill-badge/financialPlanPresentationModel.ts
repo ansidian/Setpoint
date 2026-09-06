@@ -11,7 +11,7 @@ function purposeLabel(plan: FinancialEmailPlan): string {
     case "credit_card_statement": return "Card payment";
     case "utility_statement": return "Recurring bill";
     case "income": return "Income";
-    case "informational": return "No Actual action";
+    case "informational": return "No automatic entry";
     default: return "One-time expense";
   }
 }
@@ -31,9 +31,9 @@ function destination(plan: FinancialEmailPlan): string | null {
 function noWriteDetail(plan: FinancialEmailPlan): string {
   if (plan.reconciliation.status === "already_recorded") return "An exact transaction is already in Actual.";
   if (plan.reconciliation.status === "already_scheduled") return "An exact schedule is already in Actual.";
-  if (plan.classification.eventKind === "payment_cancelled") return "This payment was cancelled; nothing will be sent.";
-  if (plan.classification.eventKind === "payment_failed") return "This payment failed; nothing will be sent.";
-  return "This email does not require an Actual write.";
+  if (plan.classification.eventKind === "payment_cancelled") return "The email was assessed as a cancelled payment. Confirm the details below if a record is needed.";
+  if (plan.classification.eventKind === "payment_failed") return "The email was assessed as a failed payment. Confirm the details below if a record is needed.";
+  return "No automatic entry is planned for this email. You can confirm the details below.";
 }
 
 export function presentFinancialPlan(

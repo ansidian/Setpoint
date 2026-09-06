@@ -42,6 +42,7 @@ function renderBillBadge(props: Partial<ComponentProps<typeof BillBadge>> = {}) 
       emailSubject="Payment due"
       emailFrom="Bank"
       emailBody=""
+      plan={readyPlan()}
       {...props}
     />,
   );
@@ -119,6 +120,31 @@ describe("BillBadge", () => {
     expect(sendToActualBudget).toHaveBeenCalledWith(expect.objectContaining({ notes: "Autopay scheduled from checking" }));
   });
 
+  it("clears a prefilled category when the owner selects No category", async () => {
+    let recordedCategory: string | null | undefined = "cat-utilities";
+    vi.mocked(sendToActualBudget).mockImplementation(async (bill) => {
+      recordedCategory = bill.category_id;
+      return { message: "Sent to Actual" };
+    });
+    await renderSendableBill({ category_id: "cat-utilities" });
+    fireEvent.click(screen.getByRole("button", { name: "Utilities" }));
+    fireEvent.click(await screen.findByRole("option", { name: "No category" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send to Actual Budget" }));
+    expect(await screen.findByText("Sent to Actual")).toBeTruthy();
+    expect(recordedCategory).toBeNull();
+  });
+
+  it("lets the owner complete a historical record after an AI no-write assessment", async () => {
+    const plan = readyPlan();
+    plan.classification.eventKind = "payment_failed";
+    plan.operation = { kind: "no_write", intended: "no_write", reasons: [] };
+    plan.reconciliation = { status: "not_checked", disposition: "none" };
+    renderBillBadge({ plan, bill: { payee: "Power Co", amount: 12, due_date: "2026-05-10", type: "expense", account_id: "checking" } });
+    fireEvent.change(await screen.findByPlaceholderText("0.00"), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send to Actual Budget" }));
+    expect(await screen.findByText("Sent to Actual")).toBeTruthy();
+  });
+
   it("prefills the visible notes field with a detected credit-card fee breakdown", async () => {
     renderBillBadge({ bill: { payee: "SCE", amount: 100, due_date: "2026-05-10", type: "expense", account_id: "checking" } });
     expect(await screen.findByDisplayValue("$100.00 + $1.65 CC fee")).toBeTruthy();
@@ -146,7 +172,7 @@ describe("BillBadge", () => {
   it("applies late resolver fields that the user has not touched", async () => {
     const { rerender } = renderBillBadge();
     await screen.findByPlaceholderText("Optional note");
-    rerender(<BillBadge bill={{ payee: "Power Co", payee_id: "payee-power", amount: 73.11, due_date: "2026-05-30", type: "expense", account_id: "checking", category_id: "cat-utilities" }} emailSubject="Payment due" emailFrom="Bank" emailBody="Full bill body" />);
+    rerender(<BillBadge plan={readyPlan()} bill={{ payee: "Power Co", payee_id: "payee-power", amount: 73.11, due_date: "2026-05-30", type: "expense", account_id: "checking", category_id: "cat-utilities" }} emailSubject="Payment due" emailFrom="Bank" emailBody="Full bill body" />);
     expect(await screen.findByDisplayValue("73.11")).toBeTruthy();
   });
 
@@ -154,7 +180,7 @@ describe("BillBadge", () => {
     const { rerender } = renderBillBadge();
     const amount = await screen.findByPlaceholderText("0.00");
     fireEvent.change(amount, { target: { value: "11.00" } });
-    rerender(<BillBadge bill={{ payee: "Power Co", amount: 73.11, due_date: "2026-05-30", type: "expense" }} emailSubject="Payment due" emailFrom="Bank" emailBody="Full bill body" />);
+    rerender(<BillBadge plan={readyPlan()} bill={{ payee: "Power Co", amount: 73.11, due_date: "2026-05-30", type: "expense" }} emailSubject="Payment due" emailFrom="Bank" emailBody="Full bill body" />);
     expect(screen.getByDisplayValue("11.00")).toBeTruthy();
   });
 });

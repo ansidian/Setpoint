@@ -70,12 +70,7 @@ import type {
   ActualConnectionOverrides,
   ActualConnectionResponse,
   ActualMetadataResponse,
-  BillCandidate,
-  BillExtractionInput,
-  FinancialEmailExtractionResponse,
   BillMutationResponse,
-  FinancialEmailPlan,
-  BillPaySeedRequest,
   CalendarBillsRangeResponse,
 } from "../shared/types/bills.ts";
 import type { ActualAccount, ActualCategoryGroup, ActualPayee } from "../shared/types/actual.ts";
@@ -469,9 +464,7 @@ export const updateTodoistTask = (id: ApiId, data: DeadlineMutationRequest): Pro
 export const deleteTodoistTask = (id: ApiId): Promise<DeadlineDeleteResponse> => apiFetch(`/api/briefing/todoist/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 // Actual Budget
-export const sendToActualBudget = (bill: BillCandidate): Promise<BillMutationResponse> => apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
-export const extractBillFromEmail = ({ subject, from, body }: BillExtractionInput): Promise<FinancialEmailExtractionResponse> => apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
-export const resolveFinancialEmailPlan = (payload: BillPaySeedRequest): Promise<FinancialEmailPlan> => apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
+export { sendToActualBudget, extractBillFromEmail, resolveFinancialEmailPlan, completeFinancialEvent } from "./lib/financialEmailApi";
 export const markBillPaid = (id: ApiId): Promise<BillMutationResponse> => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
 export const getActualAccounts = (): Promise<ActualAccount[]> => apiFetch("/api/briefing/actual/accounts");
 export const getActualPayees = (): Promise<ActualPayee[]> => apiFetch("/api/briefing/actual/payees");

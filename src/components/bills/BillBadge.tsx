@@ -2,6 +2,7 @@ import useBillBadgeForm from "./useBillBadgeForm";
 import type { UseBillBadgeFormOptions } from "./useBillBadgeForm";
 import BillBadgeForm from "./bill-badge/BillBadgeForm";
 import type { FinancialEmailPlan } from "../../../shared/types/bills";
+import FinancialEventStatus from "./FinancialEventStatus";
 
 interface BillBadgeProps extends UseBillBadgeFormOptions {
   plan?: FinancialEmailPlan | null;
@@ -9,7 +10,13 @@ interface BillBadgeProps extends UseBillBadgeFormOptions {
   layout?: "inline" | "drawer" | "mobile";
 }
 
-export default function BillBadge({
+export default function BillBadge(props: BillBadgeProps) {
+  if (props.plan?.workflow) return <FinancialEventStatus plan={props.plan} allowCompletion />;
+  if (!props.plan || props.planLoading) return <div role="status" className="px-3 py-2 text-[11px] text-muted-foreground">Checking the current Actual status…</div>;
+  return <ManualBillBadge {...props} />;
+}
+
+function ManualBillBadge({
   bill,
   model,
   emailSubject,

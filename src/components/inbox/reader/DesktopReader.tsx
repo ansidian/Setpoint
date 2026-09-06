@@ -8,45 +8,37 @@ import {
   Sparkles,
   BellPlus,
   CreditCard,
-  CheckCircle2,
   ExternalLink,
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
 import { timeClock } from "../helpers";
 import { LANE } from "../../../lib/shell-helpers";
-import BillBadge from "../../bills/BillBadge";
+import ActualRecordWorkspace from "./ActualRecordWorkspace";
 import TriagePanel from "./TriagePanel";
 import EmailContentSection from "./EmailContentSection";
 import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
-import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActionGroups } from "./readerActionsModel";
-import { resolveBillSeed } from "./billSeedModel";
 import DesktopReaderActionBar, { ToolbarButton } from "./DesktopReaderActionBar";
-import {
-  isActualActioned,
-  resolveActualCalendarTarget,
-} from "./actualActionStatusModel";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { InboxEmailLike } from "../inboxTypes";
 import type { BillResolutionState, EmailBodyState, ReaderSurfaceProps } from "./readerTypes";
-import { asBillCandidate, IDLE_BILL_RESOLUTION } from "./readerTypes";
+import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import { motionDuration, motionTransition } from "../../../lib/motion";
 
-function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, billResolution }: {
+function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, billResolution, onOpenRecordedBill }: {
   billOpen: boolean;
   billMounted: boolean;
   setBillOpen: Dispatch<SetStateAction<boolean>>;
   email: InboxEmailLike;
   bodyState: EmailBodyState;
   billResolution: BillResolutionState;
+  onOpenRecordedBill: ReaderSurfaceProps["onOpenRecordedBill"];
 }) {
   const reduceMotion = useReducedMotion() ?? false;
-  const extractionBody = resolveBillExtractionBody(bodyState);
-  const billSeed = resolveBillSeed(billResolution, asBillCandidate(email.extractedBill));
 
   return (
     <Motion.div
@@ -67,6 +59,7 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
           animate={{ opacity: billOpen ? 1 : 0, x: reduceMotion || billOpen ? 0 : 14 }}
           transition={motionTransition(reduceMotion, billOpen ? motionDuration.panel : motionDuration.exit)}
           aria-hidden={!billOpen}
+          aria-label="Actual record"
           inert={!billOpen ? true : undefined}
           data-state={billOpen ? "open" : "closed"}
           style={{
@@ -101,13 +94,13 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
                 color: "var(--sp-accent)",
               }}
             >
-              Pay bill
+              Actual record
             </span>
             <span style={{ flex: 1 }} />
             <button
               type="button"
               onClick={() => setBillOpen(false)}
-              aria-label="Close bill pay"
+              aria-label="Close Actual record"
               className="bill-drawer-close inbox-a-control sp-focus-ring"
               style={{
                 background: "transparent",
@@ -124,18 +117,11 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
             </button>
           </div>
           <div style={{ padding: "14px 16px 18px" }}>
-            <BillBadge
-              layout="drawer"
-              bill={billSeed}
-              model={email.billModel}
-              emailSubject={email.subject || ""}
-              emailFrom={email.from || ""}
-              emailBody={extractionBody.body}
-              emailBodyLoading={extractionBody.loading}
-              emailBodySource={extractionBody.source}
-              emailBodyError={extractionBody.error}
-              plan={billResolution?.plan}
-              planLoading={billResolution?.status === "loading"}
+            <ActualRecordWorkspace
+              email={email}
+              bodyState={bodyState}
+              billResolution={billResolution}
+              onOpenRecordedBill={onOpenRecordedBill}
             />
           </div>
         </Motion.aside>
@@ -223,14 +209,11 @@ export default function DesktopReader({
   const {
     catchUp,
     showDestructiveActions,
-    billToggleEligible,
+    canOpenActualRecord,
     moveDestinations,
     moveDisabled,
     triageItems,
   } = readerActionGroups;
-  const showBillToggle = billToggleEligible;
-  const actualActioned = isActualActioned(billResolution?.actualStatus);
-  const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
 
   const sender = email.from || email.from_name || email.fromEmail || "Unknown sender";
   const address = email.fromEmail || email.from_email || email.from_address;
@@ -241,14 +224,8 @@ export default function DesktopReader({
   const lane = email._lane ? LANE[email._lane] : undefined;
   const status = readOnly ? "Historical snapshot" : email._snoozed ? "Snoozed" : lane?.label;
   const carriedOver = email._carryover || email._snapshotCarryover;
-  const showBillAction = (showDestructiveActions || (email._snoozed && !email._snoozedUnavailable)) && showBillToggle;
-  const billActionLabel = actualCalendarTarget ? "View bill" : actualActioned ? (billOpen ? "Hide details" : "View bill") : (billOpen ? "Hide bill" : "Review bill");
   const hasTriage = !!(showTriage && (email.claude || email.aiSummary || email.summary));
   const contextualActions = <>
-    {showBillAction && <ToolbarButton icon={actualActioned ? CheckCircle2 : CreditCard} label={billActionLabel} expanded={billOpen} onClick={() => {
-      if (actualCalendarTarget && onOpenRecordedBill) { onOpenRecordedBill(actualCalendarTarget); return; }
-      setBillOpen((value) => !value);
-    }} />}
     {!drafting && !showDraft && !catchUp && email.claude?.draftReply && <ToolbarButton icon={Reply} label="Review draft" onClick={() => setDrafting(true)} />}
   </>;
 
@@ -287,6 +264,7 @@ export default function DesktopReader({
               </div>
             </div>
             <div className="inbox-a-reader-utilities" role="group" aria-label="Email tools">
+              {canOpenActualRecord && <ToolbarButton icon={CreditCard} label="Actual record" expanded={billOpen} onClick={() => setBillOpen((value) => !value)} />}
               {onRemind && <ToolbarButton icon={BellPlus} label={taskOpen ? "Hide reminder" : "Remind me"} expanded={taskOpen} onClick={onRemind} />}
               {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" expanded={alfredOpen} onClick={() => { if (alfredWorkspace?.open) alfredWorkspace.close(); else onAskAlfred(); }} />}
               {gmailUrl && <span className="inbox-a-reader-external"><ToolbarButton icon={ExternalLink} label="Open in Gmail" onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")} /></span>}
@@ -309,7 +287,7 @@ export default function DesktopReader({
           </div>
         </div>
       </div>
-      <BillDrawer billOpen={billOpen} billMounted={billMounted} setBillOpen={setBillOpen} email={email} bodyState={bodyState} billResolution={resolvedBillResolution} />
+      <BillDrawer billOpen={billOpen} billMounted={billMounted} setBillOpen={setBillOpen} email={email} bodyState={bodyState} billResolution={resolvedBillResolution} onOpenRecordedBill={onOpenRecordedBill} />
       <ReminderDrawer open={taskOpen} workspace={taskWorkspace} />
     </div>
   );

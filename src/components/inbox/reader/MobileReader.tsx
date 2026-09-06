@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   Trash2,
   Check,
-  CheckCircle2,
   CreditCard,
   FileText,
   Mail,
@@ -34,10 +33,6 @@ import type { ReaderSurfaceProps } from "./readerTypes";
 import { IDLE_BILL_RESOLUTION } from "./readerTypes";
 import EmailActualStatus from "./EmailActualStatus";
 import VerificationCodeCallout from "./VerificationCodeCallout";
-import {
-  isActualActioned,
-  resolveActualCalendarTarget,
-} from "./actualActionStatusModel";
 
 export default function MobileReader({
   email,
@@ -69,17 +64,14 @@ export default function MobileReader({
     isUntriagedReadSnapshot,
     showMutableActions,
     showDestructiveActions,
-    billToggleEligible,
+    canOpenActualRecord,
     canReopen,
     canDismiss,
     canMoveToNeeds,
     canPin,
     pinned,
   } = actions;
-  const showBillToggle = (showDestructiveActions || (email._snoozed && !email._snoozedUnavailable)) && billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
-  const actualActioned = isActualActioned(billResolution?.actualStatus);
-  const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || email.summary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
@@ -101,7 +93,7 @@ export default function MobileReader({
   };
   const hasTriageActions = actions.canHandle || canReopen || canPin || showMutableActions
     || actions.canMoveToFyi || actions.canMoveToNoise || canMoveToNeeds || canDismiss;
-  const hasFollowUpActions = showDestructiveActions || !!onRemind || showBillToggle
+  const hasFollowUpActions = showDestructiveActions || !!onRemind || canOpenActualRecord
     || (!catchUp && !!email.claude?.draftReply);
   const hasMessageActions = !!remoteTrust.trustSender;
 
@@ -194,6 +186,8 @@ export default function MobileReader({
           setBillExpanded={setBillExpanded}
           bodyState={bodyState}
           billResolution={resolvedBillResolution}
+          onClose={() => setBillOpen(false)}
+          onOpenRecordedBill={onOpenRecordedBill}
         />
       )}
 
@@ -277,22 +271,14 @@ export default function MobileReader({
                       }}
                     />
                   )}
-                  {showBillToggle && (
+                  {canOpenActualRecord && (
                     <MobileActionRow
-                      icon={actualActioned ? CheckCircle2 : CreditCard}
+                      icon={CreditCard}
                       iconColor="var(--sp-green)"
-                      label={actualCalendarTarget
-                        ? "View bill details"
-                        : actualActioned
-                        ? (billOpen ? "Hide bill details" : "View bill details")
-                        : (billOpen ? "Hide bill pay" : "Open bill pay")}
+                      label="Actual record"
                       active={billOpen}
                       onClick={() => {
                         setActionsOpen(false);
-                        if (actualCalendarTarget && onOpenRecordedBill) {
-                          onOpenRecordedBill(actualCalendarTarget);
-                          return;
-                        }
                         setBillOpen((value) => !value);
                       }}
                     />

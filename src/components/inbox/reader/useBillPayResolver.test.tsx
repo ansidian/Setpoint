@@ -46,7 +46,7 @@ function plan(candidate: BillCandidate, status: FinancialReconciliationStatus = 
 }
 
 describe("useBillPayResolver", () => {
-  it("resolves a bill candidate on selection before Bill Pay is opened and caches it", async () => {
+  it("resolves a bill candidate on selection before Actual record is opened and caches it", async () => {
     vi.mocked(resolveFinancialEmailPlan).mockResolvedValueOnce(plan(
       { payee: "Power", amount: 42 },
       "already_scheduled",
@@ -87,9 +87,10 @@ describe("useBillPayResolver", () => {
       uid: "msg-2",
       subject: "Water bill",
     };
+    let resolveSecond!: (value: FinancialEmailPlan) => void;
     vi.mocked(resolveFinancialEmailPlan)
       .mockResolvedValueOnce(plan({ payee: "Power", amount: 42 }, "already_scheduled"))
-      .mockResolvedValueOnce(plan({ payee: "Water", amount: 24 }));
+      .mockImplementationOnce(() => new Promise<FinancialEmailPlan>((resolve) => { resolveSecond = resolve; }));
 
     const { result, rerender } = renderHook(
       ({ selectedEmail }) => useBillPayResolver({
@@ -105,6 +106,10 @@ describe("useBillPayResolver", () => {
     });
 
     rerender({ selectedEmail: secondEmail });
+    // An editable financial plan must never retain the previous email's
+    // identity while the newly selected email is loading.
+    expect(result.current.plan).toBeNull();
+    await act(async () => { resolveSecond(plan({ payee: "Water", amount: 24 })); });
     await waitFor(() => {
       expect(result.current.resolvedBill).toEqual({ payee: "Water", amount: 24 });
     });

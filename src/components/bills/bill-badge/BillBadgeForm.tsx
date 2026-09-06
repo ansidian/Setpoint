@@ -109,12 +109,12 @@ function BillFields({
                 placeholder="Select account..."
               />
             </FieldShell>
-            <FieldShell label="Category">
+            <FieldShell label="Category (optional)">
               <SearchableDropdown
-                options={categories}
+                options={[{ id: "", name: "No category" }, ...categories]}
                 value={editCategory}
                 onChange={setEditCategory}
-                placeholder="Select category..."
+                placeholder="No category"
               />
             </FieldShell>
           </>
@@ -206,12 +206,12 @@ function BillFields({
                 placeholder="Select account..."
               />
             </FieldShell>
-            <FieldShell label="Category">
+            <FieldShell label="Category (optional)">
               <SearchableDropdown
-                options={categories}
+                options={[{ id: "", name: "No category" }, ...categories]}
                 value={editCategory}
                 onChange={setEditCategory}
-                placeholder="Select category..."
+                placeholder="No category"
               />
             </FieldShell>
           </>

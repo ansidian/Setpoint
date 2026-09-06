@@ -3,6 +3,7 @@ import { extractBillFromEmail, sendToActualBudget } from "../../api";
 import { ensureMetadataLoaded, _metadataCache } from "../../lib/actualMetadata";
 import type { ActualMetadataEntry, ActualCategoryMetadata } from "../../lib/actualMetadata";
 import type { BillCandidate, BillType, FinancialEmailPlan } from "../../../shared/types/bills";
+import { canCreateManualActualRecord } from "./manualActualRecordPolicy";
 import {
   detectFee,
   formatModelName,
@@ -269,6 +270,7 @@ export default function useBillBadgeForm({
 
   const handleSend = (event: StoppableEvent) => {
     event.stopPropagation();
+    if (!canSend || state === "sending" || state === "sent") return;
     setState("sending");
     setErrorMessage("");
     const edited: BillCandidate = {
@@ -285,7 +287,7 @@ export default function useBillBadgeForm({
       edited.schedule_name = editScheduleName.trim();
     } else {
       edited.account_id = editAccount || undefined;
-      if (editCategory) edited.category_id = editCategory;
+      edited.category_id = editCategory || null;
     }
     sendToActualBudget(edited)
       .then((res) => {
@@ -298,7 +300,7 @@ export default function useBillBadgeForm({
       });
   };
 
-  const planAllowsWrite = plan?.operation.kind !== "no_write" && plan?.operation.intended !== "no_write";
+  const planAllowsWrite = canCreateManualActualRecord(plan);
   const canSend = Boolean(planAllowsWrite && editAmount.trim() && editDue
     && (isTransfer
       ? (editFromAccount && editToAccount && editScheduleName.trim())

@@ -1,17 +1,13 @@
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, X } from "lucide-react";
 import { motion as Motion, useReducedMotion } from "motion/react";
-import BillBadge from "../../bills/BillBadge";
-import { resolveBillExtractionBody } from "./billExtractionBody";
-import { formatBillAmount, resolveBillSeed } from "./billSeedModel";
+import ActualRecordWorkspace from "./ActualRecordWorkspace";
 import type { Dispatch, SetStateAction } from "react";
 import type { InboxEmailLike } from "../inboxTypes";
-import type { BillResolutionState, EmailBodyState } from "./readerTypes";
-import { asBillCandidate } from "./readerTypes";
+import type { BillResolutionState, EmailBodyState, ReaderSurfaceProps } from "./readerTypes";
 import { heightTransition, motionDuration, motionTransition } from "../../../lib/motion";
 
-// Mobile slide-up bill-pay sheet with an expand/collapse affordance. Extracted
-// from MobileReader; expand state is owned by the parent (so it persists across
-// open/close), while the seed/extraction/height derivations live here.
+// The shared Actual record workspace in a mobile sheet. Expansion stays with
+// the reader so it persists across open/close.
 export default function MobileBillDrawer({
   email,
   open,
@@ -19,6 +15,8 @@ export default function MobileBillDrawer({
   setBillExpanded,
   bodyState,
   billResolution,
+  onClose,
+  onOpenRecordedBill,
 }: {
   email: InboxEmailLike;
   open: boolean;
@@ -26,16 +24,17 @@ export default function MobileBillDrawer({
   setBillExpanded: Dispatch<SetStateAction<boolean>>;
   bodyState: EmailBodyState;
   billResolution: BillResolutionState;
+  onClose: () => void;
+  onOpenRecordedBill: ReaderSurfaceProps["onOpenRecordedBill"];
 }) {
   const reduceMotion = useReducedMotion() ?? false;
-  const extractionBody = resolveBillExtractionBody(bodyState);
-  const extractedBill = asBillCandidate(email.extractedBill);
-  const billSeed = resolveBillSeed(billResolution, extractedBill);
   const billPanelHeight = billExpanded ? "52%" : "38%";
 
   return (
     <Motion.div
       data-testid="inbox-mobile-bill-panel"
+      role="region"
+      aria-label="Actual record"
       initial={reduceMotion ? false : { height: 0, minHeight: 0, opacity: 0, y: 16 }}
       animate={{
         height: open ? billPanelHeight : 0,
@@ -64,30 +63,6 @@ export default function MobileBillDrawer({
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-          <button
-            type="button"
-            aria-label={billExpanded ? "Collapse bill pay" : "Expand bill pay"}
-            onClick={() => setBillExpanded((value) => !value)}
-            className="mobile-bill-drawer-handle"
-            style={{
-              width: 44,
-              height: "var(--sp-touch-min)",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-              padding: 0,
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <span
-              className="mobile-bill-drawer-handle-indicator"
-              aria-hidden="true"
-              style={{ width: 36, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.16)" }}
-            />
-          </button>
-        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span
             style={{
@@ -98,30 +73,12 @@ export default function MobileBillDrawer({
               color: "var(--sp-green)",
             }}
           >
-            Bill pay
+            Actual record
           </span>
-          {extractedBill?.amount != null && (
-            <span
-              style={{
-                fontSize: 11,
-                color: "rgba(205,214,244,0.62)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {formatBillAmount(extractedBill.amount)}
-            </span>
-          )}
-          {extractedBill?.due_date && (
-            <>
-              <span style={{ color: "var(--color-text-faint)" }}>·</span>
-              <span style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
-                Due {extractedBill.due_date}
-              </span>
-            </>
-          )}
           <span style={{ flex: 1 }} />
           <button
             type="button"
+            aria-label={billExpanded ? "Collapse Actual record" : "Expand Actual record"}
             onClick={() => setBillExpanded((value) => !value)}
             className="mobile-bill-drawer-toggle"
             style={{
@@ -150,6 +107,10 @@ export default function MobileBillDrawer({
             </Motion.span>
             {billExpanded ? "Less" : "More"}
           </button>
+          <button type="button" onClick={onClose} aria-label="Close Actual record"
+            className="mobile-reader-icon-button mobile-bill-drawer-toggle">
+            <X aria-hidden="true" size={18} />
+          </button>
         </div>
       </div>
       <div
@@ -161,18 +122,12 @@ export default function MobileBillDrawer({
           padding: "10px 14px 16px",
         }}
       >
-        <BillBadge
-          layout="mobile"
-          bill={billSeed}
-          model={email.billModel}
-          emailSubject={email.subject || ""}
-          emailFrom={email.from || ""}
-          emailBody={extractionBody.body}
-          emailBodyLoading={extractionBody.loading}
-          emailBodySource={extractionBody.source}
-          emailBodyError={extractionBody.error}
-          plan={billResolution?.plan}
-          planLoading={billResolution?.status === "loading"}
+        <ActualRecordWorkspace
+          email={email}
+          bodyState={bodyState}
+          billResolution={billResolution}
+          isMobile
+          onOpenRecordedBill={onOpenRecordedBill}
         />
       </div>
     </Motion.div>

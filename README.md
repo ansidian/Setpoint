@@ -24,7 +24,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 
 - **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local rules, or pauses job draining.
 - **Semantic inbox search** — Searches the persisted email index with SQLite FTS5, OpenAI embeddings, and an Ask AI answer path over retrieved mail.
-- **Financial email planning and bill pay** — Extracts payment context, infers Actual targets without owner-authored mappings, reconciles existing activity, and connects bill actions and qualifying expense imports to Actual Budget.
+- **Financial email records** — Extracts payment context, reconciles existing Actual activity, and autonomously records supported new purchases, receipts, payments and bill schedules. Every email offers an Actual record workspace for status and missing details.
 - **Calendar workspace** — Aggregates Google Calendar events across connected accounts with event creation/editing, deadline and bill overlays, reminders, and a local search mirror for fast calendar search.
 - **Todoist integration** — Syncs personal tasks, supports Todoist OAuth refresh and webhooks, creates/edits/deletes tasks, and preserves completed recurring occurrences long enough for the UI to stay stable.
 - **Weather** — Shows current conditions and forecasts via Pirate Weather.
@@ -101,19 +101,46 @@ The complete template is in [`.env.example`](.env.example):
   switches, and legacy owner/origin imports. Fresh installs do not set an owner
   ID, password hash, WebAuthn origin, or redirect URI.
 
-Financial emails use one zero-configuration planning path for semantic purpose,
-canonical amount, Actual target inference, reconciliation, and explicit review.
-Final plans are persisted so reopening an email does not repeat model work;
-new generic and supported Amazon/PayPal USD one-time expenses automatically preview and import when their
-evidence, inferred targets, authentication, and duplicate checks pass. Exceptions
-remain in review. Existing observe-only items are not promoted by deployment;
-income and schedule/transfer automation remain unimplemented and observe-only.
-Finance retains scan history, review, retry, dismiss, and status controls, but no
-source modes or account/category mappings. New source-specific items use planner
-targets and eligibility; historical items preserve their captured targets and
-execution modes. Legacy mapping data remains untouched in storage for audit and
-recovery, with no runtime reads or fallback. Deterministic source receipts stay
-with their source importer and are excluded from generic staging.
+New financial email runs through a durable event workflow independent of Inbox
+triage, read/dismiss/snooze state and manual review. Migration 062 starts with new
+arrivals only; it does not enroll previously indexed or historical mail. Gmail
+forward capture covers received mail outside Inbox; iCloud retains its configured
+Inbox scope. The configured strong email model assesses complete source text;
+paused or disabled email AI pauses autonomous extraction and planning.
+
+Related authenticated receipts can combine payment and account evidence into one
+event. Grounded purchases/refunds/income create signed transactions, completed
+payments between represented accounts create linked transfers, and utility/card
+obligations create schedules. A schedule does not prove payment. Exact Actual
+previews bind the budget and operation before a durable attempt is admitted;
+uncertain writes only reconcile that same attempt. Unsupported currency, missing
+dates/accounts, incomplete bodies and conflicting evidence cannot authorize a
+write. Missing facts and transient failures retry automatically; definitive Actual
+conflicts are visible in the reader. Images and attachments are not financial
+extraction inputs.
+
+The reader shows event status, related-email count and automatic retry state.
+Every email has one **Actual record** action (under More email actions on mobile).
+It opens the record workspace, where an unresolved record can be completed with
+the missing date, accounts and other facts, then **Send to Actual** through the same event.
+The inline status card is informational. Recorded items retain a **View in Calendar**
+link inside the workspace when a calendar target is available.
+Owner confirmation works while AI is paused and still checks current Actual data
+before writing. Categories are optional in both this workflow and retained bill
+forms; missing, ambiguous or unavailable categories never block recording.
+Once an Actual attempt starts, its details are fixed and retries reconcile that
+attempt. The form is available again for corrections only while an unattempted
+record is waiting or needs attention.
+Historical emails use the same entrance. The workspace checks the saved plan and
+existing imports before offering the retained manual form; existing import items
+keep their original review path. Failed ownership checks offer Retry and cannot
+expose a separate writer. An AI no-entry assessment does not block owner-confirmed
+details when no existing write, conflicting Actual match or operation owner is found.
+`npm run financial-email:observe` reports document coverage and event outcomes,
+including unplanned failures, alongside retained historical plan summaries.
+Historical scan/import records and their captured execution modes remain intact;
+new managed emails are excluded from those paths to avoid duplicate ownership.
+Legacy mapping data stays in storage for audit, with no runtime fallback.
 
 Production startup delays workers so the web server can accept initial requests
 before catch-up jobs start. The default worker delay is 60–120 seconds, with an

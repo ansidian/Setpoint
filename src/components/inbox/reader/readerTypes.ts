@@ -39,6 +39,7 @@ export type BillResolutionState = BillResolutionValue & {
   key: string | null;
   status: "idle" | "loading" | "resolved" | "error";
   error: unknown;
+  retry?: () => void;
 };
 
 export interface ReaderSurfaceProps {

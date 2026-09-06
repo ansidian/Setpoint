@@ -93,16 +93,23 @@ describe("resolveReaderActions pin toggle", () => {
   });
 });
 
-describe("resolveReaderActions bill toggle", () => {
-  it("is eligible for bill, live/untriaged, queued, and untriaged_read rows", () => {
-    expect(resolveReaderActions({ hasBill: true }).billToggleEligible).toBe(true);
-    expect(resolveReaderActions({ _untriaged: true }).billToggleEligible).toBe(true);
-    expect(resolveReaderActions(snapshotEmail({ _lane: "queued" })).billToggleEligible).toBe(true);
-    expect(resolveReaderActions(snapshotEmail({ _lane: "untriaged_read" })).billToggleEligible).toBe(true);
+describe("resolveReaderActions Actual record", () => {
+  it("is available regardless of triage, financial classification, or historical/snoozed state", () => {
+    for (const email of [
+      { hasBill: true }, { _untriaged: true },
+      snapshotEmail({ _lane: "queued" }), snapshotEmail({ _lane: "untriaged_read" }),
+      snapshotEmail({ _lane: "needs_attention", hasBill: false }),
+      snapshotEmail({ _lane: "catch_up" }),
+      { _snoozed: true, _snoozedUnavailable: true },
+    ]) {
+      expect(resolveReaderActions(email).canOpenActualRecord).toBe(true);
+      expect(resolveReaderActions(email, { readOnly: true }).canOpenActualRecord).toBe(true);
+    }
   });
 
-  it("is not eligible for a triaged non-bill row", () => {
-    expect(resolveReaderActions(snapshotEmail({ _lane: "needs_attention", hasBill: false })).billToggleEligible).toBe(false);
+  it("requires a selected email", () => {
+    expect(resolveReaderActions(null).canOpenActualRecord).toBe(false);
+    expect(resolveReaderActions(undefined).canOpenActualRecord).toBe(false);
   });
 });
 

@@ -51,7 +51,7 @@ describe("Inbox Remind me workspace", () => {
 
 
 
-  it("delegates dirty Cancel confirmation to the editor while still guarding competing bill actions", async () => {
+  it("delegates dirty Cancel confirmation to the editor while guarding a competing Actual record workspace", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
@@ -64,7 +64,7 @@ describe("Inbox Remind me workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
     await waitFor(() => expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("false"));
     fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Changed again" } });
-    fireEvent.click(screen.getByRole("button", { name: /review bill/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Actual record" }));
     expect(screen.getByLabelText("Task title")).toBeTruthy();
     expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("false");
   });

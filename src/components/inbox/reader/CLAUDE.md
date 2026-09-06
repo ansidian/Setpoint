@@ -1,6 +1,6 @@
 # Inbox Reader Map
 
-The desktop and mobile email detail pane: body loading/rendering, triage context, actions, bill-pay resolution, transaction-import status, and reader-specific controls. `Reader.tsx` is the entry point and routes to the desktop or mobile presentation.
+The desktop and mobile email detail pane: body loading/rendering, triage context, actions, Actual record resolution, transaction-import status, and reader-specific controls. `Reader.tsx` is the entry point and routes to the desktop or mobile presentation.
 
 ## Files
 
@@ -17,7 +17,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
 
 ### Mobile
-- `MobileBillDrawer.tsx` — mobile slide-up bill-pay sheet with expand/collapse affordance
+- `MobileBillDrawer.tsx` — mobile Actual record sheet with expand/collapse and close controls
 - `MobileReaderHeader.tsx` — scrolling subject/sender with expandable details and AI summary
 - `MobileActionRow.tsx` — single-row mobile action buttons
 - `MobileReader.css` — mobile reading layout, safe areas, and disclosure/control states
@@ -39,16 +39,17 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `useEmailBody.ts` — fetches and caches body HTML with preview fallback
 
 ### Actual, bills, and transaction imports
+- `ActualRecordWorkspace.tsx` — single desktop/mobile editor entrance; resolves managed versus historical ownership before mounting a writer, with lookup retry and recorded-item Calendar navigation
 - `useBillPayResolver.ts` — resolves or reuses the persisted zero-configuration financial plan for the open email
 - `ActualActionStatus.tsx` — shared desktop/mobile status strip for canonical Actual reconciliation results
 - `actualActionStatusModel.ts` — pure copy/tone/actioned-state projection for Actual reconciliation status
-- `EmailActualStatus.tsx` — shared desktop/mobile owner that renders one import-or-reconciliation status
+- `EmailActualStatus.tsx` — informational desktop/mobile status; prefers the live managed financial event, otherwise displays retained import/reconciliation status
 - `emailActualStatusModel.ts` — pure precedence policy across transaction-import and statement reconciliation evidence
 - `TransactionImportStatus.tsx` — shared Amazon/PayPal import status with focused Finance review routing
 - `transactionImportStatusModel.ts` — pure durable item-to-reader status projection
-- `useTransactionImportStatus.ts` — owner-scoped status fetch with stale guards and active-only polling
-- `billExtractionBody.ts` — body state for the bill-pay workflow
-- `billSeedModel.ts` — pure bill-pay seed derivation plus USD amount formatting
+- `useTransactionImportStatus.ts` — owner-scoped financial-event/import status with stale guards, pending polling and slower waiting-state refresh; accepted owner completions refresh status and restart polling
+- `billExtractionBody.ts` — source body state for Actual record resolution and retained extraction
+- `billSeedModel.ts` — pure historical form seed derivation for the Actual record workspace
 - `remindMeTaskSeedModel.ts` — pure email-to-Todoist seed derivation with Pacific due-date handling and bounded provenance
 
 ### Action policy
@@ -63,6 +64,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - Shared action visibility belongs in `readerActionsModel.ts` so desktop, mobile, hotkeys, and dispatch stay aligned.
 - `Ask Alfred` is intentionally passed only to the desktop reader and hidden in demo builds; it stages context without sending a prompt or starting a model run.
 - Bill and transaction-import status are projections of durable backend state; hooks own fetching and stale-response guards.
+- Every email offers **Actual record**, independent of triage/lifecycle visibility. Completion lives only in that workspace. Historical records retain their existing import owner or manual writer behind successful ownership lookups; categories remain optional.
 
 ## Related
 

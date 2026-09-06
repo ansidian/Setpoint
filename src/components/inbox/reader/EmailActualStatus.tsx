@@ -7,6 +7,7 @@ import { resolveTransactionImportStatus } from "./transactionImportStatusModel";
 import useTransactionImportStatus from "./useTransactionImportStatus";
 import type { CSSProperties } from "react";
 import type { ActualResolutionLike } from "./actualActionStatusModel";
+import FinancialEventStatus from "../../bills/FinancialEventStatus";
 
 export default function EmailActualStatus({
   emailUid,
@@ -22,6 +23,10 @@ export default function EmailActualStatus({
     transactionImportItems: transactionImportState.items,
     billResolution,
   });
+
+  if (transactionImportState.financialEvent?.workflow) {
+    return <FinancialEventStatus plan={transactionImportState.financialEvent} style={style} />;
+  }
 
   if (source === "transaction_import") {
     const view = resolveTransactionImportStatus(transactionImportState.items);

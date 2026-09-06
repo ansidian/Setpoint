@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveFinancialEmailPlan } from "../../../api";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import type { BillPaySeedRequest, FinancialEmailPlan } from "../../../../shared/types/bills";
@@ -133,14 +133,47 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
     billOpen || email?.hasBill || email?.bill_candidate || email?.extractedBill
   );
 
+  const retry = useCallback(() => {
+    if (!key) return;
+    billResolutionCache.delete(key);
+    cacheRef.current = { key, value: null, promise: null };
+    setSettingsVersion((value) => value + 1);
+  }, [key]);
+
+  useEffect(() => {
+    const workflow = state.plan?.workflow;
+    if (!key || state.key !== key || !workflow || !["pending", "waiting"].includes(workflow.state)) return;
+    const timer = window.setInterval(() => {
+      if (cacheRef.current.promise) return;
+      billResolutionCache.delete(key);
+      cacheRef.current = { key, value: null, promise: null };
+      setSettingsVersion((value) => value + 1);
+    }, workflow.state === "pending" ? 3_000 : 30_000);
+    return () => window.clearInterval(timer);
+  }, [key, state.key, state.plan]);
+
   useEffect(() => {
     cacheRef.current = { key, value: null, promise: null };
   }, [key]);
 
   useEffect(() => {
+    const onFinancialChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ emailUid: string; plan?: FinancialEmailPlan }>).detail;
+      if (!key || detail?.emailUid !== emailId) return;
+      billResolutionCache.delete(key);
+      const value = detail.plan ? resolvedValue(detail.plan) : null;
+      cacheRef.current = { key, value, promise: null };
+      if (value) setState({ key, status: "resolved", ...value, error: null });
+      setSettingsVersion((version) => version + 1);
+    };
+    window.addEventListener("ea-financial-event-changed", onFinancialChange);
+    return () => window.removeEventListener("ea-financial-event-changed", onFinancialChange);
+  }, [emailId, key]);
+
+  useEffect(() => {
     const reset = () => {
       cacheRef.current = { key: cacheRef.current.key, value: null, promise: null };
-      setState({
+      setState((current) => current.plan?.workflow ? { ...current, status: "loading", error: null } : {
         key: cacheRef.current.key,
         status: "idle",
         plan: null,
@@ -191,7 +224,8 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
       candidate: asBillCandidate(email.bill_candidate || email.extractedBill),
       source: email.hasBill || email.bill_candidate ? "triage" : "reader",
     };
-    setState((current) => ({ ...current, key, status: "loading", error: null }));
+    setState((current) => current.key === key ? { ...current, status: "loading", error: null }
+      : { key, status: "loading", plan: null, resolvedBill: null, actualStatus: null, error: null });
     const cached = loadBillResolution(key, payload);
     if (cached.value) {
       cacheRef.current = { key, value: cached.value, promise: null };
@@ -214,7 +248,7 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
       .catch((error: unknown) => {
         if (cacheRef.current.key === key && cacheRef.current.promise === promise) {
           cacheRef.current.promise = null;
-          setState({
+          setState((current) => current.key === key && current.plan?.workflow ? { ...current, status: "error", error } : {
             key,
             status: "error",
             plan: null,
@@ -227,7 +261,7 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
   }, [email, emailId, extractionBody.body, extractionBody.loading, extractionBody.source, key, settingsVersion, shouldResolve]);
 
   return state.key === key
-    ? state
+    ? { ...state, retry }
     : {
         key,
         status: "idle",
@@ -235,5 +269,6 @@ export default function useBillPayResolver({ email, billOpen, bodyState }: {
         resolvedBill: null,
         actualStatus: null,
         error: null,
+        retry,
       };
 }

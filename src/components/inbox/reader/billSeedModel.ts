@@ -1,6 +1,4 @@
-// Pure bill-pay seed derivation + currency formatting, shared by the mobile and
-// desktop email readers' bill drawers (the seed fallback chain was duplicated
-// verbatim in both; the currency formatter was inline in MobileReader).
+// Historical form seed for the shared Actual record workspace.
 import type { BillCandidate } from "../../../../shared/types/bills";
 import type { BillResolutionState } from "./readerTypes";
 
@@ -19,11 +17,4 @@ export function resolveBillSeed(
       type: "expense",
     }
   );
-}
-
-// Format a bill amount as USD ("$1,234.50"). Returns "" for null/undefined
-// (but formats 0 as "$0.00").
-export function formatBillAmount(amount: number | string | null | undefined): string {
-  if (amount == null) return "";
-  return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 }
