@@ -259,13 +259,13 @@ export function buildTimeline({
 // Tri-color lane metadata for the inbox
 export const LANE: Record<string, LaneMetadata> = {
   pinned: { key: "pinned", label: "Pinned", color: "#b4befe", soft: "rgba(180,190,254,0.10)", border: "rgba(180,190,254,0.22)", icon: "Pin" },
-  queued: { key: "queued", label: "Queued", color: "#89b4fa", soft: "rgba(137,180,250,0.10)", border: "rgba(137,180,250,0.22)", icon: "Clock" },
+  queued: { key: "queued", label: "Queued", color: "#a6adc8", soft: "rgba(166,173,200,0.08)", border: "rgba(166,173,200,0.16)", icon: "Clock" },
   needs_attention: { key: "needs_attention", label: "Needs Attention", color: "#f38ba8", soft: "rgba(243,139,168,0.12)", border: "rgba(243,139,168,0.22)", icon: "Zap" },
-  carryover: { key: "carryover", label: "Carryover", color: "#f9e2af", soft: "rgba(249,226,175,0.10)", border: "rgba(249,226,175,0.22)", icon: "History" },
-  catch_up: { key: "catch_up", label: "Catch-up", color: "#cba6da", soft: "rgba(203,166,218,0.10)", border: "rgba(203,166,218,0.22)", icon: "MailOpen" },
+  carryover: { key: "carryover", label: "Carryover", color: "#e8afba", soft: "rgba(232,175,186,0.10)", border: "rgba(232,175,186,0.22)", icon: "History" },
+  catch_up: { key: "catch_up", label: "Catch-up", color: "#9dbde8", soft: "rgba(157,189,232,0.10)", border: "rgba(157,189,232,0.22)", icon: "MailOpen" },
   fyi:    { key: "fyi",    label: "FYI", color: "#89dceb", soft: "rgba(137,220,235,0.10)", border: "rgba(137,220,235,0.20)", icon: "FileText" },
   handled: { key: "handled", label: "Handled", color: "#a6e3a1", soft: "rgba(166,227,161,0.09)", border: "rgba(166,227,161,0.18)", icon: "Check" },
   untriaged_read: { key: "untriaged_read", label: "Untriaged Read", color: "#a6adc8", soft: "rgba(166,173,200,0.08)", border: "rgba(166,173,200,0.16)", icon: "MailOpen" },
-  noise:  { key: "noise",  label: "Noise", color: "#6c7086", soft: "rgba(108,112,134,0.10)", border: "rgba(255,255,255,0.05)", icon: "BellOff" },
+  noise:  { key: "noise",  label: "Noise", color: "#a6adc8", soft: "rgba(108,112,134,0.10)", border: "rgba(255,255,255,0.05)", icon: "BellOff" },
 };
 LANE.action = LANE.needs_attention!;

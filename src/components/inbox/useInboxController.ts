@@ -1,3 +1,6 @@
+import useSnoozedEmails from "./useSnoozedEmails";
+import { collectSnoozed } from "./inboxSnoozedModel";
+import type { InboxActionDispatcher } from "./useInboxActionDispatch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { PinnedEmailEntry } from "../../../shared/types/email";
@@ -88,6 +91,7 @@ export default function useInboxController({
   onAskAlfred = () => {},
 }: InboxControllerOptions) {
   const {
+    collection = "inbox", setCollection,
     accountId,
     lane,
     search,
@@ -97,6 +101,7 @@ export default function useInboxController({
     setSearch,
     setSelectedId,
   } = useInboxSessionState({ sessionState, onSessionStateChange });
+  const snoozed = useSnoozedEmails(collection === "snoozed");
   const searchRef = useRef<HTMLInputElement>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileUnreadOnly, setMobileUnreadOnly] = useState(false);
@@ -140,8 +145,8 @@ export default function useInboxController({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset locally-mutable map when the entries prop changes
-    setSnoozedMap(new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])));
-  }, [snoozedEntries]);
+    setSnoozedMap(new Map([...snoozedEntries.map((entry): [string, number] => [entry.uid, entry.until_ts]), ...snoozed.entries.map((entry): [string, number] => [entry.uid, Infinity])]));
+  }, [snoozedEntries, snoozed.entries]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset locally-mutable map when the entries prop changes
@@ -275,17 +280,31 @@ export default function useInboxController({
       : accountsById
   ), [indexedSearchActive, accountsById, indexedSearch.accountsById]);
 
-  const visibleEmails = useMemo(() => selectVisibleEmails({
+  const snoozedRows = useMemo(() => collectSnoozed(
+    snoozed.entries, emailAccounts, liveReadOverrides,
+    new Set(pinnedRows.map((row) => row.uid)), pinnedOverrides, snoozed.returningUid,
+  ), [snoozed.entries, emailAccounts, liveReadOverrides, pinnedRows, pinnedOverrides, snoozed.returningUid]);
+  const collectionAccounts = useMemo(() => {
+    const merged = new Map(emailAccounts.map((account) => [account.id || account.name, account]));
+    for (const row of snoozedRows) merged.set(row._accountKey, row._account);
+    return [...merged.values()];
+  }, [emailAccounts, snoozedRows]);
+  const scopedSnoozedRows = useMemo(() => snoozedRows.filter((row) => (
+    (accountId === "__all" || row._accountKey === accountId) && (!isMobile || !mobileUnreadOnly || !row.read)
+  )), [snoozedRows, accountId, isMobile, mobileUnreadOnly]);
+
+  const visibleEmails = useMemo(() => !indexedSearchActive && collection === "snoozed" ? scopedSnoozedRows : selectVisibleEmails({
     flatEmails,
     indexedSearchActive,
     indexedSearchEmails: indexedSearch.emails,
     accountId,
     lane,
-    snoozedMap,
+    snoozedMap: readOnly ? undefined : snoozedMap,
     nowTick,
     sortOrder: isMobile ? "newest" : "lane",
     unreadOnly: isMobile && mobileUnreadOnly,
   }), [
+    collection, scopedSnoozedRows, readOnly,
     flatEmails,
     accountId,
     lane,
@@ -303,8 +322,8 @@ export default function useInboxController({
   );
 
   const chipCounts = useMemo(
-    () => computeInboxChipCounts(flatEmails, { accountId, snoozedMap, nowTick }),
-    [flatEmails, snoozedMap, nowTick, accountId],
+    () => computeInboxChipCounts(flatEmails, { accountId, snoozedMap: readOnly ? undefined : snoozedMap, nowTick }),
+    [flatEmails, snoozedMap, nowTick, accountId, readOnly],
   );
 
   const totalUnread = useMemo(() => computeUnreadCount(flatEmails), [flatEmails]);
@@ -312,18 +331,20 @@ export default function useInboxController({
   const noiseUnreadCount = useMemo(() => computeScopedNoiseUnreadCount(flatEmails, {
     accountId,
     indexedSearchActive,
-    snoozedMap,
+    snoozedMap: readOnly ? undefined : snoozedMap,
     nowTick,
-  }), [accountId, flatEmails, indexedSearchActive, nowTick, snoozedMap]);
+  }), [accountId, flatEmails, indexedSearchActive, nowTick, snoozedMap, readOnly]);
 
   const unreadInView = useMemo(() => computeUnreadCount(visibleEmails), [visibleEmails]);
 
   const selectedEmail = useMemo(() => {
     if (!selectedId) return null;
     const searchHit = indexedSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
-    if (searchHit) return searchHit;
-    return flatEmails.find((email) => email.id === selectedId || email.uid === selectedId) || null;
-  }, [selectedId, flatEmails, indexedSearch.emails]);
+    if (indexedSearchActive && searchHit) return searchHit;
+    // Search changes the list, not the open reader or its unsaved workspace.
+    const source = collection === "snoozed" ? snoozedRows : flatEmails;
+    return source.find((email) => email.id === selectedId || email.uid === selectedId) || null;
+  }, [selectedId, flatEmails, indexedSearch.emails, indexedSearchActive, collection, snoozedRows]);
 
   // CONTEXT.md: the desktop Inbox AI entry points (Sparkles, Cmd/Ctrl+Enter)
   // hand off to Alfred — the panel opens and runs the query immediately.
@@ -371,7 +392,8 @@ export default function useInboxController({
     if (next) setSelectedId(next.id || next.uid || null);
   }, [visibleEmails, selectedId, setSelectedId]);
 
-  const { onAction, announcement } = useInboxActionDispatch({
+  const { onAction: dispatchAction, announcement } = useInboxActionDispatch({
+    onSnoozedChange: snoozed.refresh,
     selectedEmail,
     readOnly,
     moveBy,
@@ -389,12 +411,25 @@ export default function useInboxController({
     snapshotRequestRef,
   });
 
+  const onAction: InboxActionDispatcher = (kind, payload) => {
+    if (kind !== "unsnooze") { dispatchAction(kind, payload); return; }
+    const email = selectedEmail;
+    if (!email?._snoozed || email._snoozedUnavailable || !email.uid) return;
+    const uid = email.uid;
+    void snoozed.returnEarly(uid).then((success) => {
+      if (!success) return;
+      setSnoozedMap((previous) => { const next = new Map(previous); next.delete(uid); return next; });
+      setSelectedId((previous) => previous === email.id || previous === uid ? null : previous);
+      void onActiveSnapshotRefresh();
+    });
+  };
+
   useEffect(() => {
     if (!selectedId) return undefined;
     if (readOnly) return undefined;
     const timeout = setTimeout(() => {
       const email = selectedEmail;
-      if (!email || email.read) return;
+      if (!email || email.read || email._snoozedUnavailable) return;
 
       const scope = resolveReadScope(email);
       if (scope === READ_SCOPE.LIVE || scope === READ_SCOPE.SNAPSHOT) {
@@ -430,6 +465,10 @@ export default function useInboxController({
     : emailAccounts.find((account) => (account.id || account.name) === accountId);
 
   return {
+    collection, setCollection,
+    snoozedCount: snoozedRows.filter((row) => accountId === "__all" || row._accountKey === accountId).length,
+    snoozedLoading: snoozed.loading, snoozedError: snoozed.error, refreshSnoozed: snoozed.refresh,
+    emailAccounts: collection === "snoozed" ? collectionAccounts : emailAccounts,
     nowTick,
     accountId,
     setAccountId,
@@ -476,7 +515,7 @@ export default function useInboxController({
     showPreview: true,
     density: "comfortable",
     layout: "two-pane",
-    grouping: isMobile ? "flat" : "swimlanes",
+    grouping: isMobile || collection === "snoozed" ? "flat" : "swimlanes",
     activeSnapshotMode,
     scopedAccount: indexedSearchActive ? null : scopedAccount,
   };

@@ -8,9 +8,13 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 ## Files
 
+- `useSnoozedEmails.ts` / `inboxSnoozedModel.ts` — deferred collection fetch/return reconciliation and canonical row projection, independent of snapshot history.
+
 ### Views + orchestration
 - `InboxView.tsx` — composes active/historical snapshot modes and the initial-load live fallback, session state, undo coordination
 - `InboxDesktopPane.tsx` — desktop layout: digest, sidebar, list, reader, undo toast
+- `InboxDesktopHeader.tsx` — list-aligned search, history and processing context
+- `InboxDesktop.css` — scoped desktop queue/rail hierarchy, responsive sizing and interaction states
 - `inboxViewTypes.ts` — shared top-level desktop/mobile pane composition contract
 - `useInboxController.ts` — central state machine: selection, filters, search, undo, desktop Alfred handoff
 - `inboxReadRoutingModel.ts` — read-scope routing (`resolveReadScope`) + `planMarkAllVisibleRead`; one home for the live/snapshot/indexed decision shared by mark-all and auto-mark-read
@@ -20,16 +24,15 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `useInboxUndoSlot.ts` — undo slot lifecycle: timer, pending, commit/settle
 
 ### List + rows
-- `InboxList.tsx` — desktop list container: skeletons, search, lane filters, Alfred handoff (⌘Enter)
-- `InboxLaneFilterBar.tsx` — compact desktop lane scope with non-empty, lane-tinted count chips
+- `InboxList.tsx` — bounded desktop list, lane headings, read controls, skeletons and search results
+- `InboxLaneFilterBar.tsx` — All mail and primary lanes; populated Queued, Catch-up and Untriaged Read views below a divider
 - `LaneSection.tsx` — memoized swimlane lane section: sticky header + collapsible row body
-- `EmailRow.tsx` — single email row: avatar, preview, urgency/lane bar
-- `InboxRowTransition.tsx` — desktop/mobile row and desktop lane motion shell; departing content fades sideways while inert, then its space closes
+- `EmailRow.tsx` — sender/subject/preview row, optional concise action hint and carryover provenance
+- `InboxRowTransition.tsx` — desktop/mobile row and desktop lane motion shell; source and destination space animate together; departing content is immediately inert
 - `DigestStrip.tsx` — header strip: snapshot status, lane counts, processing activity
 - `DesktopSnapshotNavigator.tsx` — desktop list-local snapshot context, adjacent navigation, and active update status
 - `SnapshotNavigationControls.tsx` — shared desktop/mobile adjacent-snapshot controls with boundary, loading, and error states
-- `Sidebar.tsx` — collapsible desktop account navigation and shortcut reference
-- `sidebarCompactStore.ts` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
+- `Sidebar.tsx` — account scope, fixed desktop lane navigation, secondary views and compact shortcuts
 - `inboxRow.ts` — canonical row normalization: field fallbacks, read-override merge
 - `inboxWorkItems.ts` — work item pipelines: active-snapshot, initial-load live fallback, and resurfaced-snooze
 - `inboxVisibleEmailsModel.ts` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/lane filter + lane/recency sort)
@@ -61,8 +64,9 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 - `useInboxKeyboardCommands.ts` — window hotkeys: undo, search focus, j/k nav, actions
 
 ### Shared
-- `helpers.ts` — time formatters and snooze preset builder
-- `primitives.tsx` — Kbd, Avatar, Eyebrow, StickyHeader, LaneIcon, QuickAction
+- `InboxEmptyState.tsx` / `InboxEmptyState.css` — restrained list/reader empty presentations and recovery controls
+- `helpers.ts` — time formatters, snooze presets and optional action-hint text filtering
+- `primitives.tsx` — LaneIcon, NumberField and QuickAction
 - `test-utils/inboxFixtures.ts` — email/account test factories
 - `test-utils/mobileInboxActions.test-utils.ts` — shared mobile action-sheet and search drivers for existing Inbox behavior tests
 
@@ -72,7 +76,7 @@ The email triage and reading surface, desktop and mobile: active snapshots (tria
 
 - Optimistic UI: snapshot mutations apply overlays immediately and reconcile on refresh.
 - Session state lives outside React (external store) so tab switches don't reset triage position.
-- Lane-based classification drives both filtering and hotkey behavior; lane rules live in `activeSnapshotWorkflowModel.ts`.
+- Lane-based classification drives filtering and hotkeys; `activeSnapshotWorkflowModel.ts` owns lane rules and reading order. Carryover is provenance (`_carryover`), shown inside the assigned Needs Attention/Queued lane. Existing Untriaged Read rows remain visible regardless of the current triage-read setting.
 
 ## Related
 

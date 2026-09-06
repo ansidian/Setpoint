@@ -1,17 +1,22 @@
+import { formatSnoozeTime } from "../inboxSnoozedModel";
+import "./DesktopReader.css";
 import { useRef } from "react";
 import { motion as Motion, useReducedMotion } from "motion/react";
 import {
   Reply,
   Sparkles,
+  BellPlus,
+  CreditCard,
+  CheckCircle2,
+  ExternalLink,
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { timeClock, timeSince } from "../helpers";
-import { Avatar, QuickAction } from "../primitives";
+import { timeClock } from "../helpers";
+import { LANE } from "../../../lib/shell-helpers";
 import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
-import EmailBodyPane from "./EmailBodyPane";
-import EmailAttachmentShelf from "./EmailAttachmentShelf";
+import OriginalEmailSection from "./OriginalEmailSection";
 import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import EmailActualStatus from "./EmailActualStatus";
@@ -19,7 +24,7 @@ import VerificationCodeCallout from "./VerificationCodeCallout";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import { resolveReaderActionGroups } from "./readerActionsModel";
 import { resolveBillSeed } from "./billSeedModel";
-import DesktopReaderActionBar from "./DesktopReaderActionBar";
+import DesktopReaderActionBar, { ToolbarButton } from "./DesktopReaderActionBar";
 import {
   isActualActioned,
   resolveActualCalendarTarget,
@@ -44,6 +49,8 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
 
   return (
     <Motion.div
+      className="inbox-reader-workspace"
+      data-open={billOpen}
       initial={false}
       animate={{ width: billOpen ? 360 : 0 }}
       transition={motionTransition(reduceMotion, billOpen ? motionDuration.panel : motionDuration.exit)}
@@ -100,7 +107,7 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
               type="button"
               onClick={() => setBillOpen(false)}
               aria-label="Close bill pay"
-              className="bill-drawer-close"
+              className="bill-drawer-close inbox-a-control sp-focus-ring"
               style={{
                 background: "transparent",
                 border: "1px solid transparent",
@@ -141,6 +148,8 @@ function ReminderDrawer({ open, workspace }: { open: boolean; workspace: ReactNo
 
   return (
     <Motion.div
+      className="inbox-reader-workspace"
+      data-open={open}
       initial={false}
       animate={{ width: open ? 360 : 0 }}
       transition={motionTransition(reduceMotion, open ? motionDuration.panel : motionDuration.exit)}
@@ -181,6 +190,8 @@ export default function DesktopReader({
   accent,
   onAction,
   onClose,
+  onPrevious,
+  onNext,
   showTriage,
   showDraft,
   billOpen,
@@ -218,189 +229,81 @@ export default function DesktopReader({
   const actualActioned = isActualActioned(billResolution?.actualStatus);
   const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
 
+  const sender = email.from || email.from_name || email.fromEmail || "Unknown sender";
+  const address = email.fromEmail || email.from_email || email.from_address;
+  const recipient = account?.email || email.account_email;
+  const initials = sender.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  const date = email.date ? new Date(email.date) : null;
+  const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
+  const lane = email._lane ? LANE[email._lane] : undefined;
+  const status = readOnly ? "Historical snapshot" : email._snoozed ? "Snoozed" : lane?.label;
+  const carriedOver = email._carryover || email._snapshotCarryover;
+  const showBillAction = (showDestructiveActions || (email._snoozed && !email._snoozedUnavailable)) && showBillToggle;
+  const billActionLabel = actualCalendarTarget ? "View bill" : actualActioned ? (billOpen ? "Hide details" : "View bill") : (billOpen ? "Hide bill" : "Review bill");
+  const contextualActions = <>
+    {showBillAction && <ToolbarButton icon={actualActioned ? CheckCircle2 : CreditCard} label={billActionLabel} expanded={billOpen} onClick={() => {
+      if (actualCalendarTarget && onOpenRecordedBill) { onOpenRecordedBill(actualCalendarTarget); return; }
+      setBillOpen((value) => !value);
+    }} />}
+    {!drafting && !showDraft && !catchUp && email.claude?.draftReply && <ToolbarButton icon={Reply} label="Review draft" onClick={() => setDrafting(true)} />}
+  </>;
+
   return (
-    <div
-      style={{
-        flex: 1.3,
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        background: "color-mix(in srgb, var(--sp-panel) 50%, transparent)",
-        minHeight: 0,
-      }}
-    >
+    <div className="inbox-a-reader">
       <DesktopReaderActionBar
         accent={accent}
         moveDestinations={moveDestinations}
         moveDisabled={moveDisabled}
         triageItems={triageItems}
-        billAction={showDestructiveActions && showBillToggle ? {
-          label: actualCalendarTarget
-            ? "View bill"
-            : actualActioned
-            ? (billOpen ? "Hide details" : "View bill")
-            : (billOpen ? "Hide bill" : "Pay bill"),
-          primary: !billOpen && !actualActioned,
-          actioned: actualActioned,
-          onClick: () => {
-            if (actualCalendarTarget && onOpenRecordedBill) {
-              onOpenRecordedBill(actualCalendarTarget);
-              return;
-            }
-            setBillOpen((value) => !value);
-          },
-        } : null}
-        gmailUrl={gmailUrl}
         showTrash={showDestructiveActions}
         onAction={onAction}
         onClose={onClose}
-        onRemind={onRemind}
-        reminderOpen={taskOpen}
-        onAskAlfred={onAskAlfred}
+        onPrevious={onPrevious}
+        onNext={onNext}
         snoozeAnchorRef={resolvedSnoozeBtnRef}
         snoozeOpen={snoozeOpen}
         setSnoozeOpen={setSnoozeOpen}
       />
-
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{ padding: "22px 24px 8px", flexShrink: 0 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 21,
-              fontWeight: 500,
-              color: "#fff",
-              lineHeight: 1.2,
-              letterSpacing: -0.3,
-            }}
-          >
-            {email.subject}
-          </h1>
-          <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 12 }}>
-            <Avatar
-              name={email.from}
-              email={email.fromEmail}
-              color={account?.color || accent}
-              size={34}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>
-                {email.from}
-                {email.fromEmail && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "var(--color-text-faint)",
-                      fontWeight: 400,
-                      marginLeft: 6,
-                    }}
-                  >
-                    &lt;{email.fromEmail}&gt;
-                  </span>
-                )}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--color-text-faint)",
-                  marginTop: 2,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span>to me</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>{timeClock(email.date)}</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>{timeSince(email.date)}</span>
-                {account?.name && (
-                  <>
-                    <span style={{ opacity: 0.4 }}>·</span>
-                    <span style={{ color: account.color }}>{account.name}</span>
-                  </>
-                )}
-              </div>
+      <div className="inbox-a-reader-scroll">
+        <div className="inbox-a-reader-inner">
+          <header className="inbox-a-reader-header">
+            <div className="inbox-a-reader-meta">
+              {(account?.name || email.account_label) && <span>{account?.name || email.account_label}</span>}
+              {(account?.name || email.account_label) && dateLabel && <span aria-hidden="true">·</span>}
+              {dateLabel && <span>{dateLabel}</span>}
+              {carriedOver && <span className="inbox-a-reader-carry">Carried over</span>}
+              {status && <span className="inbox-a-reader-status" style={{ color: lane?.color }}>{status}</span>}
             </div>
-          </div>
+            <h1>{email.subject}</h1>
+            <div className="inbox-a-reader-identity">
+              <span className="inbox-a-reader-avatar" aria-hidden="true">{initials}</span>
+              <div className="inbox-a-reader-sender">
+                <strong>{sender}</strong>
+                <small>{address && <>{address}<br /></>}{recipient ? `to ${recipient}` : "to me"}</small>
+              </div>
+              <time dateTime={email.date || undefined}>{timeClock(email.date)}</time>
+            </div>
+          </header>
+          <VerificationCodeCallout key={String(email.uid || email.id || "verification-code")} email={email} readOnly={readOnly} onTrash={() => onAction("trash")} />
+          <AnimatedCollapse open={!!(showTriage && (email.claude || email.aiSummary || email.summary))}>
+            <TriagePanel email={email} accent={accent}>{contextualActions}</TriagePanel>
+          </AnimatedCollapse>
+          {!(showTriage && (email.claude || email.aiSummary || email.summary)) && <div className="inbox-a-reader-context-actions">{contextualActions}</div>}
+          <EmailActualStatus emailUid={String(email.uid || email.email_id || "")} billResolution={billResolution} style={{ margin: "0 0 18px" }} />
+          <AnimatedCollapse open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}>
+            <DraftReply key={email.id} email={email} accent={accent} onDiscard={() => setDrafting(false)} onDirtyChange={setDraftDirty} />
+          </AnimatedCollapse>
+          {email._snoozedUntil && <p className="inbox-a-reader-snooze-note">Snoozed · returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
+          <OriginalEmailSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} />
+          <footer className="inbox-a-reader-footer">
+            {onRemind && <ToolbarButton icon={BellPlus} label={taskOpen ? "Hide reminder" : "Remind me"} expanded={taskOpen} onClick={onRemind} />}
+            {onAskAlfred && <ToolbarButton icon={Sparkles} label="Ask Alfred" onClick={onAskAlfred} />}
+            {gmailUrl && <ToolbarButton icon={ExternalLink} label="Open in Gmail" onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")} />}
+          </footer>
         </div>
-
-        <VerificationCodeCallout
-          key={String(email.uid || email.id || "verification-code")}
-          email={email}
-          readOnly={readOnly}
-          onTrash={() => onAction("trash")}
-        />
-
-        <AnimatedCollapse open={!!(showTriage && email.claude)} style={{ flexShrink: 0 }}>
-          <TriagePanel email={email} accent={accent} />
-        </AnimatedCollapse>
-
-        <EmailActualStatus
-          emailUid={String(email.uid || email.email_id || "")}
-          billResolution={billResolution}
-          style={{ margin: "8px 20px 0" }}
-        />
-
-        <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <EmailAttachmentShelf
-              emailUid={String(email.uid || email.email_id || email.id || "")}
-              attachments={bodyState.attachments}
-            />
-            <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} />
-          </div>
-          <BillDrawer
-            billOpen={billOpen}
-            billMounted={billMounted}
-            setBillOpen={setBillOpen}
-            email={email}
-            bodyState={bodyState}
-            billResolution={resolvedBillResolution}
-          />
-          <ReminderDrawer open={taskOpen} workspace={taskWorkspace} />
-        </div>
-
-        <AnimatedCollapse
-          open={!!((drafting || showDraft) && !catchUp && email.claude?.draftReply)}
-          style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}
-        >
-          <DraftReply
-            key={email.id}
-            email={email}
-            accent={accent}
-            onDiscard={() => setDrafting(false)}
-            onDirtyChange={setDraftDirty}
-          />
-        </AnimatedCollapse>
       </div>
-
-      {!drafting && !showDraft && !catchUp && email.claude?.draftReply && (
-        <div
-          style={{
-            padding: "10px 20px",
-            flexShrink: 0,
-            borderTop: "1px solid rgba(255,255,255,0.05)",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "color-mix(in srgb, var(--sp-mantle) 80%, transparent)",
-          }}
-        >
-          <Sparkles size={11} color={accent} />
-          <span style={{ fontSize: 11, color: "rgba(205,214,244,0.7)", flex: 1 }}>
-            Draft reply ready.
-          </span>
-          <QuickAction
-            icon={Reply}
-            label="Review reply"
-            tooltip="Review draft reply"
-            primary
-            onClick={() => setDrafting(true)}
-            accent={accent}
-          />
-        </div>
-      )}
+      <BillDrawer billOpen={billOpen} billMounted={billMounted} setBillOpen={setBillOpen} email={email} bodyState={bodyState} billResolution={resolvedBillResolution} />
+      <ReminderDrawer open={taskOpen} workspace={taskWorkspace} />
     </div>
   );
 }

@@ -3,10 +3,11 @@ import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
 import type { InboxEmailLike } from "../inboxTypes";
 import type { EmailBodyState } from "./readerTypes";
 
-export default function EmailBodyPane({ state, fallback, isMobile = false, email }: {
+export default function EmailBodyPane({ state, fallback, isMobile = false, presentation = "original", email }: {
   state: EmailBodyState;
   fallback?: string | null;
   isMobile?: boolean;
+  presentation?: "reading" | "original";
   email?: InboxEmailLike | null;
 }) {
   const accountId = email?.account_id || email?.accountId || email?._account?.account_id || email?._account?.id;
@@ -68,6 +69,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, email
         >
           <EmailIframe
             html={text}
+            presentation={state.source === "loaded" ? presentation : "original"}
             isMobile={isMobile}
             messageKey={messageKey != null ? String(messageKey) : null}
             remoteContentTrust={{
@@ -92,7 +94,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false, email
     >
       <div
         style={{
-          fontSize: 13.5, lineHeight: 1.7, color: "rgba(205,214,244,0.88)",
+          fontSize: 13.5, lineHeight: presentation === "reading" ? 1.95 : 1.7, color: "rgba(205,214,244,0.88)",
           whiteSpace: "pre-wrap",
         }}
       >

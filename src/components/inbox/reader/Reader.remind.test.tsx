@@ -64,7 +64,7 @@ describe("Inbox Remind me workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
     await waitFor(() => expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("false"));
     fireEvent.change(screen.getByLabelText("Task title"), { target: { value: "Changed again" } });
-    fireEvent.click(screen.getByRole("button", { name: /pay bill/i }));
+    fireEvent.click(screen.getByRole("button", { name: /review bill/i }));
     expect(screen.getByLabelText("Task title")).toBeTruthy();
     expect(screen.getByTestId("inbox-remind-workspace").getAttribute("aria-hidden")).toBe("false");
   });

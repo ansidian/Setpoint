@@ -189,17 +189,17 @@ describe("InboxView action workflows", () => {
     renderInbox({ activeSnapshot: makeSnapshotController() });
 
     fireEvent.click(screen.getByText("Snapshot action"));
-    fireEvent.click(openMobileEmailActions().getByRole("button", { name: "Handled" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark handled" }));
 
     // test-architecture: allow-boundary-interaction -- snapshot-item mutation payload is the outbound API contract for this rendered workflow.
     await waitFor(() => expect(api.markSnapshotItemHandled).toHaveBeenCalledWith(11));
-    expect(screen.queryByRole("button", { name: "Handled" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark handled" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
     // test-architecture: allow-boundary-interaction -- Undo restores the snapshot item's provider-owned lifecycle state.
     await waitFor(() => expect(api.reopenSnapshotItem).toHaveBeenCalledWith(11));
-    expect(openMobileEmailActions().getByRole("button", { name: "Handled" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mark handled" })).toBeTruthy();
   });
 
   it("snoozes a selected live email with its row snapshot and unsnoozes it from Undo", async () => {

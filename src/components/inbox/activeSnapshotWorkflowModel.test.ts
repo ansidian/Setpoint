@@ -21,7 +21,8 @@ describe("active snapshot workflow model", () => {
 
   it("normalizes snapshot item lanes for inbox projection", () => {
     expect(snapshotInboxLaneForItem({ lane: "action" })).toBe("needs_attention");
-    expect(snapshotInboxLaneForItem({ lane: "fyi", _snapshotCarryover: true })).toBe("carryover");
+    expect(snapshotInboxLaneForItem({ lane: "needs_attention", _snapshotCarryover: true })).toBe("needs_attention");
+    expect(snapshotInboxLaneForItem({ lane: "queued", source: "arrival_grace", _snapshotCarryover: true })).toBe("queued");
     expect(snapshotInboxLaneForItem({ lane: "queued", source: "arrival_grace" })).toBe("queued");
     expect(snapshotInboxLaneForItem({ lane: "untriaged_read", source: "arrival_grace_read" })).toBe("untriaged_read");
     expect(snapshotInboxLaneForItem({ lane: "fyi", handled_at: "2026-05-05T12:00:00.000Z" })).toBe("handled");

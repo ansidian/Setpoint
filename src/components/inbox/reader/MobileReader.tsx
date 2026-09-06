@@ -20,8 +20,7 @@ import {
 import { useRemoteContentTrust } from "../../../hooks/useRemoteContentTrust";
 import SnoozePicker from "../SnoozePicker";
 import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
-import EmailBodyPane from "./EmailBodyPane";
-import EmailAttachmentShelf from "./EmailAttachmentShelf";
+import OriginalEmailSection from "./OriginalEmailSection";
 import DraftReply from "./DraftReply";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import MobileActionRow from "./MobileActionRow";
@@ -77,11 +76,11 @@ export default function MobileReader({
     canPin,
     pinned,
   } = actions;
-  const showBillToggle = showDestructiveActions && billToggleEligible;
+  const showBillToggle = (showDestructiveActions || (email._snoozed && !email._snoozedUnavailable)) && billToggleEligible;
   const snapshotPending = !!email._optimisticSnapshotPending;
   const actualActioned = isActualActioned(billResolution?.actualStatus);
   const actualCalendarTarget = resolveActualCalendarTarget(billResolution?.actualStatus);
-  const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
+  const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || email.summary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
   const [trustSaving, setTrustSaving] = useState(false);
@@ -136,6 +135,11 @@ export default function MobileReader({
         </button>
       </div>
 
+      {(email._snoozed || actions.canHandle || canReopen || showDestructiveActions) && <div className="mobile-reader-primary">
+        {email._snoozed ? <button className="mobile-reader-disclosure" disabled={email._snoozedUnavailable || email._snoozedReturning} onClick={() => handleAction("unsnooze")}>{email._snoozedReturning ? "Returning…" : "Return to Inbox"}</button>
+          : (actions.canHandle || canReopen) && <button className="mobile-reader-disclosure" disabled={snapshotPending} onClick={() => handleAction(canReopen ? "snapshot-reopen" : "snapshot-handled")}><Check size={15} />{canReopen ? "Reopen" : "Mark handled"}</button>}
+        {showDestructiveActions && <button className="mobile-reader-disclosure" onClick={openSnoozePicker}><Clock size={15} />Snooze</button>}
+      </div>}
       <div className="mobile-reader-scroll" data-testid="inbox-mobile-reader-scroll">
         <MobileReaderHeader
           email={email}
@@ -179,14 +183,7 @@ export default function MobileReader({
           </div>
         </AnimatedCollapse>
 
-        <div>
-          <EmailAttachmentShelf
-            emailUid={String(email.uid || email.email_id || email.id || "")}
-            attachments={bodyState.attachments}
-            isMobile
-          />
-          <EmailBodyPane state={bodyState} fallback={email.body || email.preview} email={email} isMobile />
-        </div>
+        <OriginalEmailSection key={`source-${email.uid || email.email_id || email.id || ""}`} email={email} bodyState={bodyState} isMobile />
       </div>
 
       {billMounted && (
@@ -219,16 +216,7 @@ export default function MobileReader({
               <section className="mobile-reader-action-group" aria-label="Triage">
                 <h3>Triage</h3>
                 <div className="mobile-reader-action-grid">
-                  {actions.canHandle && <MobileActionRow icon={Check} iconColor="var(--sp-green)" label="Handled" disabled={snapshotPending} onClick={() => handleAction("snapshot-handled")} />}
-                  {canReopen && (
-                    <MobileActionRow
-                      icon={Check}
-                      iconColor="var(--sp-green)"
-                      label="Reopen"
-                      disabled={snapshotPending}
-                      onClick={() => handleAction("snapshot-reopen")}
-                    />
-                  )}
+
                   {showMutableActions && (
                     <MobileActionRow
                       icon={email.read ? Mail : MailOpen}

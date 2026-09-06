@@ -39,7 +39,7 @@ import type {
 import type { InboxUndoController } from "./useInboxUndoSlot";
 
 type SnapshotActionKind = "snapshot-move-lane" | "snapshot-dismiss" | "snapshot-handled" | "snapshot-reopen";
-export type InboxActionKind = SnapshotActionKind | "next" | "prev" | "pin-toggle" | "trash" | "snooze" | "toggle-read";
+export type InboxActionKind = SnapshotActionKind | "next" | "prev" | "pin-toggle" | "trash" | "snooze" | "toggle-read" | "unsnooze";
 export type InboxActionDispatcher = (kind: InboxActionKind, payload?: SnapshotTriageLane | number) => void;
 
 type SnapshotOverlayMap = Map<string, SnapshotOptimisticOverlay>;
@@ -66,6 +66,7 @@ export interface InboxActionDispatchOptions {
   onLiveReadOverrideChange: (uid: string, read: boolean) => void;
   closeSelectedEmail: () => void;
   updateIndexedSearchRead: (uid: string, read: boolean) => void;
+  onSnoozedChange?: () => unknown | Promise<unknown>;
   onActiveSnapshotRefresh: () => unknown | Promise<unknown>;
   replaceUndoSlot: InboxUndoController["replaceUndoSlot"];
   setSelectedId: Dispatch<SetStateAction<InboxId | null>>;
@@ -104,6 +105,8 @@ function buildEmailSnapshot(email: InboxEmailLike | null | undefined): (PinnedEm
     account_label: email.account_label || account?.name || null,
     account_color: email.account_color || account?.color || null,
     account_icon: email.account_icon || account?.icon || null,
+    deadline_at: email.deadline_at, escalation_badge: email.escalation_badge,
+    summary: email.summary, action: email.action, lane: email.lane || email._lane, category: email.category,
     urgency: email.urgency || null,
     hasBill: email.hasBill,
     extractedBill: email.extractedBill,
@@ -222,6 +225,7 @@ export default function useInboxActionDispatch({
   closeSelectedEmail,
   updateIndexedSearchRead,
   onActiveSnapshotRefresh,
+  onSnoozedChange,
   replaceUndoSlot,
   setSelectedId,
   setLiveTrashedUids,
@@ -346,6 +350,8 @@ export default function useInboxActionDispatch({
       return;
     }
 
+    if (selectedEmail._snoozedUnavailable) return;
+
     if (kind === "pin-toggle") {
       const wasPinned = !!selectedEmail._pinned;
       const entry = wasPinned
@@ -382,6 +388,7 @@ export default function useInboxActionDispatch({
     }
 
     if (kind === "trash") {
+      if (selectedEmail._snoozed) return;
       const command = buildTrashCommand(selectedEmail, { readOnly });
       if (!command.allowed) return;
       if (command.uid == null) return;
@@ -447,6 +454,7 @@ export default function useInboxActionDispatch({
     }
 
     if (kind === "snooze") {
+      if (selectedEmail._snoozed) return;
       if (catchUpSelected) return;
       if (readOnly) return;
       const untilTs = Number(payload);
@@ -458,7 +466,7 @@ export default function useInboxActionDispatch({
       });
       const snapshot = buildEmailSnapshot(selectedEmail);
       const restoreSelectedId = id || uid;
-      const snoozePromise = snoozeEmail(uid, untilTs, snapshot).catch((err) => {
+      const snoozePromise = snoozeEmail(uid, untilTs, snapshot).then((result) => { void onSnoozedChange?.(); return result; }).catch((err) => {
         setSnoozedMap((prev) => {
           const next = new Map(prev);
           next.delete(uid);
@@ -473,6 +481,7 @@ export default function useInboxActionDispatch({
         undo: async () => {
           await snoozePromise.catch(() => {});
           await unsnoozeEmail(uid);
+          await onSnoozedChange?.();
           setSnoozedMap((prev) => {
             const next = new Map(prev);
             next.delete(uid);
@@ -489,12 +498,12 @@ export default function useInboxActionDispatch({
     if (kind === "toggle-read") {
       if (readOnly) return;
       const markingUnread = !!selectedEmail.read;
-      if (selectedEmail._live || selectedEmail._activeSnapshot) {
+      if (selectedEmail._live || selectedEmail._activeSnapshot || selectedEmail._snoozed) {
         onLiveReadOverrideChange(uid, !markingUnread);
       }
       const call = markingUnread ? markEmailAsUnread : markEmailAsRead;
       call(uid).catch(() => {
-        if (selectedEmail._live || selectedEmail._activeSnapshot) {
+        if (selectedEmail._live || selectedEmail._activeSnapshot || selectedEmail._snoozed) {
           onLiveReadOverrideChange(uid, markingUnread);
         }
         updateIndexedSearchRead(uid, markingUnread);
@@ -513,6 +522,7 @@ export default function useInboxActionDispatch({
     closeSelectedEmail,
     updateIndexedSearchRead,
     onActiveSnapshotRefresh,
+    onSnoozedChange,
     replaceUndoSlot,
     setSelectedId,
     setLiveTrashedUids,

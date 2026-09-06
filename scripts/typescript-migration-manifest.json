@@ -230,8 +230,6 @@
     "src/components/inbox/inboxWorkItems.test.ts",
     "src/components/inbox/indexedSearchModel.ts",
     "src/components/inbox/indexedSearchModel.test.ts",
-    "src/components/inbox/sidebarCompactStore.ts",
-    "src/components/inbox/sidebarCompactStore.test.ts",
     "src/components/inbox/snapshotSummary.ts",
     "src/components/inbox/test-utils",
     "src/components/inbox/useInboxSessionState.ts",

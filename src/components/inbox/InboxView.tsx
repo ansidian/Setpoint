@@ -102,6 +102,7 @@ export default function InboxView({
   }, [seedSelectedId, setResolvedSessionState]);
 
   const normalizedSessionState = useMemo(() => ({
+    collection: resolvedSessionState?.collection || "inbox",
     accountId: resolvedSessionState?.accountId || "__all",
     lane: resolvedSessionState?.lane || "__all",
     search: resolvedSessionState?.search || "",
@@ -112,7 +113,7 @@ export default function InboxView({
   const activeSnapshot = controlledActiveSnapshot || localActiveSnapshot;
   const snapshotInboxMode = !!controlledActiveSnapshot || !!activeSnapshot.snapshot?.snapshot;
   const activeSnapshotView = activeSnapshot.snapshot || (snapshotInboxMode ? EMPTY_ACTIVE_SNAPSHOT_VIEW : null);
-  const readOnly = !!activeSnapshotView?.readOnly;
+  const readOnly = normalizedSessionState.collection !== "snoozed" && !!activeSnapshotView?.readOnly;
   const shouldSettleArrivalGraceRef = useRef(false);
   const refreshAfterArrivalGraceSettleRef = useRef<InboxActiveSnapshotController["refresh"] | null>(null);
   useEffect(() => {
@@ -189,7 +190,6 @@ export default function InboxView({
     mobileScrollTopRequestId,
     onMobileReaderBack,
     mobileReaderBackLabel,
-    emailAccounts: displayedAccounts,
     liveEmailsLoading: snapshotInboxMode
       ? triageActivity.syncing
       : liveEmailsLoading || triageActivity.syncing,

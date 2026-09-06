@@ -1,0 +1,16 @@
+.inbox-empty-state { display: flex; flex: 1; min-width: 0; min-height: 100%; align-items: center; justify-content: center; padding: 44px 24px 76px; }
+.inbox-empty-state-content { width: 100%; max-width: 280px; text-align: center; }
+.inbox-empty-state-icon { display: flex; justify-content: center; margin-bottom: 18px; color: #b4a6c7; }
+.inbox-empty-state h2 { margin: 0; color: #e3e6f5; font-size: 15px; font-weight: 500; line-height: 1.5; letter-spacing: -.015em; }
+.inbox-empty-state p { margin: 9px 0 0; color: #a6adc8; font-size: 12px; line-height: 1.8; }
+.inbox-empty-state-action { margin-top: 20px; padding: 8px 12px; min-height: 36px; border: 1px solid #ffffff24; border-radius: 6px; background: #ffffff04; color: #ddd0ec; font-family: inherit; font-size: 11px; font-weight: 500; line-height: 1.5; cursor: pointer; transition: transform 160ms ease, background 160ms ease, border-color 160ms ease; }
+.inbox-empty-state-action:hover, .inbox-empty-state-action:focus-visible { transform: translateY(-1px); background: #ffffff0b; border-color: #cba6da66; }
+.inbox-empty-state-action:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 3px; }
+.inbox-empty-state-action:active { transform: translateY(0); background: #ffffff14; }
+.inbox-empty-state-shortcuts { display: flex; justify-content: center; align-items: center; gap: 5px; margin-top: 23px; padding-top: 18px; border-top: 1px solid #ffffff0c; color: #a6adc8; font-size: 10px; }
+.inbox-empty-state-shortcuts kbd { min-width: 20px; padding: 3px 5px; border: 1px solid #ffffff19; border-radius: 4px; color: #cdd6f4; font: inherit; }
+.inbox-empty-state-shortcuts span { margin-left: 3px; }
+.inbox-reader-empty { display: flex; flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: #20202f; }
+@media (prefers-reduced-motion: reduce) { .inbox-empty-state-action { transition: none; } .inbox-empty-state-action:hover, .inbox-empty-state-action:focus-visible, .inbox-empty-state-action:active { transform: none; } }
+
+@media (max-width: 639px) { .inbox-empty-state-action { min-height: 44px; } }

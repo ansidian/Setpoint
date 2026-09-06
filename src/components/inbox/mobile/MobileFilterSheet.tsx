@@ -4,21 +4,28 @@ import type { InboxSnapshotNavigation } from "../inboxViewTypes";
 import { Check, CheckCheck } from "lucide-react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import type { Dispatch, SetStateAction } from "react";
-import { selectVisibleInboxLaneChips } from "../inboxCountsModel";
 import type { InboxAccount } from "../inboxTypes";
 
 const LANES = [
-  { key: "__all", label: "All" },
+  { key: "__all", label: "All mail" },
+  { key: "queued", label: "Queued" },
   { key: "needs_attention", label: "Needs attention" },
+  { key: "catch_up", label: "Catch-up" },
   { key: "fyi", label: "FYI" },
+  { key: "handled", label: "Handled" },
+  { key: "untriaged_read", label: "Untriaged read" },
   { key: "noise", label: "Noise" },
 ];
 
 export default function MobileFilterSheet({
+  collection, setCollection, snoozedCount,
   snapshotNavigation,
   open, accent, accountId, setAccountId, accounts, totalUnread,
   lane, setLane, chipCounts, indexedSearchActive, unreadInView, onMarkAllRead, readOnly, onClose,
 }: {
+  collection: "inbox" | "snoozed";
+  setCollection: (collection: "inbox" | "snoozed") => void;
+  snoozedCount: number;
   snapshotNavigation: InboxSnapshotNavigation | null;
   open: boolean;
   accent: string;
@@ -38,6 +45,12 @@ export default function MobileFilterSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title="Filters">
       <div data-testid="inbox-mobile-filter-sheet" className="mobile-filter-content">
+        {!indexedSearchActive && <section className="mobile-filter-group" aria-label="Collection">
+          <h3>Collection</h3><div className="mobile-filter-lanes">
+            <button className="mobile-filter-option" aria-pressed={collection === "inbox"} onClick={() => { setCollection("inbox"); onClose(); }}>Inbox</button>
+            <button className="mobile-filter-option" aria-pressed={collection === "snoozed"} onClick={() => { setCollection("snoozed"); onClose(); }}>Snoozed · {snoozedCount}</button>
+          </div>
+        </section>}
         {!indexedSearchActive && snapshotNavigation && (
           <section className="mobile-filter-group" aria-label="Snapshots">
             <h3>Snapshot</h3>
@@ -45,11 +58,11 @@ export default function MobileFilterSheet({
             <SnapshotNavigationControls navigation={snapshotNavigation} historical={readOnly} mobile onNavigate={(direction) => { void snapshotNavigation.onNavigate(direction); }} />
           </section>
         )}
-        {!indexedSearchActive && (
+        {!indexedSearchActive && collection === "inbox" && (
           <section className="mobile-filter-group" aria-label="Triage">
             <h3>Triage</h3>
             <div className="mobile-filter-lanes">
-              {selectVisibleInboxLaneChips(LANES, chipCounts).map((item) => (
+              {LANES.filter((item) => item.key === "__all" || item.key === lane || (chipCounts[item.key] ?? 0) > 0).map((item) => (
                 <button
                   type="button"
                   key={item.key}

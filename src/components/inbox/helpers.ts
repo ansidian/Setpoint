@@ -106,3 +106,13 @@ export function computePlacement(anchorRect: Pick<DOMRect, "top" | "bottom" | "l
 
   return { top, left };
 }
+
+// List hints are optional: omit generic triage defaults and prose that belongs
+// in the reader. Display the provider/model's existing wording without inventing
+// an action from a category or urgency score.
+export function getEmailActionHint(action: string | null | undefined): string | null {
+  const text = action?.replace(/\s+/g, " ").trim();
+  if (!text || text.length > 80 || text.split(" ").length > 8) return null;
+  if (/^(review|classify|read( later)?|ignore|none|no action( required| needed)?|n\/a|reply|archive|dismiss)[.!]?$/i.test(text)) return null;
+  return text;
+}

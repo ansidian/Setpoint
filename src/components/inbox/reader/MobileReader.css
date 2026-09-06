@@ -66,3 +66,9 @@
 .mobile-reader-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
 .mobile-reader-action-list { display: flex; flex-direction: column; gap: 2px; }
 .mobile-reader-trash { padding-bottom: 0; }
+
+
+.mobile-reader-primary { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid #ffffff12; }
+.mobile-reader-primary > button { padding: 6px 12px; border: 1px solid #cba6f730; color: var(--ea-accent); }
+.mobile-reader-primary > button:disabled { opacity: .5; cursor: default; transform: none; }
+.mobile-reader-original-label { margin: 14px 16px 0; font-size: 11px; font-weight: 500; color: #a6adc8; }

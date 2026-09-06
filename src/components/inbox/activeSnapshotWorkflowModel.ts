@@ -1,13 +1,13 @@
 export const SNAPSHOT_LANE_ORDER: Readonly<Record<string, number>> = {
-  queued: 0,
-  carryover: 1,
-  needs_attention: 2,
-  action: 2,
-  catch_up: 3,
-  fyi: 4,
-  handled: 5,
+  needs_attention: 0,
+  action: 0,
+  carryover: 0,
+  fyi: 1,
+  noise: 2,
+  handled: 3,
+  queued: 4,
+  catch_up: 5,
   untriaged_read: 6,
-  noise: 7,
 };
 
 const SNAPSHOT_REOPEN_LANES = new Set<SnapshotTriageLane>(["needs_attention", "fyi", "noise"]);
@@ -33,7 +33,7 @@ export function snapshotInboxLaneForItem(item: InboxEmailLike = {}): InboxLane {
   if (arrivalGraceQueued) return "queued";
   if (untriagedRead) return "untriaged_read";
   if (catchUp) return "catch_up";
-  if (item._snapshotCarryover) return "carryover";
+  // Carryover records retain their assigned lane; provenance is a row status.
   return item.lane === "action" ? "needs_attention" : (item.lane ?? null);
 }
 

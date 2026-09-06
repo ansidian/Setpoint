@@ -73,15 +73,25 @@ describe("selectVisibleEmails", () => {
     expect(result.map((e) => e.uid)).toEqual(["work-mkt", "work-fin"]);
   });
 
-  it("sorts by lane order, then newest-first", () => {
+  it("orders reader navigation by the displayed lanes, then newest-first within each lane", () => {
     const flatEmails = [
       email({ uid: "fyi-old", _lane: "fyi", date: "2026-01-01T00:00:00.000Z" }),
       email({ uid: "queued", _lane: "queued", date: "2026-01-01T00:00:00.000Z" }),
       email({ uid: "untriaged", _untriaged: true, _lane: "queued", date: "2026-01-01T00:00:00.000Z" }),
       email({ uid: "fyi-new", _lane: "fyi", date: "2026-06-01T00:00:00.000Z" }),
+      email({ uid: "needs", _lane: "needs_attention" }),
+      email({ uid: "noise", _lane: "noise" }),
+      email({ uid: "handled", _lane: "handled" }),
+      email({ uid: "catch-up", _lane: "catch_up" }),
+      email({ uid: "read-before-triage", _lane: "untriaged_read" }),
+      email({ uid: "legacy-action", _lane: "action", date: "2026-01-01T00:00:00.000Z" }),
+      email({ uid: "legacy-carryover", _lane: "carryover", date: "2026-02-01T00:00:00.000Z" }),
     ];
     const result = selectVisibleEmails({ flatEmails });
-    expect(result.map((e) => e.uid)).toEqual(["queued", "untriaged", "fyi-new", "fyi-old"]);
+    expect(result.map((e) => e.uid)).toEqual([
+      "needs", "legacy-carryover", "legacy-action", "fyi-new", "fyi-old", "noise", "handled",
+      "queued", "untriaged", "catch-up", "read-before-triage",
+    ]);
   });
 
   it("uses _resurfacedAt as the recency key, ranking a row up when it resurfaced recently", () => {

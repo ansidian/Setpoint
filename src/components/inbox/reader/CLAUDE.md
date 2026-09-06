@@ -6,13 +6,14 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 
 ### Entry + surfaces
 - `Reader.tsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
-- `DesktopReader.tsx` — desktop detail layout with triage panel
+- `DesktopReader.tsx` — scrollable desktop reading context, original body and bounded bill/task workspaces
+- `DesktopReader.css` — reader measure, scrolling and narrow workspace overlay composition
 - `MobileReader.tsx` — focused mobile reading screen with one top bar and actions sheet
-- `ReaderShared.tsx` — section accordion and empty-state primitives
+- `ReaderShared.tsx` — reader empty state using the shared Inbox presentation
 - `readerTypes.ts` — shared reader body, bill-resolution, and surface contracts
 
 ### Desktop
-- `DesktopReaderActionBar.tsx` — desktop reader action clusters, grouped menus, adaptive label collapse, and the desktop-only `Ask Alfred` attachment action
+- `DesktopReaderActionBar.tsx` — desktop lifecycle actions, consolidated More menu, snooze, and adjacent-email navigation
 - `DesktopReaderActionBar.css` — container-responsive action-bar states, cluster separation, and reduced motion
 
 ### Mobile
@@ -23,6 +24,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `MobileReaderControls.tsx` — mobile status badges
 
 ### Body + triage
+- `OriginalEmailSection.tsx` / `OriginalEmailSection.css` — full-source reading/original formatting control and message attachments/body
 - `EmailBodyPane.tsx` — iframe HTML/plain-text body renderer
 - `EmailAttachmentShelf.tsx` / `EmailAttachmentPreview.tsx` — compact file shelf plus safe PDF/raster preview overlay
 - `EmailCsvPreview.tsx` — bounded read-only CSV table preview with sticky headers and truncation limits
@@ -30,7 +32,7 @@ The desktop and mobile email detail pane: body loading/rendering, triage context
 - `EmailPdfPreview.tsx` — lazy PDF.js canvas renderer with continuous inline page scrolling
 - `emailAttachmentDownload.ts` — checked browser object-URL download handoff with delayed byte cleanup
 - `emailAttachmentModel.ts` — attachment filtering, naming, size, and preview policy
-- `TriagePanel.tsx` — AI summary, bullets, urgency, and lane tag display
+- `TriagePanel.tsx` / `TriagePanel.css` — What needs you / At a glance summary, contextual actions, and disclosed classification details
 - `DraftReply.tsx` — AI-drafted reply with send/discard
 - `VerificationCodeCallout.tsx` — shared desktop/mobile fresh-code display and copy-before-trash action
 - `verificationCodeModel.ts` — pure freshness, expiry, and trash-eligibility projection for verification codes

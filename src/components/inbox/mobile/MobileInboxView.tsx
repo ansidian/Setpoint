@@ -2,10 +2,13 @@ import { AnimatePresence } from "motion/react";
 import InboxRowTransition from "../InboxRowTransition";
 import { publicAssetUrl } from "@/publicAsset";
 import {
+  Inbox,
+  SearchX,
   Filter,
   Pin,
   Search,
 } from "lucide-react";
+import InboxEmptyState from "../InboxEmptyState";
 import MobileEmailRow from "./MobileEmailRow";
 import Reader from "../reader/Reader";
 import MobileFilterSheet from "./MobileFilterSheet";
@@ -66,6 +69,7 @@ function MobileLiveLoadingBlock({ compact = false, activeSnapshotMode = false }:
 
 export default function MobileInboxView({
   accent,
+  collection, setCollection, snoozedCount, snoozedLoading, snoozedError, refreshSnoozed,
   mobileShellActions,
   mobileScrollTopRequestId,
   onMobileReaderBack,
@@ -146,7 +150,7 @@ export default function MobileInboxView({
   useLayoutEffect(() => {
     listScrollTopRef.current = 0;
     if (listRef.current) listRef.current.scrollTop = 0;
-  }, [accountId, lane, search, mobileUnreadOnly, snapshotNavigation?.snapshot?.id, mobileScrollTopRequestId]);
+  }, [collection, accountId, lane, search, mobileUnreadOnly, snapshotNavigation?.snapshot?.id, mobileScrollTopRequestId]);
 
   const allowWorkspaceExit = () => !workspaceDirty || window.confirm("Discard your unsaved changes?");
   const guardedOpen: typeof onOpen = (...args) => {
@@ -162,7 +166,7 @@ export default function MobileInboxView({
   // visibleEmails arrives pinned-first (selectVisibleEmails sorts pinned rows
   // ahead of everything else, newest pin first), so splitting off the pinned
   // block for the compact group header is a findIndex split, not a re-sort.
-  const pinnedCount = visibleEmails.findIndex((e) => !e._pinned);
+  const pinnedCount = collection === "snoozed" && !indexedSearchActive ? 0 : visibleEmails.findIndex((e) => !e._pinned);
   const pinnedRows = pinnedCount === -1 ? visibleEmails : visibleEmails.slice(0, pinnedCount);
   const restRows = pinnedCount === -1 ? [] : visibleEmails.slice(pinnedCount);
   return (
@@ -183,7 +187,7 @@ export default function MobileInboxView({
           email={selectedEmail}
           account={selectedAccount}
           accent={accent}
-          onAction={onAction}
+          onAction={(kind, payload) => { if (kind === "unsnooze" && !allowWorkspaceExit()) return; onAction(kind, payload); }}
           onClose={guardedClose}
           backLabel={mobileReaderBackLabel}
           onWorkspaceDirtyChange={setWorkspaceDirty}
@@ -223,7 +227,7 @@ export default function MobileInboxView({
                 </>
               ) : (
                 <>
-                  <h1 className="mobile-inbox-title"><img src={publicAssetUrl("favicon.svg")} alt="" width={22} height={22} />Inbox</h1>
+                  <h1 className="mobile-inbox-title"><img src={publicAssetUrl("favicon.svg")} alt="" width={22} height={22} />{collection === "snoozed" ? "Snoozed" : "Inbox"}</h1>
                   <button
                     type="button"
                     className="mobile-inbox-control"
@@ -248,7 +252,7 @@ export default function MobileInboxView({
                     aria-label="Open filters"
                     aria-haspopup="dialog"
                     aria-expanded={mobileFiltersOpen}
-                    data-active={accountId !== "__all" || (!indexedSearchActive && lane !== "__all")}
+                    data-active={accountId !== "__all" || (!indexedSearchActive && collection === "inbox" && lane !== "__all")}
                     data-testid="inbox-mobile-filter-trigger"
                     onClick={() => setMobileFiltersOpen(true)}
                   >
@@ -258,11 +262,11 @@ export default function MobileInboxView({
                 </>
               )}
             </div>
-            <MobileSnapshotHeader readOnly={readOnly} snapshotNavigation={snapshotNavigation} />
-            {(scopedAccount || (!indexedSearchActive && lane !== "__all") || indexedSearchActive) && (
+            {collection === "inbox" && <MobileSnapshotHeader readOnly={readOnly} snapshotNavigation={snapshotNavigation} />}
+            {(scopedAccount || (!indexedSearchActive && collection === "inbox" && lane !== "__all") || indexedSearchActive) && (
               <div className="mobile-inbox-scope">
                 {scopedAccount && <span>{scopedAccount.name || scopedAccount.email}</span>}
-                {!indexedSearchActive && lane !== "__all" && <span>{LANE[lane]?.label || lane}</span>}
+                {!indexedSearchActive && collection === "inbox" && lane !== "__all" && <span>{LANE[lane]?.label || lane}</span>}
                 {indexedSearchActive && (
                   <span>{mobileUnreadOnly
                     ? `${visibleEmails.length} unread in loaded results`
@@ -272,6 +276,10 @@ export default function MobileInboxView({
             )}
           </div>
 
+          {collection === "snoozed" && !indexedSearchActive && <div role="status" style={{ padding: "10px 16px", color: "#a6adc8", fontSize: 12 }}>
+            {snoozedError ? <>{snoozedError} <button className="mobile-inbox-control" onClick={() => { void refreshSnoozed(); }}>Retry</button></>
+              : snoozedLoading ? "Loading snoozed mail…" : `${visibleEmails.length} messages · ordered by return time`}
+          </div>}
           <div style={{ padding: "6px 0 20px" }}>
             {indexedSearchError && (
               <div
@@ -350,17 +358,15 @@ export default function MobileInboxView({
                   </InboxRowTransition>
                 ))}
                 </AnimatePresence>
-                {visibleEmails.length === 0 && (
-              <div
-                style={{
-                  padding: "36px 18px",
-                  textAlign: "center",
-                  color: "var(--color-text-faint)",
-                  fontSize: 12,
-                }}
-              >
-                {mobileUnreadOnly ? (indexedSearchActive && indexedSearchHasMore ? "No unread messages in the loaded results." : "No unread messages in this view.") : indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
-              </div>
+                {visibleEmails.length === 0 && !indexedSearchError && !snoozedError && (
+                  <InboxEmptyState
+                    icon={indexedSearchActive ? <SearchX size={26} strokeWidth={1.3} /> : <Inbox size={26} strokeWidth={1.3} />}
+                    title={mobileUnreadOnly ? "No unread messages" : indexedSearchActive ? "No matching emails" : collection === "snoozed" ? "Nothing snoozed" : "No mail in this view"}
+                    message={mobileUnreadOnly ? (indexedSearchHasMore ? "There are no unread messages in the loaded results." : "Turn off Unread to see the other messages in this view.") : indexedSearchActive ? "Try a different sender, subject, or phrase." : collection === "snoozed" ? "Emails you snooze will wait here until their return time." : "New mail will appear here when it arrives."}
+                    action={mobileUnreadOnly
+                      ? { label: "Show read and unread", onClick: () => setMobileUnreadOnly(false) }
+                      : indexedSearchActive ? { label: "Clear search", onClick: () => { setSearch(""); setSearchExpanded(true); window.requestAnimationFrame(() => searchRef?.current?.focus()); } } : undefined}
+                  />
                 )}
               </>
             )}
@@ -397,6 +403,7 @@ export default function MobileInboxView({
       )}
 
       <MobileFilterSheet
+        collection={collection} setCollection={setCollection} snoozedCount={snoozedCount}
         open={mobileFiltersOpen}
         accent={accent}
         accountId={accountId}

@@ -21,6 +21,8 @@ export default function Reader({
   accent,
   onAction,
   onClose,
+  onPrevious,
+  onNext,
   backLabel,
   onRemind,
   onAskAlfred,
@@ -38,6 +40,8 @@ export default function Reader({
   accent: string;
   onAction: InboxActionDispatcher;
   onClose: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
   backLabel?: string;
   onRemind?: () => void;
   onAskAlfred?: () => void;
@@ -150,6 +154,8 @@ export default function Reader({
     accent,
     onAction,
     onClose,
+    onPrevious,
+    onNext,
     backLabel,
     onRemind: onRemind || toggleTask,
     onAskAlfred,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveReaderActions } from "./readerActionsModel";
+import { resolveReaderActions, resolveReaderActionGroups } from "./readerActionsModel";
 
 // Active-snapshot row carries a snapshot_item_id, like every real reader email
 // (inboxRow spreads it through; the dispatch + Sidebar require it).
@@ -104,4 +104,18 @@ describe("resolveReaderActions bill toggle", () => {
   it("is not eligible for a triaged non-bill row", () => {
     expect(resolveReaderActions(snapshotEmail({ _lane: "needs_attention", hasBill: false })).billToggleEligible).toBe(false);
   });
+});
+
+
+it("offers early return without snapshot or destructive actions for deferred mail", () => {
+  const email = { uid: "deferred", _snoozed: true, _lane: "fyi" };
+  const actions = resolveReaderActions(email);
+  expect(actions.canHandle).toBe(false);
+  expect(actions.canDismiss).toBe(false);
+  expect(actions.canMoveToNeeds).toBe(false);
+  expect(actions.showDestructiveActions).toBe(false);
+  expect(resolveReaderActionGroups(email).triageItems.map((item) => item.key)).toEqual(["unsnooze", "pin-toggle", "toggle-read"]);
+  expect(resolveReaderActionGroups({ ...email, _snoozedUnavailable: true }).triageItems).toEqual([
+    expect.objectContaining({ key: "unsnooze", disabled: true }),
+  ]);
 });

@@ -1,13 +1,6 @@
-import type { InboxChip, InboxEmailLike } from "./inboxTypes";
+import type { InboxEmailLike } from "./inboxTypes";
 
 type LaneCounts = Record<string, number>;
-
-export const PRIMARY_INBOX_LANES = ["needs_attention", "fyi", "noise"] as const;
-const PRIMARY_INBOX_LANE_SET = new Set<string>(PRIMARY_INBOX_LANES);
-
-export function isPrimaryInboxLane(lane: string): boolean {
-  return PRIMARY_INBOX_LANE_SET.has(lane);
-}
 
 export function computeScopedNoiseUnreadCount(emails: InboxEmailLike[] = [], {
   accountId = "__all",
@@ -21,7 +14,7 @@ export function computeScopedNoiseUnreadCount(emails: InboxEmailLike[] = [], {
   for (const email of emails || []) {
     const uid = email?.uid || email?.id;
     const snoozeUntil = uid ? snoozedMap.get(uid) : null;
-    if (snoozeUntil && snoozeUntil > nowTick) continue;
+    if (!email._pinned && snoozeUntil && snoozeUntil > nowTick) continue;
     if (accountId !== "__all" && email?._accountKey !== accountId) continue;
     if (email?._lane === "noise" && !email.read) count += 1;
   }
@@ -62,7 +55,7 @@ export function computeInboxChipCounts(emails: InboxEmailLike[] = [], {
   for (const email of emails) {
     const uid = email.uid || email.id;
     const snoozeUntil = uid == null ? null : snoozedMap.get(uid);
-    if (snoozeUntil && snoozeUntil > nowTick) continue;
+    if (!email._pinned && snoozeUntil && snoozeUntil > nowTick) continue;
     if (accountId !== "__all" && email._accountKey !== accountId) continue;
     counts.__all = (counts.__all ?? 0) + 1;
     if (email._lane && counts[email._lane] != null) counts[email._lane] = (counts[email._lane] ?? 0) + 1;
@@ -75,17 +68,4 @@ export function computeInboxChipCounts(emails: InboxEmailLike[] = [], {
 // (over all flat emails) and the in-view total (over the filtered list).
 export function computeUnreadCount(emails: InboxEmailLike[] = []): number {
   return emails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
-}
-
-// Primary chip-bar visibility: always keep `__all`; show only natural triage
-// destinations with a positive scoped count. Lifecycle lanes never enter the
-// primary bar. Source order is preserved.
-export function selectVisibleInboxLaneChips(
-  chips: InboxChip[] = [],
-  counts: Readonly<Record<string, number>> = {},
-): InboxChip[] {
-  return chips.filter(
-    (chip) => chip.key === "__all"
-      || (isPrimaryInboxLane(chip.key) && (counts[chip.key] ?? 0) >= 1),
-  );
 }

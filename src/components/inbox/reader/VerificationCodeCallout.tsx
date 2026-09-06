@@ -50,7 +50,7 @@ export default function VerificationCodeCallout({
       const writeText = typeof navigator === "undefined" ? null : navigator.clipboard?.writeText;
       if (!writeText) throw new Error("Clipboard unavailable");
       await writeText.call(navigator.clipboard, clickAction.code);
-      onTrash();
+      if (!clickAction.copyOnly) onTrash();
     } catch {
       setError(COPY_ERROR);
     } finally {
@@ -68,7 +68,7 @@ export default function VerificationCodeCallout({
         </div>
         <div className="verification-code-callout__code">{action.code}</div>
         <div className="verification-code-callout__detail">
-          Copies the code, then moves this email to provider Trash. You can undo it.
+          {action.copyOnly ? "Copies the code. This email stays snoozed." : "Copies the code, then moves this email to provider Trash. You can undo it."}
         </div>
       </div>
       <button
@@ -79,9 +79,9 @@ export default function VerificationCodeCallout({
       >
         <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
           <Copy size={13} />
-          <Trash2 size={13} />
+          {!action.copyOnly && <Trash2 size={13} />}
         </span>
-        {copying ? "Copying…" : "Copy code & trash"}
+        {copying ? "Copying…" : action.copyOnly ? "Copy code" : "Copy code & trash"}
       </button>
       {error && <p className="verification-code-callout__error" role="alert">{error}</p>}
     </section>

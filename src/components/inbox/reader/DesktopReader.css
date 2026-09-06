@@ -1,0 +1,48 @@
+.inbox-a-reader {
+  container: inbox-reader / inline-size;
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #20202f;
+}
+.inbox-a-reader-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.inbox-a-reader-inner { box-sizing: border-box; width: 100%; max-width: 860px; padding: 32px 38px 48px; margin: 0 auto; }
+.inbox-a-reader-header h1 { margin: 0 0 22px; font-size: 23px; font-weight: 600; line-height: 1.45; letter-spacing: -0.025em; color: #edeef9; overflow-wrap: anywhere; }
+.inbox-a-reader-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; color: #a6adc8; font-size: 10px; }
+.inbox-a-reader-status { margin-left: auto; padding: 3px 6px; border-radius: 4px; background: #ffffff06; }
+.inbox-a-reader-carry { padding: 3px 6px; border-radius: 4px; color: #f9e2af; background: #f9e2af0c; }
+.inbox-a-reader-identity { display: flex; gap: 12px; align-items: center; margin-bottom: 26px; }
+.inbox-a-reader-avatar { width: 34px; height: 34px; border: 1px solid #ffffff1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #cec1de; background: #cba6da0c; flex-shrink: 0; }
+.inbox-a-reader-sender { min-width: 0; overflow-wrap: anywhere; }
+.inbox-a-reader-sender strong { font-size: 12px; font-weight: 500; color: #e3e6f5; }
+.inbox-a-reader-sender small { display: block; margin-top: 3px; color: #a6adc8; font-size: 10px; line-height: 1.7; }
+.inbox-a-reader-identity time { margin-left: auto; align-self: flex-start; padding-top: 2px; font-size: 10px; color: #a6adc8; white-space: nowrap; }
+.inbox-a-original-label { margin: 0 0 16px; color: #a6adc8; font-size: 11px; font-weight: 500; }
+.inbox-a-reader-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.inbox-a-reader-context-actions:has(button) { margin: 14px 0 4px; }
+.inbox-a-reader-header + .inbox-a-reader-context-actions:has(button) { margin-bottom: 24px; }
+.inbox-a-reader-body { display: flex; min-width: 0; overflow-wrap: anywhere; }
+.inbox-a-reader-body > div { padding: 0 !important; min-width: 0; }
+/* Provider HTML keeps its own scroll viewport; plain text flows at content height. */
+.inbox-a-reader-body iframe { min-height: 360px; }
+.inbox-a-reader-snooze-note { margin: 0 0 20px; color: #cba6f7; font-size: 12px; line-height: 1.7; }
+.inbox-a-reader-footer { border-top: 1px solid #ffffff0d; margin-top: 30px; padding-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+.inbox-a-reader-footer .desktop-reader-action-button { border-color: transparent; background: transparent; color: #a6adc8; padding: 0 7px; }
+.inbox-a-reader-footer .desktop-reader-action-button:hover { background: #ffffff0c; color: #e3e6f5; }
+.inbox-a-reader-footer .desktop-reader-action-button:active { background: #ffffff16; }
+.inbox-a-reader .inbox-reader-workspace { position: absolute; inset: 69px 0 0 auto; z-index: 3; max-width: 100%; background: #16161e; isolation: isolate; }
+.inbox-a-reader .inbox-reader-workspace[data-open="true"] > aside { width: min(360px, 100%) !important; }
+@media (min-width: 1700px) { .inbox-a-reader-inner { padding-top: 40px; } }
+@media (max-width: 1200px) { .inbox-a-reader-inner { padding: 26px 24px 40px; } .inbox-a-reader-header h1 { font-size: 21px; } }
+@container inbox-reader (max-width: 400px) { .inbox-a-reader-inner { padding: 24px 20px 36px; } }
+
+.inbox-a-reader .verification-code-callout { margin: 0 0 26px; padding: 18px; }
+@container inbox-reader (max-width: 500px) { .inbox-a-reader .verification-code-callout { grid-template-columns: 1fr; } }
+
+.inbox-a-reader .email-attachment-shelf { padding: 0 0 22px; margin-bottom: 24px; background: transparent; border-bottom-color: #ffffff12; }
+.inbox-a-reader .email-attachment-shelf-summary { margin-bottom: 10px; font-weight: 500; }
+.inbox-a-reader .email-attachment-item { background: #ffffff03; border-color: #ffffff18; border-radius: 8px; }
+.inbox-a-reader .email-attachment-item-previewable:hover { background: #ffffff08; border-color: #ffffff30; }

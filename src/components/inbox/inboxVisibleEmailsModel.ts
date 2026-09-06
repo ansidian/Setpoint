@@ -55,7 +55,7 @@ export function selectVisibleEmails({
     const aLaneOrder = a._lane ? SNAPSHOT_LANE_ORDER[a._lane] : undefined;
     const bLaneOrder = b._lane ? SNAPSHOT_LANE_ORDER[b._lane] : undefined;
     if (aLaneOrder !== bLaneOrder) {
-      return (aLaneOrder ?? 4) - (bLaneOrder ?? 4);
+      return (aLaneOrder ?? 1) - (bLaneOrder ?? 1);
     }
     const aKey = a._resurfacedAt || new Date(a.date || 0).getTime();
     const bKey = b._resurfacedAt || new Date(b.date || 0).getTime();

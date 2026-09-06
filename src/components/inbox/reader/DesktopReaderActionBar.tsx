@@ -1,20 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRightLeft,
   BellOff,
-  BellPlus,
   CalendarX,
   Check,
-  CheckCircle2,
   Clock,
-  CreditCard,
-  ExternalLink,
   FileText,
-  ListChecks,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
   Mail,
   MailOpen,
   Pin,
-  Sparkles,
   Trash2,
   X,
   Zap,
@@ -28,26 +24,16 @@ import SnoozePicker from "../SnoozePicker";
 import Tooltip from "../../shared/Tooltip";
 import "./DesktopReaderActionBar.css";
 
-type BillAction = {
-  label: string;
-  primary: boolean;
-  actioned: boolean;
-  onClick: () => void;
-};
-
 export type DesktopReaderActionBarProps = {
   accent: string;
   moveDestinations: ReaderMoveDestination[];
   moveDisabled: boolean;
   triageItems: ReaderTriageItem[];
-  billAction: BillAction | null;
-  gmailUrl: string | null;
   showTrash: boolean;
   onAction: InboxActionDispatcher;
   onClose: () => void;
-  onRemind?: () => void;
-  reminderOpen?: boolean;
-  onAskAlfred?: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
   snoozeAnchorRef: RefObject<HTMLButtonElement | null>;
   snoozeOpen: boolean;
   setSnoozeOpen: (open: boolean) => void;
@@ -72,7 +58,7 @@ type ToolbarButtonProps = {
   suspendHotkeys?: boolean;
 };
 
-function ToolbarButton({
+export function ToolbarButton({
   icon: Icon,
   label,
   ariaLabel,
@@ -238,211 +224,69 @@ export default function DesktopReaderActionBar({
   moveDestinations,
   moveDisabled,
   triageItems,
-  billAction,
-  gmailUrl,
   showTrash,
   onAction,
   onClose,
-  onRemind,
-  reminderOpen = false,
-  onAskAlfred,
+  onPrevious,
+  onNext,
   snoozeAnchorRef,
   snoozeOpen,
   setSnoozeOpen,
 }: DesktopReaderActionBarProps) {
-  const [openMenu, setOpenMenu] = useState<"move" | "triage" | null>(null);
-  const moveTriggerRef = useRef<HTMLButtonElement>(null);
-  const movePanelRef = useRef<HTMLDivElement>(null);
-  const triagePanelRef = useRef<HTMLDivElement>(null);
-
-  const closeMenu = (menu: "move" | "triage", restoreFocus = true) => {
-    setOpenMenu(null);
-    if (restoreFocus) {
-      const trigger = menu === "move" ? moveTriggerRef.current : snoozeAnchorRef.current;
-      trigger?.focus();
-    }
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const morePanelRef = useRef<HTMLDivElement>(null);
+  const closeMenu = () => {
+    setMoreOpen(false);
+    moreTriggerRef.current?.focus();
   };
-
-  const selectTriage = (item: ReaderTriageItem) => {
-    if (item.key === "snooze") {
-      closeMenu("triage", false);
-      setSnoozeOpen(true);
-      return;
-    }
-    closeMenu("triage");
-    onAction(item.key);
-  };
-
   const closeSnooze = () => {
     setSnoozeOpen(false);
     window.queueMicrotask(() => snoozeAnchorRef.current?.focus());
   };
-
-  const lifecycleItems = triageItems.filter((item) => item.section === "lifecycle");
-  const stateItems = triageItems.filter((item) => item.section === "state");
-  const hasWorkCluster = !!(onRemind || onAskAlfred || billAction);
+  const primaryItem = triageItems.find((item) => item.key === "snapshot-handled" || item.key === "snapshot-reopen" || item.key === "unsnooze");
+  const snoozeItem = triageItems.find((item) => item.key === "snooze");
+  const secondaryItems = triageItems.filter((item) => item !== primaryItem && item !== snoozeItem);
+  const hasMore = moveDestinations.length > 0 || secondaryItems.length > 0 || showTrash;
 
   return (
     <div className="desktop-reader-action-bar" data-testid="desktop-reader-action-bar">
-      {hasWorkCluster && (
-        <div className="desktop-reader-action-cluster" data-action-cluster="work">
-          {onRemind && (
-            <ToolbarButton
-              icon={BellPlus}
-              label={reminderOpen ? "Hide reminder" : "Remind me"}
-              adaptive
-              expanded={reminderOpen}
-              onClick={onRemind}
-            />
-          )}
-          {onAskAlfred && (
-            <ToolbarButton
-              icon={Sparkles}
-              label="Ask Alfred"
-              adaptive
-              alfred
-              onClick={onAskAlfred}
-            />
-          )}
-          {billAction && (
-            <ToolbarButton
-              icon={billAction.actioned ? CheckCircle2 : CreditCard}
-              label={billAction.label}
-              adaptive
-              primary={billAction.primary}
-              accent="#a6e3a1"
-              onClick={billAction.onClick}
-            />
-          )}
-        </div>
-      )}
-
-      {(moveDestinations.length > 0 || triageItems.length > 0) && (
-        <div className="desktop-reader-action-cluster" data-action-cluster="organize">
-          {moveDestinations.length > 0 && (
-            <ToolbarButton
-              icon={ArrowRightLeft}
-              label="Move to…"
-              ariaLabel="Move to"
-              adaptive
-              disabled={moveDisabled}
-              expanded={openMenu === "move"}
-              popup="menu"
-              buttonRef={moveTriggerRef}
-              suspendHotkeys
-              onClick={() => setOpenMenu((current) => current === "move" ? null : "move")}
-            />
-          )}
-          {triageItems.length > 0 && (
-            <ToolbarButton
-              icon={ListChecks}
-              label="Triage"
-              adaptive
-              expanded={openMenu === "triage"}
-              popup="menu"
-              buttonRef={snoozeAnchorRef}
-              suspendHotkeys
-              onClick={() => setOpenMenu((current) => current === "triage" ? null : "triage")}
-            />
-          )}
-        </div>
-      )}
-
-      {(gmailUrl || showTrash) && (
-        <div className="desktop-reader-action-cluster" data-action-cluster="utilities">
-          {gmailUrl && (
-            <ToolbarButton
-              icon={ExternalLink}
-              ariaLabel="Open in Gmail"
-              tooltip="Open in Gmail"
-              keyHint="O"
-              accent={accent}
-              onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")}
-            />
-          )}
-          {showTrash && (
-            <ToolbarButton
-              icon={Trash2}
-              ariaLabel="Trash email"
-              tooltip="Trash email"
-              keyHint="E"
-              danger
-              onClick={() => onAction("trash")}
-            />
-          )}
-        </div>
-      )}
-
-      <div className="desktop-reader-action-close">
+      <div className="desktop-reader-action-cluster">
+        {primaryItem && <ToolbarButton icon={Check} label={primaryItem.label} primary accent={accent} disabled={primaryItem.disabled} onClick={() => onAction(primaryItem.key)} />}
+        {snoozeItem && <ToolbarButton icon={Clock} label="Snooze" adaptive disabled={snoozeItem.disabled} buttonRef={snoozeAnchorRef} expanded={snoozeOpen} onClick={() => { setMoreOpen(false); setSnoozeOpen(!snoozeOpen); }} />}
+        {hasMore && <ToolbarButton icon={MoreHorizontal} ariaLabel="More email actions" tooltip="More email actions" expanded={moreOpen} popup="menu" buttonRef={moreTriggerRef} suspendHotkeys onClick={() => { setSnoozeOpen(false); setMoreOpen((value) => !value); }} />}
+      </div>
+      <div className="desktop-reader-action-navigation">
+        <ToolbarButton icon={ChevronLeft} ariaLabel="Previous email" tooltip="Previous email" disabled={!onPrevious} onClick={() => onPrevious?.()} />
+        <ToolbarButton icon={ChevronRight} ariaLabel="Next email" tooltip="Next email" disabled={!onNext} onClick={() => onNext?.()} />
+        <span className="desktop-reader-action-separator" aria-hidden="true" />
         <ToolbarButton icon={X} ariaLabel="Close reader" tooltip="Close" onClick={onClose} />
       </div>
-
-      {openMenu === "move" && (
+      {moreOpen && (
         <MenuPanel
-          anchorRef={moveTriggerRef}
-          panelRef={movePanelRef}
-          ariaLabel="Move email"
-          height={moveDestinations.length * 36 + 12}
-          onClose={() => closeMenu("move")}
+          anchorRef={moreTriggerRef}
+          panelRef={morePanelRef}
+          ariaLabel="More email actions"
+          height={(secondaryItems.length + moveDestinations.length + Number(showTrash)) * 36 + 60}
+          onClose={closeMenu}
         >
-          {moveDestinations.map((destination) => (
-            <MenuItem
-              key={destination.lane}
-              icon={moveIcon(destination.lane)}
-              label={destination.label}
-              keyHint={destination.keyHint}
-              onSelect={() => {
-                closeMenu("move");
-                onAction("snapshot-move-lane", destination.lane);
-              }}
-            />
+          {secondaryItems.map((item) => (
+            <MenuItem key={item.key} icon={item.key === "toggle-read" && item.label === "Mark unread" ? Mail : triageIcon(item.key)} label={item.label} keyHint={item.keyHint} active={item.active} disabled={item.disabled} onSelect={() => { closeMenu(); onAction(item.key); }} />
           ))}
-        </MenuPanel>
-      )}
-
-      {openMenu === "triage" && (
-        <MenuPanel
-          anchorRef={snoozeAnchorRef}
-          panelRef={triagePanelRef}
-          ariaLabel="Triage email"
-          height={triageItems.length * 36 + (lifecycleItems.length && stateItems.length ? 11 : 0) + 12}
-          onClose={() => closeMenu("triage")}
-        >
-          {lifecycleItems.map((item) => (
-            <MenuItem
-              key={item.key}
-              icon={triageIcon(item.key)}
-              label={item.label}
-              keyHint={item.keyHint}
-              active={item.active}
-              disabled={item.disabled}
-              onSelect={() => selectTriage(item)}
-            />
-          ))}
-          {lifecycleItems.length > 0 && stateItems.length > 0 && (
+          {moveDestinations.length > 0 && <>
+            {secondaryItems.length > 0 && <div className="desktop-reader-action-menu-divider" role="separator" />}
+            <div className="desktop-reader-action-menu-heading">Move to</div>
+            {moveDestinations.map((destination) => (
+              <MenuItem key={destination.lane} icon={moveIcon(destination.lane)} label={destination.label} keyHint={destination.keyHint} disabled={moveDisabled} onSelect={() => { closeMenu(); onAction("snapshot-move-lane", destination.lane); }} />
+            ))}
+          </>}
+          {showTrash && <>
             <div className="desktop-reader-action-menu-divider" role="separator" />
-          )}
-          {stateItems.map((item) => (
-            <MenuItem
-              key={item.key}
-              icon={item.key === "toggle-read" && item.label === "Mark unread" ? Mail : triageIcon(item.key)}
-              label={item.label}
-              keyHint={item.keyHint}
-              active={item.active}
-              disabled={item.disabled}
-              onSelect={() => selectTriage(item)}
-            />
-          ))}
+            <MenuItem icon={Trash2} label="Trash email" keyHint="E" onSelect={() => { closeMenu(); onAction("trash"); }} />
+          </>}
         </MenuPanel>
       )}
-
-      {snoozeOpen && (
-        <SnoozePicker
-          anchorRef={snoozeAnchorRef}
-          onSelect={(untilTs) => onAction("snooze", untilTs)}
-          onClose={closeSnooze}
-        />
-      )}
+      {snoozeOpen && <SnoozePicker anchorRef={snoozeAnchorRef} onSelect={(untilTs) => onAction("snooze", untilTs)} onClose={closeSnooze} />}
     </div>
   );
 }

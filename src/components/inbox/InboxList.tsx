@@ -1,27 +1,38 @@
 import { useState, useMemo, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
-import type { MouseEventHandler, RefObject } from "react";
+import type { MouseEventHandler, CSSProperties } from "react";
 import {
-  Mail, Search, CheckCheck, RefreshCw,
-  X,
+  Inbox, SearchX, CheckCheck, RefreshCw,
 } from "lucide-react";
-import { Kbd, IconBtn } from "./primitives";
+
 import EmailRow from "./EmailRow";
 import InboxRowTransition from "./InboxRowTransition";
-import EmptyStateSplash from "../shared/EmptyStateSplash";
+import InboxEmptyState from "./InboxEmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import InboxSearchFlagChips from "./InboxSearchFlagChips";
-import InboxLaneFilterBar from "./InboxLaneFilterBar";
+
+import { LANE } from "../../lib/shell-helpers";
 import LaneSection from "./LaneSection";
-import DesktopSnapshotNavigator from "./DesktopSnapshotNavigator";
+
 import type { InboxAccount, InboxEmailLike, InboxId } from "./inboxTypes";
-import type { InboxSnapshotNavigation } from "./inboxViewTypes";
+
+
+const LANE_DESCRIPTIONS: Record<string, string> = {
+  __all: "All inbox lanes, including unfinished mail carried over from earlier snapshots.",
+  needs_attention: "Mail that needs a reply, decision, or action, including unfinished mail carried over.",
+  action: "Mail that needs a reply, decision, or action, including unfinished mail carried over.",
+  fyi: "Updates worth reading, with no action needed.",
+  noise: "Low-priority mail you can review or dismiss.",
+  queued: "New mail waiting for automatic triage.",
+  catch_up: "Unread FYI from the previous snapshot, kept as read-only context.",
+  untriaged_read: "Read mail that skipped automatic triage. Triage read arrivals in Settings applies to future mail; previously skipped mail stays here.",
+  handled: "Mail you marked done. Reopen it to restore its previous lane.",
+  snoozed: "Mail deferred until a chosen time. It returns to the Inbox when ready.",
+};
 
 type CollapsedLanes = Record<string, boolean | undefined>;
 type GroupedEmails = Record<string, InboxEmailLike[]> & {
   pinned: InboxEmailLike[];
   queued: InboxEmailLike[];
-  carryover: InboxEmailLike[];
   needs_attention: InboxEmailLike[];
   action: InboxEmailLike[];
   catch_up: InboxEmailLike[];
@@ -33,7 +44,7 @@ type GroupedEmails = Record<string, InboxEmailLike[]> & {
 
 function createGroupedEmails(): GroupedEmails {
   return {
-    pinned: [], queued: [], carryover: [], needs_attention: [],
+    pinned: [], queued: [], needs_attention: [],
     action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [],
   };
 }
@@ -98,10 +109,11 @@ function InboxSearchSkeletonRows() {
 }
 
 export default function InboxList({
+  collection = "inbox", snoozedLoading = false, snoozedError = null,
   accent, nowTick, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
-  searchQuery, onSearchChange, onMarkAllRead, onRefresh,
-  totalCount, unreadCount, noiseUnreadCount = 0, searchRef,
+  searchQuery, onClearSearch, onShowAllMail, onMarkAllRead, onRefresh,
+  totalCount, unreadCount, noiseUnreadCount = 0,
   liveEmailsLoading = false,
   indexedSearchActive = false,
   indexedSearchLoading = false,
@@ -109,16 +121,14 @@ export default function InboxList({
   indexedSearchTotal = null,
   indexedSearchHasMore = false,
   onLoadMoreSearch = () => {},
-  onAskAlfred = () => {},
   activeSnapshotMode = false,
-  processingCount = 0,
   activeSnapshotError = null,
   lane = "__all",
-  laneCounts = {},
-  onLaneChange = () => {},
-  snapshotNavigation = null,
   readOnly = false,
 }: {
+  collection?: "inbox" | "snoozed";
+  snoozedLoading?: boolean;
+  snoozedError?: string | null;
   accent: string;
   nowTick?: number;
   emails: InboxEmailLike[];
@@ -129,13 +139,13 @@ export default function InboxList({
   layout: string;
   showPreview: boolean;
   searchQuery: string;
-  onSearchChange: (query: string) => void;
+  onClearSearch: () => void;
+  onShowAllMail: () => void;
   onMarkAllRead: MouseEventHandler<HTMLButtonElement>;
   onRefresh: MouseEventHandler<HTMLButtonElement>;
   totalCount: number;
   unreadCount: number;
   noiseUnreadCount?: number;
-  searchRef: RefObject<HTMLInputElement | null> | null;
   liveEmailsLoading?: boolean;
   indexedSearchActive?: boolean;
   indexedSearchLoading?: boolean;
@@ -143,14 +153,9 @@ export default function InboxList({
   indexedSearchTotal?: number | null;
   indexedSearchHasMore?: boolean;
   onLoadMoreSearch?: MouseEventHandler<HTMLButtonElement>;
-  onAskAlfred?: (query: string) => void;
   activeSnapshotMode?: boolean;
-  processingCount?: number;
   activeSnapshotError?: string | null;
   lane?: string;
-  laneCounts?: Record<string, number | undefined>;
-  onLaneChange?: (lane: string) => void;
-  snapshotNavigation?: InboxSnapshotNavigation | null;
   readOnly?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<CollapsedLanes>(() => (activeSnapshotMode ? { handled: true, untriaged_read: true } : {}));
@@ -189,16 +194,17 @@ export default function InboxList({
         <EmailRow
           email={email}
           account={accountsById[accountKey]}
-          selected={selectedId === email.id}
+          selected={selectedId === (email.id || email.uid)}
           onOpen={onOpen}
           density={density}
           showPreview={showPreview}
           accent={accent}
           nowTick={nowTick}
+          showLaneTag={!!email._pinned || !!email._snoozed || indexedSearchActive}
         />
       </InboxRowTransition>
     );
-  })}</AnimatePresence>, [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick]);
+  })}</AnimatePresence>, [accountsById, selectedId, onOpen, density, showPreview, accent, nowTick, indexedSearchActive]);
 
   return (
     <div
@@ -209,103 +215,19 @@ export default function InboxList({
         minHeight: 0,
       }}
     >
-      {activeSnapshotMode && (
-        <DesktopSnapshotNavigator
-          navigation={snapshotNavigation}
-          liveLoading={liveEmailsLoading}
-          processingCount={processingCount}
-          readOnly={readOnly}
-        />
-      )}
-      <div
-        style={{
-          padding: "12px 14px", display: "flex", alignItems: "center", gap: 10,
-          borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            flex: 1, display: "flex", alignItems: "center", gap: 8,
-            padding: "7px 10px", borderRadius: 8,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
-          <Search size={12} color="rgba(205,214,244,0.4)" />
-          <input
-            ref={searchRef}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                onAskAlfred(searchQuery);
-              } else if (e.key === "Enter") {
-                e.preventDefault();
-                e.currentTarget.blur();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                if (searchQuery) onSearchChange("");
-                e.currentTarget.blur();
-              }
-            }}
-            aria-label="Search indexed mail"
-            placeholder="Search indexed mail"
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
-            style={{
-              flex: 1, background: "transparent", border: "none", outline: "none",
-              fontSize: 12, color: "var(--sp-text)", fontFamily: "inherit",
-            }}
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              onClick={() => onSearchChange("")}
-              title="Clear search"
-              style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 18, height: 18, padding: 0,
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 4, cursor: "pointer",
-                color: "rgba(205,214,244,0.7)", fontFamily: "inherit",
-                transition: "background 120ms, border-color 120ms, color 120ms",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "color-mix(in srgb, var(--sp-rose) 14%, transparent)";
-                e.currentTarget.style.borderColor = "color-mix(in srgb, var(--sp-rose) 32%, transparent)";
-                e.currentTarget.style.color = "var(--sp-rose)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-                e.currentTarget.style.color = "rgba(205,214,244,0.7)";
-              }}
-            >
-              <X size={10} />
-            </button>
-          ) : (
-            <Kbd>⌘F</Kbd>
-          )}
+      <header className="inbox-a-queue-heading" data-filtered={!indexedSearchActive && lane !== "__all" && collection !== "snoozed"} style={{ "--inbox-lane-color": LANE[lane]?.color || accent } as CSSProperties}>
+        <div className="inbox-a-queue-title">
+          <h2>{indexedSearchActive ? "Search results" : collection === "snoozed" ? "Snoozed" : lane === "__all" ? "All mail" : LANE[lane]?.label || "Inbox"}</h2>
+          <span className="inbox-a-queue-total">{totalCount}</span>
+          {!readOnly && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={onMarkAllRead} aria-label="Mark all read" title="Mark all read" disabled={unreadCount === 0}><CheckCheck size={14} /></button>}
+          {!readOnly && <button className="inbox-a-control inbox-a-icon-control" type="button" onClick={onRefresh} aria-label="Sync now" title="Sync now"><RefreshCw size={13} /></button>}
         </div>
-        <InboxSearchFlagChips
-          query={searchQuery}
-          onChange={onSearchChange}
-          accent={accent}
-        />
-        {!readOnly && (
-          <IconBtn
-            onClick={onMarkAllRead}
-            title="Mark all read"
-            tinted={unreadCount > 0}
-            accent={accent}
-          >
-            <CheckCheck size={11} />
-          </IconBtn>
-        )}
-        {!readOnly && <IconBtn onClick={onRefresh} title="Sync now"><RefreshCw size={11} /></IconBtn>}
-      </div>
-
+        <p>{indexedSearchActive ? "All accounts · all indexed dates" : <>{readOnly && "Historical snapshot · read only. "}{LANE_DESCRIPTIONS[collection === "snoozed" ? "snoozed" : lane] || LANE_DESCRIPTIONS.__all}</>}</p>
+      </header>
+      {collection === "snoozed" && !indexedSearchActive && (snoozedError || snoozedLoading) && <div role="status" style={{ padding: "8px 16px", fontSize: 12, color: "#a6adc8" }}>
+        {snoozedError ? <>{snoozedError} <button className="inbox-a-control" type="button" onClick={onRefresh}>Retry</button></>
+          : snoozedLoading ? "Loading snoozed mail…" : emails.length === 0 ? "No snoozed mail in this view." : "Messages stay here until they return successfully."}
+      </div>}
 
       {indexedSearchActive ? (
         <div
@@ -324,16 +246,9 @@ export default function InboxList({
             {`of ${indexedSearchTotal ?? totalCount} indexed results`}
           </span>
         </div>
-      ) : (
-        <InboxLaneFilterBar
-          accent={accent}
-          activeLane={lane}
-          counts={laneCounts}
-          onChange={onLaneChange}
-        />
-      )}
+      ) : null}
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+      <div className="inbox-a-mail-list" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         {indexedSearchError && (
           <div
             style={{
@@ -378,7 +293,7 @@ export default function InboxList({
                 renderRows={renderRows}
               />
             )}
-            {["queued", "carryover", "needs_attention", "catch_up", "fyi", "handled", "untriaged_read", "noise"].map((k) => (
+            {["needs_attention", "fyi", "noise", "handled", "queued", "catch_up", "untriaged_read"].map((k) => (
               grouped[k]!.length > 0 && (
                 <LaneSection
                   key={k}
@@ -402,6 +317,7 @@ export default function InboxList({
                 type="button"
                 onClick={onLoadMoreSearch}
                 disabled={indexedSearchLoading}
+                className="inbox-a-control sp-focus-ring"
                 style={{
                   margin: "10px 12px 16px",
                   padding: "8px 12px",
@@ -433,36 +349,15 @@ export default function InboxList({
             )}
           </div>
         )}
-        {emails.length === 0 && !showSkeletonRows && !showSearchSkeletonRows && (
-          <div
-            style={{
-              padding: "20px 20px 0",
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "flex-start",
-            }}
-          >
-            <div
-              data-testid="inbox-list-empty-state-card"
-              style={{
-                width: "100%",
-                aspectRatio: "1 / 1",
-              }}
-            >
-              <EmptyStateSplash
-                icon={<Mail size={26} strokeWidth={1.8} />}
-                eyebrow="Inbox"
-                title={indexedSearchActive ? "No indexed mail matches" : searchQuery ? "No emails match this view" : "No emails available"}
-                message={indexedSearchActive
-                  ? "Try another sender, subject, or phrase. Search covers mail indexed from your inboxes — mail archived before it was ever indexed isn't included."
-                  : searchQuery
-                  ? "Try a sender, subject word, or another account. Search covers mail indexed from your inboxes."
-                  : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
-                compact
-                minHeight="100%"
-              />
-            </div>
-          </div>
+        {emails.length === 0 && !showSkeletonRows && !showSearchSkeletonRows && !snoozedLoading && !snoozedError && !indexedSearchError && !activeSnapshotError && (
+          <InboxEmptyState
+            icon={indexedSearchActive || searchQuery ? <SearchX size={26} strokeWidth={1.3} /> : <Inbox size={26} strokeWidth={1.3} />}
+            title={indexedSearchActive || searchQuery ? "No matching emails" : collection === "snoozed" ? "Nothing snoozed" : lane === "needs_attention" ? "Nothing needs attention" : lane === "handled" ? "Nothing handled yet" : lane !== "__all" ? "No mail in this lane" : "No mail in this view"}
+            message={indexedSearchActive || searchQuery ? "Try a different sender, subject, or phrase." : collection === "snoozed" ? "Emails you snooze will wait here until their return time." : lane === "handled" ? "Emails you mark handled will appear here." : "New mail will appear here when it arrives."}
+            action={indexedSearchActive || searchQuery
+              ? { label: "Clear search", onClick: onClearSearch }
+              : lane !== "__all" || collection === "snoozed" ? { label: "View all mail", onClick: onShowAllMail } : undefined}
+          />
         )}
       </div>
     </div>

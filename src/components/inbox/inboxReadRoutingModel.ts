@@ -13,7 +13,7 @@ export const READ_SCOPE = {
 export type ReadScope = typeof READ_SCOPE[keyof typeof READ_SCOPE];
 
 export function resolveReadScope(email: InboxEmailLike | null | undefined): ReadScope {
-  if (email?._live) return READ_SCOPE.LIVE;
+  if (email?._live || email?._snoozed) return READ_SCOPE.LIVE;
   if (email?._activeSnapshot && email?.uid) return READ_SCOPE.SNAPSHOT;
   return READ_SCOPE.INDEXED;
 }
@@ -24,7 +24,7 @@ export function resolveReadScope(email: InboxEmailLike | null | undefined): Read
 // search read state). Live and snapshot overrides are idempotent map writes, so
 // collapsing the original two-pass loop into one preserves the resulting state.
 export function planMarkAllVisibleRead(visibleEmails: InboxEmailLike[] = []) {
-  const unread = visibleEmails.filter((email) => !email.read);
+  const unread = visibleEmails.filter((email) => !email.read && !email._snoozedUnavailable);
   const overrideUids: string[] = [];
   for (const email of unread) {
     const scope = resolveReadScope(email);

@@ -5,6 +5,7 @@ import { DashboardProvider } from "../../context/DashboardContext";
 import InboxView from "./InboxView";
 import type { InboxActiveSnapshotController } from "./InboxView";
 import {
+  searchEmails,
   settleArrivalGrace,
 } from "../../api";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures";
@@ -19,6 +20,10 @@ vi.mock("../../api", async () => {
     ...actual,
     getEmailBody: vi.fn().mockResolvedValue({ body: "Loaded email body" }),
     peekEmailBody: vi.fn(() => null),
+    fetchSnoozedEmails: vi.fn().mockResolvedValue([]),
+    getTodoistProjects: vi.fn().mockResolvedValue([]),
+    getTodoistLabels: vi.fn().mockResolvedValue([]),
+    searchEmails: vi.fn().mockResolvedValue({ results: [], total: 0 }),
     markEmailAsRead: vi.fn().mockResolvedValue({}),
     markEmailAsUnread: vi.fn().mockResolvedValue({}),
     trashEmail: vi.fn().mockResolvedValue({}),
@@ -99,7 +104,8 @@ function makeSessionSnapshot(includeAction = true) {
   });
 }
 
-function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh = vi.fn() }: {
+function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh = vi.fn(), isMobile = true }: {
+  isMobile?: boolean;
   initialSelectedId?: InboxSelectionId;
   activeSnapshotRefresh?: InboxActiveSnapshotController["refresh"];
 }) {
@@ -164,7 +170,7 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
           seedSelectedId={seedSelectedId}
           sessionState={sessionState}
           onSessionStateChange={setSessionState}
-          isMobile
+          isMobile={isMobile}
         />
       ) : (
         <div data-testid="dashboard-placeholder">Dashboard</div>
@@ -174,6 +180,26 @@ function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh =
 }
 
 describe("InboxView session state", () => {
+  it("preserves an edited reminder while search loads, returns no matches, and clears", async () => {
+    let finishSearch!: (value: Awaited<ReturnType<typeof searchEmails>>) => void;
+    vi.mocked(searchEmails).mockReturnValueOnce(new Promise((resolve) => { finishSearch = resolve; }));
+    render(<InboxSessionHarness initialSelectedId="email-action" isMobile={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remind me" }));
+    const editedTitle = "Review the revised budget with finance";
+    fireEvent.change(screen.getByLabelText("Task title"), { target: { value: editedTitle } });
+    const searchInput = screen.getByLabelText("Search indexed mail");
+    fireEvent.change(searchInput, { target: { value: "no matching mail" } });
+
+    expect((screen.getByLabelText("Task title") as HTMLInputElement).value).toBe(editedTitle);
+    await act(async () => { finishSearch({ results: [], accounts: [], total: 0, offset: 0, has_more: false, capped: false, query: "no matching mail" }); });
+    await screen.findByText("No matching emails");
+    expect((screen.getByLabelText("Task title") as HTMLInputElement).value).toBe(editedTitle);
+
+    fireEvent.change(searchInput, { target: { value: "" } });
+    expect((screen.getByLabelText("Task title") as HTMLInputElement).value).toBe(editedTitle);
+  });
+
   it("refreshes the active snapshot after Inbox exit but not while a calendar modal is open", async () => {
     const activeSnapshotRefresh = vi.fn().mockResolvedValue({});
     render(<InboxSessionHarness activeSnapshotRefresh={activeSnapshotRefresh} />);
@@ -266,7 +292,8 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /trash email/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more email actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /trash email/i }));
     const searchInput = screen.getByLabelText("Search indexed mail");
     searchInput.focus();
     fireEvent.keyDown(searchInput, { key: "z", metaKey: true });

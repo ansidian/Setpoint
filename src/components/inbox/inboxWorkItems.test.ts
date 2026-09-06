@@ -93,6 +93,39 @@ describe("inbox work items", () => {
     ]);
   });
 
+  it("retains assigned lanes and carryover provenance independently of read state", () => {
+    const snapshot = makeActiveSnapshot({
+      lanes: {
+        needs_attention: [],
+        fyi: [],
+        noise: [],
+        handled: [{
+          id: 23, uid: "handled-carryover", account_id: "gmail-work",
+          lane: "needs_attention", is_carryover: true,
+          handled_at: "2026-05-05T12:00:00.000Z",
+        }],
+      },
+      carryover: [
+        { id: 21, uid: "carried-work", account_id: "gmail-work", lane: "needs_attention", read: false },
+        { id: 22, uid: "carried-queue", account_id: "gmail-work", lane: "queued", source: "arrival_grace", read: false },
+      ],
+    });
+
+    expect(collectActiveSnapshotEmails(snapshot, { "carried-work": true })).toEqual([
+      expect.objectContaining({
+        uid: "carried-work", _lane: "needs_attention", lane: "needs_attention",
+        _carryover: true, _activeSnapshot: true, snapshot_item_id: 21, read: true,
+      }),
+      expect.objectContaining({
+        uid: "carried-queue", _lane: "queued", lane: "queued",
+        _carryover: true, _arrivalGraceQueued: true, read: false,
+      }),
+      expect.objectContaining({
+        uid: "handled-carryover", _lane: "handled", lane: "needs_attention", _carryover: true,
+      }),
+    ]);
+  });
+
   it("projects resurfaced snapshot rows in their stored lane", () => {
     const snapshot = makeActiveSnapshot({
       lanes: {

@@ -139,7 +139,7 @@ export function collectActiveSnapshotEmails(
         account_email: account.email,
         account_color: account.color,
         account_icon: account.icon,
-        _carryover: lane === "carryover",
+        _carryover: !!item._snapshotCarryover || !!item.is_carryover,
         _catchUp: lane === "catch_up",
         _arrivalGraceQueued: arrivalGraceQueued,
         _untriagedRead: untriagedRead,

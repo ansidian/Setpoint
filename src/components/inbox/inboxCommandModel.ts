@@ -17,7 +17,7 @@ export function buildTrashCommand(
   email: InboxEmailLike | null | undefined,
   { readOnly = false }: { readOnly?: boolean } = {},
 ): TrashCommand {
-  if (!email || readOnly || isCatchUpEmail(email)) {
+  if (!email || readOnly || email._snoozed || isCatchUpEmail(email)) {
     return { allowed: false };
   }
   const id = email.id;

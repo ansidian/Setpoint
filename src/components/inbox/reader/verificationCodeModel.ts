@@ -31,13 +31,14 @@ export function resolveVerificationCodeAction(
   } = {},
 ) {
   const trash = buildTrashCommand(email, { readOnly });
+  const copyOnly = !!email?._snoozed && !email._snoozedUnavailable;
   const visible = isVerificationCodeFresh(email, nowMs)
     && !email?._providerRemoved
-    && trash.allowed
-    && trash.uid != null;
+    && (copyOnly || (trash.allowed && trash.uid != null));
 
   return {
     visible,
+    copyOnly,
     canActivate: visible && !copying,
     code: visible ? email?.verification_code?.code || null : null,
     activeUntilMs: visible ? verificationCodeActiveUntilMs(email) : null,

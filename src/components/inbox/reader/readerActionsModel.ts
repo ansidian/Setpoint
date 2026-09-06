@@ -26,8 +26,8 @@ export function resolveReaderActions(
   const isQueuedSnapshot = email?._lane === "queued";
   const isUntriagedReadSnapshot = email?._lane === "untriaged_read";
 
-  const showMutableActions = !readOnly;
-  const showDestructiveActions = showMutableActions && !catchUp;
+  const showMutableActions = !readOnly && !email?._snoozedUnavailable;
+  const showDestructiveActions = showMutableActions && !catchUp && !email?._snoozed;
   const billToggleEligible = !!(
     email?._untriaged || email?.hasBill || isQueuedSnapshot || isUntriagedReadSnapshot
   );
@@ -61,7 +61,7 @@ export function resolveReaderActions(
     canMoveToNoise: snapshotEligible && canMoveSnapshotEmailToLane(email, "noise", readOnly),
     // Pin is an overlay write, deliberately exempt from readOnly and catch-up
     // gating — pinning from frozen-snapshot browsing is the feature.
-    canPin: !!email,
+    canPin: !!email && !email._snoozedUnavailable,
     pinned: !!email?._pinned,
   };
 }
@@ -73,7 +73,7 @@ export type ReaderMoveDestination = {
 };
 
 export type ReaderTriageItem = {
-  key: "snapshot-reopen" | "snapshot-handled" | "snapshot-dismiss" | "snooze" | "pin-toggle" | "toggle-read";
+  key: "snapshot-reopen" | "snapshot-handled" | "snapshot-dismiss" | "snooze" | "pin-toggle" | "toggle-read" | "unsnooze";
   label: string;
   keyHint: "H" | "D" | "S" | "P" | null;
   section: "lifecycle" | "state";
@@ -100,6 +100,12 @@ export function resolveReaderActionGroups(
     moveDestinations.push({ lane: "noise", label: "Noise", keyHint: "N" });
   }
 
+  if (email._snoozed) {
+    triageItems.push({
+      key: "unsnooze", label: email._snoozedReturning ? "Returning…" : "Return to Inbox",
+      keyHint: null, section: "lifecycle", disabled: !!email._snoozedUnavailable || !!email._snoozedReturning, active: false,
+    });
+  }
   if (actions.canReopen) {
     triageItems.push({
       key: "snapshot-reopen",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
+import { applyEmailReadingPresentation } from "./emailReadingPresentation";
 import { shouldRelayReaderKey } from "./readerHotkeyRelay";
 import { hasRemoteImageRefs } from "./remoteContentDetection";
 import {
@@ -15,16 +16,19 @@ export interface EmailIframeRemoteContentTrust {
   onTrustSender?: (() => Promise<void>) | null;
 }
 
-// Sanitized iframe: desktop scrolls inside the frame; mobile measures its
-// content so the message and metadata share the reader scroll container.
-export default function EmailIframe({ html, isMobile = false, messageKey, remoteContentTrust }: {
+// Original desktop formatting scrolls inside the frame. Reading view and
+// mobile measure content so the message shares the reader scroll container.
+export default function EmailIframe({ html, isMobile = false, presentation = "original", messageKey, remoteContentTrust }: {
   html: string;
   isMobile?: boolean;
+  presentation?: "reading" | "original";
   messageKey?: string | null;
   remoteContentTrust?: EmailIframeRemoteContentTrust;
 }) {
+  const expandToContent = isMobile || presentation === "reading";
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const sizingCleanupRef = useRef<(() => void) | null>(null);
+  const readingCleanupRef = useRef<(() => void) | null>(null);
   const hotkeyDocumentRef = useRef<Document | null>(null);
 
   // Sanitize then wrap in a full document so the email's own styles apply.
@@ -62,6 +66,8 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
   const showTrustConfirmation = hasRemoteContent && shownOnce && savedContentKey !== contentKey && canTrustSender;
 
   const policy = remoteContentAllowed ? REMOTE_IMAGES_ALLOWED_EMAIL_CSP_POLICY : STRICT_EMAIL_CSP_POLICY;
+  // Presentation deliberately stays out of srcDoc: toggling styles must keep
+  // the loaded document and its already-fetched images alive.
   const srcDoc = useMemo(
     () => withEmailContentSecurityPolicy(isMobile ? withMobileViewport(sanitized) : sanitized, policy),
     [isMobile, sanitized, policy],
@@ -117,8 +123,17 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
       if (!doc) return;
       sizingCleanupRef.current?.();
       sizingCleanupRef.current = null;
-      if (isMobile && doc.body) {
+      readingCleanupRef.current?.();
+      readingCleanupRef.current = presentation === "reading" ? applyEmailReadingPresentation(doc) : null;
+      if (!expandToContent) iframeRef.current?.style.removeProperty("height");
+      if (expandToContent && doc.body) {
         const frame = iframeRef.current!;
+        // Keep exact source inline styles so leaving Reading view reverses all
+        // sizing changes, including properties that originally were absent.
+        const sourceStyles = new Map<HTMLElement, string | null>([
+          [doc.documentElement, doc.documentElement.getAttribute("style")],
+          [doc.body, doc.body.getAttribute("style")],
+        ]);
         // Measure natural body height, not the document scrollHeight (which
         // includes the iframe viewport and prevents shrinking on reflow).
         doc.documentElement.style.setProperty("height", "auto", "important");
@@ -132,8 +147,9 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
             // Fixed-width newsletter tables can otherwise force the entire
             // document wider than a phone. Relax only oversized tables, from
             // the innermost layout outward, retaining small tables/buttons.
-            [...doc.querySelectorAll("table")].reverse().forEach((table) => {
+            if (isMobile) [...doc.querySelectorAll("table")].reverse().forEach((table) => {
               if (table.getBoundingClientRect().width > frame.clientWidth) {
+                if (!sourceStyles.has(table)) sourceStyles.set(table, table.getAttribute("style"));
                 table.style.setProperty("width", "100%", "important");
                 table.style.setProperty("min-width", "0", "important");
               }
@@ -165,6 +181,10 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
           cancelAnimationFrame(pendingFrame);
           doc.removeEventListener("load", measure, true);
           window.removeEventListener("resize", measure);
+          sourceStyles.forEach((style, element) => {
+            if (style === null) element.removeAttribute("style");
+            else element.setAttribute("style", style);
+          });
         };
       }
       doc.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
@@ -180,7 +200,7 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
     } catch {
       // contentDocument may be inaccessible in edge cases; silently skip
     }
-  }, [isMobile, relayReaderHotkey]);
+  }, [expandToContent, isMobile, presentation, relayReaderHotkey]);
 
   useEffect(() => {
     // React Activity disconnects effects while a keep-alive tab is hidden and
@@ -190,12 +210,15 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
     handleLoad();
     return () => {
       sizingCleanupRef.current?.();
+      sizingCleanupRef.current = null;
+      readingCleanupRef.current?.();
+      readingCleanupRef.current = null;
       hotkeyDocumentRef.current?.removeEventListener("keydown", relayReaderHotkey);
     };
   }, [handleLoad, relayReaderHotkey]);
 
   return (
-    <div className={isMobile ? "w-full" : "w-full h-full flex flex-col min-h-0"}>
+    <div className={expandToContent ? "w-full" : "w-full h-full flex flex-col min-h-0"}>
       {isMobile && showBlockedBanner && (
         <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 text-xs text-slate-600">
           <span>Images blocked</span>
@@ -283,8 +306,8 @@ export default function EmailIframe({ html, isMobile = false, messageKey, remote
       )}
       <iframe
         ref={iframeRef}
-        className={isMobile ? "block w-full border-none bg-white" : "w-full flex-1 border-none rounded-default bg-white"}
-        style={isMobile ? { minHeight: 1 } : undefined}
+        className={expandToContent ? "block w-full border-none bg-white" : "w-full flex-1 border-none rounded-default bg-white"}
+        style={expandToContent ? { minHeight: 1 } : undefined}
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         srcDoc={srcDoc}
         title="Email content"

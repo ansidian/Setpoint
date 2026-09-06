@@ -35,7 +35,6 @@ const happyDomTypescriptTests = [
   "src/components/calendar/views/deadlines/useDeadlineQuickActions.test.ts",
   "src/components/inbox/inboxHotkeys.test.ts",
   "src/components/inbox/reader/useEmailBody.test.ts",
-  "src/components/inbox/sidebarCompactStore.test.ts",
   "src/components/inbox/useInboxActionDispatch.test.ts",
   "src/components/inbox/useInboxActionDispatch.pin.test.ts",
   "src/components/inbox/useInboxActionDispatch.read.test.ts",

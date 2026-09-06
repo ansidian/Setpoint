@@ -295,8 +295,8 @@ describe("InboxView snapshot mutation recovery", () => {
     });
     renderInbox({ activeSnapshot: makeSnapshotController(snapshot) });
 
-    const actions = await openActions("Handled snapshot action");
-    fireEvent.click(within(actions).getByRole("button", { name: "Reopen" }));
+    fireEvent.click(await screen.findByText("Handled snapshot action"));
+    fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
     // test-architecture: allow-boundary-interaction -- Reopen mutates the durable handled item through the snapshot provider boundary.
     await waitFor(() => expect(api.reopenSnapshotItem).toHaveBeenCalledWith(11));
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));

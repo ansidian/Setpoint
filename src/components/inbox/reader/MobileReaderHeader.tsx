@@ -1,3 +1,4 @@
+import { formatSnoozeTime } from "../inboxSnoozedModel";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { timeClock, timeSince } from "../helpers";
@@ -15,7 +16,7 @@ export default function MobileReaderHeader({
   triageSummary?: string | null;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(true);
   const senderAddress = email.from_address || email.fromEmail || email.from_email;
   return (
     <header className="mobile-reader-message-header">
@@ -42,6 +43,7 @@ export default function MobileReaderHeader({
           {isUntriagedReadSnapshot && <MobileStatusPill color="#a6adc8" label="Read" subtle />}
         </div>
       )}
+      {email._snoozedUntil && <p className="mobile-reader-summary" style={{ color: accent }}>Returns {formatSnoozeTime(email._snoozedUntil)}{email._snoozedUnavailable && " · Source unavailable; deferred state is kept."}</p>}
       {triageSummary && (
         <>
           <button
@@ -51,7 +53,7 @@ export default function MobileReaderHeader({
             onClick={() => setSummaryOpen((value) => !value)}
             style={{ color: accent }}
           >
-            <span>AI summary</span>
+            <span>{email._lane === "needs_attention" || email._lane === "carryover" ? "What needs you" : "At a glance"}</span>
             <ChevronDown size={14} className={summaryOpen ? "is-open" : undefined} />
           </button>
           <AnimatedCollapse open={summaryOpen}>

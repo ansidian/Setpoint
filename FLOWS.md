@@ -103,7 +103,7 @@ Email evidence is normalized before indexing by `server/email/email-evidence.ts`
 3. `server/snapshots/snapshot-triage-attachment.ts:attachArrivalGraceEmailToActiveSnapshot` — new email lands in the queued lane (see flow 2)
 4. `server/triage/triage-finalize-store.ts:attachToActiveSnapshot` — triage decisions land in their lanes (see flow 2)
 5. `server/snapshots/snapshot-snooze-lifecycle.ts:deferPendingTriageForSnooze` — snoozing hides the item and reschedules its triage job to wake time
-6. `server/snapshots/snooze-waker.ts:wakeDueSnoozes` — 5-min cron flips snoozed → resurfaced, re-attaches to the active snapshot
+6. `server/snapshots/snooze-waker.ts:wakeDueSnoozes` — 5-min cron restores the active snapshot through snooze-restoration.ts before flipping snoozed → resurfaced
 7. `server/snapshots/snapshot-snooze-lifecycle.ts:attachResurfacedSnoozeToActiveSnapshot` — upserts the resurfaced item, lane normalized by `server/snapshots/snapshot-state-machine.ts:resurfacedTriageLane`
 8. `server/snapshots/snapshot-item-mutations.ts:moveSnapshotItemLane` — user lane transitions (plus handled/reopen mutations) via the snapshot item routes
 9. `server/snapshots/snapshot-service.ts:getActiveSnapshotView` — loads items, derives lanes and read-only state, and supplies the view clock for 30-minute verification-code freshness (frozen snapshots are read-only)
@@ -111,9 +111,11 @@ Email evidence is normalized before indexing by `server/email/email-evidence.ts`
 11. `server/dashboard/current-events.ts:publishCurrentDashboardEvent` — lifecycle changes publish dashboard events
 12. `src/hooks/useCurrentDashboard.ts:handleChanged` — SSE-triggered refetch embeds the fresh snapshot view in the dashboard payload
 13. `src/hooks/useActiveSnapshot.ts:useActiveSnapshot` — standalone fallback fetch; 15s poll while processing is active
-14. `src/components/inbox/InboxView.tsx:InboxView` — renders snapshot lanes; read-only when frozen
+14. `src/components/inbox/InboxView.tsx:InboxView` — renders snapshot lanes; read-only when frozen. Inbox projects carryover into its stored Needs Attention/Queued lane with a provenance label, keeping persistence and carry-forward eligibility unchanged. Catch-up remains separate; populated Untriaged Read remains accessible after settings changes.
 
 **Caches:** single-flight sync map in `server/snapshots/snapshot-service.ts` (dedupes concurrent active-snapshot syncs); `ea_current_data_cache` rows in `server/dashboard/current-service.ts` (other providers; the active snapshot itself is fetched fresh); frontend snapshot state in `src/hooks/useActiveSnapshot.ts` and `src/hooks/useCurrentDashboard.ts`, overwritten on each refetch.
+
+**Deferred browsing:** GET /api/briefing/email/snoozed → email-service → snoozed-emails hydrates owner-scoped index/triage rows with captured-snapshot fallback. useSnoozedEmails refreshes on entry/focus and polls (30 seconds while browsing, 60 otherwise). Persisted snoozed status owns membership, including overdue retry rows. Browsing never creates snapshot membership; read state uses UID overrides. DELETE /email/:uid/snooze uses the same durable restoration as scheduled wake before settling deferred state. Missing-source early return fails without deleting the snooze.
 
 **SSE:** `dashboard-current-changed` (reasons incl. `email_triage_queued`, `email_triage_finalized`, `snoozed_pending_deferred`) — same emitter/stream/consumer chain as flow 2. Supplemented by polling: `src/hooks/useActiveSnapshot.ts` every 15s while processing, `src/hooks/useCurrentDashboard.ts` short post-refresh polling.
 

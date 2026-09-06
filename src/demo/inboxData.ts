@@ -37,6 +37,7 @@ interface DemoSnapshotEmailInput {
   fromName: string;
   fromAddress: string;
   summary: string;
+  action?: string;
   day: Date;
   read?: boolean;
   category?: string;
@@ -60,6 +61,7 @@ function snapshotEmail({
   fromName,
   fromAddress,
   summary,
+  action = "",
   day,
   read = false,
   category = "work",
@@ -88,7 +90,7 @@ function snapshotEmail({
     from_name: fromName,
     from_address: fromAddress,
     summary,
-    action: lane === "needs_attention" ? "Review" : lane === "queued" ? "Classify" : "Read later",
+    action,
     date: atLocalIso(day, hour, minute),
     read,
     urgency,
@@ -148,12 +150,27 @@ function makeSnapshotFilters(lanes: DemoLanes, carryover: DemoSnapshotEmail[]) {
   };
 }
 
+const DEMO_BUDGET_BODY = `<!doctype html><html><head><style>
+body { margin: 24px; background: #fff; color: #263044; font-family: Georgia, serif; font-size: 15px; }
+.preheader { display: none; max-height: 0; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; } th, td { padding: 12px; border: 1px solid #dce0e8; text-align: left; }
+a { color: #3455a4; }
+</style></head><body>
+<div class="preheader">Hidden delivery preview — not part of the visible message.</div>
+<p>Hi Alex,</p>
+<p>Please review the <strong>fictional demo rollout budget</strong> before noon. The attached PDF is ready for your approval.</p>
+<table id="budget-details"><caption>Approval details</caption><thead><tr><th scope="col">Item</th><th scope="col">Next step</th></tr></thead><tbody><tr><td>Demo rollout budget</td><td>Review the attached PDF</td></tr><tr><td>Approval</td><td>Reply before noon</td></tr></tbody></table>
+<p><a href="#budget-details">Review the approval details</a></p>
+<blockquote><p>The content in this message is representative sample data only.</p></blockquote>
+<p>Thanks,<br>Morgan</p>
+</body></html>`;
+
 function makeEmailBodies(lanes: DemoLanes, carryover: DemoSnapshotEmail[]) {
   return Object.fromEntries(flattenSnapshotRows(lanes, carryover).map((row) => [
     row.uid,
     {
       uid: row.uid,
-      body: `This is a fictional demo email body for "${row.subject}". ${row.summary} The content is representative sample data only.`,
+      body: row.uid === "demo-email-budget" ? DEMO_BUDGET_BODY : `This is a fictional demo email body for "${row.subject}". ${row.summary} The content is representative sample data only.`,
       attachments: getDemoEmailAttachmentDescriptors(row.uid),
     },
   ]));
@@ -207,6 +224,7 @@ export function buildDemoInboxSeed(now: Date) {
         fromName: "Morgan Lee",
         fromAddress: "morgan@northstar.example",
         summary: "Morgan needs approval on the fictional demo rollout budget before noon.",
+      action: "Approve budget",
         day: today,
         category: "finance",
       }),
@@ -240,6 +258,7 @@ export function buildDemoInboxSeed(now: Date) {
         fromName: "PagerDuty",
         fromAddress: "alerts@pagerduty.example",
         summary: "A Gmail watch renewal warning needs acknowledgement before the provider window closes.",
+      action: "Review renewal warning",
         day: today,
         category: "engineering",
         escalationBadge: "Prod",
@@ -255,6 +274,7 @@ export function buildDemoInboxSeed(now: Date) {
         fromName: "Riley Park",
         fromAddress: "riley@northstar.example",
         summary: "Riley left a blocking review on the stale calendar-source retry copy.",
+      action: "Review retry copy",
         day: today,
         category: "engineering",
         receivedHour: 10,
@@ -269,6 +289,7 @@ export function buildDemoInboxSeed(now: Date) {
         fromName: "Morgan Lee",
         fromAddress: "morgan@northstar.example",
         summary: "Morgan needs a final call on read-only personal date marker behavior.",
+      action: "Decide marker behavior",
         day: today,
         category: "product",
         receivedHour: 11,
@@ -283,6 +304,7 @@ export function buildDemoInboxSeed(now: Date) {
         fromName: "Jamie Rivera",
         fromAddress: "jamie@talent.example",
         summary: "Jamie asked for availability and a concise dashboard architecture summary.",
+      action: "Share availability",
         day: today,
         category: "career",
         receivedHour: 12,
@@ -500,6 +522,7 @@ export function buildDemoInboxSeed(now: Date) {
       fromName: "Jordan Patel",
       fromAddress: "jordan@counsel.example",
       summary: "A carried-over review item from yesterday.",
+      action: "Review contract",
       day: yesterday,
       category: "legal",
     }),
@@ -512,6 +535,7 @@ export function buildDemoInboxSeed(now: Date) {
       fromName: "Nina Torres",
       fromAddress: "nina@northstar.example",
       summary: "Nina is waiting on a final approval for the retry runbook update.",
+      action: "Approve runbook",
       day: yesterday,
       category: "engineering",
     }),
@@ -553,6 +577,6 @@ export function buildDemoInboxSeed(now: Date) {
       { address: "jamie@talent.example", name: "Jamie Rivera", source: "manual" },
     ],
     emailBodies: makeEmailBodies(lanes, carryover),
-    snoozedEmails: {} as Record<string, { row: DemoSnapshotEmail; lane: DemoLaneKey | "carryover" | null }>,
+    snoozedEmails: {} as Record<string, { row: DemoSnapshotEmail; until_ts: number; lane: DemoLaneKey | "carryover" | null }>,
   };
 }

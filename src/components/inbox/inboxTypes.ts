@@ -57,6 +57,7 @@ export interface InboxEmailLike {
   read?: boolean;
   lane?: InboxLane;
   lane_at_snapshot?: InboxLane;
+  is_carryover?: boolean;
   category?: string | null;
   urgency?: string | null;
   urgentFlag?: { label?: string } | null;
@@ -87,6 +88,10 @@ export interface InboxEmailLike {
   _account?: InboxAccount;
   _lane?: InboxLane;
   _live?: boolean;
+  _snoozed?: boolean;
+  _snoozedUntil?: number;
+  _snoozedUnavailable?: boolean;
+  _snoozedReturning?: boolean;
   _activeSnapshot?: boolean;
   _indexedSearch?: boolean;
   _untriaged?: boolean;
@@ -124,11 +129,6 @@ export interface NormalizedInboxRow extends InboxEmailLike {
   _activeSnapshot: boolean;
   _resurfaced: boolean;
   _resurfacedAt: number | null;
-}
-
-export interface InboxChip {
-  key: string;
-  label?: string;
 }
 
 export type SnapshotOptimisticOverlay = {

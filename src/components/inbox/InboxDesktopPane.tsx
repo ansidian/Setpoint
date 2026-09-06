@@ -1,4 +1,6 @@
 import { memo, useState } from "react";
+import "./InboxDesktop.css";
+import InboxDesktopHeader from "./InboxDesktopHeader";
 import DigestStrip from "./DigestStrip";
 import Sidebar from "./Sidebar";
 import InboxList from "./InboxList";
@@ -9,6 +11,7 @@ import { isDemoMode } from "../../demo/config";
 
 function InboxDesktopPane({
   accent,
+  collection, setCollection, snoozedCount, snoozedLoading, snoozedError, refreshSnoozed,
   nowTick,
   briefingSummary,
   liveEmailsLoading = false,
@@ -42,7 +45,6 @@ function InboxDesktopPane({
   visibleEmails,
   laneCounts,
   chipCounts,
-  totalUnread,
   noiseUnreadCount,
   unreadInView,
   onAction,
@@ -67,6 +69,10 @@ function InboxDesktopPane({
     setWorkspaceDirty(false);
     onOpen(...args);
   };
+  const guardedCollection = (value: "inbox" | "snoozed") => {
+    if (!allowWorkspaceExit()) return;
+    setWorkspaceDirty(false); closeSelectedEmail(); setCollection(value);
+  };
   const guardedClose = () => {
     if (!allowWorkspaceExit()) return;
     setWorkspaceDirty(false);
@@ -74,12 +80,20 @@ function InboxDesktopPane({
   };
   const guardedSnapshotNavigation = snapshotNavigation ? {
     ...snapshotNavigation,
+    onReturnToCurrent: snapshotNavigation.onReturnToCurrent ? () => {
+      if (!allowWorkspaceExit()) return;
+      setWorkspaceDirty(false);
+      snapshotNavigation.onReturnToCurrent?.();
+    } : undefined,
     onNavigate: async (direction: "older" | "newer") => {
       if (!allowWorkspaceExit()) return;
       setWorkspaceDirty(false);
       await snapshotNavigation.onNavigate(direction);
     },
   } : null;
+  const selectedIndex = selectedEmail ? visibleEmails.findIndex((email) => (email.id || email.uid) === (selectedEmail.id || selectedEmail.uid)) : -1;
+  const previousEmail = selectedIndex > 0 ? visibleEmails[selectedIndex - 1] : undefined;
+  const nextEmail = selectedIndex >= 0 ? visibleEmails[selectedIndex + 1] : undefined;
   const selectedUid = selectedEmail?.uid || selectedEmail?.email_id || selectedEmail?.id;
   const attachSelectedEmail = !isDemoMode() && selectedEmail && selectedUid && onAttachEmailToAlfred
     ? () => onAttachEmailToAlfred({
@@ -100,6 +114,7 @@ function InboxDesktopPane({
   return (
     <div
       data-testid="inbox-desktop-view"
+      className="inbox-a-desktop"
       style={{
         position: "relative",
         display: "flex",
@@ -110,6 +125,17 @@ function InboxDesktopPane({
         color: "var(--sp-text)",
       }}
     >
+      <InboxDesktopHeader
+        accent={accent}
+        search={search}
+        onSearchChange={setSearch}
+        searchRef={searchRef}
+        onAskAlfred={onAskAlfred}
+        navigation={collection === "snoozed" ? null : guardedSnapshotNavigation}
+        readOnly={readOnly}
+        processingCount={processingCount}
+        liveLoading={liveEmailsLoading}
+      />
       {!activeSnapshotMode && (
         <DigestStrip
           accent={accent}
@@ -121,44 +147,26 @@ function InboxDesktopPane({
         />
       )}
 
-      <div style={{ flex: 1, display: "flex", minHeight: 0, padding: "14px 18px 18px", gap: 14 }}>
+      <div className="inbox-a-workspace">
         <Sidebar
-          accent={accent}
           accounts={emailAccounts}
           accountId={accountId}
-          setAccountId={setAccountId}
-          totalUnread={totalUnread}
+          onAccountChange={setAccountId}
+          accent={accent}
+          lane={lane}
+          laneCounts={chipCounts}
+          onLaneChange={(value) => { if (!allowWorkspaceExit()) return; setWorkspaceDirty(false); closeSelectedEmail(); setCollection("inbox"); setLane(value); }}
+          collection={collection} onCollectionChange={guardedCollection} snoozedCount={snoozedCount}
+          searchActive={indexedSearchActive}
           selectedEmail={selectedEmail}
           readOnly={readOnly}
         />
 
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            minWidth: 0,
-            minHeight: 0,
-            border: "1px solid rgba(255,255,255,0.05)",
-            borderRadius: 14,
-            overflow: "hidden",
-            background: "color-mix(in srgb, var(--sp-panel) 40%, transparent)",
-            boxShadow: "0 20px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)",
-          }}
-        >
-          <div
-            style={{
-              flexGrow: 0,
-              flexShrink: 0,
-              flexBasis: billOpen ? "28%" : "43%",
-              minWidth: 260,
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              overflow: "hidden",
-            }}
-          >
+        <div className="inbox-a-panes" data-list-only={layout === "list-only"} data-reading={!!selectedEmail}>
+          <div className="inbox-a-queue">
             <InboxList
               accent={accent}
+              collection={collection} snoozedLoading={snoozedLoading} snoozedError={snoozedError}
               nowTick={nowTick}
               emails={visibleEmails}
               accountsById={rowAccountsById}
@@ -168,12 +176,12 @@ function InboxDesktopPane({
               layout={indexedSearchActive ? "flat" : grouping}
               showPreview={showPreview}
               searchQuery={search}
-              onSearchChange={setSearch}
+              onClearSearch={() => { setSearch(""); searchRef?.current?.focus(); }}
+              onShowAllMail={() => { if (!allowWorkspaceExit()) return; setWorkspaceDirty(false); closeSelectedEmail(); setCollection("inbox"); setLane("__all"); }}
               onMarkAllRead={markAllVisibleRead}
-              onRefresh={onRefresh}
+              onRefresh={collection === "snoozed" ? refreshSnoozed : onRefresh}
               readOnly={readOnly}
               liveEmailsLoading={liveEmailsLoading}
-              processingCount={processingCount}
               activeSnapshotError={activeSnapshotError}
               indexedSearchActive={indexedSearchActive}
               indexedSearchLoading={indexedSearchLoading}
@@ -181,16 +189,11 @@ function InboxDesktopPane({
               indexedSearchTotal={indexedSearchTotal}
               indexedSearchHasMore={indexedSearchHasMore}
               onLoadMoreSearch={loadMoreIndexedSearch}
-              onAskAlfred={onAskAlfred}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
               noiseUnreadCount={noiseUnreadCount}
-              searchRef={searchRef}
               activeSnapshotMode={activeSnapshotMode}
               lane={lane}
-              laneCounts={chipCounts}
-              onLaneChange={setLane}
-              snapshotNavigation={guardedSnapshotNavigation}
             />
           </div>
           {layout !== "list-only" && (
@@ -199,8 +202,10 @@ function InboxDesktopPane({
               email={selectedEmail}
               account={selectedAccount}
               accent={accent}
-              onAction={onAction}
+              onAction={(kind, payload) => { if (kind === "unsnooze" && !allowWorkspaceExit()) return; onAction(kind, payload); }}
               onClose={guardedClose}
+              onPrevious={previousEmail ? () => guardedOpen(previousEmail) : undefined}
+              onNext={nextEmail ? () => guardedOpen(nextEmail) : undefined}
               onWorkspaceDirtyChange={setWorkspaceDirty}
               showTriage={showTriage}
               showDraft={showDraft}

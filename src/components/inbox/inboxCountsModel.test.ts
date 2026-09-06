@@ -4,7 +4,6 @@ import {
   computeLaneCounts,
   computeInboxChipCounts,
   computeUnreadCount,
-  selectVisibleInboxLaneChips,
 } from "./inboxCountsModel";
 import type { InboxEmailLike } from "./inboxTypes";
 
@@ -61,13 +60,14 @@ describe("computeLaneCounts", () => {
     const counts = computeLaneCounts([
       email({ uid: "q1", _lane: "queued" }),
       email({ uid: "na1", _lane: "needs_attention" }),
-      email({ uid: "na2", _lane: "needs_attention" }),
+      email({ uid: "na2", _lane: "needs_attention", _carryover: true }),
       email({ uid: "live1", _untriaged: true, _lane: "queued" }),
       email({ uid: "other-acct", _lane: "fyi", _accountKey: "personal" }),
     ], { accountId: "work" });
 
     expect(counts.queued).toBe(2);
     expect(counts.needs_attention).toBe(2);
+    expect(counts.carryover).toBe(0);
     expect(counts.fyi).toBe(0);
   });
 
@@ -90,23 +90,24 @@ describe("computeLaneCounts", () => {
 });
 
 describe("computeInboxChipCounts", () => {
-  it("honors snooze and tracks lane and __all counts", () => {
+  it("honors snooze with the visible pinned exception and tracks lane and __all counts", () => {
     const nowTick = 1_000;
     const counts = computeInboxChipCounts([
       email({ uid: "live1", _untriaged: true, _lane: "queued" }),
       email({ uid: "na1", _lane: "needs_attention" }),
       email({ uid: "snoozed", _lane: "fyi" }),
+      email({ uid: "pinned-snooze", _lane: "fyi", _pinned: true }),
     ], {
       accountId: "work",
-      snoozedMap: new Map([["snoozed", nowTick + 500]]),
+      snoozedMap: new Map([["snoozed", nowTick + 500], ["pinned-snooze", nowTick + 500]]),
       nowTick,
     });
 
-    expect(counts.__all).toBe(2);
+    expect(counts.__all).toBe(3);
     expect(counts.queued).toBe(1);
     expect(counts.needs_attention).toBe(1);
     expect(counts.action).toBe(1);
-    expect(counts.fyi).toBe(0);
+    expect(counts.fyi).toBe(1);
   });
 });
 
@@ -118,46 +119,5 @@ describe("computeUnreadCount", () => {
       email({ uid: "untriaged-read", read: false, _lane: "untriaged_read" }),
     ]);
     expect(count).toBe(1);
-  });
-});
-
-describe("selectVisibleInboxLaneChips", () => {
-  const chips = [
-    { key: "__all", label: "All" },
-    { key: "queued", label: "Queue" },
-    { key: "carryover", label: "Carry" },
-    { key: "needs_attention", label: "Needs" },
-    { key: "catch_up", label: "Catch" },
-    { key: "fyi", label: "FYI" },
-    { key: "handled", label: "Handled" },
-    { key: "noise", label: "Noise" },
-  ];
-
-  it("keeps All and positive natural triage lanes only", () => {
-    const visible = selectVisibleInboxLaneChips(chips, {
-      __all: 10,
-      queued: 2,
-      carryover: 1,
-      needs_attention: 2,
-      catch_up: 1,
-      fyi: 0,
-      handled: 1,
-      noise: 1,
-    });
-    expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
-  });
-
-  it("preserves the source order of the surviving chips", () => {
-    const visible = selectVisibleInboxLaneChips(chips, {
-      __all: 1, needs_attention: 1, fyi: 1, noise: 1,
-    });
-    expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "fyi", "noise"]);
-  });
-
-  it("hides a natural lane whose key is absent from counts", () => {
-    const sparse = { __all: 2, needs_attention: 2 };
-    expect(
-      selectVisibleInboxLaneChips(chips, sparse).map((c) => c.key),
-    ).toEqual(["__all", "needs_attention"]);
   });
 });

@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { InboxSelectionId } from "./inboxTypes";
 
 export interface InboxSessionState {
+  collection?: "inbox" | "snoozed";
   accountId: string;
   lane: string;
   search: string;
@@ -10,6 +11,7 @@ export interface InboxSessionState {
 }
 
 export interface InboxSessionActions {
+  setCollection: (value: "inbox" | "snoozed") => void;
   setAccountId: Dispatch<SetStateAction<string>>;
   setLane: Dispatch<SetStateAction<string>>;
   setSearch: Dispatch<SetStateAction<string>>;
@@ -23,6 +25,7 @@ export interface InboxSessionActions {
 export type InboxSessionController = InboxSessionState & InboxSessionActions;
 
 export const DEFAULT_INBOX_SESSION: Readonly<InboxSessionState> = Object.freeze({
+  collection: "inbox",
   accountId: "__all",
   lane: "__all",
   search: "",
@@ -84,8 +87,9 @@ export default function useInboxSessionState({
   sessionState?: Partial<InboxSessionState>;
   onSessionStateChange: Dispatch<SetStateAction<InboxSessionState>>;
 }): InboxSessionController {
+  const collection = sessionState?.collection || "inbox";
   const accountId = sessionState?.accountId || "__all";
-  const lane = sessionState?.lane || "__all";
+  const lane = sessionState?.lane === "carryover" ? "needs_attention" : sessionState?.lane || "__all";
   const search = sessionState?.search || "";
   const selectedId = sessionState?.selectedId || null;
 
@@ -118,6 +122,8 @@ export default function useInboxSessionState({
   }, [setSessionField]);
 
   return {
+    collection,
+    setCollection: (value: "inbox" | "snoozed") => setSessionField("collection", value),
     accountId,
     lane,
     search,

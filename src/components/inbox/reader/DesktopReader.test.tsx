@@ -53,19 +53,19 @@ function renderReader(overrides: ReaderOverrides = {}) {
   render(<Harness />);
 }
 
-function openTriageMenu() {
-  const trigger = screen.getByRole("button", { name: /^triage$/i });
+function openMoreMenu() {
+  const trigger = screen.getByRole("button", { name: /more email actions/i });
   fireEvent.click(trigger);
   return {
     trigger,
-    menu: screen.getByRole("menu", { name: /triage email/i }),
+    menu: screen.getByRole("menu", { name: /more email actions/i }),
   };
 }
 
 describe("DesktopReader durable interactions", () => {
   it("supports menu arrow navigation, Escape dismissal, and focus restoration", async () => {
     renderReader();
-    const { trigger, menu } = openTriageMenu();
+    const { trigger, menu } = openMoreMenu();
     const items = within(menu).getAllByRole("menuitem");
 
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
@@ -73,15 +73,14 @@ describe("DesktopReader durable interactions", () => {
     expect(document.activeElement).toBe(items[1]);
     fireEvent.keyDown(document, { key: "Escape" });
 
-    expect(screen.queryByRole("menu", { name: /triage email/i })).toBeNull();
+    expect(screen.queryByRole("menu", { name: /more email actions/i })).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
-  it("hands focus from Triage to Snooze and restores it when the picker closes", async () => {
+  it("hands focus from the Snooze action to its picker and restores it on close", async () => {
     renderReader();
-    const { trigger, menu } = openTriageMenu();
-
-    fireEvent.click(within(menu).getByRole("menuitem", { name: /snooze/i }));
+    const trigger = screen.getByRole("button", { name: /^snooze$/i });
+    fireEvent.click(trigger);
     const picker = await screen.findByRole("menu", { name: "Snooze" });
     await waitFor(() => expect(picker.contains(document.activeElement)).toBe(true));
 

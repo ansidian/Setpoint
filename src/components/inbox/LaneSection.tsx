@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from "react";
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import { ChevronRight } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
-import { StickyHeader, LaneIcon } from "./primitives";
+import { LaneIcon } from "./primitives";
 import type { ReactNode } from "react";
 import type { InboxEmailLike } from "./inboxTypes";
 import { heightTransition, motionDuration, motionTransition } from "../../lib/motion";
@@ -50,7 +50,7 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
 
   return (
     <InboxRowTransition>
-      <StickyHeader borderColor="rgba(255,255,255,0.03)">
+      <div className="inbox-a-lane-heading" style={{ background: `color-mix(in srgb, ${lane.color} 10%, var(--sp-page))`, borderColor: `${lane.color}30` }}>
         <button
           type="button"
           aria-expanded={!collapsed}
@@ -77,8 +77,8 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
           </span>
           <span
             style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: 2,
-              textTransform: "uppercase", color: laneKey === "noise" ? "var(--color-text-faint)" : lane.color,
+              fontSize: 12, fontWeight: 600, letterSpacing: 0,
+              color: lane.color,
               minWidth: 0, whiteSpace: "nowrap",
               overflow: "hidden", textOverflow: "ellipsis",
             }}
@@ -88,32 +88,17 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
           <span
             style={{
               flexShrink: 0,
-              fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-              background: lane.soft, color: laneKey === "noise" ? "var(--color-text-faint)" : `${lane.color}cc`,
+              fontSize: 11, fontWeight: 500,
+              color: lane.color,
               fontVariantNumeric: "tabular-nums",
             }}
           >
             {emails.length}
           </span>
-          {laneKey === "noise" && noiseUnreadCount > 0 && (
-            <span
-              style={{
-                flexShrink: 0,
-                fontSize: 9,
-                fontWeight: 650,
-                padding: "2px 6px",
-                borderRadius: 999,
-                background: "rgba(205,214,244,0.07)",
-                border: "1px solid rgba(205,214,244,0.12)",
-                color: "rgba(205,214,244,0.58)",
-                fontVariantNumeric: "tabular-nums",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {noiseUnreadCount} unread
-            </span>
-          )}
           <span style={{ flex: 1 }} />
+          <span className="inbox-a-lane-read">{(laneKey === "noise" ? noiseUnreadCount : emails.filter((email) => !email.read).length) > 0
+            ? `${laneKey === "noise" ? noiseUnreadCount : emails.filter((email) => !email.read).length} unread`
+            : "All read"}</span>
           <Motion.span
             aria-hidden="true"
             animate={{ rotate: collapsed || reduceMotion ? 0 : 90 }}
@@ -123,7 +108,7 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
             <ChevronRight size={12} color="rgba(205,214,244,0.4)" />
           </Motion.span>
         </button>
-      </StickyHeader>
+      </div>
       <AnimatePresence initial={false}>
         {!collapsed && (
           <Motion.div

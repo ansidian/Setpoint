@@ -1,9 +1,10 @@
-import { memo, useState } from "react";
-import { Clock, KeyRound, Pin } from "lucide-react";
+import { formatSnoozeTime } from "./inboxSnoozedModel";
+import { memo, type CSSProperties } from "react";
+import { ArrowRight, Clock, KeyRound, Pin } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
-import { timeAgo } from "./helpers";
+import { getEmailActionHint, timeAgo } from "./helpers";
 import type { InboxAccount, InboxEmailLike } from "./inboxTypes";
-import { Avatar, LaneIcon } from "./primitives";
+import { LaneIcon } from "./primitives";
 import { isVerificationCodeFresh } from "./reader/verificationCodeModel";
 
 interface EmailRowProps {
@@ -18,245 +19,47 @@ interface EmailRowProps {
   showLaneTag?: boolean;
 }
 
-function EmailRow({
-  email,
-  account = null,
-  selected = false,
-  onOpen,
-  density,
-  showPreview = false,
-  accent,
-  nowTick,
-  showLaneTag = false,
-}: EmailRowProps) {
-  const [hover, setHover] = useState(false);
-  const arrivalGraceQueued = email._arrivalGraceQueued;
-  const untriagedRead = email._untriagedRead;
-  const laneKey = email._lane;
-  const L = laneKey ? LANE[laneKey] : undefined;
-  const urgColor = email.urgency === "high" ? "#f38ba8"
-                  : email.urgency === "medium" ? "#fab387"
-                  : "#a6adc8";
-  const dimmed = email.read;
-  const snapshotPending = !!email._optimisticSnapshotPending;
-  const summaryColor = dimmed ? "rgba(205,214,244,0.76)" : "rgba(205,214,244,0.82)";
-  const barColor = L ? L.color : "#6c7086";
-  const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
-  const hPad = 14;
-  const freshVerificationCode = isVerificationCodeFresh(email, nowTick);
-  const laneAlreadyCommunicated = (arrivalGraceQueued && laneKey === "queued")
-    || (untriagedRead && laneKey === "untriaged_read");
-
+function EmailRow({ email, account = null, selected = false, onOpen, density,
+  showPreview = false, accent, nowTick, showLaneTag = false }: EmailRowProps) {
+  const lane = email._lane ? LANE[email._lane] : undefined;
+  const freshCode = isVerificationCodeFresh(email, nowTick);
+  const actionHint = freshCode ? "Code ready" : email._lane === "handled" ? null : getEmailActionHint(email.action);
+  const deadline = email.deadline_at ? new Date(email.deadline_at) : null;
+  const dueLabel = email._lane !== "handled" && deadline && !Number.isNaN(deadline.getTime())
+    ? `Due ${deadline.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : null;
+  const carryover = email._carryover || email._snapshotCarryover || !!email.is_carryover;
+  const pending = !!email._optimisticSnapshotPending;
+  const showStatus = actionHint || dueLabel || carryover || email._resurfaced || (showLaneTag && lane) || email._snoozedUntil;
   return (
-    <div
-      role="button"
-      className="inbox-email-row sp-focus-ring"
-      aria-busy={snapshotPending || undefined}
-      tabIndex={0}
+    <button
+      type="button"
+      className="inbox-a-mail-row"
+      data-unread={!email.read}
+      data-density={density}
+      aria-current={selected ? "true" : undefined}
+      aria-label={`${email.from}, ${email.subject}, ${email.read ? "Read" : "Unread"}`}
+      aria-busy={pending || undefined}
       onClick={() => onOpen(email)}
-      onKeyDown={(e) => { if (e.key === "Enter") onOpen(email); }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: "relative",
-        display: "flex", alignItems: "flex-start", gap: 10,
-        padding: `${vPad}px ${hPad}px ${vPad}px ${hPad + 4}px`,
-        cursor: "pointer",
-        background: selected ? `${accent}14` : hover ? "rgba(255,255,255,0.025)" : "transparent",
-        boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
-        transition: "background var(--sp-motion-height) var(--sp-ease-height), box-shadow var(--sp-motion-height) var(--sp-ease-height), opacity var(--sp-motion-height) var(--sp-ease-height), filter var(--sp-motion-height) var(--sp-ease-height)",
-        opacity: snapshotPending ? 0.6 : email._providerRemoved ? 0.55 : dimmed && !hover ? 0.82 : 1,
-        // Skip layout+paint for offscreen rows (the dominant cost at large N);
-        // reserve a representative row height so the scrollbar does not jump
-        // before the row is first rendered. Pure CSS containment.
-        contentVisibility: "auto",
-        containIntrinsicSize: "auto 52px",
-      }}
+      style={{ "--ea-accent": accent, "--inbox-lane-color": lane?.color || accent, opacity: pending || email._providerRemoved ? 0.6 : 1 } as CSSProperties}
     >
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute", left: 0, top: vPad, bottom: vPad,
-          width: 3, borderRadius: 2,
-          background: barColor,
-          opacity: 0.7,
-          boxShadow: `0 0 6px ${barColor}40`,
-        }}
-      />
-      <span
-        aria-hidden="true"
-        className="inbox-email-selection-edge"
-        style={{
-          position: "absolute", left: 0, top: vPad, bottom: vPad,
-          width: 3, borderRadius: 2, background: accent,
-          pointerEvents: "none",
-          opacity: selected ? 1 : 0,
-          transform: selected ? "scaleY(1)" : "scaleY(0.55)",
-          transition: "transform var(--sp-motion-height) var(--sp-ease-height), opacity var(--sp-motion-height) var(--sp-ease-height)",
-        }}
-      />
-      {density === "compact" ? (
-        <div
-          style={{
-            width: 6, height: 6, marginTop: 8, borderRadius: 999,
-            background: email.read ? "transparent" : urgColor, flexShrink: 0,
-            boxShadow: email.read ? "none" : `0 0 6px ${urgColor}80`,
-          }}
-        />
-      ) : (
-        <Avatar
-          name={email.from}
-          email={email.fromEmail}
-          color={account?.color || accent}
-          size={density === "comfortable" ? 30 : 26}
-        />
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span
-            style={{
-              fontSize: 12, fontWeight: email.read ? 500 : 600,
-              color: email.read ? "rgba(205,214,244,0.7)" : "rgba(255,255,255,0.96)",
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              maxWidth: 200,
-            }}
-          >
-            {email.from}
-          </span>
-          <span style={{ flex: 1 }} />
-          <span
-            style={{
-              fontSize: 10, fontVariantNumeric: "tabular-nums", fontWeight: 500,
-              color: email.urgency === "high" ? urgColor : "var(--color-text-faint)",
-            }}
-          >
-            {timeAgo(email.date)}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-          <span
-            style={{
-              flex: 1, fontSize: 13, fontWeight: email.read ? 400 : 600,
-              color: email.read ? "rgba(205,214,244,0.78)" : "rgba(255,255,255,0.96)",
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}
-          >
-            {email.subject}
-          </span>
-          {email._pinned && <Pin size={10} color="#b4befe" data-testid="email-row-pin" style={{ flexShrink: 0 }} />}
-          {freshVerificationCode && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: "rgba(205,214,244,0.78)",
-                background: "rgba(205,214,244,0.06)",
-                border: "1px solid rgba(205,214,244,0.16)",
-              }}
-              title="Verification code ready"
-            >
-              <KeyRound size={8} aria-hidden="true" />
-              Code ready
-            </span>
-          )}
-          {email._resurfaced && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: "var(--sp-orange)", background: "color-mix(in srgb, var(--sp-orange) 8%, transparent)",
-                border: "1px dashed color-mix(in srgb, var(--sp-orange) 32%, transparent)",
-              }}
-              title="Resurfaced from snooze"
-            >
-              <Clock size={8} />
-              Snoozed
-            </span>
-          )}
-          {arrivalGraceQueued && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: "var(--sp-blue)", background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
-                border: "1px solid color-mix(in srgb, var(--sp-blue) 24%, transparent)",
-              }}
-            >
-              <Clock size={8} />
-              Queued
-            </span>
-          )}
-          {untriagedRead && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: "rgba(205,214,244,0.58)",
-                background: "rgba(205,214,244,0.05)",
-                border: "1px solid rgba(205,214,244,0.09)",
-              }}
-            >
-              Read
-            </span>
-          )}
-          {!freshVerificationCode && email.urgentFlag && email._lane !== "noise" && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: urgColor, background: `${urgColor}1c`, border: `1px solid ${urgColor}35`,
-              }}
-            >
-              {email.urgentFlag.label || email.urgency}
-            </span>
-          )}
-          {!freshVerificationCode && showLaneTag && L && !laneAlreadyCommunicated && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                flexShrink: 0,
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: L.color, background: L.soft, border: `1px solid ${L.border}`,
-              }}
-            >
-              <LaneIcon laneKey={String(laneKey)} />
-              {L.label}
-            </span>
-          )}
-          {!freshVerificationCode && !showLaneTag && !arrivalGraceQueued && !untriagedRead && email.category && email.category !== "uncategorized" && (
-            <span
-              style={{
-                display: "inline-flex", alignItems: "center",
-                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
-                padding: "2px 6px", borderRadius: 4,
-                color: "rgba(205,214,244,0.62)",
-                background: "rgba(205,214,244,0.06)",
-                border: "1px solid rgba(205,214,244,0.10)",
-              }}
-            >
-              {email.category.replace(/_/g, " ")}
-            </span>
-          )}
-        </div>
-        {showPreview && density !== "compact" && email.preview && (
-          <div
-            style={{
-              marginTop: 4, fontSize: 11, color: summaryColor,
-              lineHeight: 1.5,
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}
-          >
-            {email.preview}
-          </div>
-        )}
-      </div>
-    </div>
+      <span className="inbox-a-row-top">
+        {!email.read && <span className="inbox-a-unread-dot" aria-hidden="true" />}
+        <span className="inbox-a-row-sender">{email.from}</span>
+        {email._pinned && <Pin size={11} data-testid="email-row-pin" aria-label="Pinned" />}
+        <time>{timeAgo(email.date)}</time>
+      </span>
+      <span className="inbox-a-row-subject">{email.subject || "(No subject)"}</span>
+      {showPreview && density !== "compact" && email.preview && <span className="inbox-a-row-preview">{email.preview}</span>}
+      {showStatus && <span className="inbox-a-row-bottom">
+        {showLaneTag && lane && <span className="inbox-a-row-lane"><LaneIcon laneKey={String(email._lane)} />{lane.label}</span>}
+        {actionHint && <span className="inbox-a-action-hint">{freshCode ? <KeyRound size={12} /> : <ArrowRight size={12} />}{actionHint}</span>}
+        {dueLabel && <span>{dueLabel}</span>}
+        {email._snoozedUntil && <span className="inbox-a-return-time">Returns {formatSnoozeTime(email._snoozedUntil)}</span>}
+        {email._resurfaced && !email._snoozed && <span className="inbox-a-return-time"><Clock size={12} />Returned from snooze</span>}
+        {carryover && <span className="inbox-a-row-carry">Carried over</span>}
+      </span>}
+      {account?.name && showLaneTag && <span className="inbox-a-row-account">{account.name}</span>}
+    </button>
   );
 }
 
@@ -270,8 +73,8 @@ function rowKeyFields(email: InboxEmailLike): unknown[] {
     email.id, email.uid,
     email.read, email._lane, email._resurfaced,
     email._arrivalGraceQueued, email._untriagedRead,
-    email.urgency, email.category, email.from, email.fromEmail,
-    email.subject, email.preview, email.date,
+    email.action, email.deadline_at, email._carryover, email._snapshotCarryover, email.is_carryover, email.from, email.fromEmail,
+    email.subject, email.preview, email.date, email._snoozedUntil, email._snoozedReturning,
     email.urgentFlag?.label, email.urgentFlag,
     email._pinned, email._providerRemoved,
     email._optimisticSnapshotPending,
