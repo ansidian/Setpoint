@@ -12,6 +12,7 @@ import {
 import type { CalendarCellStackMetrics } from "./CalendarCellItemStackModel";
 import type { CalendarChipItem, CalendarItemQuickActions } from "./CalendarCellItemChip";
 import type { CalendarOverflowComposition } from "./useCalendarGridOverflow";
+import { overflowCompletionSignature } from "./calendarGridUtils";
 
 function isClippingAncestor(node: Element | null | undefined): boolean {
   if (!(node instanceof HTMLElement)) return false;
@@ -173,6 +174,7 @@ export default function CalendarCellItemStack({
     dateKey || "",
     day ?? "",
     hiddenSignature,
+    overflowCompletionSignature(hiddenItems),
     leadingColumnWidth,
     stackItems.length,
     visibleCount,

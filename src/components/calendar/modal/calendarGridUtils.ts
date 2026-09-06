@@ -69,6 +69,15 @@ export function overflowHiddenSignature(items: readonly { id?: unknown }[] | nul
   return (items || []).map((item) => String(item.id)).join("\u001f");
 }
 
+interface OverflowCompletionItem {
+  complete?: boolean;
+  sourceItem?: Record<string, unknown>;
+}
+
+export function overflowCompletionSignature(items: readonly OverflowCompletionItem[]): string {
+  return items.map((item) => `${!!item.sourceItem?._completing}:${!!item.complete}`).join("\u001f");
+}
+
 export function getModalScrollContainer(element: Element | null | undefined): Element | null {
   const panel = element?.closest?.("[data-testid='calendar-modal-panel']");
   const body = panel?.querySelector?.("[data-testid='calendar-modal-body']");

@@ -22,7 +22,7 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `events/EventsAgendaMonthSection.tsx` — memoized month/date sections with headers, event/deadline rows, preview forwarding, and drag/drop
 - `events/EventsAgendaRailParts.tsx` — weather header and skeleton loader
 - `events/EventsAgendaEventRows.tsx` — all-day and timed event rows with location/reminders
-- `events/EventsAgendaDeadlineRow.tsx` — task-like agenda row with deadline status
+- `events/EventsAgendaDeadlineRow.tsx` — task-like agenda row with deadline status and the shared in-place Done receipt
 - `events/EventsCellContent.tsx` — event chips in grid cells, multi-day span handling
 - `events/EventsDetailRail.tsx` — event detail panel: duration, location, reminders, attendees
 - `events/EventSelectedCard.tsx` — selected-event hero card (title/time/meta chips); shared by the detail rail and the dashboard glance sheet
@@ -46,7 +46,7 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 ### deadlines
 - `deadlines/DeadlinesCellContent.tsx` — deadline ghost descriptors reused by Events cells
 - `deadlines/DeadlinesDetailRail.tsx` — task detail panel: status, reminders, actions
-- `deadlines/DeadlineDetailCard.tsx` — task card with metadata and reminders
+- `deadlines/DeadlineDetailCard.tsx` — task card with metadata, reminders, and the shared Done receipt; action dock retains disabled/loading feedback
 - `deadlines/DeadlineDetailActions.tsx` — mark-complete, edit, delete, link menu
 - `deadlines/DeadlineQuickActionLayer.tsx` — context menu for quick actions
 - `deadlines/DeadlineStatusIndicator.tsx` — status badge icon

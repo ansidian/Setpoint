@@ -1,3 +1,4 @@
+import CompletionTransition from "../../dashboard/CompletionTransition";
 import { memo, useMemo } from "react";
 import type { CSSProperties, FocusEventHandler, MouseEvent as ReactMouseEvent, PointerEventHandler, RefObject } from "react";
 import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
@@ -434,7 +435,7 @@ export const ItemChip = memo(function ItemChip({
     );
   }
 
-  return (
+  const chip = (
     <button
       key={item.id}
       type="button"
@@ -533,7 +534,7 @@ export const ItemChip = memo(function ItemChip({
       onPointerLeave={() => onClearActive?.(String(item.id))}
       onFocus={() => onSetActive?.(String(item.id))}
       onBlur={() => onClearActive?.(String(item.id))}
-      style={style}
+      style={{ ...style, width: "100%" }}
     >
       <ChipContent
         item={item}
@@ -544,4 +545,9 @@ export const ItemChip = memo(function ItemChip({
       <CalendarChipReminderMarker item={item} />
     </button>
   );
+  return item.detailKind === "deadline" && !ghost ? (
+    <CompletionTransition itemId={selectionId} completing={!!item.sourceItem?._completing}>
+      {chip}
+    </CompletionTransition>
+  ) : chip;
 });

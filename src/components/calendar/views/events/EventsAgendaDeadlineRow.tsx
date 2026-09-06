@@ -1,3 +1,4 @@
+import CompletionTransition from "../../../dashboard/CompletionTransition";
 import { Bell, CheckCircle2, CircleDashed } from "lucide-react";
 import { formatReminderSummary } from "../../reminderDisplay.ts";
 import { colorWithAlpha } from "./eventsAgendaColor.ts";
@@ -64,106 +65,108 @@ export default function EventsAgendaDeadlineRow({
   const reminderSummary = formatReminderSummary(deadline);
 
   return (
-    <button
-      key={`deadline-${deadline.agendaItemId}-${dateKey}`}
-      ref={(node) => registerRow(`${deadline.agendaItemId}-${dateKey}`, node, dateKey)}
-      type="button"
-      className="sp-agenda-touch calendar-agenda-deadline"
-      data-testid="calendar-agenda-deadline-row"
-      data-item-id={deadline.agendaItemId}
-      onClick={(clickEvent) => onSelect(deadline, clickEvent.currentTarget)}
-      style={{
-        width: "100%",
-        display: "grid",
-        gridTemplateColumns: "8px minmax(0, 1fr) auto",
-        alignItems: "start",
-        columnGap: 8,
-        padding: "8px 9px",
-        borderRadius: 8,
-        border: selected ? `1px solid ${colorWithAlpha(color, 0.72)}` : "1px solid rgba(255,255,255,0.055)",
-        background: selected ? colorWithAlpha(color, 0.16) : "rgba(255,255,255,0.022)",
-        color: deadline.agendaComplete ? "rgba(205,214,244,0.48)" : "var(--sp-text)",
-        cursor: "pointer",
-        textAlign: "left",
-        transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
-      }}
-      onMouseEnter={(eventObject) => {
-        eventObject.currentTarget.style.transform = "translateY(-1px)";
-        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
-        onPreviewStart?.(deadline);
-      }}
-      onMouseLeave={(eventObject) => {
-        eventObject.currentTarget.style.transform = "translateY(0)";
-        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
-        onPreviewEnd?.(deadline);
-      }}
-      onFocus={(eventObject) => {
-        eventObject.currentTarget.style.transform = "translateY(-1px)";
-        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
-        onPreviewStart?.(deadline);
-      }}
-      onBlur={(eventObject) => {
-        eventObject.currentTarget.style.transform = "translateY(0)";
-        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
-        onPreviewEnd?.(deadline);
-      }}
-    >
-      <span
-        aria-hidden="true"
+    <CompletionTransition itemId={String(deadline.agendaItemId)} completing={!!deadline._completing}>
+      <button
+        key={`deadline-${deadline.agendaItemId}-${dateKey}`}
+        ref={(node) => registerRow(`${deadline.agendaItemId}-${dateKey}`, node, dateKey)}
+        type="button"
+        className="sp-agenda-touch calendar-agenda-deadline"
+        data-testid="calendar-agenda-deadline-row"
+        data-item-id={deadline.agendaItemId}
+        onClick={(clickEvent) => onSelect(deadline, clickEvent.currentTarget)}
         style={{
-          width: 7,
-          height: 7,
-          marginTop: 5,
-          borderRadius: 999,
-          background: color,
-          boxShadow: selected ? `0 0 0 3px ${colorWithAlpha(color, 0.16)}` : "none",
+          width: "100%",
+          display: "grid",
+          gridTemplateColumns: "8px minmax(0, 1fr) auto",
+          alignItems: "start",
+          columnGap: 8,
+          padding: "8px 9px",
+          borderRadius: 8,
+          border: selected ? `1px solid ${colorWithAlpha(color, 0.72)}` : "1px solid rgba(255,255,255,0.055)",
+          background: selected ? colorWithAlpha(color, 0.16) : "rgba(255,255,255,0.022)",
+          color: deadline.agendaComplete ? "rgba(205,214,244,0.48)" : "var(--sp-text)",
+          cursor: "pointer",
+          textAlign: "left",
+          transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}
-      />
-      <span className="calendar-agenda-body" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <span className="calendar-agenda-time" style={{ color: "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 650, fontVariantNumeric: "tabular-nums", lineHeight: 1.25 }}>
-          {deadline.agendaTimeRange}
-        </span>
-        <span className="calendar-agenda-title"
+        onMouseEnter={(eventObject) => {
+          eventObject.currentTarget.style.transform = "translateY(-1px)";
+          if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+          onPreviewStart?.(deadline);
+        }}
+        onMouseLeave={(eventObject) => {
+          eventObject.currentTarget.style.transform = "translateY(0)";
+          if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+          onPreviewEnd?.(deadline);
+        }}
+        onFocus={(eventObject) => {
+          eventObject.currentTarget.style.transform = "translateY(-1px)";
+          if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+          onPreviewStart?.(deadline);
+        }}
+        onBlur={(eventObject) => {
+          eventObject.currentTarget.style.transform = "translateY(0)";
+          if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+          onPreviewEnd?.(deadline);
+        }}
+      >
+        <span
+          aria-hidden="true"
           style={{
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            color: deadline.agendaComplete ? "rgba(205,214,244,0.58)" : "#f1f2fb",
-            fontSize: 12,
-            fontWeight: 650,
-            lineHeight: 1.25,
-            textDecoration: deadline.agendaComplete ? "line-through" : "none",
-            textDecorationColor: "rgba(205,214,244,0.28)",
+            width: 7,
+            height: 7,
+            marginTop: 5,
+            borderRadius: 999,
+            background: color,
+            boxShadow: selected ? `0 0 0 3px ${colorWithAlpha(color, 0.16)}` : "none",
           }}
-        >
-          <TitleTag>{deadline.agendaTitle}</TitleTag>
-        </span>
-        <span className="calendar-agenda-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3 }}>
-          {deadline.agendaSubtitle}
-        </span>
-        {reminderSummary ? (
-          <span
-            className="calendar-agenda-meta" data-testid="calendar-agenda-reminder-label"
-            aria-label={reminderSummary}
+        />
+        <span className="calendar-agenda-body" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+          <span className="calendar-agenda-time" style={{ color: "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 650, fontVariantNumeric: "tabular-nums", lineHeight: 1.25 }}>
+            {deadline.agendaTimeRange}
+          </span>
+          <span className="calendar-agenda-title"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              color: "var(--sp-cream)",
-              fontSize: 10.5,
-              lineHeight: 1.3,
-              minWidth: 0,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              color: deadline.agendaComplete ? "rgba(205,214,244,0.58)" : "#f1f2fb",
+              fontSize: 12,
+              fontWeight: 650,
+              lineHeight: 1.25,
+              textDecoration: deadline.agendaComplete ? "line-through" : "none",
+              textDecorationColor: "rgba(205,214,244,0.28)",
             }}
           >
-            <Bell size={11} aria-hidden />
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {reminderSummary}
-            </span>
+            <TitleTag>{deadline.agendaTitle}</TitleTag>
           </span>
-        ) : null}
-      </span>
-      <AgendaDeadlineStatus deadline={deadline} />
-    </button>
+          <span className="calendar-agenda-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3 }}>
+            {deadline.agendaSubtitle}
+          </span>
+          {reminderSummary ? (
+            <span
+              className="calendar-agenda-meta" data-testid="calendar-agenda-reminder-label"
+              aria-label={reminderSummary}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                color: "var(--sp-cream)",
+                fontSize: 10.5,
+                lineHeight: 1.3,
+                minWidth: 0,
+              }}
+            >
+              <Bell size={11} aria-hidden />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {reminderSummary}
+              </span>
+            </span>
+          ) : null}
+        </span>
+        <AgendaDeadlineStatus deadline={deadline} />
+      </button>
+    </CompletionTransition>
   );
 }

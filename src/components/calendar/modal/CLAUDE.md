@@ -29,13 +29,13 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `calendarMonthPreviewModel.ts` — preview entries for mounted non-active months, reused while inputs are unchanged
 
 ### Chips, stacks, overflow
-- `CalendarCellItemChip.tsx` — item chip button rendering over the pure metrics/content presentation model
+- `CalendarCellItemChip.tsx` — item chip button rendering over the pure metrics/content presentation model; deadline completion uses the shared in-place Done receipt
 - `CalendarCellItemChipModel.ts` — chip label compacting, leading-column width estimation, presentation styling, and content-fit projection
 - `CalendarCellItemStack.tsx` — visible/hidden item split with layout measurement
 - `CalendarCellItemStackModel.ts` — stack height calculation and visibility split
 - `calendarCellItemMetrics.ts` — per-tier item capacity for cells
 - `CalendarCellOverflowPopover.tsx` — portal shell, focus, positioning, and keyboard navigation for hidden items
-- `CalendarCellOverflowItem.tsx` — one overflow item row: selection/modifier selection, context menu, drag payload, metadata, reminders/status, and active styling
+- `CalendarCellOverflowItem.tsx` — one overflow item row: selection/modifier selection, context menu, drag payload, metadata, reminders/status, active styling, and shared deadline completion receipt
 - `CalendarCellOverflowPopover.position.ts` — popover viewport clamping from trigger rect
 - `CalendarInlineOverflowLayer.tsx` — inline overflow panel when space permits
 - `useCalendarGridOverflow.ts` — overflow state machine: popover vs inline, reanchor on scroll

@@ -1,3 +1,4 @@
+import CompletionTransition from "../../dashboard/CompletionTransition";
 import type { CSSProperties, RefObject } from "react";
 import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.tsx";
 import { isEventSelectionModifier } from "../events/calendarEventSelectionModel";
@@ -159,7 +160,7 @@ export default function CalendarCellOverflowItem({
   const batchSelected = !specialDate && !!interaction.quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
   const Shell = (ghost ? "div" : "button") as "button";
 
-  return (
+  const chip = (
     <Shell
       type={ghost ? undefined : "button"}
       data-testid={ghost ? "calendar-ghost-chip" : "calendar-cell-overflow-item"}
@@ -257,6 +258,7 @@ export default function CalendarCellOverflowItem({
       onBlur={interaction.onDeactivate}
       style={{
         ...itemButtonStyle({ accent, selected, active, ghost, batchSelected, specialDate }),
+        width: "100%",
         display: "grid",
         gridTemplateColumns: specialDate
           ? "28px minmax(0, 1fr)"
@@ -327,4 +329,9 @@ export default function CalendarCellOverflowItem({
       </span>
     </Shell>
   );
+  return item.detailKind === "deadline" && !ghost ? (
+    <CompletionTransition itemId={itemId} completing={!!item.sourceItem?._completing}>
+      {chip}
+    </CompletionTransition>
+  ) : chip;
 }

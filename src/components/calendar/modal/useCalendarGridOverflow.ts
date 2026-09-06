@@ -5,6 +5,7 @@ import {
   OTHER_MONTH_BOUNDARY_COLOR,
   overflowHiddenSignature,
   overflowStateIsLiveInScope,
+  overflowCompletionSignature,
   resolveOverflowPresentation,
   sameOverflowDate,
 } from "./calendarGridUtils";
@@ -179,7 +180,10 @@ export default function useCalendarGridOverflow({
         && current.visibleCount === composition.visibleCount
         && current.leadingColumnWidth === composition.leadingColumnWidth
       ) {
-        return current;
+        // Completion changes the receipt, not overflow membership or anchoring.
+        return overflowCompletionSignature(current.items) === overflowCompletionSignature(composition.hiddenItems)
+          ? current
+          : { ...current, items: composition.hiddenItems };
       }
       const keepOpenItemId = current.keepOpenItemId ?? gridSelectedItemId;
       if (
