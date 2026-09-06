@@ -3,7 +3,7 @@ import { StatusDot } from "../../shared/StatusDot";
 export interface NeedsYouBreakdownSegment { text: string; color: string }
 
 // The leading count block, shown only when something needs attention. The
-// all-clear state is owned by NeedsYouBand (a centered, label-less treatment),
+// all-clear state is owned by NeedsYouBand (a centered confirmation),
 // so this block always renders the count + breakdown.
 export function NeedsYouCountBlock({ countN, countColor, breakdown = [], isMobile = false }: {
   countN: number;

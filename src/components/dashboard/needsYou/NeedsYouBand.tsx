@@ -1,5 +1,6 @@
 import { AnimatePresence } from "motion/react";
 import CompletionTransition from "../CompletionTransition";
+import AnimatedHeight from "../../shared/AnimatedHeight";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel, collectNeedsYouCandidateIds } from "./needsYouModel";
@@ -138,11 +139,9 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   const allClear = model.countN === 0;
 
   const allClearBlock = (
-    <div style={!isMobile
-      ? { width: 190, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }
-      : { width: "100%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-      <CheckCircle2 size={18} color="var(--sp-green)" />
-      <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-green)" }}>All clear</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <CheckCircle2 size={16} color="var(--sp-green)" aria-hidden="true" />
+      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--sp-text)" }}>All clear</span>
     </div>
   );
   const header = allClear
@@ -173,13 +172,14 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   }
 
   return (
+    <AnimatedHeight>
     <div
       data-testid="needs-you-band"
-      style={{ flex: "none", display: "flex", gap: 20, alignItems: "stretch", padding: "18px 20px", borderRadius: 16,
+      style={{ flex: "none", display: "flex", flexDirection: allClear ? "column" : "row", gap: allClear ? 0 : 20, alignItems: "stretch", padding: allClear ? "12px 20px" : "18px 20px", borderRadius: 16,
         background: "var(--sp-card, rgba(36,36,58,0.4))",
         border: "1px solid var(--color-border, rgba(255,255,255,0.08))" }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "none" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: allClear ? "center" : undefined, gap: 6, flex: "none" }}>
         {header}
         {errorLine}
       </div>
@@ -219,6 +219,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
         </div>
       </div>
     </div>
+    </AnimatedHeight>
   );
 }
 
