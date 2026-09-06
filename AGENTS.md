@@ -1,96 +1,68 @@
 # Setpoint Agent Map
 
-Personal executive-assistant dashboard for one owner. It triages email, fetches calendar, weather, Todoist-backed deadlines/tasks, and Actual Budget finances.
+Personal executive-assistant dashboard for one owner: email triage, calendar, weather, Todoist-backed tasks/deadlines, and Actual Budget finances.
 
-Use this file as a map, not the full manual. Top-level tracked docs are the source of truth for standing product and system guidance. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
+## Sources of Truth
 
-- `README.md` - setup, env vars, and what the product does.
-- `ARCHITECTURE.md` - system shape, data flow, routes, database, briefing pipeline.
-- `FLOWS.md` - cross-layer pipelines and cross-cutting behaviors, hop by hop; check it before fixing anything that spans server/SSE/caches/UI.
-- `PRODUCT.md` - product intent, audience, voice, and non-goals.
-- `DESIGN.md` / `DESIGN.json` - visual language and design tokens.
-- `docs/index.md` - local documentation catalog when present.
-- `docs/exec-plans/active/` - optional local scratch/working memory for complex planning, research, or historical context.
-- `docs/exec-plans/completed/` - local historical plans; useful context, not current requirements.
-- `docs/design-docs/history/` - local historical design specs; defer to `DESIGN.md` for current rules.
+Use this file as a map. Standing guidance belongs in tracked top-level docs; `docs/` is local working memory, gitignored for this personal single-user repo. Use it when present, but never make tracked code depend on it.
 
-## Process
+- `README.md` — setup, environment variables, commands, and integrations.
+- `ARCHITECTURE.md` — system shape, routes, database, and data flow.
+- `FLOWS.md` — cross-layer pipelines; read before changes spanning server, SSE, caches, and UI.
+- `PRODUCT.md` — product intent, audience, voice, and non-goals.
+- `DESIGN.md` — visual language and authoritative tokens; its frontmatter and `.impeccable/design.json` sidecar define current design guidance.
+- Optional local context: `docs/index.md`, plans in `docs/exec-plans/active/`, and history in `docs/exec-plans/completed/` and `docs/design-docs/history/`. Historical plans are context, not current requirements.
 
-- When exploring the codebase or reading files for context, prefer using explorer agents for concrete, bounded questions, especially when multiple independent areas can be investigated in parallel. Keep immediate blocking investigation local, and synthesize explorer findings before making edits.
-- For frontend-facing work, use the global `impeccable` skill and treat this as a dense product UI, not a marketing surface.
-- For UI work, add deliberate hover/focus motion to buttons and icon buttons unless the control is disabled or reduced-motion handling requires a static state.
-- Before handing off UI changes, scan every touched enabled button or icon button, including close/cancel controls in overlays, for hover, focus, and active-state styling.
-- Prefer repo patterns over new abstractions. Add abstractions only when they remove real complexity or match established structure.
-- Capture executable plans as local markdown in `docs/exec-plans/active/` (gitignored working memory). Write them as execution contracts, not vague backlog notes: goal, context, scope, non-goals, locked decisions, relevant files, acceptance criteria, and verification steps.
-- Keep planned work bounded. If a plan spans multiple independent surfaces, split it into a parent/spec plan plus smaller per-surface plans, each small enough for one focused PR and explicit about what not to change.
-- Keep plans current as work progresses: reflect material scope changes and locked decisions in the plan, and leave concise implementation/verification notes.
+## Working Approach
 
-## Search Routing
-
-- In a directory that has its own `CLAUDE.md` map, read that map before bulk-reading files.
-
-## Mechanical Checks
-
-- `npm run verify` - required final verification before handing off code changes or pushing: full typecheck, lint, fast tests, slow integrations, harness, and production build. CI and the pre-push hook use this same command.
-- Targeted tests and browser checks are development feedback, not substitutes for final verification. Run verification after the final code edit; state explicitly if it failed or was not completed. "No new presentation tests" does not mean "skip existing tests."
-- Before pushing, verify that the checkout being tested matches the commits being pushed. The hook tests the current working tree; uncommitted fixes or pushes of another branch are not verified commit snapshots.
-- `npm run lint` - ESLint.
-- `npm run build` - production build.
-- `npm run check:harness` - agent-harness checks for the agent map, local-doc cleanup when present, and oversized components.
-
-## Test Architecture
-
-- A product requirement or regression triggers a test only when it owns durable behavior at a stable seam; a frontend or UI change does not automatically qualify.
-- Treat reproduction tests as temporary diagnostic artifacts until they pass a post-fix retention review. Before handing off, ask whether each new test protects consequential durable behavior at the stable behavior-owning seam, stays cheap and reliable, and adds coverage not already owned elsewhere. If not, delete it. A test's usefulness while reproducing a bug is not by itself a reason to keep it.
-- Default to no new automated test for frontend presentation work. Do not test responsive composition, styling, visual tokens, typography, motion, ordinary disclosure/visibility state, rendered markup, or component wiring. Verify those changes through bounded browser inspection.
-- Add a frontend test only when it protects consequential domain behavior or a durable accessibility/interaction contract that browser inspection cannot cover reliably. Before writing it, name the exact regression it prevents and why a bounded browser check is insufficient; if that case is weak, do not add the test.
-- When a temporary rendered-component repro and a smaller pure/model test exercise the same invariant, retain at most the stable behavior-owner test. Do not keep the rendered test as duplicate confidence.
-- Do not expand or duplicate frontend coverage merely because a tested component was touched. Prefer existing coverage plus browser verification unless the requested behavior changes the stable contract that the existing suite owns.
-- Test through the stable module or use-case facade and allow its internal collaborators to work together. Name one primary behavior owner before adding overlapping coverage.
-- Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate the file under test.
-- Prefer observable results and durable state. Interaction assertions are review warnings: replace internal call-graph checks where practical, and use a narrow inline rationale when an unavoidable outbound/provider/browser/database/filesystem/process boundary is the contract.
-- A boundary rationale cannot turn an internal callback assertion into durable coverage. Component-to-parent, component-to-hook, grid-to-router, state-setter, and sibling-module callbacks are internal implementation details even when they cross a file boundary; do not retain tests whose only proof is that one of these callbacks fired.
-- For UI cleanup, dismissal, routing, or leaked-preview regressions, assert the user-visible state or durable owner state at the smallest facade that can observe the outcome. If the only affordable automated assertion is an internal callback or rendered wiring detail, keep the repro temporary and use bounded browser verification instead.
-- Reserve `test-architecture: allow-boundary-interaction` for unavoidable external or public contracts where the interaction itself is the observable result. The rationale must name why no returned value, durable state, or user-visible outcome can prove the contract; architectural layering alone is not sufficient.
-- Keep direct pure tests for intentionally stable algorithms and dense policy matrices. Persistence tests should execute against an ephemeral database instead of asserting SQL text or positional arguments.
-- Broad fake-database heuristics are advisory only. The semantic persistence inventory governs only observed execute calls, SQL-shape assertions, and positional database-argument contracts.
-- Full-workspace integration tests are reviewed through behavior ownership and runtime cost, not filename allowlists; prefer a smaller stable facade whenever it can exercise the same requirement.
-- `scripts/lib/test-architecture-baseline.json` is permanently zero-default: both allowance objects must remain empty. Local-module mocks and raw mock-metadata observations remain hard failures; interaction matcher findings are non-blocking review warnings that only an eligible external/public boundary rationale can suppress.
-
-## Maintainability Guardrail
-
-- Strongly evaluate decomposition before adding significant UI or state to any component near or above 600 lines.
-- Do not build god components. Separate heavy domain logic, data fetching, portal/layout mechanics, and large render trees.
-- Prefer extracting helpers, hooks, subcomponents, or state modules when a component grows.
-- If an unusually long component is kept on purpose, call out the reason in the handoff.
-- If you touch an already overloaded component for unrelated work, flag it in the handoff and advise future refactoring instead of silently adding more responsibility.
+- Resolve material uncertainty before editing. Prefer the simplest solution and existing repo patterns; add abstractions only when they remove real complexity. Keep edits within the requested scope.
+- Prefer explorer agents for independent, bounded codebase questions. Keep immediate blocking investigation local and synthesize findings before editing.
+- For complex or multi-surface work, keep a local execution plan in `docs/exec-plans/active/`: goal, context, scope/non-goals, locked decisions, relevant files, acceptance criteria, and verification. Split independent surfaces into focused plans and keep decisions/results current. Routine fixes do not require a plan file.
+- Before adding significant UI or state near or above 600 lines, evaluate decomposition of domain logic, fetching, layout mechanics, and render trees. Explain intentionally oversized components in the handoff; flag existing overload without doing unrelated refactors.
+- Commits: one logical change per commit, single-line `feat:`, `fix:`, or `chore:` message, no agent co-author.
 
 ## Area Maps
 
-Directories with a `CLAUDE.md` map (calendar, inbox, dashboard, settings, hooks, the `server/<domain>/` directories such as server/email and server/bills, server/routes, and others — enforced by `npm run check:harness`) document their own files, patterns, and boundaries. Read the area map before bulk-reading files there. Calendar specifics: hooks/models in `src/hooks/calendar/`, UI in `src/components/calendar/` — do not add calendar files elsewhere; see those maps.
+Read a directory's `CLAUDE.md` before bulk-reading its files. These maps own local file organization, patterns, and boundaries; `npm run check:harness` checks coverage. Calendar hooks/models belong in `src/hooks/calendar/`, UI in `src/components/calendar/`; do not add calendar files elsewhere.
 
-## Floating Panel Pattern
+## Verification
 
-For dropdowns, popovers, and panels, follow the repo pattern in `src/components/briefing/BriefingHistoryPanel.tsx` and `src/components/shared/pickers/AnchoredFloatingPanel.tsx`:
+Match verification to the change. Small, isolated changes can be reviewed and committed after targeted checks; do not run the full suite for every edit or visual preview.
 
-1. `createPortal(..., document.body)`.
-2. `position: fixed` from `getBoundingClientRect()`, recalculated on scroll/resize.
-3. `overscrollBehavior: contain` plus wheel containment at top/bottom.
-4. `isolation: isolate` and opaque `#16161e` background.
-5. Outside-click via document `pointerdown`; check trigger and portal refs.
+- **Code:** lint changed files and run the relevant `npm run typecheck:client`, `typecheck:server`, or `typecheck:tools`. Run existing tests for the affected behavior owner and connected callers/consumers, including integrations when affected. Select by dependencies and behavior, not directory proximity. Shared changes may require multiple typechecks and test areas.
+- **UI:** add bounded browser inspection of touched layouts, interactions, and relevant states/sizes. Presentation-only edits do not require new tests, but retain and run relevant existing coverage.
+- **Docs only:** check the diff and referenced paths. Run `npm run check:harness` for agent-map, area-map, or architectural guidance changes; application tests/builds are unnecessary unless executable code or configuration also changes.
+- **Full verification:** run `npm run verify` for broad changes, shared infrastructure, authentication, persistence, dependencies/build/test configuration, or impact that cannot be confidently bounded. It runs all typechecks, repository lint, fast tests, slow integrations, harness checks, and the production build. Playwright and the demo build are separate checks; run them when the affected contract requires them.
+- **Before push / CI:** the pre-push hook and CI must continue running `npm run verify`. Push the checkout/commits that were verified; uncommitted fixes or another branch's passing run do not verify the pushed snapshot. Avoid an identical manual run immediately before the hook; do not bypass the hook.
+- Reuse passing results while the tested code and relevant inputs remain unchanged. Recheck affected work after edits or failures; broaden checks when new evidence warrants it. State what ran, what passed, and any gaps; never describe targeted checks as full verification.
 
-## Context Outside The Repo
+Commands: `npm test -- <test-file> ...` for focused tests, `npx eslint <file> ...` for changed-file lint (`npm run lint` scans the repository), and `npm run build` for the production build. `npm run check:harness` also checks import boundaries, reachability, file sizes, and test policy.
 
-- Prod DB is Turso; dev DB is `server/db/ea.db`, and can be probed through Turso CLI.
-- Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/actual/actual.ts`, not the CLI.
+## Test Architecture
+
+- A product requirement or regression triggers a test only for durable behavior at a stable seam. Choose one primary behavior owner and test through its module/use-case facade with internal collaborators working together. Prefer smaller facades over full-workspace integrations based on coverage and runtime cost, not filename allowlists.
+- Default to no new presentation tests: layout, styles/tokens, typography, motion, ordinary disclosure/visibility, markup, and component wiring belong in browser inspection. Touching a tested component alone does not justify expanding coverage. Before adding a frontend test, name the consequential domain regression or durable accessibility/interaction contract and why bounded browser inspection cannot reliably cover it.
+- Reproduction tests are temporary until reviewed after the fix. Retain only cheap, reliable, nonduplicative tests of consequential behavior at its stable owner. If a model test and rendered repro cover the same invariant, keep at most the owner test.
+- Mock external/provider, browser, database, filesystem, or process boundaries. Do not mock internal hooks, child components, services, or policy modules merely to isolate a file.
+- Assert observable results, user-visible state, or durable owner state. Internal callbacks and call-graph assertions—including parent/hook, routing, dismissal, and cleanup callbacks—are not durable coverage. A file boundary or explanatory comment cannot make them external contracts; if they are the only affordable proof, keep the repro temporary and use browser inspection.
+- Interaction matchers are review warnings. Reserve `test-architecture: allow-boundary-interaction` for unavoidable external/public interactions that are themselves the observable contract. Put a narrow rationale beside the assertion explaining why no returned result or state can prove it.
+- Keep direct pure tests for stable algorithms and dense policy matrices. Test persistence with an ephemeral database, not SQL text or positional arguments. Broad fake-database heuristics are advisory; the semantic persistence inventory governs observed execute calls, SQL-shape assertions, and positional database-argument contracts.
+- Both allowance objects in `scripts/lib/test-architecture-baseline.json` must remain empty. Local-module mocks and raw mock-metadata observations are hard failures; only an eligible external/public rationale can suppress interaction warnings.
+
+## UI Implementation
+
+- Use the global `impeccable` skill for frontend work and follow `DESIGN.md`; this is a dense product UI.
+- Give touched enabled buttons/icon buttons hover and focus motion plus visible focus and active states, including overlay close/cancel controls. Scan them before handoff; disabled controls and reduced-motion handling are exceptions to motion.
+- Follow `src/components/shared/pickers/AnchoredFloatingPanel.tsx` and `src/components/briefing/BriefingHistoryPanel.tsx` for floating panels: portal to `document.body`, fixed positioning from the trigger rect updated on scroll/resize, opaque `#16161e` background with `isolation: isolate`, contained overscroll/wheel edges, and document `pointerdown` dismissal checking both trigger and portal refs.
+
+## Provider Boundaries
+
+- Production uses Turso. Normal development uses `server/db/ea.db`; see `README.md` for opt-in Turso development.
+- `npm run actual -- <command>` is for ad-hoc inspection only. Runtime paths use the in-process `@actual-app/api` singleton in `server/actual/actual.ts`.
 
 ## Demo Mode Contract
 
-- Demo mode is build-time only (`VITE_EA_DEMO=1`) and must not become a URL/query/runtime toggle.
-- Future `src/api.ts` exports must have explicit demo behavior: demo data, in-memory mutation, inert demo-safe response, or intentional `DEMO_API_UNHANDLED` failure.
-- Demo mode must never fall through to real `/api/*`, SSE/EventSource, provider authentication or connectivity-check flows, AI calls, webhooks, Actual SDK work, token management, bill-pay provider actions, or external service navigation.
-- Demo data may mutate in memory for the walkthrough, but it must reset on page refresh and must not persist to localStorage, IndexedDB, or a server.
-
-## Commit Style
-
-Single-line messages prefixed `feat:`, `fix:`, or `chore:`. One commit per logical change; split unrelated edits.
+- Demo mode is build-time only (`VITE_EA_DEMO=1`), never a URL/query/runtime toggle.
+- Every new `src/api.ts` export needs explicit demo behavior: fictional data, an in-memory mutation, an inert response, or intentional `DEMO_API_UNHANDLED` failure.
+- Never fall through to real `/api/*`, SSE/EventSource, provider authentication/connectivity checks, AI calls, webhooks, Actual SDK work, token management, bill-pay provider actions, or external service navigation.
+- Demo mutations stay in memory, reset on refresh, and never persist to localStorage, IndexedDB, or a server. See `src/demo/CLAUDE.md` for implementation ownership.

@@ -246,10 +246,16 @@ npm test           # complete required non-Playwright suite (fast + slow)
 ```
 
 CI and the pre-push hook run the same `verify` command, stopping at the first
-failure. Targeted tests remain useful while editing, but are not full verification.
+failure. For small, isolated changes, use affected behavior tests, connected
+caller/consumer coverage, changed-file lint, and the relevant typecheck; add
+bounded browser inspection for UI changes. These checks are sufficient for
+iteration, review, and commits. Run full verification for broad or consequential
+changes and whenever impact cannot be confidently bounded. Reuse passing checks
+while their code and inputs remain unchanged; do not rerun the full suite for
+every visual preview. See `AGENTS.md` for test selection and retention rules.
 The hook is installed by `npm install` / `npm ci`; after changing hook configuration
 in an existing checkout, run `npx simple-git-hooks` to refresh it. Commits keep the
-lightweight architecture-regeneration hook; full verification runs only at push.
+lightweight architecture-regeneration hook; the pre-push hook owns full verification.
 Push from the verified checkout without uncommitted fixes: local verification
 tests the working tree, while CI tests the pushed commit after a clean `npm ci`.
 CI also supplies its base revision for the harness's historical comparison.
