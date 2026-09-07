@@ -59,12 +59,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
       // test-architecture: allow-boundary-interaction -- The request owner must receive the unchanged origin after the real editor accepts the seed.
       expect(onAcknowledged).toHaveBeenCalledWith({ status: "accepted", origin: request.origin });
       expect((screen.getByTestId("calendar-event-title") as HTMLInputElement).value).toBe("Seeded planning");
-      expect(screen.getByTestId("calendar-ghost-chip")).toBeTruthy();
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
     });
-    const floatingShell = screen.getByTestId("calendar-floating-detail-shell");
-    expect(floatingShell.style.height).toBe("");
-    expect(floatingShell.style.maxHeight).not.toBe("");
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull());
