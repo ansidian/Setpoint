@@ -9,6 +9,7 @@ type StoreDb = Pick<Client, "execute" | "batch">;
 type DocumentStatus = "pending" | "processing" | "retry" | "ignored" | "associated";
 type EventStatus = "pending" | "processing" | "waiting" | "settled" | "needs_review";
 const CLAIM_LEASE_MS = 15 * 60_000;
+const ORIGINAL_UNGUARDED = `NOT EXISTS (SELECT 1 FROM ea_financial_corrected_sources g WHERE g.user_id=ea_financial_events.user_id AND g.owner='event' AND g.record_id=ea_financial_events.id)`;
 
 export interface FinancialStatusDb {
   execute(statement: InStatement): Promise<{ rows: Array<Record<string, unknown>> }>;
@@ -42,6 +43,7 @@ export interface FinancialDocument {
   eventId: string | null;
   contentHash: string | null;
   candidate: BillCandidate | null;
+  correctedEntry?: (FinancialEventCompletionEntry & { payeeId?: string | null; scheduleId?: string }) | null;
   ownerConfirmedEntry: FinancialEventCompletionEntry | null;
   ownerConfirmationConflict: boolean;
   nextAttemptAt: number | null;
@@ -81,7 +83,10 @@ export interface FinancialEvent {
 
 const DOCUMENT_SELECT = `SELECT d.*, e.subject, e.body_text, e.from_name, e.from_address,
   e.email_date_utc, e.thread_id, e.message_id, e.sender_authentication_json,
-  owner_event.owner_completion_json AS event_owner_completion_json
+  owner_event.owner_completion_json AS event_owner_completion_json,
+  (SELECT json_extract(c.effective_result_json, '$.entry') FROM ea_financial_effective_corrections c
+   JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
+   WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id) AS correction_entry_json
   FROM ea_financial_documents d LEFT JOIN ea_email_index e
     ON e.user_id = d.user_id AND e.uid = d.email_uid
   LEFT JOIN ea_financial_events owner_event ON owner_event.user_id = d.user_id AND owner_event.id = d.event_id`;
@@ -124,7 +129,8 @@ export function documentFromRow(row: Row): FinancialDocument {
     attempts: Number(row.attempts), claimToken: nullableString(row.claim_token),
     claimedAt: nullableNumber(row.claimed_at), eventId: nullableString(row.event_id),
     contentHash: nullableString(row.content_hash), candidate: readJson<BillCandidate>(row.candidate_json),
-    ownerConfirmedEntry: readJson<FinancialOwnerCompletion>(row.event_owner_completion_json)?.entry || null,
+    correctedEntry: readJson<FinancialEventCompletionEntry>(row.correction_entry_json),
+    ownerConfirmedEntry: readJson<FinancialEventCompletionEntry>(row.correction_entry_json) || readJson<FinancialOwnerCompletion>(row.event_owner_completion_json)?.entry || null,
     ownerConfirmationConflict: Number(row.owner_confirmation_conflict) === 1,
     nextAttemptAt: nullableNumber(row.next_attempt_at), error: nullableString(row.last_error),
     createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
@@ -319,7 +325,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
                 collection_deadline = MAX(COALESCE(collection_deadline, 0), ?),
                 next_attempt_at = MAX(COALESCE(collection_deadline, 0), ?), attempts = 0,
                 claim_token = NULL, claimed_at = NULL, updated_at = ?
-              WHERE user_id = ? AND id = ? AND revision = ? AND attempted_at IS NULL AND operation_json IS NULL
+              WHERE user_id = ? AND id = ? AND revision = ? AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
                 AND (owner_completion_json IS NULL OR status IN ('waiting', 'needs_review'))
                 AND COALESCE(json_extract(outcome_json, '$.outcome'), '') NOT IN ('added', 'updated', 'already_present')
                 AND COALESCE(json_extract(plan_json, '$.reconciliation.status'), '') NOT IN ('already_recorded', 'already_scheduled')
@@ -394,7 +400,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     const result = await dbClient.execute({
       sql: `UPDATE ea_financial_events SET status = 'processing', claim_token = ?, claimed_at = ?,
               attempts = attempts + 1, updated_at = ?
-            WHERE id = (SELECT id FROM ea_financial_events WHERE ${READY_EVENT}
+            WHERE id = (SELECT id FROM ea_financial_events WHERE ${READY_EVENT} AND ${ORIGINAL_UNGUARDED}
               ORDER BY created_at, id LIMIT 1) AND status IN ('pending', 'waiting') RETURNING *`,
       args: [claimToken, timestamp, timestamp, timestamp],
     });
@@ -412,7 +418,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       sql: `UPDATE ea_financial_events SET status = ?, plan_json = ?, next_attempt_at = ?, reason = ?,
               outcome_json = CASE WHEN ? THEN ? ELSE outcome_json END,
               claim_token = NULL, claimed_at = NULL, updated_at = ?
-            WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing'`,
+            WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing' AND ${ORIGINAL_UNGUARDED}`,
       args: [input.status, input.plan ? writeJson(input.plan) : null, input.nextAttemptAt ?? null,
         input.reason ?? null, input.outcome === undefined ? 0 : 1,
         input.outcome === undefined ? null : writeJson(input.outcome), now(),
@@ -429,7 +435,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
       sql: `UPDATE ea_financial_events SET operation_json = ?, attempted_at = ?, updated_at = ?,
               plan_json = COALESCE(?, plan_json)
             WHERE user_id = ? AND id = ? AND claim_token = ? AND revision = ? AND status = 'processing'
-              AND attempted_at IS NULL AND operation_json IS NULL
+              AND attempted_at IS NULL AND operation_json IS NULL AND ${ORIGINAL_UNGUARDED}
               AND ${INTAKE_COMPLETE}
               AND NOT EXISTS (SELECT 1 FROM ea_financial_documents d
                 WHERE d.user_id = ea_financial_events.user_id AND d.event_id = ea_financial_events.id
@@ -492,7 +498,9 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return result.rows[0] ? projectEvent(result.rows[0]) : null;
   }
 
-  return { claimDocument, settleDocument, associateDocument, listDocuments, findEventsByReference, completeEvent,
+  return { async isCorrected(userId: string, id: string) {
+    return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
+  }, claimDocument, settleDocument, associateDocument, listDocuments, findEventsByReference, completeEvent,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,
     admitOperation, recoverStaleClaims, getNextWakeAt, isManagedEmail, getDocumentForEmail, getEventForEmail };
 }

@@ -152,6 +152,7 @@ export function createFinancialEventWorker({
   async function processNextEvent(): Promise<boolean> {
     const event = await store.claimEvent(randomUUID());
     if (!event) return false;
+    if (await store.isCorrected(event.userId, event.id)) return true;
     let plan = event.plan;
     let attempted = event.attemptedAt !== null;
     try {

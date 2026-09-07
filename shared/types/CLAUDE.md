@@ -18,3 +18,5 @@ Cross-layer, serializable contracts used by the server and client. Keep domain b
 
 - Files here must remain serializable and side-effect free.
 - Provider SDK types and database row shapes stay in their owning server domains.
+
+- `financial-corrections.ts` — frozen correction preview, step journal, exact SDK snapshot and status contracts

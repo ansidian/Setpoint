@@ -134,6 +134,7 @@ server/
 │   │   └── evals/
 │   └── test-utils/
 ├── financial-activity/
+├── financial-corrections/
 ├── financial-events/
 ├── middleware/
 ├── news/
@@ -724,6 +725,11 @@ erDiagram
 | `ea_financial_activity_aliases` | `063_financial_activity.sql` |
 | `ea_financial_activity_occurrences` | `063_financial_activity.sql` |
 | `ea_financial_actual_bindings` | `063_financial_activity.sql` |
+| `ea_financial_correction_guards` | `064_financial_corrections.sql` |
+| `ea_financial_correction_observations` | `064_financial_corrections.sql` |
+| `ea_financial_correction_previews` | `064_financial_corrections.sql` |
+| `ea_financial_correction_steps` | `064_financial_corrections.sql` |
+| `ea_financial_corrections` | `064_financial_corrections.sql` |
 | `ea_financial_documents` | `062_financial_events.sql` |
 | `ea_financial_event_references` | `062_financial_events.sql` |
 | `ea_financial_events` | `062_financial_events.sql` |
@@ -889,6 +895,9 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
 | POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |
+| GET | `/api/briefing/financial-corrections/:id` | `server/routes/briefing/financial-corrections.ts` |
+| POST | `/api/briefing/financial-corrections/confirm` | `server/routes/briefing/financial-corrections.ts` |
+| POST | `/api/briefing/financial-corrections/preview` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review-changes` | `server/routes/briefing/transaction-imports.ts` |

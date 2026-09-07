@@ -23,6 +23,8 @@ const OPERATIONS = new Set([
   "importTransactionGroups",
   "reconcileTransferSchedule",
   "inspectOriginalImportBinding",
+  "inspectCorrection",
+  "dispatchCorrection",
   "reconcileFinancialOperation",
 ].filter(isActualWorkerOperation));
 

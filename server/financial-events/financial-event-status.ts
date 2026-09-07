@@ -40,7 +40,7 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
     || (document.status === "ignored" ? "settled" : document.status === "retry" ? "waiting" : "pending");
   const reason = event?.reason || document.error || (state === "settled" ? "No financial entry is needed."
     : document.status === "associated" ? "Collecting related payment details." : "Checking this email for financial activity.");
-  const plan: FinancialEmailPlan = event?.plan || {
+  const plan: FinancialEmailPlan = event?.plan ? structuredClone(event.plan) : {
     version: 1, identity: { version: 1, status: "resolved", key: event?.id || `financial-document:${document.id}` },
     candidate: document.candidate || {},
     classification: { documentKind: "informational", eventKind: document.candidate?.event_kind || null, confidence: null, reasons: [] },
@@ -50,7 +50,20 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
     reconciliation: { status: "not_checked", disposition: "review", reason, checkedAt: null, evidence: null },
     reviewReasons: [], automation: { eligible: false, operationClass: "unsupported", rollout: "observe_only", gates: [], reasons: [] },
   };
-  const blockedReason = completionBlocker(event);
+  if (document.correctedEntry) {
+    const entry = document.correctedEntry;
+    plan.candidate = { ...plan.candidate, type: entry.kind === 'transfer_schedule' ? 'transfer' : entry.kind,
+      amount: entry.amount, amount_candidates: undefined, amount_verification: undefined, due_date: entry.date,
+      payee: entry.payee, currency: 'USD' };
+    for (const [key, id] of Object.entries({ account: entry.accountId, fromAccount: entry.fromAccountId,
+      toAccount: entry.toAccountId, category: entry.categoryId, payee: entry.payeeId, schedule: entry.scheduleId })) {
+      const target = plan.targets[key as keyof typeof plan.targets];
+      plan.targets[key as keyof typeof plan.targets] = { kind: target.kind, status: id ? 'resolved' : 'not_applicable', id: id || null, provenance: [] };
+    }
+    plan.operation = { ...plan.operation, kind: 'no_write' };
+    plan.automation = { ...plan.automation, eligible: false };
+  }
+  const blockedReason = document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
   return { ...plan, workflow: { id: event?.id || `financial-document:${document.id}`, state,
     relatedEmails: event?.documents.length || 1, reason, nextAttemptAt: event?.nextAttemptAt || document.nextAttemptAt,
     completion: { emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,

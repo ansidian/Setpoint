@@ -43,6 +43,15 @@ describe("demo mode API network guard", () => {
     expect(beaconAttempted).toBe(false);
   });
 
+  it("keeps correction preview, confirmation and status explicitly unavailable before network", async () => {
+    const requests = installRecordingFetch({});
+    const api = await importApiWithDemoMode("1");
+    await expect(api.previewFinancialCorrection({ owner: "event", id: "demo" }, { type: "income", amountCents: 100, date: "2026-09-06", accountId: "demo" })).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    await expect(api.confirmFinancialCorrection("demo", "demo-key")).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    await expect(api.getFinancialCorrection("demo")).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+    expect(requests).toEqual([]);
+  });
+
   it("keeps normal API fetch behavior outside demo mode", async () => {
     const requests = installRecordingFetch({ authenticated: true });
 

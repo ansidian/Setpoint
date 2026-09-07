@@ -1,3 +1,5 @@
+import { coordinateActualWrite, guardOrdinaryActualWrite, guardCorrectedOriginalIdentity } from './actual-write-coordination.ts';
+import type { CorrectionSnapshot, CorrectionStep, CorrectionTargets, CorrectionStepStatus } from '../../shared/types/financial-corrections.ts';
 import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationMode, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
@@ -136,7 +138,7 @@ export async function getMetadata(userId: string, { forceWorker = false, forceRe
   return data;
 }
 
-export async function markBillPaid(scheduleId: string, userId: string): Promise<unknown> {
+async function markBillPaidInner(scheduleId: string, userId: string): Promise<unknown> {
   const result = await callActual<unknown>("markBillPaid", [scheduleId, userId], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
@@ -148,7 +150,7 @@ export async function markBillPaid(scheduleId: string, userId: string): Promise<
 // ACTUAL_LIGHTWEIGHT_UNSUPPORTED and the fallback is allowed, (3) in-process
 // SDK in test/dev. Errors after the lightweight local write was applied
 // (err.localWriteApplied) never fall back — retrying would duplicate the write.
-export async function sendBill(billData: ActualBillWriteInput, userId: string): Promise<unknown> {
+async function sendBillInner(billData: ActualBillWriteInput, userId: string): Promise<unknown> {
   if (!shouldUseInProcessActual()) {
     try {
       const result = await sendBillLightweight(userId, billData);
@@ -176,13 +178,13 @@ export async function sendBill(billData: ActualBillWriteInput, userId: string): 
   return result;
 }
 
-export async function createQuickTxn(userId: string, payload: ActualQuickTransactionInput): Promise<ActualQuickTransactionResult> {
+async function createQuickTxnInner(userId: string, payload: ActualQuickTransactionInput): Promise<ActualQuickTransactionResult> {
   const result = await callActual<ActualQuickTransactionResult>("createQuickTxn", [userId, payload], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
 }
 
-export async function importTransactionGroups(
+async function importTransactionGroupsInner(
   userId: string,
   groups: ActualImportAccountGroup[],
   dryRun: boolean,
@@ -196,7 +198,7 @@ export async function importTransactionGroups(
   return result;
 }
 
-export async function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode): Promise<ActualTransferScheduleResult> {
+async function reconcileTransferScheduleInner(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode): Promise<ActualTransferScheduleResult> {
   const result = await callActual<ActualTransferScheduleResult>("reconcileTransferSchedule", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
@@ -207,8 +209,71 @@ export async function inspectOriginalImportBinding(userId: string, budgetId: str
     "inspectOriginalImportBinding", [userId, budgetId, accountId, importedId, targetId], WRITE_OPERATION_WORKER_OPTIONS);
 }
 
-export async function reconcileFinancialOperation(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode): Promise<ActualFinancialOperationResult> {
+async function reconcileFinancialOperationInner(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode): Promise<ActualFinancialOperationResult> {
   const result = await callActual<ActualFinancialOperationResult>("reconcileFinancialOperation", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
 }
+
+export async function markBillPaid(scheduleId: string, userId: string): Promise<unknown> {
+  return coordinateActualWrite(async () => {
+    await guardOrdinaryActualWrite(userId);
+    return markBillPaidInner(scheduleId, userId);
+  });
+}
+
+export async function sendBill(billData: ActualBillWriteInput, userId: string): Promise<unknown> {
+  return coordinateActualWrite(async () => {
+    await guardOrdinaryActualWrite(userId);
+    return sendBillInner(billData, userId);
+  });
+}
+
+export async function createQuickTxn(userId: string, payload: ActualQuickTransactionInput): Promise<ActualQuickTransactionResult> {
+  return coordinateActualWrite(async () => {
+    await guardOrdinaryActualWrite(userId);
+    return createQuickTxnInner(userId, payload);
+  });
+}
+
+export async function importTransactionGroups(
+  userId: string,
+  groups: ActualImportAccountGroup[],
+  dryRun: boolean,
+): Promise<ActualImportBatchResult> {
+  return coordinateActualWrite(async () => {
+    await guardOrdinaryActualWrite(userId);
+    await guardCorrectedOriginalIdentity(userId, groups.flatMap(group => group.transactions.map(transaction => transaction.importedId)));
+    return importTransactionGroupsInner(userId, groups, dryRun);
+  });
+}
+
+export async function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode): Promise<ActualTransferScheduleResult> {
+  return coordinateActualWrite(async () => {
+    await guardOrdinaryActualWrite(userId);
+    await guardCorrectedOriginalIdentity(userId, [input.identityKey]);
+    return reconcileTransferScheduleInner(userId, input, mode);
+  });
+}
+
+export async function reconcileFinancialOperation(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode): Promise<ActualFinancialOperationResult> {
+  return coordinateActualWrite(async () => {
+    await guardOrdinaryActualWrite(userId);
+    await guardCorrectedOriginalIdentity(userId, [input.identityKey]);
+    return reconcileFinancialOperationInner(userId, input, mode);
+  });
+}
+
+export async function inspectCorrection(userId: string, budgetId: string, targets: CorrectionTargets): Promise<CorrectionSnapshot> {
+  return callActual('inspectCorrection', [userId, budgetId, targets], WRITE_OPERATION_WORKER_OPTIONS);
+}
+export async function dispatchCorrection(userId: string, budgetId: string, step: CorrectionStep, expected: CorrectionSnapshot): Promise<{ localObserved?: CorrectionSnapshot; observed: CorrectionSnapshot; state: CorrectionStepStatus['state']; error: string | null }> {
+  const result = await callActual<{ localObserved?: CorrectionSnapshot; observed: CorrectionSnapshot; state: CorrectionStepStatus['state']; error: string | null }>('dispatchCorrection', [userId, budgetId, step, expected], WRITE_OPERATION_WORKER_OPTIONS);
+  clearMetadataCache();
+  return result;
+}
+
+export { coordinateActualWrite } from './actual-write-coordination.ts';
+export { correctionJson, correctionConditions, decodeCorrectionJson } from './actualCorrectionEvidence.ts';
+export { observeCorrectionStep } from './actualCorrectionExecutor.ts';
+export { buildDateCondition as buildCorrectionDateCondition } from './actualCoreModel.ts';

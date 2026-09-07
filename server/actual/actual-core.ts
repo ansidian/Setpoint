@@ -1,3 +1,6 @@
+import type { CorrectionSnapshot, CorrectionStep, CorrectionTargets } from '../../shared/types/financial-corrections.ts';
+import { readCorrectionSnapshot, correctionJson } from './actualCorrectionEvidence.ts';
+import { executeCorrectionStep } from './actualCorrectionExecutor.ts';
 import { readOriginalTransactions } from "./actualOriginalEvidence.ts";
 import { readOriginalResult } from "./actualOriginalEvidence.ts";
 import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
@@ -511,5 +514,22 @@ export function reconcileFinancialOperation(userId: string, input: ActualFinanci
     const result = await reconcileActualFinancialOperation(sdk, config.syncId, input, mode);
     clearMetadataCache();
     return result;
+  }));
+}
+
+export function inspectCorrection(userId: string, budgetId: string, targets: CorrectionTargets) {
+  return withLock(() => withActualBudget(userId, async config => {
+    if (config.syncId !== budgetId) throw new Error('The selected Actual budget changed.');
+    await sdk.sync();
+    return readCorrectionSnapshot(sdk, budgetId, targets);
+  }));
+}
+export function dispatchCorrection(userId: string, budgetId: string, step: CorrectionStep, expected: CorrectionSnapshot) {
+  return withLock(() => withActualBudget(userId, async config => {
+    if (config.syncId !== budgetId) throw new Error('The selected Actual budget changed.');
+    await sdk.sync();
+    const observed = await readCorrectionSnapshot(sdk, budgetId, step.targets);
+    if (correctionJson(observed) !== correctionJson(expected)) return { observed, state: 'no_write' as const, error: 'Actual changed before dispatch; refresh this correction.' };
+    return executeCorrectionStep(sdk, budgetId, step, expected);
   }));
 }

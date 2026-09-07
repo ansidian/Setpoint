@@ -1,3 +1,4 @@
+import type { FinancialCorrection } from './financial-corrections.ts';
 import type { FinancialEmailPlan } from "./bills.ts";
 import type { TransactionImportItem, TransactionImportRunSummary, TransactionImportSource } from "./transaction-imports.ts";
 
@@ -49,13 +50,15 @@ export interface FinancialActivity {
   updatedAt: number;
   status: "needs_attention" | "processing" | "completed" | "dismissed";
   reason: string;
-  actions: { complete: boolean; retry: boolean; inspect: true; correct: false };
+  identityConflict?: true;
+  actions: { complete: boolean; retry: boolean; inspect: true; correct: boolean };
   originalReceipts: FinancialOriginalReceipt[];
   sourceEvidence: unknown[];
   targetBindings: FinancialWriteEvidence[];
   /** Saved evidence only; a read of history does not query or synchronize Actual. */
   liveState: "not_checked";
   effectiveResult: unknown;
+  correction?: { id: string; state: FinancialCorrection['state']; revision: number };
   completionPlan: FinancialEmailPlan | null;
   importItem: TransactionImportItem | null;
   runs: TransactionImportRunSummary[];

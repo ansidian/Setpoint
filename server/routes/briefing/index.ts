@@ -1,3 +1,4 @@
+import financialCorrections from './financial-corrections.ts';
 import { Router } from "express";
 import { requireCookieSession } from "../../middleware/auth.ts";
 import dev from "./dev.ts";
@@ -21,5 +22,6 @@ router.use(bills);
 router.use(snapshot);
 router.use(transactionImports);
 router.use(financialActivity);
+router.use(financialCorrections);
 
 export default router;

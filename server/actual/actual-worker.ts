@@ -43,6 +43,7 @@ let operationQueue: Promise<unknown> = Promise.resolve();
 let health: ActualWorkerHealth = { ...INITIAL_HEALTH };
 let idleShutdownTimer: NodeJS.Timeout | null = null;
 const expectedWorkerExits = new Set<ChildProcess>();
+const retiringWorkers = new Map<ChildProcess, Promise<void>>();
 const workerForceKillTimers = new Map<ChildProcess, NodeJS.Timeout>();
 
 function appendBounded(current: string, chunk: string): string {
@@ -115,6 +116,12 @@ function requestWorkerShutdown(child: ChildProcess | null, {
         lastError: null,
       };
     }
+  }
+  if (!retiringWorkers.has(child)) {
+    retiringWorkers.set(child, new Promise<void>(resolve => child.once('exit', () => {
+      retiringWorkers.delete(child);
+      resolve();
+    })));
   }
   child.kill("SIGTERM");
   armForceKill(child, forceKillGraceMs);
@@ -302,7 +309,9 @@ function sendOperation<T>(operation: ActualWorkerOperation, args: unknown[], opt
 }
 
 export function runActualWorkerOperation<T = unknown>(operation: ActualWorkerOperation, args: unknown[] = [], options: ActualWorkerOptions = {}): Promise<T> {
-  const run = () => sendOperation<T>(operation, args, options);
+  const run = () => retiringWorkers.size
+    ? Promise.all([...retiringWorkers.values()]).then(() => sendOperation<T>(operation, args, options))
+    : sendOperation<T>(operation, args, options);
   const result = operationQueue.then(run, run) as Promise<T>;
   operationQueue = result.catch(() => {});
   return result;
@@ -318,6 +327,7 @@ export function shutdownActualWorker(): void {
   }
   for (const timer of workerForceKillTimers.values()) clearTimeout(timer);
   workerForceKillTimers.clear();
+  retiringWorkers.clear();
   expectedWorkerExits.clear();
   rejectPendingRequests(Object.assign(new Error("Actual worker shut down"), { status: 503 }));
   pendingRequests = new Map<string, PendingRequest>();

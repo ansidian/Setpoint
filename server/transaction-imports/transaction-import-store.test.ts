@@ -15,7 +15,7 @@ describe("transaction import store", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "063_financial_activity.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "030_owner_bootstrap.sql", "041_email_transaction_imports.sql", "042_transaction_import_item_subject.sql", "053_transaction_import_financial_plans.sql", "054_email_sender_authentication.sql", "055_generic_financial_email_imports.sql", "056_generic_financial_email_automation.sql", "058_generic_financial_email_income_automation.sql", "062_financial_events.sql", "063_financial_activity.sql", "064_financial_corrections.sql"]) {
       await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
     }
     await db.execute({
@@ -72,6 +72,22 @@ describe("transaction import store", () => {
       ...overrides,
     };
   }
+
+  it("suppresses corrected receipt aliases while allowing a different order from the same email", async () => {
+    await createRun();
+    const subject = store();
+    await subject.insertItem(itemInput({ status: 'added' }));
+    await db.execute("INSERT INTO ea_financial_correction_guards SELECT user_id,activity_id FROM ea_financial_activity_occurrences WHERE record_id='item-1'");
+    await db.execute("UPDATE ea_transaction_import_runs SET status='completed' WHERE id='run-1'");
+    await createRun('run-2');
+    await subject.insertItem(itemInput({ id: 'repeat', runId: 'run-2', status: 'ready' }));
+    const repeat = (await subject.getRunDetail('owner-1', 'run-2'))!.items.find(item => item.id === 'repeat');
+    expect(repeat).toMatchObject({ status: 'needs_review', automaticSafe: false });
+    expect(await subject.claimNextItem('replay')).toBeNull();
+    expect(await subject.confirmItem('owner-1', 'run-2', 'repeat', { date: '2026-01-15', amountCents: -2599, payee: 'Amazon', notes: '', actualAccountId: 'checking', actualCategoryId: null })).toBe(false);
+    await subject.insertItem(itemInput({ id: 'different-order', runId: 'run-2', candidateKey: 'another-order', importedId: 'another-order', externalId: 'another-order', status: 'ready' }));
+    expect(await subject.claimNextItem('new-order')).toMatchObject({ id: 'different-order' });
+  });
 
   it("coalesces an identical active historical run and admits a new one after completion", async () => {
     const first = await createRun("run-1");

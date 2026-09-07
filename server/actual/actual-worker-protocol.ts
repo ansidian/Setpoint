@@ -13,6 +13,8 @@ export type ActualWorkerOperation =
   | "importTransactionGroups"
   | "reconcileTransferSchedule"
   | "inspectOriginalImportBinding"
+  | "inspectCorrection"
+  | "dispatchCorrection"
   | "reconcileFinancialOperation";
 
 export interface ActualWorkerRequest {
@@ -68,6 +70,8 @@ const OPERATIONS: ReadonlySet<string> = new Set<ActualWorkerOperation>([
   "importTransactionGroups",
   "reconcileTransferSchedule",
   "inspectOriginalImportBinding",
+  "inspectCorrection",
+  "dispatchCorrection",
   "reconcileFinancialOperation",
 ]);
 

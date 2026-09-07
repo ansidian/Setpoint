@@ -33,8 +33,10 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       { sql: "SELECT * FROM ea_financial_identity_conflicts WHERE user_id = ?", args: [userId] },
       { sql: "SELECT * FROM ea_financial_actual_bindings WHERE user_id = ?", args: [userId] },
       { sql: "SELECT * FROM ea_financial_original_receipts WHERE user_id = ? ORDER BY captured_at, record_id", args: [userId] },
+      { sql: "SELECT * FROM ea_financial_corrections WHERE user_id = ? ORDER BY rowid", args: [userId] },
+      { sql: "SELECT * FROM ea_financial_effective_corrections WHERE user_id = ?", args: [userId] },
     ], "read");
-    const [events, documents, imports, runs, occurrences, conflicts, bindings, receipts] = results.map((result) => result.rows);
+    const [events, documents, imports, runs, occurrences, conflicts, bindings, receipts, corrections, effectiveCorrections] = results.map((result) => result.rows);
     const occurrenceMap = new Map(occurrences!.map((row) => [`${row.owner}:${row.record_id}`, row]));
     const runMap = new Map(runs!.map((row) => [String(row.id), projectTransactionImportRun(row)]));
     const receiptMap = new Map<string, FinancialOriginalReceipt[]>();
@@ -121,7 +123,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       const reference: FinancialActivityReference = { owner: "import", id: item.id, runId: item.runId };
       const activityRuns = [...new Set(rows.map((row) => String(row.run_id)))].flatMap((id) => runMap.get(id) || []);
       const successful = completed.has(item.status) || originalReceipts.length > 0;
-      output.push({ id, reference, occurrences: rows.map((row) => ({ owner: "import", id: String(row.id), runId: String(row.run_id) })),
+      output.push({ ...(identityConflict ? { identityConflict: true as const } : {}), id, reference, occurrences: rows.map((row) => ({ owner: "import", id: String(row.id), runId: String(row.run_id) })),
         source: item.source, contexts: [...new Set(activityRuns.map((run) => run.trigger))],
         emailUids: [...new Set(rows.map((row) => String(row.email_uid)))], subject: item.emailSubject,
         payee: item.payee, amountCents: item.amountCents, currency: item.currency,
@@ -132,6 +134,27 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         actions: { complete: !identityConflict && !successful && policy.complete, retry: !identityConflict && !successful && policy.retry, inspect: true, correct: false },
         originalReceipts, sourceEvidence: rows.map((row) => parse(occurrenceMap.get(`import:${row.id}`)?.source_snapshot_json)), targetBindings: targets(id), liveState: "not_checked", effectiveResult: originalReceipts[0]?.result || null,
         completionPlan: item.financialPlan, importItem: item, runs: activityRuns });
+    }
+    for (const activity of output) {
+      const current = corrections!.filter(row => row.activity_id === activity.id).at(-1);
+      const effective = effectiveCorrections!.find(row => row.activity_id === activity.id);
+      if (effective) {
+        const result = parse<{ entry?: { amountCents?: number; payee?: string } }>(effective.effective_result_json);
+        activity.effectiveResult = result;
+        activity.amountCents = result?.entry?.amountCents ?? activity.amountCents;
+        activity.payee = result?.entry?.payee ?? activity.payee;
+      }
+      activity.actions.correct = !activity.identityConflict && activity.originalReceipts.length > 0 && activity.targetBindings.length === 1;
+      if (current) {
+        activity.correction = { id: String(current.id), state: current.state as NonNullable<FinancialActivity['correction']>['state'], revision: Number(current.revision) };
+        activity.actions.complete = false; activity.actions.retry = false;
+        if (['applying', 'recovering'].includes(String(current.state))) {
+          activity.status = 'processing'; activity.reason = current.state === 'applying' ? 'Applying the confirmed correction.' : 'Recovering the correction; its attempted steps will not be replayed.';
+          activity.actions.correct = false;
+        } else if (current.state === 'attention') {
+          activity.status = 'needs_attention'; activity.reason = 'The correction stopped and requires attention. Its observed effects are preserved.';
+        }
+      }
     }
     return output.sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
   }

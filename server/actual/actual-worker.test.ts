@@ -202,12 +202,14 @@ describe("Actual worker runner", () => {
 
     const second = runActualWorkerOperation("getPayees", ["user-1"], { timeoutMs: 5000 });
     await Promise.resolve();
-    // test-architecture: allow-boundary-interaction -- secondChild.send is the replacement-process IPC boundary; recovery must admit the next request without waiting for force-kill grace.
-    expect(secondChild.send).toHaveBeenCalledTimes(1);
+    // test-architecture: allow-boundary-interaction -- secondChild.send is the replacement-process IPC boundary; replacement IPC must wait until the retired process has exited.
+    expect(secondChild.send).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(2000);
     // test-architecture: allow-boundary-interaction -- child.kill is the process lifecycle boundary; an unresponsive timed-out worker must escalate to SIGKILL after grace.
     expect(firstChild.kill).toHaveBeenCalledWith("SIGKILL");
+    firstChild.emit("exit", null, "SIGKILL");
+    await vi.advanceTimersByTimeAsync(0);
 
     // test-architecture: allow-boundary-interaction -- Actual worker IPC and fork configuration are process boundaries; request correlation, replacement, and memory ceilings are observable only on child messages and fork options.
     const secondRequest = secondChild.send.mock.calls[0]![0];

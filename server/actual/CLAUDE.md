@@ -28,6 +28,9 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-metadata-projection.ts` — DB projection of Actual metadata with TTL for fast reads
 - `actual-bill-occurrences.ts` — expands Actual schedules into dated bill occurrences with paid status
 - `actual-amount-condition.ts` — single source of truth for interpreting an Actual `amount` schedule condition (scalar cents vs `isbetween` range)
+- `actual-write-coordination.ts` — parent-process write serialization and durable active/original-source correction guards
+- `actualCorrectionEvidence.ts` — exact raw correction snapshots including orphan schedule children
+- `actualCorrectionExecutor.ts` — one awaited frozen dispatch and synchronized effect verification
 - `actualOriginalEvidence.ts` — read-only raw SDK transaction/schedule graph snapshots and original before/after evidence; preserves cents, exact IDs and unknown provenance
 - `actualTransactionImportModel.ts` — pure validation, SDK projection, compatibility classification, and reconciliation outcome mapping for grouped imports
 - `actual-connection-test.ts` — HTTP-level reachability test for the Actual server

@@ -326,7 +326,10 @@ export function createTransactionImportWorker({
                 item.preparedEvidence = outcome.evidence;
                 admitted.push(item);
               }
-            } else admitted.push(item);
+            } else {
+              await store.settleItem(item.userId, item.id, item.claimToken, { status: 'needs_review',
+                lastError: 'Actual did not provide exact preparation evidence; no original write was admitted.' });
+            }
           }
         }
         if (!admitted.length) continue;

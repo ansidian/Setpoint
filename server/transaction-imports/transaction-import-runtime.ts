@@ -1,3 +1,4 @@
+import { financialCorrections } from '../financial-corrections/financial-corrections.ts';
 import { transactionImportWorker } from "./transaction-import-worker.ts";
 import { financialEventWorker } from "../financial-events/financial-event-service.ts";
 import { financialEventIntake } from "../financial-events/financial-event-intake.ts";
@@ -27,7 +28,7 @@ interface FinancialEventWorker {
 }
 
 export function createTransactionImportRuntime(worker: TransactionImportWorker, financeWorker?: FinancialEventWorker,
-  financeIntake?: Pick<typeof financialEventIntake, "processNextPage" | "getNextWakeAt" | "recoverStaleClaims">) {
+  financeIntake?: Pick<typeof financialEventIntake, "processNextPage" | "getNextWakeAt" | "recoverStaleClaims">, corrections?: Pick<typeof financialCorrections, "recoverPending">) {
   let safetyInterval: ReturnType<typeof setInterval> | null = null;
   let wakeTimer: ReturnType<typeof setTimeout> | null = null;
   let wakeAt: number | null = null;
@@ -76,6 +77,7 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
         await financeWorker?.recoverStaleClaims();
         await financeIntake?.recoverStaleClaims();
       }
+      await corrections?.recoverPending();
       const intakeSaturated = financeIntake ? await drainBounded(
         MAX_FINANCIAL_INTAKE_PAGES_PER_DRAIN, financeIntake.processNextPage,
       ) : false;
@@ -165,7 +167,7 @@ export function createTransactionImportRuntime(worker: TransactionImportWorker, 
   return { requestDrain, start, stop };
 }
 
-const runtime = createTransactionImportRuntime(transactionImportWorker, financialEventWorker, financialEventIntake);
+const runtime = createTransactionImportRuntime(transactionImportWorker, financialEventWorker, financialEventIntake, financialCorrections);
 
 export const requestTransactionImportDrain = runtime.requestDrain;
 export const startTransactionImportWorker = runtime.start;

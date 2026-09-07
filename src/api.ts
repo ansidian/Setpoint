@@ -1,3 +1,4 @@
+export { previewFinancialCorrection, confirmFinancialCorrection, getFinancialCorrection } from './lib/financialCorrectionApi';
 import type { SnoozedEmailEntry } from "../shared/types/email";
 export { listFinancialActivity, getFinancialActivity, inspectFinancialActivityBinding } from "./lib/financialActivityApi";
 import { isDemoMode } from "./demo/config.ts";

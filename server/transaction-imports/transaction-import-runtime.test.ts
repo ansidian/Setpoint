@@ -167,7 +167,7 @@ describe("transaction import runtime", () => {
     vi.useFakeTimers();
     const startedAt = Date.parse("2026-09-07T00:00:00Z");
     vi.setSystemTime(startedAt);
-    const database = await createEmailIndexTestDb({ extraMigrations: [] });
+    const database = await createEmailIndexTestDb({ extraMigrations: ['030_owner_bootstrap.sql', '041_email_transaction_imports.sql', '042_transaction_import_item_subject.sql', '053_transaction_import_financial_plans.sql', '055_generic_financial_email_imports.sql', '056_generic_financial_email_automation.sql', '058_generic_financial_email_income_automation.sql', '059_generic_financial_email_transfer_automation.sql', '063_financial_activity.sql', '064_financial_corrections.sql'] });
     await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
     const store = createFinancialEventStore(database);
     await seedIndexedEmail(database, { uid: "arrival", email_date: "2026-09-06T12:01:00Z" });
@@ -210,7 +210,7 @@ describe("transaction import runtime", () => {
 
   it("waits for admitted financial work to persist before stopping and leaves later arrivals pending", async () => {
     vi.useFakeTimers();
-    const database = await createEmailIndexTestDb({ extraMigrations: [] });
+    const database = await createEmailIndexTestDb({ extraMigrations: ['030_owner_bootstrap.sql', '041_email_transaction_imports.sql', '042_transaction_import_item_subject.sql', '053_transaction_import_financial_plans.sql', '055_generic_financial_email_imports.sql', '056_generic_financial_email_automation.sql', '058_generic_financial_email_income_automation.sql', '059_generic_financial_email_transfer_automation.sql', '063_financial_activity.sql', '064_financial_corrections.sql'] });
     await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2000-01-01T00:00:00Z'");
     const store = createFinancialEventStore(database);
     await seedIndexedEmail(database, { uid: "first" });
@@ -258,7 +258,7 @@ describe("transaction import runtime", () => {
     vi.useFakeTimers();
     const startedAt = Date.parse("2026-09-02T00:00:00Z");
     vi.setSystemTime(startedAt);
-    const database = await createEmailIndexTestDb({ extraMigrations: [] });
+    const database = await createEmailIndexTestDb({ extraMigrations: ['030_owner_bootstrap.sql', '041_email_transaction_imports.sql', '042_transaction_import_item_subject.sql', '053_transaction_import_financial_plans.sql', '055_generic_financial_email_imports.sql', '056_generic_financial_email_automation.sql', '058_generic_financial_email_income_automation.sql', '059_generic_financial_email_transfer_automation.sql', '063_financial_activity.sql', '064_financial_corrections.sql'] });
     await database.execute("UPDATE ea_financial_workflow_state SET cutover_at = '2026-09-01T00:00:00Z'");
     await seedEmailAccount(database);
     const intake = createFinancialEventIntake({ dbClient: database, async fetchPage(account, { end, pageToken }) {
