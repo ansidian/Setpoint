@@ -15,10 +15,6 @@ const NON_REQUEST = new Set<string>(NON_REQUEST_NAMES);
 
 // These surfaces are deliberately unavailable in the public walkthrough.
 const INTENTIONALLY_UNHANDLED_NAMES = [
-  "completeFinancialEvent",
-  "previewFinancialCorrection",
-  "confirmFinancialCorrection",
-  "getFinancialCorrection",
   "cancelPasskeyAuthentication",
   "addICloudAccount",
   "createApiToken",

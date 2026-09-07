@@ -1,3 +1,5 @@
+import { completeDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
+import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
 import { createDemoApiError } from "./config.ts";
 import {
   NO_DEMO_API_RESPONSE,
@@ -29,15 +31,12 @@ type DemoRemoteContentTrustEntry = {
 };
 const clone = <T>(value: T): T => value == null ? value : structuredClone(value);
 let demoRemoteContentTrustEntries: DemoRemoteContentTrustEntry[] = [];
-
 function route(path: string): URL {
   return new URL(path, "http://setpoint-demo.local");
 }
-
 function unsupported(path: string): never {
   throw createDemoApiError(path);
 }
-
 function parseBody(options: RequestInit = {}): DemoRequestBody {
   if (!options.body) return {};
   if (typeof options.body === "string") {
@@ -49,13 +48,11 @@ function parseBody(options: RequestInit = {}): DemoRequestBody {
   }
   return options.body as unknown as DemoRequestBody;
 }
-
 function mutateTask(seed: DemoSeed, taskId: string, updater: (task: DemoTask) => void): void {
   for (const task of seed.deadlines.upcoming || []) {
     if (String(task.id || task.todoist_id) === String(taskId)) updater(task);
   }
 }
-
 function makeDemoReminder(seed: DemoSeed, body: DemoRequestBody): Reminder {
   const now = new Date();
   let sequence = seed.reminders.length + 1;
@@ -294,7 +291,9 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const targetedRefresh = pathname === "/api/dashboard/current/refresh" && method === "POST" && body.source != null;
   const readOnlyPost = !targetedRefresh && (pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync");
   const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
-  if (pathname === "/api/briefing/financial-activity" || pathname.startsWith("/api/briefing/financial-activity/")) return handleDemoFinancialActivity(url, method);
+  if (pathname.startsWith("/api/briefing/financial-corrections/") || pathname === "/api/briefing/financial-activity" || pathname.startsWith("/api/briefing/financial-activity/")) return handleDemoFinancialActivity(url, method, body);
+  if (pathname === "/api/briefing/bills/resolve" && method === "POST" && body.emailId === "demo-email-budget") return demoCompletionPlan();
+  if (pathname === "/api/briefing/financial-events/complete" && method === "POST") return completeDemoFinancialEvent(body as unknown as FinancialEventCompletionRequest);
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
   const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body, seed });

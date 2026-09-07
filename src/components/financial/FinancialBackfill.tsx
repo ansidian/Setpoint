@@ -1,38 +1,26 @@
+import { getAccounts, getCapabilities, getSettings } from "@/api";
+import { projectConnectionRows } from "../settings/connectionModel";
+import { projectFeatureDependencies } from "../settings/featureDependencyModel";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
-import { History, Landmark, Loader2, RefreshCw, ScanSearch } from "lucide-react";
-import { SettingsCard, StatusPill } from "@/components/settings/settings-ui";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  SETTINGS_PRIMARY_BUTTON_CLASS,
-  SETTINGS_SECONDARY_BUTTON_CLASS,
-} from "@/components/settings/settings-core";
+import { Link } from "react-router";
+import { History, Loader2, RefreshCw, ScanSearch } from "lucide-react";
+import Dropdown from "../shared/Dropdown";
 import { cn } from "@/lib/utils";
-import useTransactionImports from "@/hooks/settings/useTransactionImports";
-import TransactionImportReviewList from "./transaction-import/TransactionImportReviewList";
-import TransactionImportDateField from "./transaction-import/TransactionImportDateField";
-import { runPhase } from "./transaction-import/transactionImportReviewModel";
-import type { AccountSummary } from "../../../../shared/types/accounts";
-import type { ActualMetadataResponse } from "../../../../shared/types/bills";
+import useTransactionImports from "@/hooks/useTransactionImports";
+import { financialHref } from "./financialNavigation";
+import DateField from "@/components/shared/pickers/DateField";
+import { runPhase } from "./transactionImportReviewModel";
+import type { AccountSummary } from "../../../shared/types/accounts";
 import type {
   TransactionImportParserSource,
   TransactionImportRunSummary,
-} from "../../../../shared/types/transaction-imports";
+} from "../../../shared/types/transaction-imports";
 
 const SOURCES: Array<{ id: TransactionImportParserSource; label: string }> = [
   { id: "amazon", label: "Amazon" },
   { id: "paypal", label: "PayPal" },
 ];
 const BUTTON_BASE = "inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-[11px] font-semibold outline-none transition-[background-color,border-color,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0";
-const SELECT_TRIGGER_CLASS = "min-h-9 w-full rounded-md border-white/[0.08] bg-input-bg px-2.5 text-[12px] font-medium text-foreground transition-[border-color,background-color,box-shadow,transform] duration-[var(--sp-motion-fast)] hover:border-white/[0.14] hover:bg-white/[0.03] focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none";
-const SELECT_CONTENT_CLASS = "border-white/[0.1] bg-[var(--sp-panel)] text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)]";
-const SELECT_ITEM_CLASS = "min-h-8 px-2.5 text-[12px] text-foreground/85 focus:bg-primary/[0.14] focus:text-foreground";
 
 function ymd(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -49,30 +37,50 @@ function runLabel(run: TransactionImportRunSummary): string {
   return `${run.trigger === "arrival" ? "New mail" : "Manual backfill"} · ${new Date(run.createdAt).toLocaleString()} · ${runPhase(run)}`;
 }
 
-export default function EmailTransactionImportCard({
-  metadata,
-  metadataLoading,
-  onRequestMetadata,
-  gmailAccounts,
-  liveOperationsAvailable,
-}: {
-  metadata: ActualMetadataResponse;
-  metadataLoading: boolean;
-  onRequestMetadata: () => unknown;
+export default function FinancialBackfill({ requestedRunId, onRepair }: {
+  requestedRunId: string | null;
+  onRepair: () => void;
+}) {
+  const [setup, setSetup] = useState<{ accounts: AccountSummary[]; available: boolean } | null>(null);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("ea-settings-changed", refresh);
+    return () => window.removeEventListener("ea-settings-changed", refresh);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    void Promise.all([getAccounts(), getSettings(), getCapabilities(revision > 0)]).then(([response, settings, capabilities]) => {
+      if (!active) return;
+      const accounts = Array.isArray(response) ? response : response.accounts;
+      const connections = projectConnectionRows({ accounts, settings, capabilities: capabilities.capabilities, credentialMetadata: null });
+      setSetup({ accounts, available: projectFeatureDependencies(connections).finance.allowLiveMetadata });
+    }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Could not load backfill setup."); });
+    return () => { active = false; };
+  }, [revision]);
+  return <div className="financial-detail">
+    {error && <p role="alert" className="financial-error">{error} <button className="financial-button" onClick={() => { setError(""); setRevision(value => value + 1); }}>Try again</button></p>}
+    {!setup && !error && <p role="status">Loading backfill setup…</p>}
+    {setup && <>
+      {!setup.available && <div className="mb-4 financial-note"><p>Connect Actual Budget to start a backfill. Saved batches remain available.</p><button className="financial-button mt-2" onClick={onRepair}>Check Actual connection</button></div>}
+      <BackfillControls gmailAccounts={setup.accounts} liveOperationsAvailable={setup.available} requestedRunId={requestedRunId} />
+    </>}
+  </div>;
+}
+
+function BackfillControls({ gmailAccounts, liveOperationsAvailable, requestedRunId }: {
   gmailAccounts: AccountSummary[];
   liveOperationsAvailable: boolean;
+  requestedRunId: string | null;
 }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const pendingOnly = searchParams.get("reviewPending") === "1";
-  const imports = useTransactionImports({ requestedRunId: searchParams.get("importRun"), pendingOnly });
+  const imports = useTransactionImports({ requestedRunId });
   const initialDates = useMemo(() => defaultDates(), []);
   const [startDate, setStartDate] = useState(initialDates.start);
   const [endDate, setEndDate] = useState(initialDates.end);
   const [scanAccounts, setScanAccounts] = useState<Set<string> | null>(null);
   const [scanSources, setScanSources] = useState<Set<TransactionImportParserSource>>(new Set(["amazon", "paypal"]));
   const [localError, setLocalError] = useState("");
-  const actualAccounts = (metadata.accounts || []).filter((account) => !account.closed);
-  const categoryGroups = metadata.categories || [];
 
   const defaultScanAccounts = useMemo(
     () => new Set(gmailAccounts.filter((account) => account.type === "gmail").map((account) => account.id)),
@@ -99,36 +107,15 @@ export default function EmailTransactionImportCard({
   const runOptions = selectedRun && !imports.runs.some((run) => run.id === selectedRun.id)
     ? [selectedRun, ...imports.runs] : imports.runs;
   const error = localError || imports.error;
-  const hasReviewableItems = Boolean(selectedRun?.items.some((item) => item.status === "ready" || item.status === "needs_review"));
-
-  useEffect(() => {
-    if (!liveOperationsAvailable || metadataLoading || !hasReviewableItems || actualAccounts.length) return;
-    void onRequestMetadata();
-  }, [
-    actualAccounts.length,
-    hasReviewableItems,
-    liveOperationsAvailable,
-    metadataLoading,
-    onRequestMetadata,
-  ]);
-
   return (
-    <SettingsCard
-      id="email-transaction-imports"
-      ready={!imports.loading}
-      title="Email Transaction Imports"
-      icon={<Landmark size={14} aria-hidden="true" />}
-      description="Review financial email imports and backfill Amazon or PayPal receipts. Accounts and categories are resolved from email evidence and Actual history."
-      headerAction={imports.active ? <StatusPill tone="accent"><Loader2 size={11} className="animate-spin" /> Working</StatusPill> : null}
-    >
-      <div className="flex flex-col gap-5">
+      <div className="financial-backfill-content flex flex-col gap-5">
         {error ? (
           <div role="alert" className="rounded-lg border border-danger/20 bg-danger/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-danger">
             {error}
           </div>
         ) : null}
 
-        {!pendingOnly && <section aria-labelledby="transaction-scan-title">
+        <section aria-labelledby="transaction-scan-title">
           <div className="flex items-center gap-2">
             <ScanSearch size={14} className="text-primary/75" aria-hidden="true" />
             <h3 id="transaction-scan-title" className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">Manual backfill</h3>
@@ -185,7 +172,7 @@ export default function EmailTransactionImportCard({
             <label className="text-[10px] text-muted-foreground">
               Start date
               <div className="mt-1">
-                <TransactionImportDateField
+                <DateField
                   ariaLabel="Start date"
                   value={startDate}
                   onChange={setStartDate}
@@ -196,7 +183,7 @@ export default function EmailTransactionImportCard({
             <label className="text-[10px] text-muted-foreground">
               End date
               <div className="mt-1">
-                <TransactionImportDateField
+                <DateField
                   ariaLabel="End date"
                   value={endDate}
                   onChange={setEndDate}
@@ -208,68 +195,37 @@ export default function EmailTransactionImportCard({
               type="button"
               disabled={imports.busyKey === "scan" || imports.active || !liveOperationsAvailable}
               onClick={() => void startScan()}
-              className={cn(BUTTON_BASE, SETTINGS_PRIMARY_BUTTON_CLASS)}
+              className={cn(BUTTON_BASE, "financial-primary")}
             >
               {imports.busyKey === "scan" ? <Loader2 size={13} className="animate-spin" /> : <ScanSearch size={13} />}
               {imports.busyKey === "scan" ? "Starting…" : "Start backfill"}
             </button>
           </div>
-        </section>}
+        </section>
 
         <section id="transaction-import-review" aria-labelledby="transaction-results-title" className="scroll-mt-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <History size={14} className="text-primary/75" aria-hidden="true" />
-              <h3 id="transaction-results-title" className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">{pendingOnly ? "Pending review" : "Recent results"}</h3>
+              <h3 id="transaction-results-title" className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">Recent batches</h3>
             </div>
             <button
               type="button"
               disabled={imports.loading}
               onClick={() => void imports.refresh()}
-              className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
+              className={cn(BUTTON_BASE, "financial-button", "min-h-8 px-2.5")}
             >
               <RefreshCw size={12} className={cn(imports.loading && "animate-spin")} /> Refresh
             </button>
           </div>
 
-          {pendingOnly && <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] text-muted-foreground" role="status">
-              {imports.totalRuns === 0 ? "No runs need review." : `Runs ${imports.pageOffset + 1}–${Math.min(imports.pageOffset + 12, imports.totalRuns)} of ${imports.totalRuns} needing review`}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
-                disabled={imports.loading || !!imports.busyKey || imports.pageOffset === 0}
-                onClick={() => void imports.changePage(imports.pageOffset - 12)}>Previous page</button>
-              <button type="button" className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
-                disabled={imports.loading || !!imports.busyKey || imports.pageOffset + 12 >= imports.totalRuns}
-                onClick={() => void imports.changePage(imports.pageOffset + 12)}>Next page</button>
-              <button type="button" className={cn(BUTTON_BASE, SETTINGS_SECONDARY_BUTTON_CLASS, "min-h-8 px-2.5")}
-                disabled={imports.loading || !!imports.busyKey}
-                onClick={() => setSearchParams((current) => { const next = new URLSearchParams(current); next.delete("reviewPending"); next.delete("importRun"); return next; })}>Show recent activity</button>
-            </div>
-          </div>}
-
           {runOptions.length ? (
             <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <Select
-                value={imports.selectedRunId || ""}
-                disabled={imports.loading || !!imports.busyKey}
-                onValueChange={(value) => {
-                  if (value) void imports.selectRun(value);
-                }}
-              >
-                <SelectTrigger className={cn(SELECT_TRIGGER_CLASS, "min-w-0")} aria-label="Transaction import run">
-                  <SelectValue className="truncate">{selectedRun ? runLabel(selectedRun) : "Choose a run"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent align="start" alignItemWithTrigger={false} className={SELECT_CONTENT_CLASS}>
-                  {runOptions.map((run) => (
-                    <SelectItem key={run.id} value={run.id} className={SELECT_ITEM_CLASS}>
-                      {runLabel(run)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedRun ? <StatusPill tone={selectedRun.status === "failed" || selectedRun.status === "paused" ? "danger" : selectedRun.status === "completed" ? "success" : "accent"}>{runPhase(selectedRun)}</StatusPill> : null}
+              <Dropdown ariaLabel="Transaction import run" value={imports.selectedRunId || ""}
+                disabled={imports.loading || !!imports.busyKey} placeholder="Choose a run"
+                onChange={value => { void imports.selectRun(value); }}
+                options={runOptions.map(run => ({ id: run.id, name: runLabel(run) }))} />
+              {selectedRun ? <span className="financial-status" data-tone={selectedRun.status === "completed" ? "success" : "attention"}>{runPhase(selectedRun)}</span> : null}
             </div>
           ) : null}
 
@@ -284,25 +240,16 @@ export default function EmailTransactionImportCard({
                 {selectedRun.lastError ? <span className="text-danger">{selectedRun.lastError}</span> : null}
               </div>
               <div className="mt-3">
-                <TransactionImportReviewList
-                  items={selectedRun.items}
-                  accounts={actualAccounts}
-                  categoryGroups={categoryGroups}
-                  busyKey={imports.busyKey}
-                  liveOperationsAvailable={liveOperationsAvailable}
-                  onCommit={imports.commit}
-                  onRetry={imports.retry}
-                  onDismiss={imports.dismiss}
-                />
+                <div className="flex flex-wrap gap-2 mb-3"><Link className={cn(BUTTON_BASE, "financial-button", "financial-action")} to={financialHref({ view:"needs_attention", runId:selectedRun.id })}>Open batch review</Link><Link className={cn(BUTTON_BASE, "financial-button", "financial-action")} to={financialHref({ view:"completed", runId:selectedRun.id })}>Completed results</Link></div>
+
               </div>
             </>
           ) : (
             <div className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-4 py-5 text-[12px] text-muted-foreground/70">
-              {imports.loading ? "Loading transaction imports…" : pendingOnly ? "No pending review items on this page." : "No transaction import activity yet."}
+              {imports.loading ? "Loading transaction imports…" : "No transaction import activity yet."}
             </div>
           )}
         </section>
       </div>
-    </SettingsCard>
   );
 }

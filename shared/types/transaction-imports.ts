@@ -1,5 +1,6 @@
 import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
-import type { FinancialWriteEvidence } from "./financial-activity.ts";
+import type { FinancialCorrectionDraft } from "./financial-corrections.ts";
+import type { FinancialActivity, FinancialWriteEvidence } from "./financial-activity.ts";
 
 export const TRANSACTION_IMPORT_PARSER_SOURCES = ["amazon", "paypal"] as const;
 export type TransactionImportParserSource = typeof TRANSACTION_IMPORT_PARSER_SOURCES[number];
@@ -74,6 +75,9 @@ export interface TransactionImportRunSummary {
 }
 
 export interface TransactionImportItem {
+  correction?: FinancialActivity["correction"];
+  /** Latest verified correction for read-only consumers; original import fields remain immutable history. */
+  effectiveResult?: { correctionId: string; entry: FinancialCorrectionDraft & { payee?: string }; scheduleId?: string; transactionId?: string };
   preparedEvidence?: FinancialWriteEvidence;
   originalAttemptedAt?: number | null;
   id: string;

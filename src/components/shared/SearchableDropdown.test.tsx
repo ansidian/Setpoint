@@ -87,4 +87,16 @@ describe("SearchableDropdown", () => {
     expect(screen.queryByPlaceholderText("Search...")).toBeNull();
     expect(selectedId).toBe("checking");
   });
+
+  it("keeps same-named provider records distinct during keyboard selection", async () => {
+    let selectedId = "first";
+    render(<SearchableDropdown options={[{ id:"first",name:"Electric" },{ id:"second",name:"Electric" }]}
+      value={selectedId} onChange={id => { selectedId = id; }} ariaLabel="Payee" />);
+    fireEvent.click(screen.getByRole("button", { name:"Payee" }));
+    const search = await screen.findByPlaceholderText("Search...");
+    fireEvent.change(search, { target:{ value:"Electric" } });
+    fireEvent.keyDown(search, { key:"ArrowDown" });
+    fireEvent.keyDown(search, { key:"Enter" });
+    expect(selectedId).toBe("second");
+  });
 });

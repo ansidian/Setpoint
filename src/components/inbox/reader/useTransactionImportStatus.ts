@@ -17,7 +17,8 @@ export default function useTransactionImportStatus(emailUid: string, { pollAllSt
   const error = result.emailUid === emailUid && result.error;
   const financialEvent = result.emailUid === emailUid ? result.financialEvent : null;
   const active = hasActiveTransactionImport(items);
-  const financialState = financialEvent?.workflow?.state;
+  const correctionState = financialEvent?.workflow?.correction?.state;
+  const financialState = correctionState && !['completed','superseded','attention'].includes(correctionState) ? 'pending' : financialEvent?.workflow?.state;
 
   const refresh = useCallback(async () => {
     if (!emailUid) {

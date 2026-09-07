@@ -1,3 +1,4 @@
+import type { FinancialActivity } from "./financial-activity.ts";
 import type {
   ActualBillOccurrence,
   ActualCategory,
@@ -420,6 +421,7 @@ export interface FinancialEmailPlan {
   targetInferenceVersion?: number;
   transferExecution?: { budgetId: string; attemptedAt?: string };
   workflow?: {
+    correction?: FinancialActivity["correction"];
     id: string;
     state: "pending" | "waiting" | "settled" | "needs_review";
     relatedEmails: number;

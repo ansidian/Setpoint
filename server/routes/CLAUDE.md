@@ -17,7 +17,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/email-index.ts` — email index health checks, backfill queuing
 - `briefing/snapshot.ts` — snapshot fetch/sync, kanban lane reorder
 - `briefing/tasks.ts` — Todoist projects and labels listing
-- `briefing/financial-corrections.ts` — authenticated preview, idempotent confirmation and saved correction status
+- `briefing/financial-corrections.ts` — authenticated synchronized editor inspection, preview, idempotent confirmation and saved correction status
 - `briefing/financial-activity.ts` — authenticated shared history, exact activity detail and explicit old imported-identity binding inspection
 - `briefing/transaction-imports.ts` — transaction-import scans, status, confirm/commit, retry, dismiss, resume and revision-checked owner completion of managed financial events; paginated managed review and actionable-change reads; no source configuration endpoints
 - `briefing/dev.ts` — dev-only email re-indexing endpoint

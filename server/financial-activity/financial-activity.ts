@@ -18,7 +18,7 @@ const key = (reference: FinancialActivityReference) => `${reference.owner}:${ref
 
 /** One snapshot precedes semantic filtering, alias grouping, counts and pagination. */
 export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = db) {
-  async function snapshot(userId: string, includeInactive = false): Promise<FinancialActivity[]> {
+  async function snapshot(userId: string, includeInactive = false, includeHistory = false): Promise<FinancialActivity[]> {
     if (!userId) invalid("An authenticated owner is required");
     const results = await dbClient.batch([
       { sql: "SELECT * FROM ea_financial_events WHERE user_id = ?", args: [userId] },
@@ -35,8 +35,15 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
       { sql: "SELECT * FROM ea_financial_original_receipts WHERE user_id = ? ORDER BY captured_at, record_id", args: [userId] },
       { sql: "SELECT * FROM ea_financial_corrections WHERE user_id = ? ORDER BY rowid", args: [userId] },
       { sql: "SELECT * FROM ea_financial_effective_corrections WHERE user_id = ?", args: [userId] },
+      ...(includeHistory ? [
+        { sql: `SELECT s.correction_id, s.position, s.state, s.attempted_at FROM ea_financial_correction_steps s
+          JOIN ea_financial_corrections c ON c.id = s.correction_id WHERE c.user_id = ? ORDER BY s.position`, args: [userId] },
+        { sql: `SELECT uid, subject, email_date_utc FROM ea_email_index WHERE user_id = ? AND uid IN (
+          SELECT email_uid FROM ea_transaction_import_items WHERE user_id = ?)`, args: [userId, userId] },
+      ] : []),
     ], "read");
-    const [events, documents, imports, runs, occurrences, conflicts, bindings, receipts, corrections, effectiveCorrections] = results.map((result) => result.rows);
+    const [events, documents, imports, runs, occurrences, conflicts, bindings, receipts, corrections, effectiveCorrections, correctionSteps, importEmails] = results.map((result) => result.rows);
+    const emailMap = new Map([...(importEmails || []), ...documents!].map(row => [String(row.email_uid || row.uid), row]));
     const occurrenceMap = new Map(occurrences!.map((row) => [`${row.owner}:${row.record_id}`, row]));
     const runMap = new Map(runs!.map((row) => [String(row.id), projectTransactionImportRun(row)]));
     const receiptMap = new Map<string, FinancialOriginalReceipt[]>();
@@ -136,7 +143,22 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
         completionPlan: item.financialPlan, importItem: item, runs: activityRuns });
     }
     for (const activity of output) {
-      const current = corrections!.filter(row => row.activity_id === activity.id).at(-1);
+      const activityCorrections = corrections!.filter(row => row.activity_id === activity.id);
+      const current = activityCorrections.at(-1);
+      if (includeHistory) activity.history = {
+        emails: [...new Set(activity.emailUids)].map(uid => {
+          const email = emailMap.get(uid);
+          const receivedAt = email?.email_date_utc ? Date.parse(String(email.email_date_utc)) : NaN;
+          return { uid, subject: String(email?.subject || 'Source email'), receivedAt: Number.isFinite(receivedAt) ? receivedAt : null };
+        }),
+        corrections: activityCorrections.map(row => ({ id: String(row.id), predecessorId: row.predecessor_id == null ? null : String(row.predecessor_id),
+          state: row.state as NonNullable<FinancialActivity['correction']>['state'], updatedAt: Number(row.updated_at),
+          steps: (correctionSteps || []).filter(step => step.correction_id === row.id).map(step => ({
+            state: step.state as NonNullable<FinancialActivity['history']>['corrections'][number]['steps'][number]['state'],
+            attemptedAt: step.attempted_at == null ? null : Number(step.attempted_at),
+          })),
+        })),
+      };
       const effective = effectiveCorrections!.find(row => row.activity_id === activity.id);
       if (effective) {
         const result = parse<{ entry?: { amountCents?: number; payee?: string } }>(effective.effective_result_json);
@@ -172,7 +194,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
     },
     async detail(userId: string, reference: FinancialActivityReference): Promise<FinancialActivity | null> {
       if (!reference || !["event", "document", "import"].includes(reference.owner) || !reference.id) invalid("An exact financial activity reference is required");
-      const items = await snapshot(userId, true);
+      const items = await snapshot(userId, true, true);
       return items.find((item) => item.occurrences.some((entry) => key(entry) === key(reference)
         && (reference.owner !== "import" || (entry.owner === "import" && entry.runId === reference.runId)))) || null;
     },

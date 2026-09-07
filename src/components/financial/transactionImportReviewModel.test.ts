@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   formatImportAmount,
-  isBulkSelectable,
   itemToConfirmation,
-  selectedTotal
 } from "./transactionImportReviewModel";
-import type { TransactionImportItem } from "../../../../../shared/types/transaction-imports";
+import type { TransactionImportItem } from "../../../shared/types/transaction-imports";
 
 function item(overrides: Partial<TransactionImportItem> = {}): TransactionImportItem {
   return {
@@ -45,16 +43,8 @@ function item(overrides: Partial<TransactionImportItem> = {}): TransactionImport
 }
 
 describe("transaction import review model", () => {
-  it("bulk-selects only safe, reviewable candidates that are not already present", () => {
-    expect(isBulkSelectable(item())).toBe(true);
-    expect(isBulkSelectable(item({ automaticSafe: false }))).toBe(false);
-    expect(isBulkSelectable(item({ status: "added" }))).toBe(false);
-    expect(isBulkSelectable(item({ reconciliationStatus: "already_present" }))).toBe(false);
-  });
-
-  it("projects selected signed totals and editable confirmations", () => {
+  it("projects signed amounts and editable confirmations", () => {
     const items = [item(), item({ id: "item-2", amountCents: 500 })];
-    expect(selectedTotal(items, new Set(["item-1", "item-2"]))).toBe(-700);
     expect(formatImportAmount(-700)).toBe("-$7.00");
     expect(itemToConfirmation(items[0]!, { payee: "Corrected" })).toMatchObject({
       itemId: "item-1",

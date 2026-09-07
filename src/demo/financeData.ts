@@ -1,12 +1,15 @@
+import type { TransactionRecord } from '../../shared/types/transactions';
 import { demoDateRange } from "./dateRange.ts";
 import type { DemoSeed } from "./store.ts";
 import type { TransactionImportItem } from "../../shared/types/transaction-imports.ts";
 
-export function buildDemoTransactions(todayKey: string, yesterdayKey: string) {
+export function buildDemoTransactions(todayKey: string, yesterdayKey: string): TransactionRecord[] {
   const priorMonth = new Date(`${todayKey.slice(0, 7)}-01T12:00:00Z`);
   priorMonth.setUTCMonth(priorMonth.getUTCMonth() - 1);
   const priorDate = priorMonth.toISOString().slice(0, 10);
   return [
+    { id: "demo-transfer-from", date: todayKey, amount: 250, direction: "expense", transferAccountId: "demo-savings", payee: "Emergency Fund", category: "Uncategorized", account: "Demo Checking", notes: "Fictional transfer" },
+    { id: "demo-transfer-to", date: todayKey, amount: 250, direction: "income", transferAccountId: "demo-checking", payee: "Demo Checking", category: "Uncategorized", account: "Emergency Fund", notes: "Fictional transfer" },
     { id: "demo-txn-payroll", date: todayKey, amount: 4200, direction: "income", payee: "Northstar Payroll", category: "Income", account: "Demo Checking", notes: "Demo direct deposit" },
     { id: "demo-txn-market", date: todayKey, amount: 68.42, direction: "expense", payee: "Corner Market", category: "Groceries", account: "Demo Checking", notes: "Demo grocery run" },
     { id: "demo-txn-refund", date: yesterdayKey, amount: 34.99, direction: "income", payee: "Cloud Sandbox", category: "Refunds", account: "Demo Checking", notes: "Demo service credit" },
@@ -18,7 +21,7 @@ export function buildDemoTransactions(todayKey: string, yesterdayKey: string) {
 }
 
 export function recordDemoImportedTransaction(seed: DemoSeed, item: TransactionImportItem) {
-  const transaction = {
+  const transaction: TransactionRecord = {
     id: item.id,
     date: item.date || seed.dateKey,
     amount: Math.abs(item.amountCents || 0) / 100,
@@ -39,7 +42,7 @@ export function buildDemoCalendarBillsRange(seed: DemoSeed, url: URL) {
   const end = url.searchParams.get("end") ?? "";
   return {
     schedules: demoDateRange(seed.bills, start, end, (item) => item.next_date),
-    transactions: demoDateRange(seed.transactions, start, end, (item) => item.date),
+    transactions: demoDateRange(seed.transactions.filter(row => !row.transferAccountId), start, end, (item) => item.date),
     transactionsTruncated: false,
     payeeMap: structuredClone(seed.currentDashboard.payeeMap),
     actualBudgetUrl: seed.currentDashboard.actualBudgetUrl,

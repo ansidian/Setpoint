@@ -1,4 +1,4 @@
-import type { FinancialCorrection } from './financial-corrections.ts';
+import type { CorrectionStepStatus, FinancialCorrection } from './financial-corrections.ts';
 import type { FinancialEmailPlan } from "./bills.ts";
 import type { TransactionImportItem, TransactionImportRunSummary, TransactionImportSource } from "./transaction-imports.ts";
 
@@ -35,6 +35,20 @@ export interface FinancialOriginalReceipt {
   evidence: FinancialWriteEvidence | null;
 }
 
+export interface FinancialCorrectionHistory {
+  id: string;
+  predecessorId: string | null;
+  state: FinancialCorrection['state'];
+  updatedAt: number;
+  steps: Array<Pick<CorrectionStepStatus, 'state' | 'attemptedAt'>>;
+}
+
+/** Detail-only saved history; no inferred email dates or provider reads. */
+export interface FinancialActivityHistory {
+  emails: Array<{ uid: string; subject: string; receivedAt: number | null }>;
+  corrections: FinancialCorrectionHistory[];
+}
+
 export interface FinancialActivity {
   id: string;
   reference: FinancialActivityReference;
@@ -53,6 +67,7 @@ export interface FinancialActivity {
   identityConflict?: true;
   actions: { complete: boolean; retry: boolean; inspect: true; correct: boolean };
   originalReceipts: FinancialOriginalReceipt[];
+  history?: FinancialActivityHistory;
   sourceEvidence: unknown[];
   targetBindings: FinancialWriteEvidence[];
   /** Saved evidence only; a read of history does not query or synchronize Actual. */

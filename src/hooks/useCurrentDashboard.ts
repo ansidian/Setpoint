@@ -1,3 +1,4 @@
+import { subscribeDashboardEventStream } from './dashboardEventStream';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
@@ -425,17 +426,7 @@ export default function useCurrentDashboard(
   }, [disabled, loadCurrent]);
 
   useEffect(() => {
-    if (disabled || isDemoMode() || typeof EventSource === "undefined") return undefined;
-    const source = new EventSource("/api/dashboard/current/events");
-    let interrupted = false;
-    const handleOpen = () => {
-      setLiveUpdatesDisconnected(false);
-      if (interrupted) {
-        setHealthReadFailed(true);
-        interrupted = false;
-        void runEventRefetch();
-      }
-    };
+    if (disabled) return undefined;
     const handleChanged = (event: Event) => {
       const payload = parseDashboardEvent(event instanceof MessageEvent ? String(event.data || "") : "");
       if (payload?.source === "bills") invalidateActualMetadata();
@@ -456,31 +447,11 @@ export default function useCurrentDashboard(
         },
       });
     };
-    // Route an expired-session SSE failure to /login instead of letting the browser
-    // reconnect-loop forever.
-    const handleError = () => {
-      interrupted = true;
-      setLiveUpdatesDisconnected(true);
-      // A 401 (or any rejected handshake) closes the stream terminally — readyState stays CLOSED
-      // and the browser will NOT auto-reconnect. Transient network blips set readyState back to
-      // CONNECTING, which we ignore so a single flicker does not bounce the user to login.
-      const closedState = typeof EventSource !== "undefined" ? EventSource.CLOSED : 2;
-      if (source.readyState === closedState) {
-        source.close();
-        // Mirror apiFetch's 401 handling (src/api.ts) so recovery is immediate and not
-        // dependent on an unrelated poll firing its own redirect.
-        window.location.href = "/login";
-      }
-    };
-    source.addEventListener("dashboard-current-changed", handleChanged);
-    source.addEventListener("open", handleOpen);
-    source.onerror = handleError;
-    return () => {
-      source.removeEventListener?.("dashboard-current-changed", handleChanged);
-      source.removeEventListener?.("open", handleOpen);
-      source.onerror = null;
-      source.close();
-    };
+    return subscribeDashboardEventStream({
+      changed: handleChanged,
+      connectionChanged: setLiveUpdatesDisconnected,
+      reconnected: () => { setHealthReadFailed(true); void runEventRefetch(); },
+    });
   }, [disabled, runEventRefetch]);
 
   useEffect(() => {

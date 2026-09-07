@@ -3,7 +3,7 @@ import { correctionResult } from './financial-correction-result.ts';
 import { publishCurrentDashboardEvent } from '../dashboard/current-events.ts';
 import { randomUUID } from 'node:crypto';
 import type { FinancialActivityReference, FinancialWriteEvidence } from '../../shared/types/financial-activity.ts';
-import type { FinancialCorrectionDraft, FinancialCorrectionPreview, CorrectionSnapshot } from '../../shared/types/financial-corrections.ts';
+import type { FinancialCorrectionDraft, FinancialCorrectionPreview, FinancialCorrectionInspection, CorrectionSnapshot } from '../../shared/types/financial-corrections.ts';
 import { financialActivityReader } from '../financial-activity/financial-activity.ts';
 import { inspectCorrection, dispatchCorrection } from '../actual/actual.ts';
 import { coordinateActualWrite } from '../actual/actual.ts';
@@ -20,24 +20,37 @@ async function publishCorrection(userId: string) {
 
 export function createFinancialCorrections({ store = createFinancialCorrectionStore(), reader = financialActivityReader,
   inspect = inspectCorrection, dispatch = dispatchCorrection, changed = publishCorrection } = {}) {
+  async function resolve(userId: string, reference: FinancialActivityReference, targetScheduleId?: string) {
+    const activity = await reader.detail(userId, reference);
+    if (!activity?.originalReceipts.length) correctionConstraint('This activity has no completed original result.');
+    const previous = await store.latest(userId, activity.id);
+    const effective = previous?.effectiveResult as { evidence?: FinancialWriteEvidence } | null;
+    const evidence = effective?.evidence || previous?.preview.evidence || activity.targetBindings[0] || activity.originalReceipts[0]?.evidence;
+    if (!evidence?.objects.length || activity.targetBindings.length > 1) correctionConstraint('Resolve exact targets in one Actual budget before correcting.');
+    const targets = { transactionIds: evidence.objects.filter(row => row.kind === 'transaction').map(row => row.id),
+      scheduleIds: evidence.objects.filter(row => row.kind === 'schedule').map(row => row.id), ruleIds: evidence.objects.filter(row => row.kind === 'rule').map(row => row.id) };
+    if (targetScheduleId) targets.scheduleIds.push(targetScheduleId);
+    if (previous && previous.state !== 'completed') {
+      targets.transactionIds.push(...previous.preview.targets.transactionIds);
+      targets.scheduleIds.push(...previous.preview.targets.scheduleIds);
+      targets.ruleIds.push(...previous.steps.flatMap(step => step.observed?.rules.map(row => row.id) || []));
+    }
+    return { activity, previous, evidence, targets };
+  }
+  async function inspectActivity(userId: string, reference: FinancialActivityReference): Promise<FinancialCorrectionInspection> {
+    return coordinateActualWrite(async () => {
+      const { activity, previous, evidence, targets } = await resolve(userId, reference);
+      const snapshot = await inspect(userId, evidence.budgetId, targets);
+      if (snapshot.budgetId !== evidence.budgetId) correctionConstraint('The selected Actual budget changed.');
+      return { reference, activityId: activity.id, budgetId: evidence.budgetId,
+        originalReceipts: activity.originalReceipts, evidence, snapshot, correction: previous };
+    });
+  }
   async function preview(userId: string, reference: FinancialActivityReference, draft: FinancialCorrectionDraft): Promise<FinancialCorrectionPreview> {
     return coordinateActualWrite(async () => {
-      const activity = await reader.detail(userId, reference);
-      if (!activity?.originalReceipts.length) correctionConstraint('This activity has no completed original result.');
+      const { activity, previous, evidence, targets } = await resolve(userId, reference, draft?.targetScheduleId);
       const sourceRevision = await store.sourceRevision(userId, activity.id);
-      const previous = await store.latest(userId, activity.id);
       if (previous && (!previous.executionStopped || previous.steps.some(step => step.attemptedAt !== null && !['applied', 'no_write', 'partial'].includes(step.state)))) correctionConstraint('The earlier correction has an uncertain attempted step; it cannot be bypassed.');
-      const effective = previous?.effectiveResult as { evidence?: FinancialWriteEvidence } | null;
-      const evidence = effective?.evidence || previous?.preview.evidence || activity.targetBindings[0] || activity.originalReceipts[0]?.evidence;
-      if (!evidence?.objects.length || activity.targetBindings.length > 1) correctionConstraint('Resolve exact targets in one Actual budget before correcting.');
-      const targets = { transactionIds: evidence.objects.filter(row => row.kind === 'transaction').map(row => row.id),
-        scheduleIds: evidence.objects.filter(row => row.kind === 'schedule').map(row => row.id), ruleIds: evidence.objects.filter(row => row.kind === 'rule').map(row => row.id) };
-      if (draft?.targetScheduleId) targets.scheduleIds.push(draft.targetScheduleId);
-      if (previous && previous.state !== 'completed') {
-        targets.transactionIds.push(...previous.preview.targets.transactionIds);
-        targets.scheduleIds.push(...previous.preview.targets.scheduleIds);
-        targets.ruleIds.push(...previous.steps.flatMap(step => step.observed?.rules.map(row => row.id) || []));
-      }
       const snapshot = await inspect(userId, evidence.budgetId, targets);
       if (snapshot.budgetId !== evidence.budgetId) correctionConstraint('The selected Actual budget changed.');
       const successorSteps = correctionSuccessorSteps(previous, snapshot);
@@ -138,7 +151,7 @@ export function createFinancialCorrections({ store = createFinancialCorrectionSt
       }
     });
   }
-  return { preview, confirm, read: store.read, apply,
+  return { inspect: inspectActivity, preview, confirm, read: store.read, apply,
     async recoverPending() { for (const item of await store.pending()) await apply(item.userId, item.id); } };
 }
 export const financialCorrections = createFinancialCorrections();

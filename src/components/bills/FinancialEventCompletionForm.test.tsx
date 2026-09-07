@@ -24,6 +24,7 @@ function waitingPlan(revision = 1): FinancialEmailPlan {
 let currentRevision: number;
 let confirmed: FinancialEventCompletionRequest | null;
 beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(new Date("2026-09-06T19:00:00Z").getTime());
   currentRevision = 1;
   confirmed = null;
   invalidateActualMetadata();
@@ -43,12 +44,14 @@ beforeEach(() => {
       completion: { ...plan.workflow!.completion, canComplete: false } } }, { status: 202 });
   });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 async function fillMissingFields() {
-  await waitFor(() => expect(screen.getByRole("option", { name: "Everyday Checking" })).toBeTruthy());
-  fireEvent.change(screen.getByLabelText("Transaction date"), { target: { value: "2026-09-06" } });
-  fireEvent.change(screen.getByLabelText("Account"), { target: { value: "checking" } });
+  await waitFor(() => expect(screen.queryByText("Loading Actual accounts…")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "Account" }));
+  fireEvent.click(await screen.findByRole("option", { name:"Everyday Checking" }));
+  fireEvent.click(screen.getByRole("button", { name:"Transaction date" }));
+  fireEvent.click(await screen.findByRole("button", { name:"Choose date" }));
 }
 
 describe("owner completion of a managed financial record", () => {
@@ -56,7 +59,7 @@ describe("owner completion of a managed financial record", () => {
     render(<BillBadge bill={{}} plan={waitingPlan()} />);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(true);
     await fillMissingFields();
-    expect(screen.getByLabelText<HTMLSelectElement>("Category (optional)").value).toBe("");
+    expect(screen.getByRole("button", { name:"Category (optional)" }).textContent).toBe("No category");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(false);
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
     expect(await screen.findByText("Your confirmed record is queued for Actual.")).toBeTruthy();
@@ -69,13 +72,13 @@ describe("owner completion of a managed financial record", () => {
   it("preserves owner edits and the reviewed revision when a newer source arrives during editing", async () => {
     const view = render(<BillBadge bill={{}} plan={waitingPlan()} />);
     await fillMissingFields();
-    fireEvent.change(screen.getByLabelText("Amount (USD)"), { target: { value: "45" } });
+    fireEvent.change(screen.getByLabelText("Outflow amount (USD)"), { target: { value: "45" } });
     currentRevision = 2;
     view.rerender(<BillBadge bill={{}} plan={waitingPlan(2)} />);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(false);
     fireEvent.submit(screen.getByRole("form", { name: "Complete financial record" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByLabelText<HTMLInputElement>("Amount (USD)").value).toBe("45");
+    expect(screen.getByLabelText<HTMLInputElement>("Outflow amount (USD)").value).toBe("45");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Send to Actual" }).disabled).toBe(true);
     expect(confirmed).toBeNull();
   });

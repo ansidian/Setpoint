@@ -13,7 +13,7 @@ export function buildDemoDashboardFinance(seed: DemoSeed): DashboardFinanceRespo
   const previous = { start: `${priorMonth}-01`, end: `${priorMonth}-${String(Math.min(day, previousMonthEnd.getUTCDate())).padStart(2, "0")}`, total: 0 };
   const buckets = new Map<string, { label: string; amount: number; count: number }>();
   for (const tx of seed.transactions) {
-    if (tx.direction !== "expense") continue;
+    if (tx.direction !== "expense" || tx.transferAccountId) continue;
     if (tx.date >= current.start && tx.date <= current.end) {
       current.total += tx.amount;
       const bucket = buckets.get(tx.category) || { label: tx.category, amount: 0, count: 0 };

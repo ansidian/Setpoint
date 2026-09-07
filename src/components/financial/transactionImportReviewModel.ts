@@ -3,21 +3,12 @@ import type {
   TransactionImportItem,
   TransactionImportRunSummary,
   TransactionImportSource,
-} from "../../../../../shared/types/transaction-imports";
+} from "../../../shared/types/transaction-imports";
 
 const SELECTABLE_STATUSES = new Set(["needs_review", "ready"]);
 
-export function isBulkSelectable(item: TransactionImportItem): boolean {
-  return item.automaticSafe && SELECTABLE_STATUSES.has(item.status)
-    && item.reconciliationStatus !== "already_present";
-}
-
 export function isIndividuallyReviewable(item: TransactionImportItem): boolean {
   return SELECTABLE_STATUSES.has(item.status);
-}
-
-export function selectedTotal(items: TransactionImportItem[], selected: ReadonlySet<string>): number {
-  return items.reduce((total, item) => selected.has(item.id) ? total + (item.amountCents || 0) : total, 0);
 }
 
 export function itemToConfirmation(

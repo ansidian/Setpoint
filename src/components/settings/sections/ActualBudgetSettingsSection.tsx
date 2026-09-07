@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActualMetadata } from "@/api";
 import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
-import EmailTransactionImportCard from "@/components/settings/cards/EmailTransactionImportCard";
-import FinancialEventReviewCard from "@/components/settings/cards/FinancialEventReviewCard";
+import FinancialReviewNotificationsControl from "../cards/financial-review/FinancialReviewNotificationsControl";
 import ConnectionDependencyPrompt from "@/components/settings/ConnectionDependencyPrompt";
 import { projectFeatureDependencies } from "@/components/settings/featureDependencyModel";
 import type { SettingsCardStateProps } from "../settingsTypes";
 import type { ConnectionRowView } from "../connectionModel";
 import type { ActualMetadataResponse } from "../../../../shared/types/bills";
-import type { AccountSummary } from "../../../../shared/types/accounts";
 
 const EMPTY_METADATA: ActualMetadataResponse = { accounts: [], payees: [], categories: [] };
 
@@ -17,8 +15,7 @@ export default function ActualBudgetSettingsSection({
   setSettings,
   patch,
   connections,
-  accounts,
-}: SettingsCardStateProps & { connections: readonly ConnectionRowView[]; accounts: AccountSummary[] }) {
+}: SettingsCardStateProps & { connections: readonly ConnectionRowView[] }) {
   const dependency = projectFeatureDependencies(connections).finance;
   const [metadata, setMetadata] = useState<ActualMetadataResponse>(EMPTY_METADATA);
   const [metadataLoading, setMetadataLoading] = useState(false);
@@ -62,7 +59,7 @@ export default function ActualBudgetSettingsSection({
   if (!dependency.showSettings) {
     return (
       <>
-        <FinancialEventReviewCard liveOperationsAvailable={false} />
+        <FinancialReviewNotificationsControl />
         <ConnectionDependencyPrompt
           title="Connect Actual Budget"
           description="Finance tools become available after Actual Budget is connected. Existing pay links remain saved while disconnected."
@@ -74,7 +71,7 @@ export default function ActualBudgetSettingsSection({
 
   return (
     <>
-      <FinancialEventReviewCard liveOperationsAvailable={dependency.allowLiveMetadata} />
+      <FinancialReviewNotificationsControl />
       {dependency.actual === "needs_attention" ? (
         <ConnectionDependencyPrompt
           title="Actual Budget needs attention"
@@ -83,13 +80,6 @@ export default function ActualBudgetSettingsSection({
           actions={[{ connectionId: "actual-budget", label: "Repair connection" }]}
         />
       ) : null}
-      <EmailTransactionImportCard
-        metadata={metadata}
-        metadataLoading={metadataLoading}
-        onRequestMetadata={requestMetadata}
-        gmailAccounts={accounts}
-        liveOperationsAvailable={dependency.allowLiveMetadata}
-      />
       <UtilityPayLinksCard
         settings={settings}
         setSettings={setSettings}

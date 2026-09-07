@@ -89,6 +89,23 @@ describe("transaction import store", () => {
     expect(await subject.claimNextItem('new-order')).toMatchObject({ id: 'different-order' });
   });
 
+  it("projects the last verified correction in Inbox and Dashboard without rewriting original import history", async () => {
+    await createRun();
+    const subject = store();
+    await subject.insertItem(itemInput({ status: 'added' }));
+    const occurrence = await db.execute("SELECT activity_id FROM ea_financial_activity_occurrences WHERE record_id='item-1' AND owner='import'");
+    const activityId = String(occurrence.rows[0]!.activity_id);
+    const effective = { correctionId: 'corrected', entry: { type: 'income', amountCents: 4500, date: '2026-01-16', payee: 'Refund' }, transactionId: 'actual-row' };
+    await db.execute({ sql: "INSERT INTO ea_financial_correction_previews VALUES ('preview','owner-1',?,'{}',1)", args: [activityId] });
+    await db.execute({ sql: "INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,state,effective_result_json,updated_at) VALUES ('corrected','owner-1',?,'budget','preview','key','completed',?,2)", args: [activityId, JSON.stringify(effective)] });
+    await db.execute({ sql: "INSERT INTO ea_financial_correction_previews VALUES ('later-preview','owner-1',?,'{}',3)", args: [activityId] });
+    await db.execute({ sql: "INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,state,updated_at) VALUES ('later','owner-1',?,'budget','later-preview','later-key','recovering',3)", args: [activityId] });
+    expect((await subject.listItemsForEmail('owner-1', itemInput().emailUid))[0]).toMatchObject({ effectiveResult: effective, correction: { id: 'later', state: 'recovering', revision: 1 }, amountCents: -2599, payee: 'Amazon' });
+    expect((await subject.readDashboardActivity('owner-1')).recent[0]).toMatchObject({ amountCents: 4500, payee: 'Refund', description: 'Corrected record in Actual' });
+    expect(await subject.getItem('owner-1','item-1')).toMatchObject({ amountCents: -2599, payee: 'Amazon' });
+    expect(await subject.listItemsForEmail('another-owner', itemInput().emailUid)).toEqual([]);
+  });
+
   it("coalesces an identical active historical run and admits a new one after completion", async () => {
     const first = await createRun("run-1");
     const coalesced = await createRun("run-2");

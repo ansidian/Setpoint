@@ -163,13 +163,22 @@ export function createTransactionImportStore(dbClient: StoreDb = db, now = Date.
 
   async function listItemsForEmail(userId: string, emailUid: string): Promise<TransactionImportItem[]> {
     const result = await dbClient.execute({
-      sql: `SELECT * FROM ea_transaction_import_items
+      sql: `SELECT items.*, (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
+              JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
+              WHERE o.user_id=items.user_id AND o.owner='import' AND o.record_id=items.id) AS effective_result_json,
+            (SELECT json_object('id', c.id, 'state', c.state, 'revision', c.revision) FROM ea_financial_corrections c
+              JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
+              WHERE o.user_id=items.user_id AND o.owner='import' AND o.record_id=items.id
+              ORDER BY c.rowid DESC LIMIT 1) AS correction_json
+            FROM ea_transaction_import_items items
             WHERE user_id = ? AND email_uid = ?
             ORDER BY updated_at DESC, created_at DESC, id DESC
             LIMIT 20`,
       args: [userId, emailUid],
     });
-    return result.rows.map(projectItem);
+    return result.rows.map(row => ({ ...projectItem(row),
+      ...(typeof row.correction_json === 'string' ? { correction: JSON.parse(row.correction_json) as TransactionImportItem['correction'] } : {}),
+      ...(typeof row.effective_result_json === 'string' ? { effectiveResult: JSON.parse(row.effective_result_json) as TransactionImportItem['effectiveResult'] } : {}) }));
   }
 
   async function confirmItem(userId: string, runId: string, itemId: string, input: {

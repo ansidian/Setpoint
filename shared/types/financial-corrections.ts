@@ -39,6 +39,16 @@ export interface CorrectionStep {
   /** Exact intended raw fields; generated schedule children are verified separately. */
   after: { transactions?: CorrectionRow[]; schedule?: CorrectionRow; conditions?: unknown[]; scheduleActions?: unknown[]; nextDate?: number; removedScheduleId?: string; removedRuleId?: string; ruleActions?: { scheduleId: string; actions: unknown[] } };
 }
+/** Explicit synchronized read for editing; never admits a correction or changes saved receipts. */
+export interface FinancialCorrectionInspection {
+  reference: FinancialActivityReference;
+  activityId: string;
+  budgetId: string;
+  originalReceipts: FinancialOriginalReceipt[];
+  evidence: FinancialWriteEvidence;
+  snapshot: CorrectionSnapshot;
+  correction: FinancialCorrection | null;
+}
 export interface FinancialCorrectionPreview {
   id: string;
   reference: FinancialActivityReference;

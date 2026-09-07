@@ -1,3 +1,4 @@
+import { subscribeCurrentDashboardEvents } from "./current-events.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   setupCurrentServiceTest, cleanupCurrentServiceTest,
@@ -48,6 +49,17 @@ describe("applyDeadlineCurrentStatus", () => {
 });
 
 describe("GET /api/dashboard/current", () => {
+  it("publishes a completed Actual refresh when schedule rows are unchanged", async () => {
+    const first = await syncResponse(new Date('2026-05-04T12:00:00.000Z'));
+    const received: string[] = [];
+    const unsubscribe = subscribeCurrentDashboardEvents('u1', event => { if (event.source === 'bills') received.push(event.reason); });
+    try {
+      const second = await syncResponse(new Date('2026-05-04T12:01:00.000Z'));
+      expect(second.body.bills).toEqual(first.body.bills);
+      expect(received).toEqual(['changed']);
+    } finally { unsubscribe(); }
+  });
+
   it.each([
     ["current", getCurrentDashboard],
     ["manual refresh", requestCurrentDashboardRefresh],

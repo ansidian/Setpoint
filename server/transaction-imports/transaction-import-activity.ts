@@ -10,6 +10,9 @@ export function createTransactionImportActivity(dbClient: Pick<Client, "execute"
   async function readDashboardActivity(userId: string): Promise<DashboardFinanceActivity> {
     const columns = `id, run_id, email_uid, payee, amount_cents, currency, status, updated_at,
       actual_account_id,
+      (SELECT c.effective_result_json FROM ea_financial_effective_corrections c
+        JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
+        WHERE o.user_id=ea_transaction_import_items.user_id AND o.owner='import' AND o.record_id=ea_transaction_import_items.id) AS effective_result_json,
       CASE WHEN json_valid(financial_email_plan_json)
         THEN json_extract(financial_email_plan_json, '$.operation.intended') END AS operation`;
     const [count, review, recent] = await Promise.all([
@@ -41,12 +44,14 @@ export function createTransactionImportActivity(dbClient: Pick<Client, "execute"
         : status === "already_present" ? (transfer ? "Transfer already scheduled or recorded" : "Already recorded in Actual")
         : status === "updated" ? "Updated in Actual"
         : transfer ? "Transfer scheduled in Actual" : "Recorded in Actual";
+      const effective = typeof row.effective_result_json === 'string'
+        ? JSON.parse(row.effective_result_json) as { entry?: { type?: string; amountCents?: number; payee?: string } } : null;
       return {
         id: String(row.id), runId: String(row.run_id), emailUid: String(row.email_uid),
-        payee: row.payee == null ? null : String(row.payee),
-        amountCents: row.amount_cents == null ? null : Number(row.amount_cents),
+        payee: effective?.entry?.payee ?? (row.payee == null ? null : String(row.payee)),
+        amountCents: effective?.entry?.amountCents ?? (row.amount_cents == null ? null : Number(row.amount_cents)),
         currency: row.currency == null ? null : String(row.currency),
-        status, description, updatedAt: Number(row.updated_at),
+        status, description: effective ? effective.entry?.type === 'bill' ? "Corrected schedule in Actual" : "Corrected record in Actual" : description, updatedAt: Number(row.updated_at),
       };
     }
     return {

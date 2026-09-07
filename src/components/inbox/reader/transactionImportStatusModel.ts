@@ -1,6 +1,7 @@
+import { financialHref } from "../../financial/financialNavigation";
 import type { TransactionImportItem } from "../../../../shared/types/transaction-imports";
 
-export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode"> & Partial<Pick<TransactionImportItem, "financialPlan">>;
+export type TransactionImportStatusItem = Pick<TransactionImportItem, "status" | "automationMode"> & Partial<Pick<TransactionImportItem, "financialPlan" | "effectiveResult" | "correction" | "id" | "runId">>;
 
 export type TransactionImportStatusTone = "success" | "warning" | "danger" | "active";
 
@@ -10,16 +11,33 @@ export interface TransactionImportStatusView {
   detail: string;
   review: boolean;
   active: boolean;
+  recordHref?: string;
 }
 
 const ACTIVE = new Set(["queued", "reconciling", "importing"]);
 
 export function hasActiveTransactionImport(items: readonly TransactionImportStatusItem[]): boolean {
-  return items.some((item) => ACTIVE.has(item.status));
+  return items.some((item) => ACTIVE.has(item.status) || (item.correction && !['completed','superseded','attention'].includes(item.correction.state)));
 }
 
 export function resolveTransactionImportStatus(items: readonly TransactionImportStatusItem[]): TransactionImportStatusView | null {
   if (!items.length) return null;
+  const correcting = items.find(item => item.correction && !['completed','superseded'].includes(item.correction.state));
+  const correction = correcting?.correction;
+  const recordHref = (item: TransactionImportStatusItem) => item.id && item.runId
+    ? financialHref({ view: item.correction?.state === 'completed' ? 'completed' : 'needs_attention' }, { owner: 'import', id: item.id, runId: item.runId }) : undefined;
+  if (correction) return {
+    tone: correction.state === 'attention' ? 'warning' : 'active',
+    title: correction.state === 'attention' ? 'Correction needs attention' : 'Checking correction progress',
+    detail: 'The correction is retained. Open its record to inspect the current outcome; do not repeat the original import.',
+    review: correction.state === 'attention', active: correction.state !== 'attention', recordHref: recordHref(correcting!),
+  };
+  const corrected = items.find(item => item.effectiveResult);
+  if (corrected && items.every(item => ['added','updated','already_present','dismissed'].includes(item.status))) {
+    return { tone: 'success', title: 'Corrected in Actual',
+      detail: corrected.effectiveResult?.entry.type === 'bill' ? 'The corrected schedule is saved in Actual.' : 'The corrected entry is recorded in Actual.',
+      review: false, active: false, recordHref: recordHref(corrected) };
+  }
   const transfer = items.some((item) => item.financialPlan?.operation.intended === "create_transfer_schedule");
   if (transfer) {
     const review = items.find((item) => ["failed", "paused", "needs_review", "ready"].includes(item.status));
@@ -36,7 +54,7 @@ export function resolveTransactionImportStatus(items: readonly TransactionImport
     };
   }
   if (items.some((item) => item.status === "failed")) {
-    return { tone: "danger", title: "Couldn’t sync", detail: "Open Finance settings to retry this transaction.", review: true, active: false };
+    return { tone: "danger", title: "Couldn’t sync", detail: "Open Financial activity to retry this transaction.", review: true, active: false };
   }
   if (items.some((item) => item.status === "paused" || item.status === "needs_review" || item.status === "ready")) {
     const observed = items.some((item) => item.status === "ready" && item.automationMode === "observe");

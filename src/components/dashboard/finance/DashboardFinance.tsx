@@ -1,3 +1,5 @@
+import { financialHref } from "../../financial/financialNavigation";
+import type { DashboardFinanceActivityItem } from "../../../../shared/types/dashboard-finance";
 import { useNavigate } from "react-router";
 import { RefreshCw } from "lucide-react";
 import AnimatedHeight from "../../shared/AnimatedHeight";
@@ -20,7 +22,7 @@ export default function DashboardFinance({ bills, billsLoading, configured, heal
 }) {
   const finance = useDashboardFinance(refreshing);
   const navigate = useNavigate();
-  const openReview = (runId?: string) => navigate(`/settings?tab=finance${runId ? `&importRun=${encodeURIComponent(runId)}` : "&reviewPending=1"}#transaction-import-review`);
+  const openReview = (item?: DashboardFinanceActivityItem, completed = false) => navigate(financialHref({ view: completed ? "completed" : "needs_attention", ...(item ? { runId:item.runId } : {}) }, item ? { owner:"import", id:item.id, runId:item.runId } : undefined));
   return <div className="dashboard-finance">
     <div className="dashboard-finance-grid">
       <MoneyAheadCard bills={bills} loading={billsLoading} configured={configured} health={health} onOpen={onOpenBill} />

@@ -89,6 +89,7 @@ src/
 │   │   ├── rails/
 │   │   └── timeline/
 │   ├── email/
+│   ├── financial/
 │   ├── inbox/
 │   │   ├── mobile/
 │   │   ├── reader/
@@ -164,7 +165,7 @@ server/
 /settings ─ centered Settings modal over retained Dashboard (auth required)
 ```
 
-`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/` and `/settings` share `WorkspaceRoute`, so Dashboard remains mounted across Settings navigation. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
+`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/`, `/settings`, and `/finance` share `WorkspaceRoute`, so Dashboard remains mounted across Settings and financial navigation. Financial activity, exact records, and historical backfill use `/finance`; old Settings workflow URLs redirect without losing record or batch identity. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
 
 ### Component Hierarchy
 
@@ -241,6 +242,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useMobileDashboardScrollRestoration` | `src/components/dashboard/useMobileDashboardScrollRestoration.ts` |
 | `useMobileInboxNavigation` | `src/components/dashboard/useMobileInboxNavigation.ts` |
 | `useSnapshotNavigation` | `src/components/dashboard/useSnapshotNavigation.ts` |
+| `useFinancialNavigationGuard` | `src/components/financial/useFinancialNavigationGuard.ts` |
 | `useBillPayResolver` | `src/components/inbox/reader/useBillPayResolver.ts` |
 | `useEmailBody` | `src/components/inbox/reader/useEmailBody.ts` |
 | `useTransactionImportStatus` | `src/components/inbox/reader/useTransactionImportStatus.ts` |
@@ -292,7 +294,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useViewportWidth` | `src/hooks/calendar/useViewportWidth.ts` |
 | `useInboxSelectionHistory` | `src/hooks/email/useInboxSelectionHistory.ts` |
 | `useSettingsPage` | `src/hooks/settings/useSettingsPage.ts` |
-| `useTransactionImports` | `src/hooks/settings/useTransactionImports.ts` |
 | `useActiveSnapshot` | `src/hooks/useActiveSnapshot.ts` |
 | `useAutoRefresh` | `src/hooks/useAutoRefresh.ts` |
 | `useBrowserBackDismiss` | `src/hooks/useBrowserBackDismiss.ts` |
@@ -306,6 +307,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useNews` | `src/hooks/useNews.ts` |
 | `useNotifications` | `src/hooks/useNotifications.ts` |
 | `useRemoteContentTrust` | `src/hooks/useRemoteContentTrust.ts` |
+| `useTransactionImports` | `src/hooks/useTransactionImports.ts` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.ts` |
 | `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.ts` |
 | `useWarmImport` | `src/hooks/useWarmImport.ts` |
@@ -897,6 +899,7 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |
 | GET | `/api/briefing/financial-corrections/:id` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/confirm` | `server/routes/briefing/financial-corrections.ts` |
+| POST | `/api/briefing/financial-corrections/inspect` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-corrections/preview` | `server/routes/briefing/financial-corrections.ts` |
 | POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review` | `server/routes/briefing/transaction-imports.ts` |

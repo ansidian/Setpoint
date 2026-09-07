@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
@@ -30,7 +30,7 @@ function displayDate(value: string): string {
   }).format(epoch);
 }
 
-export default function TransactionImportDateField({
+export default function DateField({
   value,
   onChange,
   ariaLabel,
@@ -46,6 +46,19 @@ export default function TransactionImportDateField({
   const [open, setOpen] = useState(false);
   const [nowTick] = useState(() => Date.now());
   const initialEpoch = useMemo(() => epochFromYmd(value), [value]);
+
+  // The mobile sheet is a body portal inside a parent dialog. Consume Escape
+  // before that dialog can interpret the same key as leaving the form.
+  useEffect(() => {
+    if (!open) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault(); event.stopPropagation();
+      setOpen(false); triggerRef.current?.focus({ preventScroll:true });
+    };
+    document.addEventListener("keydown", escape, true);
+    return () => document.removeEventListener("keydown", escape, true);
+  }, [open]);
 
   return (
     <>
@@ -77,6 +90,7 @@ export default function TransactionImportDateField({
           onClose={() => setOpen(false)}
           width={PICKER_WIDTH}
           height={PICKER_HEIGHT}
+          mobileHeight={null}
           role="dialog"
           ariaLabel={`${ariaLabel} picker`}
           style={{ overflow: "hidden", padding: 8, zIndex: 10001 }}

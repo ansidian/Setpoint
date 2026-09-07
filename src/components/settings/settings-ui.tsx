@@ -193,7 +193,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
   return (
     <div className="flex min-h-0 flex-1 flex-col text-foreground">
       <div className="flex min-h-0 flex-1 flex-col">
-        <header className="shrink-0 border-b border-white/[0.08] px-4 py-5 pr-16 sm:px-6 sm:pr-16">
+        <header className="settings-header shrink-0 border-b border-white/[0.08] px-4 py-5 pr-16 sm:px-6 sm:pr-16">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 id="settings-heading" className="text-xl font-semibold leading-tight">Settings</h1>
             {headerAction}
@@ -203,7 +203,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
           </p>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 p-4 md:grid-cols-[180px_minmax(0,1fr)] md:grid-rows-1 md:gap-6 md:p-6">
+        <div className="settings-body grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 p-4 md:grid-cols-[180px_minmax(0,1fr)] md:grid-rows-1 md:gap-6 md:p-6">
           <nav className="min-w-0">
             <div className="border-t border-white/[0.06] pt-3 md:border-t-0 md:border-l md:pl-3 md:pt-0">
               <div className="px-2 pb-2 text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
@@ -258,7 +258,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
           </nav>
 
           <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-2" role="tabpanel" aria-label={activeTabMeta?.label}>
-            {children}
+            <div className="settings-content">{children}</div>
           </div>
         </div>
       </div>

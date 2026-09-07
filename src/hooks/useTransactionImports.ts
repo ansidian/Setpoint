@@ -13,7 +13,7 @@ import type {
   TransactionImportHistoricalScanRequest,
   TransactionImportRunDetail,
   TransactionImportRunSummary,
-} from "../../../shared/types/transaction-imports";
+} from "../../shared/types/transaction-imports";
 
 const ACTIVE_RUN_STATUSES = new Set(["queued", "running", "retry"]);
 const ACTIVE_ITEM_STATUSES = new Set(["queued", "reconciling", "importing"]);

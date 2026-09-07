@@ -1,3 +1,5 @@
+import { financialHref } from "../financial/financialNavigation";
+import { Link } from "react-router";
 import { CheckCircle2, Clock3, Loader2 } from "lucide-react";
 import { useId, useRef, useState, type CSSProperties } from "react";
 import type { FinancialEmailPlan } from "../../../shared/types/bills";
@@ -21,18 +23,21 @@ function FinancialEventStatusPanel({ plan: currentPlan, style, allowCompletion =
     ? queued : currentPlan;
   const workflow = plan.workflow;
   if (!workflow) return null;
-  const pending = workflow.state === "pending";
-  const settled = workflow.state === "settled";
+  const correction = workflow.correction;
+  const correcting = correction && !['completed','superseded'].includes(correction.state);
+  const pending = correcting ? correction.state !== 'attention' : workflow.state === "pending";
+  const settled = !correcting && workflow.state === "settled";
   const needsReview = workflow.state === "needs_review";
   const scheduled = settled && plan.reconciliation.status === "already_scheduled";
   const recorded = settled && plan.reconciliation.status === "already_recorded";
   const color = settled ? "var(--sp-green)" : pending ? "var(--sp-blue)" : "var(--sp-cream)";
   const Icon = settled ? CheckCircle2 : pending ? Loader2 : Clock3;
-  const title = recorded ? "Recorded in Actual" : scheduled ? "Scheduled in Actual"
+  const title = correcting ? correction.state === 'attention' ? 'Correction needs attention' : 'Checking correction progress'
+    : correction?.state === 'completed' ? 'Corrected in Actual' : recorded ? "Recorded in Actual" : scheduled ? "Scheduled in Actual"
     : settled ? "No entry needed" : needsReview ? "Actual entry needs attention"
       : pending ? "Checking financial details" : "Waiting for payment details";
   const details = [
-    workflow.reason,
+    correcting ? 'The correction is retained. Inspect its outcome before making another change.' : workflow.reason,
     workflow.relatedEmails > 1 ? `${workflow.relatedEmails} related emails describe this event.` : null,
     !settled && workflow.nextAttemptAt ? "Checks again automatically." : null,
   ].filter(Boolean).join(" ");
@@ -47,6 +52,8 @@ function FinancialEventStatusPanel({ plan: currentPlan, style, allowCompletion =
           <div className="mt-0.5 text-foreground/80">{details}</div>
         </div>
       </div>
+      {correction && <Link to={financialHref({ view: correcting ? 'needs_attention' : 'completed' }, { owner: 'event', id: workflow.id })}
+        className="mt-2 inline-flex rounded-lg border border-white/10 px-3 py-2 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none">View record</Link>}
       {allowCompletion && !editing && workflow.completion?.canComplete && <Button ref={trigger} type="button" variant="ghost" size="sm"
         aria-expanded={editing} aria-controls={editorId}
         className="mt-2 h-8 text-xs transition-transform hover:-translate-y-px focus-visible:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"

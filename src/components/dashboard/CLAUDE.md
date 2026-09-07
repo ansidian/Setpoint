@@ -62,13 +62,12 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `rails/railPrimitives.tsx` — shared `SectionHeader`/`EmptyRow` used by the inbox peek and Coming-up card
 
 ### Financial context and schedule notices
-- `finance/DashboardFinance.tsx` — Money Ahead / Spending Snapshot pair and Finance Review / Recent Automation activity with Settings and Calendar handoffs
-- `finance/useDashboardFinance.ts` — independent local financial read, refresh/focus handling, and last-success retention
+- `finance/DashboardFinance.tsx` — Money Ahead / Spending Snapshot pair and Finance Review / Recent Automation activity with exact shared financial foreground and Calendar handoffs
+- `finance/useDashboardFinance.ts` — local financial read, coalesced financial/Actual invalidations, refresh/focus handling, and last-success retention
 - `finance/MoneyAheadCard.tsx` — future unpaid scheduled bills, seven-day total and bounded expandable rows
 - `finance/SpendingSnapshotCard.tsx` — month-to-date comparison, matching prior dates, top categories and sync freshness
-- `finance/FinancialActivityCard.tsx` — pending review count and latest automatic outcomes with review and source actions
-- `finance/FinancialEventReviewPreview.tsx` — independently refreshed managed financial exception count and three direct Finance completion links
-- `finance/FinancialEmailPreview.tsx` — anchored/mobile source preview through the existing safe email body reader
+- `finance/FinancialActivityCard.tsx` — pending review count and latest automatic outcomes with exact financial record entry points; source evidence lives inside the record
+- `finance/FinancialEventReviewPreview.tsx` — independently refreshed managed financial exception count and three exact event/document shared financial record links
 - `finance/finance-cards.css` — financial grid, typography, controls and responsive/motion states
 - `timeline/DashboardScheduleNotices.tsx` / `.css` — conditional stored departure estimate and overlap notices, reusing calendar reminders
 - `timeline/dashboardScheduleModel.ts` — exact occurrence reminder matching and remaining-today overlap policy

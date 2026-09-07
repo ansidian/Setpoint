@@ -1,3 +1,4 @@
+import { resolveManagedFinancialPlan } from "./financial-event-status.ts";
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -335,6 +336,30 @@ describe("owner completion of managed financial events", () => {
     await drainEvent();
     expect(await store.getEventForEmail("owner", "repeat")).toMatchObject({ id: original.workflow?.id, status: "settled" });
     expect(ledger.size).toBe(1);
+  });
+
+  it("projects a corrected schedule as a recorded ledger entry while retaining the original managed outcome", async () => {
+    await arrive("receipt", null);
+    const completed = await completion().complete("owner", await request("receipt", { ...entry, kind: 'bill' }));
+    await drainEvent();
+    const eventId = completed.workflow!.id;
+    const original = await store.getEventForEmail('owner', 'receipt');
+    const occurrence = await db.execute({ sql: "SELECT activity_id FROM ea_financial_activity_occurrences WHERE owner='event' AND record_id=?", args: [eventId] });
+    const activityId = String(occurrence.rows[0]!.activity_id);
+    await db.execute({ sql: "INSERT INTO ea_financial_correction_previews VALUES ('preview','owner',?,'{}',1)", args: [activityId] });
+    await db.execute({ sql: "INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,state,effective_result_json,updated_at) VALUES ('correction','owner',?,'budget','preview','key','completed',?,2)", args: [activityId, JSON.stringify({ entry: { kind:'expense', type:'payment', amount:15, amountCents:1500, date:DATE, accountId:'checking', payee:'Corrected merchant' } })] });
+    expect(await resolveManagedFinancialPlan('owner','receipt',{ dbClient:db })).toMatchObject({
+      candidate: { type:'expense', amount:15, payee:'Corrected merchant' },
+      operation: { kind:'no_write', intended:'create_transaction' },
+      reconciliation: { status:'already_recorded' },
+      workflow: { correction: { id:'correction', state:'completed', revision:1 }, completion: { canComplete:false } },
+    });
+    await db.execute({ sql: "INSERT INTO ea_financial_correction_previews VALUES ('next-preview','owner',?,'{}',3)", args: [activityId] });
+    await db.execute({ sql: "INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,state,updated_at) VALUES ('next','owner',?,'budget','next-preview','next-key','recovering',3)", args: [activityId] });
+    expect(await resolveManagedFinancialPlan('owner','receipt',{ dbClient:db })).toMatchObject({
+      candidate: { amount:15 }, workflow: { correction: { id:'next', state:'recovering' }, completion: { canComplete:false } },
+    });
+    expect((await store.getEventForEmail('owner','receipt'))?.outcome).toEqual(original?.outcome);
   });
 
   it.each([

@@ -60,11 +60,13 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
       const target = plan.targets[key as keyof typeof plan.targets];
       plan.targets[key as keyof typeof plan.targets] = { kind: target.kind, status: id ? 'resolved' : 'not_applicable', id: id || null, provenance: [] };
     }
-    plan.operation = { ...plan.operation, kind: 'no_write' };
+    const scheduled = entry.kind === 'bill' || entry.kind === 'transfer_schedule';
+    plan.operation = { ...plan.operation, kind: 'no_write', intended: scheduled ? entry.kind === 'transfer_schedule' ? 'create_transfer_schedule' : 'create_schedule' : entry.kind === 'transfer' ? 'create_transfer' : 'create_transaction' };
+    plan.reconciliation = { ...plan.reconciliation, status: scheduled ? 'already_scheduled' : 'already_recorded', disposition: 'no_write', reason: 'The explicit correction is verified in Actual.' };
     plan.automation = { ...plan.automation, eligible: false };
   }
-  const blockedReason = document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
-  return { ...plan, workflow: { id: event?.id || `financial-document:${document.id}`, state,
+  const blockedReason = document.correction || document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
+  return { ...plan, workflow: { ...(document.correction ? { correction:document.correction } : {}), id: event?.id || `financial-document:${document.id}`, state,
     relatedEmails: event?.documents.length || 1, reason, nextAttemptAt: event?.nextAttemptAt || document.nextAttemptAt,
     completion: { emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,
       canComplete: !blockedReason, ...(blockedReason ? { blockedReason } : {}) } } };

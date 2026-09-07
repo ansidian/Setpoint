@@ -109,8 +109,10 @@ function invalidateActualMetadataInBackground(userId: string): void {
 }
 
 export async function invalidateActualAfterTransactionImport(userId: string): Promise<void> {
-  await invalidateActualMetadata(userId);
+  // Persist reconciliation before a fallible cache refresh: settled originals
+  // have no correction journal to retry a failed projection publication.
   await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 });
+  await invalidateActualMetadata(userId);
 }
 
 async function scheduleBillsMirrorRefreshInBackground(userId: string, delayMs: number) {

@@ -99,9 +99,7 @@ export default function Settings() {
         window.addEventListener("scrollend", finishScroll, { once: true });
         document.addEventListener("scrollend", finishScroll, { once: true });
       }
-      // The financial queue can span many screens; its completion entrance is
-      // at the top, while the existing compact settings targets stay centered.
-      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: targetId === "financial-event-review" ? "start" : "center" });
+      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
       target.focus({ preventScroll: true });
       if (reduceMotion) finishScroll();
       else scrollFallbackTimer = window.setTimeout(finishScroll, 700);
@@ -196,7 +194,6 @@ export default function Settings() {
           setSettings={setSettings}
           patch={patch}
           connections={connections}
-          accounts={accounts}
         />
       );
     } else if (tab === "automation") {

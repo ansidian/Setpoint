@@ -1,3 +1,5 @@
+import { getDemoFinancialActivities } from "./financialActivity";
+import type { FinancialEventReviewResponse } from "../../shared/types/financial-review";
 import type { DemoSeed } from "./store.ts";
 import { demoEmailAiUsageStats, demoLegacyTriageStats } from "./emailAiUsageData.ts";
 import { buildDemoDashboardFinance } from "./dashboardFinance.ts";
@@ -6,7 +8,16 @@ import { getDemoTodoistSetupResponse, NO_DEMO_TODOIST_SETUP_RESPONSE } from "./t
 export const NO_DEMO_REFERENCE_RESPONSE = Symbol("NO_DEMO_REFERENCE_RESPONSE");
 
 export function getDemoReferenceResponse({ pathname, method, seed }: { pathname: string; method: string; seed: DemoSeed }): unknown {
-  if (pathname === "/api/briefing/financial-events/review" && method === "GET") return { items: [], total: 0, offset: 0, limit: 20 };
+  if (pathname === "/api/briefing/financial-events/review" && method === "GET") {
+    const items: FinancialEventReviewResponse['items'] = getDemoFinancialActivities()
+      .filter(activity => activity.source === 'managed' && activity.status === 'needs_attention')
+      .map(activity => ({ id: `event:${activity.reference.id}`, emailUid: activity.emailUids[0] || '', subject: activity.subject,
+        from: 'Fictional finance <finance@example.invalid>', receivedAt: new Date(activity.createdAt).toISOString(), payee: activity.payee,
+        amount: activity.amountCents === null ? null : Math.abs(activity.amountCents) / 100, currency: activity.currency,
+        state: 'needs_review', reason: activity.reason, relatedEmails: activity.emailUids.length, createdAt: activity.createdAt,
+        nextAttemptAt: null, canComplete: activity.actions.complete, attention: activity.actions.complete ? 'complete_details' : 'check_actual' }));
+    return { items, total: items.length, offset: 0, limit: 20 } satisfies FinancialEventReviewResponse;
+  }
   if (pathname === "/api/briefing/financial-events/review-changes" && method === "GET") return { items: [], cursor: null, hasMore: false };
   if (pathname === "/api/dashboard/finance" && method === "GET") return buildDemoDashboardFinance(seed);
   if (pathname === "/api/ea/triage/cache-stats") return demoLegacyTriageStats();

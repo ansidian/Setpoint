@@ -43,6 +43,7 @@ export interface FinancialDocument {
   eventId: string | null;
   contentHash: string | null;
   candidate: BillCandidate | null;
+  correction?: NonNullable<FinancialEmailPlan["workflow"]>["correction"];
   correctedEntry?: (FinancialEventCompletionEntry & { payeeId?: string | null; scheduleId?: string }) | null;
   ownerConfirmedEntry: FinancialEventCompletionEntry | null;
   ownerConfirmationConflict: boolean;
@@ -86,7 +87,11 @@ const DOCUMENT_SELECT = `SELECT d.*, e.subject, e.body_text, e.from_name, e.from
   owner_event.owner_completion_json AS event_owner_completion_json,
   (SELECT json_extract(c.effective_result_json, '$.entry') FROM ea_financial_effective_corrections c
    JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
-   WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id) AS correction_entry_json
+   WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id) AS correction_entry_json,
+  (SELECT json_object('id', c.id, 'state', c.state, 'revision', c.revision) FROM ea_financial_corrections c
+   JOIN ea_financial_activity_occurrences o ON o.user_id=c.user_id AND o.activity_id=c.activity_id
+   WHERE o.user_id=d.user_id AND o.owner='event' AND o.record_id=d.event_id
+   ORDER BY c.rowid DESC LIMIT 1) AS correction_json
   FROM ea_financial_documents d LEFT JOIN ea_email_index e
     ON e.user_id = d.user_id AND e.uid = d.email_uid
   LEFT JOIN ea_financial_events owner_event ON owner_event.user_id = d.user_id AND owner_event.id = d.event_id`;
@@ -129,6 +134,7 @@ export function documentFromRow(row: Row): FinancialDocument {
     attempts: Number(row.attempts), claimToken: nullableString(row.claim_token),
     claimedAt: nullableNumber(row.claimed_at), eventId: nullableString(row.event_id),
     contentHash: nullableString(row.content_hash), candidate: readJson<BillCandidate>(row.candidate_json),
+    correction: readJson<FinancialDocument["correction"]>(row.correction_json) || undefined,
     correctedEntry: readJson<FinancialEventCompletionEntry>(row.correction_entry_json),
     ownerConfirmedEntry: readJson<FinancialEventCompletionEntry>(row.correction_entry_json) || readJson<FinancialOwnerCompletion>(row.event_owner_completion_json)?.entry || null,
     ownerConfirmationConflict: Number(row.owner_confirmation_conflict) === 1,

@@ -41,8 +41,9 @@ describe("financial review browser delivery", () => {
     await controller.refresh();
     expect(notices.map((notice) => notice.title)).toEqual(["A financial record needs your attention"]);
     notices[0]!.onclick?.();
-    expect(window.location.search).toBe("?tab=finance&financialEmail=gmail-1%2Fmessage%201");
-    expect(window.location.hash).toBe("#financial-event-review");
+    expect(window.location.pathname).toBe("/finance");
+    expect(window.location.search).toBe("?financial=list&view=needs_attention&source=managed&financialEmail=gmail-1%2Fmessage%201");
+    expect(window.location.hash).toBe("");
     expect(notices[0]!.closed).toBe(true);
     response = batch("missing-account", 1_000_000);
     await controller.refresh();
@@ -64,7 +65,8 @@ describe("financial review browser delivery", () => {
     await controller.refresh();
     expect(notices[0]!.title).toBe("2 financial records need your attention");
     notices[0]!.onclick?.();
-    expect(window.location.search).toBe("?tab=finance");
+    expect(window.location.pathname).toBe("/finance");
+    expect(window.location.search).toBe("?financial=list&view=needs_attention&source=managed");
     await controller.refresh();
     expect(notices).toHaveLength(2);
     controller.dispose();
@@ -130,7 +132,14 @@ describe("financial review browser delivery", () => {
     vi.stubGlobal("fetch", async () => { throw new Error("Demo must not reach the network"); });
     const controller = createFinancialReviewNotifications(() => {});
     await controller.refresh();
-    expect(await getFinancialEventReview()).toEqual({ items: [], total: 0, offset: 0, limit: 20 });
+    expect(await getFinancialEventReview()).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: "event:demo-event-review", canComplete: true }),
+        expect.objectContaining({ id: "event:demo-event-partial", canComplete: false }),
+        expect.objectContaining({ id: "event:demo-event-uncertain", canComplete: false }),
+      ]),
+      total: 3, offset: 0, limit: 20,
+    });
     expect(await getFinancialReviewChanges(null)).toEqual({ items: [], cursor: null, hasMore: false });
     expect(notices).toHaveLength(0);
     expect(localStorage.getItem(storageKey)).toBeNull();

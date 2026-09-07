@@ -3,6 +3,10 @@ import { financialCorrections } from '../../financial-corrections/financial-corr
 import { requestTransactionImportDrain } from '../../transaction-imports/transaction-import-runtime.ts';
 
 const router = Router();
+router.post('/financial-corrections/inspect', async (req, res, next) => {
+  try { res.json(await financialCorrections.inspect(process.env.EA_USER_ID!, req.body?.reference)); }
+  catch (error) { next(error); }
+});
 router.post('/financial-corrections/preview', async (req, res, next) => {
   try { res.json(await financialCorrections.preview(process.env.EA_USER_ID!, req.body?.reference, req.body?.draft)); }
   catch (error) { next(error); }

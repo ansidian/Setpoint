@@ -78,7 +78,7 @@ function HistoricalActualRecord({ emailUid, plan, billResolution, children }: {
   if (imports.items.length) {
     const view = resolveTransactionImportStatus(imports.items);
     return <TransactionImportStatusView view={view || {
-      tone: "warning", title: "Existing import record", detail: "Check this email’s import in Finance settings before adding another entry.", review: true, active: false,
+      tone: "warning", title: "Existing import record", detail: "Check this email’s import in Financial activity before adding another entry.", review: true, active: false,
     }} />;
   }
   if (!canCreateManualActualRecord(plan)) {

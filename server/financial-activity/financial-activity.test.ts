@@ -96,6 +96,36 @@ describe("shared financial activity history", () => {
     await db.execute("UPDATE ea_financial_documents SET event_id = 'associated', status = 'associated'");
     expect((await reader().detail("owner", before.reference))?.reference).toEqual({ owner: "event", id: "associated" });
   });
+  it("returns related sources and every admitted correction on one owner-scoped record", async () => {
+    await event("chain");
+    for (const [uid, date] of [["notice", "2026-01-01T10:00:00Z"], ["revised", "2026-01-01T10:10:00Z"]]) {
+      await db.execute({ sql: `INSERT INTO ea_email_index (uid,user_id,account_id,account_label,account_email,subject,email_date,email_date_utc)
+        VALUES (?,'owner','mail','Mail','owner@example.com',? ,?,?)`, args: [uid!, `Bill ${uid}`, date!, date!] });
+      await db.execute({ sql: `INSERT INTO ea_financial_documents (user_id,account_id,email_uid,event_id,status,candidate_json,created_at,updated_at)
+        VALUES ('owner','mail',?,'chain','associated','{}',1000,1000)`, args: [uid!] });
+    }
+    await db.execute(`UPDATE ea_financial_events SET status='settled',outcome_json='{"outcome":"updated"}',updated_at=2000 WHERE id='chain'`);
+    const activityId = JSON.stringify(["event", "chain"]);
+    for (const [id,state,previous,updatedAt] of [["first","superseded",null,3000], ["second","completed","first",4000]] as const) {
+      await db.execute({ sql: `INSERT INTO ea_financial_correction_previews VALUES (?,'owner',?,'{}',2500)`, args:[id,activityId] });
+      await db.execute({ sql: `INSERT INTO ea_financial_corrections (id,user_id,activity_id,budget_id,preview_id,idempotency_key,predecessor_id,state,updated_at)
+        VALUES (?,'owner',?,'budget',?,?,?,?,?)`, args:[id,activityId,id,id,previous,state,updatedAt] });
+      await db.execute({ sql: `INSERT INTO ea_financial_correction_steps (correction_id,position,step_json,attempted_at,state)
+        VALUES (?,0,'{}',?,?)`, args:[id,updatedAt-100,id === 'first' ? 'partial' : 'applied'] });
+    }
+    const detail = await reader().detail("owner", { owner:"event",id:"chain" });
+    expect(detail?.history).toEqual({
+      emails:[{ uid:"notice",subject:"Bill notice",receivedAt:Date.parse("2026-01-01T10:00:00Z") },{ uid:"revised",subject:"Bill revised",receivedAt:Date.parse("2026-01-01T10:10:00Z") }],
+      corrections:[{ id:"first",predecessorId:null,state:"superseded",updatedAt:3000,steps:[{ state:"partial",attemptedAt:2900 }] },{ id:"second",predecessorId:"first",state:"completed",updatedAt:4000,steps:[{ state:"applied",attemptedAt:3900 }] }],
+    });
+    expect(detail?.originalReceipts).toHaveLength(1);
+    expect(detail?.correction?.id).toBe("second");
+    expect((await reader().list("owner")).items).toMatchObject([{ id:activityId }]);
+    expect((await reader().list("owner")).items[0]?.history).toBeUndefined();
+    expect(await reader().detail("other", { owner:"event",id:"chain" })).toBeNull();
+    await db.execute("DELETE FROM ea_email_index WHERE uid='notice'");
+    expect((await reader().detail("owner", { owner:"event",id:"chain" }))?.history?.emails[0]).toEqual({ uid:"notice",subject:"Source email",receivedAt:null });
+  });
   it("keeps automatic retries and ordinary processing out of attention", async () => {
     await event("retry");
     await db.execute("UPDATE ea_financial_events SET reason = 'Financial processing is paused while email AI is disabled.'");

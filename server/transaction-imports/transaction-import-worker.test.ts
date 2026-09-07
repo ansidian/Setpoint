@@ -1,3 +1,4 @@
+import { subscribeCurrentDashboardEvents, clearCurrentDashboardEventSubscribers } from "../dashboard/current-events.ts";
 import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -33,7 +34,7 @@ describe("transaction import worker", () => {
                       VALUES ('gmail-1', 'owner-1', 'gmail', 'owner@example.test', 'Personal')`);
   });
 
-  afterEach(() => db.close());
+  afterEach(() => { clearCurrentDashboardEventSubscribers(); db.close(); });
 
   function setup(now = () => 1_000) {
     const store = createTransactionImportStore(db, now);
@@ -70,7 +71,7 @@ describe("transaction import worker", () => {
     return { runId };
   }
 
-  function actualResult(groups: ActualImportAccountGroup[], dryRun: boolean): ActualImportBatchResult {
+  function actualResult(groups: ActualImportAccountGroup[], dryRun: boolean, outcome: "would_add" | "added" | "already_present" = dryRun ? "would_add" : "added"): ActualImportBatchResult {
     return {
       dryRun,
       groups: groups.map((group) => ({
@@ -78,22 +79,8 @@ describe("transaction import worker", () => {
         items: group.transactions.map((transaction) => ({
           itemId: transaction.itemId,
           importedId: transaction.importedId,
-          outcome: dryRun ? "would_add" : "added", evidence: { budgetId: "fixture-budget", objects: [] },
-          error: null,
-        })),
-      })),
-    };
-  }
-
-  function alreadyPresentResult(groups: ActualImportAccountGroup[], dryRun: boolean): ActualImportBatchResult {
-    return {
-      dryRun,
-      groups: groups.map((group) => ({
-        accountId: group.accountId,
-        items: group.transactions.map((transaction) => ({
-          itemId: transaction.itemId,
-          importedId: transaction.importedId,
-          outcome: "already_present",
+          outcome,
+          ...(outcome === "already_present" ? {} : { evidence: { budgetId: "fixture-budget", objects: [] } }),
           error: null,
         })),
       })),
@@ -169,6 +156,8 @@ describe("transaction import worker", () => {
     const { store } = setup();
     const runId = await stageGeneric(store);
     const ledger = new Map<string, number>();
+    const statuses: string[] = [];
+    subscribeCurrentDashboardEvents('owner-1', event => { if (event.reason === 'financial_event_changed') statuses.push(event.reason); });
     const worker = createTransactionImportWorker({
       store, dbClient: db, createId,
       importGroups: async (_userId, groups, dryRun) => {
@@ -190,6 +179,7 @@ describe("transaction import worker", () => {
     });
     await worker.processNextItemBatch();
     expect([...ledger.entries()]).toEqual([["financial-email:v1:worker", -1234]]);
+    expect(statuses).toEqual(["financial_event_changed", "financial_event_changed"]);
     expect((await store.getRunDetail("owner-1", runId))!.items[0]).toMatchObject({ status: "added" });
     expect(await stageFinancialEmailPreflight("owner-1", {
       accountId: "gmail-1", emailId: "generic-email",
@@ -250,11 +240,13 @@ describe("transaction import worker", () => {
     const { store } = setup();
     const runId = await stageGeneric(store);
     const ledger = new Map<string, number>();
+    const statuses: string[] = [];
+    subscribeCurrentDashboardEvents('owner-1', event => { if (event.reason === 'financial_event_changed') statuses.push(event.reason); });
     const worker = createTransactionImportWorker({
-      store, dbClient: db, createId, now: () => 1_000,
+      store, dbClient: db, createId, now: () => 1_000, invalidateAfterCommit: async () => undefined,
       importGroups: async (_userId, groups, dryRun) => {
         const transaction = groups[0]!.transactions[0]!;
-        if (ledger.has(transaction.importedId)) return alreadyPresentResult(groups, dryRun);
+        if (ledger.has(transaction.importedId)) return actualResult(groups, dryRun, "already_present");
         if (dryRun) return actualResult(groups, true);
         ledger.set(transaction.importedId, transaction.amountCents);
         throw Object.assign(new Error("Sync acknowledgement lost"), { code: "ACTUAL_IMPORT_SYNC_UNCERTAIN" });
@@ -269,6 +261,7 @@ describe("transaction import worker", () => {
       financialPlan: { operation: { kind: "no_write" }, automation: { eligible: false } },
     });
     expect([...ledger.entries()]).toEqual([["financial-email:v1:worker", -1234]]);
+    expect(statuses).toEqual(["financial_event_changed", "financial_event_changed", "financial_event_changed"]);
     await expect(worker.processNextItemBatch()).resolves.toBe(false);
   });
 
@@ -434,7 +427,7 @@ describe("transaction import worker", () => {
     const retryWorker = createTransactionImportWorker({
       store,
       dbClient: db,
-      importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => alreadyPresentResult(groups, dryRun)),
+      importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => actualResult(groups, dryRun, "already_present")),
       invalidateAfterCommit: vi.fn(),
       createId,
       now: () => 20_000,
@@ -521,7 +514,7 @@ describe("transaction import worker", () => {
     const retryWorker = createTransactionImportWorker({
       store,
       dbClient: db,
-      importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => alreadyPresentResult(groups, dryRun)),
+      importGroups: vi.fn(async (_userId: string, groups: ActualImportAccountGroup[], dryRun: boolean) => actualResult(groups, dryRun, "already_present")),
       invalidateAfterCommit: vi.fn(),
       createId,
       now: () => 20_000,

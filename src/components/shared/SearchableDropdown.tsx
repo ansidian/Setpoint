@@ -98,7 +98,8 @@ export default function SearchableDropdown({ options, value, onChange, placehold
                   {options.map(o => (
                     <CommandItem
                       key={o.id}
-                      value={o.name}
+                      value={`option:${o.id}`}
+                      keywords={[o.name]}
                       onSelect={() => { onChange(o.id); setOpen(false); setSearch(""); }}
                       data-checked={o.id === value ? "true" : undefined}
                       className="text-[13px] text-foreground/80 cursor-pointer transition-all duration-150"
@@ -110,7 +111,8 @@ export default function SearchableDropdown({ options, value, onChange, placehold
                 {showCreateOption && (
                   <CommandGroup>
                     <CommandItem
-                      value={trimmedSearch}
+                      value={`create:${trimmedSearch}`}
+                      keywords={[trimmedSearch]}
                       onSelect={handleCreate}
                       className="text-primary"
                     >

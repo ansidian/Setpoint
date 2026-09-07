@@ -1,6 +1,6 @@
 # Settings Map
 
-The settings surface: a Connections directory plus Automation, Finance, and System sections inside the centered `/settings` modal. `src/pages/WorkspaceRoute.tsx` keeps Dashboard mounted beneath it and owns close/history/focus return. Connections owns external-service setup and health; the feature tabs retain behavior and owner-security controls. `settings-core.ts` owns tab routing and `settings-ui.tsx` owns shared layout primitives, persistent heading, responsive section navigation, and independently scrolling content.
+The settings surface: a Connections directory plus Automation, Finance, and System sections inside the centered `/settings` modal. The viewport-responsive shell grows to 1920×1600 CSS pixels with wider navigation spacing; form content stays within 1280px and scrolls independently. Financial workflows live at `/finance`, owned by `src/components/financial/`; Settings is visited only for connection repair and finance preferences. `src/pages/WorkspaceRoute.tsx` keeps Dashboard mounted beneath it and owns close/history/focus return. Connections owns external-service setup and health; the feature tabs retain behavior and owner-security controls. `settings-core.ts` owns tab routing and `settings-ui.tsx` owns shared layout primitives, persistent heading, responsive section navigation, and independently scrolling content.
 
 ## Files
 
@@ -21,7 +21,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 
 ### Sections (one per tab)
 - `sections/ConnectionsSettingsSection.tsx` — directory shell that binds projected service rows, onboarding progress, and advanced deep links to connection panels
-- `sections/ActualBudgetSettingsSection.tsx` — Finance behavior: transaction imports and utility pay links; legacy mapping controls are no longer mounted
+- `sections/ActualBudgetSettingsSection.tsx` — Finance preferences: browser alerts and utility pay links, with lazy Actual metadata
 - `sections/EmailAutomationSettingsSection.tsx` — triage mode, sounds, AI models, extraction, lookback
 - `sections/SystemSettingsSection.tsx` — passkeys and API tokens
 
@@ -45,13 +45,7 @@ The settings surface: a Connections directory plus Automation, Finance, and Syst
 - `cards/WeatherLocationCard.tsx` — city geocode → lat/lng patch for dashboard weather snapshots
 - `cards/HomeLocationCard.tsx` — Places-backed atomic Home selection/removal for driving Time-to-Leave estimates
 - `cards/ActualBudgetConnectionCard.tsx` — Actual server URL/auth config, budget cache hydration
-- `cards/EmailTransactionImportCard.tsx` — bounded Amazon/PayPal historical scans, durable import progress, and financial-email review with dashboard run deep links and pending-run pagination; no source mappings or mode controls
-- `cards/FinancialEventReviewCard.tsx` — paginated exceptions for new financial arrivals, available even while Actual is disconnected; direct record URLs retain the shared managed completion owner
-- `cards/financial-review/FinancialRecordReview.tsx` — inline managed status/completion and safe source-email disclosure; no independent writer or historical fallback
 - `cards/financial-review/FinancialReviewNotificationsControl.tsx` — explicit browser permission control and delivery availability; demo is inert
-- `cards/transaction-import/TransactionImportReviewList.tsx` — Amazon, PayPal, and generic financial-email candidate labeling, corrections, confirmation, retry, and dismiss
-- `cards/transaction-import/TransactionImportDateField.tsx` — shared-calendar date trigger for bounded manual backfill dates
-- `cards/transaction-import/transactionImportReviewModel.ts` — pure candidate eligibility, source labels, total, confirmation, amount, and run-phase projection
 - `cards/BriefingSchedulesCard.tsx` — snapshot window boundaries with FLIP reorder animation
 - `cards/ApiTokensCard.tsx` — API token list/create/revoke with scopes and expiry
 - `cards/PasskeysCard.tsx` — passkey registration/deletion, explicit auth mode, password step-up/change, and recovery-code regeneration

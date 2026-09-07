@@ -67,7 +67,6 @@ function renderSection({ initialSettings, patch = vi.fn<SettingsPatch>(), strict
         setSettings={setSettings}
         patch={patch}
         connections={[actualConnection(state)]}
-        accounts={[]}
       />
     );
   }

@@ -13,6 +13,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useCurrentDashboard.ts` — dashboard state: fetching, polling, SSE streaming, briefing selection
 - `currentDashboardModel.ts` — briefing/live data transforms, active-refresh detection
 - `currentDashboardHealthModel.ts` — provider freshness plus browser connectivity/read-failure health projection; saved data never implies a successful health check
+- `dashboardEventStream.ts` — single dashboard change subscription; production SSE reconnect/auth behavior and build-time demo-only in-memory financial signals
 - `dashboardEventRefreshModel.ts` — pure SSE source-to-refresh-scope routing and strongest-scope merge rules
 - `useActiveSnapshot.ts` — active snapshot fetch and sync with processing-time polling
 - `useAutoRefresh.ts` — 5-minute interval and tab-focus refresh gates
@@ -34,7 +35,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useTriageNotificationSounds.ts` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.ts` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.ts` — settings UI orchestration: tabs, debounced auto-save, sync status
-- `settings/useTransactionImports.ts` — Finance transaction-import runs, paginated pending review and explicit run deep links, stale-safe review mutations, visibility refresh, and active-only polling
+- `useTransactionImports.ts` — Finance transaction-import runs, paginated pending review and explicit run deep links, stale-safe review mutations, visibility refresh, and active-only polling
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 

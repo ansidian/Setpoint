@@ -11,15 +11,15 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `parsers/paypal.ts` — pure PayPal payment/order parser
 - `parsers/parser-registry.ts` — source routing, deterministic receipt ownership, and public parser entry point
 - `transaction-email-discovery.ts` — allowlisted Gmail historical-search adapter
-- `transaction-import-store.ts` — durable run, item, claim, recovery, recent-run, and per-email status persistence; bounded redacted dashboard activity and paginated pending-review runs; no mapping-table access
-- `transaction-import-activity.ts` — existing bounded dashboard activity and pending-run read projections
+- `transaction-import-store.ts` — durable run, item, claim, recovery, recent-run, and per-email status persistence; bounded redacted dashboard activity and paginated pending-review runs; Inbox reads expose latest correction status and last verified effective results without rewriting original owner fields; no mapping-table access
+- `transaction-import-activity.ts` — existing bounded dashboard activity and pending-run read projections, including verified corrected amounts/payees
 - `transaction-import-store-projections.ts` — database-row projections for durable runs and items, including historical captured targets/modes
 - `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner, planner-owned targets/rollout for new items, and redacted historical equivalence projection
 - `transaction-import-equivalence-report.ts` — read-only historical replay and redacted gate summary
 - `financial-email-preflight.ts` — stages exact generic USD expenses and transfer schedules, preserves their rollout mode, and applies expense preview outcomes and unattended eligibility
 - `financial-email-transfer.ts` — shared payment identity across reminder emails, separate transfer preview/commit/recovery, durable attempt admission and schedule-aware outcomes
 - `transaction-import-service.ts` — arrival preparation and historical-run admission
-- `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains
+- `transaction-import-worker.ts` — resumable Gmail paging plus Actual preview/commit drains; settled batches publish the shared financial signal and recovered original imports reuse Actual invalidation
 - `transaction-import-arrivals.ts` — transient Gmail normalized-email adapter used by the non-blocking sync hook
 - `transaction-import-runtime.ts` — shared bounded financial-document/event and legacy-import drains, startup stale recovery, and graceful shutdown
 

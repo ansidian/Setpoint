@@ -40,6 +40,19 @@ function item(status: TransactionImportItem["status"], overrides: Partial<Transa
 }
 
 describe("transaction import inbox status model", () => {
+  it('uses the completed correction type without hiding another pending receipt', () => {
+    const corrected = item('added', { effectiveResult: { correctionId:'correction-1', entry: { type:'payment', amountCents:1200, date:'2026-09-07', accountId:'account-1' } } });
+    expect(resolveTransactionImportStatus([corrected])).toMatchObject({ title:'Corrected in Actual', detail:'The corrected entry is recorded in Actual.', review:false });
+    expect(resolveTransactionImportStatus([corrected, item('needs_review')])).toMatchObject({ title:'Needs review', review:true });
+    corrected.correction = { id:'next', state:'recovering', revision:1 };
+    expect(resolveTransactionImportStatus([corrected])).toMatchObject({ title:'Checking correction progress', active:true });
+    corrected.correction.state = 'attention';
+    expect(resolveTransactionImportStatus([corrected])).toMatchObject({ title:'Correction needs attention', review:true });
+    corrected.correction = undefined;
+    corrected.effectiveResult!.entry.type = 'bill';
+    expect(resolveTransactionImportStatus([corrected])?.detail).toBe('The corrected schedule is saved in Actual.');
+  });
+
   it.each([
     ["added", "Added to Actual"],
     ["updated", "Updated in Actual"],

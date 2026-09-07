@@ -61,6 +61,16 @@ beforeEach(async () => {
 });
 afterEach(async () => { await actualApi.shutdown(); db.close(); await removeTempDir(directory); });
 describe('durable correction facade with an offline Actual budget', () => {
+  it('inspects current edits without changing original receipts or admitting correction work', async () => {
+    await actualApi.updateTransaction(transaction, { amount: -1400, notes: 'Changed in Actual' });
+    const inspection = await facade().inspect('owner', reference);
+    expect(inspection.snapshot.transactions).toEqual([expect.objectContaining({ id: transaction, amount: -1400, notes: 'Changed in Actual' })]);
+    expect(inspection.originalReceipts[0]?.evidence?.objects[0]?.after?.amount).toBe(-1000);
+    expect(inspection.correction).toBeNull();
+    expect(await createFinancialCorrectionStore(db).latest('owner', inspection.activityId)).toBeNull();
+    expect(await actualApi.getTransactions(account, '2026-09-01', '2026-09-01')).toEqual([expect.objectContaining({ id: transaction, amount: -1400 })]);
+    await expect(facade().inspect('another-owner', reference)).rejects.toThrow('no completed original result');
+  });
   it('corrects signed amount on the same row, preserves original identity, and confirms idempotently', async () => {
     const service = facade();
     const preview = await service.preview('owner', reference, { type: 'income', amountCents: 1700, date: '2026-09-02', accountId: account });

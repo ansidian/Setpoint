@@ -1,3 +1,4 @@
+import { financialHref } from "../../financial/financialNavigation";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { Link } from "react-router";
 import type { CSSProperties } from "react";
@@ -69,12 +70,12 @@ export function TransactionImportStatusView({
         <div style={{ fontSize: 11, fontWeight: 650, color: tone.color }}>{view.title}</div>
         <div style={{ marginTop: 1, fontSize: 10.5, color: "rgba(205,214,244,0.68)" }}>{view.detail}</div>
       </div>
-      {view.review ? (
+      {view.review || view.recordHref ? (
         <Link
-          to="/settings?tab=finance#transaction-import-review"
+          to={view.recordHref || financialHref()}
           className="shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[10.5px] font-semibold text-foreground outline-none transition-[background-color,border-color,color,transform] duration-200 hover:-translate-y-px hover:border-white/[0.14] hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none"
         >
-          Review
+          {view.recordHref ? "View record" : "Review"}
         </Link>
       ) : null}
     </div>

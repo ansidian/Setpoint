@@ -11,7 +11,7 @@ export const extractBillFromEmail = ({ subject, from, body }: BillExtractionInpu
 export const resolveFinancialEmailPlan = (payload: BillPaySeedRequest): Promise<FinancialEmailPlan> =>
   apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
 
-// Intentionally unavailable in demo; the demo dispatcher rejects this write.
+// Demo completion is fictional and remains inside the in-memory dispatcher.
 export const completeFinancialEvent = async (payload: FinancialEventCompletionRequest): Promise<FinancialEmailPlan> => {
   const notify = (plan?: FinancialEmailPlan) => {
     if (typeof window !== "undefined" && !isDemoMode()) window.dispatchEvent(new CustomEvent("ea-financial-event-changed", {

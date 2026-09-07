@@ -1,3 +1,6 @@
+import { demoCompletionPlan } from './financialCompletion';
+import { getDemoCorrection } from './financialCorrections';
+import { announceDemoFinanceChange } from './financeProjection';
 import type {
   TransactionImportItem,
   TransactionImportRunDetail,
@@ -62,6 +65,13 @@ let runs: TransactionImportRunDetail[] = [{
   items: [item, { ...item, id: "demo-transaction-item-automatic", emailUid: "demo-email-cloud-receipt", emailSubject: "You paid Cloud Sandbox $38.47", gmailMessageId: "demo-cloud-message", internetMessageId: "<demo-cloud@example.invalid>", externalId: "DEMO_CLOUD_3847", importedId: "paypal-DEMO_CLOUD_3847", payee: "Cloud Sandbox", amountCents: -3847, automationMode: "automatic", status: "added", reconciliationStatus: "added", updatedAt: now - 600_000 }],
 }];
 
+function projectCorrection(item: TransactionImportItem): TransactionImportItem {
+  const correction = getDemoCorrection({ owner: 'import', id: item.id, runId: item.runId });
+  if (!correction) return item;
+  return { ...item, correction: { id: correction.id, state: correction.state, revision: correction.revision },
+    ...(correction.state === 'completed' ? { effectiveResult: correction.effectiveResult as NonNullable<TransactionImportItem['effectiveResult']> } : {}) };
+}
+
 function needsReview(entry: TransactionImportItem) {
   return ["needs_review", "failed", "paused"].includes(entry.status)
     || (entry.status === "ready" && !entry.confirmedAt && (entry.automationMode === "observe" || !entry.automaticSafe));
@@ -73,11 +83,15 @@ export function getDemoFinanceActivity(): DashboardFinanceActivity {
   const items = runs.flatMap((run) => run.items);
   const review = items.filter(needsReview);
   const recent = items.filter((entry) => entry.automationMode === "automatic" && !entry.confirmedAt && ["added", "updated", "already_present"].includes(entry.status));
-  const project = (entry: TransactionImportItem): DashboardFinanceActivityItem => ({
+  const project = (original: TransactionImportItem): DashboardFinanceActivityItem => {
+    const projected = projectCorrection(original);
+    const effective = projected.effectiveResult?.entry;
+    const entry = effective ? { ...projected, payee: effective.payee || projected.payee, amountCents: effective.amountCents * (effective.type === 'income' ? 1 : -1), status: 'updated' as const } : projected;
+    return ({
     id: entry.id, runId: entry.runId, emailUid: entry.emailUid, payee: entry.payee, amountCents: entry.amountCents, currency: entry.currency,
     status: entry.status as DashboardFinanceActivityItem["status"], updatedAt: entry.updatedAt,
     description: entry.status === "added" ? "Imported into Actual" : entry.status === "already_present" ? "Already recorded in Actual" : entry.status === "updated" ? "Updated in Actual" : entry.status === "ready" ? "Ready for your confirmation" : entry.status === "failed" ? "Import needs a retry" : "Review the source evidence",
-  });
+  }); };
   return { status: "ready", reviewCount: review.length, review: review.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), recent: recent.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3).map(project), error: null };
 }
 
@@ -171,6 +185,7 @@ export function handleDemoTransactionImportRequest({
       });
       return { ...run, items, counts: { ...run.counts, added: run.counts.added + accepted, review: Math.max(0, run.counts.review - accepted) }, updatedAt: Date.now() };
     });
+    if (accepted) announceDemoFinanceChange();
     return { accepted };
   }
   const itemActionMatch = pathname.match(/\/items\/([^/]+)\/(retry|dismiss)$/);
@@ -195,7 +210,8 @@ export function handleDemoTransactionImportRequest({
   }
   if (pathname.endsWith("/email-status") && method === "GET") {
     const emailUid = url.searchParams.get("emailUid") || "";
-    return { emailUid, items: clone(runs.flatMap((run) => run.items).filter((candidate) => candidate.emailUid === emailUid)) };
+    if (emailUid === "demo-email-budget") return { emailUid, items: [], financialEvent: demoCompletionPlan() };
+    return { emailUid, items: clone(runs.flatMap((run) => run.items).filter((candidate) => candidate.emailUid === emailUid).map(projectCorrection)) };
   }
   return NO_DEMO_TRANSACTION_IMPORT_RESPONSE;
 }

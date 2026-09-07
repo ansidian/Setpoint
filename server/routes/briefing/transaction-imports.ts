@@ -117,7 +117,7 @@ export function createTransactionImportRouter({
       const [items, plan] = await Promise.all([
         service.listItemsForEmail(ownerUserId(), emailUid), financialStatus(ownerUserId(), emailUid),
       ]);
-      const financialEvent = plan?.workflow?.state === "settled" && !plan.candidate.event_kind ? null : plan;
+      const financialEvent = plan?.workflow?.state === "settled" && !plan.workflow.correction && !plan.candidate.event_kind ? null : plan;
       res.json({ emailUid, items, financialEvent });
     } catch (error) {
       errorResponse(res, error);

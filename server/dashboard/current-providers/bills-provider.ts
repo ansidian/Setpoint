@@ -22,6 +22,9 @@ function billsHealthProjection(health: BillsMirrorHealth | null = null) {
     state: health?.state || null,
     configured: health?.configured ?? null,
     lastError: health?.lastError || null,
+    // Ledger-only writes can leave every schedule unchanged. Publish only after
+    // the persisted mirror refresh succeeds, including those transaction changes.
+    lastSuccessAt: health?.lastSuccessAt || null,
     pendingRefreshAt: health?.pendingRefreshAt || null,
     refreshStartedAt: health?.refreshStartedAt || null,
   };

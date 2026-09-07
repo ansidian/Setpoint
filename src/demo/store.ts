@@ -274,6 +274,7 @@ function makeDemoSeed(now = new Date()) {
   };
 
   const bills = [
+    bill({ id: "demo-shared-schedule", payee: "Fictional Electric", day: today, amount: 90 }),
     bill({ id: "demo-electric", payee: "Demo Electric", day: tomorrow, amount: 146.32 }),
     bill({ id: "demo-water", payee: "Northstar Water", day: later, amount: 58.11 }),
     bill({ id: "demo-internet", payee: "Fiber Co-op", day: yesterday, amount: 79.99, paid: true }),

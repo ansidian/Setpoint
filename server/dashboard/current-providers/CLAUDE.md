@@ -8,7 +8,7 @@ Per-source modules for the `/api/dashboard/current` engine. Each provider owns i
 - `weather-provider.ts` — weather current data
 - `calendar-provider.ts` — calendar current data
 - `deadlines-provider.ts` — deadlines (Todoist-backed) current data
-- `bills-provider.ts` — bills/Actual current data + maintenance-refresh reason
+- `bills-provider.ts` — bills/Actual current data + maintenance-refresh reason; successful mirror timestamps publish ledger-only changes even when schedules are unchanged
 
 (Tests are not listed in this map; follow the behavior-ownership policy in `AGENTS.md`.)
 

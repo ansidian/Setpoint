@@ -139,6 +139,7 @@ afterEach(async () => {
 
 const {
   getMetadata,
+  invalidateActualAfterTransactionImport,
   sendBill,
   markBillPaid,
   createQuickTxn,
@@ -151,6 +152,16 @@ function rowResult(rows: Array<Record<string, unknown>> = []) {
   return { rows };
 }
 
+
+describe("settled Actual invalidation", () => {
+  it("retains a durable mirror retry when metadata invalidation fails", async () => {
+    const database = await useReconciliationDb();
+    mockActual.invalidateActualMetadataCache.mockRejectedValue(new Error('Actual cache unavailable'));
+    await expect(invalidateActualAfterTransactionImport('u1')).rejects.toThrow('Actual cache unavailable');
+    const { rows } = await database.execute("SELECT status, pending_refresh_at FROM ea_bills_mirror_state WHERE user_id='u1'");
+    expect(rows).toEqual([expect.objectContaining({ status:'needs_sync', pending_refresh_at:expect.any(String) })]);
+  });
+});
 
 describe("sendBill", () => {
   it("forwards to actual.sendBill and schedules a delayed mirror refresh", async () => {

@@ -4,7 +4,7 @@ Bill domain logic: AI extraction from emails, zero-configuration financial-email
 
 ## Files
 
-- `bills-service.ts` — public bills API; owns Actual-metadata invalidation fan-out on writes
+- `bills-service.ts` — public bills API; owns Actual-metadata invalidation fan-out on writes; settled imports persist mirror reconciliation before fallible cache refresh
 - `bill-extract.ts` — supplies complete bounded semantic email evidence for financial extraction; rejects incomplete source bodies
 - `bill-extraction-service.ts` — owns candidate-only LLM extraction/verification for the financial-email planner
 - `bill-semantic-prompt.ts` — public bills-domain entry that owns first-pass bill-semantic extraction instructions shared by email triage and manual extraction

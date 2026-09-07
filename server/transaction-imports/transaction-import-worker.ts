@@ -1,4 +1,5 @@
 import { isTransferImport, processTransferImportItem } from "./financial-email-transfer.ts";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.ts";
 import { randomUUID } from "crypto";
 import type { Client } from "@libsql/client";
 import db from "../db/connection.ts";
@@ -307,6 +308,9 @@ export function createTransactionImportWorker({
           }
         }
         await applyResults([item], result);
+        if (result.groups.some(group => group.items.some(outcome => outcome.outcome === "already_present"))) {
+          await Promise.resolve(invalidateAfterCommit(item.userId)).catch(error => console.error("[Transaction Imports] Recovered import invalidation failed:", conciseError(error)));
+        }
       } catch (error) { await settleImportFailure([item], error); }
     }
     const commitItems = valid.filter((item) => item.status === "importing" && item.originalAttemptedAt == null);
@@ -343,6 +347,9 @@ export function createTransactionImportWorker({
       } catch (error) {
         await settleImportFailure(items, error);
       }
+    }
+    for (const userId of new Set(batch.map(item => item.userId))) {
+      publishCurrentDashboardEvent(userId, { source: "email_triage", reason: "financial_event_changed", state: "current" });
     }
     return true;
   }
