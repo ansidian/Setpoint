@@ -159,10 +159,10 @@ server/
 ```
 / ──────── Dashboard (auth required)
 /login ─── Login
-/settings ─ Settings (auth required)
+/settings ─ centered Settings modal over retained Dashboard (auth required)
 ```
 
-Auth guard in `App.tsx`: `authenticated ? <Component /> : <Navigate to="/login" />`. Auth state: `null` = loading spinner, `true/false` = route.
+`App.tsx` applies the owner-claim/authentication route policy before mounting runtime views. `/` and `/settings` share `WorkspaceRoute`, so Dashboard remains mounted across Settings navigation. Settings retains its query/hash targets inside a centered modal with a fixed heading and scrolling section content. Closing an in-app visit returns to its originating history entry and focus; a fresh Settings entry closes to Dashboard.
 
 ### Component Hierarchy
 

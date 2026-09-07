@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Link } from "react-router";
-import { ChevronLeft, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Check, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TABS } from "@/components/settings/settings-core";
 import type { SettingsTab } from "@/components/settings/settings-core";
@@ -192,42 +191,20 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
   }
 
   return (
-    <div className="relative isolate min-h-screen px-4 py-4 text-foreground sm:px-6 sm:py-6">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{ background: "radial-gradient(ellipse at top, var(--sp-page), var(--sp-deep) 60%)" }}
-      />
-
-      <div className="mx-auto max-w-[1140px]">
-        <header className="mb-8 flex flex-col gap-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <Link
-                to="/"
-                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground/75 transition-colors no-underline hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:bg-white/[0.06] motion-reduce:transition-none"
-              >
-                <ChevronLeft size={14} />
-                Dashboard
-              </Link>
-              <div className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
-                Workspace Preferences
-              </div>
-              <h1 className="mt-1 text-[32px] font-semibold leading-none text-foreground">
-                Settings
-              </h1>
-              <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground/75">
-                Manage external connections, automation, finance behavior, and owner security.
-              </p>
-            </div>
-            <div className="shrink-0">
-              {headerAction}
-            </div>
+    <div className="flex min-h-0 flex-1 flex-col text-foreground">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <header className="shrink-0 border-b border-white/[0.08] px-4 py-5 pr-16 sm:px-6 sm:pr-16">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 id="settings-heading" className="text-xl font-semibold leading-tight">Settings</h1>
+            {headerAction}
           </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Connections, automation, finance, and owner security.
+          </p>
         </header>
 
-        <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="min-w-0 md:sticky md:top-6 md:self-start">
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 p-4 md:grid-cols-[180px_minmax(0,1fr)] md:grid-rows-1 md:gap-6 md:p-6">
+          <nav className="min-w-0">
             <div className="border-t border-white/[0.06] pt-3 md:border-t-0 md:border-l md:pl-3 md:pt-0">
               <div className="px-2 pb-2 text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 Sections
@@ -235,14 +212,14 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
               <div
                 role="tablist"
                 aria-label="Settings sections"
-                className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0"
+                className="grid grid-cols-4 gap-1 md:flex md:flex-col"
               >
                 {TABS.map((tab) => {
                   const isSelected = activeTab === tab.id;
                   const className = cn(
-                    "rounded-lg border px-3 py-2 text-left text-[13px] font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none",
+                    "min-h-11 rounded-lg border px-1 py-2 text-center text-[11px] font-medium whitespace-nowrap md:min-h-0 md:px-3 md:text-left md:text-[13px] transition-[background-color,border-color,color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 motion-safe:hover:-translate-y-px motion-safe:focus-visible:-translate-y-px active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none",
                     isSelected
-                      ? "border-primary/20 bg-primary/[0.12] text-primary shadow-[0_0_8px_rgba(203,166,218,0.18)]"
+                      ? "border-primary/20 bg-primary/[0.12] text-primary"
                       : "border-transparent text-muted-foreground hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-foreground"
                   );
 
@@ -280,7 +257,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
             </div>
           </nav>
 
-          <div className="min-w-0" role="tabpanel" aria-label={activeTabMeta?.label}>
+          <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-2" role="tabpanel" aria-label={activeTabMeta?.label}>
             {children}
           </div>
         </div>

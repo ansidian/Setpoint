@@ -56,6 +56,10 @@ export default function useDashboardShellHotkeys({
     };
 
     function onKey(e: KeyboardEvent) {
+      if (document.querySelector("[data-workspace-foreground]")) {
+        clearActionChord();
+        return;
+      }
       const target = e.target as HTMLElement;
       const editableTarget = !!(
         target.tagName === "INPUT"

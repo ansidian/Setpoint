@@ -14,6 +14,8 @@ import {
   type AppBootstrapState,
   type AppRoutePath,
 } from "./appRouteModel";
+import SettingsChrome from "./components/settings/SettingsChrome";
+import WorkspaceRoute from "./pages/WorkspaceRoute";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import useFinancialReviewNotifications from "./hooks/useFinancialReviewNotifications";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
@@ -135,24 +137,26 @@ export default function App(): ReactElement {
               </RecoverableErrorBoundary>
             ))
           } />
-          <Route path="/" element={
+          <Route element={
             redirectElement("/", bootstrap, (
-              <RecoverableErrorBoundary>
-                <Suspense fallback={<AuthSpinner />}>
-                  <Dashboard />
-                </Suspense>
-              </RecoverableErrorBoundary>
+              <WorkspaceRoute>
+                <RecoverableErrorBoundary>
+                  <Suspense fallback={<AuthSpinner />}>
+                    <Dashboard />
+                  </Suspense>
+                </RecoverableErrorBoundary>
+              </WorkspaceRoute>
             ))
-          } />
-          <Route path="/settings" element={
-            redirectElement("/settings", bootstrap, (
+          }>
+            <Route index element={null} />
+            <Route path="/settings" element={
               <RecoverableErrorBoundary>
-                <Suspense fallback={<AuthSpinner />}>
+                <Suspense fallback={<SettingsChrome />}>
                   <SettingsRoute />
                 </Suspense>
               </RecoverableErrorBoundary>
-            ))
-          } />
+            } />
+          </Route>
           <Route path="/onboarding" element={
             redirectElement("/onboarding", bootstrap, (
               <RecoverableErrorBoundary>

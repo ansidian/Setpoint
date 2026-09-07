@@ -198,6 +198,7 @@ export default function Dashboard() {
   // R hotkey maps to the explicit Sync now action.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (document.querySelector("[data-suspend-calendar-hotkeys=blocking]")) return;
       const target = e.target instanceof HTMLElement ? e.target : null;
       if (!shouldTriggerSyncHotkey({
         key: e.key,

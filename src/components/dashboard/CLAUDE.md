@@ -1,6 +1,6 @@
 # Dashboard Map
 
-The landing surface: a Needs-you band, today timeline, and a context column, plus the calendar and notes tabs and overlay mounts. Entry points are `DashboardShell.tsx` (state + overlays + tabs) and `DashboardBody.tsx` (the 3-tier render).
+The landing surface: a Needs-you band, today timeline, and a context column, plus the calendar and notes tabs and overlay mounts. Entry points are `DashboardShell.tsx` (state + overlays + tabs) and `DashboardBody.tsx` (the 3-tier render). The shared `src/pages/WorkspaceRoute.tsx` parent retains Dashboard during Settings navigation; direct Settings loads initialize Dashboard, and shell shortcuts are suspended while Settings owns the foreground.
 
 ## Files
 

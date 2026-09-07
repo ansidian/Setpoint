@@ -1,7 +1,7 @@
 import MobileShellActions from "../shell/MobileShellActions";
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import type { ComponentType, Dispatch, RefObject, SetStateAction } from "react";
-import { useNavigate } from "react-router";
+import { useMatch, useNavigate } from "react-router";
 import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav";
 import { useDashboard } from "../../context/DashboardContext";
@@ -107,6 +107,7 @@ export function DashboardShell({
   const calendarRange = calendarRangeInput as ReturnType<typeof useCalendarRange>;
   const isMobile = useIsMobile();
   const demoMode = isDemoMode();
+  const settingsOpen = useMatch("/settings") !== null;
   const {
     handleAddTask,
     handleCompleteTask,
@@ -114,6 +115,7 @@ export function DashboardShell({
     handleMoveTask,
   } = useDashboard();
   const [tab, setTab] = useState<DashboardTab>(() => {
+    if (settingsOpen) return "dashboard";
     try {
       const saved = readDemoSafeLocalStorage("ea:tab");
       if (saved === "inbox") return "inbox";
@@ -257,10 +259,8 @@ export function DashboardShell({
   // openAnalytics is already a stable useCallback, so it is wired directly.
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
 
-  // Single signal for "a non-input overlay owns the foreground", gating the global
-  // single-key shell hotkeys and ShellHeader's 1/2 tab hotkeys so neither opens overlays
-  // behind, nor desyncs the tab from, the open modal.
-  const anyBlockingOverlayOpen = analyticsOpen || historyOpen;
+  // Foreground overlays suspend shell navigation while retaining the active tab.
+  const anyBlockingOverlayOpen = analyticsOpen || historyOpen || settingsOpen;
 
   useDashboardShellHotkeys({
     activeTab: tab,
@@ -295,7 +295,6 @@ export function DashboardShell({
     resetInboxSession({ lane: lane || "__all" });
     setShellTab("inbox");
   }, [prepareEmailOpen, setShellTab]);
-
 
 
   const inboxActiveSnapshot = useMemo(() => {

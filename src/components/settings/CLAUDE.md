@@ -1,6 +1,6 @@
 # Settings Map
 
-The settings surface: a Connections directory plus Automation, Finance, and System sections. Connections owns external-service setup and health; the feature tabs retain behavior and owner-security controls. `settings-core.ts` owns tab routing and `settings-ui.tsx` owns shared layout primitives.
+The settings surface: a Connections directory plus Automation, Finance, and System sections inside the centered `/settings` modal. `src/pages/WorkspaceRoute.tsx` keeps Dashboard mounted beneath it and owns close/history/focus return. Connections owns external-service setup and health; the feature tabs retain behavior and owner-security controls. `settings-core.ts` owns tab routing and `settings-ui.tsx` owns shared layout primitives, persistent heading, responsive section navigation, and independently scrolling content.
 
 ## Files
 
