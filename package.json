@@ -11,6 +11,7 @@
     "dev:server": "node --watch server/index.ts",
     "predev": "node scripts/regen-architecture.mts",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "demo": "VITE_EA_DEMO=1 vite",
     "dev:ai-search-turso": "EA_DEV_DB_ADAPTER=turso AI_SEARCH_VECTOR_ADAPTER=turso EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED=1 concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "postinstall": "npm rebuild better-sqlite3 && simple-git-hooks",
     "regen:architecture": "node scripts/regen-architecture.mts",

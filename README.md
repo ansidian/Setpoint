@@ -263,6 +263,18 @@ Frontend: `http://localhost:5173` — proxies `/api/*` to Express on port 3001.
 
 By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → Automation when you intentionally want real local triage or need to pause triage job draining.
 
+### Running the demo locally
+
+```bash
+npm run demo      # fictional demo data with Vite HMR; no backend required
+```
+
+Open the local URL printed by Vite (normally `http://localhost:5173`; if that port is occupied, Vite picks the next available port). To choose a port explicitly, use `npm run demo -- --port 5182`.
+
+This sets `VITE_EA_DEMO=1` when Vite starts and serves the demo with React Fast Refresh and CSS hot updates. Demo mutations stay in memory and reset on refresh. Stop and restart the command to switch between demo and normal development.
+
+To check the static deployment artifact instead, run `npm run build:demo` followed by `npm run preview:demo`. The preview serves `dist-demo` without HMR; rebuild it after changes.
+
 ### Tests
 
 ```bash

@@ -43,6 +43,29 @@ describe("demo mode API network guard", () => {
     expect(beaconAttempted).toBe(false);
   });
 
+  it("refreshes Dashboard after an email is handled even when the demo timestamp stays fixed", async () => {
+    const requests = installRecordingFetch({});
+    const api = await importApiWithDemoMode("1");
+    const { renderHook, act, waitFor } = await import("@testing-library/react/pure");
+    const { default: useCurrentDashboard } = await import("../hooks/useCurrentDashboard");
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    try {
+      await waitFor(() => expect(result.current.current).toBeTruthy());
+      const before = result.current.current!;
+      const email = before.activeSnapshot.carryover[0]!;
+      await act(async () => {
+        await api.markSnapshotItemHandled(email.id);
+        await result.current.activeSnapshot.refresh();
+      });
+      expect(result.current.current!.fetchedAt).toBe(before.fetchedAt);
+      expect(result.current.current!.activeSnapshot.carryover.some(row => row.id === email.id)).toBe(false);
+      expect(result.current.current!.activeSnapshot.lanes.handled.some(row => row.id === email.id)).toBe(true);
+      expect(requests).toEqual([]);
+    } finally {
+      unmount();
+    }
+  });
+
   it("previews and confirms fictional corrections without network and preserves receipts", async () => {
     const requests = installRecordingFetch({});
     const api = await importApiWithDemoMode("1");

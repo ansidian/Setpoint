@@ -19,6 +19,9 @@ export function demoDashboardResponse(seed: DemoSeed, sourceToRefresh: unknown, 
   }
   return structuredClone({
     ...seed.currentDashboard,
+    // Demo mutations share this in-memory snapshot but retain the seed's
+    // fetchedAt. Do not treat that timestamp as an unchanged-content signal.
+    contentKey: null,
     systemStatus: {
       ...seed.currentDashboard.systemStatus,
       sources: seed.currentDashboard.systemStatus.sources.map((source) => ({ ...source, retrySource: RETRY_KEYS[source.key] })),
