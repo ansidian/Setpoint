@@ -69,7 +69,7 @@ describe("demo mode read adapter", () => {
     });
     expect(deadlines.upcoming.some((task) => task.title === "Send portfolio demo link")).toBe(true);
     expect(bills.schedules.some((bill) => bill.payee === "Demo Electric")).toBe(true);
-    expect(bills.schedules.find((bill) => bill.payee === "Everyday Card")?.next_date).toBe("2026-05-12");
+    expect(bills.schedules.find((bill) => bill.payee === "Everyday Card")).toMatchObject({ next_date: "2026-05-12", type: "transfer" });
     expect(bills.schedules.find((bill) => bill.payee === "Demo Electric")?.next_date).toBe("2026-05-13");
     expect(bills.transactions).toEqual(expect.arrayContaining([
       expect.objectContaining({ direction: "income", payee: "Northstar Payroll" }),

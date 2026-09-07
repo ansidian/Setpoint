@@ -8,11 +8,15 @@ import type { DashboardActiveSnapshotController } from "./useLiveReadOverrides";
 import type { DashboardGlanceSheet } from "./dashboardShellModel";
 import type { GlanceActionContext } from "./glanceActionsModel";
 import type { DashboardSheetItem } from "./DashboardItemDetailSheet";
+import type { CalendarRangeController } from "../../hooks/calendar/useCalendarRange";
 
 interface DashboardShellOverlaysProps {
   isMobile: boolean;
   itemSheet: DashboardGlanceSheet | null;
   closeItemSheet: () => void;
+  calendarRange: Partial<CalendarRangeController>;
+  onEditorDirtyChange: (dirty: boolean) => void;
+  onOpenEmail: (uid: string | number) => void;
   onOpenItemInCalendar: (sheet: DashboardGlanceSheet) => void;
   billCtx: GlanceActionContext;
   accent: string;
@@ -41,7 +45,10 @@ export default function DashboardShellOverlays({
   isMobile,
   itemSheet,
   closeItemSheet,
+  calendarRange,
+  onEditorDirtyChange,
   onOpenItemInCalendar,
+  onOpenEmail,
   billCtx,
   accent,
   addTaskOpen,
@@ -66,11 +73,14 @@ export default function DashboardShellOverlays({
         <Suspense fallback={null}>
           <DashboardItemDetailSheet
             kind={itemSheet.kind}
+            calendarRange={calendarRange}
+            onEditorDirtyChange={onEditorDirtyChange}
             item={itemSheet.item as DashboardSheetItem}
             anchorRef={itemSheet.anchorRef as RefObject<HTMLElement | null>}
             accent={accent}
             ctx={itemSheet.kind === "bill" ? billCtx : undefined}
             onClose={closeItemSheet}
+            onOpenEmail={onOpenEmail}
             onOpenInCalendar={() => onOpenItemInCalendar(itemSheet)}
           />
         </Suspense>

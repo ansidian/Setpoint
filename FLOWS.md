@@ -33,7 +33,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **SSE:** `dashboard-current-changed` with `source: "bills"` — emitted via `server/dashboard/current-events.ts:publishCurrentDashboardEvent`, streamed by the GET `/current/events` handler in `server/routes/dashboard.ts` — consumed by `src/hooks/useCurrentDashboard.ts:handleChanged`.
 
-**UI:** dashboard Needs-you band + Coming-up card (`src/components/dashboard/needsYou/needsYouModel.ts` classifies due-today bills; `src/components/dashboard/context/ComingUpCard.tsx` lists upcoming ones), Finances Utilities and Journal (`src/components/finances/FinancesWorkspace.tsx`), and bill badge form dropdowns on next metadata load.
+**UI:** dashboard Money Ahead (`src/components/dashboard/finance/MoneyAheadCard.tsx`) shows unpaid bills from today through seven days ahead, excluding transfers and income from rows, counts, and totals. Needs You admits deadlines and urgent emails only; bill posting stays in Actual and returns through the existing sync. Finances Utilities and Journal (`src/components/finances/FinancesWorkspace.tsx`) and bill badge form dropdowns update on the next metadata load.
 
 ### New-arrival financial events
 

@@ -8,6 +8,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `config.ts` — build-time mode check and explicit `DEMO_API_UNHANDLED` error.
 - `apiAdapter.ts` — demo request dispatcher and calendar, task, reminder, settings, and connection-safe handlers.
 - `dashboardAdapter.ts` — fictional dashboard envelope and source retry timestamps; updates only in-memory seed state.
+- `taskFields.ts` — fictional Todoist project references and mutation-to-read project/label normalization.
 - `apiHandler.ts` — shared request contracts, unhandled sentinel, URL path helpers, and not-found errors.
 - `referenceAdapter.ts` — read/reference responses for settings controls, Actual metadata lists, usage, dashboard finance, and the managed financial review projection/change feed.
 - `store.ts` — rolling fictional seed, shared in-memory state, mutation forks, and Pacific date projection.

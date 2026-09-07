@@ -45,7 +45,7 @@ export interface CalendarModalHotkeysOptions {
   activeView: { getItemId: (item: FloatingEditorItem) => unknown };
   itemsByDay: Record<number, FloatingEditorItem[]>;
   itemsByDate: Record<string, FloatingEditorItem[]>;
-  setSuppressFocusRing: (value: boolean) => void;
+
   floatingDetail: CalendarFloatingDetail | null;
   floatingDetailRef: MutableRefObject<CalendarFloatingDetail | null>;
   setFloatingDetail: Dispatch<SetStateAction<CalendarFloatingDetail | null>>;
@@ -151,7 +151,7 @@ export default function useCalendarModalHotkeys({
   activeView,
   itemsByDay,
   itemsByDate,
-  setSuppressFocusRing,
+
   floatingDetail,
   floatingDetailRef,
   setFloatingDetail,
@@ -192,12 +192,12 @@ export default function useCalendarModalHotkeys({
       if (isFullySuspendedHotkeyTarget(event.target)) return;
       if (blockingShellOverlayOpen()) return;
       if (event.key === "Tab") {
-        setSuppressFocusRing(false);
+
         return;
       }
 
       const consumeCalendarKey = ({ preventDefault = true }: { preventDefault?: boolean } = {}) => {
-        setSuppressFocusRing(true);
+
         if (preventDefault && event.cancelable) event.preventDefault();
         event.stopPropagation();
       };
@@ -307,7 +307,7 @@ export default function useCalendarModalHotkeys({
         && event.target instanceof HTMLElement
         && event.target.closest("button, [role='button'], [role='gridcell']")
       ) {
-        setSuppressFocusRing(true);
+
         return;
       }
 

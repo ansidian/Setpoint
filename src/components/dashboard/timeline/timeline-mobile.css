@@ -7,8 +7,8 @@
   transition: transform 130ms ease, background 130ms ease !important;
 }
 
-.timeline-mobile-row:focus-visible,
-.timeline-mobile-control:focus-visible {
+.timeline-mobile-row:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.timeline-mobile-control:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid var(--sp-accent) !important;
   outline-offset: 2px !important;
   transform: translateY(-1px);

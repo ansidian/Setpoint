@@ -3,7 +3,7 @@ import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/reac
 import { ChevronRight } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { LaneIcon } from "./primitives";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { InboxEmailLike } from "./inboxTypes";
 import { heightTransition, motionDuration, motionTransition } from "../../lib/motion";
 import InboxRowTransition from "./InboxRowTransition";
@@ -50,65 +50,60 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
 
   return (
     <InboxRowTransition>
-      <div className="inbox-a-lane-heading" style={{ background: `color-mix(in srgb, ${lane.color} 10%, var(--sp-page))`, borderColor: `${lane.color}30` }}>
-        <button
-          type="button"
-          aria-expanded={!collapsed}
-          onClick={() => onToggle(laneKey)}
-          className="inbox-lane-toggle sp-focus-ring"
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={() => onToggle(laneKey)}
+        className="inbox-a-lane-heading inbox-lane-toggle"
+        style={{ "--inbox-lane-color": lane.color } as CSSProperties}
+      >
+        <span
+          ref={arrivalHighlight}
+          aria-hidden="true"
           style={{
-            display: "flex", alignItems: "center", gap: 8, width: "100%",
-            cursor: "pointer", background: "transparent", border: "none",
-            fontFamily: "inherit", color: "inherit", padding: 0, position: "relative",
+            position: "absolute", inset: 0,
+            background: lane.soft,
+            boxShadow: `inset 0 0 0 1px ${lane.color}40`,
+            opacity: 0, pointerEvents: "none",
+          }}
+        />
+        <span style={{ flexShrink: 0, display: "inline-flex" }}>
+          <LaneIcon laneKey={laneKey} />
+        </span>
+        <span
+          style={{
+            fontSize: 12, fontWeight: 600, letterSpacing: 0,
+            color: lane.color,
+            minWidth: 0, whiteSpace: "nowrap",
+            overflow: "hidden", textOverflow: "ellipsis",
           }}
         >
-          <span
-            ref={arrivalHighlight}
-            aria-hidden="true"
-            style={{
-              position: "absolute", inset: "-4px -6px", borderRadius: 6,
-              background: lane.soft,
-              boxShadow: `inset 0 0 0 1px ${lane.color}40`,
-              opacity: 0, pointerEvents: "none",
-            }}
-          />
-          <span style={{ flexShrink: 0, display: "inline-flex" }}>
-            <LaneIcon laneKey={laneKey} />
-          </span>
-          <span
-            style={{
-              fontSize: 12, fontWeight: 600, letterSpacing: 0,
-              color: lane.color,
-              minWidth: 0, whiteSpace: "nowrap",
-              overflow: "hidden", textOverflow: "ellipsis",
-            }}
-          >
-            {lane.label}
-          </span>
-          <span
-            style={{
-              flexShrink: 0,
-              fontSize: 11, fontWeight: 500,
-              color: lane.color,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {emails.length}
-          </span>
-          <span style={{ flex: 1 }} />
-          <span className="inbox-a-lane-read">{(laneKey === "noise" ? noiseUnreadCount : emails.filter((email) => !email.read).length) > 0
-            ? `${laneKey === "noise" ? noiseUnreadCount : emails.filter((email) => !email.read).length} unread`
-            : "All read"}</span>
-          <Motion.span
-            aria-hidden="true"
-            animate={{ rotate: collapsed || reduceMotion ? 0 : 90 }}
-            transition={motionTransition(reduceMotion, motionDuration.feedback)}
-            style={{ display: "inline-flex", flexShrink: 0 }}
-          >
-            <ChevronRight size={12} color="rgba(205,214,244,0.4)" />
-          </Motion.span>
-        </button>
-      </div>
+          {lane.label}
+        </span>
+        <span
+          style={{
+            flexShrink: 0,
+            fontSize: 11, fontWeight: 500,
+            color: lane.color,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {emails.length}
+        </span>
+        <span style={{ flex: 1 }} />
+        <span className="inbox-a-lane-read">{(laneKey === "noise" ? noiseUnreadCount : emails.filter((email) => !email.read).length) > 0
+          ? `${laneKey === "noise" ? noiseUnreadCount : emails.filter((email) => !email.read).length} unread`
+          : "All read"}</span>
+        <Motion.span
+          className="inbox-lane-chevron"
+          aria-hidden="true"
+          animate={{ rotate: collapsed || reduceMotion ? 0 : 90 }}
+          transition={motionTransition(reduceMotion, motionDuration.feedback)}
+          style={{ display: "inline-flex", flexShrink: 0 }}
+        >
+          <ChevronRight size={12} color="rgba(205,214,244,0.4)" />
+        </Motion.span>
+      </button>
       <AnimatePresence initial={false}>
         {!collapsed && (
           <Motion.div

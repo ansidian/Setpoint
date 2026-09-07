@@ -48,6 +48,7 @@ export default function useInboxKeyboardCommands({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.isComposing) return;
       if (document.querySelector("[data-workspace-foreground]")) return;
       const { onUndo: onUndoNow, moveBy: moveByNow, selectedEmail: selectedEmailNow, readOnly: readOnlyNow, onAction: onActionNow } = handlersRef.current;
       if (shouldHandleInboxUndoHotkey({

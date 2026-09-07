@@ -305,6 +305,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.{js,ts}` and `src/compo
 | `useDismissablePortal` | `src/hooks/useDismissablePortal.ts` |
 | `useFinancialReviewNotifications` | `src/hooks/useFinancialReviewNotifications.ts` |
 | `useIsMobile` | `src/hooks/useIsMobile.ts` |
+| `useKeyboardFocusIndicators` | `src/hooks/useKeyboardFocusIndicators.ts` |
 | `useMediaQuery` | `src/hooks/useMediaQuery.ts` |
 | `useMotionPresence` | `src/hooks/useMotionPresence.ts` |
 | `useNews` | `src/hooks/useNews.ts` |

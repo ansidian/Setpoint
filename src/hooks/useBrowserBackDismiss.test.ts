@@ -88,6 +88,42 @@ describe("useBrowserBackDismiss", () => {
     });
   });
 
+  it("keeps Back owned while a dirty editor or its detail stays open", async () => {
+    const { result } = renderHook(() => {
+      const [mode, setMode] = useState("editor");
+      const [dirty, setDirty] = useState(true);
+      useBrowserBackDismiss({
+        enabled: mode !== "closed",
+        historyKey: "eaTestGuardedEditor",
+        onDismiss: () => {
+          if (dirty) return false;
+          if (mode === "editor") { setMode("detail"); return false; }
+          setMode("closed");
+          return true;
+        },
+      });
+      return { mode, setDirty };
+    });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const token = window.history.state.eaTestGuardedEditor;
+      act(() => window.history.back());
+      await waitFor(() => {
+        expect(window.history.state.eaTestGuardedEditor).toBeTruthy();
+        expect(window.history.state.eaTestGuardedEditor).not.toBe(token);
+      });
+      expect(result.current.mode).toBe("editor");
+    }
+
+    act(() => result.current.setDirty(false));
+    act(() => window.history.back());
+    await waitFor(() => expect(result.current.mode).toBe("detail"));
+    expect(window.history.state.eaTestGuardedEditor).toBeTruthy();
+    act(() => window.history.back());
+    await waitFor(() => expect(result.current.mode).toBe("closed"));
+    expect(window.history.state.eaTestGuardedEditor).toBeUndefined();
+  });
+
   it("unwinds its history entry on unmount while still enabled (mount-style consumers)", async () => {
     const { unmount } = renderHook(() => useBrowserBackDismiss({
       enabled: true,

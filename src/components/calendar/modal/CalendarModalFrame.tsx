@@ -15,14 +15,14 @@ interface CalendarModalFrameProps {
     scrollRef: RefObject<HTMLDivElement | null>;
   };
   layout: CalendarModalFrameLayout;
-  suppressFocusRing: boolean;
+
   children: ReactNode;
 }
 
 export default function CalendarModalFrame({
   refs: { panelRef, scrollRef },
   layout: { panelWidth, panelMaxWidth, shellMaxHeight, shellPadding, contentGap },
-  suppressFocusRing,
+
   children,
 }: CalendarModalFrameProps) {
   return (
@@ -40,7 +40,7 @@ export default function CalendarModalFrame({
       <div
         ref={panelRef}
         data-testid="calendar-modal-panel"
-        data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
+
         className="isolate flex flex-col"
         aria-labelledby="calendar-modal-title"
         tabIndex={-1}

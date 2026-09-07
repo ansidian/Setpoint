@@ -8,16 +8,14 @@ import { NeedsYouCountBlock } from "./NeedsYouCountBlock";
 import { PriorityCard } from "./PriorityCard";
 import { StartHereStrip } from "./StartHereStrip";
 import { MobileNeedsYouList } from "./MobileNeedsYouList";
-import type { NeedsYouBill, NeedsYouCard, NeedsYouDeadlines, NeedsYouLanes } from "./needsYouModel";
+import type { NeedsYouCard, NeedsYouDeadlines, NeedsYouLanes } from "./needsYouModel";
 
 export interface NeedsYouBandProps {
   snapshotLanes?: NeedsYouLanes | null;
   liveDeadlines?: NeedsYouDeadlines;
-  liveBills?: NeedsYouBill[] | null;
   railThreshold?: number;
   isMobile?: boolean;
   onOpenEmail?: (uid: string | number) => void;
-  onMarkHandled?: (snapshotItemId: number) => Promise<unknown> | unknown;
   onCompleteDeadline?: (id: string | number, data: unknown) => Promise<unknown> | unknown;
   onOpen?: (payload: { kind?: string | null; id?: string | number | null; date?: string | null; data?: unknown }, anchor?: HTMLElement) => void;
   onPromotedDeadlineIdsChange?: (ids: readonly string[]) => void;
@@ -25,14 +23,14 @@ export interface NeedsYouBandProps {
 
 const ACTION_ERROR_TEXT = "Couldn't mark done — try again";
 
-function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThreshold = 5, isMobile = false, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen, onPromotedDeadlineIdsChange }: NeedsYouBandProps) {
+function NeedsYouBandInner({ snapshotLanes, liveDeadlines, railThreshold = 5, isMobile = false, onOpenEmail, onCompleteDeadline, onOpen, onPromotedDeadlineIdsChange }: NeedsYouBandProps) {
   const [opened, setOpened] = useState<string[]>([]);
   const [handled, setHandled] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const desktopCardRowRef = useRef<HTMLDivElement | null>(null);
   const model = useMemo(
-    () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, opened, handled, maxCards: Infinity, backfillLimit: 0 }),
-    [snapshotLanes, liveDeadlines, liveBills, opened, handled],
+    () => buildNeedsYouModel({ snapshotLanes, liveDeadlines, opened, handled, maxCards: Infinity, backfillLimit: 0 }),
+    [snapshotLanes, liveDeadlines, opened, handled],
   );
   const recommendation = model.urgentCards[0] ?? null;
   const queuedUrgentCards = recommendation ? model.urgentCards.slice(1) : model.urgentCards;
@@ -55,7 +53,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   // An id still present in server data is NOT pruned — that also covers the
   // in-flight optimistic-hide case, since the server hasn't caught up yet.
   useEffect(() => {
-    const candidateIds = collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines, liveBills });
+    const candidateIds = collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines });
     setHandled((prev) => {
       const next = prev.filter((id) => candidateIds.has(id));
       return next.length === prev.length ? prev : next;
@@ -64,7 +62,7 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
       const next = prev.filter((id) => candidateIds.has(id));
       return next.length === prev.length ? prev : next;
     });
-  }, [snapshotLanes, liveDeadlines, liveBills]);
+  }, [snapshotLanes, liveDeadlines]);
 
   const handleOpen = useCallback((card: NeedsYouCard) => {
     setOpened((prev) => (prev.includes(card.id) ? prev : [...prev, card.id]));
@@ -72,26 +70,13 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
   }, [onOpenEmail]);
 
   const handleStartHere = useCallback((card: NeedsYouCard, anchor: HTMLButtonElement) => {
-    if (card.email) {
+    if (card.email && isMobile) {
       handleOpen(card);
       return;
     }
 
     onOpen?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, anchor);
-  }, [handleOpen, onOpen]);
-
-  const handleMarkHandled = useCallback(async (card: NeedsYouCard) => {
-    setHandled((prev) => (prev.includes(card.id) ? prev : [...prev, card.id]));
-    if (card.snapshotItemId == null) return;
-    try {
-      const result = await onMarkHandled?.(card.snapshotItemId);
-      if (result === false) throw new Error("mark handled failed");
-      setActionError(null);
-    } catch {
-      setHandled((prev) => prev.filter((id) => id !== card.id));
-      setActionError(ACTION_ERROR_TEXT);
-    }
-  }, [onMarkHandled]);
+  }, [handleOpen, isMobile, onOpen]);
 
   // Deadline "Mark done" → real Todoist completion (via the dashboard context's
   // canonical completer). Optimistically hide it here too so it leaves the band
@@ -162,7 +147,6 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
         breakdown={model.breakdown}
         actionError={actionError}
         onOpen={handleOpen}
-        onMarkHandled={handleMarkHandled}
         onComplete={handleComplete}
         onJump={onOpen}
         recommendation={recommendation}
@@ -188,26 +172,38 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, railThresh
           {recommendation && (
             <CompletionTransition key={recommendation.id} itemId={recommendation.id}>
             <StartHereStrip card={recommendation} onActivate={handleStartHere}
-              onMarkHandled={handleMarkHandled} onComplete={handleComplete} />
+              onOpenEmail={handleOpen} onComplete={handleComplete} />
             </CompletionTransition>
           )}
         </AnimatePresence>
         <div
           ref={desktopCardRowRef}
           data-testid="needs-you-card-row"
+          onFocusCapture={(event) => {
+            if (!useDesktopRail) return;
+            const card = event.target.closest<HTMLElement>(".needs-you-priority-card");
+            if (!card) return;
+            const row = event.currentTarget;
+            const bounds = row.getBoundingClientRect();
+            const target = card.getBoundingClientRect();
+            // Reveal the whole focused card, including its outside outline.
+            if (target.left - 4 < bounds.left) row.scrollLeft += target.left - 4 - bounds.left;
+            else if (target.right + 4 > bounds.right) row.scrollLeft += target.right + 4 - bounds.right;
+          }}
           style={{
             flex: 1, minWidth: 0, display: "flex", gap: 10, alignItems: "stretch",
             overflowX: useDesktopRail ? "auto" : "visible", overflowY: "visible",
             overscrollBehaviorX: "contain", scrollSnapType: "none",
             scrollbarColor: "color-mix(in srgb, var(--sp-accent) 32%, transparent) transparent",
             scrollbarWidth: useDesktopRail ? "thin" : "auto",
-            padding: useDesktopRail ? "3px 1px 6px" : 0,
+            // Reserve the 2px outline + 2px offset and 1px hover/focus lift.
+            padding: useDesktopRail ? "5px 4px 6px" : 0,
           }}
         >
           <AnimatePresence initial={false} custom={handled}>
             {queuedUrgentCards.map((card) => (
               <CompletionTransition key={card.id} itemId={card.id} horizontal style={{ display: "flex", minWidth: 0, flex: useDesktopRail ? "0 0 210px" : "1 1 0" }}>
-                <PriorityCard card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
+                <PriorityCard card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onComplete={handleComplete} onJump={onOpen} />
               </CompletionTransition>
             ))}
             {model.backfillCards.map((card) => (

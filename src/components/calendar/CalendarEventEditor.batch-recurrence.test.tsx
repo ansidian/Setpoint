@@ -195,9 +195,14 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-interval"), {
       target: { value: "2" },
     });
-    fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-ends-type"), {
-      target: { value: "onDate" },
-    });
+    fireEvent.click(within(repeatPicker).getByRole("combobox", { name: "Recurrence ends" }));
+    fireEvent.keyDown(await screen.findByRole("option", { name: "Never" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("option", { name: "On date" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: /recurrence picker/i })).toBeTruthy();
+    fireEvent.click(within(repeatPicker).getByRole("combobox", { name: "Recurrence ends" }));
+    const onDateOption = await screen.findByRole("option", { name: "On date" });
+    fireEvent.mouseMove(onDateOption);
+    fireEvent.click(onDateOption);
     fireEvent.click(await within(repeatPicker).findByTestId("calendar-recurrence-until-date"));
     fireEvent.click(within(await screen.findByLabelText("Recurrence end date picker")).getByRole("button", { name: "24" }));
 

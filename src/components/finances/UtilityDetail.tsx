@@ -1,3 +1,4 @@
+import Dropdown from "../shared/Dropdown";
 import { useState } from 'react';
 import { ArrowRight, ChevronDown, ChevronRight, ReceiptText, X } from 'lucide-react';
 import type { FinanceUtility, UtilityStatement } from '../../../shared/types/finances';
@@ -36,7 +37,7 @@ export default function UtilityDetail({ utility, month, statementId, end, onNavi
       {!statement && occurrence && <p>Schedule estimate: {financeMoney(Math.round(occurrence.amount * 100))} · due {financeDate(occurrence.next_date)}. This is not a saved statement.</p>}
       {!statement && sameMonth.length > 1 && <p>Multiple statements in this month. Select a source below; no combined amount is inferred.</p>}
     </section>
-    <div className="fin-between fin-period"><h3>Billed over the year</h3><label><span className="sr-only">Bill month</span><select value={month} onChange={event=>choose(event.target.value)}>{months.map(key=><option key={key} value={key}>{new Date(`${key}-01T12:00:00`).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</option>)}</select></label></div>
+    <div className="fin-between fin-period"><h3>Billed over the year</h3><div className="fin-month-dropdown"><Dropdown ariaLabel="Bill month" value={month} onChange={choose} options={months.map(key => ({ id:key,name:new Date(`${key}-01T12:00:00`).toLocaleDateString('en-US',{month:'short',year:'numeric'}) }))} /></div></div>
     <div className="fin-chart" role="group" aria-label="Select a monthly bill">
       {months.map((key,index)=><button key={key} aria-pressed={key===month && !statementId} aria-label={`${key}: ${financeMoney(amounts[index] ?? null)}`} onClick={()=>choose(key)}><span className="fin-bar-space">{amounts[index] != null && <i style={{height:`${Math.max(2,amounts[index]!/max*100)}%`}} />}</span><span className="fin-month-label">{new Date(`${key}-01T12:00:00`).toLocaleDateString('en-US',{month:'short'})}</span></button>)}
     </div>

@@ -1,3 +1,4 @@
+import { demoTodoistProjects } from "./taskFields";
 import type { DemoSeed } from "./store.ts";
 import { demoEmailAiUsageStats, demoLegacyTriageStats } from "./emailAiUsageData.ts";
 import { buildDemoDashboardFinance } from "./dashboardFinance.ts";
@@ -15,11 +16,7 @@ export function getDemoReferenceResponse({ pathname, method, seed }: { pathname:
   if (pathname === "/api/auth/logout" && method === "POST") return { ok: true };
   if (pathname.match(/^\/api\/briefing\/tombstone\/[^/]+$/) && method === "DELETE") return { ok: true };
   if (pathname === "/api/briefing/todoist/projects") {
-    return [
-      { id: "demo-project-inbox", name: "Inbox", isInbox: true, color: "#89b4fa" },
-      { id: "demo-project-engineering", name: "Engineering", isInbox: false, color: "#a6e3a1" },
-      { id: "demo-project-career", name: "Career", isInbox: false, color: "#f5c2e7" },
-    ];
+    return structuredClone(demoTodoistProjects);
   }
   if (pathname === "/api/briefing/todoist/labels") {
     return [

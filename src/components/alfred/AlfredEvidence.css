@@ -86,11 +86,11 @@
   background: color-mix(in srgb, var(--sp-text) 15%, transparent);
 }
 
-.alfred-evidence-row--interactive:focus-visible,
-.alfred-sent-attachment:focus-visible,
-.alfred-attachment-preview:focus-visible,
-.alfred-attachment-remove:focus-visible,
-.alfred-attachment-retry:focus-visible {
+.alfred-evidence-row--interactive:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.alfred-sent-attachment:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.alfred-attachment-preview:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.alfred-attachment-remove:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.alfred-attachment-retry:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid var(--sp-mauve);
   outline-offset: -2px;
 }

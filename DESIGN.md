@@ -271,7 +271,7 @@ Setpoint uses gently rounded, border-led geometry. Dense controls use 6px to 8px
 ### Inputs / Fields
 
 - **Style:** `#313244` or matching tokenized input background, 8px radius, 1px border, 12px to 13px type.
-- **Focus:** Shift border toward lavender and use a restrained accent glow only when focus needs stronger affordance.
+- **Focus:** Tab (including Shift+Tab), Enter, and Space enable keyboard focus indicators. Pointer actions and letter shortcuts such as E do not activate them. Typing and arrow navigation preserve the current mode. `useKeyboardFocusIndicators` owns the document-root `data-sp-keyboard-focus` flag; Tailwind focus-visible utilities and authored `:focus-visible` selectors must use that gate, including portaled controls. Shift border toward lavender and use a restrained accent glow only when focus needs stronger affordance.
 - **Error / Disabled:** Error uses urgent rose with text or icon support. Disabled states reduce contrast but should remain readable.
 
 ### Navigation
@@ -302,7 +302,7 @@ Floating panels must be portaled to `document.body`, fixed-positioned from the t
 
 Item details in Dashboard and Calendar use one shared layered treatment: the outer panel owns the single type label, icon, close control, and dragging; the inner card owns the title, facts, and action dock. Keep the inner card opaque with a restrained 4% domain tint over `#20202a`, a quiet border, 13px radius, and 15px compact padding. Do not repeat the type label inside the card.
 
-Use aligned, unboxed label/value rows for deadline and bill facts. Give bills a prominent 29px outflow-colored amount; give events a 15px source-colored time range and icon-led location/duration metadata. Titles remain 17px on desktop and wrap naturally. Keep urgency in a separate text badge, ordinary metadata unboxed, and reminders visibly distinct. Payment wording describes whether a payment is recorded in Actual, never provider-confirmed settlement. Separate the compact action dock with one quiet divider. Preserve Calendar's anchoring, caret, selection, editing, and mobile-sheet behavior when refining this shared presentation.
+Use aligned, unboxed label/value rows for deadline and bill facts. Give bills a prominent 29px outflow-colored amount; give events a 15px source-colored time range and icon-led location/duration metadata. Titles remain 17px on desktop and wrap naturally. Keep urgency in a separate text badge, ordinary metadata unboxed, and reminders visibly distinct. Payment wording describes whether a payment is recorded in Actual, never provider-confirmed settlement. Separate the compact action dock with one quiet divider. Dashboard email previews show snapshot sender, subject, summary, and action text; their Open email action enters the Inbox reader, where Mark handled remains available. Desktop email cards preview on body click and open the reader through their aligned footer; mobile email taps open the reader directly. Previews do not mark mail read or handled. Preserve Calendar's anchoring, caret, selection, editing, and mobile-sheet behavior when refining this shared presentation.
 
 ### Notes Canvas
 

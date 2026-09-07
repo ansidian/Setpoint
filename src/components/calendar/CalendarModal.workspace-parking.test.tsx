@@ -119,7 +119,6 @@ describe("CalendarModal floating detail behavior", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
     });
-    expect(screen.getByTestId("calendar-modal-panel").getAttribute("data-calendar-suppress-focus-ring")).toBe("true");
     expect(screen.getByTestId("calendar-cell-inline-overflow")).toBeTruthy();
 
     fireEvent.keyDown(document, { key: "Escape" });

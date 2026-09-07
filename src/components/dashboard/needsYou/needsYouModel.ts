@@ -1,4 +1,4 @@
-import { daysUntil, formatAmount } from "../../../lib/bill-utils";
+import { daysUntil } from "../../../lib/bill-utils";
 import { formatChipDateTime } from "../../../lib/shell-helpers";
 import type { ActualBillOccurrence } from "../../../../shared/types/actual";
 import type { SnapshotItem } from "../../../../shared/types/snapshots";
@@ -28,9 +28,7 @@ export interface NeedsYouCard {
   tone?: string;
   email?: boolean;
   opened?: boolean;
-  handleable?: boolean;
   completable?: boolean;
-  snapshotItemId?: number | null;
   uid?: string | number | null;
   jumpKind?: "deadline" | "bill" | "email" | null;
   jumpId?: string | number | null;
@@ -59,7 +57,7 @@ function laneRows(snapshotLanes?: NeedsYouLanes | null): NeedsYouEmail[] {
   const s = snapshotLanes || {};
   const seen = new Set<string>();
   return [
-    ...(s.carryover || []).map((r) => ({ ...r, lane: "needs_attention" })),
+    ...(s.carryover || []).map((r) => ({ ...r, lane: "needs_attention", is_carryover: true })),
     ...(s.needs_attention || []),
     ...(s.fyi || []),
   ].filter((row) => {
@@ -72,7 +70,7 @@ function laneRows(snapshotLanes?: NeedsYouLanes | null): NeedsYouEmail[] {
 
 function isUrgentEmail(row: NeedsYouEmail) {
   // Reading does NOT clear an email from the band — only an explicit "mark
-  // handled" (card or inbox) does, which the server records as handled_at and
+  // handled" in the reader does, which the server records as handled_at and
   // drops from the lane on refetch. So we deliberately do not filter on read.
   return row.lane === "needs_attention" && row.urgency === "high";
 }
@@ -84,7 +82,7 @@ function classifyDeadline(d: NeedsYouDeadline): RankedNeedsYouCard | null {
   const overdue = days < 0;
   return {
     id: `deadline:${d.id}`, kind: "urgent", source: "Deadline", sourceIcon: overdue ? "AlertCircle" : "Circle",
-    tone: TONE.rose, email: false, opened: false, handleable: false, completable: true, snapshotItemId: null, uid: null,
+    tone: TONE.rose, email: false, opened: false, completable: true, uid: null,
     // Click-to-open dispatch payload (Blocking Fix 2): the card body routes
     // through onOpen/onJump as { kind: jumpKind, id, date, data } so the band
     // remains the single home for opening an overdue/due-today deadline.
@@ -97,22 +95,6 @@ function classifyDeadline(d: NeedsYouDeadline): RankedNeedsYouCard | null {
   };
 }
 
-function classifyBill(b: NeedsYouBill): RankedNeedsYouCard | null {
-  if (b.paid) return null;
-  const days = daysUntil(b.next_date);
-  if (days == null || days !== 0) return null;
-  return {
-    id: `bill:${b.id}`, kind: "urgent", source: "Bill", sourceIcon: "CreditCard",
-    tone: TONE.rose, email: false, opened: false, handleable: false, completable: false, snapshotItemId: null, uid: null,
-    // Click-to-open dispatch payload (Blocking Fix 2).
-    jumpKind: "bill", jumpId: b.id, date: b.next_date || null, data: b,
-    chipTooltip: formatChipDateTime(b.next_date, null, true),
-    title: b.name || b.payee || "Bill", meta: `${formatAmount(b.amount)} · No matching payment in Actual`,
-    pill: { label: "Due today", tone: TONE.rose },
-    _overdue: false, _dueToday: true, _rank: 1,
-  };
-}
-
 function classifyEmailCard(row: NeedsYouEmail, opened: string[]): RankedNeedsYouCard {
   const id = `email:${row.id ?? row.uid ?? row.email_id}`;
   // A read email (server `read`) reflects as opened too, so a previously-read
@@ -122,9 +104,8 @@ function classifyEmailCard(row: NeedsYouEmail, opened: string[]): RankedNeedsYou
   return {
     id, kind: "urgent", source: "Email", sourceIcon: isOpen ? "MailOpen" : "Mail",
     tone: TONE.rose, email: true, opened: isOpen, completable: false,
-    handleable: row.snapshot_item_id != null, snapshotItemId: row.snapshot_item_id ?? null,
-    // Click-to-open dispatch: the card body opens the email reader (consistent
-    // with deadline/bill cards), so there is no separate "Open email" button.
+    // Desktop bodies preview this snapshot data; the separate reader action
+    // uses uid without fetching or marking the email read for a preview.
     jumpKind: "email", jumpId: uid, date: null, data: row,
     uid,
     title: row.subject || "(no subject)",
@@ -165,10 +146,9 @@ function buildInbox(rows: NeedsYouEmail[], opened: string[], handled: string[]) 
 // present means either it's a legitimately still-active item, or it's in
 // flight (optimistically hidden, server not yet refetched) — either way, not
 // pruned yet.
-export function collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines, liveBills }: {
+export function collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines }: {
   snapshotLanes?: NeedsYouLanes | null;
   liveDeadlines?: NeedsYouDeadlines;
-  liveBills?: NeedsYouBill[] | null;
 } = {}) {
   const rows = laneRows(snapshotLanes);
   const ids = new Set<string>();
@@ -180,18 +160,12 @@ export function collectNeedsYouCandidateIds({ snapshotLanes, liveDeadlines, live
     ids.add(`deadline:${d.id}`);
   });
 
-  (liveBills || []).forEach((b) => {
-    if (b.paid) return;
-    ids.add(`bill:${b.id}`);
-  });
-
   return ids;
 }
 
-export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, handled = [], opened = [], maxCards = 5, backfillLimit = 2 }: {
+export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, handled = [], opened = [], maxCards = 5, backfillLimit = 2 }: {
   snapshotLanes?: NeedsYouLanes | null;
   liveDeadlines?: NeedsYouDeadlines;
-  liveBills?: NeedsYouBill[] | null;
   handled?: string[];
   opened?: string[];
   maxCards?: number;
@@ -205,11 +179,7 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
   const deadlineCards = (liveDeadlines?.upcoming || [])
     .map(classifyDeadline).filter(isRankedNeedsYouCard)
     .filter((c) => !handled.includes(c.id));
-  const billCards = (liveBills || [])
-    .map(classifyBill).filter(isRankedNeedsYouCard)
-    .filter((c) => !handled.includes(c.id));
-
-  const all = [...deadlineCards, ...billCards, ...emailCards].sort((a, b) => a._rank - b._rank);
+  const all = [...deadlineCards, ...emailCards].sort((a, b) => a._rank - b._rank);
 
   const countN = all.length;
   const nOverdue = all.filter((c) => c._overdue).length;
@@ -234,17 +204,13 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
         .filter((d) => d.status !== "complete")
         .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || deadlineProjectName(d) || "Deadline"}`, foot: "Deadline", completable: true, jumpKind: "deadline" as const, jumpId: d.id, date: d.due_date, data: d, chipTooltip: formatChipDateTime(d.due_date, d.due_time, false) }))
         .filter((x): x is typeof x & { when: number } => x.when != null && x.when > 0),
-      ...(liveBills || [])
-        .filter((b) => !b.paid)
-        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill", completable: false, jumpKind: "bill" as const, jumpId: b.id, date: b.next_date, data: b, chipTooltip: formatChipDateTime(b.next_date, null, false) }))
-        .filter((x): x is typeof x & { when: number } => x.when != null && x.when > 0),
     ]
       .filter((u) => !handled.includes(u.id))
       .sort((a, b) => a.when - b.when).slice(0, slotsLeft);
     const backfillCards: NeedsYouCard[] = upcoming.map((u) => ({
       id: u.id, kind: "backfill", source: "Coming up", sourceIcon: "Clock",
       title: u.title || "", meta: u.meta, foot: u.foot, chipTooltip: u.chipTooltip,
-      // Upcoming deadlines and bills open through the same detail route as due
+      // Upcoming deadlines open through the same detail route as due
       // items; deadlines also keep the canonical completion payload.
       completable: !!u.completable, jumpKind: u.jumpKind ?? null, jumpId: u.jumpId ?? null, date: u.date ?? null, data: u.data ?? null,
       pill: { label: u.when === 1 ? "Tomorrow" : `In ${u.when} days`, tone: TONE.cream },

@@ -128,7 +128,6 @@ export default function useCalendarModalController({
   });
   const [labelMonth, setLabelMonth] = useState(() => ({ year: activeViewDate.year, month: activeViewDate.month }));
   const [manualMonthBrowseKey, setManualMonthBrowseKey] = useState(0);
-  const [suppressFocusRing, setSuppressFocusRing] = useState(false);
   const [pendingItemDetailFocus, setPendingItemDetailFocus] = useState<PendingDashboardDetailFocus | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -507,7 +506,7 @@ export default function useCalendarModalController({
       openFloatingDeadlineCreate,
     },
     selection: {
-      selectedItemId, selectedDay, selectedDateKey, setSuppressFocusRing,
+      selectedItemId, selectedDay, selectedDateKey,
       setSelectedDay, setSelectedDateKey, setSelectedItemId,
     },
     navigation: {
@@ -543,7 +542,7 @@ export default function useCalendarModalController({
     },
     editorState: { deadlineEditor, setDeadlineEditor, setDeadlineDraftPreview },
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
-    viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, suppressFocusRing },
+    viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate },
     data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: visibleGetMonthEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp + (deadlinesRangeData?.revision ?? 0), getMonthBills: billsRangeData?.getMonthData || null, billsRange: billsRangeData || null, billsDataRevision: billsRangeData?.revision ?? 0 },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId, setViewDate },

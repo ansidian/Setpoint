@@ -213,8 +213,6 @@ describe("InboxView snapshot mutation recovery", () => {
         openPalette: () => {},
         openAnalytics: () => setAnalyticsOpen(true),
         closeAnalytics: () => setAnalyticsOpen(false),
-        openDeadlineCreate: () => {},
-        openCalendar: () => {},
         setHistoryOpen,
         toggleAlfred: () => {},
         alfredNewChat: () => {},
@@ -229,11 +227,18 @@ describe("InboxView snapshot mutation recovery", () => {
     }
 
     render(<Harness />);
+    fireEvent.keyDown(window, { key: "a", cancelable: true });
+    expect(screen.getByText("Analytics open")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "a", cancelable: true });
+    expect(screen.getByText("Analytics closed")).toBeTruthy();
     fireEvent.click(screen.getByText("Snapshot action"));
     fireEvent.keyDown(window, { key: "a", cancelable: true });
 
     // test-architecture: allow-boundary-interaction -- the hotkey's lane move is the owner-visible provider mutation contract.
     await waitFor(() => expect(api.moveSnapshotItemLane).toHaveBeenCalledWith(11, "needs_attention"));
+    expect(screen.getByText("Analytics closed")).toBeTruthy();
+    // Already in Needs attention: A stays reserved even when triage is a no-op.
+    fireEvent.keyDown(window, { key: "a", cancelable: true });
     expect(screen.getByText("Analytics closed")).toBeTruthy();
   });
 

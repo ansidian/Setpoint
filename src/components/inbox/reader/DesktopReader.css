@@ -33,7 +33,7 @@
 .inbox-a-reader-external { margin-left: auto; }
 .inbox-a-reader-external .desktop-reader-action-button { color: #a6adc8; }
 .inbox-a-reader-utilities .desktop-reader-action-button:hover,
-.inbox-a-reader-utilities .desktop-reader-action-button:focus-visible { background: #ffffff0c; color: #e3e6f5; }
+.inbox-a-reader-utilities .desktop-reader-action-button:focus-visible:where([data-sp-keyboard-focus="true"] *) { background: #ffffff0c; color: #e3e6f5; }
 .inbox-a-reader-utilities .desktop-reader-action-button:active { background: #ffffff16; }
 .inbox-a-reader-utilities .desktop-reader-action-button[aria-expanded="true"] { background: #cba6da12; color: var(--sp-accent); }
 .inbox-a-reader-content { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -67,8 +67,8 @@
   .inbox-a-reader-content[data-has-context="true"] { grid-template-columns: minmax(0, 1fr) 320px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .inbox-a-reader-content .desktop-reader-action-button:focus-visible,
-  .inbox-a-reader-utilities .desktop-reader-action-button:focus-visible { transform: translateY(-1px); }
+  .inbox-a-reader-content .desktop-reader-action-button:focus-visible:where([data-sp-keyboard-focus="true"] *),
+  .inbox-a-reader-utilities .desktop-reader-action-button:focus-visible:where([data-sp-keyboard-focus="true"] *) { transform: translateY(-1px); }
 }
 .inbox-a-reader .inbox-reader-workspace { position: absolute; inset: 69px 0 0 auto; z-index: 3; max-width: 100%; background: #16161e; isolation: isolate; }
 .inbox-a-reader .inbox-reader-workspace[data-open="true"] > aside { width: min(360px, 100%) !important; }

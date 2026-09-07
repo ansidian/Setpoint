@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, X } from "lucide-react";
+import { CalendarClock, Clock3, X } from "lucide-react";
 import { skipSchedule } from "@/api";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import TimePickerView from "@/components/shared/pickers/TimePickerView";
 import { Switch } from "@/components/ui/switch";
 import {
   SettingsCard,
@@ -138,39 +140,34 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }: 
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="time"
-                  value={schedule.time || "08:00"}
-                  onFocus={() => {
-                    setFrozenOrder(sortOrder);
-                    setEditingTimeIdx(originalIndex);
-                  }}
-                  onBlur={() => {
-                    captureRects();
-                    const current = schedules?.[originalIndex]?.time || "";
-                    if (current.trim()) {
-                      patch({ schedules_json: schedules });
-                    } else {
-                      // Never persist a blank time: the server validator rejects
-                      // the whole PUT with a 400, dropping every co-batched
-                      // setting — and the autosave re-queue would then re-send
-                      // the invalid payload on every flush (P1-3). Restore the
-                      // default, matching the value fallback above.
-                      const restored = [...schedules];
-                      restored[originalIndex] = { ...restored[originalIndex]!, time: "08:00" };
-                      setSettings((cur) => ({ ...(cur || {}), schedules: restored }));
-                      patch({ schedules_json: restored });
-                    }
-                    setEditingTimeIdx(null);
-                    setFrozenOrder(null);
-                  }}
-                  onChange={(event) => {
-                    const updated = [...schedules];
-                    updated[originalIndex] = { ...updated[originalIndex]!, time: event.target.value };
-                    setSettings((current) => ({ ...(current || {}), schedules: updated }));
-                  }}
-                  className="h-8 rounded-md border border-white/[0.08] bg-transparent px-2.5 text-xs text-muted-foreground/75 [color-scheme:dark]"
-                />
+                <Popover open={editingTimeIdx === originalIndex} onOpenChange={(open) => {
+                  captureRects();
+                  setFrozenOrder(open ? sortOrder : null);
+                  setEditingTimeIdx(open ? originalIndex : null);
+                }}>
+                  <PopoverTrigger
+                    aria-label={`Time for ${schedule.label || "boundary"}`}
+                    className="inline-flex min-h-8 max-[600px]:min-h-11 items-center gap-2 rounded-md border border-white/15 bg-transparent px-2.5 text-xs text-foreground transition-[background-color,transform] hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-primary focus-visible:-translate-y-px active:translate-y-px motion-reduce:transition-none motion-reduce:transform-none"
+                  >
+                    <Clock3 size={13} aria-hidden="true" />
+                    {new Date(`2000-01-01T${schedule.time || "08:00"}:00`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-[280px] max-w-[calc(100vw-32px)] bg-[var(--sp-panel)] p-0 overscroll-contain">
+                    {editingTimeIdx === originalIndex && <TimePickerView
+                      initialTime={schedule.time || "08:00"}
+                      onBack={() => { setEditingTimeIdx(null); setFrozenOrder(null); }}
+                      onSelect={(time) => {
+                        captureRects();
+                        const updated = [...schedules];
+                        updated[originalIndex] = { ...updated[originalIndex]!, time };
+                        setSettings((current) => ({ ...(current || {}), schedules: updated }));
+                        patch({ schedules_json: updated });
+                        setEditingTimeIdx(null);
+                        setFrozenOrder(null);
+                      }}
+                    />}
+                  </PopoverContent>
+                </Popover>
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={!!schedule.enabled}

@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import ExpandingTextarea from "../../shared/ExpandingTextarea";
 import AnimatedCollapse from "../../shared/AnimatedCollapse";
 import AnimatedHeight from "../../shared/AnimatedHeight";
@@ -56,6 +57,7 @@ function CompactOption({
       aria-selected={active}
       onClick={onClick}
       style={{
+        "--option-color": color || "var(--sp-accent)",
         display: "flex",
         alignItems: "center",
         gap: 8,
@@ -77,9 +79,10 @@ function CompactOption({
         fontFamily: "inherit",
         cursor: "pointer",
         overflowWrap: "anywhere",
-      }}
+      } as CSSProperties}
     >
       {children}
+      {active && <Check size={13} aria-hidden="true" style={{ marginLeft: "auto", flexShrink: 0 }} />}
     </button>
   );
 }

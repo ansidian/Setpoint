@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef } from "react";
 interface UseBrowserBackDismissOptions {
   enabled: boolean;
   historyKey: string;
-  onDismiss?: () => void;
+  /** Return false when the surface remains open (for example, a dirty form). */
+  onDismiss?: () => boolean | void;
 }
 
 function createToken(prefix: string): string {
@@ -34,7 +35,12 @@ export default function useBrowserBackDismiss({
       if (event.state?.[historyKey] === token) return;
       entryTokenRef.current = null;
       popDismissedRef.current = true;
-      onDismissRef.current?.();
+      if (onDismissRef.current?.() === false) {
+        const replacement = createToken(historyKey);
+        window.history.pushState({ ...window.history.state, [historyKey]: replacement }, "");
+        entryTokenRef.current = replacement;
+        popDismissedRef.current = false;
+      }
     }
 
     window.addEventListener("popstate", handlePopState);

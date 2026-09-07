@@ -55,20 +55,6 @@ describe("BriefingSchedulesCard", () => {
     expect((screen.getByDisplayValue("Morning") as HTMLInputElement).value.trim()).not.toBe("");
   });
 
-  it("never patches a blank schedule time, restoring a default on blur (P1-3)", async () => {
-    renderCard();
-
-    const timeInput = screen.getByDisplayValue("08:00");
-    fireEvent.focus(timeInput);
-    fireEvent.change(timeInput, { target: { value: "" } });
-    fireEvent.blur(timeInput);
-
-    // A cleared native time input sends time:"" which the server rejects with a
-    // 400, dropping every co-batched setting — and the autosave re-queue would
-    // then re-send the invalid payload on every subsequent flush.
-    expect((screen.getByDisplayValue("08:00") as HTMLInputElement).value.trim()).not.toBe("");
-  });
-
   it("applies skip results returned by the API", async () => {
     mockApi.skipSchedule.mockResolvedValue({
       schedules: [

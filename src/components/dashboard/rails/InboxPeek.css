@@ -12,8 +12,8 @@
 .inbox-peek-row-meta, .inbox-peek-processing { grid-column: 1 / -1; color: var(--sp-subtext, #a6adc8); font-size: 11px; line-height: 1.5; }
 .inbox-peek-row[data-read] .inbox-peek-sender { font-weight: 450; }
 .inbox-peek-processing { margin: 8px 5px 0; }
-.dashboard-inbox-peek button:hover, .dashboard-inbox-peek button:focus-visible { background-color: rgba(255,255,255,.05); transform: translateY(-1px); }
-.dashboard-inbox-peek button:focus-visible { outline: 2px solid var(--ea-accent, #cba6da); outline-offset: 1px; }
+.dashboard-inbox-peek button:hover, .dashboard-inbox-peek button:focus-visible:where([data-sp-keyboard-focus="true"] *) { background-color: rgba(255,255,255,.05); transform: translateY(-1px); }
+.dashboard-inbox-peek button:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--ea-accent, #cba6da); outline-offset: -2px; }
 .dashboard-inbox-peek button:active { transform: scale(.98); background-color: rgba(255,255,255,.075); }
 .dashboard-inbox-peek--mobile button { min-height: 44px; }
 @media (prefers-reduced-motion: reduce) { .dashboard-inbox-peek button { transition: none; transform: none !important; } }

@@ -8,7 +8,7 @@
   }
 }
 
-.dashboard-item-trigger:focus-visible {
+.dashboard-item-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   transform: translateY(-1px);
 }
 
@@ -21,7 +21,7 @@
     transition: none !important;
   }
 
-  .dashboard-item-trigger:is(:hover, :focus-visible, :active) {
+  .dashboard-item-trigger:is(:hover, :focus-visible:where([data-sp-keyboard-focus="true"] *), :active) {
     transform: none;
   }
 }

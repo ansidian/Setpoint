@@ -215,7 +215,7 @@ export default function InboxList({
         minHeight: 0,
       }}
     >
-      <header className="inbox-a-queue-heading" data-filtered={!indexedSearchActive && lane !== "__all" && collection !== "snoozed"} style={{ "--inbox-lane-color": LANE[lane]?.color || accent } as CSSProperties}>
+      <header className="inbox-a-queue-heading" data-filtered={!indexedSearchActive && (collection === "snoozed" || lane !== "__all")} style={{ "--inbox-lane-color": collection === "snoozed" ? "#f4bb86" : LANE[lane]?.color || accent } as CSSProperties}>
         <div className="inbox-a-queue-title">
           <h2>{indexedSearchActive ? "Search results" : collection === "snoozed" ? "Snoozed" : lane === "__all" ? "All mail" : LANE[lane]?.label || "Inbox"}</h2>
           <span className="inbox-a-queue-total">{totalCount}</span>

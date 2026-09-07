@@ -774,6 +774,14 @@
   background: rgba(255, 255, 255, 0.075) !important;
 }
 
+.calendar-editor-inline-option[aria-selected="true"]:not(:disabled):is(:hover, :focus-visible:where([data-sp-keyboard-focus="true"] *)) {
+  border-color: color-mix(in srgb, var(--option-color) 60%, transparent) !important;
+  background: color-mix(in srgb, var(--option-color) 22%, transparent) !important;
+}
+.calendar-editor-inline-option[aria-selected="true"]:not(:disabled):active {
+  background: color-mix(in srgb, var(--option-color) 30%, transparent) !important;
+}
+
 .calendar-editor-fact-sheet__sr-separator {
   position: absolute;
   width: 1px;

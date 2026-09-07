@@ -148,8 +148,13 @@ function CommandSeparator({
 function CommandItem({
   className,
   children,
+  "aria-selected": selectionState,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Item>) {
+  const content = <>
+    {children}
+    <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+  </>;
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
@@ -158,9 +163,11 @@ function CommandItem({
         className
       )}
       {...props}
+      asChild={selectionState !== undefined || props.asChild}
     >
-      {children}
-      <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+      {/* cmdk uses aria-selected for its active row. A slotted child lets a
+          multi-select expose actual selection while data-selected tracks focus. */}
+      {selectionState !== undefined ? <div aria-selected={selectionState}>{content}</div> : content}
     </CommandPrimitive.Item>
   )
 }

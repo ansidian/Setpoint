@@ -1,17 +1,8 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import Dropdown from "@/components/shared/Dropdown";
 import { SectionLabel } from "@/components/settings/settings-ui";
 import { ExternalLink } from "lucide-react";
 import type { ProviderModelAvailability } from "../../../../shared/types/settings";
 import { projectProviderModelControl } from "../featureDependencyModel";
-
-const SELECT_CONTENT_CLASS = "bg-[var(--sp-panel)] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
-const SELECT_TRIGGER_CLASS = "w-full bg-input/30 transition-colors hover:bg-input/50";
 
 export default function ProviderModelSelect({
   providers,
@@ -39,11 +30,6 @@ export default function ProviderModelSelect({
     provider,
     model,
   });
-  const listedModel = selectedProvider?.models.find((entry) => entry.id === selectedModel);
-  const selectedModelLabel = listedModel?.label
-    || modelOptions.find((entry) => entry.id === selectedModel)?.label
-    || selectedModel;
-
   function changeProvider(nextProvider: string | null) {
     if (!nextProvider) return;
     const entry = providers.find((item) => item.provider === nextProvider) || providers[0];
@@ -59,48 +45,30 @@ export default function ProviderModelSelect({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div className="space-y-1.5">
         <SectionLabel className="mb-0">{providerLabel}</SectionLabel>
-        <Select
+        <Dropdown
+          ariaLabel={providerAriaLabel || providerLabel}
           value={selectedProvider?.provider || provider}
-          onValueChange={changeProvider}
+          onChange={changeProvider}
           disabled={disabled}
-        >
-          <SelectTrigger className={SELECT_TRIGGER_CLASS} aria-label={providerAriaLabel || providerLabel}>
-            <SelectValue>{selectedProvider?.label || provider}</SelectValue>
-          </SelectTrigger>
-          <SelectContent align="start" className={SELECT_CONTENT_CLASS}>
-            {providers.map((entry) => (
-              <SelectItem
-                key={entry.provider}
-                value={entry.provider}
-                disabled={!entry.available}
-                className="text-[13px]"
-              >
-                {entry.label}
-                {!entry.available ? " (unavailable)" : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder={provider}
+          options={providers.map(entry => ({
+            id: entry.provider,
+            name: `${entry.label}${entry.available ? "" : " (unavailable)"}`,
+            disabled: !entry.available,
+          }))}
+        />
       </div>
 
       <div className="space-y-1.5">
         <SectionLabel className="mb-0">{modelLabel}</SectionLabel>
-        <Select
+        <Dropdown
+          ariaLabel={modelAriaLabel || modelLabel}
           value={selectedModel}
-          onValueChange={changeModel}
+          onChange={changeModel}
           disabled={disabled || !selectedProvider?.available}
-        >
-          <SelectTrigger className={SELECT_TRIGGER_CLASS} aria-label={modelAriaLabel || modelLabel}>
-            <SelectValue>{selectedModelLabel}</SelectValue>
-          </SelectTrigger>
-          <SelectContent align="start" className={SELECT_CONTENT_CLASS}>
-            {modelOptions.map((entry) => (
-              <SelectItem key={entry.id} value={entry.id} className="text-[13px]">
-                {entry.label || entry.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder={selectedModel}
+          options={modelOptions.map(entry => ({ id: entry.id, name: entry.label || entry.id }))}
+        />
       </div>
 
       {selectedProvider?.pricingUrl ? (

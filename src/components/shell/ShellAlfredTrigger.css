@@ -14,12 +14,12 @@
   cursor: pointer;
   transition: transform 160ms ease, background 160ms ease, color 160ms ease;
 }
-.shell-alfred-trigger:hover, .shell-alfred-trigger:focus-visible {
+.shell-alfred-trigger:hover, .shell-alfred-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   transform: translateY(-1px);
   background: #ffffff0a;
   color: var(--sp-text);
 }
-.shell-alfred-trigger:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.shell-alfred-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
 .shell-alfred-trigger:active { transform: translateY(0); background: #ffffff14; }
 .shell-alfred-trigger[aria-expanded="true"] {
   color: var(--sp-accent);
@@ -27,5 +27,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .shell-alfred-trigger { transition: none; }
-  .shell-alfred-trigger:hover, .shell-alfred-trigger:focus-visible, .shell-alfred-trigger:active { transform: none; }
+  .shell-alfred-trigger:hover, .shell-alfred-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *), .shell-alfred-trigger:active { transform: none; }
 }

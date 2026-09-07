@@ -1,3 +1,4 @@
+import { demoTaskFields } from "./taskFields";
 import { handleDemoFinances } from './financesWorkspace';
 import { completeDemoFinancialEvent, demoCompletionPlan } from "./financialCompletion";
 import type { FinancialEventCompletionRequest } from "../../shared/types/financial-operations";
@@ -347,6 +348,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
       due_date: dueDate,
       status: "open",
       source: "todoist",
+      ...demoTaskFields(body, true),
     };
     seed.deadlines.upcoming.unshift(task);
     return clone(task);
@@ -354,9 +356,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
 
   if (pathname.match(/^\/api\/briefing\/todoist\/tasks\/[^/]+$/) && method === "POST") {
     const taskId = decodeURIComponent(pathSegment(pathname, 1));
-    mutateTask(seed, taskId, (task) => {
-      Object.assign(task, body, { id: task.id, todoist_id: task.todoist_id });
-    });
+    mutateTask(seed, taskId, (task) => { Object.assign(task, body, demoTaskFields(body), { id: task.id, todoist_id: task.todoist_id }); });
     return clone(seed.deadlines.upcoming.find((task) => String(task.id) === String(taskId)) || { ok: true });
   }
 
@@ -488,8 +488,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
         due_time: body.due_time || body.dueTime || null,
         status: body.status || "open",
         source: "todoist",
-        class_name: String(body.class_name || body.project_name || "Inbox"),
-        project_name: String(body.class_name || body.project_name || "Inbox"),
+        ...demoTaskFields(body, true),
       };
       seed.deadlines.upcoming.unshift(deadline);
       return clone(deadline);
@@ -499,9 +498,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
 
   if (pathname.match(/^\/api\/calendar\/deadlines\/[^/]+$/) && method === "PATCH") {
     const taskId = decodeURIComponent(pathSegment(pathname, 1));
-    mutateTask(seed, taskId, (task) => {
-      Object.assign(task, body, { id: task.id, todoist_id: task.todoist_id || task.id });
-    });
+    mutateTask(seed, taskId, (task) => { Object.assign(task, body, demoTaskFields(body), { id: task.id, todoist_id: task.todoist_id || task.id }); });
     return clone(seed.deadlines.upcoming.find((task) => String(task.id) === String(taskId)) || { ok: true });
   }
 

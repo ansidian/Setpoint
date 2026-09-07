@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { ComponentType } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatFullDate } from "./calendarOverviewModel.ts";
@@ -84,48 +83,18 @@ export function EventsLoadingFrame() {
 }
 
 export function EmptyDayPrimaryAction({ action }: { action?: PrimaryAction | null }) {
-  const [hovered, setHovered] = useState(false);
   if (!action) return null;
 
   return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: 12,
-        border: "1px solid color-mix(in srgb, var(--sp-accent) 16%, transparent)",
-        background: "color-mix(in srgb, var(--sp-accent) 6%, transparent)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
+    <button
+      type="button"
+      className="calendar-empty-day-action"
+      onClick={action.onClick}
+      data-calendar-focus-ring="true"
     >
-      <button
-        type="button"
-        onClick={action.onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        data-calendar-focus-ring="true"
-        style={{
-          alignSelf: "flex-start",
-          padding: "8px 12px",
-          borderRadius: 8,
-          border: hovered ? "1px solid color-mix(in srgb, var(--sp-accent) 38%, transparent)" : "1px solid color-mix(in srgb, var(--sp-accent) 24%, transparent)",
-          background: hovered ? "color-mix(in srgb, var(--sp-accent) 18%, transparent)" : "color-mix(in srgb, var(--sp-accent) 12%, transparent)",
-          color: "var(--sp-accent)",
-          fontSize: 11,
-          fontWeight: 700,
-          fontFamily: "inherit",
-          cursor: "pointer",
-          transform: hovered ? "translateY(-1px)" : "translateY(0)",
-          transition: "background 140ms, border-color 140ms, transform 140ms",
-        }}
-      >
-        {action.label}
-      </button>
-      <div style={{ fontSize: 11, lineHeight: 1.45, color: "rgba(205,214,244,0.56)" }}>
-        {action.detail}
-      </div>
-    </div>
+      <span className="calendar-empty-day-action-label">{action.label}</span>
+      <span className="calendar-empty-day-action-detail">{action.detail}</span>
+    </button>
   );
 }
 

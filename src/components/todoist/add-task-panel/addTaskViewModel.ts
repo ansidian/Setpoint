@@ -150,7 +150,7 @@ export function buildAddTaskDirtySnapshot({
   return JSON.stringify({
     content: String(parsedStripped || input || "").trim(),
     description: String(description || "").trim(),
-    project: resolvedProjectName || resolvedProjectId || null,
+    project: resolvedProjectId || resolvedProjectName || null,
     priority: resolvedPriority || null,
     labels: (resolvedLabels || []).map((label) => label.name).sort(),
     due: isEdit && !useManualDue ? originalDueValue : resolvedDue || null,

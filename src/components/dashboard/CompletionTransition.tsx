@@ -25,6 +25,7 @@ export default function CompletionTransition({ children, itemId, completing: com
       animate={{ opacity: 1, height: "auto", scale: 1 }}
       exit={{ opacity: 0, ...(horizontal ? { scale: 0.96 } : { height: 0 }), transition: { ...transition, delay: completing && !reduced ? 0.18 : 0 } }}
       inert={!present || completing || undefined}
+      data-height-animating={!present && !horizontal && completing && !reduced ? "true" : undefined}
       aria-hidden={!present || undefined}
       style={{ position: "relative", minWidth: 0, overflow: present ? "visible" : "clip", ...style }}
     >

@@ -8,6 +8,7 @@ interface UseCalendarEditorHistoryOptions {
   dirtySnapshot: string;
   titleInputPending: boolean;
   onPopState: () => void;
+  manageHistory?: boolean;
 }
 
 export default function useCalendarEditorHistory({
@@ -17,6 +18,7 @@ export default function useCalendarEditorHistory({
   dirtySnapshot,
   titleInputPending,
   onPopState,
+  manageHistory = true,
 }: UseCalendarEditorHistoryOptions) {
   const dirtyBaselineRef = useRef<string | null>(null);
   const historyTokenRef = useRef<string | null>(null);
@@ -30,7 +32,7 @@ export default function useCalendarEditorHistory({
   /* eslint-enable react-hooks/refs */
 
   useEffect(() => {
-    if (typeof window === "undefined") return undefined;
+    if (!manageHistory || typeof window === "undefined") return undefined;
 
     function handlePopState() {
       if (!historyTokenRef.current) return;
@@ -40,10 +42,10 @@ export default function useCalendarEditorHistory({
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [onPopState]);
+  }, [manageHistory, onPopState]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!manageHistory || typeof window === "undefined") return;
 
     if (mode === "editor" && open && view === "events") {
       if (historyTokenRef.current) return;
@@ -62,7 +64,7 @@ export default function useCalendarEditorHistory({
     if (window.history.state?.eaCalendarEditorToken === token) {
       window.history.back();
     }
-  }, [mode, open, view]);
+  }, [manageHistory, mode, open, view]);
 
   return { captureDirtyBaseline, isDirty };
 }

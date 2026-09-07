@@ -6,7 +6,7 @@ import type { CalendarEventCreateRequest } from "../../hooks/calendar/calendarEv
 
 export type DashboardTab = "dashboard" | "inbox" | "calendar" | "notes" | "news" | "finances";
 export type DashboardGlanceSheet = {
-  kind: "deadline" | "bill" | "event";
+  kind: "deadline" | "bill" | "event" | "email";
   item?: DashboardDeadline | Record<string, unknown>;
   itemId?: string | number | null;
   date?: string | null;
@@ -155,10 +155,10 @@ export function resolveDashboardShellHotkey({
   defaultPrevented = false,
   repeat = false,
   editableTarget = false,
-  actionChord = null,
   anyBlockingOverlayOpen = false,
   analyticsOpen = false,
   historyOpen = false,
+  emailSelected = false,
   isMobile = false,
   activeTab,
 }: {
@@ -171,10 +171,10 @@ export function resolveDashboardShellHotkey({
   defaultPrevented?: boolean;
   repeat?: boolean;
   editableTarget?: boolean;
-  actionChord?: string | null;
   anyBlockingOverlayOpen?: boolean;
   analyticsOpen?: boolean;
   historyOpen?: boolean;
+  emailSelected?: boolean;
   isMobile?: boolean;
   activeTab?: DashboardTab;
 } = {}) {
@@ -186,39 +186,24 @@ export function resolveDashboardShellHotkey({
     if (isMobile) return { action: "ignore" };
     return { action: shiftKey ? "alfred-new-chat" : "toggle-alfred" };
   }
-  if (editableTarget) return { action: "clear-chord" };
+  if (editableTarget) return { action: "ignore" };
   const normalized = String(key || "").toLowerCase();
 
   // ⌘K command palette must keep working over any overlay; it is the global
   // entry point and overlays close themselves on Escape (their own handlers).
   if ((metaKey || ctrlKey) && normalized === "k") return { action: "open-palette" };
   if (repeat || metaKey || ctrlKey || altKey) return { action: "ignore" };
-  if (activeTab === "notes") return { action: "clear-chord" };
+  if (activeTab === "notes") return { action: "ignore" };
 
-  // P3-26: when a non-input blocking overlay (Analytics / Customize / History)
-  // is open, suppress single-key commands that would open calendar/analytics/
-  // snapshots/deadline overlays *behind* the modal. The one exception is the
-  // toggle that CLOSES the overlay currently in the foreground (`a` while
-  // Analytics is open, `y` while History is open) — like Escape, it only ever
-  // dismisses, never opens-behind. Everything else (incl. an in-flight g-chord,
-  // `c`, or a toggle whose overlay is NOT the open one) is ignored. ⌘K/⌘\ are
-  // handled above and Escape is never a command here.
+  // Overlays own single keys; retain only the toggle that closes the foreground.
   if (anyBlockingOverlayOpen) {
-    if (actionChord === "g") return { action: "clear-chord" };
     if (normalized === "a" && analyticsOpen) return { action: "toggle-analytics" };
     if (normalized === "y" && historyOpen) return { action: "toggle-history" };
     return { action: "ignore" };
   }
 
-  if (actionChord === "g") {
-    if (normalized === "t") return { action: "open-deadline-create", clearChord: true };
-    if (normalized === "e" || normalized === "c") {
-      return { action: "open-event-create", clearChord: true };
-    }
-    return { action: "clear-chord" };
-  }
-
-  if (normalized === "g") return { action: "start-g-chord" };
+  // Inbox owns A while a message is selected, including read-only/no-op triage.
+  if (normalized === "a" && activeTab === "inbox" && emailSelected) return { action: "ignore" };
   if (normalized === "a") return { action: "toggle-analytics" };
   if (normalized === "y") return { action: "toggle-history" };
   return { action: "ignore" };

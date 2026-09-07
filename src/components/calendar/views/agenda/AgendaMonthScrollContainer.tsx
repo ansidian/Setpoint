@@ -467,7 +467,7 @@ const AgendaMonthScrollContainer = forwardRef(function AgendaMonthScrollContaine
     >
       <style>
         {`
-          [data-testid="${testId}"] button:focus-visible {
+          [data-testid="${testId}"] button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
             outline: 2px solid color-mix(in srgb, var(--ea-accent, var(--sp-accent)) 72%, transparent);
             outline-offset: 2px;
           }

@@ -29,7 +29,7 @@ function setup() {
     closeEventEditor: noop,
     setDeadlineEditor: noop,
     setDeadlineDraftPreview: noop,
-    setSuppressFocusRing: noop,
+
     setFloatingDetail: noop,
     cancelFloatingEditor: noop,
     shakeFloatingEditor: noop,

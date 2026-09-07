@@ -1,7 +1,10 @@
 import { useState } from "react";
+import AnimatedHeight from "../../shared/AnimatedHeight";
 import ExpandingTextarea from "../../shared/ExpandingTextarea";
 import { CalendarClock, Trash2, X } from "lucide-react";
-import { Dropdown, LabelPicker, PriorityIndicator } from "./controls";
+import { LabelPicker, PriorityIndicator } from "./controls";
+import Dropdown from "../../shared/Dropdown";
+import SearchableDropdown from "../../shared/SearchableDropdown";
 import { buildContainerStyle, buildDropdownRowStyle, DRAG_HANDLE_STYLE } from "./styles";
 import { FieldLabel, PickerFieldButton } from "../../calendar/events/CalendarEditorControls";
 import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
@@ -204,48 +207,46 @@ export default function AddTaskPanelFloatingEditor({
           }}
         >
           <div style={buildDropdownRowStyle(isMobile)}>
-            <Dropdown
-              label="Project"
-              value={resolvedProject}
-              color={resolvedProject ? "#cba6da" : null}
-              options={projects}
-              onChange={(opt) => {
-                setManualProject(opt);
-                setOverrides((prev) => ({ ...prev, project: true }));
-              }}
-              renderValue={(val) => val?.name || "Inbox"}
-              renderOption={(opt) => (
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: opt.color || "rgba(205,214,244,0.3)",
-                    }}
-                  />
-                  {opt.name}
-                </span>
-              )}
-            />
-            <Dropdown
-              label="Priority"
-              value={resolvedPriority}
-              color={
-                resolvedPriority && resolvedPriority <= 2
-                  ? "#f38ba8"
-                  : resolvedPriority === 3
-                    ? "#89b4fa"
-                    : null
-              }
-              options={priorityOptions}
-              onChange={(opt) => {
-                setManualPriority(opt.value);
-                setOverrides((prev) => ({ ...prev, priority: true }));
-              }}
-              renderValue={(val) => (val ? <PriorityIndicator level={val} /> : "None")}
-              renderOption={(opt) => (opt.value ? <PriorityIndicator level={opt.value} /> : "None")}
-            />
+            <div className="min-w-0 flex-1">
+              <FieldLabel>Project</FieldLabel>
+              <SearchableDropdown
+                ariaLabel="Project"
+                value={resolvedProject?.id}
+                placeholder="Inbox"
+                options={projects.map((project) => ({
+                  id: project.id,
+                  name: project.name,
+                  content: <span className="flex min-w-0 items-center gap-1.5">
+                    <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: project.color || "var(--sp-subtext)" }} />
+                    <span className="min-w-0 whitespace-normal break-words">{project.name}</span>
+                  </span>,
+                }))}
+                onChange={(id) => {
+                  const project = projects.find((entry) => entry.id === id);
+                  if (!project) return;
+                  setManualProject(project);
+                  setOverrides((prev) => ({ ...prev, project: true }));
+                }}
+              />
+            </div>
+            <div className="min-w-0 w-full min-[640px]:w-24 min-[640px]:shrink-0">
+              <FieldLabel>Priority</FieldLabel>
+              <Dropdown
+                ariaLabel="Priority"
+                value={resolvedPriority === null ? "" : String(resolvedPriority)}
+                options={priorityOptions.map((option) => ({
+                  id: option.value === null ? "" : String(option.value),
+                  name: option.label,
+                  content: option.value ? <PriorityIndicator level={option.value} /> : "None",
+                }))}
+                onChange={(id) => {
+                  const option = priorityOptions.find((entry) => (entry.value === null ? "" : String(entry.value)) === id);
+                  if (!option) return;
+                  setManualPriority(option.value);
+                  setOverrides((prev) => ({ ...prev, priority: true }));
+                }}
+              />
+            </div>
           </div>
 
           <div>
@@ -277,45 +278,47 @@ export default function AddTaskPanelFloatingEditor({
 
           <div>
             <FieldLabel>Labels</FieldLabel>
-            <div
-              style={{
-                background: "rgba(205,214,244,0.04)",
-                border: resolvedLabels.length
-                  ? "1px solid color-mix(in srgb, var(--sp-teal) 15%, transparent)"
-                  : "1px solid rgba(205,214,244,0.08)",
-                borderRadius: 8,
-                padding: "6px 12px",
-                minHeight: 32,
-                display: "flex",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 4,
-              }}
-            >
-              <TodoistSelectedLabelChips
-                borderRadius={4}
-                fontSize={11}
-                padding="2px 8px"
-                resolvedLabels={resolvedLabels}
-                setManualLabels={setManualLabels}
-                setOverrides={setOverrides}
-              />
-              {labels.length > 0 && (
-                <LabelPicker
-                  available={labels.filter((label) => !resolvedLabels.find((entry) => entry.id === label.id))}
-                  onAdd={(label) => {
-                    const updated = [...resolvedLabels, label];
-                    setManualLabels(updated);
-                    setOverrides((prev) => ({ ...prev, labels: true }));
-                  }}
+            <AnimatedHeight>
+              <div
+                style={{
+                  background: "rgba(205,214,244,0.04)",
+                  border: resolvedLabels.length
+                    ? "1px solid color-mix(in srgb, var(--sp-teal) 15%, transparent)"
+                    : "1px solid rgba(205,214,244,0.08)",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  minHeight: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 4,
+                }}
+              >
+                <TodoistSelectedLabelChips
+                  borderRadius={4}
+                  fontSize={11}
+                  padding="2px 8px"
+                  resolvedLabels={resolvedLabels}
+                  setManualLabels={setManualLabels}
+                  setOverrides={setOverrides}
                 />
-              )}
-              {!resolvedLabels.length && !labels.length && (
-                <span style={{ color: "var(--color-text-faint)", fontSize: 12 }}>
-                  None
-                </span>
-              )}
-            </div>
+                {labels.length > 0 && (
+                  <LabelPicker
+                    labels={labels}
+                    selected={resolvedLabels}
+                    onChange={(updated) => {
+                      setManualLabels(updated);
+                      setOverrides((prev) => ({ ...prev, labels: true }));
+                    }}
+                  />
+                )}
+                {!resolvedLabels.length && !labels.length && (
+                  <span style={{ color: "var(--color-text-faint)", fontSize: 12 }}>
+                    None
+                  </span>
+                )}
+              </div>
+            </AnimatedHeight>
           </div>
 
           <TodoistReminderChips
@@ -343,6 +346,7 @@ export default function AddTaskPanelFloatingEditor({
             cancelDiscard={cancelDiscard}
             deleteTask={deleteTask}
             deleting={deleting}
+            showCancel={isEdit}
             handleSubmit={handleSubmit}
             isEdit={isEdit}
             requestClose={requestClose}

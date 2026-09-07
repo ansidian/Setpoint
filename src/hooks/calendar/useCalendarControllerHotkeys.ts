@@ -14,7 +14,7 @@ type EditorState = Pick<CalendarHotkeyOptions,
   | "openFloatingEventCreate" | "openFloatingDeadlineCreate"
 >;
 type SelectionState = Pick<CalendarHotkeyOptions,
-  | "selectedItemId" | "selectedDay" | "selectedDateKey" | "setSuppressFocusRing"
+  | "selectedItemId" | "selectedDay" | "selectedDateKey"
   | "setSelectedDay" | "setSelectedDateKey" | "setSelectedItemId"
 >;
 type NavigationState = Pick<CalendarHotkeyOptions,

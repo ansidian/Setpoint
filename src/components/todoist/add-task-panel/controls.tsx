@@ -1,120 +1,7 @@
-import { createPortal } from "react-dom";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
-import { ChevronDown, X } from "lucide-react";
-import { FieldLabel } from "../../calendar/events/CalendarEditorControls";
+import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
+import SearchableDropdown from "../../shared/SearchableDropdown";
 import type { TodoistLabel, TodoistPriority, TodoistProject } from "../../../../shared/types/tasks";
-
-interface FloatingMenuProps {
-  open: boolean;
-  triggerRef: RefObject<HTMLElement | null>;
-  panelRef: RefObject<HTMLDivElement | null>;
-  onClose: () => void;
-  children: ReactNode;
-  minWidth?: number;
-  maxHeight?: number;
-}
-
-function useFloatingMenu({
-  open,
-  triggerRef,
-  panelRef,
-  onClose,
-  minWidth = 120,
-  maxHeight = 180,
-}: Omit<FloatingMenuProps, "children">) {
-  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
-
-  const updatePos = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const margin = 8;
-    const width = Math.max(rect.width, minWidth);
-    const left = Math.min(
-      Math.max(margin, rect.left),
-      Math.max(margin, window.innerWidth - width - margin),
-    );
-    const spaceBelow = window.innerHeight - rect.bottom - margin;
-    const spaceAbove = rect.top - margin;
-    const opensAbove = spaceBelow < Math.min(maxHeight, 120) && spaceAbove > spaceBelow;
-    const availableHeight = Math.max(96, Math.min(maxHeight, opensAbove ? spaceAbove - 4 : spaceBelow - 4));
-    const top = opensAbove
-      ? Math.max(margin, rect.top - availableHeight - 4)
-      : Math.min(window.innerHeight - margin - availableHeight, rect.bottom + 4);
-    setPos({ top, left, width, maxHeight: availableHeight });
-  }, [maxHeight, minWidth, triggerRef]);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    updatePos();
-    window.addEventListener("resize", updatePos);
-    window.addEventListener("scroll", updatePos, true);
-    return () => {
-      window.removeEventListener("resize", updatePos);
-      window.removeEventListener("scroll", updatePos, true);
-    };
-  }, [open, updatePos]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target as Node | null;
-      if (target && triggerRef.current?.contains(target)) return;
-      if (target && panelRef.current?.contains(target)) return;
-      onClose();
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [open, onClose, panelRef, triggerRef]);
-
-  useEffect(() => {
-    const element = panelRef.current;
-    if (!open || !element) return undefined;
-    const scrollElement = element;
-    function handleWheel(event: WheelEvent) {
-      const atTop = scrollElement.scrollTop <= 0 && event.deltaY < 0;
-      const atBottom = scrollElement.scrollTop + scrollElement.clientHeight >= scrollElement.scrollHeight - 1 && event.deltaY > 0;
-      if (atTop || atBottom) event.preventDefault();
-    }
-    scrollElement.addEventListener("wheel", handleWheel, { passive: false });
-    return () => scrollElement.removeEventListener("wheel", handleWheel);
-  }, [open, panelRef, pos]);
-
-  return pos;
-}
-
-function FloatingMenu({ open, triggerRef, panelRef, onClose, children, minWidth = 120, maxHeight = 180 }: FloatingMenuProps) {
-  const pos = useFloatingMenu({ open, triggerRef, panelRef, onClose, minWidth, maxHeight });
-  if (!open || !pos) return null;
-
-  return createPortal(
-    <div
-      ref={panelRef}
-      role="listbox"
-      style={{
-        position: "fixed",
-        top: pos.top,
-        left: pos.left,
-        width: pos.width,
-        maxHeight: pos.maxHeight,
-        overflowY: "auto",
-        overscrollBehavior: "contain",
-        isolation: "isolate",
-        background: "var(--sp-panel)",
-        border: "1px solid rgba(205,214,244,0.12)",
-        borderRadius: 8,
-        zIndex: 10002,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-      }}
-    >
-      {children}
-    </div>,
-    document.body,
-  );
-}
 
 export function PriorityIndicator({ level }: { level: Exclude<TodoistPriority, null> }) {
   const colors = {
@@ -143,112 +30,6 @@ export function PriorityIndicator({ level }: { level: Exclude<TodoistPriority, n
         P{level}
       </span>
     </span>
-  );
-}
-
-export function Dropdown<Option extends { id?: string; value?: string | number | null; name?: string; label?: string }, Value>({
-  label,
-  value,
-  options,
-  onChange,
-  renderOption,
-  renderValue,
-  color,
-}: {
-  label: string;
-  value: Value;
-  options: Option[];
-  onChange: (option: Option) => void;
-  renderOption?: (option: Option) => ReactNode;
-  renderValue?: (value: Value) => ReactNode;
-  color?: string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const [hover, setHover] = useState(false);
-  const triggerRef = useRef<HTMLDivElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  const borderColor = color ? `${color}33` : "rgba(205,214,244,0.08)";
-
-  return (
-    <div style={{ position: "relative", flex: 1 }}>
-      <FieldLabel>{label}</FieldLabel>
-      <div
-        ref={triggerRef}
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            setOpen((value) => !value);
-          }
-        }}
-        style={{
-          background: hover ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.03)",
-          border: `1px solid ${borderColor}`,
-          borderRadius: 8,
-          padding: "9px 12px",
-          fontSize: 12.5,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          cursor: "pointer",
-          color: color || "var(--color-text-faint)",
-          transform: hover ? "translateY(-1px)" : "translateY(0)",
-          transition: "transform 140ms, background 140ms, border-color 140ms",
-        }}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-      >
-        <span>{renderValue ? renderValue(value) : String(value || "None")}</span>
-        <ChevronDown size={12} style={{ opacity: 0.5 }} />
-      </div>
-      <FloatingMenu
-        open={open}
-        triggerRef={triggerRef}
-        panelRef={menuRef}
-        onClose={() => setOpen(false)}
-        minWidth={160}
-        maxHeight={180}
-      >
-          {options.map((opt, index) => (
-            <div
-              key={opt.id ?? opt.value ?? index}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  onChange(opt);
-                  setOpen(false);
-                }
-              }}
-              style={{
-                padding: "8px 12px",
-                fontSize: 12,
-                cursor: "pointer",
-                color: "var(--sp-text)",
-                borderBottom:
-                  index < options.length - 1
-                    ? "1px solid rgba(205,214,244,0.06)"
-                    : "none",
-              }}
-              onMouseEnter={(event) => {
-                event.currentTarget.style.background = "rgba(205,214,244,0.06)";
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.background = "transparent";
-              }}
-            >
-              {renderOption ? renderOption(opt) : opt.name || opt.label}
-            </div>
-          ))}
-      </FloatingMenu>
-    </div>
   );
 }
 
@@ -369,90 +150,35 @@ export function TokenAutocomplete({
   );
 }
 
-export function LabelPicker({ available, onAdd }: { available: TodoistLabel[]; onAdd: (label: TodoistLabel) => void }) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  if (!available.length) return null;
-
+export function LabelPicker({ labels, selected, onChange }: {
+  labels: TodoistLabel[];
+  selected: TodoistLabel[];
+  onChange: (labels: TodoistLabel[]) => void;
+}) {
+  const options = [...labels, ...selected.filter(label => !labels.some(option => option.id === label.id))];
   return (
-    <span style={{ position: "relative" }}>
-      <span
-        ref={triggerRef}
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") setOpen((value) => !value);
-        }}
-        style={{
-          color: "var(--color-text-faint)",
-          fontSize: 11,
-          cursor: "pointer",
-          padding: "2px 6px",
-          borderRadius: 4,
-          border: "1px dashed rgba(205,214,244,0.12)",
-        }}
-      >
-        + label
-      </span>
-      <FloatingMenu
-        open={open}
-        triggerRef={triggerRef}
-        panelRef={menuRef}
-        onClose={() => setOpen(false)}
-        minWidth={120}
-        maxHeight={140}
-      >
-          {available.map((label) => (
-            <div
-              key={label.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                onAdd(label);
-                setOpen(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  onAdd(label);
-                  setOpen(false);
-                }
-              }}
-              style={{
-                padding: "6px 12px",
-                fontSize: 12,
-                cursor: "pointer",
-                color: "var(--sp-teal)",
-              }}
-              onMouseEnter={(event) => {
-                event.currentTarget.style.background = "rgba(205,214,244,0.06)";
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.background = "transparent";
-              }}
-            >
-              {label.name}
-            </div>
-          ))}
-      </FloatingMenu>
-    </span>
+    <div className="w-full min-w-0">
+      <SearchableDropdown
+        multiple
+        ariaLabel="Labels"
+        placeholder="Choose labels"
+        options={options}
+        value={selected.map(label => label.id)}
+        onChange={ids => onChange(options.filter(label => ids.includes(label.id)))}
+      />
+    </div>
   );
 }
 
-export function RemoveLabelButton({ onRemove }: { onRemove: () => void }) {
+export function RemoveLabelButton({ name, onRemove }: { name: string; onRemove: () => void }) {
   return (
-    <span
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
+      aria-label={`Remove label ${name}`}
       onClick={onRemove}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") onRemove();
-      }}
-      style={{ cursor: "pointer", opacity: 0.6, display: "inline-flex", alignItems: "center" }}
+      className="inline-flex size-5 max-[600px]:size-11 shrink-0 cursor-pointer items-center justify-center rounded-sm text-current transition-[background-color,transform] duration-[var(--sp-motion-fast)] hover:bg-white/10 hover:-translate-y-px focus-visible:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-px active:bg-white/15 motion-reduce:transition-none motion-reduce:transform-none"
     >
-      <X size={12} />
-    </span>
+      <X size={12} aria-hidden />
+    </button>
   );
 }

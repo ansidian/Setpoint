@@ -8,7 +8,7 @@
 }
 .mobile-inbox-search-row { display: flex; gap: 4px; align-items: center; }
 .mobile-inbox-search { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; height: var(--sp-touch-min); padding: 0 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.035); color: var(--sp-subtext); }
-.mobile-inbox-search:focus-within { border-color: var(--ea-accent); }
+.mobile-inbox-search:focus-within:where([data-sp-keyboard-focus="true"] *) { border-color: var(--ea-accent); }
 .mobile-inbox-search input { width: 100%; min-width: 0; border: 0; background: transparent; outline: none; color: var(--sp-text); font-family: inherit; font-size: 16px; font-weight: 400; line-height: 1.4; }
 .mobile-inbox-search input::placeholder { color: var(--sp-subtext); }
 .mobile-inbox-control { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: var(--sp-touch-min); padding: 0 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: transparent; color: var(--sp-subtext); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease; }
@@ -16,12 +16,12 @@
 .mobile-inbox-control-icon { width: var(--sp-touch-min); padding: 0; }
 .mobile-inbox-control:hover, .mobile-filter-option:hover, .mobile-filter-mark-read:enabled:hover { background: rgba(255,255,255,.07); transform: translateY(-1px); }
 .mobile-inbox-control:active, .mobile-filter-option:active, .mobile-filter-mark-read:enabled:active { transform: scale(.98); }
-.mobile-inbox-control:focus-visible, .mobile-filter-option:focus-visible, .mobile-filter-mark-read:focus-visible { outline: 2px solid var(--ea-accent); outline-offset: 2px; }
+.mobile-inbox-control:focus-visible:where([data-sp-keyboard-focus="true"] *), .mobile-filter-option:focus-visible:where([data-sp-keyboard-focus="true"] *), .mobile-filter-mark-read:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--ea-accent); outline-offset: 2px; }
 .mobile-inbox-scope { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; color: var(--sp-subtext); font-size: 11px; line-height: 1.5; }
 .mobile-email-row { display: block; width: 100%; padding: 12px 16px; border: 0; border-bottom: 1px solid rgba(255,255,255,.055); background: transparent; color: var(--sp-text); font-family: inherit; text-align: left; cursor: pointer; content-visibility: auto; contain-intrinsic-size: auto 120px; transition: background-color 160ms ease, transform 160ms ease; }
 .mobile-email-row:hover { background: rgba(255,255,255,.035); }
 .mobile-email-row:active { background: rgba(255,255,255,.06); transform: scale(.995); }
-.mobile-email-row:focus-visible { outline: 2px solid var(--ea-accent); outline-offset: -3px; background: rgba(255,255,255,.035); }
+.mobile-email-row:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--ea-accent); outline-offset: -3px; background: rgba(255,255,255,.035); }
 .mobile-email-sender-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mobile-email-sender { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sp-subtext); font-size: 12px; font-weight: 400; }
 .mobile-email-date { flex-shrink: 0; color: var(--sp-subtext); font-size: 10px; font-variant-numeric: tabular-nums; }

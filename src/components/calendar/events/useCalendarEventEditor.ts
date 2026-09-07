@@ -49,6 +49,7 @@ export interface CalendarEventEditorOptions {
   onFocusDate?: (date: string) => void;
   onSaved?: (event: NormalizedCalendarEvent | null, metadata: Record<string, unknown>) => void;
   onDeleted?: (event: NormalizedCalendarEvent) => void;
+  manageHistory?: boolean;
 }
 
 export default function useCalendarEventEditor({
@@ -64,7 +65,7 @@ export default function useCalendarEventEditor({
   removeEvent,
   onFocusDate,
   onSaved,
-  onDeleted,
+  onDeleted, manageHistory = true,
 }: CalendarEventEditorOptions) {
   const [mode, setMode] = useState<CalendarEditorMode>("detail");
   const [draft, setDraft] = useState(() => defaultDraft(null));
@@ -334,9 +335,7 @@ export default function useCalendarEventEditor({
     recurringEditScope,
   }), [batchDrafts, draft, effectiveTitle, intentState.mode, recurrenceDraft, recurringEditScope, titleInput]);
   const { captureDirtyBaseline, isDirty } = useCalendarEditorHistory({
-    open,
-    view,
-    mode,
+    manageHistory, open, view, mode,
     dirtySnapshot,
     titleInputPending,
     onPopState: clearEditorState,

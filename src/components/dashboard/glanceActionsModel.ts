@@ -26,8 +26,8 @@ type DashboardGlanceEvent = Partial<NormalizedCalendarEvent>;
 
 // Ordered action descriptors for the dashboard glance sheet's action row, by item
 // kind. Link actions carry an href; command actions ("complete"/"edit"/
-// "openInCalendar") are wired to handlers by the sheet. "openInCalendar" is the
-// explicit deep-link CTA present on every item. Pure — no React, no handlers.
+// "openInCalendar") are wired to handlers by the sheet. Event editing stays in
+// the sheet; deadline and bill deep-links remain explicit. Pure — no React, no handlers.
 
 function openInCalendarAction(label = "Open in calendar"): GlanceAction {
   return { key: "openInCalendar", label, type: "command", tone: "ghost" };
@@ -62,7 +62,9 @@ function billActions(bill: DashboardGlanceBill, ctx: GlanceActionContext): Glanc
 }
 
 function eventActions(ev: DashboardGlanceEvent): GlanceAction[] {
-  const out: GlanceAction[] = [openInCalendarAction("Edit Event")];
+  const out: GlanceAction[] = ev.writable
+    ? [{ key: "edit", label: "Edit Event", type: "command", tone: "ghost" }]
+    : [];
   const gcalUrl = calendarActionUrl(ev);
   if (gcalUrl) {
     out.push({ key: "gcal", label: "Open in Google Calendar", type: "link", href: gcalUrl, tone: "ghost" });

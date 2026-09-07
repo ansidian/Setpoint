@@ -17,6 +17,7 @@ import {
 import SettingsChrome from "./components/settings/SettingsChrome";
 import WorkspaceRoute from "./pages/WorkspaceRoute";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
+import useKeyboardFocusIndicators from "./hooks/useKeyboardFocusIndicators";
 import useFinancialReviewNotifications from "./hooks/useFinancialReviewNotifications";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
 import RecoverableErrorBoundary from "./components/layout/RecoverableErrorBoundary";
@@ -70,6 +71,7 @@ function FinancialReviewNotifications({ enabled }: { enabled: boolean }): null {
 }
 
 export default function App(): ReactElement {
+  useKeyboardFocusIndicators();
   const demoMode = isDemoMode();
   const [bootstrap, setBootstrap] = useState<AppBootstrapState | null>(() => initialAppBootstrap(demoMode));
 

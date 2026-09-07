@@ -190,7 +190,7 @@ describe("CalendarModal event grid behavior", () => {
     expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
   });
 
-  it("consumes navigation hotkeys without leaving selected items in focus-ring mode", async () => {
+  it("consumes calendar navigation and unknown letter shortcuts", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -218,7 +218,7 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const panel = await screen.findByTestId("calendar-modal-panel", {}, { timeout: 5000 });
+    await screen.findByTestId("calendar-modal-panel", {}, { timeout: 5000 });
     const chip = within(await screen.findByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
     fireEvent.click(chip);
     chip.focus();
@@ -229,9 +229,6 @@ describe("CalendarModal event grid behavior", () => {
     });
 
     expect(navigationEvent.defaultPrevented).toBe(true);
-    await waitFor(() => {
-      expect(panel.getAttribute("data-calendar-suppress-focus-ring")).toBe("true");
-    });
 
     const strayHotkeyEvent = new KeyboardEvent("keydown", { key: "x", bubbles: true, cancelable: true });
     act(() => {
@@ -240,13 +237,6 @@ describe("CalendarModal event grid behavior", () => {
 
     expect(strayHotkeyEvent.defaultPrevented).toBe(true);
 
-    const tabEvent = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
-    act(() => {
-      document.dispatchEvent(tabEvent);
-    });
 
-    await waitFor(() => {
-      expect(panel.hasAttribute("data-calendar-suppress-focus-ring")).toBe(false);
-    });
   });
 });

@@ -84,6 +84,7 @@ export default function useCalendarEditorPickers(editor: ReturnType<typeof useCa
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (event.target instanceof Element && event.target.closest('[data-slot="select-content"]')) return;
       event.preventDefault();
       event.stopPropagation();
       setOpenPicker(null);

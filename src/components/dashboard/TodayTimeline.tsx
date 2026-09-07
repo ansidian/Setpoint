@@ -258,7 +258,6 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
   const contentPresence = useMotionPresence(open, reduceMotion ? 0 : heightMotionDuration * 1000);
   const contentRendered = open || contentPresence;
   const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
   const [pressed, setPressed] = useState(false);
   const summary = [
     count.events ? `${count.events} event${count.events === 1 ? "" : "s"}` : null,
@@ -269,10 +268,9 @@ function TomorrowGroup({ accent, count, isMobile = false, items, label, now, onJ
     <div>
       <button type="button" className={`timeline-disclosure${isMobile ? " timeline-mobile-control" : ""}`} aria-expanded={open} onClick={onToggle}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
-        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onPointerDown={() => setPressed(true)} onPointerUp={() => setPressed(false)}
         onPointerCancel={() => setPressed(false)}
-        style={{ width: "100%", minHeight: isMobile ? 48 : undefined, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: isMobile ? "10px 6px" : "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", outline: focus ? "1px solid color-mix(in srgb, var(--sp-accent) 55%, transparent)" : "none", outlineOffset: -1, background: pressed ? "rgba(255,255,255,0.05)" : hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease, outline-color 130ms ease" }}>
+        style={{ width: "100%", minHeight: isMobile ? 48 : undefined, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: isMobile ? "10px 6px" : "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: pressed ? "rgba(255,255,255,0.05)" : hover ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease, outline-color 130ms ease" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <Motion.span
             aria-hidden="true"
@@ -333,7 +331,6 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
   const contentPresence = useMotionPresence(open, reduceMotion ? 0 : heightMotionDuration * 1000);
   const contentRendered = open || contentPresence;
   const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
   const [pressed, setPressed] = useState(false);
   if (count <= 0) return null;
 
@@ -341,10 +338,9 @@ function RestOfWeekGroup({ accent, count, isMobile = false, now, onJump, onToggl
     <div>
       <button type="button" className={`timeline-disclosure${isMobile ? " timeline-mobile-control" : ""}`} aria-expanded={open} onClick={onToggle}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
-        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onPointerDown={() => setPressed(true)} onPointerUp={() => setPressed(false)}
         onPointerCancel={() => setPressed(false)}
-        style={{ width: "100%", minHeight: isMobile ? 48 : undefined, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: isMobile ? "10px 6px" : "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", outline: focus ? "1px solid color-mix(in srgb, var(--sp-accent) 55%, transparent)" : "none", outlineOffset: -1, background: pressed ? "rgba(255,255,255,0.05)" : hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease, outline-color 130ms ease" }}>
+        style={{ width: "100%", minHeight: isMobile ? 48 : undefined, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: isMobile ? "10px 6px" : "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: pressed ? "rgba(255,255,255,0.05)" : hover ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease, outline-color 130ms ease" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <Motion.span
             aria-hidden="true"

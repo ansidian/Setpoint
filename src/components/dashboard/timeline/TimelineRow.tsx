@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type CSSProperties } from "react";
 import "./timeline-mobile.css";
 import "./timeline-presentation.css";
 import {
@@ -426,9 +426,9 @@ function TimelineRow({
       {liveMarker && (() => {
         const pctStr = `${liveMarker.pct * 100}%`;
         return (
-          <div data-testid="timeline-now-marker" className="timeline-progress">
-            <div className="timeline-progress-track"><span className="timeline-progress-fill" style={{ width: pctStr, background: effectiveRailDotColor }} /></div>
-            <span className="timeline-progress-label">{liveMarker.label}</span>
+          <div data-testid="timeline-now-marker" className="timeline-progress" style={{ "--live-progress": pctStr, "--live-color": effectiveRailDotColor } as CSSProperties}>
+            <div className="timeline-progress-track"><span className="timeline-progress-fill" style={{ width: pctStr }} /></div>
+            <span className="timeline-progress-label" data-trailing={liveMarker.pct > 0.55}>{liveMarker.label}</span>
           </div>
         );
       })()}

@@ -10,13 +10,12 @@ import {
   DashboardSurface,
 } from "./layout/DashboardScenePrimitives";
 import { calendarContentSignature, stabilizeDeadlines } from "../../hooks/currentDashboardModel";
-import { markSnapshotItemHandled } from "../../api";
 import { useDashboard } from "../../context/DashboardContext";
 import type { NormalizedCalendarEvent } from "../../../shared/types/calendar";
 import type { ActiveSnapshotView } from "../../../shared/types/snapshots";
 import type { DashboardDeadline, DashboardDeadlineRoot } from "../../context/dashboardTaskProjection";
 import type { CurrentDashboardLiveData } from "../../hooks/currentDashboardModel";
-import type { NeedsYouBill } from "./needsYou/needsYouModel";
+import type { NeedsYouBill, NeedsYouEmail } from "./needsYou/needsYouModel";
 import { buildNeedsYouModel } from "./needsYou/needsYouModel";
 import { DashboardScheduleNotices } from "./timeline/DashboardScheduleNotices";
 import DashboardFinance from "./finance/DashboardFinance";
@@ -59,6 +58,7 @@ interface DashboardBodyProps {
   calendarDeadlinesLoading?: boolean;
   calendarDeadlinesError?: boolean;
   domainRefreshing?: boolean;
+  onPreviewEmail: (email: NeedsYouEmail, anchor?: HTMLElement) => void;
   onOpenEmail: (id: string | number | null) => void;
   onOpenInbox?: (lane?: "needs_attention" | "carryover" | "fyi" | "queued") => void;
   onOpenDeadline: (task: DashboardDeadline, anchor?: HTMLElement) => void;
@@ -71,7 +71,7 @@ function DashboardBodyInner({
   isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false,
   calendarDeadlinesError = false,
   domainRefreshing = false,
-  onOpenEmail, onOpenInbox, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
+  onOpenEmail, onPreviewEmail, onOpenInbox, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
 }: DashboardBodyProps) {
   const navigate = useNavigate();
   const liveData = liveDataInput as unknown as CurrentDashboardLiveData;
@@ -184,11 +184,8 @@ function DashboardBodyInner({
     const data = payload.data && typeof payload.data === "object"
       ? payload.data as Record<string, unknown>
       : undefined;
-    const email = payload.email && typeof payload.email === "object"
-      ? payload.email as { id?: string | number }
-      : undefined;
-    if (payload.kind === "email" && email?.id) {
-      onOpenEmail(email.id);
+    if (payload.kind === "email" && data) {
+      onPreviewEmail(data as NeedsYouEmail, anchor);
     } else if (payload.kind === "deadline") {
       onOpenDeadline((data || payload) as DashboardDeadline, anchor);
     } else if (payload.kind === "bill") {
@@ -201,7 +198,7 @@ function DashboardBodyInner({
       }).format(new Date(data.startMs));
       onOpenEventsCalendar(ymd, payload.id || getEventSelectionId(data), data, anchor);
     }
-  }, [onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
+  }, [onPreviewEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 
   // Stable inbox-open handler shared by the band and the context column, so a
   // pure poll/refresh re-render does not hand them a fresh arrow identity.
@@ -209,14 +206,6 @@ function DashboardBodyInner({
     if (onOpenInbox) onOpenInbox(lane);
     else onOpenEmail(null);
   }, [onOpenEmail, onOpenInbox]);
-
-  // Wire the band's "handled" action straight to the snapshot endpoint; it emits
-  // the SSE the dashboard refetches on, so no extra dispatch hook is needed here.
-  // The promise is returned (not swallowed) so the band can revert its
-  // optimistic hide and surface an error when the request fails.
-  const handleMarkHandled = useCallback((snapshotItemId: number) => {
-    if (snapshotItemId != null) return Promise.resolve(markSnapshotItemHandled(snapshotItemId));
-  }, []);
 
   // Deadline "Mark done" in the band routes through the same canonical completer
   // the deadline popover uses (optimistic flag → completeDeadlineOccurrence →
@@ -231,11 +220,9 @@ function DashboardBodyInner({
     <NeedsYouBand
       snapshotLanes={bandLanes}
       liveDeadlines={bandDeadlines}
-      liveBills={bills}
       railThreshold={5}
       isMobile={isMobile}
       onOpenEmail={onOpenEmail}
-      onMarkHandled={handleMarkHandled}
       onCompleteDeadline={handleCompleteDeadline}
       onOpen={handleRailJump}
       onPromotedDeadlineIdsChange={handlePromotedDeadlineIdsChange}

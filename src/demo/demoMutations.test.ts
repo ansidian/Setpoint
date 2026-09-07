@@ -78,6 +78,38 @@ describe("demo mode in-memory mutations", () => {
     expect(networkAttempted).toBe(false);
   });
 
+  it.each(["deadline", "todoist"] as const)("preserves %s project and label edits across Dashboard and Calendar reads", async (kind) => {
+    const api = await importDemoApi();
+    const projects = await api.getTodoistProjects();
+    const labels = await api.getTodoistLabels();
+    const initialProject = projects[1]!;
+    const editedProject = projects[2]!;
+    const create = kind === "deadline" ? api.createDeadline : api.createTodoistTask;
+    const update = kind === "deadline" ? api.updateDeadline : api.updateTodoistTask;
+    const created = await create({
+      title: "Demo editable deadline", dueDate: "2026-05-16",
+      projectId: initialProject.id, labelIds: [labels[0]!.name],
+    });
+    expect(created).toMatchObject({ class_name: initialProject.name, class_color: initialProject.color, labels: [labels[0]!.name] });
+
+    const editedLabels = labels.slice(1).map((label) => label.name);
+    const edited = await update(created.id, { projectId: editedProject.id, labelIds: editedLabels });
+    const expected = { class_name: editedProject.name, class_color: editedProject.color, labels: editedLabels };
+    expect(edited).toMatchObject(expected);
+    await update(created.id, { title: "Demo renamed deadline" });
+    expect((await api.getCurrentDashboard()).deadlines.upcoming.find((task) => task.id === created.id)).toMatchObject(expected);
+    expect((await api.getCalendarDeadlines()).upcoming.find((task) => task.id === created.id)).toMatchObject(expected);
+
+    await update(created.id, { labelIds: [] });
+    expect((await api.getCurrentDashboard()).deadlines.upcoming.find((task) => task.id === created.id))
+      .toMatchObject({ class_name: editedProject.name, labels: [] });
+    expect(networkAttempted).toBe(false);
+
+    vi.resetModules();
+    const reloaded = await import("../api");
+    expect((await reloaded.getCurrentDashboard()).deadlines.upcoming.some((task) => task.id === created.id)).toBe(false);
+  });
+
   it("keeps bulk read state and demo task references available across reads", async () => {
     const api = await importDemoApi();
 

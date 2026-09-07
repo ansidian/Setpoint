@@ -30,6 +30,13 @@ describe("mobile Inbox navigation history", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  it.each([false, true])("opens Dashboard email selection in Inbox after browsing Snoozed (mobile: %s)", (isMobile) => {
+    resetInboxSession({ collection: "snoozed" });
+    const { result } = renderHook(() => useMobileInboxNavigation({ isMobile, tab: "dashboard", setTab: () => {} }));
+    act(() => result.current.prepareEmailOpen("gmail-work-message-1"));
+    expect(getInboxSession()).toMatchObject({ collection: "inbox", selectedId: "gmail-work-message-1" });
+  });
+
   it("returns a Dashboard email directly home with browser Back, including repeated visits", async () => {
     const { result } = renderHook(useNavigationHarness);
     for (const id of ["first", "second"]) {

@@ -75,7 +75,7 @@
   transform: translateY(0) scale(0.98);
 }
 
-.verification-code-callout__action:focus-visible {
+.verification-code-callout__action:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid var(--sp-accent);
   outline-offset: 2px;
 }

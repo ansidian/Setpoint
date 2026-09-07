@@ -71,6 +71,7 @@ function AgendaHeader({
       type="button"
       ref={(node) => registerHeader(group.dateKey, node)}
       data-agenda-date-header="true"
+      data-drop-active={dropActive || undefined}
       data-date-key={group.dateKey}
       aria-label={`Select ${date ? date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : group.dateKey}`}
       onClick={() => onActivate(group.dateKey)}
@@ -101,10 +102,6 @@ function AgendaHeader({
         padding: "8px 10px 7px",
         border: "0",
         borderRadius: 0,
-        background: dropActive
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel)"
-          : "var(--sp-panel)",
-        boxShadow: dropActive ? "inset 0 0 0 1px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
         color: group.dateKey === todayKey ? "#0495FF" : "#B1B1B3",
         fontSize: 12,
         fontWeight: 800,
@@ -113,20 +110,9 @@ function AgendaHeader({
         textAlign: "left",
         textTransform: "uppercase",
         cursor: "pointer",
-        transition: "background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1)",
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.background = dropActive
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 18%, transparent), color-mix(in srgb, var(--sp-accent) 9%, transparent)), var(--sp-panel)"
-          : "var(--sp-panel)";
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.background = dropActive
-          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel)"
-          : "var(--sp-panel)";
       }}
     >
-      <span>{mobileAgenda ? formatAgendaHeaderLabel(group.dateKey, todayKey, true) : group.headerLabel}</span>
+      <span className="calendar-agenda-date-label">{mobileAgenda ? formatAgendaHeaderLabel(group.dateKey, todayKey, true) : group.headerLabel}</span>
       <WeatherHeader weather={group.weather} />
     </button>
   );

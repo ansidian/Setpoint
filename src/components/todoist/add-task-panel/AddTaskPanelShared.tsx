@@ -221,6 +221,7 @@ export function TodoistSelectedLabelChips({
         >
           {label.name}
           <RemoveLabelButton
+            name={label.name}
             onRemove={() => {
               const updated = resolvedLabels.filter((entry) => entry.id !== label.id);
               setManualLabels(updated);

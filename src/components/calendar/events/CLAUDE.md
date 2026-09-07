@@ -8,7 +8,7 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `useCalendarEventEditor.ts` — composes editor draft/picker/reminder/source state with mutation, history, and open-session hooks; retains typed create origin/completion through save while preserving the caller-facing controller
 - `useCalendarEventCreateCoordination.ts` — focused in-memory create-request/origin lifecycle: session open wrapping, cancel/edit cleanup, existing saved-route composition, and exactly-once completion
 - `useCalendarEventMutations.ts` — save/delete/reconnect mutation lifecycle: duplicate guards, batch/partial failures, reminder reconciliation, validation projection, and recurring scopes
-- `useCalendarEditorHistory.ts` — browser-history ownership, dirty-state tracking, and cancel/pop coordination for the editor
+- `useCalendarEditorHistory.ts` — browser-history ownership, dirty-state tracking, and cancel/pop coordination for the editor; embedded Dashboard workspaces retain dirty tracking while delegating history to their sheet
 - `useCalendarEventEditorSession.ts` — open create/edit lifecycle: request cancellation, typed create-seed application, intent-aware source seeding, existing-event draft/reminder hydration, and location state
 - `calendarEventEditorErrors.ts` — editor error detail projection shared by the editor orchestrator and mutation hook
 - `useCalendarEditorPickers.ts` — floating panel visibility and field anchor refs

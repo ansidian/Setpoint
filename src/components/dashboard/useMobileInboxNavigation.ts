@@ -53,7 +53,9 @@ export default function useMobileInboxNavigation({ isMobile, tab, setTab }: {
 
   const prepareEmailOpen = useCallback((id: InboxSelectionId) => {
     setReaderOrigin(isMobile && tab === "dashboard" && id ? "dashboard" : "inbox");
-    if (id) setInboxSession((previous) => ({ ...previous, selectedId: id }));
+    // Dashboard targets belong to the active Inbox, even when the retained
+    // session was last browsing Snoozed. Select the collection and UID together.
+    if (id) setInboxSession((previous) => ({ ...previous, collection: "inbox", selectedId: id }));
   }, [isMobile, tab]);
 
   const returnHome = useCallback(() => {

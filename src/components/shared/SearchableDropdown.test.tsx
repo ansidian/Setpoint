@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SearchableDropdown from "./SearchableDropdown";
@@ -99,4 +100,25 @@ describe("SearchableDropdown", () => {
     fireEvent.keyDown(search, { key:"Enter" });
     expect(selectedId).toBe("second");
   });
+  it("keeps multi-selection and its search active while toggling labels", async () => {
+    function Labels() {
+      const [value, setValue] = useState<string[]>([]);
+      return <SearchableDropdown multiple options={[
+        { id: "work", name: "work" }, { id: "deep-work", name: "deep-work" },
+      ]} value={value} onChange={setValue} ariaLabel="Labels" />;
+    }
+    render(<Labels />);
+    fireEvent.click(screen.getByRole("button", { name: "Labels" }));
+    const search = await screen.findByPlaceholderText("Search...");
+    fireEvent.change(search, { target: { value: "work" } });
+    fireEvent.click(screen.getByRole("option", { name: "work" }));
+    expect((screen.getByPlaceholderText("Search...") as HTMLInputElement).value).toBe("work");
+    fireEvent.click(screen.getByRole("option", { name: "deep-work" }));
+    expect(screen.getByRole("option", { name: "work" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("option", { name: "deep-work" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("option", { name: "work" }));
+    expect(screen.getByRole("option", { name: "work" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("option", { name: "deep-work" }).getAttribute("aria-selected")).toBe("true");
+  });
+
 });

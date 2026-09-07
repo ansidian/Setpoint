@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock, Check, Calendar } from "lucide-react";
+import { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock, Check, Calendar, ArrowUpRight } from "lucide-react";
 import { StatusChip } from "../../shared/StatusChip";
 import Tooltip from "../../shared/Tooltip";
 import MarkDoneAction from "../MarkDoneAction";
@@ -19,8 +19,9 @@ const baseCardStyle: CSSProperties = {
 // The card body has its own hover lift; this action button owns a distinct
 // hover/focus treatment (brighter tinted fill + border, slight raise) so it
 // reads as a separate control from the card it sits in.
-function CardActionButton({ tone, label, onClick }: { tone: string; label: string; onClick?: () => void }) {
+function CardActionButton({ tone, label, email = false, onClick }: { tone: string; label: string; email?: boolean; onClick?: () => void }) {
   const [active, setActive] = useState(false);
+  const Icon = email ? ArrowUpRight : Check;
   return (
     <button
       type="button"
@@ -40,17 +41,16 @@ function CardActionButton({ tone, label, onClick }: { tone: string; label: strin
         transition: "background 130ms ease, border-color 130ms ease, transform 130ms ease",
       }}
     >
-      <Check size={11} color={tone} strokeWidth={2.4} />{label}
+      <Icon size={11} color={tone} strokeWidth={2.4} />{label}
     </button>
   );
 }
 
-export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpen, onMarkHandled, onComplete, onJump }: {
+export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpen, onComplete, onJump }: {
   card: PriorityCardModel;
   variant?: "urgent" | "backfill";
   isMobile?: boolean;
   onOpen?: (card: PriorityCardModel) => void;
-  onMarkHandled?: (card: PriorityCardModel) => void;
   onComplete?: (card: PriorityCardModel) => void;
   onJump?: (payload: { kind?: string | null; id?: string | number | null; date?: string | null; data?: unknown }, anchor?: HTMLElement) => void;
 }) {
@@ -58,18 +58,17 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   const SourceIcon = SOURCE_ICONS[card.sourceIcon] || Circle;
   const cardTone = card.tone || "var(--sp-rose)";
   const tone = variant === "backfill" ? "rgba(205,214,244,0.5)" : cardTone;
-  // Every card with a destination opens on a body click: emails route to the
-  // reader, while deadline/bill cards jump to their existing detail treatment.
+  // Desktop card bodies preview; the email footer opens the reader directly.
   const bodyClickable = card.email || card.jumpKind != null;
   const activate = (e: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) => {
     if (!bodyClickable) return;
-    if (card.email) onOpen?.(card);
+    if (card.email && isMobile) onOpen?.(card);
     else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, e?.currentTarget);
   };
   const style = { ...baseCardStyle, background: "rgba(255,255,255,0.015)",
     border: "1px solid rgba(255,255,255,0.07)", cursor: bodyClickable ? "pointer" : "default" };
 
-  // Footer action: emails get "Mark handled", deadlines get a real "Mark done",
+  // Footer action: emails open the reader, deadlines get a real "Mark done",
   // bills get none (they aren't completable here — body click opens the calendar).
   // Backfill (upcoming) cards show their "Coming up" foot at rest; completable
   // ones (deadlines) reveal the same quiet text-only Mark-done on hover/focus —
@@ -93,7 +92,7 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
       )}
     </div>
   ) : card.email ? (
-    card.handleable ? <CardActionButton tone={cardTone} label="Mark handled" onClick={() => onMarkHandled?.(card)} /> : null
+    <CardActionButton tone={cardTone} label="Open email" email onClick={() => onOpen?.(card)} />
   ) : card.completable ? (
     <CardActionButton tone={cardTone} label="Mark done" onClick={() => onComplete?.(card)} />
   ) : null;
@@ -101,7 +100,8 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   return (
     <div
       className={bodyClickable ? "needs-you-priority-card dashboard-item-trigger sp-focus-ring" : "needs-you-priority-card"}
-      data-dashboard-detail-trigger={!card.email && card.jumpKind != null ? "true" : undefined}
+      data-dashboard-detail-trigger={card.jumpKind != null ? "true" : undefined}
+      aria-label={card.email ? `${isMobile ? "Open" : "Preview"} email: ${card.title}` : undefined}
       style={
         !hover
           ? style
@@ -130,9 +130,9 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
         </Tooltip>
       </div>
       <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "var(--sp-text)", margin: "8px 0 4px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>{card.title}</div>
-      <div style={{ fontSize: 11, lineHeight: 1.5, color: "var(--color-text-secondary, #a6adc8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.meta}</div>
+      <div style={{ fontSize: 11, lineHeight: 1.5, marginBottom: footer ? 10 : undefined, color: "var(--color-text-secondary, #a6adc8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.meta}</div>
       {footer && (
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ marginTop: "auto", paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           {footer}
         </div>
       )}

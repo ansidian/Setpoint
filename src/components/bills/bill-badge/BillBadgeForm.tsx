@@ -330,7 +330,7 @@ function FeeAndSendRow({
                   onClick={(event) => event.stopPropagation()}
                   placeholder="0.00"
                   className={cn(
-                    "pl-[16px] pr-2 rounded-md font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus:border-[var(--sp-accent)]/40",
+                    "pl-[16px] pr-2 rounded-md font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus-visible:border-[var(--sp-accent)]/40",
                     isMobile ? "w-[76px] h-[28px] text-[11px]" : "w-[68px] h-[22px] text-[10px]",
                   )}
                 />
@@ -396,7 +396,7 @@ function FeeAndSendRow({
               onChange={(event) => setCustomFee(event.target.value)}
               onClick={(event) => event.stopPropagation()}
               placeholder="0.00"
-              className="w-[68px] pl-[16px] pr-2 h-[22px] rounded-md text-[10px] font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus:border-[var(--sp-accent)]/40"
+              className="w-[68px] pl-[16px] pr-2 h-[22px] rounded-md text-[10px] font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus-visible:border-[var(--sp-accent)]/40"
             />
           </div>
         )}

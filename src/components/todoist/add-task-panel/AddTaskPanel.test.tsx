@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLayoutEffect, useRef, useState } from "react";
 import AddTaskPanel from "../AddTaskPanel";
+import useAddTaskPanelController from "./useAddTaskPanelController";
 import { invalidateTodoistReferenceCache } from "./todoistReferenceCache";
 import type { AddTaskPanelProps } from "./types";
 import type * as Api from "../../../api";
@@ -131,6 +132,27 @@ describe("AddTaskPanel behaviors", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(screen.getByText("Editor closed")).toBeTruthy();
+  });
+
+  it.each([
+    { project_id: "p1", class_name: "Work" },
+    { class_name: "Work" },
+    { project_id: "p1" },
+  ])("keeps an untouched deadline clean before and after project hydration: %j", async (project) => {
+    const work = { id: "p1", name: "Work", color: "#fff", isInbox: false };
+    mockGetTodoistProjects.mockResolvedValue([work]);
+    const task = { id: "todo-1", title: "Follow up", ...project, priority: 3 as const, labels: [], due_date: "2026-04-21" };
+    const { result } = renderHook(() => useAddTaskPanelController({
+      host: "inline", editingTask: task, onClose: () => {},
+    }));
+    expect(result.current.isDirty).toBe(false);
+    await act(() => vi.runAllTimersAsync());
+    expect(result.current.resolvedProject?.name).toBe("Work");
+    expect(result.current.isDirty).toBe(false);
+    act(() => result.current.setManualProject({ ...work, id: "p2", name: "Personal" }));
+    expect(result.current.isDirty).toBe(true);
+    act(() => result.current.setManualProject(work));
+    expect(result.current.isDirty).toBe(false);
   });
 
   it("uses a two-step delete confirmation instead of hold-to-delete", async () => {

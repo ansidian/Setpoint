@@ -18,7 +18,7 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
     return bills.filter((bill) => {
       const days = daysUntil(bill.next_date);
       const key = `${bill.scheduleId || bill.id}:${bill.next_date}`;
-      if (bill.paid || days == null || days < 1 || days > 7 || seen.has(key)) return false;
+      if (bill.type === "transfer" || bill.type === "income" || bill.paid || days == null || days < 0 || days > 7 || seen.has(key)) return false;
       seen.add(key);
       return true;
     }).sort((a, b) => String(a.next_date).localeCompare(String(b.next_date)));
@@ -33,13 +33,13 @@ export default function MoneyAheadCard({ bills, loading, configured, health, onO
     </button>
   );
   return <section className="dashboard-finance-card" aria-label="Money ahead">
-    <div className="dashboard-finance-heading"><h3><Wallet size={15} />Money Ahead</h3><span className="dashboard-finance-caption">Next 7 days</span></div>
+    <div className="dashboard-finance-heading"><h3><Wallet size={15} />Money Ahead</h3><span className="dashboard-finance-caption">Today + next 7 days</span></div>
     {!configured ? <p className="dashboard-finance-note">Connect Actual Budget in Settings to see scheduled obligations.</p>
       : loading && !upcoming.length ? <p className="dashboard-finance-note">Loading scheduled obligations…</p>
       : unavailable && !upcoming.length ? <p className="dashboard-finance-note">Scheduled obligations are unavailable until Actual syncs.</p>
       : <>
         <div className="dashboard-finance-value">{amountsKnown ? formatAmount(total) : "Amount incomplete"}</div>
-        <p className="dashboard-finance-note">{upcoming.length} upcoming {upcoming.length === 1 ? "obligation" : "obligations"} · Today’s bills are in Needs You</p>
+        <p className="dashboard-finance-note">{upcoming.length} upcoming {upcoming.length === 1 ? "obligation" : "obligations"} · Excludes transfers</p>
         {health?.state !== "current" && <p className="dashboard-finance-note">Showing the last available schedule data.</p>}
         {upcoming.slice(0, 3).map(renderBill)}
         <AnimatedCollapse open={expanded}>{upcoming.slice(3).map(renderBill)}</AnimatedCollapse>

@@ -217,7 +217,7 @@ describe("dirty snapshot vs baseline", () => {
       parsedStripped: "Follow up",
       input: "Follow up",
       description: "",
-      resolvedProjectName: null,
+      resolvedProjectName: "Work",
       resolvedProjectId: "p1",
       resolvedPriority: 4,
       resolvedLabels: [{ name: "IHSS" }],

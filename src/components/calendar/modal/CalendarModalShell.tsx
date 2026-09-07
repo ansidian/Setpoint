@@ -61,7 +61,7 @@ export interface CalendarModalShellProps {
     currentYear: number;
     currentMonth: number;
     todayDate: number;
-    suppressFocusRing?: boolean;
+
   };
   viewModel: {
     panelWidth: number | string;
@@ -195,7 +195,7 @@ export default function CalendarModalShell({
   availableCalendarViews,
 }: CalendarModalShellProps) {
   const { panelRef, scrollRef, contextRailRef, agendaRailRef } = refs;
-  const { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, suppressFocusRing = false } = viewState;
+  const { view, viewYear, viewMonth, currentYear, currentMonth, todayDate } = viewState;
   const {
     panelWidth,
     layout,
@@ -449,7 +449,7 @@ export default function CalendarModalShell({
         shellPadding: layout.shellPadding,
         contentGap: layout.contentGap,
       }}
-      suppressFocusRing={suppressFocusRing}
+
     >
       <CalendarModalHeader
         view={view}
@@ -585,7 +585,7 @@ export default function CalendarModalShell({
         label={floatingDetailLabel}
         calendarPanelRef={panelRef}
         railRef={contextRailRef}
-        suppressFocusRing={suppressFocusRing}
+
         onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
         onUserDraggedChange={onFloatingDetailDragged}
       >

@@ -1,3 +1,4 @@
+import Dropdown from "../shared/Dropdown";
 import type { CSSProperties } from "react";
 import InboxLaneFilterBar from "./InboxLaneFilterBar";
 import { resolveReaderActions } from "./reader/readerActionsModel";
@@ -25,10 +26,15 @@ export default function Sidebar({
   const actions = resolveReaderActions(selectedEmail, { readOnly });
   return (
     <aside className="inbox-a-rail" aria-label="Inbox views" style={{ "--ea-accent": accent } as CSSProperties}>
-      <select className="inbox-a-account-select" aria-label="Email account" value={accountId} onChange={(event) => onAccountChange(event.target.value)}>
-        <option value="__all">All accounts</option>
-        {accounts.map((account) => <option key={account.id || account.name} value={account.id || account.name}>{account.name || account.email || "Account"}</option>)}
-      </select>
+      <Dropdown
+        ariaLabel="Email account"
+        value={accountId}
+        onChange={onAccountChange}
+        options={[
+          { id: "__all", name: "All accounts" },
+          ...accounts.map(account => ({ id: account.id || account.name, name: account.name || account.email || "Account" })),
+        ]}
+      />
       <InboxLaneFilterBar
         accent={accent}
         activeLane={collection === "inbox" ? lane : "snoozed"}

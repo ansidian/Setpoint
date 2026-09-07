@@ -271,7 +271,7 @@ export default function MiniCalendar({
           [data-testid="calendar-mini-calendar"] .mini-calendar-date:not(:disabled):active {
             transform: translateY(0);
           }
-          [data-testid="calendar-mini-calendar"] button:focus-visible {
+          [data-testid="calendar-mini-calendar"] button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
             outline: 2px solid color-mix(in srgb, var(--ea-accent, var(--sp-accent)) 72%, transparent);
             outline-offset: 2px;
           }

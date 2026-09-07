@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Circle, Clock, CreditCard, Mail, MailOpen } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Check, Circle, Clock, CreditCard, Mail, MailOpen } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { NeedsYouCard } from "./needsYouModel";
 import "./StartHereStrip.css";
@@ -9,8 +9,8 @@ function recommendationDetail(card: NeedsYouCard) {
 
 const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
 
-function recommendationAction(card: NeedsYouCard) {
-  if (card.email) return "Open email";
+function recommendationAction(card: NeedsYouCard, isMobile: boolean) {
+  if (card.email) return isMobile ? "Open email" : "Preview email";
   if (card.jumpKind === "bill") return "Review bill";
   return "Open task";
 }
@@ -19,20 +19,21 @@ export function StartHereStrip({
   card,
   isMobile = false,
   onActivate,
-  onMarkHandled,
+  onOpenEmail,
   onComplete,
 }: {
   card: NeedsYouCard;
   isMobile?: boolean;
   onActivate: (card: NeedsYouCard, anchor: HTMLButtonElement) => void;
-  onMarkHandled: (card: NeedsYouCard) => void;
+  onOpenEmail: (card: NeedsYouCard) => void;
   onComplete: (card: NeedsYouCard) => void;
 }) {
   const detail = recommendationDetail(card);
-  const action = recommendationAction(card);
+  const action = recommendationAction(card, isMobile);
   const SourceIcon = SOURCE_ICONS[card.sourceIcon] || Circle;
-  const quickAction = card.email ? "Mark handled" : "Mark done";
-  const hasQuickAction = card.email ? card.handleable : card.completable;
+  const quickAction = card.email ? "Open email" : "Mark done";
+  const QuickIcon = card.email ? ArrowUpRight : Check;
+  const hasQuickAction = card.email ? !isMobile : card.completable;
 
   return (
     <div
@@ -42,7 +43,7 @@ export function StartHereStrip({
       <button
         type="button"
         className="start-here-strip__open dashboard-item-trigger sp-focus-ring"
-        data-dashboard-detail-trigger={!card.email ? "true" : undefined}
+        data-dashboard-detail-trigger={!isMobile ? "true" : undefined}
         aria-label={`${action}: ${card.title}. ${detail}`}
         title={`${card.title} — ${detail}`}
         onClick={(event) => onActivate(card, event.currentTarget)}
@@ -65,9 +66,9 @@ export function StartHereStrip({
           className="start-here-strip__quick-action sp-focus-ring"
           aria-label={`${quickAction}: ${card.title}`}
           title={`${quickAction}: ${card.title}`}
-          onClick={() => card.email ? onMarkHandled(card) : onComplete(card)}
+          onClick={() => card.email ? onOpenEmail(card) : onComplete(card)}
         >
-          <Check size={13} strokeWidth={2.4} aria-hidden="true" />
+          <QuickIcon size={13} strokeWidth={2.4} aria-hidden="true" />
           <span className="start-here-strip__quick-label">{quickAction}</span>
         </button>
       )}

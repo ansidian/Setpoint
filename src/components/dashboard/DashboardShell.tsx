@@ -230,13 +230,6 @@ export function DashboardShell({
   const openPalette = useCallback(() => {
     setPaletteOpen(true);
   }, []);
-  const openDeadlineCreate = useCallback(() => {
-    if (isMobile) {
-      setAddTaskOpen(true);
-      return;
-    }
-    openCalendar("events", null, "new", { source: "dashboard", forceDeadlineOverlay: true });
-  }, [isMobile, openCalendar]);
   // Stable source navigation keeps unrelated dashboard refreshes out of Alfred.
   const handleAlfredOpenCalendarItem = useCallback((request: CalendarOpenRequest) => {
     closeAlfred();
@@ -263,8 +256,6 @@ export function DashboardShell({
     openPalette,
     openAnalytics,
     closeAnalytics,
-    openDeadlineCreate,
-    openCalendar,
     setHistoryOpen,
     toggleAlfred,
     alfredNewChat,
@@ -274,7 +265,7 @@ export function DashboardShell({
   const briefing = bd.briefing;
   const dashboardCalendarDeadlines = calendarDeadlines;
 
-  // Email click anywhere → switch to inbox and let its state handle selection.
+  // Explicit email opens switch to Inbox and let its state handle selection.
   const openEmailInInbox = useCallback((id: string | number | null) => {
     setHistoricalSnapshotView(null);
     prepareEmailOpen(id);
@@ -318,11 +309,13 @@ export function DashboardShell({
   const {
     itemSheet,
     close: closeItemSheet,
+    setEditorDirty: setItemEditorDirty,
     openDeadline: openDashboardDeadline,
+    openEmail: previewDashboardEmail,
     openBill: openDashboardBill,
     openEvent: openDashboardEvent,
     openInCalendar: openItemSheetInCalendar,
-  } = useDashboardItemSheet({ tab, openCalendar });
+  } = useDashboardItemSheet({ tab, isMobile, openCalendar });
   const handleInboxOpenRecordedBill = useCallback((target: FinanceDestination) => {
     closeAlfred();
     navigate(financesHref(target));
@@ -466,6 +459,7 @@ export function DashboardShell({
             calendarDeadlinesError={!!calendarDeadlinesError}
             domainRefreshing={domainRefreshing}
             onOpenEmail={openEmailInInbox}
+            onPreviewEmail={previewDashboardEmail}
             onOpenInbox={openInboxLane}
             onOpenDeadline={openDashboardDeadline}
             onOpenBillsCalendar={openDashboardBill}
@@ -553,6 +547,8 @@ export function DashboardShell({
         isMobile={isMobile}
         itemSheet={itemSheet}
         closeItemSheet={closeItemSheet}
+        calendarRange={calendarRange} onEditorDirtyChange={setItemEditorDirty}
+        onOpenEmail={openEmailInInbox}
         onOpenItemInCalendar={openItemSheetInCalendar}
         billCtx={{ actualBudgetUrl: calendarBillsData?.actualBudgetUrl, payLinksByScheduleId: billPayLinksByScheduleId }}
         accent={accent}

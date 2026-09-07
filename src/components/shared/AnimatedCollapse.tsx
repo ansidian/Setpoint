@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useRef, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, motion as Motion, useIsPresent, useReducedMotion } from "motion/react";
 import { heightTransition } from "@/lib/motion";
 
@@ -15,17 +15,21 @@ export default function AnimatedCollapse({ open, children, style, className }: C
 
 function CollapseContent({ children, style, className }: Omit<CollapseProps, "open">) {
   const present = useIsPresent();
+  const shellRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   return (
     <Motion.div
+      ref={shellRef}
       initial={{ height: 0 }}
       animate={{ height: "auto" }}
       exit={{ height: 0 }}
       transition={heightTransition(reduce)}
+      onAnimationStart={() => { if (shellRef.current && !reduce) shellRef.current.dataset.heightAnimating = "true"; }}
+      onAnimationComplete={() => { if (shellRef.current) delete shellRef.current.dataset.heightAnimating; }}
       aria-hidden={!present || undefined}
       inert={!present || undefined}
-      className={className}
-      style={{ overflow: "hidden", minHeight: 0, ...style }}
+      className={`sp-animated-height${className ? ` ${className}` : ""}`}
+      style={{ minHeight: 0, ...style }}
     >
       {children}
     </Motion.div>

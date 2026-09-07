@@ -179,14 +179,14 @@ export default function useAddTaskPanelController({
     ensureChrono();
   }, []);
 
+  const originalProject = useMemo(() => projects.find((project) => editingTask?.project_id
+    ? project.id === editingTask.project_id
+    : project.name === (editingTask?.project_name || editingTask?.class_name)), [editingTask, projects]);
   useEffect(() => {
-    if (!editingTask || !projects.length || manualProject) return;
-    const match = projects.find((project) => project.name === editingTask.class_name);
-    if (match) {
-      setManualProject(match);
-      setOverrides((prev) => ({ ...prev, project: true }));
-    }
-  }, [editingTask, manualProject, projects]);
+    if (!originalProject || manualProject) return;
+    setManualProject(originalProject);
+    setOverrides((prev) => ({ ...prev, project: true }));
+  }, [manualProject, originalProject]);
 
   useEffect(() => {
     if (!editingTask || !labels.length) return;
@@ -259,8 +259,8 @@ export default function useAddTaskPanelController({
       parsedStripped: parsed.stripped,
       input,
       description,
-      resolvedProjectName: resolvedProject?.name,
-      resolvedProjectId: resolvedProject?.id,
+      resolvedProjectName: resolvedProject?.name || (!overrides.project ? editingTask?.project_name || editingTask?.class_name : null),
+      resolvedProjectId: resolvedProject?.id || (!overrides.project ? originalProject?.id || editingTask?.project_id : null),
       resolvedPriority,
       resolvedLabels,
       isEdit,
@@ -268,12 +268,17 @@ export default function useAddTaskPanelController({
       originalDueValue,
       resolvedDue,
     }),
-    [description, input, isEdit, originalDueValue, overrides.due, parsed.stripped, resolvedDue, resolvedLabels, resolvedPriority, resolvedProject?.id, resolvedProject?.name],
+    [description, editingTask, input, isEdit, originalDueValue, originalProject?.id, overrides.due, overrides.project, parsed.stripped, resolvedDue, resolvedLabels, resolvedPriority, resolvedProject?.id, resolvedProject?.name],
   );
 
+  // Resolve legacy name-only tasks on both sides of the comparison. Loading
+  // project metadata changes its representation, not the owner's draft.
   const dirtyBaseline = useMemo(
-    () => buildAddTaskDirtyBaseline({ editingTask, originalDueValue }),
-    [editingTask, originalDueValue],
+    () => buildAddTaskDirtyBaseline({
+      editingTask: editingTask ? { ...editingTask, project_id: originalProject?.id || editingTask.project_id } : null,
+      originalDueValue,
+    }),
+    [editingTask, originalDueValue, originalProject?.id],
   );
   const isDirty = !isEdit && input === initialInput && description === initialDescription && !Object.keys(overrides).length && !todoistReminders.length && !removedReminderIds.length ? false : dirtySnapshot !== dirtyBaseline;
   dirtyClose.setDirty(isDirty);

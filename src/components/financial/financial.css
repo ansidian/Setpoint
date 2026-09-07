@@ -39,7 +39,7 @@
 /* Neutral hover is a fallback: variants and selected states retain their colors.
    Shared Button owns its colors in the utility layer and must stay excluded. */
 .financial-surface :where(button:not([data-slot=button]):not(:disabled):hover), .financial-action:where(:not(:disabled):hover) { background-color:#ffffff0a; }
-.financial-surface button:not(:disabled):focus-visible, .financial-action:focus-visible { outline:2px solid var(--primary); outline-offset:2px; transform:translateY(-1px); }
+.financial-surface button:not(:disabled):focus-visible:where([data-sp-keyboard-focus="true"] *), .financial-action:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline:2px solid var(--primary); outline-offset:2px; transform:translateY(-1px); }
 .financial-surface button:not(:disabled):active, .financial-action:active { transform:translateY(1px); }
 .financial-surface button:disabled { opacity:.5; cursor:not-allowed; }
 .financial-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:36px; padding:8px 12px; border-radius:6px; border:1px solid #ffffff24; line-height:18px; }
@@ -48,7 +48,7 @@
 .financial-surface .financial-primary:not(:disabled):hover { background:var(--primary); filter:brightness(1.12); }
 .financial-field { display:flex; flex-direction:column; gap:6px; min-width:0; font-size:11px; }
 .financial-field input:not([aria-hidden=true]),.financial-field select,.financial-field textarea { width:100%; min-width:0; min-height:36px; padding:8px; border:1px solid #ffffff28; border-radius:6px; background:var(--input-bg); color:var(--foreground); font-size:12px; color-scheme:dark; }
-.financial-field :is(input:not([aria-hidden=true]),select,textarea):focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.financial-field :is(input:not([aria-hidden=true]),select,textarea):focus-visible:where([data-sp-keyboard-focus="true"] *) { outline:2px solid var(--primary); outline-offset:2px; }
 .financial-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .financial-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
 .financial-summary dt { font-size:11px; color:var(--muted-foreground); margin-bottom:4px; }
@@ -134,7 +134,7 @@
 .financial-discard button { transition:background-color 160ms,transform 160ms; }
 .financial-discard button:hover { transform:translateY(-1px); }
 .financial-discard :where(button:not([data-slot=button]):not(:disabled):hover) { background-color:#ffffff0a; }
-.financial-discard button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; transform:translateY(-1px); }
+.financial-discard button:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline:2px solid var(--primary); outline-offset:2px; transform:translateY(-1px); }
 .financial-discard button:active { transform:translateY(1px); }
 .financial-discard .financial-primary:hover { background:var(--primary); filter:brightness(1.12); }
 .financial-danger { color:var(--sp-rose); background:color-mix(in srgb,var(--sp-rose) 7%,transparent); border-color:color-mix(in srgb,var(--sp-rose) 35%,transparent); }

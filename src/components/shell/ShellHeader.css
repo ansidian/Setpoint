@@ -27,25 +27,25 @@
   color: var(--sp-accent);
   background: color-mix(in srgb, var(--sp-accent) 10%, transparent);
 }
-.shell-nav-tab:hover, .shell-nav-tab:focus-visible,
-.shell-palette-trigger:hover, .shell-palette-trigger:focus-visible {
+.shell-nav-tab:hover, .shell-nav-tab:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.shell-palette-trigger:hover, .shell-palette-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   color: var(--sp-text);
   background: #ffffff0a;
   transform: translateY(-1px);
 }
 .shell-nav-tab[aria-selected="true"]:hover,
-.shell-nav-tab[aria-selected="true"]:focus-visible { color: var(--sp-accent); }
-.shell-nav-tab:focus-visible, .shell-palette-trigger:focus-visible {
+.shell-nav-tab[aria-selected="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) { color: var(--sp-accent); }
+.shell-nav-tab:focus-visible:where([data-sp-keyboard-focus="true"] *), .shell-palette-trigger:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid var(--sp-accent);
   outline-offset: 2px;
 }
 .shell-nav-tab:active, .shell-palette-trigger:active { transform: translateY(0); background: #ffffff14; }
 .shell-palette-trigger { flex-shrink: 0; padding: 0 6px; font-family: var(--font-mono); }
 .shell-desktop-menu-item { transition: background 160ms ease, transform 160ms ease; }
-.shell-desktop-menu-item:hover, .shell-desktop-menu-item:focus-visible { background: #ffffff0a !important; transform: translateX(1px); }
-.shell-desktop-menu-item:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: -2px; }
+.shell-desktop-menu-item:hover, .shell-desktop-menu-item:focus-visible:where([data-sp-keyboard-focus="true"] *) { background: #ffffff0a !important; transform: translateX(1px); }
+.shell-desktop-menu-item:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--sp-accent); outline-offset: -2px; }
 .shell-desktop-menu-item:active { transform: translateX(0); background: #ffffff14 !important; }
-.shell-more-control:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.shell-more-control:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
 .shell-more-control:active { transform: translateY(0) !important; }
 @media (max-width: 1000px) {
   .shell-primary-tabs { margin-left: 0; gap: 2px; }

@@ -172,7 +172,7 @@
   }
 }
 
-.calendar-compact-schedule-picker button:focus-visible {
+.calendar-compact-schedule-picker button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--ea-accent) 75%, white);
   outline-offset: 2px;
 }

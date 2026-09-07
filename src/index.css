@@ -36,6 +36,23 @@
   }
 }
 
+/* Keyboard modality is owned by useKeyboardFocusIndicators. Keep authored
+   :focus-visible rules gated the same way as these Tailwind utilities. */
+@custom-variant focus-visible (&:focus-visible:where([data-sp-keyboard-focus="true"] *));
+@custom-variant focus-within (&:focus-within:where([data-sp-keyboard-focus="true"] *));
+
+/* Suppress the browser's fallback outline when focus came from a pointer or
+   shortcut. Authored focus effects are gated above; ordinary shadows stay intact. */
+:root[data-sp-keyboard-focus="false"] :focus {
+  outline: none;
+}
+
+/* The embedded Notes canvas uses its own focus manager. Its focus color is
+   gated without changing canvas focus, selection, or non-focus shadows. */
+:root[data-sp-keyboard-focus="false"] .tl-container {
+  --tl-color-focus: transparent;
+}
+
 /* Custom variants */
 @custom-variant data-open {
   &:where([data-state="open"]),
@@ -910,11 +927,11 @@ body {
     transition: transform 170ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 170ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   .sp-mobile-agenda-control:hover,
-  .sp-mobile-agenda-control:focus-visible {
+  .sp-mobile-agenda-control:focus-visible:where([data-sp-keyboard-focus="true"] *) {
     transform: translateY(-1px);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--sp-accent) 24%, transparent);
   }
-  .sp-mobile-agenda-control:focus-visible {
+  .sp-mobile-agenda-control:focus-visible:where([data-sp-keyboard-focus="true"] *) {
     outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, transparent);
     outline-offset: 2px;
   }
@@ -926,7 +943,7 @@ body {
 @media (max-width: 639px) and (prefers-reduced-motion: reduce) {
   .sp-mobile-agenda-control,
   .sp-mobile-agenda-control:hover,
-  .sp-mobile-agenda-control:focus-visible,
+  .sp-mobile-agenda-control:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .sp-mobile-agenda-control:active {
     transform: none;
     transition: none;
@@ -1015,13 +1032,13 @@ body {
 }
 
 .notes-canvas-button:hover,
-.notes-canvas-button:focus-visible {
+.notes-canvas-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   border-color: color-mix(in srgb, var(--sp-accent) 52%, transparent);
   background: color-mix(in srgb, var(--sp-accent) 18%, var(--sp-panel));
   transform: translateY(-1px);
 }
 
-.notes-canvas-button:focus-visible {
+.notes-canvas-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 64%, transparent);
   outline-offset: 2px;
 }
@@ -1034,7 +1051,7 @@ body {
 }
 
 .notes-canvas-button--warning:hover,
-.notes-canvas-button--warning:focus-visible {
+.notes-canvas-button--warning:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   border-color: color-mix(in srgb, var(--sp-cream) 48%, transparent);
   background: color-mix(in srgb, var(--sp-cream) 13%, var(--sp-panel));
 }
@@ -1047,7 +1064,7 @@ body {
 }
 
 .notes-canvas-button:disabled:hover,
-.notes-canvas-button:disabled:focus-visible,
+.notes-canvas-button:disabled:focus-visible:where([data-sp-keyboard-focus="true"] *),
 .notes-canvas-button:disabled:active {
   border-color: color-mix(in srgb, var(--sp-accent) 30%, transparent);
   background: color-mix(in srgb, var(--sp-accent) 12%, var(--sp-panel));
@@ -1191,7 +1208,7 @@ body {
   border-bottom: 1px solid color-mix(in srgb, var(--checklist-text) 14%, transparent);
 }
 
-.setpoint-checklist__title-row:focus-within {
+.setpoint-checklist__title-row:focus-within:where([data-sp-keyboard-focus="true"] *) {
   border-bottom-color: var(--tl-color-focus);
 }
 
@@ -1342,7 +1359,7 @@ body {
 }
 
 .setpoint-checklist__check[aria-checked="true"]:hover,
-.setpoint-checklist__check[aria-checked="true"]:focus-visible {
+.setpoint-checklist__check[aria-checked="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   color: var(--checklist-background);
   background: color-mix(in srgb, var(--checklist-accent) 88%, var(--checklist-text));
 }
@@ -1374,7 +1391,7 @@ body {
   white-space: pre-wrap;
 }
 
-.setpoint-checklist__item-input:focus-visible {
+.setpoint-checklist__item-input:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   box-shadow: inset 0 -1px var(--tl-color-focus);
 }
 
@@ -1429,15 +1446,15 @@ body {
 }
 
 .setpoint-checklist__drag:hover,
-.setpoint-checklist__drag:focus-visible,
+.setpoint-checklist__drag:focus-visible:where([data-sp-keyboard-focus="true"] *),
 .setpoint-checklist__check:hover,
-.setpoint-checklist__check:focus-visible,
+.setpoint-checklist__check:focus-visible:where([data-sp-keyboard-focus="true"] *),
 .setpoint-checklist__remove:hover,
-.setpoint-checklist__remove:focus-visible,
+.setpoint-checklist__remove:focus-visible:where([data-sp-keyboard-focus="true"] *),
 .setpoint-checklist__add:hover,
-.setpoint-checklist__add:focus-visible,
+.setpoint-checklist__add:focus-visible:where([data-sp-keyboard-focus="true"] *),
 .setpoint-checklist__clear:hover,
-.setpoint-checklist__clear:focus-visible {
+.setpoint-checklist__clear:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   color: inherit;
   background-color: var(--tl-color-muted-1);
   opacity: 1;
@@ -1445,15 +1462,15 @@ body {
 }
 
 .setpoint-checklist__clear:hover,
-.setpoint-checklist__clear:focus-visible {
+.setpoint-checklist__clear:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   color: var(--tl-color-danger);
 }
 
-.setpoint-checklist__drag:focus-visible,
-.setpoint-checklist__check:focus-visible,
-.setpoint-checklist__remove:focus-visible,
-.setpoint-checklist__add:focus-visible,
-.setpoint-checklist__clear:focus-visible {
+.setpoint-checklist__drag:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.setpoint-checklist__check:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.setpoint-checklist__remove:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.setpoint-checklist__add:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.setpoint-checklist__clear:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid var(--tl-color-focus);
   outline-offset: 2px;
 }
@@ -1471,7 +1488,7 @@ body {
 
   .notes-canvas-button,
   .notes-canvas-button:hover,
-  .notes-canvas-button:focus-visible,
+  .notes-canvas-button:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .notes-canvas-button:active {
     transition: none;
     transform: none;
@@ -1487,15 +1504,15 @@ body {
   }
 
   .setpoint-checklist__drag:hover,
-  .setpoint-checklist__drag:focus-visible,
+  .setpoint-checklist__drag:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .setpoint-checklist__check:hover,
-  .setpoint-checklist__check:focus-visible,
+  .setpoint-checklist__check:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .setpoint-checklist__remove:hover,
-  .setpoint-checklist__remove:focus-visible,
+  .setpoint-checklist__remove:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .setpoint-checklist__add:hover,
-  .setpoint-checklist__add:focus-visible,
+  .setpoint-checklist__add:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .setpoint-checklist__clear:hover,
-  .setpoint-checklist__clear:focus-visible,
+  .setpoint-checklist__clear:focus-visible:where([data-sp-keyboard-focus="true"] *),
   .setpoint-checklist__drag:active,
   .setpoint-checklist__check:active,
   .setpoint-checklist__remove:active,
@@ -1619,7 +1636,7 @@ body {
   transform: translateY(-1px);
 }
 
-.news-toolbar-button:focus-visible {
+.news-toolbar-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 68%, transparent);
   outline-offset: 2px;
 }
@@ -1716,9 +1733,9 @@ body {
   font-weight: 650;
 }
 
-.news-topic-index a:focus-visible {
+.news-topic-index a:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 64%, transparent);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .news-topic-index-name {
@@ -1848,7 +1865,7 @@ body {
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
-.news-topic-health:focus-visible {
+.news-topic-health:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
@@ -1950,7 +1967,7 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.news-row:focus-visible {
+.news-row:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 62%, transparent);
   outline-offset: 2px;
 }
@@ -1989,7 +2006,7 @@ body {
 }
 
 .news-row:hover .news-row-title,
-.news-row:focus-visible .news-row-title {
+.news-row:focus-visible:where([data-sp-keyboard-focus="true"] *) .news-row-title {
   color: var(--sp-accent);
 }
 
@@ -2227,7 +2244,13 @@ body {
 @keyframes newsPanelIn { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes newsBackdropIn { from { opacity: 0; } to { opacity: 1; } }
 
-.sp-focus-ring:focus-visible {
+/* Settled disclosures must leave room for their children's focus outlines.
+   Clip only while resizing or removing content. */
+.sp-animated-height { overflow: visible; }
+.sp-animated-height[data-height-animating="true"],
+.sp-animated-height[inert] { overflow: clip; }
+
+.sp-focus-ring:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid var(--sp-lavender);
   outline-offset: 2px;
 }
@@ -2238,7 +2261,7 @@ body {
     background-color var(--sp-motion-fast) var(--sp-ease-out),
     transform var(--sp-motion-fast) var(--sp-ease-out);
 }
-.mobile-bottom-nav-button:focus-visible {
+.mobile-bottom-nav-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 66%, transparent);
   outline-offset: -3px;
   background: color-mix(in srgb, var(--sp-accent) 7%, transparent) !important;
@@ -2260,17 +2283,17 @@ body {
   transition: background-color var(--sp-motion-fast) var(--sp-ease-out);
 }
 .bill-drawer-close:hover,
-.bill-drawer-close:focus-visible,
+.bill-drawer-close:focus-visible:where([data-sp-keyboard-focus="true"] *),
 .mobile-bill-drawer-toggle:hover,
-.mobile-bill-drawer-toggle:focus-visible {
+.mobile-bill-drawer-toggle:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   color: var(--sp-text) !important;
   background: rgba(255,255,255,0.07) !important;
   border-color: rgba(255,255,255,0.14) !important;
   transform: translateY(-1px);
 }
-.bill-drawer-close:focus-visible,
-.mobile-bill-drawer-toggle:focus-visible,
-.mobile-bill-drawer-handle:focus-visible {
+.bill-drawer-close:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.mobile-bill-drawer-toggle:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.mobile-bill-drawer-handle:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 68%, transparent);
   outline-offset: 2px;
 }
@@ -2280,21 +2303,8 @@ body {
   transform: translateY(0) scale(0.97);
 }
 .mobile-bill-drawer-handle:hover .mobile-bill-drawer-handle-indicator,
-.mobile-bill-drawer-handle:focus-visible .mobile-bill-drawer-handle-indicator {
+.mobile-bill-drawer-handle:focus-visible:where([data-sp-keyboard-focus="true"] *) .mobile-bill-drawer-handle-indicator {
   background: rgba(255,255,255,0.26) !important;
-}
-.inbox-lane-toggle {
-  border-radius: 6px !important;
-  transition:
-    background-color var(--sp-motion-fast) var(--sp-ease-out),
-    transform var(--sp-motion-fast) var(--sp-ease-out);
-}
-.inbox-lane-toggle:hover,
-.inbox-lane-toggle:focus-visible {
-  background: rgba(255,255,255,0.025) !important;
-}
-.inbox-lane-toggle:active {
-  transform: translateY(1px);
 }
 .inbox-email-row:active {
   filter: brightness(1.08);
@@ -2304,7 +2314,7 @@ body {
     transform: none !important;
   }
 }
-.toast-undo-button:focus-visible {
+.toast-undo-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline-color: color-mix(in srgb, var(--sp-accent) 72%, white);
 }
 .toast-undo-button:active:not(:disabled) {
@@ -2329,13 +2339,13 @@ body {
     transform var(--sp-motion-fast) var(--sp-ease-out);
 }
 .anchored-floating-panel-close:hover,
-.anchored-floating-panel-close:focus-visible {
+.anchored-floating-panel-close:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   color: var(--sp-text);
   background: rgba(255,255,255,0.07);
   border-color: rgba(255,255,255,0.12);
   transform: translateY(-1px);
 }
-.anchored-floating-panel-close:focus-visible {
+.anchored-floating-panel-close:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 68%, transparent);
   outline-offset: 2px;
 }
@@ -2343,16 +2353,60 @@ body {
   transform: translateY(0) scale(0.97);
 }
 
-[data-calendar-focus-ring="true"]:focus-visible {
+/* A single-action surface owns its full hit area and all interaction states. */
+.calendar-empty-day-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sp-accent) 24%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sp-accent) 6%, transparent);
+  color: var(--sp-accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--sp-motion-fast) var(--sp-ease-out), border-color var(--sp-motion-fast) var(--sp-ease-out), transform var(--sp-motion-fast) var(--sp-ease-out);
+}
+.calendar-empty-day-action:hover, .calendar-empty-day-action:focus-visible:where([data-sp-keyboard-focus="true"] *) {
+  background: color-mix(in srgb, var(--sp-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--sp-accent) 38%, transparent);
+  transform: translateY(-1px);
+}
+.calendar-empty-day-action:active {
+  background: color-mix(in srgb, var(--sp-accent) 18%, transparent);
+  transform: translateY(0);
+}
+.calendar-empty-day-action-label { font-size: 11px; font-weight: 700; }
+.calendar-empty-day-action-detail { font-size: 11px; line-height: 1.45; color: rgba(205,214,244,0.56); }
+[data-agenda-date-header="true"] {
+  background: var(--sp-panel);
+  transition: background-color var(--sp-motion-fast) var(--sp-ease-out), box-shadow var(--sp-motion-fast) var(--sp-ease-out);
+}
+[data-agenda-date-header="true"]:hover, [data-agenda-date-header="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) {
+  background: color-mix(in srgb, var(--sp-accent) 9%, var(--sp-panel));
+}
+[data-agenda-date-header="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--sp-accent); outline-offset: -2px; }
+[data-agenda-date-header="true"]:active { background: color-mix(in srgb, var(--sp-accent) 15%, var(--sp-panel)); }
+[data-agenda-date-header="true"][data-drop-active="true"] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sp-accent) 24%, transparent);
+}
+.calendar-agenda-date-label { transition: translate var(--sp-motion-fast) var(--sp-ease-out); }
+[data-agenda-date-header="true"]:hover .calendar-agenda-date-label, [data-agenda-date-header="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) .calendar-agenda-date-label { translate: 1px 0; }
+[data-agenda-date-header="true"]:active .calendar-agenda-date-label { translate: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .calendar-empty-day-action, [data-agenda-date-header="true"], .calendar-agenda-date-label { transition: none; }
+  .calendar-empty-day-action:hover, .calendar-empty-day-action:focus-visible:where([data-sp-keyboard-focus="true"] *), .calendar-empty-day-action:active { transform: none; }
+  [data-agenda-date-header="true"]:hover .calendar-agenda-date-label, [data-agenda-date-header="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) .calendar-agenda-date-label { translate: none; }
+}
+[data-calendar-focus-ring="true"]:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, transparent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sp-accent) 14%, transparent);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--sp-accent) 14%, transparent);
 }
 
-[data-calendar-suppress-focus-ring="true"] [data-calendar-focus-ring="true"]:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
 
 /* CalendarCell hover (PERF-L03): kept in CSS, not React state, so hovering
    a cell never re-renders it / re-invokes renderCellContents. `!important`
@@ -2371,9 +2425,6 @@ body {
   background: rgba(255, 255, 255, 0.018) !important;
 }
 
-[data-calendar-suppress-focus-ring="true"] :focus {
-  outline: none;
-}
 
 .mouse-spotlight-canvas {
   position: fixed;
@@ -2433,7 +2484,7 @@ body {
     box-shadow 150ms ease-out;
 }
 .inbox-mobile-triage-button:hover,
-.inbox-mobile-triage-button:focus-visible {
+.inbox-mobile-triage-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   border-color: rgba(255,255,255,0.14) !important;
   background: rgba(255,255,255,0.06) !important;
   color: #fff !important;
@@ -2446,8 +2497,8 @@ body {
   background: rgba(255, 255, 255, 0.07) !important;
 }
 
-.inbox-mobile-action-row:focus-visible,
-.inbox-draft-close:focus-visible {
+.inbox-mobile-action-row:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.inbox-draft-close:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, white);
   outline-offset: 2px;
 }
@@ -2471,7 +2522,7 @@ body {
   color: #fff !important;
   transform: translateY(-1px);
 }
-.inbox-snooze-menu-item:focus-visible {
+.inbox-snooze-menu-item:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, white);
   outline-offset: -2px;
   background: rgba(255, 255, 255, 0.06) !important;
@@ -2480,7 +2531,7 @@ body {
   background: rgba(255, 255, 255, 0.1) !important;
   transform: translateY(0) scale(0.99);
 }
-.inbox-mobile-triage-button:focus-visible {
+.inbox-mobile-triage-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent);
 }
@@ -2489,7 +2540,7 @@ body {
   transform: translateY(0) !important;
 }
 .inbox-mobile-triage-button--danger:hover,
-.inbox-mobile-triage-button--danger:focus-visible {
+.inbox-mobile-triage-button--danger:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   border-color: color-mix(in srgb, var(--sp-rose) 32%, transparent) !important;
   background: color-mix(in srgb, var(--sp-rose) 13%, transparent) !important;
   color: color-mix(in srgb, var(--sp-rose) 88%, white) !important;
@@ -2526,7 +2577,7 @@ body {
   }
 
   .inbox-mobile-triage-button:hover,
-  .inbox-mobile-triage-button:focus-visible {
+  .inbox-mobile-triage-button:focus-visible:where([data-sp-keyboard-focus="true"] *) {
     transform: translateY(0) !important;
   }
   .mobile-bottom-nav-button:active,
@@ -2537,7 +2588,6 @@ body {
   .mobile-bill-drawer-handle:active {
     transform: none !important;
   }
-  .inbox-lane-toggle:active,
   .toast-undo-button:active:not(:disabled) {
     transform: none !important;
   }
@@ -2580,7 +2630,7 @@ body {
   text-decoration-color: currentColor;
   transform: translateY(-1px);
 }
-.todoist-description-link:focus-visible {
+.todoist-description-link:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--sp-blue) 70%, white);
   outline-offset: 3px;
   border-radius: 3px;
@@ -2592,7 +2642,7 @@ body {
   background: color-mix(in srgb, var(--badge-color) 8%, transparent) !important;
   box-shadow: 0 2px 12px color-mix(in srgb, var(--badge-color) 15%, transparent);
 }
-.badge-clickable:focus-visible {
+.badge-clickable:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 1px solid color-mix(in srgb, var(--badge-color) 40%, transparent);
   outline-offset: 1px;
 }

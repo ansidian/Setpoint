@@ -77,6 +77,9 @@ export default function useDismissablePortal({
         return;
       }
       if (event.key === "Escape") {
+        // Nested shared selects/popovers own the first Escape. Let their
+        // keyboard handlers close the choice list and return trigger focus.
+        if (event.target instanceof Element && event.target.closest('[data-slot="select-content"], [data-slot="popover-content"]')) return;
         handlersRef.current.onDismiss?.();
         event.preventDefault();
         event.stopPropagation();

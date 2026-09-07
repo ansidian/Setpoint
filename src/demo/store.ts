@@ -282,7 +282,7 @@ function makeDemoSeed(now = new Date()) {
     bill({ id: "demo-rent", payee: "Northstar Lofts", day: monthDay(today, 1), amount: 2450.00 }),
     bill({ id: "demo-phone", payee: "Signal Mobile", day: monthDay(today, 12), amount: 64.20 }),
     bill({ id: "demo-cloud", payee: "Cloud Sandbox", day: addDays(today, 5), amount: 38.47 }),
-    bill({ id: "demo-card", payee: "Everyday Card", day: today, amount: 512.84 }),
+    { ...bill({ id: "demo-card", payee: "Everyday Card", day: today, amount: 512.84 }), type: "transfer" },
     bill({ id: "demo-student-loan", payee: "Student Loan Servicer", day: addDays(today, 6), amount: 220.00 }),
   ];
   const transactions = buildDemoTransactions(dateKey(today), dateKey(yesterday));

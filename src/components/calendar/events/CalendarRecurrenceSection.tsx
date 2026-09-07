@@ -1,12 +1,12 @@
+import Dropdown from "@/components/shared/Dropdown";
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
   type CSSProperties,
   type HTMLInputTypeAttribute,
 } from "react";
-import { CalendarDays, ChevronDown } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
 import { PickerFieldButton } from "./CalendarEditorControls";
@@ -22,19 +22,6 @@ import type { CalendarRecurrenceDraft } from "./calendarEventEditorModel";
 import type useEventRecurrenceDraft from "./useEventRecurrenceDraft";
 
 type EventRecurrenceDraftController = ReturnType<typeof useEventRecurrenceDraft>;
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-interface StyledSelectProps {
-  options: SelectOption[];
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-  testId: string;
-}
 
 interface InlineInputProps {
   type: HTMLInputTypeAttribute;
@@ -76,7 +63,6 @@ const ENDS_OPTIONS = [
   { value: "afterCount", label: "After count" },
 ];
 
-const SELECT_PANEL_WIDTH = 180;
 const DATE_PICKER_WIDTH = 300;
 const DATE_PICKER_HEIGHT = 386;
 
@@ -102,148 +88,6 @@ function sectionCardStyle(): CSSProperties {
     flexDirection: "column",
     gap: 12,
   };
-}
-
-function StyledSelect({ options, value, onChange, disabled, testId }: StyledSelectProps) {
-  const [open, setOpen] = useState(false);
-  const anchorRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const selectedLabel = options.find((o) => o.value === value)?.label || value;
-  const panelHeight = options.length * 34 + 8;
-
-  const handleSelect = useCallback((optionValue: string) => {
-    onChange(optionValue);
-    setOpen(false);
-  }, [onChange]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (anchorRef.current?.contains(target) || panelRef.current?.contains(target)) return;
-      setOpen(false);
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [open]);
-
-  return (
-    <div>
-      <select
-        data-testid={testId}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        style={{
-          position: "absolute",
-          opacity: 0,
-          width: 0,
-          height: 0,
-          overflow: "hidden",
-          pointerEvents: "none",
-        }}
-        tabIndex={-1}
-        aria-hidden="true"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      <button
-        ref={anchorRef}
-        type="button"
-        className="calendar-recurrence-section__select-trigger"
-        onClick={() => !disabled && setOpen((prev) => !prev)}
-        disabled={disabled}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          padding: "8px 10px",
-          borderRadius: 8,
-          border: "1px solid rgba(255,255,255,0.06)",
-          background: open ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.03)",
-          color: "var(--sp-text)",
-          fontSize: 12,
-          fontFamily: "inherit",
-          cursor: disabled ? "not-allowed" : "pointer",
-          boxSizing: "border-box",
-          textAlign: "left",
-          transition: "background 140ms, border-color 140ms",
-        }}
-      >
-        <span>{selectedLabel}</span>
-        <ChevronDown
-          size={12}
-          style={{
-            color: "rgba(205,214,244,0.45)",
-            flexShrink: 0,
-            transform: open ? "rotate(180deg)" : "rotate(0)",
-            transition: "transform 140ms",
-          }}
-        />
-      </button>
-      {open ? (
-        <AnchoredFloatingPanel
-          anchorRef={anchorRef}
-          panelRef={panelRef}
-          onClose={() => setOpen(false)}
-          width={SELECT_PANEL_WIDTH}
-          height={panelHeight}
-          matchAnchorWidth
-          minWidth={140}
-          maxWidth={280}
-          role="listbox"
-          ariaLabel="Select option"
-          style={{ padding: 4, zIndex: 10001 }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {options.map((o) => {
-              const isSelected = o.value === value;
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  className="calendar-recurrence-section__select-option"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => handleSelect(o.value)}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    padding: "7px 10px",
-                    borderRadius: 6,
-                    border: "none",
-                    background: isSelected ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "transparent",
-                    color: isSelected ? "var(--sp-accent)" : "var(--sp-text)",
-                    fontSize: 12,
-                    fontWeight: isSelected ? 600 : 400,
-                    fontFamily: "inherit",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    transition: "background 100ms",
-                  }}
-                  onMouseEnter={(event) => {
-                    if (!isSelected) event.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.background = isSelected ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "transparent";
-                  }}
-                >
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
-        </AnchoredFloatingPanel>
-      ) : null}
-    </div>
-  );
 }
 
 function InlineInput({ type, value, testId, disabled, onChange, min, step }: InlineInputProps) {
@@ -397,12 +241,12 @@ export default function CalendarRecurrenceSection({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <div style={fieldLabelStyle()}>Frequency</div>
-            <StyledSelect
-              options={FREQUENCY_OPTIONS}
+            <Dropdown
+              options={FREQUENCY_OPTIONS.map(option => ({ id: option.value, name: option.label }))}
               value={recurrenceDraft.frequency}
               onChange={(value) => onUpdateRecurrence("frequency", value)}
               disabled={disabled}
-              testId="calendar-recurrence-frequency"
+              ariaLabel="Recurrence frequency"
             />
           </div>
           <div>
@@ -475,12 +319,12 @@ export default function CalendarRecurrenceSection({
       >
         <div>
           <div style={fieldLabelStyle()}>Ends</div>
-          <StyledSelect
-            options={ENDS_OPTIONS}
+          <Dropdown
+            options={ENDS_OPTIONS.map(option => ({ id: option.value, name: option.label }))}
             value={recurrenceDraft.ends?.type || "never"}
             onChange={(value) => onUpdateRecurrence("endsType", value)}
             disabled={disabled}
-            testId="calendar-recurrence-ends-type"
+            ariaLabel="Recurrence ends"
           />
         </div>
 

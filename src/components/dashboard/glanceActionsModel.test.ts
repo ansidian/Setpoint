@@ -56,7 +56,8 @@ describe("selectGlanceActions — bills", () => {
 describe("selectGlanceActions — events", () => {
   const ev = (overrides: Record<string, unknown> = {}) => ({ id: "e1", ...overrides });
 
-  it("falls back to only open-in-calendar for a plain event with no links", () => {
-    expect(keys(selectGlanceActions({ kind: "event", item: ev({ title: "Standup" }) }))).toEqual(["openInCalendar"]);
+  it("edits writable events in place and omits editing for read-only events", () => {
+    expect(keys(selectGlanceActions({ kind: "event", item: ev({ title: "Standup", writable: true }) }))).toEqual(["edit"]);
+    expect(keys(selectGlanceActions({ kind: "event", item: ev({ title: "Holiday", writable: false }) }))).toEqual([]);
   });
 });

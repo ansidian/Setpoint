@@ -19,14 +19,13 @@ interface MobileNeedsYouListProps {
   breakdown: NeedsYouBreakdownSegment[];
   actionError: string | null;
   onOpen: (card: NeedsYouCard) => void;
-  onMarkHandled: (card: NeedsYouCard) => void;
   onComplete: (card: NeedsYouCard) => void;
   onJump: NeedsYouBandProps["onOpen"];
   recommendation: NeedsYouCard | null;
   onStartHere: (card: NeedsYouCard, anchor: HTMLButtonElement) => void;
 }
 
-export function MobileNeedsYouList({ handledIds, urgentCards, countN, countColor, breakdown, actionError, onOpen, onMarkHandled, onComplete, onJump, recommendation, onStartHere }: MobileNeedsYouListProps) {
+export function MobileNeedsYouList({ handledIds, urgentCards, countN, countColor, breakdown, actionError, onOpen, onComplete, onJump, recommendation, onStartHere }: MobileNeedsYouListProps) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
   const headingId = useId();
@@ -60,7 +59,7 @@ export function MobileNeedsYouList({ handledIds, urgentCards, countN, countColor
         {recommendation && (
           <CompletionTransition key={recommendation.id} itemId={recommendation.id}>
           <StartHereStrip card={recommendation} isMobile onActivate={onStartHere}
-            onMarkHandled={onMarkHandled} onComplete={onComplete} />
+            onOpenEmail={onOpen} onComplete={onComplete} />
           </CompletionTransition>
         )}
       </AnimatePresence>
@@ -68,8 +67,8 @@ export function MobileNeedsYouList({ handledIds, urgentCards, countN, countColor
           <AnimatePresence initial={false} custom={handledIds}>
             {visibleCards.map((card) => {
               const SourceIcon = SOURCE_ICONS[card.sourceIcon];
-              const actionLabel = card.email ? "Mark handled" : "Mark done";
-              const hasAction = card.email ? card.handleable : card.completable;
+              const actionLabel = "Mark done";
+              const hasAction = !card.email && card.completable;
               return (
                 <CompletionTransition key={card.id} itemId={card.id}>
                 <div role="listitem" className="mobile-needs-you__row">
@@ -96,7 +95,7 @@ export function MobileNeedsYouList({ handledIds, urgentCards, countN, countColor
                       type="button"
                       className="mobile-needs-you__action sp-focus-ring"
                       aria-label={`${actionLabel}: ${card.title}`}
-                      onClick={() => card.email ? onMarkHandled(card) : onComplete(card)}
+                      onClick={() => onComplete(card)}
                     >
                       <Check size={14} aria-hidden="true" />
                       <span>{actionLabel}</span>

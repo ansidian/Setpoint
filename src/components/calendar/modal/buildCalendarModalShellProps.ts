@@ -98,7 +98,7 @@ export default function buildCalendarModalShellProps({
       currentYear: viewState.currentYear,
       currentMonth: viewState.currentMonth,
       todayDate: viewState.todayDate,
-      suppressFocusRing: viewState.suppressFocusRing,
+
     },
     viewModel: {
       panelWidth: viewModel.panelWidth,

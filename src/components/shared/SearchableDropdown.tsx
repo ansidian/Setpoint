@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -13,37 +13,63 @@ import {
 export type SearchableDropdownOption = {
   id: string;
   name: string;
+  content?: ReactNode;
 };
 
-export type SearchableDropdownProps = {
+type SearchableDropdownBaseProps = {
   options: SearchableDropdownOption[];
-  value: string | null | undefined;
-  onChange: (value: string) => void;
   placeholder?: string;
-  allowCreate?: boolean;
-  onCreateNew?: (name: string) => void;
   ariaLabel?: string;
   onOpen?: () => void;
   disabled?: boolean;
 };
 
-export default function SearchableDropdown({ options, value, onChange, placeholder = "Select...", allowCreate = false, onCreateNew, ariaLabel, onOpen, disabled = false }: SearchableDropdownProps) {
+export type SearchableDropdownProps = SearchableDropdownBaseProps & ({
+  multiple?: false;
+  value: string | null | undefined;
+  onChange: (value: string) => void;
+  allowCreate?: boolean;
+  onCreateNew?: (name: string) => void;
+} | {
+  multiple: true;
+  value: string[];
+  onChange: (value: string[]) => void;
+  allowCreate?: never;
+  onCreateNew?: never;
+});
+
+export default function SearchableDropdown(props: SearchableDropdownProps) {
+  const { options, placeholder = "Select...", ariaLabel, onOpen, disabled = false } = props;
+  const allowCreate = !props.multiple && props.allowCreate;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const selected = options.find(o => o.id === value);
-  const displayName = selected?.name || (allowCreate && value && !selected ? value : null);
+  const selected = props.multiple ? undefined : options.find(o => o.id === props.value);
+  const displayName = props.multiple
+    ? props.value.length ? `${props.value.length} selected` : null
+    : selected?.name || (allowCreate && props.value && !selected ? props.value : null);
   const trimmedSearch = search.trim();
   const exactMatch = trimmedSearch && options.some(o => o.name.toLowerCase() === trimmedSearch.toLowerCase());
   const showCreateOption = allowCreate && trimmedSearch && !exactMatch;
 
   const handleCreate = () => {
     const name = trimmedSearch;
-    if (onCreateNew) onCreateNew(name);
-    else onChange(name);
+    if (props.multiple) return;
+    if (props.onCreateNew) props.onCreateNew(name);
+    else props.onChange(name);
     setOpen(false);
     setSearch("");
   };
+
+  function selectOption(id: string) {
+    if (props.multiple) {
+      props.onChange(props.value.includes(id) ? props.value.filter(value => value !== id) : [...props.value, id]);
+      return;
+    }
+    props.onChange(id);
+    setOpen(false);
+    setSearch("");
+  }
 
   return (
     <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
@@ -52,7 +78,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
           aria-label={ariaLabel}
           disabled={disabled}
           className={cn(
-            "flex min-h-9 w-full items-center justify-between rounded-md bg-input-bg px-2.5 py-1.5 text-left",
+            "flex min-h-9 max-[600px]:min-h-11 w-full items-center justify-between gap-2 rounded-md bg-input-bg px-2.5 py-1.5 text-left",
             "border border-white/[0.08] text-[13px] font-medium text-foreground",
             "cursor-pointer outline-none transition-[border-color,background-color,box-shadow,transform] duration-[var(--sp-motion-fast)]",
             "hover:border-white/[0.15] hover:bg-white/[0.03] focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-px",
@@ -60,13 +86,13 @@ export default function SearchableDropdown({ options, value, onChange, placehold
             "motion-reduce:transition-none motion-reduce:transform-none",
           )}
         >
-          <span className={cn("truncate font-medium", !displayName && "text-muted-foreground/75")}>
-            {displayName || placeholder}
+          <span className={cn("min-w-0 flex-1 whitespace-normal break-words font-medium", !displayName && "text-muted-foreground/75")}>
+            {selected?.content ?? (displayName || placeholder)}
           </span>
           <svg
             width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            className={cn("text-muted-foreground/40 transition-transform duration-200", open && "rotate-180")}
+            className={cn("shrink-0 text-muted-foreground/40 transition-transform duration-200", open && "rotate-180")}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -78,7 +104,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
           collisionPadding={16}
           sticky
           onPointerDown={(e) => e.stopPropagation()}
-          className="w-[var(--anchor-width)] rounded bg-[var(--sp-panel)] border border-white/10 p-0 shadow-lg"
+          className="w-[var(--anchor-width)] min-w-[min(240px,calc(100vw-32px))] max-w-[calc(100vw-32px)] rounded bg-[var(--sp-panel)] border border-white/10 p-0 shadow-lg"
         >
           {/* PopoverContent is keepMounted (shared popover.tsx default), so the
               option DOM would otherwise persist while closed. Build the Command
@@ -92,7 +118,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
                 onValueChange={setSearch}
                 placeholder={allowCreate ? "Search or type new..." : "Search..."}
               />
-              <CommandList className="max-h-[180px]">
+              <CommandList aria-multiselectable={props.multiple || undefined} className="max-h-[180px] overscroll-contain">
                 <CommandEmpty className="py-2 text-xs text-muted-foreground/75">No matches</CommandEmpty>
                 <CommandGroup>
                   {options.map(o => (
@@ -100,11 +126,12 @@ export default function SearchableDropdown({ options, value, onChange, placehold
                       key={o.id}
                       value={`option:${o.id}`}
                       keywords={[o.name]}
-                      onSelect={() => { onChange(o.id); setOpen(false); setSearch(""); }}
-                      data-checked={o.id === value ? "true" : undefined}
-                      className="text-[13px] text-foreground/80 cursor-pointer transition-all duration-150"
+                      onSelect={() => selectOption(o.id)}
+                      data-checked={(props.multiple ? props.value.includes(o.id) : o.id === props.value) ? "true" : undefined}
+                      {...(props.multiple ? { "aria-selected": props.value.includes(o.id) } : {})}
+                      className="data-[checked=true]:hover:bg-primary/25 data-[checked=true]:data-selected:bg-primary/25 data-selected:inset-ring-1 data-selected:inset-ring-primary/40 min-h-9 max-[600px]:min-h-11 text-[13px] text-foreground cursor-pointer transition-[background-color,color,box-shadow] duration-[var(--sp-motion-fast)] active:bg-primary/20 motion-reduce:transition-none"
                     >
-                      {o.name}
+                      <span className="min-w-0 flex-1 whitespace-normal break-words">{o.content ?? o.name}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

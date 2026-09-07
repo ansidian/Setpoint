@@ -7,7 +7,7 @@
 .reader-triage-disclosure svg { transition: transform 160ms ease-out; }
 .reader-triage-disclosure[aria-expanded="true"] svg { transform: rotate(180deg); }
 .reader-triage-disclosure:hover { color: #e3e6f5; background: #ffffff06; }
-.reader-triage-disclosure:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 3px; }
+.reader-triage-disclosure:focus-visible:where([data-sp-keyboard-focus="true"] *) { outline: 2px solid var(--sp-accent); outline-offset: 3px; }
 .reader-triage-disclosure:active { color: var(--sp-accent); background: #ffffff0c; }
 .reader-triage-details { padding-top: 10px; color: #a6adc8; font-size: 11px; line-height: 1.75; }
 .reader-triage-details dl { margin: 0; display: grid; gap: 6px; }
@@ -18,6 +18,6 @@
 .reader-triage-details p { margin: 10px 0 0; }
 @media (prefers-reduced-motion: reduce) { .reader-triage-disclosure, .reader-triage-disclosure svg { transition: none; } }
 
-.reader-triage-disclosure:hover, .reader-triage-disclosure:focus-visible { transform: translateY(-1px); }
+.reader-triage-disclosure:hover, .reader-triage-disclosure:focus-visible:where([data-sp-keyboard-focus="true"] *) { transform: translateY(-1px); }
 .reader-triage-disclosure:active { transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) { .reader-triage-disclosure:hover, .reader-triage-disclosure:focus-visible, .reader-triage-disclosure:active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .reader-triage-disclosure:hover, .reader-triage-disclosure:focus-visible:where([data-sp-keyboard-focus="true"] *), .reader-triage-disclosure:active { transform: none; } }

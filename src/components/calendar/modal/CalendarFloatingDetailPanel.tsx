@@ -48,7 +48,7 @@ export default function CalendarFloatingDetailPanel({
   children,
   calendarPanelRef,
   railRef,
-  suppressFocusRing = false,
+
   onClose,
   onUserDraggedChange,
 }: {
@@ -61,7 +61,7 @@ export default function CalendarFloatingDetailPanel({
   children?: ReactNode;
   calendarPanelRef: RefObject<HTMLElement | null>;
   railRef: RefObject<HTMLElement | null>;
-  suppressFocusRing?: boolean;
+
   onClose?: () => void;
   onUserDraggedChange?: (dragged: boolean, placementKey: string) => void;
 }) {
@@ -139,9 +139,7 @@ export default function CalendarFloatingDetailPanel({
       <Motion.div
         ref={panelRef}
         data-calendar-floating-detail="true"
-        data-calendar-suppress-focus-ring={
-          suppressFocusRing ? "true" : undefined
-        }
+
         data-forced-side={detail?.forcedSide || undefined}
         data-side-intent={detail?.sideIntent || "auto"}
         data-testid="calendar-floating-detail-panel"

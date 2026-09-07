@@ -85,19 +85,24 @@ describe("dashboard shell model", () => {
     });
   });
 
-  it("resolves shell hotkeys and g-chords as commands", () => {
+  it("resolves shell hotkeys without the removed creation chords", () => {
     expect(resolveDashboardShellHotkey({ key: "k", metaKey: true })).toEqual({ action: "open-palette" });
-    expect(resolveDashboardShellHotkey({ key: "g" })).toEqual({ action: "start-g-chord" });
-    expect(resolveDashboardShellHotkey({ key: "t", actionChord: "g" })).toEqual({
-      action: "open-deadline-create",
-      clearChord: true,
-    });
-    expect(resolveDashboardShellHotkey({ key: "c", actionChord: "g" })).toEqual({
-      action: "open-event-create",
-      clearChord: true,
-    });
+    for (const key of ["g", "e", "t", "c"]) {
+      expect(resolveDashboardShellHotkey({ key })).toEqual({ action: "ignore" });
+    }
     expect(resolveDashboardShellHotkey({ key: "a" })).toEqual({ action: "toggle-analytics" });
     expect(resolveDashboardShellHotkey({ key: "y" })).toEqual({ action: "toggle-history" });
+  });
+
+  it("reserves A for selected email triage only while Inbox is active", () => {
+    expect(resolveDashboardShellHotkey({ key: "a", activeTab: "inbox", emailSelected: true }))
+      .toEqual({ action: "ignore" });
+    expect(resolveDashboardShellHotkey({ key: "A", activeTab: "inbox", emailSelected: true }))
+      .toEqual({ action: "ignore" });
+    expect(resolveDashboardShellHotkey({ key: "a", activeTab: "inbox", emailSelected: false }))
+      .toEqual({ action: "toggle-analytics" });
+    expect(resolveDashboardShellHotkey({ key: "a", activeTab: "dashboard", emailSelected: true }))
+      .toEqual({ action: "toggle-analytics" });
   });
 
   it("builds dashboard deadline and bill calendar requests through stable shell commands", () => {
@@ -141,12 +146,11 @@ describe("dashboard shell model", () => {
     });
   });
 
-  it("clears action chords from editable targets instead of dispatching commands", () => {
+  it("ignores shell commands from editable targets", () => {
     expect(resolveDashboardShellHotkey({
-      key: "t",
-      actionChord: "g",
+      key: "a",
       editableTarget: true,
-    })).toEqual({ action: "clear-chord" });
+    })).toEqual({ action: "ignore" });
   });
 
   it("ignores single-key shell commands already claimed by a focused workspace", () => {
@@ -182,14 +186,6 @@ describe("dashboard shell model", () => {
       expect(resolveDashboardShellHotkey({
         key: "a", anyBlockingOverlayOpen: true, historyOpen: true,
       })).toEqual({ action: "ignore" });
-    });
-
-    it("clears an in-flight g-chord instead of firing it while an overlay is open", () => {
-      expect(resolveDashboardShellHotkey({
-        key: "t",
-        actionChord: "g",
-        anyBlockingOverlayOpen: true,
-      })).toEqual({ action: "clear-chord" });
     });
 
     it("keeps ⌘K and Alfred ⌘\\ working over a blocking overlay (Escape is never a command)", () => {

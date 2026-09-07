@@ -175,17 +175,8 @@
   gap: 10px;
 }
 
-.calendar-recurrence-section__select-trigger {
-  transition: background 140ms, border-color 140ms, transform 140ms !important;
-}
-
-.calendar-recurrence-section__select-option {
-  transition: background 120ms, color 120ms, transform 120ms !important;
-}
-
 @media (hover: hover) {
-  .calendar-event-recurrence-picker__preset:not(:disabled):hover,
-  .calendar-recurrence-section__select-trigger:not(:disabled):hover {
+  .calendar-event-recurrence-picker__preset:not(:disabled):hover {
     border-color: rgba(255, 255, 255, 0.14) !important;
     background: rgba(255, 255, 255, 0.075) !important;
     transform: translateY(-1px);
@@ -207,10 +198,6 @@
     background: color-mix(in srgb, var(--sp-accent) 20%, transparent) !important;
   }
 
-  .calendar-recurrence-section__select-option:hover {
-    transform: translateX(2px);
-  }
-
   .calendar-event-recurrence-picker__done:hover {
     background: color-mix(in srgb, var(--ea-accent) 84%, white);
     box-shadow: 0 5px 16px color-mix(in srgb, var(--ea-accent) 20%, transparent);
@@ -218,11 +205,11 @@
   }
 }
 
-.calendar-event-recurrence-picker button:focus-visible,
-.calendar-recurrence-section button:focus-visible,
-.calendar-recurrence-section input:focus-visible {
+.calendar-event-recurrence-picker button:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.calendar-recurrence-section button:focus-visible:where([data-sp-keyboard-focus="true"] *),
+.calendar-recurrence-section input:focus-visible:where([data-sp-keyboard-focus="true"] *) {
   outline: 2px solid color-mix(in srgb, var(--ea-accent) 75%, white) !important;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .calendar-event-recurrence-picker button:active:not(:disabled),

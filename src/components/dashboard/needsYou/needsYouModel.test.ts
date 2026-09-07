@@ -36,26 +36,29 @@ const deadlines: { upcoming: NeedsYouDeadline[] } = {
 };
 const bills: NeedsYouBill[] = [
   { id: "rent", name: "Rent — Northstar Lofts", payee: "Northstar", amount: 2450, next_date: "2026-06-19", paid: false }, // due today
-  { id: "electric", name: "Demo Electric", payee: "Demo Electric", amount: 146.32, next_date: "2026-06-23", paid: false }, // future → backfill
+  { id: "electric", name: "Demo Electric", payee: "Demo Electric", amount: 146.32, next_date: "2026-06-23", paid: false }, // future bill stays outside Needs You
 ];
 
+// Include financial context to prove it never becomes an action candidate.
+const billContext = { liveBills: bills };
+
 describe("buildNeedsYouModel count", () => {
-  it("counts urgent emails + overdue/due-today deadlines + due-today unpaid bills", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills });
-    expect(m.countN).toBe(5);
+  it("counts urgent emails and overdue/due-today deadlines only", () => {
+    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext });
+    expect(m.countN).toBe(4);
   });
 
   it("is empty when no urgent items", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [] }, liveBills: [] });
+    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [] } });
     expect(m.countN).toBe(0);
     expect(m.urgentCards).toEqual([]);
   });
 });
 
 describe("buildNeedsYouModel breakdown + cards", () => {
-  it("interleaves urgent cards by rank: overdue deadline, due-today bill, due-today deadline, then emails; capped at maxCards", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills, maxCards: 5 });
-    expect(m.urgentCards.map((c) => c.id)).toEqual(["deadline:pr", "bill:rent", "deadline:demolink", "email:1", "email:2"]);
+  it("interleaves urgent cards by rank: overdue deadline, due-today deadline, then emails; capped at maxCards", () => {
+    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext, maxCards: 4 });
+    expect(m.urgentCards.map((c) => c.id)).toEqual(["deadline:pr", "deadline:demolink", "email:1", "email:2"]);
     expect(m.urgentCards.every((c) => c.kind === "urgent")).toBe(true);
     expect(m.backfillCards).toEqual([]);
     expect(m.moreCount).toBe(0);
@@ -65,31 +68,30 @@ describe("buildNeedsYouModel breakdown + cards", () => {
     const m = buildNeedsYouModel({
       snapshotLanes: lanes({ needs_attention: [lanes().needs_attention[0]!] }),
       liveDeadlines: { upcoming: [deadlines.upcoming[2]!] },
-      liveBills: [bills[1]!],
       maxCards: 5,
     });
     expect(m.urgentCards.map((c) => c.id)).toEqual(["email:1"]);
-    expect(m.backfillCards.length).toBe(2);
+    expect(m.backfillCards.length).toBe(1);
     expect(m.backfillCards[0]!.kind).toBe("backfill");
-    expect(m.backfillCards.map((c) => c.title)).toEqual(["Walkthrough notes", "Demo Electric"]);
+    expect(m.backfillCards.map((c) => c.title)).toEqual(["Walkthrough notes"]);
   });
 
   it("shows every urgent card and appends at most two future cards in an unbounded rail", () => {
     const m = buildNeedsYouModel({
       snapshotLanes: lanes(),
       liveDeadlines: deadlines,
-      liveBills: bills,
+      ...billContext,
       maxCards: Infinity,
     });
 
-    expect(m.urgentCards).toHaveLength(5);
-    expect(m.backfillCards.map((card) => card.title)).toEqual(["Walkthrough notes", "Demo Electric"]);
+    expect(m.urgentCards).toHaveLength(4);
+    expect(m.backfillCards.map((card) => card.title)).toEqual(["Walkthrough notes"]);
     expect(m.moreCount).toBe(0);
   });
 
   it("emits moreCount/+N and suppresses backfill when urgent items overflow maxCards", () => {
     const manyEmails: CompleteNeedsYouLanes = { needs_attention: Array.from({ length: 6 }, (_, i): NeedsYouEmail => ({ id: 100 + i, snapshot_item_id: 100 + i, uid: `e${i}`, lane: "needs_attention", from: `S${i}`, subject: `Email ${i}`, read: false, urgency: "high" })), fyi: [], carryover: [] };
-    const m = buildNeedsYouModel({ snapshotLanes: manyEmails, liveDeadlines: { upcoming: [deadlines.upcoming[2]!] }, liveBills: [], maxCards: 5 });
+    const m = buildNeedsYouModel({ snapshotLanes: manyEmails, liveDeadlines: { upcoming: [deadlines.upcoming[2]!] }, maxCards: 5 });
     expect(m.urgentCards.length).toBe(5);
     expect(m.moreCount).toBe(1);
     expect(m.backfillCards).toEqual([]);
@@ -97,28 +99,28 @@ describe("buildNeedsYouModel breakdown + cards", () => {
 });
 
 describe("collectNeedsYouCandidateIds", () => {
-  it("includes ids for urgent emails, deadlines, bills, and backfill items — including ids currently in handled", () => {
+  it("includes ids for urgent emails and deadlines — including ids currently in handled", () => {
     // handled/opened must NOT be threaded into the candidate collection: the
     // whole point is to compute the full server-derived id universe BEFORE the
     // handled filters remove anything, so a previously-handled-but-re-surfaced
     // id is still recognized as a live candidate.
-    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills });
-    // Urgent: overdue/due-today deadlines, due-today bills, urgent emails.
+    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext });
+    // Urgent: overdue/due-today deadlines, urgent emails.
     expect(ids.has("deadline:pr")).toBe(true);
     expect(ids.has("email:1")).toBe(true);
     expect(ids.has("email:2")).toBe(true);
-    expect(ids.has("bill:rent")).toBe(true);
+    expect(ids.has("bill:rent")).toBe(false);
     expect(ids.has("deadline:demolink")).toBe(true);
-    // Backfill (future, not yet urgent): deadline:later + bill:electric.
+    // Backfill (future, not yet urgent): deadline:later; bills never become candidates.
     expect(ids.has("deadline:later")).toBe(true);
-    expect(ids.has("bill:electric")).toBe(true);
+    expect(ids.has("bill:electric")).toBe(false);
   });
 
   it("still returns an id that the handled filter would otherwise have removed", () => {
     const emailId = `email:${lanes().needs_attention[0]!.id}`;
-    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills });
+    const ids = collectNeedsYouCandidateIds({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext });
     // Sanity: buildNeedsYouModel WOULD drop this id from urgentCards when handled.
-    const modelWithHandled = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, liveBills: bills, handled: [emailId] });
+    const modelWithHandled = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: deadlines, ...billContext, handled: [emailId] });
     expect(modelWithHandled.urgentCards.find((c) => c.id === emailId)).toBeUndefined();
     // But the candidate set still contains it — pruning is keyed off this, not the model.
     expect(ids.has(emailId)).toBe(true);
@@ -129,23 +131,23 @@ describe("collectNeedsYouCandidateIds", () => {
 describe("buildNeedsYouModel email open/handled transitions + inbox rows", () => {
   it("keeps a READ but unhandled needs-attention email in the band — reading alone does not clear it", () => {
     const readLanes = lanes({ needs_attention: [{ ...lanes().needs_attention[0]!, read: true }] });
-    const m = buildNeedsYouModel({ snapshotLanes: readLanes, liveDeadlines: { upcoming: [] }, liveBills: [] });
+    const m = buildNeedsYouModel({ snapshotLanes: readLanes, liveDeadlines: { upcoming: [] } });
     const card = m.urgentCards.find((c) => c.email);
     expect(card).toBeTruthy();
     expect(card!.id).toBe("email:1");
     expect(card!.opened).toBe(true);
   });
 
-  it("marks deadline cards completable (real completion) and bill cards not", () => {
-    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: deadlines, liveBills: bills });
+  it("keeps deadline completion available without admitting bills", () => {
+    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: deadlines, ...billContext });
     expect(m.urgentCards.find((c) => c.id === "deadline:pr")!.completable).toBe(true);
-    expect(m.urgentCards.find((c) => c.id === "bill:rent")!.completable).toBe(false);
+    expect(m.urgentCards.find((c) => c.id === "bill:rent")).toBeUndefined();
   });
 
   it("Mark handled removes the email from BOTH the band and the inbox peek", () => {
-    const base = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [] });
+    const base = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] } });
     const handledId = base.urgentCards.find((c) => c.email)!.id;
-    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [], handled: [handledId] });
+    const m = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, handled: [handledId] });
     expect(m.urgentCards.find((c) => c.id === handledId)).toBeUndefined();
     expect(m.inboxRows.find((r) => r.id === handledId)).toBeUndefined();
   });

@@ -1,13 +1,7 @@
 import { useState } from "react";
-import { BellRing, Play, Volume2 } from "lucide-react";
+import { BellRing, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import Dropdown from "@/components/shared/Dropdown";
 import { FieldHint, SectionLabel, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
@@ -25,9 +19,6 @@ import type { SettingsCardStateProps } from "../settingsTypes";
 import { playTriageNotificationSound } from "@/lib/triageSoundPlayback";
 import { cn } from "@/lib/utils";
 import type { TriageSoundLaneScope, TriageSoundSettings, TriageSoundTriggerKey, TriageSoundTriggerSetting } from "@/lib/triageSoundSettings";
-
-const SELECT_CONTENT_CLASS = "bg-[var(--sp-panel)] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
-const SELECT_TRIGGER_CLASS = "h-8 w-full min-w-[150px] bg-input/30 text-[12px] transition-colors hover:bg-input/50";
 
 const LANE_SCOPE_OPTIONS = [
   {
@@ -74,23 +65,12 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
               <SectionLabel className="mb-1">Finalized lane scope</SectionLabel>
               <FieldHint>Choose which finalized lanes can play sound.</FieldHint>
             </div>
-            <Select
+            <Dropdown
+              ariaLabel="Finalized lane scope"
               value={soundSettings.laneScope}
-              onValueChange={(value) => {
-                if (value) applySoundSettings({ ...soundSettings, laneScope: value as TriageSoundLaneScope });
-              }}
-            >
-              <SelectTrigger className={SELECT_TRIGGER_CLASS} aria-label="Finalized lane scope">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="end" className={SELECT_CONTENT_CLASS}>
-                {LANE_SCOPE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value} className="text-[13px]">
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={value => applySoundSettings({ ...soundSettings, laneScope: value as TriageSoundLaneScope })}
+              options={LANE_SCOPE_OPTIONS.map(option => ({ id: option.value, name: option.label }))}
+            />
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel className="mb-0">Volume</SectionLabel>
@@ -141,24 +121,12 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
                   </span>
                 </label>
 
-                <Select
+                <Dropdown
+                  ariaLabel={`${row.label} sound`}
                   value={trigger.soundId}
-                  onValueChange={(soundId) => {
-                    if (soundId) updateTrigger(row.key, { soundId });
-                  }}
-                >
-                  <SelectTrigger className={SELECT_TRIGGER_CLASS} aria-label={`${row.label} sound`}>
-                    <Volume2 size={13} className="text-primary/75" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="end" className={SELECT_CONTENT_CLASS}>
-                    {sounds.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.id} className="text-[13px]">
-                        {entry.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={soundId => updateTrigger(row.key, { soundId })}
+                  options={sounds.map(entry => ({ id: entry.id, name: entry.label || entry.id }))}
+                />
 
                 <Button
                   type="button"
