@@ -116,7 +116,7 @@ function writeJson(value: unknown): string {
   return result;
 }
 
-function documentFromRow(row: Row): FinancialDocument {
+export function documentFromRow(row: Row): FinancialDocument {
   return {
     id: Number(row.id), userId: String(row.user_id), accountId: String(row.account_id),
     emailUid: String(row.email_uid), revision: Number(row.revision),
@@ -136,7 +136,7 @@ function documentFromRow(row: Row): FinancialDocument {
   };
 }
 
-function eventFromRow(row: Row, documents: FinancialDocument[]): FinancialEvent {
+export function eventFromRow(row: Row, documents: FinancialDocument[]): FinancialEvent {
   return {
     id: String(row.id), userId: String(row.user_id), revision: Number(row.revision),
     status: String(row.status) as EventStatus, attempts: Number(row.attempts),

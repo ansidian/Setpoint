@@ -35,6 +35,7 @@ function transferInput(item: ClaimedItem): ActualTransferScheduleInput | null {
     fromAccountId: item.actualAccountId!, toAccountId: plan.targets.toAccount.id,
     date: item.date, amountCents: -item.amountCents!, name: item.payee,
     budgetId: plan.transferExecution?.budgetId,
+    preparedEvidence: item.preparedEvidence,
   };
 }
 
@@ -92,6 +93,12 @@ export async function processTransferImportItem(item: ClaimedItem, {
         return false;
       }
       const attemptedAt = new Date(now()).toISOString();
+      const preview = await execute(item.userId, input, "preview");
+      if (preview.outcome !== "would_create") return await settle(preview);
+      if (preview.evidence && item.originalAttemptedAt == null) {
+        if (!await store.admitOriginalImport(item, preview.evidence)) return false;
+        input.preparedEvidence = preview.evidence;
+      }
       if (!await store.markTransferAttempt(item.userId, item.id, item.claimToken, attemptedAt)) return false;
       item.financialPlan = { ...item.financialPlan, transferExecution: { budgetId: input.budgetId, attemptedAt } };
       attempted = true;
@@ -122,6 +129,7 @@ export async function processTransferImportItem(item: ClaimedItem, {
       status, financialPlan: plan, automaticSafe: plan.automation.eligible,
       reconciliationStatus: status === "added" ? "added" : status === "already_present" ? "already_present" : result.outcome === "would_create" ? "would_add" : null,
       lastError: status === "needs_review" ? result.reason : null,
+      actualResult: result,
     });
     if (settled) {
       await store.persistFinancialPlanForEmail(item.userId, item.gmailAccountId, item.emailUid, plan).catch(() => undefined);

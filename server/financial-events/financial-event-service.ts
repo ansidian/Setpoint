@@ -232,7 +232,9 @@ export function createFinancialEventWorker({
         await settle(event, plan, "waiting", "The current Actual check has not established a safe operation.");
         return true;
       }
-      const bound = bindFinancialEventOperation(operation, preview);
+      const bound = { ...bindFinancialEventOperation(operation, preview), sourceEvidence: event.documents.map((document) => ({
+        emailUid: document.emailUid, revision: document.revision, contentHash: document.contentHash, candidate: document.candidate,
+      })) };
       if (!await store.admitOperation(event, bound, plan)) {
         await settle(event, plan, "waiting", "New source evidence arrived; the operation will be checked again.");
         return true;

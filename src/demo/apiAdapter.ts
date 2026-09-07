@@ -10,6 +10,7 @@ import { demoDateRange } from "./dateRange.ts";
 import { buildDemoCalendarBillsRange } from "./financeData.ts";
 import { handleDemoNewsRequest } from "./newsAdapter.ts";
 import { getDemoReferenceResponse, NO_DEMO_REFERENCE_RESPONSE } from "./referenceAdapter.ts";
+import { handleDemoFinancialActivity } from "./financialActivity.ts";
 import { handleDemoSnapshotRequest } from "./snapshotAdapter.ts";
 import { forkDemoSeedForMutation, getDemoSeed, pacificYMD, readDemoSeed, type DemoSeed } from "./store.ts";
 import { getDemoCapabilityStatus, getDemoInstanceCredentialMetadata } from "./capabilities.ts";
@@ -285,7 +286,6 @@ function searchCalendar({ scope, q, limit }: { scope: string; q: string; limit: 
     truncated: all.length > cappedLimit,
   };
 }
-
 export async function handleDemoApiRequest(path: string, options: RequestInit = {}): Promise<unknown> {
   const url = route(path);
   const pathname = url.pathname;
@@ -294,7 +294,7 @@ export async function handleDemoApiRequest(path: string, options: RequestInit = 
   const targetedRefresh = pathname === "/api/dashboard/current/refresh" && method === "POST" && body.source != null;
   const readOnlyPost = !targetedRefresh && (pathname === "/api/dashboard/current/refresh" || pathname === "/api/dashboard/current/sync");
   const seed = method === "GET" || readOnlyPost ? getDemoSeed() : forkDemoSeedForMutation();
-
+  if (pathname === "/api/briefing/financial-activity" || pathname.startsWith("/api/briefing/financial-activity/")) return handleDemoFinancialActivity(url, method);
   const referenceResponse = getDemoReferenceResponse({ pathname, method, seed });
   if (referenceResponse !== NO_DEMO_REFERENCE_RESPONSE) return referenceResponse;
   const transactionImportResponse = handleDemoTransactionImportRequest({ pathname, method, url, body, seed });

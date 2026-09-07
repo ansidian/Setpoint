@@ -1,4 +1,6 @@
 import actualApi from "@actual-app/api";
+import { runActualTransactionImport } from "./actualTransactionImportModel.ts";
+import { readOriginalTransactions } from "./actualOriginalEvidence.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTestTempDir, removeTempDir } from "../test-utils/temp-dir.ts";
 import { reconcileActualFinancialOperation, type ActualFinancialSdk } from "./actualFinancialOperations.ts";
@@ -34,8 +36,12 @@ describe("Actual financial operation SDK compatibility", () => {
       fromAccountId, toAccountId, amountCents: 12_345, date: "2026-09-05", notes: "Verified completed payment",
     };
     const now = new Date("2026-09-06T12:00:00Z");
-    expect(await reconcileActualFinancialOperation(sdk, "isolated-budget", input, "preview", now)).toMatchObject({ outcome: "would_add" });
-    expect(await reconcileActualFinancialOperation(sdk, "isolated-budget", input, "write_once", now)).toMatchObject({ outcome: "added" });
+    const transferPreview = await reconcileActualFinancialOperation(sdk, "isolated-budget", input, "preview", now);
+    expect(transferPreview).toMatchObject({ outcome: "would_add" });
+    const transferResult = await reconcileActualFinancialOperation(sdk, "isolated-budget", { ...input, preparedEvidence: transferPreview.evidence }, "write_once", now);
+    expect(transferResult).toMatchObject({ outcome: "added" });
+    expect(transferResult.evidence?.objects.map((object) => object.role)).toEqual(["primary", "counterpart"]);
+    expect(transferResult.evidence?.objects.every((object) => object.provenance === "created")).toBe(true);
     const source = await actualApi.getTransactions(fromAccountId, input.date, input.date);
     const destination = await actualApi.getTransactions(toAccountId, input.date, input.date);
     expect(source).toHaveLength(1);
@@ -57,7 +63,15 @@ describe("Actual financial operation SDK compatibility", () => {
     const update = { ...utility, identityKey: "isolated-next-statement", scheduleId: created.scheduleId, amountCents: -9_850, date: "2026-10-28", categoryId: "removed-category" };
     const preview = await reconcileActualFinancialOperation(sdk, "isolated-budget", update, "preview", now);
     expect(preview).toMatchObject({ outcome: "would_update", scheduleId: created.scheduleId });
-    expect(await reconcileActualFinancialOperation(sdk, "isolated-budget", { ...update, expectedScheduleFingerprint: preview.scheduleFingerprint }, "write_once", now)).toMatchObject({ outcome: "updated", scheduleId: created.scheduleId });
+    const updated = await reconcileActualFinancialOperation(sdk, "isolated-budget", {
+      ...update, expectedScheduleFingerprint: preview.scheduleFingerprint, preparedEvidence: preview.evidence,
+    }, "write_once", now);
+    expect(updated).toMatchObject({ outcome: "updated", scheduleId: created.scheduleId });
+    expect(updated.evidence?.objects.map((object) => object.kind).sort()).toEqual(["rule", "schedule", "schedule_next_date"]);
+    const priorRule = preview.evidence?.objects.find((object) => object.kind === "rule")?.before;
+    expect(updated.evidence?.objects.find((object) => object.kind === "rule")?.before).toEqual(priorRule);
+    expect(updated.evidence?.objects.every((object) => object.beforeState === "captured")).toBe(true);
+    expect(updated.evidence?.objects.find((object) => object.kind === "rule")?.after).not.toEqual(priorRule);
     expect(await actualApi.getSchedules()).toEqual([expect.objectContaining({ id: created.scheduleId, amount: -9_850, date: "2026-10-28" })]);
     expect((await actualApi.getRules()).some((rule) => rule.actions.some((action) => "field" in action && action.field === "category" && action.value === categoryId))).toBe(true);
     expect(await actualApi.getTransactions(fromAccountId, "2026-09-01", "2026-10-31")).toHaveLength(1);
@@ -99,4 +113,34 @@ describe("Actual financial operation SDK compatibility", () => {
     expect((await actualApi.getTransactions(fromAccountId, "2020-05-10", "2020-05-10"))
       .find((row) => row.amount === -789)?.category).toBe(categoryId);
   }, 30_000);
+  it("receipts exact grouped-import IDs and raw cents and rejects a changed prepared target", async () => {
+    dataDir = await createTestTempDir("actual-original-import-");
+    const internal = await actualApi.init({ dataDir, verbose: false });
+    started = true;
+    await internal.send("create-budget", { budgetName: "Original import receipts", avoidUpload: true });
+    const accountId = await actualApi.createAccount({ name: "Fictional checking", offbudget: false });
+    const sdk = actualApi as unknown as ActualFinancialSdk;
+    const input = { groups: [{ accountId, transactions: [{ itemId: "one", importedId: "receipt-one", date: "2026-09-06",
+      amountCents: -1234, payee: "Fictional shop", notes: "Original" }] }],
+      sync: async () => undefined,
+      evidenceAccess: { budgetId: "isolated", readTransactions: (id: string) => readOriginalTransactions(sdk, id) },
+      importTransactions: sdk.importTransactions.bind(sdk) };
+    const preview = await runActualTransactionImport({ ...input, dryRun: true });
+    const preparedEvidence = preview.groups[0]!.items[0]!.evidence!;
+    const groups = [{ accountId, transactions: input.groups[0]!.transactions.map((item) => ({ ...item, preparedEvidence })) }];
+    const result = await runActualTransactionImport({ ...input, groups, dryRun: false });
+    expect(result.groups[0]!.items[0]!.error).toBeNull();
+    expect(result.groups[0]!.items[0]).toMatchObject({ outcome: "added", evidence: { budgetId: "isolated", objects: [
+      { kind: "transaction", provenance: "created", beforeState: "confirmed_absent", before: null, after: { amount: -1234, financial_id: "receipt-one" } },
+    ] } });
+    const id = result.groups[0]!.items[0]!.evidence!.objects[0]!.id;
+    expect((await actualApi.getTransactions(accountId, "2026-09-06", "2026-09-06"))[0]?.id).toBe(id);
+    await expect(runActualTransactionImport({ ...input, groups, dryRun: false })).rejects.toMatchObject({ code: "ACTUAL_IMPORT_PREPARATION_CHANGED" });
+    expect(await actualApi.getTransactions(accountId, "2026-09-06", "2026-09-06")).toHaveLength(1);
+    const matched = await runActualTransactionImport({ ...input, dryRun: true });
+    expect(matched.groups[0]!.items[0]).toMatchObject({ outcome: "already_present", evidence: { objects: [
+      { id, provenance: "matched", before: { amount: -1234 }, after: { amount: -1234 } },
+    ] } });
+  }, 30_000);
+
 });

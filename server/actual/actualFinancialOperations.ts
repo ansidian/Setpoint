@@ -9,6 +9,7 @@ import type {
   ActualUtilityScheduleInput,
 } from "../../shared/types/financial-operations.ts";
 import { buildDateCondition } from "./actualCoreModel.ts";
+import { readOriginalResult, settleOriginalEvidence, type ActualEvidencePort } from "./actualOriginalEvidence.ts";
 import { runActualTransactionImport, type SdkImportResult, type SdkImportTransactionInput } from "./actualTransactionImportModel.ts";
 
 interface Query {
@@ -28,7 +29,7 @@ export interface ActualFinancialSdk {
   importTransactions(accountId: string, transactions: Array<SdkImportTransactionInput & { payee?: string }>, options: { dryRun: boolean }): Promise<SdkImportResult>;
   q(dataset: string): Query;
   runQuery(query: Query): Promise<{ data: unknown[] }>;
-  internal: { send(operation: string, payload: unknown): Promise<unknown> };
+  internal: ActualEvidencePort["internal"] & { send(operation: string, payload: unknown): Promise<unknown> };
 }
 interface TransactionRow {
   id: string;
@@ -312,6 +313,10 @@ async function utilitySchedule(
   if (selected && mode === "write_once" && input.expectedScheduleFingerprint !== scheduleFingerprint) {
     return review("The utility schedule changed after preview or has no verified preview.");
   }
+  if (mode === "write_once" && input.preparedEvidence) {
+    const current = await readOriginalResult(sdk, budgetId, { scheduleId: selected?.id || deterministicId });
+    if (JSON.stringify(current) !== JSON.stringify(input.preparedEvidence)) return review("The exact utility schedule graph changed after its durable preparation.");
+  }
   const desiredDate = rule ? buildDateCondition(rule.conditions, input.date) : { field: "date", op: "is", value: input.date };
   if (rule && typeof desiredDate.value === "object" && desiredDate.value?.frequency
     && (desiredDate.value.interval ?? 0) > 1 && selected?.next_date !== input.date) {
@@ -372,8 +377,12 @@ export async function reconcileActualFinancialOperation(
     return result("needs_review", "The Actual budget differs from the verified operation budget.");
   }
   await sdk.sync();
-  if (input.kind === "transaction") return transaction(sdk, input, mode, result);
-  return input.kind === "completed_transfer"
+  const observed = await (input.kind === "transaction" ? transaction(sdk, input, mode, result) : input.kind === "completed_transfer"
     ? completedTransfer(sdk, input, mode, result, now)
-    : utilitySchedule(sdk, budgetId, input, mode, result);
+    : utilitySchedule(sdk, budgetId, input, mode, result));
+  if (observed.outcome === "needs_review") return observed;
+  const evidence = await readOriginalResult(sdk, budgetId, observed);
+  return { ...observed, ...(evidence ? { evidence: mode === "preview" ? evidence
+    : settleOriginalEvidence(evidence, input.preparedEvidence,
+      observed.outcome === "added" ? "created" : observed.outcome === "updated" ? "updated" : mode === "recover" ? "unknown" : "matched") } : {}) };
 }

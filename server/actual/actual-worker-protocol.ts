@@ -12,6 +12,7 @@ export type ActualWorkerOperation =
   | "createQuickTxn"
   | "importTransactionGroups"
   | "reconcileTransferSchedule"
+  | "inspectOriginalImportBinding"
   | "reconcileFinancialOperation";
 
 export interface ActualWorkerRequest {
@@ -66,6 +67,7 @@ const OPERATIONS: ReadonlySet<string> = new Set<ActualWorkerOperation>([
   "createQuickTxn",
   "importTransactionGroups",
   "reconcileTransferSchedule",
+  "inspectOriginalImportBinding",
   "reconcileFinancialOperation",
 ]);
 

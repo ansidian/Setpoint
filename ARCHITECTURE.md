@@ -133,6 +133,7 @@ server/
 │   ├── search/
 │   │   └── evals/
 │   └── test-utils/
+├── financial-activity/
 ├── financial-events/
 ├── middleware/
 ├── news/
@@ -720,10 +721,16 @@ erDiagram
 | `ea_email_search_embedding_state` | `006_email_search_embedding_state.sql` |
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql`, `052_financial_email_plans.sql` |
+| `ea_financial_activity_aliases` | `063_financial_activity.sql` |
+| `ea_financial_activity_occurrences` | `063_financial_activity.sql` |
+| `ea_financial_actual_bindings` | `063_financial_activity.sql` |
 | `ea_financial_documents` | `062_financial_events.sql` |
 | `ea_financial_event_references` | `062_financial_events.sql` |
 | `ea_financial_events` | `062_financial_events.sql` |
+| `ea_financial_identity_backfill` | `063_financial_activity.sql` |
+| `ea_financial_identity_conflicts` | `063_financial_activity.sql` |
 | `ea_financial_intake_state` | `062_financial_events.sql` |
+| `ea_financial_original_receipts` | `063_financial_activity.sql` |
 | `ea_financial_workflow_state` | `062_financial_events.sql` |
 | `ea_gmail_pubsub_config` | `035_gmail_pubsub_config.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
@@ -749,7 +756,7 @@ erDiagram
 | `ea_todoist_projects` | `001_ea_tables.sql` |
 | `ea_todoist_sync_state` | `001_ea_tables.sql` |
 | `ea_todoist_webhook_deliveries` | `001_ea_tables.sql` |
-| `ea_transaction_import_items_before_transfer_automation` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql`, `056_generic_financial_email_automation.sql`, `058_generic_financial_email_income_automation.sql`, `059_generic_financial_email_transfer_automation.sql` |
+| `ea_transaction_import_items_before_transfer_automation` | `041_email_transaction_imports.sql`, `042_transaction_import_item_subject.sql`, `053_transaction_import_financial_plans.sql`, `055_generic_financial_email_imports.sql`, `056_generic_financial_email_automation.sql`, `058_generic_financial_email_income_automation.sql`, `059_generic_financial_email_transfer_automation.sql`, `063_financial_activity.sql` |
 | `ea_transaction_import_mappings` | `041_email_transaction_imports.sql` |
 | `ea_transaction_import_runs` | `041_email_transaction_imports.sql` |
 | `ea_triage_feedback` | `001_ea_tables.sql` |
@@ -879,6 +886,9 @@ The structural route table below is regenerated from `server/index.ts` and `serv
 | POST | `/api/briefing/email/remote-content-trust` | `server/routes/briefing/email.ts` |
 | DELETE | `/api/briefing/email/remote-content-trust/:id` | `server/routes/briefing/email.ts` |
 | GET | `/api/briefing/email/snoozed` | `server/routes/briefing/email.ts` |
+| GET | `/api/briefing/financial-activity` | `server/routes/briefing/financial-activity.ts` |
+| GET | `/api/briefing/financial-activity/:owner/:id` | `server/routes/briefing/financial-activity.ts` |
+| POST | `/api/briefing/financial-activity/binding` | `server/routes/briefing/financial-activity.ts` |
 | POST | `/api/briefing/financial-events/complete` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review` | `server/routes/briefing/transaction-imports.ts` |
 | GET | `/api/briefing/financial-events/review-changes` | `server/routes/briefing/transaction-imports.ts` |

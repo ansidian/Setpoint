@@ -1,6 +1,9 @@
+import type { FinancialWriteEvidence } from "./financial-activity.ts";
+
 interface ActualFinancialOperationBase {
   identityKey: string;
   budgetId?: string;
+  preparedEvidence?: FinancialWriteEvidence;
 }
 
 /** Owner-confirmed USD entry; amounts are positive dollars for every kind. */
@@ -61,6 +64,7 @@ export type ActualFinancialOperationInput = ActualCompletedTransferInput | Actua
 export type ActualFinancialOperationMode = "preview" | "write_once" | "recover";
 
 export interface ActualFinancialOperationResult {
+  evidence?: FinancialWriteEvidence;
   outcome: "would_add" | "would_update" | "added" | "updated" | "already_present" | "needs_review";
   reason: string;
   budgetId: string;

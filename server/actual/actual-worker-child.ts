@@ -22,6 +22,7 @@ const OPERATIONS = new Set([
   "createQuickTxn",
   "importTransactionGroups",
   "reconcileTransferSchedule",
+  "inspectOriginalImportBinding",
   "reconcileFinancialOperation",
 ].filter(isActualWorkerOperation));
 

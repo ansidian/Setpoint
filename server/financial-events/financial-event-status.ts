@@ -2,6 +2,14 @@ import { financialEventStore, createFinancialEventStore, readManagedFinancialEma
   type FinancialStatusDb, type FinancialDocument, type FinancialEvent } from "./financial-event-store.ts";
 import { completionBlocker } from "./financial-event-completion-model.ts";
 import type { FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
+import type { Row } from "@libsql/client";
+import { documentFromRow, eventFromRow } from "./financial-event-store.ts";
+
+/** Shared history hydrates a consistent saved snapshot through the managed owner. */
+export function hydrateManagedFinancialActivity(row: Row | null, sources: Row[]) {
+  const documents = sources.map(documentFromRow);
+  return { documents, event: row ? eventFromRow(row, documents) : null };
+}
 
 /** Read-only ownership boundary shared by legacy ingestion and Inbox status. */
 export function listManagedEmailUids(userId: string, uids: string[], { dbClient }: { dbClient?: FinancialStatusDb } = {}): Promise<string[]> {

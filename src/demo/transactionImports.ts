@@ -67,6 +67,8 @@ function needsReview(entry: TransactionImportItem) {
     || (entry.status === "ready" && !entry.confirmedAt && (entry.automationMode === "observe" || !entry.automaticSafe));
 }
 
+export function getDemoImportRuns(): TransactionImportRunDetail[] { return clone(runs); }
+
 export function getDemoFinanceActivity(): DashboardFinanceActivity {
   const items = runs.flatMap((run) => run.items);
   const review = items.filter(needsReview);

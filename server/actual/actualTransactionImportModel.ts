@@ -1,3 +1,5 @@
+import { transactionEvidence, settleOriginalEvidence } from "./actualOriginalEvidence.ts";
+import type { FinancialWriteEvidence } from "../../shared/types/financial-activity.ts";
 import type {
   ActualImportAccountGroup,
   ActualImportBatchResult,
@@ -21,8 +23,8 @@ export interface SdkImportResult {
   added?: string[];
   updated?: string[];
   updatedPreview?: Array<{
-    transaction?: { imported_id?: string | null };
-    existing?: { imported_id?: string | null };
+    transaction?: { imported_id?: string | null; id?: string };
+    existing?: { imported_id?: string | null; id?: string };
     ignored?: boolean;
     tombstone?: boolean;
   }>;
@@ -118,7 +120,9 @@ export async function runActualTransactionImport({
   dryRun,
   importTransactions,
   sync,
+  evidenceAccess,
 }: {
+  evidenceAccess?: { budgetId: string; readTransactions(accountId: string): Promise<Array<Record<string, unknown>>> };
   groups: ActualImportAccountGroup[];
   dryRun: boolean;
   importTransactions: (accountId: string, transactions: SdkImportTransactionInput[], options: { dryRun: boolean }) => Promise<SdkImportResult>;
@@ -127,17 +131,48 @@ export async function runActualTransactionImport({
   validateActualImportGroups(groups, dryRun);
   const projectedGroups: ActualImportBatchResult["groups"] = [];
   try {
+    if (evidenceAccess) await sync();
     for (const group of groups) {
       const transactions = group.transactions.map((transaction) => toSdkImportTransaction(group.accountId, transaction));
-      const result = await importTransactions(group.accountId, transactions, { dryRun });
-      projectedGroups.push({
-        accountId: group.accountId,
-        items: group.transactions.map((transaction) => ({
-          itemId: transaction.itemId,
-          importedId: transaction.importedId,
-          ...projectActualImportOutcome(transaction.importedId, result, dryRun),
-        })),
-      });
+      const beforeRows = evidenceAccess ? await evidenceAccess.readTransactions(group.accountId) : [];
+      const preview = evidenceAccess ? await importTransactions(group.accountId, transactions, { dryRun: true }) : null;
+      const prepared = new Map<string, FinancialWriteEvidence>();
+      for (const input of group.transactions) {
+        if (!evidenceAccess || !preview) continue;
+        const match = preview.updatedPreview?.find((entry) => entry.transaction?.imported_id === input.importedId);
+        const rows = beforeRows.filter((row) => row.acct === group.accountId
+          && (row.financial_id === input.importedId || (match?.existing?.id && row.id === match.existing.id)));
+        const live = rows.filter((row) => !row.tombstone);
+        if (rows.length > 1 || rows.some((row) => row.tombstone)
+          || (projectActualImportOutcome(input.importedId, preview, true).outcome !== "would_add" && live.length !== 1)) {
+          throw Object.assign(new Error("Actual import target cannot be identified exactly"), { code: "ACTUAL_IMPORT_IDENTITY_UNRESOLVED", status: 409 });
+        }
+        const evidence = { budgetId: evidenceAccess.budgetId, objects: live.flatMap((row) => transactionEvidence(beforeRows, row)) };
+        prepared.set(input.itemId, evidence);
+        if (!dryRun && JSON.stringify(input.preparedEvidence) !== JSON.stringify(evidence)) {
+          throw Object.assign(new Error("Actual import target changed after its durable preparation"), { code: "ACTUAL_IMPORT_PREPARATION_CHANGED", status: 409 });
+        }
+      }
+      const result = dryRun && preview ? preview : await importTransactions(group.accountId, transactions, { dryRun });
+      if (!dryRun && evidenceAccess) await sync();
+      const afterRows = !dryRun && evidenceAccess ? await evidenceAccess.readTransactions(group.accountId) : beforeRows;
+      projectedGroups.push({ accountId: group.accountId, items: group.transactions.map((input) => {
+        const projected = projectActualImportOutcome(input.importedId, result, dryRun);
+        const before = prepared.get(input.itemId);
+        if (!before) return { itemId: input.itemId, importedId: input.importedId, ...projected };
+        if (dryRun) return { itemId: input.itemId, importedId: input.importedId, ...projected,
+          evidence: input.preparedEvidence ? settleOriginalEvidence(before, input.preparedEvidence, "unknown") : before };
+        const exact = afterRows.filter((row) => !row.tombstone && row.acct === group.accountId && row.financial_id === input.importedId);
+        if (exact.length !== 1) return { itemId: input.itemId, importedId: input.importedId,
+          outcome: "failed" as const, error: "Actual import completed but its exact target could not be verified" };
+        const ids = new Set([...(result.added || []), ...(result.updated || [])]);
+        if (projected.outcome !== "already_present" && !ids.has(String(exact[0]!.id))) return {
+          itemId: input.itemId, importedId: input.importedId, outcome: "failed" as const,
+          error: "Actual returned no exact write result for this imported identity" };
+        return { itemId: input.itemId, importedId: input.importedId, ...projected,
+          evidence: settleOriginalEvidence({ budgetId: before.budgetId, objects: exact.flatMap((row) => transactionEvidence(afterRows, row)) }, before,
+            projected.outcome === "added" ? "created" : projected.outcome === "updated" ? "updated" : "matched") };
+      }) });
     }
   } catch (error) {
     if (isActualImportCompatibilityError(error)) {
@@ -160,5 +195,5 @@ export async function runActualTransactionImport({
       });
     }
   }
-  return { dryRun, groups: projectedGroups };
+  return { dryRun, groups: projectedGroups, ...(evidenceAccess ? { budgetId: evidenceAccess.budgetId } : {}) };
 }

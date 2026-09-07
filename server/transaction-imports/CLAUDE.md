@@ -12,6 +12,7 @@ Deterministic Gmail email-to-transaction parsing and bounded historical discover
 - `parsers/parser-registry.ts` — source routing, deterministic receipt ownership, and public parser entry point
 - `transaction-email-discovery.ts` — allowlisted Gmail historical-search adapter
 - `transaction-import-store.ts` — durable run, item, claim, recovery, recent-run, and per-email status persistence; bounded redacted dashboard activity and paginated pending-review runs; no mapping-table access
+- `transaction-import-activity.ts` — existing bounded dashboard activity and pending-run read projections
 - `transaction-import-store-projections.ts` — database-row projections for durable runs and items, including historical captured targets/modes
 - `transaction-import-planner-adapter.ts` — parser-candidate adaptation into the shared financial planner, planner-owned targets/rollout for new items, and redacted historical equivalence projection
 - `transaction-import-equivalence-report.ts` — read-only historical replay and redacted gate summary

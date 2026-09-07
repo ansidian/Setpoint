@@ -22,6 +22,7 @@ Build-time fictional walkthrough (`VITE_EA_DEMO=1`). `src/api.ts` routes demo re
 - `snapshotAdapter.ts` — in-memory snapshot history, mail actions, read state, and body/search responses.
 - `emailAttachments.ts` — local fictional attachment descriptors and content.
 - `emailAiUsageData.ts` — fictional email-AI usage and legacy triage statistics.
+- `financialActivity.ts` — shared fictional imported history plus managed completed, processing and uncertain examples; old-target binding stays inert
 - `financeData.ts` — shared fictional transactions, confirmed-import mutation, and calendar Bills range projection.
 - `dashboardFinance.ts` — spending comparisons and category totals derived from the shared seed plus import activity.
 - `transactionImports.ts` — fictional import runs/items, shared pending-review predicate, paginated pending runs, safe receipt bodies, and in-memory confirmation/retry/dismiss actions.

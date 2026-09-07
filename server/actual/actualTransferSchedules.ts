@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readOriginalResult, settleOriginalEvidence, type ActualEvidencePort } from "./actualOriginalEvidence.ts";
 import type { ActualAccount, ActualPayee, ActualScheduleCondition } from "../../shared/types/actual.ts";
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
 
@@ -15,7 +16,7 @@ interface TransferSdk {
   getRules(): Promise<Array<{ id: string; conditions?: ActualScheduleCondition[]; conditions_op?: string }>>;
   q(dataset: string): Query;
   runQuery(query: Query): Promise<{ data: unknown[] }>;
-  internal: { send(operation: string, payload: unknown): Promise<unknown> };
+  internal: ActualEvidencePort["internal"] & { send(operation: string, payload: unknown): Promise<unknown> };
 }
 interface ScheduleRow {
   id: string;
@@ -57,7 +58,7 @@ function availableScheduleName(input: ActualTransferScheduleInput, schedules: Sc
 // This operation is called inside actual-core's SDK lock. create_once is admitted
 // only after the import store has durably marked an attempt. Recovery never creates:
 // the SDK's rule/next-date/schedule inserts are not one atomic operation.
-export async function reconcileActualTransferSchedule(
+async function reconcileTransferScheduleOperation(
   sdk: TransferSdk,
   budgetId: string,
   input: ActualTransferScheduleInput,
@@ -153,8 +154,17 @@ export async function reconcileActualTransferSchedule(
     ],
   });
   // Verify the full synced object. A successful dispatch alone is not completion.
-  const confirmed = await reconcileActualTransferSchedule(sdk, budgetId, input, "recover", now);
+  const confirmed = await reconcileTransferScheduleOperation(sdk, budgetId, input, "recover", now);
   return confirmed.outcome === "already_scheduled" && confirmed.scheduleId === scheduleId
     ? { ...confirmed, outcome: "created", reason: "A future transfer schedule was created and synced." }
     : confirmed;
+}
+
+export async function reconcileActualTransferSchedule(sdk: TransferSdk, budgetId: string,
+  input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode, now = new Date()): Promise<ActualTransferScheduleResult> {
+  const result = await reconcileTransferScheduleOperation(sdk, budgetId, input, mode, now);
+  if (result.outcome === "needs_review") return result;
+  const evidence = await readOriginalResult(sdk, budgetId, result);
+  return { ...result, ...(evidence ? { evidence: mode === "preview" ? evidence
+    : settleOriginalEvidence(evidence, input.preparedEvidence, result.outcome === "created" ? "created" : mode === "recover" ? "unknown" : "matched") } : {}) };
 }

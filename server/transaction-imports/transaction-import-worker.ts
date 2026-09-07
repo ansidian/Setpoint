@@ -49,6 +49,7 @@ function itemGroups(items: ClaimedItem[]): ActualImportAccountGroup[] {
       payee: item.payee,
       notes: item.notes,
       categoryId: item.actualCategoryId,
+      ...(item.preparedEvidence ? { preparedEvidence: item.preparedEvidence } : {}),
     });
     groups.set(item.actualAccountId, group);
   }
@@ -238,6 +239,7 @@ export function createTransactionImportWorker({
           lastError: outcome.error,
           financialPlan,
           automaticSafe,
+          actualResult: outcome,
         });
         if (financialPlan && settled) {
           await store.persistFinancialPlanForEmail(
@@ -259,6 +261,7 @@ export function createTransactionImportWorker({
           status,
           reconciliationStatus: outcome.outcome,
           lastError: outcome.error,
+          actualResult: outcome,
         });
         await store.incrementRunOutcomes(item.userId, item.runId, {
           added: outcome.outcome === "added" ? 1 : 0,
@@ -292,13 +295,43 @@ export function createTransactionImportWorker({
       });
     }
     const valid = claimed.filter((item) => !invalid.includes(item));
-    const previewItems = valid.filter((item) => item.status === "reconciling");
-    const commitItems = valid.filter((item) => item.status === "importing");
+    const previewItems = valid.filter((item) => item.status === "reconciling" && item.originalAttemptedAt == null);
+    const recoveryItems = valid.filter((item) => item.originalAttemptedAt != null);
+    for (const item of recoveryItems) {
+      try {
+        const result = await importGroups(item.userId, itemGroups([item]), true);
+        for (const group of result.groups) for (const outcome of group.items) {
+          if (outcome.outcome !== "already_present") {
+            outcome.outcome = "failed";
+            outcome.error = "The previously attempted import cannot be verified. Review the exact Actual target.";
+          }
+        }
+        await applyResults([item], result);
+      } catch (error) { await settleImportFailure([item], error); }
+    }
+    const commitItems = valid.filter((item) => item.status === "importing" && item.originalAttemptedAt == null);
     for (const [items, dryRun] of [[previewItems, true], [commitItems, false]] as const) {
       if (!items.length) continue;
       try {
-        const result = await importGroups(items[0]!.userId, itemGroups(items), dryRun);
-        await applyResults(items, result);
+        let admitted = [...items];
+        if (!dryRun) {
+          const preparation = await importGroups(items[0]!.userId, itemGroups(items), true);
+          admitted = [];
+          for (const item of items) {
+            const outcome = preparation.groups.flatMap((group) => group.items).find((entry) => entry.itemId === item.id);
+            if (outcome?.outcome === "already_present" || outcome?.outcome === "failed") {
+              await applyResults([item], { ...preparation, groups: preparation.groups.map((group) => ({ ...group, items: group.items.filter((entry) => entry.itemId === item.id) })) });
+            } else if (outcome?.evidence) {
+              if (await store.admitOriginalImport(item, outcome.evidence)) {
+                item.preparedEvidence = outcome.evidence;
+                admitted.push(item);
+              }
+            } else admitted.push(item);
+          }
+        }
+        if (!admitted.length) continue;
+        const result = await importGroups(admitted[0]!.userId, itemGroups(admitted), dryRun);
+        await applyResults(admitted, result);
         if (!dryRun && result.groups.some((group) => group.items.some((item) => item.outcome === "added" || item.outcome === "updated"))) {
           await invalidateAfterCommit(items[0]!.userId).catch((error) => {
             console.error("[Transaction Imports] Post-import Actual invalidation failed:", conciseError(error));

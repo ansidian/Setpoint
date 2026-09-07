@@ -12,6 +12,15 @@ import type {
   TransactionImportSource,
 } from "../../shared/types/transaction-imports.ts";
 
+/** Shared semantic policy for historical and automatic activity inspection. */
+export function transactionImportActivityActions(item: TransactionImportItem) {
+  const attention = ["needs_review", "failed", "paused"].includes(item.status)
+    || (item.status === "ready" && item.confirmedAt == null && (item.automationMode === "observe" || !item.automaticSafe));
+  const attempted = item.originalAttemptedAt != null || !!item.financialPlan?.transferExecution?.attemptedAt;
+  return { attention, complete: attention && !attempted,
+    retry: ["failed", "paused"].includes(item.status) };
+}
+
 function numberValue(value: unknown): number {
   return Number(value || 0);
 }
@@ -58,6 +67,8 @@ export function projectTransactionImportRun(row: Row): TransactionImportRunSumma
 
 export function projectTransactionImportItem(row: Row): TransactionImportItem {
   return {
+    ...(row.prepared_actual_json ? { preparedEvidence: parseJson(row.prepared_actual_json, undefined) } : {}),
+    ...(row.original_attempted_at != null ? { originalAttemptedAt: Number(row.original_attempted_at) } : {}),
     id: String(row.id),
     runId: String(row.run_id),
     gmailAccountId: String(row.gmail_account_id),

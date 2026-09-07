@@ -1,3 +1,6 @@
+import { readOriginalTransactions } from "./actualOriginalEvidence.ts";
+import { readOriginalResult } from "./actualOriginalEvidence.ts";
+import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
 import { reconcileActualTransferSchedule } from "./actualTransferSchedules.ts";
 import { reconcileActualFinancialOperation } from "./actualFinancialOperations.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationMode } from "../../shared/types/financial-operations.ts";
@@ -100,7 +103,8 @@ interface ActualSdk extends ActualSdkSchedulePort {
   addTransactions(accountId: string, transactions: SdkTransactionInput[], options?: { runTransfers: boolean; learnCategories: boolean }): Promise<void>;
   importTransactions(accountId: string, transactions: SdkImportTransactionInput[], options: { dryRun: boolean }): Promise<SdkImportResult>;
   sync(): Promise<void>;
-  internal: { send(operation: string, payload: unknown): Promise<unknown> };
+  internal: { send(operation: string, payload: unknown): Promise<unknown>;
+    db?: { all(sql: string, parameters?: unknown[]): Promise<Array<Record<string, unknown>>> } };
 }
 
 const sdk = actualApi as unknown as ActualSdk;
@@ -468,10 +472,11 @@ export function importTransactionGroups(
   dryRun: boolean,
 ): Promise<ActualImportBatchResult> {
   return withLock(async () => {
-    return withActualBudget(userId, async () => {
+    return withActualBudget(userId, async (config) => {
       const result = await runActualTransactionImport({
         groups,
         dryRun,
+        evidenceAccess: { budgetId: config.syncId, readTransactions: (accountId) => readOriginalTransactions(sdk, accountId) },
         importTransactions: (accountId, transactions, options) => sdk.importTransactions(accountId, transactions, options),
         sync: () => sdk.sync(),
       });
@@ -479,6 +484,18 @@ export function importTransactionGroups(
       return result;
     });
   });
+}
+
+export function inspectOriginalImportBinding(userId: string, budgetId: string, accountId: string, importedId: string, targetId?: string): Promise<FinancialBindingInspection> {
+  return withLock(() => withActualBudget(userId, async (config) => {
+    if (config.syncId !== budgetId) return { status: "wrong_budget", evidence: null };
+    await sdk.sync();
+    const rows = targetId ? [] : (await readOriginalTransactions(sdk, accountId)).filter((row) => !row.tombstone && row.acct === accountId && row.financial_id === importedId);
+    if (!targetId && rows.length !== 1) return { status: rows.length ? "ambiguous" : "missing", evidence: null };
+    const evidence = await readOriginalResult(sdk, budgetId, { transactionId: targetId || String(rows[0]!.id) });
+    if (!evidence || !evidence.objects.length || evidence.objects.some((object) => object.after?.tombstone)) return { status: "missing", evidence: null };
+    return { status: "resolved", evidence: { budgetId, objects: evidence.objects.map((object) => ({ ...object, provenance: "unknown", before: null, beforeState: "unknown" })) } };
+  }));
 }
 
 export function reconcileTransferSchedule(userId: string, input: ActualTransferScheduleInput, mode: ActualTransferScheduleMode) {

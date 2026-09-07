@@ -7,6 +7,7 @@ import emailIndex from "./email-index.ts";
 import tasks from "./tasks.ts";
 import snapshot from "./snapshot.ts";
 import transactionImports from "./transaction-imports.ts";
+import financialActivity from "./financial-activity.ts";
 
 const router = Router();
 router.use(quickTxnRouter);
@@ -19,5 +20,6 @@ router.use(tasks);
 router.use(bills);
 router.use(snapshot);
 router.use(transactionImports);
+router.use(financialActivity);
 
 export default router;

@@ -1,4 +1,5 @@
 import type { SnoozedEmailEntry } from "../shared/types/email";
+export { listFinancialActivity, getFinancialActivity, inspectFinancialActivityBinding } from "./lib/financialActivityApi";
 import { isDemoMode } from "./demo/config.ts";
 import { apiFetch } from "./lib/apiFetch";
 import type { DashboardFinanceResponse, DashboardFinanceReviewRunsResponse } from "../shared/types/dashboard-finance.ts";

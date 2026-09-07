@@ -97,7 +97,7 @@ function attentionFor(row: Record<string, unknown>, canComplete: boolean, plan: 
   return "retrying";
 }
 
-function projectReviewItem(row: Record<string, unknown>): FinancialEventReviewItem {
+export function projectReviewItem(row: Record<string, unknown>): FinancialEventReviewItem {
   const plan = objectJson<FinancialEmailPlan>(row.plan_json);
   const confirmed = objectJson<FinancialOwnerCompletion>(row.owner_completion_json);
   const canComplete = !completionBlocker({

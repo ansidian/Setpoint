@@ -4,9 +4,9 @@ import type { FinancialEmailPlan } from "../../shared/types/bills.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import type { ActualTransferScheduleInput } from "../../shared/types/transaction-imports.ts";
 
-export type FinancialEventOperation =
+export type FinancialEventOperation = { sourceEvidence?: unknown[] } & (
   | { executor: "financial"; input: ActualFinancialOperationInput }
-  | { executor: "transfer_schedule"; input: ActualTransferScheduleInput };
+  | { executor: "transfer_schedule"; input: ActualTransferScheduleInput });
 
 export function buildFinancialEventOperation(eventId: string, plan: FinancialEmailPlan): FinancialEventOperation | null {
   const candidate = plan.candidate;
@@ -43,11 +43,11 @@ export function buildFinancialEventOperation(eventId: string, plan: FinancialEma
 
 export function bindFinancialEventOperation(operation: FinancialEventOperation, preview: ActualFinancialOperationResult): FinancialEventOperation {
   if (operation.executor === "financial" && operation.input.kind === "utility_schedule") {
-    return { ...operation, input: { ...operation.input, budgetId: preview.budgetId,
+    return { ...operation, input: { ...operation.input, budgetId: preview.budgetId, preparedEvidence: preview.evidence,
       ...(preview.scheduleId ? { scheduleId: preview.scheduleId } : {}),
       ...(preview.scheduleFingerprint ? { expectedScheduleFingerprint: preview.scheduleFingerprint } : {}) } };
   }
-  return { ...operation, input: { ...operation.input, budgetId: preview.budgetId } } as FinancialEventOperation;
+  return { ...operation, input: { ...operation.input, budgetId: preview.budgetId, preparedEvidence: preview.evidence } } as FinancialEventOperation;
 }
 
 /** Only these two existing SDK facades can touch a budget. */

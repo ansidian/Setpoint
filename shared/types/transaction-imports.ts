@@ -1,4 +1,5 @@
 import type { FinancialEmailPlan, FinancialOperationKind, FinancialPlanReasonCode } from "./bills.ts";
+import type { FinancialWriteEvidence } from "./financial-activity.ts";
 
 export const TRANSACTION_IMPORT_PARSER_SOURCES = ["amazon", "paypal"] as const;
 export type TransactionImportParserSource = typeof TRANSACTION_IMPORT_PARSER_SOURCES[number];
@@ -73,6 +74,8 @@ export interface TransactionImportRunSummary {
 }
 
 export interface TransactionImportItem {
+  preparedEvidence?: FinancialWriteEvidence;
+  originalAttemptedAt?: number | null;
   id: string;
   runId: string;
   gmailAccountId: string;
@@ -138,6 +141,7 @@ export interface TransactionImportConfirmation {
 }
 
 export interface ActualImportTransaction {
+  preparedEvidence?: FinancialWriteEvidence;
   itemId: string;
   importedId: string;
   date: string;
@@ -153,6 +157,7 @@ export interface ActualImportAccountGroup {
 }
 
 export interface ActualTransferScheduleInput {
+  preparedEvidence?: FinancialWriteEvidence;
   identityKey: string;
   fromAccountId: string;
   toAccountId: string;
@@ -165,6 +170,7 @@ export interface ActualTransferScheduleInput {
 export type ActualTransferScheduleMode = "preview" | "create_once" | "recover";
 
 export interface ActualTransferScheduleResult {
+  evidence?: FinancialWriteEvidence;
   outcome: "would_create" | "created" | "already_scheduled" | "already_recorded" | "needs_review";
   reason: string;
   budgetId: string;
@@ -181,6 +187,7 @@ export type ActualImportItemOutcome =
   | "failed";
 
 export interface ActualImportBatchResult {
+  budgetId?: string;
   dryRun: boolean;
   groups: Array<{
     accountId: string;
@@ -189,6 +196,7 @@ export interface ActualImportBatchResult {
       importedId: string;
       outcome: ActualImportItemOutcome;
       error: string | null;
+      evidence?: FinancialWriteEvidence;
     }>;
   }>;
 }

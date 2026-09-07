@@ -13,6 +13,7 @@ Shared, mostly-pure helpers with no owning feature directory — cross-cutting u
 - `dashboard-helpers.ts` — urgency style tokens, greeting pools, Pacific-time epoch helpers
 - `email-links.ts` — builds a Gmail web URL from an email's uid + account
 - `emailAttachmentApi.ts` — demo-safe authenticated URL/blob transport for lazy email attachment downloads and previews
+- `financialActivityApi.ts` — demo-safe shared activity list/detail and explicit binding inspection transport
 - `financialEmailApi.ts` — financial extraction, planning, retained bill writes and revision-bound owner completion; completion refreshes reader status and is intentionally unavailable in demo
 - `financialReviewApi.ts` — demo-safe managed financial queue/change reads and direct Finance record URLs
 - `financialReviewNotifications.ts` — browser delivery owner: bounded change-feed draining, overlap cursor recovery, stable per-record/action deduplication, and clickable Finance alerts; no demo or server delivery

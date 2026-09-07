@@ -1,3 +1,4 @@
+import type { FinancialBindingInspection } from "../../shared/types/financial-activity.ts";
 import type { ActualTransferScheduleInput, ActualTransferScheduleMode, ActualTransferScheduleResult } from "../../shared/types/transaction-imports.ts";
 import type { ActualFinancialOperationInput, ActualFinancialOperationMode, ActualFinancialOperationResult } from "../../shared/types/financial-operations.ts";
 import { runActualWorkerOperation } from "./actual-worker.ts";
@@ -199,6 +200,11 @@ export async function reconcileTransferSchedule(userId: string, input: ActualTra
   const result = await callActual<ActualTransferScheduleResult>("reconcileTransferSchedule", [userId, input, mode], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
+}
+
+export async function inspectOriginalImportBinding(userId: string, budgetId: string, accountId: string, importedId: string, targetId?: string) {
+  return callActual<FinancialBindingInspection>(
+    "inspectOriginalImportBinding", [userId, budgetId, accountId, importedId, targetId], WRITE_OPERATION_WORKER_OPTIONS);
 }
 
 export async function reconcileFinancialOperation(userId: string, input: ActualFinancialOperationInput, mode: ActualFinancialOperationMode): Promise<ActualFinancialOperationResult> {
