@@ -15,6 +15,7 @@ import { isIndividuallyReviewable, itemToConfirmation } from './transactionImpor
 interface Props {
   activity: FinancialActivity;
   onChanged: () => void;
+  onAccepted: () => void;
   onDirty: (dirty: boolean) => void;
   onRepair: () => void;
   onConfirming: (confirming:boolean) => void;
@@ -22,20 +23,18 @@ interface Props {
 }
 
 export default function PendingFinancialRecord(props: Props) {
-  const { activity, onChanged, onDirty, onRepair, requestDiscard } = props;
+  const { activity, onDirty, onRepair, requestDiscard } = props;
   useEffect(() => () => onDirty(false),[onDirty]);
   const [editing, setEditing] = useState(true);
-  const [queued, setQueued] = useState(false);
-  if (queued || activity.status === 'processing') return <p role="status" className="financial-note">This record is processing. Its result will appear here when Actual finishes.</p>;
   if (activity.reference.owner === 'import') return <ImportCompletion {...props} />;
   const plan = activity.completionPlan;
   if (!activity.actions.complete || !plan?.workflow?.completion) return <p className="financial-note">{activity.reason}</p>;
   return editing ? <FinancialEventCompletionForm plan={plan} onDirty={onDirty} onRepair={onRepair} onConfirming={props.onConfirming}
-    onCancel={() => requestDiscard(() => { setEditing(false); onDirty(false); })} onQueued={() => { setQueued(true); onDirty(false); onChanged(); }} />
+    onCancel={() => requestDiscard(() => { setEditing(false); onDirty(false); })} onQueued={() => { props.onAccepted(); onDirty(false); }} />
     : <button type="button" className="financial-button" onClick={() => setEditing(true)}>Complete record</button>;
 }
 
-function ImportCompletion({ activity, onChanged, onDirty, onRepair, onConfirming }: Props) {
+function ImportCompletion({ activity, onAccepted, onChanged, onDirty, onRepair, onConfirming }: Props) {
   const item = activity.importItem!;
   const [draft, setDraft] = useState(() => itemToConfirmation(item));
   const [amount, setAmount] = useState(item.amountCents == null ? '' : String(Math.abs(item.amountCents) / 100));
@@ -77,11 +76,19 @@ function ImportCompletion({ activity, onChanged, onDirty, onRepair, onConfirming
     if (busy) return;
     setBusy(true); setError('');
     try {
-      if (action === 'commit') await commitTransactionImportItems(item.runId, [{ ...draft, amountCents: signedAmount }]);
-      if (action === 'retry') await retryTransactionImportItem(item.id);
+      if (action === 'commit') {
+        const result = await commitTransactionImportItems(item.runId, [{ ...draft, amountCents: signedAmount }]);
+        if (result.accepted !== 1) { onChanged(); throw new Error('This confirmation was not accepted. Check the refreshed record before trying again. Your details are retained.'); }
+      }
+      if (action === 'retry') {
+        const result = await retryTransactionImportItem(item.id);
+        if (!result.accepted) { onChanged(); throw new Error('This retry was not accepted. Check the refreshed record before trying again.'); }
+      }
       if (action === 'dismiss') await dismissTransactionImportItem(item.id);
       setConfirming(false); setResult(action === 'dismiss' ? 'This candidate was dismissed.' : 'Queued for Actual. The result will appear when processing finishes.');
-      onDirty(false); onChanged();
+      onDirty(false);
+      if (action === 'dismiss') onChanged();
+      else onAccepted();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save this record. Your details are still here.'); }
     finally { setBusy(false); }
   }

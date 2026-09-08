@@ -4,7 +4,7 @@ import { activitySignedAmountCents, capturedActivityDisplay, capturedActivitySou
 import type { FinancialActivity, FinancialActivityPage, FinancialActivityQuery, FinancialActivityReference,
   FinancialOriginalReceipt, FinancialWriteEvidence } from "../../shared/types/financial-activity.ts";
 import { projectReviewItem } from "../financial-events/financial-event-review.ts";
-import { hydrateManagedFinancialActivity, projectManagedFinancialPlan } from "../financial-events/financial-event-status.ts";
+import { FINANCIAL_EVENT_STATUS_SELECT, hydrateManagedFinancialActivity, projectManagedFinancialPlan } from "../financial-events/financial-event-status.ts";
 import { projectTransactionImportItem, projectTransactionImportRun,
   transactionImportActivityActions } from "../transaction-imports/transaction-import-store-projections.ts";
 
@@ -21,7 +21,7 @@ export function createFinancialActivityReader(dbClient: Pick<Client, "batch"> = 
   async function snapshot(userId: string, includeInactive = false, includeHistory = false): Promise<FinancialActivity[]> {
     if (!userId) invalid("An authenticated owner is required");
     const results = await dbClient.batch([
-      { sql: "SELECT * FROM ea_financial_events WHERE user_id = ?", args: [userId] },
+      { sql: `${FINANCIAL_EVENT_STATUS_SELECT} WHERE user_id = ?`, args: [userId] },
       { sql: `SELECT d.*, e.subject, e.from_name, e.from_address, e.email_date_utc,
           event.owner_completion_json AS event_owner_completion_json
         FROM ea_financial_documents d LEFT JOIN ea_email_index e ON e.user_id = d.user_id AND e.uid = d.email_uid

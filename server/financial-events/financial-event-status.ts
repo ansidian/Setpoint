@@ -4,6 +4,7 @@ import { completionBlocker } from "./financial-event-completion-model.ts";
 import type { FinancialEmailPlan, FinancialPlanTarget, FinancialTargetKind } from "../../shared/types/bills.ts";
 import type { Row } from "@libsql/client";
 import { documentFromRow, eventFromRow } from "./financial-event-store.ts";
+export { FINANCIAL_EVENT_STATUS_SELECT } from "./financial-event-store.ts";
 
 /** Shared history hydrates a consistent saved snapshot through the managed owner. */
 export function hydrateManagedFinancialActivity(row: Row | null, sources: Row[]) {
@@ -75,6 +76,7 @@ export function projectManagedFinancialPlan(document: FinancialDocument, event: 
   }
   const blockedReason = document.correction || document.correctedEntry ? 'This source has an explicit correction and cannot be resubmitted.' : completionBlocker(event);
   return { ...plan, workflow: { ...(document.correction ? { correction:document.correction } : {}), id: event?.id || `financial-document:${document.id}`, state,
+    ...(event?.progress ? { progress: event.progress } : {}),
     relatedEmails: event?.documents.length || 1, reason, nextAttemptAt: event?.nextAttemptAt || document.nextAttemptAt,
     completion: { emailUid: document.emailUid, documentRevision: document.revision, eventRevision: event?.revision ?? null,
       canComplete: !blockedReason, ...(blockedReason ? { blockedReason } : {}) } } };

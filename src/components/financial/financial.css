@@ -54,7 +54,6 @@
 .financial-summary dt { font-size:11px; color:var(--muted-foreground); margin-bottom:4px; }
 .financial-summary dd { font-size:13px; overflow-wrap:anywhere; }
 .financial-note { color:var(--muted-foreground); line-height:1.6; }
-.financial-result-summary { color:var(--sp-green); line-height:1.6; }
 .financial-error { color:var(--sp-cream); padding:12px 0; line-height:1.6; }
 .financial-section { margin-top:24px; padding-top:20px; border-top:1px solid #ffffff18; }
 .financial-section h3 { font-size:13px; font-weight:600; margin-bottom:12px; }
@@ -245,3 +244,7 @@
   .financial-confirmation-flow { padding:16px; }
   .financial-confirmation-flow dl { grid-template-columns:minmax(0,1fr); }
 }
+
+.financial-completion-status { margin-top:20px; padding:16px; }
+.financial-completion-status p { max-width:70ch; }
+.financial-status-panel[data-tone=progress] { border-color:color-mix(in srgb,var(--sp-blue) 22%,transparent); background:color-mix(in srgb,var(--sp-blue) 5%,transparent); color:var(--sp-blue); }

@@ -32,8 +32,12 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   const attentionCount = useFinancialAttentionCount(list,revision,query);
   const listRef = useRef<HTMLDivElement>(null);
   const scrolls = useRef(new Map<string,number>());
+  const processingReference = useRef<string|null>(null);
   const refresh = useCallback(() => setRevision(value => value + 1),[]);
-  const recordChanged = useCallback(() => window.dispatchEvent(new Event('ea-financial-event-changed')),[]);
+  const recordChanged = useCallback((processing = false) => {
+    if (processing) processingReference.current = referenceKey;
+    window.dispatchEvent(new Event('ea-financial-event-changed'));
+  },[referenceKey]);
   useEffect(() => {
     if (emailUid) return;
     let active = true; setLoading(true); setError('');
@@ -46,12 +50,33 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
   },[queryKey,revision,emailUid]);
   useEffect(() => {
     let active = true;
-    if (!referenceKey) { setSelected(null); return; }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const ref = JSON.parse(referenceKey);
+    if (!ref) { setSelected(null); return; }
     setSelected(current => JSON.stringify(current?.reference) === referenceKey ? current : null);
-    void getFinancialActivity(ref).then(value => { if (active) setSelected(value); }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : 'This record is unavailable.'); });
-    return () => { active = false; };
-  },[referenceKey,revision]);
+    // Publications are hints. Keep one selected pending original moving even if one is missed.
+    // Corrections own their journal polling; history/list reads do not need an interval.
+    let wasProcessing = processingReference.current === referenceKey;
+    const load = async () => {
+      try {
+        const value = await getFinancialActivity(ref);
+        if (!active) return;
+        setSelected(value);
+        const processing = value.status === 'processing' && !value.correction;
+        processingReference.current = processing ? referenceKey : null;
+        if (wasProcessing && !processing) refresh();
+        wasProcessing = processing;
+        if (processing) timer = setTimeout(() => void load(),5000);
+      } catch (cause) {
+        if (active) {
+          setError(cause instanceof Error ? cause.message : 'This record is unavailable.');
+          if (wasProcessing) timer = setTimeout(() => void load(),5000);
+        }
+      }
+    };
+    void load();
+    return () => { active = false; clearTimeout(timer); };
+  },[referenceKey,revision,refresh]);
   useEffect(() => {
     window.addEventListener('focus',refresh); window.addEventListener('ea-financial-event-changed',refresh);
     return () => { window.removeEventListener('focus',refresh); window.removeEventListener('ea-financial-event-changed',refresh); };
@@ -87,7 +112,8 @@ export default function FinancialWorkspace({ search,onNavigate,onClose,onRepair,
           {item.emailUids.length > 1 && <span className="financial-note">{item.emailUids.length} related emails · one record</span>}
           {item.status !== 'completed' && <span className="financial-note">{activityReviewReason(item)}</span>}
         </button>)}</div></AnimatedHeight>
-        {page?.total === 0 && <p className="financial-note p-3">{query.source || query.runId ? 'No records match these filters.' : view === 'completed' ? 'No completed financial activity yet.' : view === 'all' ? 'No financial activity yet.' : 'No financial records need your attention.'}</p>}
+        {list && view === 'needs_attention' && selected?.status === 'completed' && <div className="financial-note p-3 space-y-3"><p>This record has moved to Completed.</p><button className="financial-button" onClick={() => changeQuery({ view:'completed' })}>View completed activity</button></div>}
+        {page?.total === 0 && !(view === 'needs_attention' && selected?.status === 'completed') && <p className="financial-note p-3">{query.source || query.runId ? 'No records match these filters.' : view === 'completed' ? 'No completed financial activity yet.' : view === 'all' ? 'No financial activity yet.' : 'No financial records need your attention.'}</p>}
         {page && page.total > 20 && <div className="flex flex-wrap gap-2 mt-4"><button className="financial-button" disabled={loading || !page.offset} onClick={() => changeQuery({ offset:Math.max(0,page.offset - 20) })}>Previous</button><button className="financial-button" disabled={loading || page.offset + 20 >= page.total} onClick={() => changeQuery({ offset:page.offset + 20 })}>Next</button><p>{page.offset + 1}–{Math.min(page.offset + 20,page.total)} of {page.total}</p></div>}
       </div>}
       <div className="financial-detail">

@@ -94,7 +94,7 @@ describe("owner completion of managed financial events", () => {
       }),
     });
   }
-  async function drainEvent() { now += 90_000; await worker().processNextEvent(); }
+  async function drainEvent() { await worker().processNextEvent(); }
 
   it("records owner-supplied date and account without category, sender authentication, candidate, or enabled AI", async () => {
     await arrive("receipt", null);
@@ -103,8 +103,7 @@ describe("owner completion of managed financial events", () => {
     expect(queued).toMatchObject({ workflow: { state: "pending", reason: "Owner-confirmed entry queued for Actual.",
       completion: { documentRevision: input.documentRevision + 1, eventRevision: 2, canComplete: false } },
     candidate: { due_date: DATE, amount: 12 }, targets: { account: { id: "card" }, category: { status: "not_applicable" } } });
-    expect(await worker().processNextEvent()).toBe(false);
-    await drainEvent();
+    expect(await worker().processNextEvent()).toBe(true);
     expect([...ledger.values()]).toEqual([{ executor: "financial", input: {
       kind: "transaction", identityKey: `financial-event:${queued.workflow!.id}`, budgetId: "budget", accountId: "card",
       payee: "Example Market", categoryId: null, amountCents: -1200, date: DATE, notes: entry.notes,
@@ -112,6 +111,25 @@ describe("owner completion of managed financial events", () => {
     const saved = await store.getEventForEmail("owner", "receipt");
     expect(saved).toMatchObject({ status: "settled", documents: [{ candidate: null }], ownerCompletion: { documents: [{ candidate: null, revision: 1 }] } });
     await expect(completion().complete("owner", await request())).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("closes the automatic collection window at confirmation, but waits for capture through that instant", async () => {
+    await arrive();
+    const document = await store.claimDocument("assessment");
+    await store.associateDocument(document!, { candidate: partial, contentHash: "source", eventId: "existing", nextAttemptAt: now + 90_000 });
+    await db.execute({ sql: `INSERT INTO ea_financial_intake_state (user_id, account_id, completed_through, status, next_attempt_at, updated_at)
+      VALUES ('owner', 'gmail', ?, 'waiting', ?, ?)`, args: [new Date(now - 1000).toISOString(), now + 300_000, now] });
+    const queued = await completion().complete("owner", await request());
+    expect(queued.workflow?.nextAttemptAt).toBe(now);
+    expect(queued.workflow?.progress).toBe('checking_emails');
+    expect((await store.getEventForEmail("owner", "receipt"))?.collectionDeadline).toBe(now);
+    expect(await worker().processNextEvent()).toBe(false);
+    expect(ledger.size).toBe(0);
+    await db.execute({ sql: "UPDATE ea_financial_intake_state SET completed_through = ?", args: [new Date(now).toISOString()] });
+    expect((await resolveManagedFinancialPlan('owner', 'receipt', { dbClient: db }))?.workflow?.progress).toBe('queued');
+    expect(await worker().processNextEvent()).toBe(true);
+    expect((await store.getEventForEmail("owner", "receipt"))?.status).toBe("settled");
+    expect(ledger.size).toBe(1);
   });
 
   it("rejects unmanaged, cross-owner, invalid and stale requests and admits one concurrent confirmation", async () => {

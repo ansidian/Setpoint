@@ -8,6 +8,16 @@ const POLL_MS = 5 * 60_000;
 const WINDOW_MS = 24 * 60 * 60_000;
 const CLAIM_LEASE_MS = 15 * 60_000;
 type IntakeDb = Pick<Client, "execute" | "batch">;
+// The confirmed event is the durable capture request, including when a page
+// already in flight finishes after confirmation with an older fixed window.
+// Only idle polling is expedited; provider backoff and active claims remain intact.
+const OWNER_CAPTURE_REQUEST = `(status = 'waiting' AND EXISTS (
+  SELECT 1 FROM ea_financial_events event
+  WHERE event.user_id = ea_financial_intake_state.user_id
+    AND event.status IN ('pending', 'waiting') AND event.attempted_at IS NULL
+    AND event.owner_completion_json IS NOT NULL
+    AND julianday(ea_financial_intake_state.completed_through)
+      < julianday(event.collection_deadline / 1000.0, 'unixepoch')))`;
 
 /** Durable forward capture from the deployment cutoff, independent of Inbox triage. */
 export function createFinancialEventIntake({
@@ -55,7 +65,8 @@ export function createFinancialEventIntake({
       sql: `UPDATE ea_financial_intake_state SET status = 'processing', claim_token = ?, claimed_at = ?,
               attempts = attempts + 1, updated_at = ?
             WHERE id = (SELECT id FROM ea_financial_intake_state WHERE enabled = 1
-              AND status IN ('pending', 'waiting', 'retry') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+              AND status IN ('pending', 'waiting', 'retry')
+              AND (next_attempt_at IS NULL OR next_attempt_at <= ? OR ${OWNER_CAPTURE_REQUEST})
               ORDER BY updated_at, id LIMIT 1) RETURNING *`,
       args: [token, timestamp, timestamp, timestamp],
     });
@@ -125,9 +136,9 @@ export function createFinancialEventIntake({
 
   async function getNextWakeAt(): Promise<number | null> {
     const result = await dbClient.execute({
-      sql: `SELECT MIN(COALESCE(next_attempt_at, ?)) AS wake_at FROM ea_financial_intake_state
+      sql: `SELECT MIN(CASE WHEN ${OWNER_CAPTURE_REQUEST} THEN ? ELSE COALESCE(next_attempt_at, ?) END) AS wake_at FROM ea_financial_intake_state
             WHERE enabled = 1 AND status IN ('pending', 'waiting', 'retry')`,
-      args: [now()],
+      args: [now(), now()],
     });
     return result.rows[0]?.wake_at == null ? null : Number(result.rows[0].wake_at);
   }

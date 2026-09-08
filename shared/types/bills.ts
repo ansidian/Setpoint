@@ -438,6 +438,7 @@ export interface FinancialEmailPlan {
     correction?: FinancialActivity["correction"];
     id: string;
     state: "pending" | "waiting" | "settled" | "needs_review";
+    progress?: "queued" | "checking_emails" | "saving" | "recovering";
     relatedEmails: number;
     reason: string | null;
     nextAttemptAt: number | null;

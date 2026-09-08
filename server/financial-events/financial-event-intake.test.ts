@@ -47,6 +47,78 @@ describe("financial received-email capture", () => {
   function intake() { return createFinancialEventIntake({ dbClient: db, now: () => now }); }
   function store() { return createFinancialEventStore(db, () => now); }
   async function state() { return (await db.execute("SELECT * FROM ea_financial_intake_state WHERE account_id = 'gmail-work'")).rows[0]!; }
+  async function ownerCaptureRequest() {
+    const completion = { version: 1, id: "confirmation", submittedAt: now, documents: [],
+      entry: { kind: "expense", amount: 12, date: "2026-09-01", payee: "Example Market", accountId: "card" } };
+    await db.execute({
+      sql: `INSERT INTO ea_financial_events (id, user_id, owner_completion_json, collection_deadline, next_attempt_at, created_at, updated_at)
+            VALUES ('confirmed', 'user-1', ?, ?, ?, ?, ?)`,
+      args: [JSON.stringify(completion), now, now, now, now],
+    });
+  }
+
+  it("captures through owner confirmation promptly across restart without accelerating ordinary polling", async () => {
+    vi.stubGlobal("fetch", async () => response({ messages: [] }));
+    await intake().recoverStaleClaims();
+    await intake().processNextPage();
+    now += 1_000;
+    expect(await intake().processNextPage()).toBe(false);
+    expect(await intake().getNextWakeAt()).toBe(START + POLL);
+    await ownerCaptureRequest();
+    const resumed = intake();
+    expect(await resumed.getNextWakeAt()).toBe(now);
+    expect(await resumed.processNextPage()).toBe(true);
+    expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(now).toISOString() });
+    expect(await resumed.getNextWakeAt()).toBe(now + POLL);
+    expect(await resumed.processNextPage()).toBe(false);
+  });
+
+  it("catches up immediately when confirmation arrives during an older capture window", async () => {
+    let releasePage!: () => void;
+    let pageStarted!: () => void;
+    const started = new Promise<void>((resolve) => { pageStarted = resolve; });
+    const released = new Promise<void>((resolve) => { releasePage = resolve; });
+    vi.stubGlobal("fetch", async () => {
+      pageStarted();
+      await released;
+      return response({ messages: [] });
+    });
+    await intake().recoverStaleClaims();
+    const active = intake().processNextPage();
+    await started;
+    now += 1_000;
+    await ownerCaptureRequest();
+    expect(await intake().processNextPage()).toBe(false);
+    expect(await intake().getNextWakeAt()).toBeNull();
+    releasePage();
+    await active;
+    expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(START).toISOString() });
+    expect(await intake().getNextWakeAt()).toBe(now);
+    expect(await intake().processNextPage()).toBe(true);
+    expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(now).toISOString() });
+  });
+
+  it("preserves failed provider retry deadlines despite an outstanding owner capture request", async () => {
+    let fail = false;
+    vi.stubGlobal("fetch", async () => response(fail ? {} : { messages: [] }, fail ? 503 : 200));
+    await intake().recoverStaleClaims();
+    await intake().processNextPage();
+    now += 1_000;
+    await ownerCaptureRequest();
+    fail = true;
+    await intake().processNextPage();
+    const failed = await state();
+    expect(failed).toMatchObject({ status: "retry", completed_through: new Date(START).toISOString() });
+    expect(Number(failed.next_attempt_at)).toBeGreaterThan(now);
+    expect(await intake().getNextWakeAt()).toBe(failed.next_attempt_at);
+    expect(await intake().processNextPage()).toBe(false);
+    fail = false;
+    now = Number(failed.next_attempt_at);
+    expect(await intake().processNextPage()).toBe(true);
+    // A failed page resumes its fixed window before catching up to the present.
+    expect(await intake().processNextPage()).toBe(true);
+    expect(await state()).toMatchObject({ status: "waiting", completed_through: new Date(now).toISOString() });
+  });
 
   it("captures read and filter-archived new receipts without attaching them to Inbox, and excludes pre-cutover mail", async () => {
     const lists: URL[] = [];

@@ -11,11 +11,11 @@ Financial activity and records live at `/finance` inside WorkspaceRoute's retain
 - `CorrectionFields.tsx` — type-aware controlled correction fields, explicit schedule treatment and transfer survivor choice.
 - `CorrectionPreview.tsx` — frozen before/after effects and current snapshot presentation.
 - `FinancialCorrectionEditor.tsx` — inspect/draft/preview/confirm/status lifecycle, preserving drafts on failures; stopped corrections support synchronized recheck or explicit kept-result review; exact scheduled transfers remain editable.
-- `FinancialRecord.tsx` — shared saved inspection and latest correction status.
+- `FinancialRecord.tsx` — shared saved inspection, persistent accepted/processing/confirmed feedback, and latest correction status.
 - `FinancialRecordHistory.tsx` — chronological related emails, original receipts, and all admitted corrections; protected inline disclosures and explicitly unknown dates.
 - `FinancialAttentionBadge.tsx` — shared positive-only attention count, inline or above the Activity entrance.
 - `useFinancialAttentionCount.ts` — attention total for the current source/context/batch scope (otherwise owner-wide), refreshed on visibility, focus and financial changes.
-- `FinancialWorkspace.tsx` — retained list filters, pagination, selection, list scroll and financial-publication/focus refresh without a separate polling loop.
+- `FinancialWorkspace.tsx` — retained list filters, pagination, selection, list scroll and financial-publication/focus refresh; a selected processing original has sequential read-only status refresh until settlement, attention, or navigation.
 - `correctionPresentation.ts` — raw evidence interpretation and applicable draft fields.
 - `financialActivityPresentation.ts` — currency-aware signed amounts, saved type/date facts, and conservative outcome labels shared by dashboard and activity rows.
 - `PaymentConfirmation.tsx` — shared ordinary-payment money-flow review; source owners retain submission and validation.
