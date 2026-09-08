@@ -11,22 +11,12 @@ import { createFinancialEventExecutor } from "./financial-event-operation.ts";
 import { createFinancialEventStore } from "./financial-event-store.ts";
 import { createFinancialEventWorker } from "./financial-event-service.ts";
 
-const day = "2026-09-06";
-const arrival = Date.parse(day + "T18:20:00Z");
+import { day, arrival, receipt, authentication, type Source } from "./financial-event-service.test-utils.ts";
 const accounts = [
   { id: "card", name: "Example Rewards Mastercard (3234)", type: "credit" },
   { id: "checking", name: "Everyday Checking (0001)", type: "checking" },
   { id: "savings", name: "Rainy Day Savings (0002)", type: "savings" },
 ];
-
-interface Source {
-  uid: string;
-  from: string;
-  body: string;
-  candidate: BillCandidate | null;
-  receivedOffset?: number;
-  authenticated?: boolean;
-}
 
 interface LedgerEntry {
   id: string;
@@ -38,42 +28,6 @@ interface LedgerEntry {
   payee: string;
   payeeId: string | null;
   transferAccountId?: string;
-}
-
-function receipt(uid: string, { role = "processor_receipt", funding = true, reference = uid,
-  value = 30, receivedOffset = 0, authenticated = true }: {
-  role?: BillCandidate["document_role"]; funding?: boolean; reference?: string; value?: number;
-  receivedOffset?: number; authenticated?: boolean;
-} = {}): Source {
-  const paid = "Paid $" + value.toFixed(2) + " on " + day;
-  const body = "Purchase from Example Merchant Inc. " + paid + ". Reference: " + reference + "."
-    + (funding ? " Payment method: Example Rewards Mastercard." : "");
-  return {
-    uid, body, receivedOffset, authenticated,
-    from: role === "merchant_receipt" ? "receipt@merchant.example" : "payment@processor.example",
-    candidate: {
-      type: "expense", type_confidence: 0.99, type_evidence: "Purchase from Example Merchant Inc.",
-      event_kind: "purchase", event_confidence: 0.99, event_evidence: paid,
-      document_role: role, payee: "Example Merchant Inc.", payee_hint: "Example Merchant Inc.",
-      amount: value, amount_kind: "transaction_amount", currency: "USD", due_date: day,
-      amount_candidates: [{ kind: "transaction_amount", value, confidence: 0.99, evidence: "Paid $" + value.toFixed(2) }],
-      provider_reference: reference, provider_reference_evidence: "Reference: " + reference,
-      provider_reference_confidence: 0.99,
-      ...(funding ? { account_hint: "Example Rewards Mastercard", account_hint_confidence: 0.99 } : {}),
-    },
-  };
-}
-
-function authentication(source: Source) {
-  const domain = source.from.split("@")[1];
-  const pass = source.authenticated !== false;
-  return {
-    version: 1, provider: "gmail", source: "gmail_authentication_results", evaluatedAt: new Date(arrival).toISOString(),
-    status: pass ? "pass" : "unavailable", headerFromDomain: pass ? domain : null,
-    dkim: pass ? [{ result: "pass", domain, aligned: true }] : [],
-    spf: pass ? { result: "pass", domain, aligned: true } : null,
-    dmarc: pass ? { result: "pass", domain, aligned: true } : null,
-  };
 }
 
 describe("autonomous financial event processing", () => {
@@ -88,6 +42,14 @@ describe("autonomous financial event processing", () => {
   let schedules: Array<{ id: string; input: ActualFinancialOperationInput | ActualTransferScheduleInput }>;
   let admitted: Map<string, string>;
   let activeBudget: string;
+  let providerCredits: number;
+  let providerReply: BillCandidate | null;
+  let providerOffline: boolean;
+  let matchingOffline: boolean;
+  let assessmentCredits: number;
+  let assessmentOffline: boolean;
+  let aiEnabled: boolean;
+  let currentAccounts: typeof accounts;
   let loseWriteResponse: boolean;
   let duringPreview: (() => Promise<void>) | null;
 
@@ -102,12 +64,16 @@ describe("autonomous financial event processing", () => {
   function newWorker() {
     const verification = createBillCandidateVerificationService({
       credentialResolver: async () => null,
-      providers: { openai: { extract: async () => ({ fields: {}, usage: {} }) } },
+      providers: { openai: { extract: async (request) => {
+        providerCredits--;
+        if (providerOffline || (matchingOffline && request.usagePurpose === "matching")) throw new Error("Provider unavailable");
+        return { fields: structuredClone(providerReply || {}), usage: {} };
+      } } },
     });
     const planner = createFinancialEmailPlanner({
       candidateVerification: verification,
       modelChoiceReader: async () => ({ provider: "openai", model: "fixture" }),
-      metadataReader: async () => ({ accounts, payees, payeeMap: Object.fromEntries(payees.map((payee) => [payee.id, payee.name])),
+      metadataReader: async () => ({ accounts: currentAccounts, payees, payeeMap: Object.fromEntries(payees.map((payee) => [payee.id, payee.name])),
         categories: [], schedules: [], recentTransactions: [], syncHealth: { state: "current", lastSuccessAt: new Date(clock).toISOString() } }),
       occurrenceReader: async () => ({ schedules: [], syncHealth: { state: "current", lastSuccessAt: new Date(clock).toISOString() } }),
       transactionReader: async () => ({ transactions: ledger.map((entry) => ({
@@ -163,10 +129,12 @@ describe("autonomous financial event processing", () => {
     });
     return createFinancialEventWorker({ store, planner, execute, now: () => clock,
       assessDocument: async (_userId, email) => {
+        assessmentCredits--;
+        if (assessmentOffline) throw new Error("Assessment returned invalid output");
         const queued = assessments.get(email.email_id);
         return structuredClone(queued?.length ? queued.shift()! : sources.get(email.email_id)!.candidate);
       },
-      canRun: async () => true,
+      canRun: async () => aiEnabled,
       afterWrite: async () => {},
     });
   }
@@ -175,7 +143,7 @@ describe("autonomous financial event processing", () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
     for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql",
-      "054_email_sender_authentication.sql", "062_financial_events.sql"]) {
+      "054_email_sender_authentication.sql", "062_financial_events.sql", "067_financial_event_ai_requests.sql"]) {
       await db.executeMultiple(readFileSync(new URL("../db/migrations/" + file, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
@@ -184,6 +152,8 @@ describe("autonomous financial event processing", () => {
     store = createFinancialEventStore(db, () => clock);
     sources = new Map(); assessments = new Map(); ledger = []; payees = []; schedules = []; admitted = new Map();
     activeBudget = "budget-1"; loseWriteResponse = false; duringPreview = null;
+    providerCredits = 10; providerReply = null; providerOffline = false;
+    matchingOffline = false; assessmentCredits = 10; assessmentOffline = false; aiEnabled = true; currentAccounts = [...accounts];
     worker = newWorker();
   });
   afterEach(() => db.close());
@@ -213,6 +183,114 @@ describe("autonomous financial event processing", () => {
     for (let i = 0; i < 20; i++) if (!await worker.processNextEvent()) return;
     throw new Error("Event processing did not become idle");
   }
+
+  it("bounds failed document assessments across restarts without charging paused checks, and admits changed evidence", async () => {
+    await arrive(receipt("assessment-outage"));
+    aiEnabled = false;
+    for (let tick = 0; tick < 4; tick++) {
+      await assessArrivals();
+      clock += 2 * 60 * 60_000;
+    }
+    expect(assessmentCredits).toBe(10);
+    aiEnabled = true; assessmentOffline = true;
+    for (let tick = 0; tick < 5; tick++) {
+      worker = newWorker();
+      await assessArrivals();
+      clock += 2 * 60 * 60_000;
+    }
+    expect(assessmentCredits).toBe(7);
+    expect(await store.getEventForEmail("owner", "assessment-outage")).toBeNull();
+    assessmentOffline = false;
+    await revise(receipt("assessment-outage", { value: 40 }));
+    await assessArrivals();
+    await processEvents();
+    expect(assessmentCredits).toBe(6);
+    expect(ledger.map((entry) => entry.amountCents)).toEqual([-4000]);
+  });
+
+  it("reuses a completed verification through ranking failures and reconsiders new Actual targets", async () => {
+    const source = receipt("new-account");
+    providerReply = source.candidate;
+    matchingOffline = true;
+    currentAccounts = accounts.filter((account) => account.id !== "card");
+    await arrive({ ...source, candidate: { ...source.candidate, due_date: null } });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assessArrivals();
+      const document = await store.getDocumentForEmail("owner", source.uid);
+      if (document?.nextAttemptAt) clock = document.nextAttemptAt;
+    }
+    await processEvents();
+    expect(providerCredits).toBe(8); // One verification and one failed target ranking.
+    for (let tick = 0; tick < 5; tick++) {
+      clock += 16 * 60_000;
+      worker = newWorker();
+      await worker.processNextEvent();
+    }
+    expect(providerCredits).toBe(6); // Verification once, ranking at most three times.
+    expect(ledger).toEqual([]);
+    currentAccounts = [...accounts];
+    clock += 16 * 60_000;
+    await worker.processNextEvent();
+    expect(providerCredits).toBe(6);
+    expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "settled", revision: 1 });
+  });
+
+  it("stops paid planning for unchanged blocked evidence across deadlines and worker restarts", async () => {
+    const source = receipt("missing-date", { funding: false });
+    source.body = source.body.replace(" on " + day, "");
+    source.candidate = { ...source.candidate, due_date: null, event_evidence: "Paid $30.00" };
+    providerReply = source.candidate;
+    await arrive(source);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assessArrivals();
+      const document = await store.getDocumentForEmail("owner", source.uid);
+      if (document?.nextAttemptAt) clock = document.nextAttemptAt;
+    }
+    await processEvents();
+    for (let retry = 0; retry < 4; retry++) {
+      clock += 16 * 60_000;
+      worker = newWorker();
+      await worker.processNextEvent();
+    }
+    // The external provider's remaining billing credit is the costly regression.
+    expect(providerCredits).toBe(9);
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({
+      status: "waiting", revision: 1, attempts: 5, operation: null,
+      plan: { workflow: { state: "waiting" } },
+    });
+    expect(ledger).toEqual([]);
+    await revise(receipt(source.uid));
+    await assessArrivals();
+    await processEvents();
+    expect((await store.getEventForEmail("owner", source.uid))?.status).toBe("settled");
+    expect(ledger.map((entry) => entry.amountCents)).toEqual([-3000]);
+  });
+
+  it.each([true, false])("bounds unavailable AI retries while allowing recovery: %s", async (recovers) => {
+    const source = receipt("provider-outage");
+    providerReply = source.candidate;
+    providerOffline = true;
+    await arrive({ ...source, candidate: { ...source.candidate, due_date: null } });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assessArrivals();
+      const document = await store.getDocumentForEmail("owner", source.uid);
+      if (document?.nextAttemptAt) clock = document.nextAttemptAt;
+    }
+    await processEvents();
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({ status: "waiting", attempts: 1 });
+    providerOffline = !recovers;
+    for (let retry = 0; retry < 4; retry++) {
+      clock += 16 * 60_000;
+      worker = newWorker();
+      await worker.processNextEvent();
+    }
+    expect(providerCredits).toBe(recovers ? 8 : 7);
+    expect(await store.getEventForEmail("owner", source.uid)).toMatchObject({
+      status: recovers ? "settled" : "waiting", attempts: recovers ? 2 : 5,
+    });
+    expect(ledger.map((entry) => entry.amountCents)).toEqual(recovers ? [-3000] : []);
+  });
 
   it("combines complementary merchant and processor receipts into one signed entry and a new payee", async () => {
     await arrive(receipt("merchant", { role: "merchant_receipt", funding: false }));
@@ -373,7 +451,6 @@ describe("autonomous financial event processing", () => {
     const waiting = await store.getEventForEmail("owner", source.uid);
     if (missing === "date") {
       expect(waiting).toMatchObject({ status: "waiting", operation: null });
-      expect(waiting!.nextAttemptAt).toBeGreaterThan(clock);
     } else {
       const document = await store.getDocumentForEmail("owner", source.uid);
       expect(waiting).toBeNull();

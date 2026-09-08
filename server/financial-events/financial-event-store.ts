@@ -4,6 +4,7 @@ import type { BillCandidate, FinancialEmailPlan } from "../../shared/types/bills
 import type { EmailAuthenticationProjection } from "../../shared/types/email.ts";
 import type { FinancialOwnerCompletion } from "./financial-event-completion-model.ts";
 import type { FinancialEventCompletionEntry } from "../../shared/types/financial-operations.ts";
+import { createFinancialEventAiStore } from "./financial-event-ai.ts";
 
 type StoreDb = Pick<Client, "execute" | "batch">;
 type DocumentStatus = "pending" | "processing" | "retry" | "ignored" | "associated";
@@ -518,7 +519,7 @@ export function createFinancialEventStore(dbClient: StoreDb = db, now = Date.now
     return result.rows[0] ? projectEvent(result.rows[0]) : null;
   }
 
-  return { async isCorrected(userId: string, id: string) {
+  return { ...createFinancialEventAiStore(dbClient, now), async isCorrected(userId: string, id: string) {
     return (await dbClient.execute({ sql: "SELECT 1 FROM ea_financial_corrected_sources WHERE user_id=? AND owner='event' AND record_id=? LIMIT 1", args: [userId, id] })).rows.length > 0;
   }, claimDocument, settleDocument, associateDocument, listDocuments, findEventsByReference, completeEvent,
     acknowledgeOwnerCompletedDocument, claimEvent, saveEvent,

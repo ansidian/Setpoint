@@ -2,7 +2,7 @@ import { createClient, type Client } from "@libsql/client";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFinancialEventStore, type FinancialDocument } from "./financial-event-store.ts";
-import type { BillCandidate } from "../../shared/types/bills.ts";
+import type { BillCandidate, BillExtractionProviderResult, BillExtractionRequest } from "../../shared/types/bills.ts";
 
 const CUTOVER = "2026-09-06T12:00:00Z";
 const ARRIVAL = "2026-09-06T12:01:00Z";
@@ -21,6 +21,7 @@ async function database(includeWorkflow = true): Promise<Client> {
   }
   if (includeWorkflow) {
     await client.executeMultiple(migration("062_financial_events.sql"));
+    await client.executeMultiple(migration("067_financial_event_ai_requests.sql"));
     await addFinancialCorrectionSchema(client);
     await client.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [CUTOVER] });
   }
@@ -60,11 +61,83 @@ describe("financial event persistence", () => {
     return document!;
   }
 
+  const request: BillExtractionRequest = { model: "fixture", systemPrompt: "Verify payment", content: "Receipt $12", usagePurpose: "verification" };
+
+  it("reuses paid results across store instances while separating exact inputs, stages, models, providers and events", async () => {
+    await associate("arrival");
+    const event = (await store().claimEvent("claim"))!;
+    let credits = 20;
+    const send = async () => { credits--; return { fields: candidate, usage: { tokens: 10 } }; };
+    expect(await store().createAiRequestRunner(event)("openai", request, send)).toEqual({ fields: candidate, usage: { tokens: 10 } });
+    expect(await store().createAiRequestRunner(event)("openai", request, send)).toEqual({ fields: candidate, usage: {} });
+    for (const changed of [{ ...request, model: "next-model" }, { ...request, content: "Receipt $15" },
+      { ...request, systemPrompt: "Updated instructions" }, { ...request, usagePurpose: "matching" as const }]) {
+      await store().createAiRequestRunner(event)("openai", changed, send);
+    }
+    await store().createAiRequestRunner(event)("anthropic", request, send);
+    await store().saveEvent(event, { plan: null, status: "waiting", nextAttemptAt: now + 60_000 });
+    await associate("another", "event-2");
+    await store().createAiRequestRunner((await store().claimEvent("second"))!)("openai", request, send);
+    expect(credits).toBe(13);
+    expect(await store().getEventForEmail("owner", "arrival")).toMatchObject({ operation: null, attemptedAt: null });
+  });
+
+  it("serializes concurrent spending and retains a late paid response after claim expiry", async () => {
+    await associate("arrival");
+    const event = (await store().claimEvent("claim"))!;
+    let credits = 10;
+    let complete!: (value: BillExtractionProviderResult) => void;
+    let started!: () => void;
+    const sending = new Promise<void>((resolve) => { started = resolve; });
+    const first = store().createAiRequestRunner(event)("openai", request, () => {
+      credits--; started(); return new Promise((resolve) => { complete = resolve; });
+    });
+    await sending;
+    const send = async () => { credits--; return { fields: {}, usage: {} }; };
+    await expect(store().createAiRequestRunner(event)("openai", request, send)).rejects.toThrow("already active");
+    now += 15 * 60_000;
+    await store().recoverStaleClaims();
+    const current = (await store().claimEvent("replacement"))!;
+    await expect(store().createAiRequestRunner(event)("openai", { ...request, model: "fresh" }, send)).rejects.toThrow("source claim changed");
+    complete({ fields: candidate, usage: { tokens: 10 } });
+    await first;
+    expect(await store().createAiRequestRunner(current)("openai", request, send)).toEqual({ fields: candidate, usage: {} });
+    expect(await store().admitOperation(event, { invalid: true })).toBe(false);
+    expect(credits).toBe(9);
+    expect(await store().getEventForEmail("owner", "arrival")).toMatchObject({ operation: null, attemptedAt: null });
+  });
+
+  it("counts lost responses against the persisted request budget and can retain any late success", async () => {
+    await associate("arrival");
+    const pending: Array<Promise<BillExtractionProviderResult>> = [];
+    const completions: Array<(value: BillExtractionProviderResult) => void> = [];
+    let credits = 10;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const event = (await store().claimEvent("claim-" + attempt))!;
+      let started!: () => void;
+      const sending = new Promise<void>((resolve) => { started = resolve; });
+      pending.push(store().createAiRequestRunner(event)("openai", request, () => {
+        credits--; started(); return new Promise((resolve) => { completions.push(resolve); });
+      }));
+      await sending;
+      now += 15 * 60_000;
+      await store().recoverStaleClaims();
+    }
+    const current = (await store().claimEvent("exhausted"))!;
+    const send = async () => { credits--; return { fields: {}, usage: {} }; };
+    await expect(store().createAiRequestRunner(current)("openai", request, send)).rejects.toThrow("exhausted");
+    for (const complete of completions) complete({ fields: candidate, usage: {} });
+    await Promise.all(pending);
+    expect(await store().createAiRequestRunner(current)("openai", request, send)).toEqual({ fields: candidate, usage: {} });
+    expect(credits).toBe(7);
+  });
+
   it("starts empty and only enrolls newly indexed arrivals after deployment, including iCloud", async () => {
     db.close();
     db = await database(false);
     await insertEmail("already-indexed", { emailDate: "2099-01-01T00:00:00Z", indexedAt: "2099-01-01T00:00:00Z" });
     await db.executeMultiple(migration("062_financial_events.sql"));
+    await db.executeMultiple(migration("067_financial_event_ai_requests.sql"));
     await addFinancialCorrectionSchema(db);
     await db.execute({ sql: "UPDATE ea_financial_workflow_state SET cutover_at = ?", args: [CUTOVER] });
     expect(await store().getNextWakeAt()).toBeNull();

@@ -3,6 +3,8 @@ import type {
   BillCandidate,
   BillEmailContext,
   BillExtractionProvider,
+  BillExtractionRequest,
+  BillExtractionProviderResult,
 } from "../../shared/types/bills.ts";
 import { trimBillBody } from "./bill-extract.ts";
 import { createAnthropicProvider } from "./bill-extractors/anthropic.ts";
@@ -14,6 +16,13 @@ import {
   type FinancialTargetRankingOption,
   type FinancialTargetRankingResult,
 } from "./financialEmailTargetRanker.ts";
+
+/** Managed planning can durably admit/reuse each individual provider request. */
+export type BillProviderRequestRunner = (
+  provider: "openai" | "anthropic",
+  request: BillExtractionRequest,
+  send: () => Promise<BillExtractionProviderResult>,
+) => Promise<BillExtractionProviderResult>;
 
 export function createBillCandidateVerificationService({
   credentialResolver = resolveAiApiKey,
@@ -34,11 +43,13 @@ export function createBillCandidateVerificationService({
     candidate,
     providerId,
     model,
+    runProviderRequest,
   }: {
     email: BillEmailContext;
     candidate: BillCandidate;
     providerId: string;
     model: string;
+    runProviderRequest?: BillProviderRequestRunner;
   }): Promise<BillCandidate> {
     if (providerId !== "openai" && providerId !== "anthropic") return candidate;
     const content = trimBillBody({
@@ -46,7 +57,9 @@ export function createBillCandidateVerificationService({
       from: String(email.from || email.from_address || ""),
       body: String(email.body || email.body_snippet || ""),
     });
-    const provider = configuredProviders[providerId];
+    const configured = configuredProviders[providerId];
+    const provider = runProviderRequest ? { extract: (request: BillExtractionRequest) =>
+      runProviderRequest(providerId, request, () => configured.extract(request)) } : configured;
     const amountVerified = (await verifyBillAmounts({
       content,
       candidate,
@@ -69,12 +82,14 @@ export function createBillCandidateVerificationService({
     options,
     providerId,
     model,
+    runProviderRequest,
   }: {
     email: BillEmailContext;
     candidate: BillCandidate;
     options: FinancialTargetRankingOption[];
     providerId: string;
     model: string;
+    runProviderRequest?: BillProviderRequestRunner;
   }): Promise<FinancialTargetRankingResult> {
     if (providerId !== "openai" && providerId !== "anthropic") {
       return { status: "failed", key: null, confidence: null, evidence: null };
@@ -88,7 +103,8 @@ export function createBillCandidateVerificationService({
       content,
       candidate,
       options,
-      provider: configuredProviders[providerId],
+      provider: runProviderRequest ? { extract: (request) => runProviderRequest(providerId, request,
+        () => configuredProviders[providerId].extract(request)) } : configuredProviders[providerId],
       model,
     });
   }

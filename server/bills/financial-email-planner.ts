@@ -2,7 +2,7 @@ import { getMetadata as actualGetMetadata } from "../actual/actual.ts";
 import { withAiUsageContext } from "../platform/ai-usage.ts";
 import { queryTransactions } from "../transactions/transactions-service.ts";
 import { readBillsMirrorRange } from "./bills-mirror-sync.ts";
-import { createBillCandidateVerificationService } from "./bill-candidate-verification-service.ts";
+import { createBillCandidateVerificationService, type BillProviderRequestRunner } from "./bill-candidate-verification-service.ts";
 import {
   extractBillCandidate,
   loadBillExtractChoice,
@@ -354,6 +354,7 @@ async function resolveCandidate(
   userId: string,
   input: FinancialEmailInput,
   dependencies: Required<Pick<FinancialEmailPlannerDependencies, "candidateExtractor" | "candidateVerification" | "modelChoiceReader">>,
+  runProviderRequest?: BillProviderRequestRunner,
 ): Promise<CandidateResolution> {
   if (!input.candidate) {
     try {
@@ -386,6 +387,7 @@ async function resolveCandidate(
       candidate,
       providerId: choice.provider,
       model: choice.model,
+      runProviderRequest,
     });
     return {
       candidate: verified,
@@ -419,6 +421,7 @@ export function createFinancialEmailPlanner({
   return async function planFinancialEmailForUser(
     userId: string,
     input: FinancialEmailInput,
+    runProviderRequest?: BillProviderRequestRunner,
   ): Promise<FinancialEmailPlan> {
     return withAiUsageContext({
       userId,
@@ -432,7 +435,7 @@ export function createFinancialEmailPlanner({
         candidateExtractor,
         candidateVerification,
         modelChoiceReader,
-      });
+      }, runProviderRequest);
       const policyCandidate = applyOwnerFinancialEmailPolicy(resolved.candidate);
       const candidate = withFinancialEmailProviderTransactionIdentity(userId, input, policyCandidate);
       const policy = classifyFinancialEmail(candidate);
@@ -464,6 +467,7 @@ export function createFinancialEmailPlanner({
                 options,
                 providerId: choice.provider,
                 model: choice.model,
+                runProviderRequest,
               });
             } catch {
               return { status: "failed", key: null, confidence: null, evidence: null };
@@ -533,6 +537,7 @@ const defaultPlanner = createFinancialEmailPlanner();
 export function planFinancialEmail(
   userId: string,
   input: FinancialEmailInput,
+  runProviderRequest?: BillProviderRequestRunner,
 ): Promise<FinancialEmailPlan> {
-  return defaultPlanner(userId, input);
+  return defaultPlanner(userId, input, runProviderRequest);
 }

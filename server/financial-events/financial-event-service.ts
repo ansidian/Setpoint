@@ -70,7 +70,14 @@ export function createFinancialEventWorker({
       }
       requireCompleteEmailEvidence(document.body);
       const unchanged = document.contentHash === contentHash;
-      const candidate = unchanged && (document.candidate || document.processedRevision > 0)
+      const reusable = unchanged && (document.candidate || document.processedRevision > 0);
+      let assessmentAttempt = 0;
+      if (!reusable) {
+        if (!await canRun(document.userId)) throw new Error("Email AI is paused or disabled.");
+        assessmentAttempt = await store.reserveDocumentAssessment(document, contentHash) || 0;
+        if (!assessmentAttempt) throw new Error("Assessment retry limit reached for this source, or source claim changed.");
+      }
+      const candidate = reusable
         ? document.candidate
         : await withAiUsageContext({ userId: document.userId, origin: "transaction_import", accountId: document.accountId, emailId: document.emailUid },
           () => assessDocument(document.userId, {
@@ -91,7 +98,7 @@ export function createFinancialEventWorker({
       // Reassess failed or incomplete extraction against the whole source before
       // caching it or assigning an event identity. Retries remain bounded when
       // the source itself cannot supply the missing facts.
-      if ((hasFinancialSemanticConflict(candidate) || failedVerification || missingSourceDate) && document.attempts < 3) {
+      if ((hasFinancialSemanticConflict(candidate) || failedVerification || missingSourceDate) && assessmentAttempt > 0 && assessmentAttempt < 3) {
         await store.settleDocument(document, { candidate: null, contentHash: "", status: "retry",
           error: "Reassessing incomplete or conflicting payment details.", nextAttemptAt: retryAt(now(), document.attempts) });
         publish(document.userId);
@@ -202,9 +209,12 @@ export function createFinancialEventWorker({
         plan = await planner(event.userId, { candidate: evidence.candidate, source: "financial_event", providerMessageId: event.id,
           email: { from: primary.fromAddress, subject: primary.subject, body: evidence.body },
           sourceIdentity: financialEmailSourceIdentity({ account_id: primary.accountId, from_address: primary.fromAddress,
-            sender_authentication_json: primary.senderAuthentication }) });
+            sender_authentication_json: primary.senderAuthentication }) }, store.createAiRequestRunner(event));
         const blocker = financialEventPlanBlocker(plan);
         if (blocker) {
+          // Recheck current Actual evidence without repeating unchanged AI
+          // requests. Provider retry budgets belong to exact request identities,
+          // independently of timer ticks, event attempts and worker restarts.
           await settle(event, plan, "waiting", blocker);
           return true;
         }

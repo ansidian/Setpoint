@@ -29,7 +29,7 @@ describe("owner completion of managed financial events", () => {
   beforeEach(async () => {
     db = createClient({ url: "file::memory:" });
     await db.execute("PRAGMA foreign_keys = ON");
-    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql"]) {
+    for (const file of ["001_ea_tables.sql", "013_email_index_normalized_date.sql", "025_email_thread_identity.sql", "054_email_sender_authentication.sql", "062_financial_events.sql", "067_financial_event_ai_requests.sql"]) {
       await db.executeMultiple(readFileSync(new URL(`../db/migrations/${file}`, import.meta.url), "utf8"));
     }
     await addFinancialCorrectionSchema(db);
@@ -60,7 +60,7 @@ describe("owner completion of managed financial events", () => {
   }
   function completion() { return createFinancialEventCompletion({ store, now: () => now }); }
   function worker() {
-    return createFinancialEventWorker({ store, now: () => now, canRun: async () => false,
+    return createFinancialEventWorker({ store, now: () => now, canRun: async () => !assessmentPaused,
       assessDocument: async (_owner, email) => {
         if (assessmentPaused) throw new Error("Financial document assessment is unavailable while email AI is paused or disabled.");
         return candidates.get(email.email_id) || null;
@@ -97,6 +97,7 @@ describe("owner completion of managed financial events", () => {
   async function drainEvent() { await worker().processNextEvent(); }
 
   it("records owner-supplied date and account without category, sender authentication, candidate, or enabled AI", async () => {
+    assessmentPaused = true;
     await arrive("receipt", null);
     const input = await request();
     const queued = await completion().complete("owner", input);
